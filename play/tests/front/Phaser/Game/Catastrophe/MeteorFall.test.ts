@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { flashAllowed, meteorFrame } from "../../../../../src/front/Phaser/Game/Catastrophe/MeteorFall";
+import { flashAllowed, meteorFrame, waveCircles } from "../../../../../src/front/Phaser/Game/Catastrophe/MeteorFall";
 
 const FALL_MS = 1200;
 
@@ -82,5 +82,31 @@ describe("flashAllowed", () => {
             }
         }
         expect(allowed).toEqual([0, 334, 700]);
+    });
+});
+
+describe("waveCircles", () => {
+    // The crater is 8 cells of 16 px wide, the front moves one cell every 100 ms, as far as 64 cells.
+    it("starts at the rim of the crater when the meteor lands", () => {
+        const circles = waveCircles(0);
+        expect(circles[0].radius).toBe(128);
+        expect(circles[0].alpha).toBeCloseTo(0.7, 5);
+    });
+
+    it("moves on with the wave of the server, followed by two fainter circles", () => {
+        const circles = waveCircles(1000);
+        expect(circles.map((circle) => circle.radius)).toEqual([288, 264, 240]);
+        expect(circles[1].alpha).toBeLessThan(circles[0].alpha);
+        expect(circles[2].alpha).toBeLessThan(circles[1].alpha);
+    });
+
+    it("fades as it goes and is gone once the wave ended", () => {
+        expect(waveCircles(4000)[0].alpha).toBeLessThan(waveCircles(1000)[0].alpha);
+        expect(waveCircles(5599)).toHaveLength(3);
+        expect(waveCircles(5600)).toEqual([]);
+    });
+
+    it("has nothing to show before the impact", () => {
+        expect(waveCircles(-1)).toEqual([]);
     });
 });

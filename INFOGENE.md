@@ -3188,22 +3188,29 @@ est sous au moins 2 px d'eau à l'impact (d'après ce que ce navigateur sait de 
 Pour qui a demandé moins de mouvement (`prefers-reduced-motion`) : ni éclair ni météore qui tombe, il reste l'ombre
 et la gerbe. Tout est dessiné par le navigateur, en code, dans un seul calque au-dessus du voile de nuit et de la météo (`DEPTH_NIGHT_INDEX + 2`).
 
-**Ce que fait l'eau.** Le serveur vide le **disque** d'impact (rayon 6 cellules de 16 px), puis étale cette eau, **plus
-8 px apportés par cellule du disque**, à parts égales sur l'**anneau** autour du disque (jusqu'à 12 cellules). Une
-cellule de l'anneau ne reçoit pas plus que ce qui la ferait dépasser le niveau d'eau le plus haut permis (niveau de
-débordement + 18 px) : le reste est perdu. Les murs ne sont pas traversés (le disque et l'anneau se comptent par
-voisinage, sans mur ni sol bloqué) ; un impact sur une cellule fermée ou sans anneau ne fait rien. L'eau apportée est
-comptée dans les **sources** du bilan de l'eau, l'eau perdue dans les **pertes**. Ensuite c'est la simulation
-ordinaire qui la fait couler : l'eau n'est pas versée par `pour`, dont les parcelles redescendraient aussitôt dans le
-cratère. Sur une carte sans eau, rien.
+**Ce que fait l'eau.** À l'impact, le serveur vide le **cratère** (rayon 8 cellules de 16 px, soit 4 cases) et confie
+cette eau, **plus 8 px apportés par cellule du cratère**, à une **onde** (`Catastrophe/ImpactWave.ts`) dont le front
+avance d'une cellule à chaque pas de l'eau (10 par seconde, donc 5 cases par seconde), jusqu'à 64 cellules (32 cases)
+de l'impact. En eau profonde (8 px et plus) chaque cellule que le front atteint ne garde qu'une houle de 0,5 px ; le
+sol sec ou peu mouillé reçoit le reste, jusqu'au niveau d'eau le plus haut permis : c'est la rive qui est inondée,
+même loin de l'impact. L'onde ne traverse aucun mur. À sa fin, l'eau qui n'a trouvé aucune rive retombe dans le
+cratère ; ce qui n'y tient pas est perdu. L'eau apportée est comptée dans les **sources** du bilan de l'eau, l'eau
+perdue dans les **pertes**. Tant qu'une onde court, la salle reçoit l'eau cinq fois par seconde au lieu d'une. Ensuite
+c'est la simulation ordinaire : l'eau des rives redescend vers le lac. Sur une carte sans eau, rien. (Un premier
+modèle reposait l'eau du cratère sur l'anneau voisin : dans un lac plein, il n'y avait que 2 px de place sous le
+plafond et 93 % de l'eau était perdue, sans vague visible.)
+
+**Les cercles de la vague.** Quand le météore tombe dans l'eau, trois cercles clairs partent du bord du cratère et
+suivent le front de l'onde du serveur (même vitesse, même portée), de plus en plus pâles ; rien sur sol sec ni pour
+qui a demandé moins de mouvement. Dessinés par le navigateur (`waveCircles`), ils passent aussi par-dessus la terre.
 
 **Qui décide.** Le serveur (`back`, `CatastropheManager`) : le navigateur n'envoie que « météore ici »
 (`LaunchCatastropheMessage`, pixels de la carte). Refusés **sans rien dire** : un point hors de la carte ou non
 numérique, un joueur qui a lancé il y a moins de **3 s**, plus de **5 météores en vol** dans la salle, une taille de
 carte pas encore lue. Accepté, le serveur annonce à toute la salle `CatastropheMessage {id, kind, x, y, impactInMs}`
 (une fois), et frappe l'eau 1,2 s plus tard ; chaque navigateur dessine la chute à partir de ce temps restant. Valeurs
-uniques dans `libs/map-editor/src/Catastrophe/Meteor.ts` (`METEOR_FALL_MS` 1200, `METEOR_DISC_CELLS` 6,
-`METEOR_RING_CELLS` 12, `METEOR_ADDED_PX` 8, `METEOR_COOLDOWN_MS` 3000, `METEORS_PER_ROOM` 5). Une erreur à
+uniques dans `libs/map-editor/src/Catastrophe/Meteor.ts` (`METEOR_FALL_MS` 1200, `METEOR_DISC_CELLS` 8,
+`METEOR_WAVE_CELLS` 64, `METEOR_CREST_PX` 0,5, `METEOR_DEEP_PX` 8, `METEOR_ADDED_PX` 8, `METEOR_COOLDOWN_MS` 3000, `METEORS_PER_ROOM` 5). Une erreur à
 l'impact est journalisée et n'arrête ni `back` ni l'eau de la salle.
 
 **Ce que ça ne fait pas.** Ni le relief, ni les avatars, ni les animaux, ni les objets ne sont touchés (le météore
@@ -3212,8 +3219,9 @@ de carte. `map-storage` n'est pas concerné. Un météore en vol est perdu si `b
 pas gardées) ; le salon détruit les arrête. Un joueur qui entre pendant la chute ne voit que l'eau : l'annonce n'est
 envoyée qu'une fois, pas à l'entrée.
 
-**Technique.** `WaterGrid.splash` (`libs/map-editor/src/Terrain/WaterGrid.ts`) ; `TerrainWaterManager.strike`
-(compteurs, annonce aussitôt de l'eau) ; `back/src/Model/CatastropheManager.ts` (tenu par `GameRoom`,
+**Technique.** `WaterGrid.takeDisc` et `layRing` (`libs/map-editor/src/Terrain/WaterGrid.ts`), `startImpactWave` et
+`advanceImpactWave` (`Catastrophe/ImpactWave.ts`) ; `TerrainWaterManager.strike` (lance l'onde, compteurs, annonce
+aussitôt de l'eau) et son pas (fait avancer les ondes) ; `back/src/Model/CatastropheManager.ts` (tenu par `GameRoom`,
 `launchCatastrophe`, `mapSizeInPixels`) ; `RoomManager.ts` (`launchCatastropheMessage`) ; pusher : `IoSocketController`
 transmet, `PusherRoom` relaie `catastropheMessage` à tous les auditeurs. Protocole : `CatastropheKind`,
 `LaunchCatastropheMessage` (65 du navigateur au pusher, 49 du pusher à `back`), `CatastropheMessage` (42 des
@@ -3223,9 +3231,10 @@ bouton dans `AppsMenuContent.svelte`, icône `meteor` de `PixelIcons.ts`, tir da
 (`launchArmedCatastrophe`), libellés `actionbar.catastrophe` en `fr-FR` et `en-US` seulement. `play` et `back` se
 déploient ensemble ; `map-storage` n'est pas concerné.
 
-**Limites connues.** L'eau est annoncée une fois par seconde : le navigateur la voit changer à l'annonce suivante,
-pas à l'éclair (la gerbe bleue ou brune est décidée avec ce qu'il sait déjà). Un poisson dans le disque vidé peut
+**Limites connues.** La gerbe bleue ou brune et les cercles sont décidés avec l'eau que le navigateur connaît à
+l'annonce du météore. La vague ne monte pas plus haut que le plafond de l'eau (18 px au-dessus du niveau de
+débordement). Les cercles sont dessinés ronds, même derrière un mur que l'onde ne traverse pas. Un poisson dans le cratère vidé peut
 mourir à sec après 5 s. N'importe quel joueur peut inonder une carte à la longue (une rafale de 5 météores tous les
-3 s par joueur, avec 8 px apportés par cellule du disque). Pas de son. Rien n'a été vu à l'écran à l'écriture de
+3 s par joueur, avec 8 px apportés par cellule du cratère). Pas de son. Rien n'a été vu à l'écran à l'écriture de
 cette section : widget, viseur, chute, éclair et gerbe ne sont validés que par les tests ; l'effet sur l'eau en jeu
 n'est pas vu.

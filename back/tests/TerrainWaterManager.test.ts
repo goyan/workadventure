@@ -147,6 +147,33 @@ describe("TerrainWaterManager", () => {
         expect(sent[0].stats?.sources).toBeGreaterThan(0);
     });
 
+    it("the wave of a strike goes on step after step, and the room sees it five times a second", () => {
+        const { manager, sent, steps } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        fillWithWater(manager);
+        manager.strike(240, 240);
+        const afterImpact = sent.length;
+        steps(4);
+        expect(sent.length - afterImpact).toBe(2);
+        // Long after the wave ended, the room is told once a second again.
+        steps(60);
+        const settled = sent.length;
+        steps(10);
+        expect(sent.length - settled).toBeLessThanOrEqual(1);
+    });
+
+    it("a wave whose map loses its water ends without a word", () => {
+        const { manager, wam, sent, steps } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        fillWithWater(manager);
+        manager.strike(240, 240);
+        const afterImpact = sent.length;
+        wam.terrain = undefined;
+        manager.mapChanged();
+        expect(() => steps(20)).not.toThrow();
+        expect(sent.length).toBe(afterImpact);
+    });
+
     it("a strike on a map without water does nothing", () => {
         const { manager, sent } = createHarness({ wam: wamWith(undefined) });
         manager.mapChanged();

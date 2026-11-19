@@ -1,14 +1,13 @@
 import { gunzipSync, gzipSync } from "node:zlib";
 import {
+    advanceImpactWave,
     CELL_AREA_M2,
     CELL_LITRES_PER_PX,
     DEFAULT_WATER_SETTINGS,
     gridBoundsOf,
     LITRES_PER_M3,
-    METEOR_ADDED_PX,
-    METEOR_DISC_CELLS,
-    METEOR_RING_CELLS,
     rainRateAt,
+    startImpactWave,
     ratesOf,
     stepInputOf,
     TERRAIN_CELL,
@@ -19,7 +18,7 @@ import {
     waterWallsOf,
     WeatherType,
 } from "@workadventure/map-editor";
-import type { TerrainData, WaterGridBounds, WaterObject, WaterTally } from "@workadventure/map-editor";
+import type { ImpactWave, TerrainData, WaterGridBounds, WaterObject, WaterTally } from "@workadventure/map-editor";
 import type { TerrainWaterMessage } from "@workadventure/messages";
 import { z } from "zod";
 import type { VariablesRepositoryInterface } from "../Services/Repository/VariablesRepositoryInterface";
@@ -30,6 +29,8 @@ import type { RainTimelineService } from "./Services/RainTimelineService";
 const STEPS_PER_MESSAGE = WATER_MESSAGE_MS / WATER_STEP_MS;
 /** A whole state is sent again this often, so a browser that lost its place finds it again. */
 const MESSAGES_PER_FULL_STATE = 30;
+/** While the wave of an impact runs, the room is told five times a second: a wave seen once a second would jump. */
+const WAVE_STEPS_PER_MESSAGE = 2;
 /** The water is saved every half minute while it changes. */
 const STEPS_PER_SAVE = 300;
 
@@ -62,6 +63,10 @@ export class TerrainWaterManager {
     private saved: WaterGrid | undefined;
     private timer: ReturnType<typeof setInterval> | undefined;
     private steps = 0;
+    /** The step the room was last told at: the rates it is told are over the time since. */
+    private toldAtStep = 0;
+    /** The waves of the impacts still running. */
+    private waves: ImpactWave[] = [];
     private sums: Sums = noSums();
     /** Whether the last step moved any water: a grid at rest with nothing coming in is not stepped. */
     private moving = true;
@@ -169,7 +174,11 @@ export class TerrainWaterManager {
     /** One step of the water (ten a second), and once a second the room is told. */
     public step(): void {
         const grid = this.grid;
-        if (!grid) return;
+        if (!grid) {
+            // A map that lost its water: the waves running on it have nothing left to move.
+            this.waves = [];
+            return;
+        }
         const settings = this.room.getWam()?.settings;
         if (this.steps % STEPS_PER_MESSAGE === 0) {
             // Only a map in real weather has a timeline to read.
@@ -178,6 +187,8 @@ export class TerrainWaterManager {
             this.rainRate = rainRateAt(settings, this.now(), slots);
         }
         this.steps++;
+        const waving = this.waves.length > 0;
+        if (waving) this.advanceWaves(grid);
         const pouring = this.rainRate > 0 || this.objects.some((object) => object.litresPerMinute > 0);
         if (this.moving || pouring) {
             const tally = grid.step(stepInputOf(settings?.water, this.rainRate, this.objects, WATER_STEP_MS / 1000));
@@ -191,27 +202,35 @@ export class TerrainWaterManager {
             this.sums.absorptionPx += tally.absorptionPx;
             this.sums.lostPx += tally.lostPx;
         }
-        if (this.steps % STEPS_PER_MESSAGE === 0) this.tell(grid);
+        if (this.steps % STEPS_PER_MESSAGE === 0 || (waving && this.steps % WAVE_STEPS_PER_MESSAGE === 0)) {
+            this.tell(grid);
+        }
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
     }
 
+    /** The waves of the impacts move on; one that ended is forgotten, and what it lost is counted. */
+    private advanceWaves(grid: WaterGrid): void {
+        this.waves = this.waves.filter((wave) => {
+            const { done, lostPx } = advanceImpactWave(grid, wave);
+            this.sums.lostPx += lostPx;
+            return !done;
+        });
+        this.moving = true;
+        this.version++;
+        this.changedSinceSave = true;
+    }
+
     /**
-     * A meteor lands at a point of the map (pixels): the water of its crater is thrown out over the ring around it.
-     * The room is told at once. Nothing on a map without water.
+     * A meteor lands at a point of the map (pixels): the water of its crater is thrown out, and a wave carries it to
+     * the shores, step after step. The room is told at once. Nothing on a map without water.
      */
     public strike(x: number, y: number): void {
         const grid = this.grid;
         if (!grid) return;
-        const splash = grid.splash(
-            Math.floor(x / TERRAIN_CELL),
-            Math.floor(y / TERRAIN_CELL),
-            METEOR_DISC_CELLS,
-            METEOR_RING_CELLS,
-            METEOR_ADDED_PX,
-        );
-        if (!splash.moved) return;
-        this.sums.sourcesPx += splash.addedPx;
-        this.sums.lostPx += splash.lostPx;
+        const started = startImpactWave(grid, Math.floor(x / TERRAIN_CELL), Math.floor(y / TERRAIN_CELL));
+        if (!started) return;
+        this.waves.push(started.wave);
+        this.sums.sourcesPx += started.addedPx;
         this.moving = true;
         this.version++;
         this.changedSinceSave = true;
@@ -238,8 +257,11 @@ export class TerrainWaterManager {
     private tell(grid: WaterGrid): void {
         const sums = this.sums;
         this.sums = noSums();
+        // Usually a second, less when an impact or its wave has the room told sooner.
+        const stepsSince = Math.max(1, this.steps - this.toldAtStep);
+        this.toldAtStep = this.steps;
         const speed = this.room.getWam()?.settings?.water?.speed ?? DEFAULT_WATER_SETTINGS.speed;
-        const rates = ratesOf(sums, (STEPS_PER_MESSAGE * WATER_STEP_MS) / 1000, speed);
+        const rates = ratesOf(sums, (stepsSince * WATER_STEP_MS) / 1000, speed);
         const anyRate = Object.values(rates).some((rate) => rate > 0);
         const bytes = grid.writeDepths();
         const previous = this.sentBytes;

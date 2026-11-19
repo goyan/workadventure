@@ -28,6 +28,7 @@ export * from "./Terrain/WaterInputs";
 export * from "./Terrain/WaterWalls";
 export * from "./Terrain/LandWalls";
 export * from "./Catastrophe/Meteor";
+export * from "./Catastrophe/ImpactWave";
 export * from "./Life/WaterBodies";
 export * from "./Life/LandPlaces";
 export * from "./Terrain/LandTrees";

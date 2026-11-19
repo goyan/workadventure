@@ -2,7 +2,7 @@ import type { CatastropheMessage } from "@workadventure/messages";
 import { METEOR_FALL_MS } from "@workadventure/map-editor";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import { LAMP_MIN_FLASH_INTERVAL_MS } from "../Lamps/LampSignal";
-import { flashAllowed, meteorFrame } from "./MeteorFall";
+import { flashAllowed, meteorFrame, waveCircles } from "./MeteorFall";
 
 const SHADOW_RADIUS_PX = 48;
 const METEOR_RADIUS_PX = 10;
@@ -13,21 +13,24 @@ const BURST_STROKES = 12;
 const BURST_RADIUS_PX = 96;
 const WET_BURST_COLOR = 0x8fd3ff;
 const DRY_BURST_COLOR = 0x8a6a45;
+const WAVE_COLOR = 0xdff3ff;
+const WAVE_WIDTHS = [4, 3, 2];
 
 interface Meteor {
     x: number;
     y: number;
     /** When the meteor was launched, in ms of the game. */
     launchedAt: number;
-    /** Whether the ground was under water at impact: decided once, when it lands. */
-    wet: boolean | undefined;
+    /** Whether the meteor falls into water: read when it is announced, before the impact empties its crater. */
+    wet: boolean;
     /** Whether its impact flashes the screen: decided once, when it lands (see `flashAllowed`). */
     flashes: boolean | undefined;
 }
 
 /**
  * The fall of the meteors the server announces: a shadow that grows on the ground, the meteor coming in, a flash and a
- * burst at impact, blue on water and brown dust elsewhere. Drawn in code, all in one layer above everything. The
+ * burst at impact, blue on water and brown dust elsewhere, then on water the circles of the wave running to the
+ * shores. Drawn in code, all in one layer above everything. The
  * server alone decides what the water does.
  */
 export class MeteorView {
@@ -50,7 +53,7 @@ export class MeteorView {
             x: message.x,
             y: message.y,
             launchedAt: receivedAt + message.impactInMs - METEOR_FALL_MS,
-            wet: undefined,
+            wet: this.isWet(message.x, message.y),
             flashes: undefined,
         });
     }
@@ -63,16 +66,20 @@ export class MeteorView {
         let flashed = false;
         for (let index = this.meteors.length - 1; index >= 0; index--) {
             const meteor = this.meteors[index];
-            const frame = meteorFrame(now - meteor.launchedAt, METEOR_FALL_MS, reduced);
-            if (frame.done) {
+            const sinceLaunch = now - meteor.launchedAt;
+            const frame = meteorFrame(sinceLaunch, METEOR_FALL_MS, reduced);
+            // The circles of the wave run on the water long after the burst: none on dry ground, none in reduced motion.
+            const circles = meteor.wet && !reduced ? waveCircles(sinceLaunch - METEOR_FALL_MS) : [];
+            if (frame.done && circles.length === 0) {
                 this.meteors.splice(index, 1);
                 continue;
             }
+            this.drawWave(meteor, circles);
+            if (frame.done) continue;
             this.drawShadow(meteor, frame.shadowScale);
             if (frame.burst === undefined) {
                 this.drawMeteor(meteor, frame.offset);
             } else {
-                meteor.wet ??= this.isWet(meteor.x, meteor.y);
                 if (meteor.flashes === undefined) {
                     meteor.flashes = flashAllowed(now, this.lastFlashAt, LAMP_MIN_FLASH_INTERVAL_MS);
                     if (meteor.flashes) this.lastFlashAt = now;
@@ -113,6 +120,13 @@ export class MeteorView {
         }
         this.graphics.fillStyle(METEOR_COLOR, 1);
         this.graphics.fillCircle(meteor.x + offset.x, meteor.y + offset.y, METEOR_RADIUS_PX);
+    }
+
+    private drawWave(meteor: Meteor, circles: { radius: number; alpha: number }[]): void {
+        circles.forEach((circle, index) => {
+            this.graphics.lineStyle(WAVE_WIDTHS[index] ?? 2, WAVE_COLOR, circle.alpha);
+            this.graphics.strokeCircle(meteor.x, meteor.y, circle.radius);
+        });
     }
 
     private drawBurst(meteor: Meteor, burst: number, wet: boolean): void {
