@@ -3,6 +3,8 @@ import {
     DOWNPOUR_MIN_REPORT_MS,
     downpourTiles,
     DOWNPOURS_PER_ROOM,
+    FIRE_PATCHES_PER_SECOND,
+    fireTiles,
     METEOR_FALL_MS,
     meteorShape,
     METEORS_PER_ROOM,
@@ -29,6 +31,10 @@ export class CatastropheManager {
     /** The downpour of each player, by the id of the player. */
     private readonly raining = new Map<number, LiveDownpour>();
     private stopped = false;
+    /** When each player set their last patches of fire, within the last second. */
+    private readonly patches = new Map<number, number[]>();
+    /** What a patch of fire lights: the meadow of the room, given once it is made. */
+    private ignite: (x: number, y: number, radiusTiles: number) => void = () => undefined;
     private readonly inFlight = new Set<ReturnType<typeof setTimeout>>();
 
     constructor(
@@ -103,6 +109,36 @@ export class CatastropheManager {
         for (const [userId, downpour] of this.raining) if (downpour.until <= now) this.raining.delete(userId);
     }
 
+    /** What a patch of fire lights is made after the catastrophes of a room: it is given here. */
+    public igniteWith(ignite: (x: number, y: number, radiusTiles: number) => void): void {
+        this.ignite = ignite;
+    }
+
+    /**
+     * A player sets a patch of fire around a point of the map (pixels), `radiusTiles` wide (kept within what a patch
+     * may be). What burns is the business of the meadow. False when refused: outside the map, or too many in a second.
+     */
+    public fire(userId: number, x: number, y: number, radiusTiles: number): boolean {
+        if (this.stopped) return false;
+        const size = this.mapSize();
+        if (!size || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+        if (x < 0 || y < 0 || x >= size.width || y >= size.height) return false;
+        const now = this.now();
+        const recent = (this.patches.get(userId) ?? []).filter((at) => now - at < 1000);
+        if (recent.length >= FIRE_PATCHES_PER_SECOND) {
+            this.patches.set(userId, recent);
+            return false;
+        }
+        recent.push(now);
+        this.patches.set(userId, recent);
+        try {
+            this.ignite(x, y, fireTiles(radiusTiles));
+        } catch (error) {
+            console.error("A patch of fire could not be set on the meadow of the map", error);
+        }
+        return true;
+    }
+
     /** What a player asks for: the downpour that follows them, or a catastrophe thrown once. */
     public request(
         userId: number,
@@ -112,9 +148,9 @@ export class CatastropheManager {
         radiusTiles: number,
         wholeMap: boolean,
     ): boolean {
-        return kind === CatastropheKind.CATASTROPHE_DOWNPOUR
-            ? this.rain(userId, x, y, radiusTiles, wholeMap)
-            : this.launch(kind, x, y, radiusTiles);
+        if (kind === CatastropheKind.CATASTROPHE_DOWNPOUR) return this.rain(userId, x, y, radiusTiles, wholeMap);
+        if (kind === CatastropheKind.CATASTROPHE_FIRE) return this.fire(userId, x, y, radiusTiles);
+        return this.launch(kind, x, y, radiusTiles);
     }
 
     /**

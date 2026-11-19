@@ -34,6 +34,7 @@ import {
 } from "../../../../src/front/Stores/FishingStore";
 import {
     catastrophePanelStore,
+    fireRadiusTilesStore,
     downpourRadiusTilesStore,
     downpourWholeMapStore,
     meteorRadiusTilesStore,
@@ -811,6 +812,29 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(500, 700));
                 ticks[0]();
                 expect(launch.mock.calls[1]).toEqual([CatastropheKind.CATASTROPHE_DOWNPOUR, 500, 700, 3, false]);
+            });
+
+            it("sets fire under the pointer as soon as the click is pressed, and paints it while the click is held", () => {
+                catastrophePanelStore.set(true);
+                toggleArmedCatastrophe("fire");
+                fireRadiusTilesStore.set(5);
+                const press = held();
+                handler.handlePointerDownEvent(press, []);
+                expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_FIRE, 480, 640, 5]]);
+
+                // Dragging paints fire along the way: the map does not move.
+                camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(500, 700));
+                handler.handlePointerMoveEvent(press, []);
+                ticks[0]();
+                expect(launch.mock.calls[1]).toEqual([CatastropheKind.CATASTROPHE_FIRE, 500, 700, 5]);
+                expect(cameraManager.startManualPan.mock.calls).toEqual([]);
+
+                // Releasing ends it: no patch more, no walk.
+                handler.handlePointerUpEvent(pointer(0, 1), []);
+                expect(remove).toHaveBeenCalled();
+                expect(launch).toHaveBeenCalledTimes(2);
+                expect(scene.moveTo.mock.calls).toEqual([]);
+                fireRadiusTilesStore.set(2);
             });
 
             it("holding the click does not drag the map, and releasing it launches nothing more", () => {

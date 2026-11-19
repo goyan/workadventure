@@ -24,8 +24,53 @@ export const THIRST_SECONDS = 1200;
 export const DROWN_SECONDS = 60;
 /** At the highest danger, without rain, a soil loses its moisture this many times faster: the hot wind dries it out. */
 const PARCHING = 20;
+/** A tile on fire burns its full grass in this many seconds, and its fire is at its height after FIRE_RISE_SECONDS. */
+export const BURN_SECONDS = 30;
+const FIRE_RISE_SECONDS = 5;
+/** The fire a tile starts with, and from where it sets its neighbours on fire. */
+const FIRE_START = 0.2;
+const FIRE_SPREADS_FROM = 0.5;
+/**
+ * The chance a burning tile sets a straw-dry neighbour on fire at each step, without wind: a tile burns several steps,
+ * so a dry land is swept. Whatever the neighbour has to burn, as long as it has something.
+ */
+const FIRE_SPREAD_CHANCE = 0.35;
+/** Green grass still takes this share of that chance; a neighbour in a corner this share of a neighbour on a side. */
+const GREEN_SPREAD_SHARE = 0.05;
+const CORNER_SPREAD_SHARE = 0.7;
+/** The wind that doubles the chance downwind (km/h), and how far it may push or hold the fire. */
+const FIRE_WIND_KMH = 30;
+const FIRE_WIND_BOUNDS: readonly [number, number] = [0.1, 3];
+/** The wind that halves the spread of the flanks of a fire (km/h), and how much more it holds its back. */
+const FLANK_WIND_KMH = 10;
+const BACK_HOLD = 0.8;
+/**
+ * What a tile has to burn, from 0 to 1: its grass, and on a ground gone dry the dead litter of a dry land (none
+ * under the first dryness, DRY_GROUND_FUEL from the second on), whatever its grass. A full meadow burns BURN_SECONDS, a tile with less in proportion.
+ */
+const DRY_GROUND_BURNS: readonly [number, number] = [0.15, 0.5];
+const DRY_GROUND_FUEL = 0.8;
+/**
+ * Under the wind the head of a grass fire runs at about 16 % of the wind speed, 20 km/h at most (Cheney et al. 1998,
+ * Cruz et al. 2022), carried by embers landing ahead of the flames. A tile is about 1.1 m and a step 2 s: that is
+ * this many tiles downwind at each step for each km/h of wind, HEAD_MAX_TILES at most. Embers go over what would
+ * stop the flames.
+ */
+const HEAD_TILES_PER_KMH = 0.08;
+const HEAD_MAX_TILES = 10;
+/** What does not burn: too little to burn, a soil this wet, this much ash. */
+const FIRE_MIN_FUEL = 0.05;
+const FIRE_MAX_MOISTURE = 0.9;
+const FIRE_MAX_ASH = 0.5;
+/** A rain of this many mm an hour puts a fire at its height out in a second. */
+const RAIN_QUENCH_MM = 100;
+/** A fire starts by itself, at the highest danger, about once in this many seconds, on grass this dry. */
+const SELF_START_SECONDS = 60;
+const SELF_START_DRYNESS = 0.9;
+const SELF_START_TRIES = 20;
+
 /** The grass dries, or greens again, most of the way towards what the conditions make it in this many seconds. */
-export const DRYING_SECONDS = 90;
+export const DRYING_SECONDS = 30;
 /** An animal that grazes eats a full tile of grass in this many seconds. */
 export const GRAZE_SECONDS = 120;
 /** From this much grass under it, an animal that stands still is seen grazing. */
@@ -74,6 +119,11 @@ export interface MeadowStepInput {
     moistureHold?: number;
     /** How ready the grass is to burn under the conditions of the room, from 0 to 1 (see fireDanger); 0 when absent. */
     fireDanger?: number;
+    /** Where the wind comes from (degrees, 0 north, 90 east) and its speed (km/h): it pushes the fire. */
+    windFrom?: number;
+    windSpeed?: number;
+    /** The luck of the fire, from 0 to 1 at each draw: whether it spreads, whether one starts. Math.random when absent. */
+    random?: () => number;
 }
 
 /** The tiles a floor of the "Map" tool covers on the ground (a paved path, a terrace): nothing grows there. */
@@ -101,6 +151,13 @@ export class Meadow {
     private readonly grass: Float32Array;
     /** How dry the ground of each tile and its grass are, from 0 (green) to 1 (straw, ready to burn). */
     private readonly dryness: Float32Array;
+    /** The fire of each tile, from 0 (none) to 1 (at its height), and the ash a fire left, from 0 to 1. */
+    private readonly fire: Float32Array;
+    private readonly ash: Float32Array;
+    /** What each tile on fire still has to burn (see fuelOf), from 0 to 1. */
+    private readonly fuel: Float32Array;
+    /** The water lying on each tile, as the last step read it. */
+    private readonly water: Float32Array;
     /** For each tile: how long its soil holds its moisture (0: it holds none), how fertile it is, and its height. */
     private readonly hold: Float32Array;
     private readonly fertility: Float32Array;
@@ -120,6 +177,10 @@ export class Meadow {
         this.next = new Float32Array(tiles);
         this.grass = new Float32Array(tiles);
         this.dryness = new Float32Array(tiles);
+        this.fire = new Float32Array(tiles);
+        this.ash = new Float32Array(tiles);
+        this.fuel = new Float32Array(tiles);
+        this.water = new Float32Array(tiles);
         this.hold = new Float32Array(tiles);
         this.fertility = new Float32Array(tiles);
         this.ground = new Float32Array(tiles);
@@ -163,6 +224,80 @@ export class Meadow {
     public drynessAt(tileX: number, tileY: number): number {
         const index = this.indexOf(tileX, tileY);
         return index === undefined ? 0 : this.dryness[index];
+    }
+
+    /** The fire of a tile, from 0 (none) to 1 (at its height). */
+    public fireAt(tileX: number, tileY: number): number {
+        const index = this.indexOf(tileX, tileY);
+        return index === undefined ? 0 : this.fire[index];
+    }
+
+    /** The ash a fire left on a tile, from 0 to 1: it goes as the grass grows back. */
+    public ashAt(tileX: number, tileY: number): number {
+        const index = this.indexOf(tileX, tileY);
+        return index === undefined ? 0 : this.ash[index];
+    }
+
+    /** How many tiles are on fire. */
+    public burning(): number {
+        let count = 0;
+        for (let index = 0; index < this.fire.length; index++) if (this.fire[index] > 0) count++;
+        return count;
+    }
+
+    /** What a tile has to burn: its grass, or the litter of a dry ground where there is less grass than that. */
+    private fuelOf(index: number): number {
+        // The litter burns from a ground a little dry, and in full from a ground half dry: no sudden threshold.
+        const [from, full] = DRY_GROUND_BURNS;
+        const cured = Math.min(1, Math.max(0, (this.dryness[index] - from) / (full - from)));
+        return Math.max(this.grass[index], DRY_GROUND_FUEL * cured);
+    }
+
+    /** Whether a tile can take fire: something to burn on a soil that grows grass, neither wet nor burnt nor burning. */
+    private burns(index: number): boolean {
+        return (
+            this.outdoor[index] === 1 &&
+            this.fertility[index] > 0 &&
+            this.fire[index] === 0 &&
+            this.fuelOf(index) >= FIRE_MIN_FUEL &&
+            this.ash[index] < FIRE_MAX_ASH &&
+            this.moisture[index] < FIRE_MAX_MOISTURE &&
+            this.water[index] < SOAKED_WATER_PX
+        );
+    }
+
+    /** Sets a tile on fire, with what it has to burn. */
+    private light(index: number): void {
+        this.fuel[index] = this.fuelOf(index);
+        this.fire[index] = FIRE_START;
+    }
+
+    /**
+     * A patch of fire: every tile within `radius` tiles of a tile that can take fire does. Returns how many did.
+     * What happens next is the fire's own business: it dies on green or wet grass, it runs on straw.
+     */
+    public ignite(tileX: number, tileY: number, radius: number): number {
+        if (!Number.isFinite(tileX) || !Number.isFinite(tileY) || !Number.isFinite(radius)) return 0;
+        const reach = Math.max(0, radius);
+        let lit = 0;
+        for (
+            let y = Math.max(0, Math.floor(tileY - reach));
+            y <= Math.min(this.height - 1, Math.ceil(tileY + reach));
+            y++
+        ) {
+            for (
+                let x = Math.max(0, Math.floor(tileX - reach));
+                x <= Math.min(this.width - 1, Math.ceil(tileX + reach));
+                x++
+            ) {
+                if ((x - tileX) ** 2 + (y - tileY) ** 2 > reach * reach) continue;
+                const index = y * this.width + x;
+                if (!this.burns(index)) continue;
+                this.light(index);
+                lit++;
+            }
+        }
+        return lit;
     }
 
     /** For the tests and a restored state: sets a tile. */
@@ -213,8 +348,9 @@ export class Meadow {
                 : 0;
         // A hot, dry wind dries the soil itself, not under the rain.
         const parching = rain > 0 ? 1 : 1 + PARCHING * danger;
-        const { width, height, moisture, next, grass, dryness, hold, ground, fertility, outdoor } = this;
-        const water = new Float32Array(moisture.length);
+        const { width, height, moisture, next, grass, dryness, fire, ash, water, hold, ground, fertility, outdoor } =
+            this;
+        water.fill(0);
         for (let tileY = 0; tileY < height; tileY++) {
             for (let tileX = 0; tileX < width; tileX++) {
                 const index = tileY * width + tileX;
@@ -277,17 +413,123 @@ export class Meadow {
             }
             grass[index] = Math.min(1, Math.max(0, cover));
         }
+        this.burn(input, seconds);
         // The grass dries towards what the conditions and its soil make it: straw on a dry soil when it is hot, dry
         // and windy, green again on a wet soil or when the conditions ease.
         const share = 1 - Math.exp(-seconds / DRYING_SECONDS);
         for (let index = 0; index < dryness.length; index++) {
             // Every ground where grass can grow dries, bare or not; sand, rock and indoors have nothing to dry.
-            if (fertility[index] <= 0 || !outdoor[index]) {
+            // Burnt ground has nothing left to dry until its grass is back.
+            if (fertility[index] <= 0 || !outdoor[index] || ash[index] >= FIRE_MAX_ASH) {
                 dryness[index] = 0;
                 continue;
             }
             const target = water[index] >= SOAKED_WATER_PX ? 0 : danger * (1 - moisture[index]);
             dryness[index] += (target - dryness[index]) * share;
+        }
+        // At the highest danger a fire starts by itself now and then, on grass gone to straw.
+        const random = input.random ?? Math.random;
+        if (danger >= 1 && dryness.length > 0 && random() < seconds / SELF_START_SECONDS) {
+            for (let attempt = 0; attempt < SELF_START_TRIES; attempt++) {
+                const index = Math.min(dryness.length - 1, Math.floor(random() * dryness.length));
+                if (dryness[index] < SELF_START_DRYNESS || !this.burns(index)) continue;
+                this.light(index);
+                break;
+            }
+        }
+        // The ash goes as the grass grows back over it.
+        for (let index = 0; index < ash.length; index++) {
+            if (ash[index] > 0 && fire[index] === 0) ash[index] = Math.min(ash[index], 1 - grass[index]);
+        }
+    }
+
+    /** The tiles on fire burn their grass, go out under water and rain, and set their neighbours on fire. */
+    private burn(input: MeadowStepInput, seconds: number): void {
+        const { width, height, moisture, grass, dryness, fire, ash, fuel, water } = this;
+        const rain = Number.isFinite(input.rainMmPerHour) && input.rainMmPerHour > 0 ? input.rainMmPerHour : 0;
+        const random = input.random ?? Math.random;
+        const speed =
+            input.windSpeed !== undefined && Number.isFinite(input.windSpeed) ? Math.max(0, input.windSpeed) : 0;
+        // Where the wind goes: a wind from the north blows south, down the map.
+        const from =
+            ((input.windFrom !== undefined && Number.isFinite(input.windFrom) ? input.windFrom : 0) * Math.PI) / 180;
+        const windX = -Math.sin(from);
+        const windY = Math.cos(from);
+        const pace = Math.min(1, seconds / MEADOW_STEP_SECONDS);
+        const spreading: number[] = [];
+        for (let index = 0; index < fire.length; index++) {
+            if (fire[index] === 0) continue;
+            // Water lying on the tile or a sodden soil puts it out at once; a rain as hard as it falls.
+            let flame = fire[index] + seconds / FIRE_RISE_SECONDS - (seconds * rain) / RAIN_QUENCH_MM;
+            if (water[index] >= SOAKED_WATER_PX || moisture[index] >= FIRE_MAX_MOISTURE) flame = 0;
+            if (flame <= 0) {
+                fire[index] = 0;
+                continue;
+            }
+            fuel[index] -= seconds / BURN_SECONDS;
+            // The grass goes with what burns: none is left once its share is burnt.
+            grass[index] = Math.max(0, Math.min(grass[index], fuel[index]));
+            ash[index] = Math.min(1, ash[index] + seconds / BURN_SECONDS);
+            if (fuel[index] <= 1e-6) {
+                // Burnt through: nothing left but ash.
+                grass[index] = 0;
+                dryness[index] = 0;
+                ash[index] = 1;
+                fire[index] = 0;
+                continue;
+            }
+            fire[index] = Math.min(1, flame);
+            if (fire[index] >= FIRE_SPREADS_FROM) spreading.push(index);
+        }
+        // The fire set at this step spreads at the next: it does not cross the map in one.
+        for (const index of spreading) {
+            const tileX = index % width;
+            const tileY = (index - tileX) / width;
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    if (dx === 0 && dy === 0) continue;
+                    const x = tileX + dx;
+                    const y = tileY + dy;
+                    if (x < 0 || y < 0 || x >= width || y >= height) continue;
+                    const other = y * width + x;
+                    if (!this.burns(other)) continue;
+                    const corner = dx !== 0 && dy !== 0;
+                    const along = (dx * windX + dy * windY) / (corner ? Math.SQRT2 : 1);
+                    // The wind holds the flanks and the back of a fire as much as it drives its head: a fire in
+                    // the wind is long and narrow (four times as long as wide at 30 km/h, seven at 50).
+                    const calm = 1 / (1 + speed / FLANK_WIND_KMH);
+                    const head = Math.min(FIRE_WIND_BOUNDS[1], 1 + speed / FIRE_WIND_KMH);
+                    // Without wind a fire has no back: it spreads alike all around.
+                    const wind =
+                        along >= 0
+                            ? // Straight downwind far more than aslant: the head is narrow.
+                              calm + (head - calm) * along ** 3
+                            : calm * (1 + BACK_HOLD * (1 - calm) * along);
+                    const chance =
+                        FIRE_SPREAD_CHANCE *
+                        pace *
+                        (GREEN_SPREAD_SHARE + (1 - GREEN_SPREAD_SHARE) * dryness[other]) *
+                        wind *
+                        (corner ? CORNER_SPREAD_SHARE : 1);
+                    if (random() < chance) this.light(other);
+                }
+            }
+            // Embers: as far downwind as the head of the fire runs at a step, a little less likely the further.
+            const reach = Math.min(HEAD_MAX_TILES, Math.round(speed * HEAD_TILES_PER_KMH));
+            for (let leap = 2; leap <= reach; leap++) {
+                const x = tileX + Math.round(windX * leap);
+                const y = tileY + Math.round(windY * leap);
+                if (x < 0 || y < 0 || x >= width || y >= height) break;
+                const other = y * width + x;
+                if (!this.burns(other)) continue;
+                const chance =
+                    FIRE_SPREAD_CHANCE *
+                    2 *
+                    (1 - (0.5 * (leap - 1)) / reach) *
+                    pace *
+                    (GREEN_SPREAD_SHARE + (1 - GREEN_SPREAD_SHARE) * dryness[other]);
+                if (random() < chance) this.light(other);
+            }
         }
     }
 
@@ -308,6 +550,9 @@ export class Meadow {
         this.grass.fill(0);
         this.moisture.fill(0);
         this.dryness.fill(0);
+        this.fire.fill(0);
+        this.ash.fill(0);
+        this.fuel.fill(0);
     }
 
     /** The grass and the moisture of every tile, row by row, a byte each (0 to 255): told to the room and saved. */
@@ -323,17 +568,29 @@ export class Meadow {
         return bytesOf(this.dryness);
     }
 
+    /** The fire of every tile: told to the room, never saved (a room that restarts has no fire). */
+    public writeFire(): Uint8Array {
+        return bytesOf(this.fire);
+    }
+
+    public writeAsh(): Uint8Array {
+        return bytesOf(this.ash);
+    }
+
     /**
      * Reads a state written by a meadow of the same size. False (and nothing read) for any other. A state saved
      * before the grass could dry has no dryness: it is read green.
      */
-    public read(grass: Uint8Array, moisture: Uint8Array, dryness?: Uint8Array): boolean {
+    public read(grass: Uint8Array, moisture: Uint8Array, dryness?: Uint8Array, ash?: Uint8Array): boolean {
         if (grass.length !== this.grass.length || moisture.length !== this.moisture.length) return false;
         if (dryness && dryness.length !== this.dryness.length) return false;
+        if (ash && ash.length !== this.ash.length) return false;
         for (let index = 0; index < grass.length; index++) {
             this.grass[index] = this.outdoor[index] ? grass[index] / 255 : 0;
             this.moisture[index] = this.outdoor[index] ? moisture[index] / 255 : 0;
             this.dryness[index] = this.outdoor[index] && dryness ? dryness[index] / 255 : 0;
+            this.ash[index] = this.outdoor[index] && ash ? ash[index] / 255 : 0;
+            this.fire[index] = 0;
         }
         return true;
     }
@@ -347,6 +604,9 @@ export class Meadow {
                 this.moisture[index] = previous.moistureAt(tileX, tileY);
                 this.grass[index] = previous.grassAt(tileX, tileY);
                 this.dryness[index] = previous.drynessAt(tileX, tileY);
+                this.fire[index] = previous.fireAt(tileX, tileY);
+                this.fuel[index] = this.fire[index] > 0 ? Math.max(this.fuelOf(index), FIRE_MIN_FUEL) : 0;
+                this.ash[index] = previous.ashAt(tileX, tileY);
             }
         }
     }

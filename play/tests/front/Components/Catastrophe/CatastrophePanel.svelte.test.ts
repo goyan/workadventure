@@ -15,6 +15,8 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 sizeLabel: label("Size of the meteor: radius of its crater, in tiles"),
                 tabs: { catastrophes: label("Disasters"), weather: label("Weather") },
                 downpour: label("Downpour"),
+                fire: label("Fire"),
+                fireSizeLabel: label("Size of the fire"),
                 wholeMap: label("Whole map"),
                 downpourSizeLabel: label("Size of the downpour"),
                 downpourArmedHelp: label("Hold the click on the map · Esc to cancel"),
@@ -31,6 +33,7 @@ vi.mock("../../../../src/front/Components/Catastrophe/WeatherTab.svelte", async 
 import CatastrophePanel from "../../../../src/front/Components/Catastrophe/CatastrophePanel.svelte";
 import {
     armedCatastropheStore,
+    fireRadiusTilesStore,
     downpourWholeMapStore,
     meteorRadiusTilesStore,
     catastrophePanelStore,
@@ -129,6 +132,25 @@ describe("CatastrophePanel", () => {
         target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-tab-catastrophes"]')?.click();
         flushSync();
         expect(tile()).not.toBeNull();
+    });
+
+    it("arms the fire, and chooses the size of its patch from 1 to 8 tiles", () => {
+        render();
+        const fire = target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-fire"]');
+        fire?.click();
+        flushSync();
+        expect(fire?.getAttribute("aria-pressed")).toBe("true");
+        expect(get(armedCatastropheStore)).toBe("fire");
+        const slider = target.querySelector<HTMLInputElement>('[data-testid="catastrophe-fire-size"]');
+        expect(slider?.min).toBe("1");
+        expect(slider?.max).toBe("8");
+        expect(target.textContent).toContain("2 tiles");
+        if (!slider) throw new Error("no slider");
+        slider.value = "6";
+        slider.dispatchEvent(new Event("input", { bubbles: true }));
+        flushSync();
+        expect(get(fireRadiusTilesStore)).toBe(6);
+        fireRadiusTilesStore.set(2);
     });
 
     it("disarms on Escape", () => {

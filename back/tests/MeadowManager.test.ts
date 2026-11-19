@@ -26,8 +26,12 @@ function createHarness({
     meadow = undefined as NonNullable<WAMFileFormat["settings"]>["meadow"],
     grazers = undefined as (() => { x: number; y: number }[]) | undefined,
     danger = undefined as (() => number) | undefined,
+    wind = { windFrom: 0, windSpeed: 0 },
+    random = () => 1,
 }: {
     danger?: () => number;
+    wind?: { windFrom: number; windSpeed: number };
+    random?: () => number;
     grazers?: () => { x: number; y: number }[];
     meadow?: NonNullable<WAMFileFormat["settings"]>["meadow"];
     weather?: WeatherType;
@@ -59,7 +63,8 @@ function createHarness({
         () => now,
         mapSize,
         grazers,
-        danger,
+        () => ({ danger: danger?.() ?? 0, ...wind }),
+        random,
     );
     const steps = (count: number): void => {
         for (let step = 0; step < count; step++) manager.step();
@@ -69,6 +74,8 @@ function createHarness({
 
 const grassOf = (message: MeadowMessage): Uint8Array => new Uint8Array(gunzipSync(message.grass));
 const drynessOf = (message: MeadowMessage): Uint8Array => new Uint8Array(gunzipSync(message.dryness));
+const fireOf = (message: MeadowMessage): Uint8Array => new Uint8Array(gunzipSync(message.fire));
+const ashOf = (message: MeadowMessage): Uint8Array => new Uint8Array(gunzipSync(message.ash));
 
 describe("MeadowManager", () => {
     it("does nothing until the size of the map is read", () => {
@@ -135,6 +142,90 @@ describe("MeadowManager", () => {
         }
         expect(driest).toBeGreaterThan(128);
         manager.stop();
+    });
+
+    it("sets a patch of fire where a player asks, and tells the room at each step while it burns", () => {
+        // Grass first, under the rain; then a dry spell, and a patch of fire on the tile (2, 1).
+        const { manager, sent, steps, wam } = createHarness();
+        manager.mapChanged();
+        steps(400);
+        if (!wam.settings) throw new Error("no settings");
+        wam.settings.weather = WeatherType.Clear;
+        // The soil dries out before anything burns on it.
+        steps(150);
+        const before = sent.length;
+        expect(manager.ignite(2 * 32 + 5, 1 * 32 + 5, 0)).toBe(1);
+        steps(1);
+        expect(sent.length).toBe(before + 1);
+        expect(fireOf(sent[sent.length - 1])[1 * 8 + 2]).toBeGreaterThan(0);
+        steps(3);
+        expect(sent.length).toBe(before + 4);
+        // Burnt through: a last message says so, then the meadow is told every ten seconds again.
+        steps(20);
+        const last = sent[sent.length - 1];
+        expect(fireOf(last).every((fire) => fire === 0)).toBe(true);
+        // Burnt through; a blade of grass may already be growing back over the ash.
+        expect(ashOf(last)[1 * 8 + 2]).toBeGreaterThan(200);
+        expect(fireOf(manager.snapshot() ?? last)).toEqual(fireOf(last));
+        const settled = sent.length;
+        steps(4);
+        expect(sent.length - settled).toBeLessThanOrEqual(1);
+        manager.stop();
+    });
+
+    it("gives the fire the wind and the luck of the room: it spreads downwind", () => {
+        const { manager, sent, steps, wam } = createHarness({
+            // The air dries the ground; this luck spreads the fire downwind only, and starts none by itself.
+            danger: () => 1,
+            wind: { windFrom: 270, windSpeed: 60 },
+            random: () => 0.05,
+        });
+        manager.mapChanged();
+        steps(400);
+        if (!wam.settings) throw new Error("no settings");
+        wam.settings.weather = WeatherType.Clear;
+        steps(150);
+        manager.ignite(2 * 32 + 5, 1 * 32 + 5, 0);
+        steps(6);
+        const fire = fireOf(sent[sent.length - 1]);
+        const ash = ashOf(sent[sent.length - 1]);
+        // The wind blows east: the tile to the east took fire, the one to the west did not.
+        expect(fire[1 * 8 + 3] + ash[1 * 8 + 3]).toBeGreaterThan(0);
+        expect(fire[1 * 8 + 1] + ash[1 * 8 + 1]).toBe(0);
+        manager.stop();
+    });
+
+    it("keeps the ash across a restart, not the fire", async () => {
+        const first = createHarness();
+        first.manager.mapChanged();
+        first.steps(400);
+        if (!first.wam.settings) throw new Error("no settings");
+        first.wam.settings.weather = WeatherType.Clear;
+        first.steps(150);
+        first.manager.ignite(2 * 32 + 5, 1 * 32 + 5, 0);
+        first.steps(30);
+        first.manager.ignite(5 * 32 + 5, 2 * 32 + 5, 0);
+        first.steps(1);
+        first.manager.stop();
+        const second = createHarness({ saved: first.store, weather: WeatherType.Clear, now: Date.UTC(2026, 6, 14, 1) });
+        await second.manager.restore();
+        second.manager.mapChanged();
+        second.steps(5);
+        const told = second.sent[second.sent.length - 1];
+        expect(ashOf(told)[1 * 8 + 2]).toBeGreaterThan(200);
+        expect(fireOf(told).every((fire) => fire === 0)).toBe(true);
+        second.manager.stop();
+    });
+
+    it("lights nothing on a map without a meadow, nor on one that turned it off", () => {
+        const none = createHarness({ mapSize: () => undefined });
+        none.manager.mapChanged();
+        expect(none.manager.ignite(10, 10, 2)).toBe(0);
+        const off = createHarness({ meadow: { enabled: false, growMinutes: 10, thirstMinutes: 20, moistureHold: 1 } });
+        off.manager.mapChanged();
+        off.steps(5);
+        expect(off.manager.ignite(10, 10, 2)).toBe(0);
+        off.manager.stop();
     });
 
     it("keeps its meadow across a restart", async () => {

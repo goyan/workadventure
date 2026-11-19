@@ -1,8 +1,8 @@
-import { DOWNPOUR_DEFAULT_TILES, METEOR_DEFAULT_TILES } from "@workadventure/map-editor";
+import { DOWNPOUR_DEFAULT_TILES, FIRE_DEFAULT_TILES, METEOR_DEFAULT_TILES } from "@workadventure/map-editor";
 import { derived, get, writable } from "svelte/store";
 import { mapEditorModeStore } from "./MapEditorStore";
 
-export type CatastropheChoice = "meteor" | "downpour";
+export type CatastropheChoice = "meteor" | "downpour" | "fire";
 
 /** Whether the catastrophe panel is shown. Session only: closed at each page load. */
 export const catastrophePanelStore = writable<boolean>(false);
@@ -13,6 +13,9 @@ export const meteorRadiusTilesStore = writable<number>(METEOR_DEFAULT_TILES);
 /** How wide the downpour is, in tiles, and whether it falls on the whole map instead: kept for the session. */
 export const downpourRadiusTilesStore = writable<number>(DOWNPOUR_DEFAULT_TILES);
 export const downpourWholeMapStore = writable<boolean>(false);
+
+/** How wide the patch of fire set under the pointer is, in tiles: kept for the session. */
+export const fireRadiusTilesStore = writable<number>(FIRE_DEFAULT_TILES);
 
 const chosenCatastropheStore = writable<CatastropheChoice | undefined>(undefined);
 

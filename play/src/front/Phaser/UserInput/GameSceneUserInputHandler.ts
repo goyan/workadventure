@@ -36,6 +36,7 @@ import {
     armedCatastropheStore,
     downpourRadiusTilesStore,
     downpourWholeMapStore,
+    fireRadiusTilesStore,
     meteorRadiusTilesStore,
 } from "@wa/front/Stores/CatastropheStore";
 import { cameraDetachedStore } from "@wa/front/Stores/CameraStore";
@@ -75,6 +76,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     private draggingMap = false;
     /** While the click of an armed downpour is held: tells the server where the pointer is, a few times a second. */
     private downpourReports: Phaser.Time.TimerEvent | undefined;
+    /** The catastrophe a held click is throwing: a downpour that follows the pointer, or fire painted along it. */
+    private heldKind: "downpour" | "fire" | undefined;
     // The current touch gesture involved two fingers or more (a pinch): lifting a finger must not count as a tap.
     private multiTouch = false;
     private pinchFreedView = false;
@@ -90,8 +93,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         this.gameScene = gameScene;
         this.pointerCapture = new MapDragPointerCapture(
             gameScene.game.canvas,
-            // A held downpour keeps the pointer too: its release is seen even over a panel.
-            () => this.canDragMap() || (get(armedCatastropheStore) === "downpour" && !get(mapEditorModeStore)),
+            // A held downpour or fire keeps the pointer too: its release is seen even over a panel.
+            () => this.canDragMap() || (this.heldCatastrophe() !== undefined && !get(mapEditorModeStore)),
             () => this.handlePointerCancelEvent(),
         );
         // Same Key object as the "interact" key: addKey returns the existing one.
@@ -112,8 +115,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         // The canvas shows a crosshair while a catastrophe is armed, through the same default cursor as the map drag.
         let wasArmed = false;
         const unsubscribeArmed = armedCatastropheStore.subscribe((armed) => {
-            // A downpour only rains while it is the armed one.
-            if (armed !== "downpour") this.stopDownpour();
+            // A downpour only rains, and a fire is only painted, while it is the armed one.
+            if (armed !== this.heldKind) this.stopDownpour();
             if (wasArmed === (armed !== undefined)) return;
             wasArmed = armed !== undefined;
             this.gameScene.input.setDefaultCursor(wasArmed ? "crosshair" : this.idleCursor());
@@ -174,8 +177,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         // An armed catastrophe takes the click that is not a drag (the drag test above): it walks, activates and
         // picks nothing. The press itself is left to the map drag, which stays free.
         if (get(armedCatastropheStore) !== undefined && (pointer.wasTouch || pointer.leftButtonReleased())) {
-            // The downpour rained while the click was held: releasing it only ends it.
-            if (get(armedCatastropheStore) === "downpour") this.stopDownpour();
+            // The downpour rained, the fire was painted, while the click was held: releasing it only ends it.
+            if (this.heldCatastrophe() !== undefined) this.stopDownpour();
             else this.launchArmedCatastrophe(pointer);
             return;
         }
@@ -298,7 +301,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         ) {
             return;
         }
-        // The server decides: its cooldown refuses a second launch of a double click.
+        // The server decides what the meteor does there.
         this.gameScene.connection?.emitLaunchCatastrophe(
             CatastropheKind.CATASTROPHE_METEOR,
             worldPoint.x,
@@ -307,12 +310,23 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         );
     }
 
-    /** The click of an armed downpour is pressed: it rains under the pointer at once, and for as long as it is held. */
+    /** The catastrophe a held click throws, when one of those is armed: the downpour and the fire. */
+    private heldCatastrophe(): "downpour" | "fire" | undefined {
+        const armed = get(armedCatastropheStore);
+        return armed === "downpour" || armed === "fire" ? armed : undefined;
+    }
+
+    /**
+     * The click of an armed downpour or fire is pressed: it rains, or burns, under the pointer at once, and for as
+     * long as it is held, wherever the pointer goes.
+     */
     private startDownpour(pointer: Pointer): void {
         this.stopDownpour();
         if (!this.gameScene.userInputManager.isControlsEnabled) return;
+        const kind = this.heldCatastrophe();
+        this.heldKind = kind;
         const report = (): void => {
-            if (get(armedCatastropheStore) !== "downpour" || !pointer.isDown) {
+            if (get(armedCatastropheStore) !== kind || !pointer.isDown) {
                 this.stopDownpour();
                 return;
             }
@@ -320,6 +334,16 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             // A pointer past the edge rains on the edge: the cloud never leaves the map.
             const x = Math.min(this.gameScene.Map.widthInPixels - 1, Math.max(0, worldPoint.x));
             const y = Math.min(this.gameScene.Map.heightInPixels - 1, Math.max(0, worldPoint.y));
+            if (kind === "fire") {
+                // A patch of fire at each report: the fire is painted along the way of the pointer.
+                this.gameScene.connection?.emitLaunchCatastrophe(
+                    CatastropheKind.CATASTROPHE_FIRE,
+                    x,
+                    y,
+                    get(fireRadiusTilesStore),
+                );
+                return;
+            }
             this.gameScene.connection?.emitLaunchCatastrophe(
                 CatastropheKind.CATASTROPHE_DOWNPOUR,
                 x,
@@ -339,6 +363,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     private stopDownpour(): void {
         this.downpourReports?.remove();
         this.downpourReports = undefined;
+        this.heldKind = undefined;
     }
 
     private idleCursor(): string {
@@ -561,8 +586,9 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 return;
             }
         }
-        // An armed downpour takes the press: it rains while it is held, and the drag moves the cloud, not the map.
-        if (get(armedCatastropheStore) === "downpour" && !get(mapEditorModeStore)) {
+        // An armed downpour or fire takes the press: it rains, or burns, while it is held, and the drag moves the
+        // cloud or paints the fire, not the map.
+        if (this.heldCatastrophe() !== undefined && !get(mapEditorModeStore)) {
             if (pointer.wasTouch || pointer.leftButtonDown()) this.startDownpour(pointer);
             return;
         }

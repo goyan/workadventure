@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MeadowState, strawLevel } from "../../../../../src/front/Phaser/Game/Terrain/MeadowState";
+import { fireGlowAlpha, MeadowState, strawLevel } from "../../../../../src/front/Phaser/Game/Terrain/MeadowState";
 
 describe("the dryness of the meadow", () => {
     it("is read with the grass, tile by tile", () => {
@@ -54,5 +54,41 @@ describe("strawLevel", () => {
         // And denser grass a little more.
         expect(strawLevel(128, 255)).toBeGreaterThan(strawLevel(1, 255));
         expect(strawLevel(128, 255)).toBeLessThan(255);
+    });
+});
+
+describe("the fire and the ash of the meadow", () => {
+    const state = { width: 2, height: 1, grass: new Uint8Array([255, 0]), moisture: new Uint8Array([0, 0]) };
+
+    it("are read tile by tile, and a map has them to draw even without any grass left", () => {
+        const meadow = new MeadowState();
+        meadow.receive({
+            ...state,
+            grass: new Uint8Array([0, 0]),
+            fire: new Uint8Array([0, 180]),
+            ash: new Uint8Array([255, 40]),
+        });
+        expect(meadow.fireAt(1, 0)).toBe(180);
+        expect(meadow.ashAt(0, 0)).toBe(255);
+        expect(meadow.fireAt(7, 7)).toBe(0);
+        expect(meadow.hasGrass()).toBe(true);
+        expect(meadow.isBurning()).toBe(true);
+    });
+
+    it("are none from a server that knows no fire, or tells one that does not fit", () => {
+        const meadow = new MeadowState();
+        meadow.receive(state);
+        expect(meadow.fireAt(0, 0)).toBe(0);
+        expect(meadow.ashAt(0, 0)).toBe(0);
+        expect(meadow.isBurning()).toBe(false);
+        meadow.receive({ ...state, fire: new Uint8Array([9]), ash: new Uint8Array(0) });
+        expect(meadow.fireAt(0, 0)).toBe(0);
+        expect(meadow.grassAt(0, 0)).toBe(255);
+    });
+
+    it("glows on the ground as much as it burns", () => {
+        expect(fireGlowAlpha(0)).toBe(0);
+        expect(fireGlowAlpha(255)).toBeCloseTo(0.85, 5);
+        expect(fireGlowAlpha(128)).toBeGreaterThan(fireGlowAlpha(60));
     });
 });

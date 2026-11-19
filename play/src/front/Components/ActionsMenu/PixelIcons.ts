@@ -18,6 +18,24 @@ export const PIXEL_ICON_COLORS = {
 } as const;
 
 export const PIXEL_ICONS = {
+    fire: [
+        "................",
+        ".......k........",
+        "......krk.......",
+        "......krrk......",
+        ".....krork..k...",
+        "..k..kroork.krk.",
+        ".krk.kroookkrrk.",
+        ".krrkkroyorkrok.",
+        ".kroorooyyorook.",
+        ".kroooyyyyyoork.",
+        "..kroyyywyyork..",
+        "..kroyywwyyork..",
+        "...kroywwyork...",
+        "....kkoyyokk....",
+        "......kkkk......",
+        "................",
+    ],
     dance: [
         "................",
         "........kk......",

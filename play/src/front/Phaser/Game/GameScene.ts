@@ -2941,13 +2941,25 @@ export class GameScene extends DirtyScene {
     private receiveMeadow(message: MeadowMessage): void {
         this.meadowQueue = this.meadowQueue
             .then(async () => {
-                const [grass, moisture, dryness] = await Promise.all([
+                // The dryness, the fire and the ash are empty from a server that does not know them.
+                const read = (bytes: Uint8Array): Promise<Uint8Array> =>
+                    bytes.length > 0 ? gunzip(bytes) : Promise.resolve(new Uint8Array(0));
+                const [grass, moisture, dryness, fire, ash] = await Promise.all([
                     gunzip(message.grass),
                     gunzip(message.moisture),
-                    // Empty from a server that does not dry the grass.
-                    message.dryness.length > 0 ? gunzip(message.dryness) : Promise.resolve(new Uint8Array(0)),
+                    read(message.dryness),
+                    read(message.fire),
+                    read(message.ash),
                 ]);
-                this.meadow.receive({ width: message.width, height: message.height, grass, moisture, dryness });
+                this.meadow.receive({
+                    width: message.width,
+                    height: message.height,
+                    grass,
+                    moisture,
+                    dryness,
+                    fire,
+                    ash,
+                });
             })
             .catch((error: unknown) => console.warn("A state of the meadow of the map could not be read", error));
     }

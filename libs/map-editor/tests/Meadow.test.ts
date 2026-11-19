@@ -312,22 +312,24 @@ describe("the snow of the heights", () => {
 });
 
 describe("the dryness of the grass", () => {
-    const burning: MeadowStepInput = { ...dry, daylight: false, fireDanger: 1 };
+    // No luck for the fire: at this danger one could start by itself, which is not what is looked at here.
+    const burning: MeadowStepInput = { ...dry, daylight: false, fireDanger: 1, random: () => 1 };
 
-    it("rises on a dry soil when it is hot, dry and windy: most of the way in a minute and a half", () => {
+    it("rises on a dry soil when it is hot, dry and windy: most of the way in half a minute", () => {
         const meadow = new Meadow(size, undefined, undefined);
         meadow.set(3, 2, 0, 1);
-        expect(DRYING_SECONDS).toBe(90);
-        run(meadow, 90, burning);
+        expect(DRYING_SECONDS).toBe(30);
+        run(meadow, 30, burning);
         expect(meadow.drynessAt(3, 2)).toBeGreaterThan(0.6);
         expect(meadow.drynessAt(3, 2)).toBeLessThan(0.7);
-        run(meadow, 360, burning);
+        run(meadow, 120, burning);
         expect(meadow.drynessAt(3, 2)).toBeGreaterThan(0.95);
     });
 
     it("stays green on a sodden soil, and under water", () => {
+        // Sodden everywhere, under a hard rain: nowhere for the moisture to go.
         const meadow = new Meadow(size, undefined, undefined);
-        meadow.set(3, 2, 1, 1);
+        for (let y = 0; y < size.height; y++) for (let x = 0; x < size.width; x++) meadow.set(x, y, 1, 1);
         run(meadow, 20, { ...burning, rainMmPerHour: 50 });
         expect(meadow.drynessAt(3, 2)).toBeLessThan(0.05);
         const flooded = new Meadow(size, undefined, undefined);
@@ -360,7 +362,7 @@ describe("the dryness of the grass", () => {
     it("goes back down when the conditions do", () => {
         const meadow = new Meadow(size, undefined, undefined);
         meadow.set(3, 2, 0, 1, 1);
-        run(meadow, 90, { ...dry, daylight: false });
+        run(meadow, 30, { ...dry, daylight: false });
         expect(meadow.drynessAt(3, 2)).toBeLessThan(0.4);
         expect(meadow.drynessAt(3, 2)).toBeGreaterThan(0.3);
     });

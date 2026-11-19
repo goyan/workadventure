@@ -44,7 +44,14 @@ export class MeadowManager {
     private readSignature: string | undefined;
     /** The state saved before a restart, until the first meadow takes it. */
     private saved:
-        | { width: number; height: number; grass: Uint8Array; moisture: Uint8Array; dryness?: Uint8Array }
+        | {
+              width: number;
+              height: number;
+              grass: Uint8Array;
+              moisture: Uint8Array;
+              dryness?: Uint8Array;
+              ash?: Uint8Array;
+          }
         | undefined;
     private timer: ReturnType<typeof setInterval> | undefined;
     private steps = 0;
@@ -52,6 +59,10 @@ export class MeadowManager {
     private sentGrass: Uint8Array | undefined;
     private sentMoisture: Uint8Array | undefined;
     private sentDryness: Uint8Array | undefined;
+    private sentFire: Uint8Array | undefined;
+    private sentAsh: Uint8Array | undefined;
+    /** Whether a fire burnt at the last step: the room is told once more when it is out. */
+    private wasBurning = false;
     private changedSinceSave = false;
     /** Whether the meadow was wiped because the map turned it off. */
     private cleared = false;
@@ -67,8 +78,17 @@ export class MeadowManager {
         private readonly mapSize: () => { width: number; height: number } | undefined = () => undefined,
         /** Where the animals that graze are, in map pixels (the antelopes of the life of the land): they eat the grass under them. */
         private readonly grazers: () => readonly { x: number; y: number }[] = () => [],
-        /** How ready the grass is to burn under the conditions of the room, from 0 to 1: it dries by it. */
-        private readonly fireDanger: () => number = () => 0,
+        /**
+         * The conditions of the room for its fire: how ready the grass is to burn (0 to 1), which dries it, and the
+         * wind that pushes the flames.
+         */
+        private readonly fireWeather: () => { danger: number; windFrom: number; windSpeed: number } = () => ({
+            danger: 0,
+            windFrom: 0,
+            windSpeed: 0,
+        }),
+        /** The luck of the fire: whether it spreads, whether one starts by itself. */
+        private readonly random: () => number = Math.random,
     ) {}
 
     /** Brings back the meadow saved before a restart. A store that does not answer must not keep the room closed. */
@@ -88,6 +108,8 @@ export class MeadowManager {
                 ...(fields.dryness
                     ? { dryness: new Uint8Array(gunzipSync(Buffer.from(fields.dryness, "base64"))) }
                     : {}),
+                // Absent from a meadow saved before it could burn.
+                ...(fields.ash ? { ash: new Uint8Array(gunzipSync(Buffer.from(fields.ash, "base64"))) } : {}),
             };
         } catch (error) {
             console.error("Could not restore the meadow of the map", error);
@@ -126,7 +148,7 @@ export class MeadowManager {
         this.meadow = new Meadow({ width, height }, wam?.terrain, walls, paved);
         if (before) this.meadow.takeFrom(before);
         else if (this.saved && this.saved.width === width && this.saved.height === height) {
-            this.meadow.read(this.saved.grass, this.saved.moisture, this.saved.dryness);
+            this.meadow.read(this.saved.grass, this.saved.moisture, this.saved.dryness, this.saved.ash);
         }
         this.saved = undefined;
         if (!this.timer) {
@@ -173,6 +195,7 @@ export class MeadowManager {
         this.cleared = false;
         const minutes = minutesOfDayIn(date, settings?.weatherLocation?.timezone);
         const grid = this.water();
+        const weather = this.fireWeather();
         meadow.step({
             seconds: MEADOW_STEP_SECONDS,
             rainMmPerHour: this.rainRate,
@@ -181,7 +204,10 @@ export class MeadowManager {
             growSeconds: set.growMinutes * 60,
             thirstSeconds: set.thirstMinutes * 60,
             moistureHold: set.moistureHold,
-            fireDanger: this.fireDanger(),
+            fireDanger: weather.danger,
+            windFrom: weather.windFrom,
+            windSpeed: weather.windSpeed,
+            random: this.random,
             waterAt: grid
                 ? (tileX, tileY) => {
                       let deepest = 0;
@@ -196,8 +222,23 @@ export class MeadowManager {
                 : () => 0,
         });
         for (const grazer of this.grazers()) meadow.graze(grazer.x, grazer.y, MEADOW_STEP_SECONDS);
-        if (this.steps % STEPS_PER_MESSAGE === 0) this.tell(meadow);
+        // A fire is seen running: the room is told at every step while one burns, and once more when it is out.
+        const burning = meadow.burning() > 0;
+        if (this.steps % STEPS_PER_MESSAGE === 0 || burning || this.wasBurning) this.tell(meadow);
+        this.wasBurning = burning;
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
+    }
+
+    /**
+     * A patch of fire a player sets around a point of the map (pixels), `radiusTiles` wide: the grass that can burn
+     * there takes fire. Returns how many tiles did; the room sees it at the next step.
+     */
+    public ignite(x: number, y: number, radiusTiles: number): number {
+        const settings = this.room.getWam()?.settings;
+        if (!this.meadow || !{ ...DEFAULT_MEADOW_SETTINGS, ...settings?.meadow }.enabled) return 0;
+        const lit = this.meadow.ignite(Math.floor(x / TILE_PX), Math.floor(y / TILE_PX), radiusTiles);
+        if (lit > 0) this.wasBurning = true;
+        return lit;
     }
 
     /** A downpour soaks the soil under it at once; the room sees it at the next message of the meadow. */
@@ -213,13 +254,24 @@ export class MeadowManager {
 
     /** The whole state the room was last told, for a player who joins it. Undefined where nothing ever grew. */
     public snapshot(): MeadowMessage | undefined {
-        if (!this.meadow || !this.sentGrass || !this.sentMoisture || !this.sentDryness) return undefined;
+        if (
+            !this.meadow ||
+            !this.sentGrass ||
+            !this.sentMoisture ||
+            !this.sentDryness ||
+            !this.sentFire ||
+            !this.sentAsh
+        ) {
+            return undefined;
+        }
         return {
             width: this.meadow.width,
             height: this.meadow.height,
             grass: gzipSync(this.sentGrass),
             moisture: gzipSync(this.sentMoisture),
             dryness: gzipSync(this.sentDryness),
+            fire: gzipSync(this.sentFire),
+            ash: gzipSync(this.sentAsh),
         };
     }
 
@@ -227,16 +279,26 @@ export class MeadowManager {
         const grass = meadow.writeGrass();
         const moisture = meadow.writeMoisture();
         const dryness = meadow.writeDryness();
+        const fire = meadow.writeFire();
+        const ash = meadow.writeAsh();
         const same = (a: Uint8Array, b: Uint8Array | undefined): boolean =>
             b !== undefined && a.length === b.length && a.every((value, index) => value === b[index]);
         // A bare and dry map the room was never told about: nothing to say.
         if (!this.sentGrass && grass.every((value) => value === 0) && moisture.every((value) => value === 0)) return;
-        if (same(grass, this.sentGrass) && same(moisture, this.sentMoisture) && same(dryness, this.sentDryness)) {
+        if (
+            same(grass, this.sentGrass) &&
+            same(moisture, this.sentMoisture) &&
+            same(dryness, this.sentDryness) &&
+            same(fire, this.sentFire) &&
+            same(ash, this.sentAsh)
+        ) {
             return;
         }
         this.sentGrass = grass;
         this.sentMoisture = moisture;
         this.sentDryness = dryness;
+        this.sentFire = fire;
+        this.sentAsh = ash;
         this.changedSinceSave = true;
         this.room.sendSubMessageToRoom({
             message: {
@@ -247,6 +309,8 @@ export class MeadowManager {
                     grass: gzipSync(grass),
                     moisture: gzipSync(moisture),
                     dryness: gzipSync(dryness),
+                    fire: gzipSync(fire),
+                    ash: gzipSync(ash),
                 },
             },
         });
@@ -259,6 +323,7 @@ export class MeadowManager {
             ["grass", Buffer.from(gzipSync(this.meadow.writeGrass())).toString("base64")],
             ["moisture", Buffer.from(gzipSync(this.meadow.writeMoisture())).toString("base64")],
             ["dryness", Buffer.from(gzipSync(this.meadow.writeDryness())).toString("base64")],
+            ["ash", Buffer.from(gzipSync(this.meadow.writeAsh())).toString("base64")],
             ["size", `${this.meadow.width}x${this.meadow.height}`],
         ];
         for (const [field, value] of fields) {
