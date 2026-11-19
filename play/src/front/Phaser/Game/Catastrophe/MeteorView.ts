@@ -1,7 +1,8 @@
 import type { CatastropheMessage } from "@workadventure/messages";
 import { METEOR_FALL_MS } from "@workadventure/map-editor";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
-import { meteorFrame } from "./MeteorFall";
+import { LAMP_MIN_FLASH_INTERVAL_MS } from "../Lamps/LampSignal";
+import { flashAllowed, meteorFrame } from "./MeteorFall";
 
 const SHADOW_RADIUS_PX = 48;
 const METEOR_RADIUS_PX = 10;
@@ -20,6 +21,8 @@ interface Meteor {
     launchedAt: number;
     /** Whether the ground was under water at impact: decided once, when it lands. */
     wet: boolean | undefined;
+    /** Whether its impact flashes the screen: decided once, when it lands (see `flashAllowed`). */
+    flashes: boolean | undefined;
 }
 
 /**
@@ -30,6 +33,8 @@ interface Meteor {
 export class MeteorView {
     private readonly graphics: Phaser.GameObjects.Graphics;
     private readonly meteors: Meteor[] = [];
+    /** When the last full-screen flash began, in ms of the game: at most 3 flashes a second for the whole screen. */
+    private lastFlashAt: number | undefined;
 
     constructor(
         private readonly scene: Phaser.Scene & { markDirty(): void },
@@ -46,6 +51,7 @@ export class MeteorView {
             y: message.y,
             launchedAt: receivedAt + message.impactInMs - METEOR_FALL_MS,
             wet: undefined,
+            flashes: undefined,
         });
     }
 
@@ -54,6 +60,7 @@ export class MeteorView {
         const graphics = this.graphics;
         graphics.clear();
         const reduced = this.reducedMotion();
+        let flashed = false;
         for (let index = this.meteors.length - 1; index >= 0; index--) {
             const meteor = this.meteors[index];
             const frame = meteorFrame(now - meteor.launchedAt, METEOR_FALL_MS, reduced);
@@ -66,9 +73,16 @@ export class MeteorView {
                 this.drawMeteor(meteor, frame.offset);
             } else {
                 meteor.wet ??= this.isWet(meteor.x, meteor.y);
+                if (meteor.flashes === undefined) {
+                    meteor.flashes = flashAllowed(now, this.lastFlashAt, LAMP_MIN_FLASH_INTERVAL_MS);
+                    if (meteor.flashes) this.lastFlashAt = now;
+                }
                 this.drawBurst(meteor, frame.burst, meteor.wet);
             }
-            if (frame.flash > 0) this.drawFlash(frame.flash);
+            if (frame.flash > 0 && meteor.flashes && !flashed) {
+                this.drawFlash(frame.flash);
+                flashed = true;
+            }
         }
         this.scene.markDirty();
     }

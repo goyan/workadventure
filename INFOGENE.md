@@ -3183,10 +3183,10 @@ choisir quoi que ce soit. Rien n'est tiré hors de la carte ni quand les command
 reste armé après chaque lancer.
 
 **Ce que tout le monde voit.** Une ombre qui grandit au sol pendant la chute (1,2 s), le météore qui arrive en
-diagonale avec sa traîne, un éclair blanc de 120 ms sur tout l'écran, puis une gerbe de 0,6 s : **bleue** si le sol
+diagonale avec sa traîne, un éclair blanc de 120 ms sur tout l'écran (un éclair toutes les 334 ms au plus pour tout l'écran, WCAG 2.3.1 : un impact trop proche du précédent n'en a pas, il garde sa gerbe), puis une gerbe de 0,6 s : **bleue** si le sol
 est sous au moins 2 px d'eau à l'impact (d'après ce que ce navigateur sait de l'eau), **brune** (poussière) sinon.
 Pour qui a demandé moins de mouvement (`prefers-reduced-motion`) : ni éclair ni météore qui tombe, il reste l'ombre
-et la gerbe. Tout est dessiné par le navigateur, en code, dans un seul calque au-dessus de tout (`DEPTH_NIGHT_INDEX + 2`).
+et la gerbe. Tout est dessiné par le navigateur, en code, dans un seul calque au-dessus du voile de nuit et de la météo (`DEPTH_NIGHT_INDEX + 2`).
 
 **Ce que fait l'eau.** Le serveur vide le **disque** d'impact (rayon 6 cellules de 16 px), puis étale cette eau, **plus
 8 px apportés par cellule du disque**, à parts égales sur l'**anneau** autour du disque (jusqu'à 12 cellules). Une

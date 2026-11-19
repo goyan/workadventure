@@ -16,7 +16,7 @@ beforeEach(() => {
 });
 
 describe("CatastropheStore", () => {
-    it("arms the chosen catastrophe, and chosing it again disarms it", () => {
+    it("arms the chosen catastrophe, and choosing it again disarms it", () => {
         toggleArmedCatastrophe("meteor");
         expect(get(armedCatastropheStore)).toBe("meteor");
         toggleArmedCatastrophe("meteor");

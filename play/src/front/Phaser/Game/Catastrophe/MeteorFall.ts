@@ -32,3 +32,8 @@ export function meteorFrame(elapsedMs: number, fallMs: number, reducedMotion: bo
         done: sinceImpact >= BURST_MS,
     };
 }
+
+/** Whether the flash of an impact may show: never sooner than `minIntervalMs` after the previous flash began. */
+export function flashAllowed(impactAt: number, lastFlashAt: number | undefined, minIntervalMs: number): boolean {
+    return lastFlashAt === undefined || impactAt - lastFlashAt >= minIntervalMs;
+}

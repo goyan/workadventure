@@ -9,6 +9,7 @@ import type { GameRoom } from "./GameRoom";
  */
 export class CatastropheManager {
     private nextId = 1;
+    private stopped = false;
     /** When each player's last accepted launch was, by user id. */
     private readonly lastLaunch = new Map<number, number>();
     private readonly inFlight = new Set<ReturnType<typeof setTimeout>>();
@@ -23,7 +24,7 @@ export class CatastropheManager {
 
     /** A player launches a catastrophe at a point of the map (pixels). False when it is refused. */
     public launch(userId: number, kind: CatastropheKind, x: number, y: number): boolean {
-        if (kind !== CatastropheKind.CATASTROPHE_METEOR) return false;
+        if (this.stopped || kind !== CatastropheKind.CATASTROPHE_METEOR) return false;
         const size = this.mapSize();
         if (!size || !Number.isFinite(x) || !Number.isFinite(y)) return false;
         if (x < 0 || y < 0 || x >= size.width || y >= size.height) return false;
@@ -53,6 +54,7 @@ export class CatastropheManager {
     }
 
     public stop(): void {
+        this.stopped = true;
         for (const timer of this.inFlight) clearTimeout(timer);
         this.inFlight.clear();
     }

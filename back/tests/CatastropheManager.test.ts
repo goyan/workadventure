@@ -117,4 +117,13 @@ describe("CatastropheManager", () => {
         vi.advanceTimersByTime(2000);
         expect(strike).not.toHaveBeenCalled();
     });
+
+    it("refuses a launch once stopped", () => {
+        const { manager, sent, strike } = harness();
+        manager.stop();
+        expect(manager.launch(1, METEOR, 10, 10)).toBe(false);
+        vi.advanceTimersByTime(2000);
+        expect(sent).toHaveLength(0);
+        expect(strike).not.toHaveBeenCalled();
+    });
 });

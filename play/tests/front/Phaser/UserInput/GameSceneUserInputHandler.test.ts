@@ -129,6 +129,8 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
     });
 
     afterEach(() => {
+        // Releases what every handler of the test (the extra ones too: they share the scene) subscribed to.
+        scene.events.emit(Phaser.Scenes.Events.SHUTDOWN);
         wokaMenuStore.clear();
         nerfEquippedStore.set(false);
         mapEditorModeStore.set(false);

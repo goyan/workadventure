@@ -356,7 +356,7 @@ export class GameRoom implements BrothersFinder {
         );
         gameRoom.terrainWater = terrainWater;
 
-        // The meteors that fall on that water; the map size is read in cells of the relief.
+        // The meteors that fall on that water; the map size is passed in pixels.
         const catastrophes = new CatastropheManager(
             gameRoom,
             gameRoom.mapSizeInPixels.bind(gameRoom),
