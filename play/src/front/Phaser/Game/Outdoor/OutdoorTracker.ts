@@ -1,4 +1,10 @@
-import { mapLayerGroundRect, parseMapLayerPrefab, type MapLayerPiece } from "../MapEditor/MapLayer/MapLayerCatalog";
+import {
+    DOOR_VERTICAL_WIDTH,
+    WALL_THICKNESS,
+    mapLayerGroundRect,
+    parseMapLayerPrefab,
+    type MapLayerPiece,
+} from "../MapEditor/MapLayer/MapLayerCatalog";
 import { OUTDOOR_WALL_COLLECTIONS, OutdoorGrid, type Rect } from "./OutdoorGrid";
 
 /** Cell size of the team maps. */
@@ -103,6 +109,11 @@ function groundRectFor(
     if (piece === undefined || piece.kind === "floor") return undefined;
     if (piece.kind === "lintel") {
         return { x, y, width: 0, height: 0 };
+    }
+    if (piece.kind === "door" && piece.orientation === "v") {
+        const ground = mapLayerGroundRect(piece, x, y);
+        // The leaf swings beside the wall; its image must not turn the corridor into a wall.
+        return { ...ground, x: x + (DOOR_VERTICAL_WIDTH - WALL_THICKNESS) / 2, width: WALL_THICKNESS };
     }
     if (piece.height === 1) return undefined;
     return mapLayerGroundRect(piece, x, y);

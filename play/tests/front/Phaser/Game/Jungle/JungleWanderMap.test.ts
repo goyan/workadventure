@@ -41,6 +41,37 @@ describe("outdoorWanderMap", () => {
         ).toEqual(outside);
     });
 
+    it("rejects sparse paths whose outdoor waypoints cross a building", async () => {
+        const from = { x: 16, y: 48 };
+        const to = { x: 144, y: 48 };
+        const outside = (x: number): boolean => x < 64 || x >= 96;
+        const map = outdoorWanderMap(baseMap([from, to]), outside, 32);
+        expect(map.isWalkable({ x: 0, y: 1 })).toBe(true);
+        expect(map.isWalkable({ x: 4, y: 1 })).toBe(true);
+        expect(await map.findPath(from, to)).toEqual([]);
+    });
+
+    it("checks the segment to the destination when the base path omits it", async () => {
+        const from = { x: 16, y: 48 };
+        const to = { x: 144, y: 48 };
+        const map = outdoorWanderMap(baseMap([from]), (x) => x < 64 || x >= 96, 32);
+        expect(await map.findPath(from, to)).toEqual([]);
+    });
+
+    it("checks diagonals through a narrow indoor strip", async () => {
+        const from = { x: 16, y: 16 };
+        const to = { x: 144, y: 144 };
+        const map = outdoorWanderMap(baseMap([from, to]), (x, y) => x < 64 || x >= 72 || y < 64 || y >= 72, 32);
+        expect(await map.findPath(from, to)).toEqual([]);
+    });
+
+    it("rejects a diagonal that barely grazes an indoor cell", async () => {
+        const from = { x: 16, y: 16.1 };
+        const to = { x: 144, y: 144.1 };
+        const map = outdoorWanderMap(baseMap([from, to]), (x, y) => x < 64 || x >= 72 || y < 72 || y >= 80, 32);
+        expect(await map.findPath(from, to)).toEqual([]);
+    });
+
     it("has no seats", () => {
         expect("seats" in outdoorWanderMap(baseMap(), isOutdoor, 32)).toBe(false);
     });

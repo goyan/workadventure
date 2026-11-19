@@ -81,6 +81,12 @@ describe("a floor above the avatar", () => {
         });
     });
 
+    it("hides a floor above a Woka under its slabs even when a doorway has no indoor room", () => {
+        expect(aboveLevelShows({ indoors: false, raised: false, hidesAvatar: true, underFloor: true })).toEqual({
+            alpha: 0,
+        });
+    });
+
     it("leaves the floors under the avatar clearly darker", () => {
         expect(VEIL_ALPHA).toBe(0.7);
     });

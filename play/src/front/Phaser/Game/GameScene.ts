@@ -6146,6 +6146,13 @@ ${escapedMessage}
         return this.doorAnimator?.isDoorOpen(entityId) ?? false;
     }
 
+    public isInOpenVerticalDoorPassage(x: number, y: number): boolean {
+        const elevation = this.CurrentPlayer.getFloorZ();
+        return elevation === 0
+            ? (this.doorAnimator?.isInOpenVerticalPassage(x, y) ?? false)
+            : (this.upperDoors?.isInOpenVerticalPassage(x, y, elevation) ?? false);
+    }
+
     private subscribeToGameMapChanged(): void {
         this.gameMapChangedSubscription?.unsubscribe();
         this.gameMapChangedSubscription = this.gameMapFrontWrapper

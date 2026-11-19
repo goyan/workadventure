@@ -183,6 +183,17 @@ describe("entityOutdoorRect of high walls", () => {
         }
     });
 
+    it("keeps the space beside a vertical door in its room, even while its leaf swings", () => {
+        const door = piece("Carte Portes", "porte-v-gris-haut-h2", 96, 128);
+        expect(entityOutdoorRect(door, imageSize(door))).toEqual({
+            collectionName: "Carte Portes",
+            x: 122,
+            y: 160,
+            width: 12,
+            height: 32,
+        });
+    });
+
     it("gives a lintel no rectangle of its own", () => {
         const lintel = piece("Carte Murs", "linteau-gris-mid-h4-o2", 64, 0);
         expect(entityOutdoorRect(lintel, imageSize(lintel))).toMatchObject({ width: 0, height: 0 });

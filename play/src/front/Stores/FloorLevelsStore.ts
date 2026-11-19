@@ -9,12 +9,15 @@ export interface FloorLevelStack {
     levels: { elevation: number; name: string }[];
     /** The floor the avatar stands on (the last one while it is on a stair). */
     current: number;
+    /** Manual display ceiling; undefined follows the avatar. */
+    viewed?: number;
 }
 
 /** The raised floors that have slabs on the map, the floor of the avatar, and whether the map editor is open. */
 export const floorLevelsBuiltStore = writable<readonly number[]>([]);
 export const floorLevelCurrentStore = writable<number>(0);
 export const floorLevelsHiddenStore = writable<boolean>(false);
+export const floorLevelViewedStore = writable<number | undefined>(undefined);
 
 /** A floor named as in the map editor: "Sol", "Niveau 2", "Niveau 2+3". */
 export function floorLevelName(ll: TranslationFunctions, elevation: number): string {
@@ -29,10 +32,11 @@ export function floorLevelStack(
     current: number,
     hidden: boolean,
     name: (elevation: number) => string,
+    viewed?: number,
 ): FloorLevelStack | undefined {
     if (hidden || built.length === 0) return undefined;
     const levels = [...new Set([0, ...built])].sort((a, b) => b - a);
-    return { levels: levels.map((elevation) => ({ elevation, name: name(elevation) })), current };
+    return { levels: levels.map((elevation) => ({ elevation, name: name(elevation) })), current, viewed };
 }
 
 /** Whether the stack pulses: once, when the floor of the avatar changes; never when motion is reduced. */
@@ -41,7 +45,7 @@ export function levelChangePulses(previous: number | undefined, next: number, re
 }
 
 export const floorLevelsStore: Readable<FloorLevelStack | undefined> = derived(
-    [floorLevelsBuiltStore, floorLevelCurrentStore, floorLevelsHiddenStore, LL],
-    ([built, current, hidden, ll]) =>
-        floorLevelStack(built, current, hidden, (elevation) => floorLevelName(ll, elevation)),
+    [floorLevelsBuiltStore, floorLevelCurrentStore, floorLevelsHiddenStore, LL, floorLevelViewedStore],
+    ([built, current, hidden, ll, viewed]) =>
+        floorLevelStack(built, current, hidden, (elevation) => floorLevelName(ll, elevation), viewed),
 );

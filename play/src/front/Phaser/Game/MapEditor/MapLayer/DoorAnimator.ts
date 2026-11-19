@@ -209,6 +209,30 @@ export class DoorAnimator {
         return door !== undefined && door.frame !== DOOR_CLOSED_FRAME;
     }
 
+    /** Where a character's body centre fits inside the visible opening, clear of both jambs. */
+    private passageRect(state: DoorPieceState): DoorRect {
+        if (state.piece.orientation !== "v") return state.rect;
+        const rise = wallRise(state.piece.height);
+        // A 16px body needs half its height on either side of its centre before wall collisions can be released.
+        const halfBody = MAP_LAYER_TILE_SIZE / 4;
+        return {
+            ...state.rect,
+            top: state.rect.top - rise + halfBody,
+            bottom: state.rect.bottom - rise - WALL_THICKNESS - halfBody,
+        };
+    }
+
+    /** An open vertical doorway overrides the projected wall collision that otherwise covers its opening. */
+    public isInOpenVerticalPassage(x: number, y: number): boolean {
+        for (const state of this.pieces.values()) {
+            if (state.piece.orientation !== "v" || !this.isDoorOpen(state.entity.entityId)) continue;
+            const rect = this.passageRect(state);
+            const margin = MAP_LAYER_TILE_SIZE / 4;
+            if (isInsideDoor({ ...rect, left: rect.left - margin, right: rect.right + margin }, { x, y })) return true;
+        }
+        return false;
+    }
+
     /**
      * Middle of what is seen of each door that belongs to one of the locked zones `zones`, by door: where its padlock is
      * drawn. Both
@@ -224,8 +248,7 @@ export class DoorAnimator {
             if (markers.has(key)) continue;
             const { rect, piece } = state;
             if (zones.some((zone) => isDoorInZone(rect, piece.orientation, zone))) {
-                // The bottom of a vertical door passes under the joint of the vertex below it: it is not seen. A high
-                // door is drawn raised: a horizontal one up from its opening, a vertical one shifted whole.
+                // The marker follows the visible leaf, raised with the wall cap; passage collisions stay on the ground.
                 const rise = wallRise(piece.height);
                 const bottom = piece.orientation === "v" ? rect.bottom - WALL_THICKNESS - rise : rect.bottom;
                 const top = rect.top - rise;
@@ -312,10 +335,16 @@ export class DoorAnimator {
         const texture = state.textures?.[door.reverse ? 1 : 0][door.frame];
         if (texture !== undefined && state.entity.texture.key !== texture) {
             state.entity.setTexture(texture);
-            // The frames of a horizontal door have a margin above the door, the closed door (the prefab of the entity) has none.
-            const margin = state.piece.orientation === "h" && door.frame !== DOOR_CLOSED_FRAME ? DOOR_FRAME_MARGIN : 0;
-            state.entity.setOrigin(0, margin / state.entity.height);
             this.markDirty();
+        }
+        // Closed and animated leaves stay attached to the wall cap; only their collision is projected to the ground.
+        if (state.entity.height > 0) {
+            const margin = state.piece.orientation === "h" && door.frame !== DOOR_CLOSED_FRAME ? DOOR_FRAME_MARGIN : 0;
+            const originY = margin / state.entity.height;
+            if (state.entity.originY !== originY) {
+                state.entity.setOrigin(0, originY);
+                this.markDirty();
+            }
         }
     }
 
@@ -353,10 +382,14 @@ export class DoorAnimator {
         }
         // A character that goes through a horizontal door moves vertically: walking along the wall north of it, whose
         // collision is at its foot, puts the body inside the door without crossing it.
-        if (orientation === "h" && character.facingSideways) {
+        if (
+            (orientation === "h" && character.facingSideways) ||
+            (orientation === "v" && character.facingSideways === false)
+        ) {
             return false;
         }
-        return isInsideDoor(rect, character);
+        const approach = orientation === "v" && character.facingSideways ? MAP_LAYER_TILE_SIZE / 4 : 0;
+        return isInsideDoor({ ...rect, left: rect.left - approach, right: rect.right + approach }, character);
     }
 
     private pathCrosses(rect: DoorRect, character: DoorCharacter, path: readonly { x: number; y: number }[]): boolean {
@@ -395,7 +428,7 @@ export class DoorAnimator {
         let best: DoorCharacter | undefined;
         let bestDistance = Infinity;
         for (const character of characters) {
-            if (!this.isNear(state.rect, state.piece.orientation, character)) continue;
+            if (!this.isNear(this.passageRect(state), state.piece.orientation, character)) continue;
             if (
                 locks &&
                 lockedZones &&

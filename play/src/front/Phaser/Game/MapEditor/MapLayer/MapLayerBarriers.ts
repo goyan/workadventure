@@ -1,5 +1,5 @@
 import { TileBarriers } from "../../../../Utils/TileBarriers";
-import { WALL_COLLISION_HALF } from "./MapLayerCatalog";
+import { MAP_LAYER_TILE_SIZE, WALL_COLLISION_HALF, wallRise } from "./MapLayerCatalog";
 import { doorEdges } from "./MapLayerModel";
 import { modelFromPlacedPrefabs } from "./MapLayerOperations";
 import type { PlacedPrefabLike } from "./MapLayerOperations";
@@ -11,7 +11,8 @@ import type { PlacedPrefabLike } from "./MapLayerOperations";
  *   north. Its collision is the foot of the wall: it separates its tile from the one south of it.
  * - The collision of a vertical wall begins 14 px under the top of its sprite and goes on for 32 px: the feet of the
  *   avatar are stopped on the row under the one where the wall is drawn, which is also the row of the wall it ends on.
- *   It separates the tile west of its line from the one east of it, on that row.
+ *   It separates the tile west of its line from the one east of it, on that row. High vertical strips keep their
+ *   collision under their visible cap: the facade height offset is removed from that row.
  */
 export function wallBarriers(placedPrefabs: Iterable<PlacedPrefabLike>): TileBarriers {
     const barriers = new TileBarriers(WALL_COLLISION_HALF);
@@ -24,7 +25,7 @@ export function wallBarriers(placedPrefabs: Iterable<PlacedPrefabLike>): TileBar
         if (wall.orientation === "h") {
             barriers.addSouthBorder(wall.x, wall.y);
         } else {
-            barriers.addWestBorder(wall.x, wall.y + 1);
+            barriers.addWestBorder(wall.x, wall.y + 1 - wallRise(wall.height) / MAP_LAYER_TILE_SIZE);
         }
     }
     // A vertical door is wider than the way through it: the avatar stands lower than its sprite, so the end of the
@@ -33,7 +34,8 @@ export function wallBarriers(placedPrefabs: Iterable<PlacedPrefabLike>): TileBar
     for (const door of model.getDoors()) {
         if (door.orientation === "v") {
             const last = doorEdges(door)[1];
-            barriers.addWestBorder(last.x, last.y + 1);
+            const height = model.lowerWallOf(door);
+            barriers.addWestBorder(last.x, last.y + 1 - wallRise(height) / MAP_LAYER_TILE_SIZE);
         }
     }
     return barriers;

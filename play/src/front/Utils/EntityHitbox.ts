@@ -1,6 +1,21 @@
 import type { CollisionRectangle, EntityPrefab } from "@workadventure/map-editor";
 
-type HitboxPrefab = Partial<Pick<EntityPrefab, "collisionGrid" | "collisionRectangles" | "wander">>;
+import { parseAnyLevelPrefab } from "../Phaser/Game/MapEditor/MapLayer/MapLayerLevels";
+import { wallRise } from "../Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
+
+type HitboxPrefab = Partial<
+    Pick<EntityPrefab, "collisionGrid" | "collisionRectangles" | "wander" | "collectionName" | "id">
+>;
+
+/** Vertical strips and leaves are seen from above: their hitbox follows the image, without the facade's height offset. */
+function alignedVerticalRectangles(prefab: HitboxPrefab, rectangles: CollisionRectangle[]): CollisionRectangle[] {
+    const piece =
+        prefab.collectionName && prefab.id ? parseAnyLevelPrefab(prefab.collectionName, prefab.id) : undefined;
+    if (!piece || (piece.kind !== "vertical" && !(piece.kind === "door" && piece.orientation === "v")))
+        return rectangles;
+    const rise = wallRise(piece.height);
+    return rise === 0 ? rectangles : rectangles.map((rectangle) => ({ ...rectangle, y: rectangle.y - rise }));
+}
 
 /** Top-left corner of a placed entity, in pixels. */
 interface Placement {
@@ -55,9 +70,11 @@ export function getSolidRectangles(placement: Placement, prefab: HitboxPrefab, c
         return [];
     }
     if (prefab.collisionRectangles?.length) {
-        return prefab.collisionRectangles;
+        return alignedVerticalRectangles(prefab, prefab.collisionRectangles);
     }
-    return isOnGrid(placement, cellSize) ? [] : gridRectangles(prefab.collisionGrid, cellSize);
+    return isOnGrid(placement, cellSize)
+        ? []
+        : alignedVerticalRectangles(prefab, gridRectangles(prefab.collisionGrid, cellSize));
 }
 
 /**
@@ -65,9 +82,12 @@ export function getSolidRectangles(placement: Placement, prefab: HitboxPrefab, c
  * rectangles, else the blocking cells of its grid.
  */
 export function getBlockingRectangles(prefab: HitboxPrefab, cellSize: number): CollisionRectangle[] {
-    return prefab.collisionRectangles?.length
-        ? prefab.collisionRectangles
-        : gridRectangles(prefab.collisionGrid, cellSize);
+    return alignedVerticalRectangles(
+        prefab,
+        prefab.collisionRectangles?.length
+            ? prefab.collisionRectangles
+            : gridRectangles(prefab.collisionGrid, cellSize),
+    );
 }
 
 /**
