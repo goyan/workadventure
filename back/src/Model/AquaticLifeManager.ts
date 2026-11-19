@@ -170,9 +170,8 @@ export class AquaticLifeManager {
          * Where a player of the room stands, in map pixels, and whether on the ground; undefined once they left:
          * the animals they tamed follow them, and are let go when they go.
          */
-        private readonly masterAt: (
-            userId: number,
-        ) => { x: number; y: number; ground: boolean } | undefined = () => undefined,
+        private readonly masterAt: (userId: number) => { x: number; y: number; ground: boolean } | undefined = () =>
+            undefined,
     ) {}
 
     /** When each player last asked to tame an animal, to answer them TAME_ASKS_A_SECOND times a second at most. */

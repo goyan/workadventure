@@ -256,6 +256,7 @@ import type { ChatConnectionInterface, ChatUser } from "@wa/front/Chat/Connectio
 import { selectedRoomStore } from "@wa/front/Chat/Stores/SelectRoomStore";
 import { getCustomEntityCollectionUrl } from "@wa/front/Utils/MapStorageUrl";
 import { CHARACTER_BODY_OFFSET_Y, PLAYTEXT_NEW_MEDIA_DEVICE_PREFIX } from "@wa/front/Phaser/Entity/Character";
+import type { Character } from "@wa/front/Phaser/Entity/Character";
 import { type Avatar, ConversationBubble } from "@wa/front/Phaser/Entity/ConversationBubble";
 import { DarkenOutsideAreaEffect } from "@wa/front/Phaser/Components/DarkenOutsideArea/DarkenOutsideAreaEffect";
 import { isInsidePersonalAreaStore, personalAreaDataStore } from "@wa/front/Stores/PersonalDeskStore";
@@ -357,6 +358,7 @@ import { TerrainWater } from "./Terrain/TerrainWater";
 import { AquaticLife } from "./Life/AquaticLife";
 import { AquaticLifeView } from "./Life/AquaticLifeView";
 import { LandLifeView } from "./Life/LandLifeView";
+import { LandCompanions } from "./Life/LandCompanions";
 import { isLandKind } from "./Life/LandSprites";
 import { LifeSpeciesStats, withoutSpeciesCounts } from "./Life/LifeSpeciesStats";
 import { LifeStats } from "./Life/LifeStats";
@@ -364,7 +366,9 @@ import { TerrainView } from "./Terrain/TerrainView";
 import { WaterFlowView } from "./Terrain/WaterFlowView";
 import { gunzip } from "./Terrain/WaterStateCodec";
 import { entityOutdoorRect, OutdoorTracker } from "./Outdoor/OutdoorTracker";
-import { GameJungle } from "./Jungle/GameJungle";
+import { feetOf, GameJungle } from "./Jungle/GameJungle";
+import { joinedUserId } from "./Jungle/JungleCompanions";
+import { InteractionPrompt } from "./Water/InteractionPrompt";
 import type { OutdoorGrid } from "./Outdoor/OutdoorGrid";
 import { SeasonalThemeManager } from "./Seasonal/SeasonalThemeManager";
 import { forcedTreeSeason, SeasonalTheme } from "./Seasonal/SeasonalTheme";
@@ -561,6 +565,9 @@ export class GameScene extends DirtyScene {
     /** The animals of the land the server runs (antelopes, lions, tigers). */
     private readonly landLife = new AquaticLife(isLandKind);
     private landLifeView: LandLifeView | undefined;
+    private landCompanions: LandCompanions | undefined;
+    private landTamePrompt: InteractionPrompt | undefined;
+    private landReleasePrompt: InteractionPrompt | undefined;
     private readonly aquaticLifeStats = new LifeStats();
     private readonly aquaticLifeSpecies = new LifeSpeciesStats();
     private aquaticLifeSubscription: Subscription | undefined;
@@ -1652,6 +1659,8 @@ export class GameScene extends DirtyScene {
         this.aquaticLifeView = undefined;
         this.landLifeView?.destroy();
         this.landLifeView = undefined;
+        this.landCompanions?.destroy();
+        this.landCompanions = undefined;
         this.skyShadowManager?.destroy();
         this.skyShadowManager = undefined;
         this.skyWindowLightManager?.destroy();
@@ -2144,6 +2153,7 @@ export class GameScene extends DirtyScene {
             this.terrainView?.update(time);
             this.waterFlowView?.update(time);
             this.aquaticLifeView?.update(time);
+            this.landCompanions?.update(time);
             this.landLifeView?.update(time);
             this.skyShadowManager?.update(time);
             this.skyWindowLightManager?.update(time);
@@ -2799,14 +2809,20 @@ export class GameScene extends DirtyScene {
         return this._waveManager;
     }
 
-    /** How many animals the local player tamed (see JungleCompanions). */
+    /** How many animals the local player tamed: wandering ones (see JungleCompanions) and those of the life. */
     public tamedAnimalCount(): number {
-        return this.gameJungle?.tamedAnimalCount() ?? 0;
+        return (this.gameJungle?.tamedAnimalCount() ?? 0) + this.landTamedCount();
+    }
+
+    /** How many lions and tigers of the life of the map follow the local player (see LandCompanions). */
+    public landTamedCount(): number {
+        return this.landCompanions?.tamedCount ?? 0;
     }
 
     /** Lets every animal the local player tamed go back to its wandering. */
     public releaseTamedAnimals(): void {
         this.gameJungle?.releaseTamedAnimals();
+        this.landCompanions?.releaseAll();
     }
 
     public get torchManager(): TorchManager | undefined {
@@ -3472,6 +3488,36 @@ export class GameScene extends DirtyScene {
                     () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
                 );
                 // The antelopes, the lions and the tigers of the land: hidden with the jungle.
+                // The lions and the tigers the players tamed follow them.
+                this.landCompanions?.destroy();
+                this.landTamePrompt ??= new InteractionPrompt(this, "land-tame", () => get(LL).trigger.jungleTame());
+                this.landReleasePrompt ??= new InteractionPrompt(this, "land-release", () =>
+                    get(LL).trigger.jungleRelease(),
+                );
+                const tamePrompt = this.landTamePrompt;
+                const releasePrompt = this.landReleasePrompt;
+                const playerOf = (userId: number): Character | undefined =>
+                    userId === joinedUserId(this.connection) ? this.CurrentPlayer : this.MapPlayersByKey.get(userId);
+                const companions = new LandCompanions(this.landLife, {
+                    localUserId: () => joinedUserId(this.connection),
+                    playerFeet: (userId) => {
+                        const player = playerOf(userId);
+                        return player ? feetOf(player) : undefined;
+                    },
+                    playerInWater: (userId) => playerOf(userId)?.isInWater() ?? false,
+                    editorOpen: () => get(mapEditorModeStore),
+                    playerOnGround: () => this.CurrentPlayer.isNearGround(),
+                    shown: () => get(jungleEnabledStore),
+                    otherCompanions: () => this.gameJungle?.tamedAnimalCount() ?? 0,
+                    tame: (animalId) => this.connection?.emitTameAnimal(animalId),
+                    release: (animalId) => this.connection?.emitReleaseAnimals(animalId),
+                    showPrompt: (kind, action) => (kind === "tame" ? tamePrompt : releasePrompt).show(action),
+                    hidePrompt: () => {
+                        tamePrompt.hide();
+                        releasePrompt.hide();
+                    },
+                });
+                this.landCompanions = companions;
                 this.landLifeView?.destroy();
                 this.landLifeView = new LandLifeView(
                     this,
@@ -3479,6 +3525,7 @@ export class GameScene extends DirtyScene {
                     () => get(jungleEnabledStore),
                     () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
                     (species) => this.gameJungle?.sheetOf(species),
+                    (animal, now) => companions.poseOf(animal.id, now),
                 );
                 // The shadows of the sun and of the moon, outdoors. One set at a time.
                 this.skyShadowManager?.destroy();
