@@ -2,6 +2,13 @@ import type { DeepPartial } from "../DeepPartial";
 import type { Translation } from "../i18n-types";
 
 const mapEditor: DeepPartial<Translation["mapEditor"]> = {
+    workshop: {
+        title: "Atelier",
+        build: "Construire",
+        decorate: "Décorer",
+        select: "Sélection",
+        play: "Tester",
+    },
     map: {
         refreshPrompt: "Nouvelle version de la carte détectée. Actualisation nécessaire",
         deletePrompt: "Cette carte a été supprimée",
@@ -709,12 +716,12 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     },
     mapLayer: {
         groups: {
-            freehand: "Tracer à la volée",
-            area: "Tracer une zone",
-            placed: "Poser un élément",
-            floors: "Paliers",
+            freehand: "Structure",
+            area: "Modifier",
+            placed: "Ouvertures",
+            floors: "Plateformes",
         },
-        title: "Carte",
+        title: "Construction",
         modes: {
             wall: "Mur",
             room: "Pièce",
@@ -762,6 +769,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             deadEnd: "Un escalier posé qui ne mène nulle part",
         },
         floorLevel: {
+            adjust: "Ajuster la hauteur",
             areaTitle: "Niveau de cette zone",
             objectTitle: "Niveau de cet objet",
             auto: "Auto",
@@ -780,6 +788,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             ground: "Sol",
             level: "Niveau {height}",
             built: "palier {rank}",
+            storey: "Étage {rank}",
             pick: "Prendre le niveau sous le pointeur",
             pickArmed: "Cliquez sur la carte…",
             pickHint:
@@ -945,6 +954,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         eraser: "Gomme",
         eraserHint: "Cliquez ou glissez sur des objets pour les supprimer.",
+        allObjects: "Tous les objets",
+        objectCount: "{count} objet{{s}}",
         testInteractionButton: "Tester interaction",
         buttonLabel: "Texte du bouton",
         editInstructions: "Sélectionnez un objet pour modifier ses propriétés.",

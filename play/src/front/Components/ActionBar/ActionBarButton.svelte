@@ -98,7 +98,7 @@
 {#if !isInMenu}
     <div
         class={[
-            "relative bg-contrast/80 backdrop-blur py-2 ps-1 pe-1 pointer-events-auto group-[.invisible]/visibilitychecker:px-2",
+            "action-tray relative bg-contrast/80 backdrop-blur py-2 ps-1 pe-1 pointer-events-auto group-[.invisible]/visibilitychecker:px-2",
             classList,
             {
                 "first-of-type:rounded-s-lg first-of-type:ps-2": first === undefined,
@@ -114,6 +114,10 @@
         <button
             type="button"
             class="h-12 @sm/actions:h-10 @xl/actions:h-12 p-1 m-0 rounded relative
+                    {isGradient ? '' : 'action-slot'}
+                    {buttonState === 'active' ? 'is-active' : ''}
+                    {buttonState === 'forbidden' || buttonState === 'disabledForbidden' ? 'is-forbidden' : ''}
+                    {buttonState === 'live' ? 'is-live' : ''}
                     {buttonState === 'disabled' ? 'opacity-50 cursor-not-allowed' : ''}
                     {buttonState === 'disabledForbidden' ? 'bg-danger opacity-70 cursor-not-allowed' : ''}
                     {buttonState === 'normal' && !isGradient ? 'hover:bg-white/10 cursor-pointer' : ''}
@@ -162,7 +166,7 @@
     </div>
 {:else}
     <button
-        class="group flex p-2 gap-2 mb-1 items-center hover:bg-white/10 transition-all cursor-pointer font-bold text-sm text-neutral-100 w-full pointer-events-auto text-start rounded select-none
+        class="menu-slot group flex p-2 gap-2 mb-1 items-center hover:bg-white/10 transition-all cursor-pointer font-bold text-sm text-neutral-100 w-full pointer-events-auto text-start rounded select-none
                     {buttonState === 'disabled' ? 'opacity-50 cursor-not-allowed' : ''}
                     {buttonState === 'disabledForbidden' ? 'bg-danger opacity-70 cursor-not-allowed' : ''}
                     {buttonState === 'active' && !isGradient
@@ -184,7 +188,9 @@
         bind:this={wrapperDiv}
     >
         {#if hasImage}
-            <div class="transition-all w-6 h-6 aspect-square text-center flex items-center justify-center">
+            <div
+                class="menu-slot-icon transition-all w-6 h-6 aspect-square text-center flex items-center justify-center"
+            >
                 {@render children?.()}
             </div>
         {/if}

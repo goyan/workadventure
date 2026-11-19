@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { writable } from "svelte/store";
+import { isBrave } from "../../../../../src/front/Phaser/Game/Wander/WanderFear";
 import type { Entity } from "../../../../../src/front/Phaser/ECS/Entity";
 import type { GameScene } from "../../../../../src/front/Phaser/Game/GameScene";
 import { WanderingCharactersManager } from "../../../../../src/front/Phaser/Game/Wander/WanderingCharactersManager";
@@ -58,6 +59,8 @@ vi.mock("../../../../../src/front/Phaser/Game/Wander/WanderSchedule", async (imp
 }));
 
 const SHEET = "duck.png";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function makeSprite() {
     const sprite = {
@@ -132,6 +135,8 @@ function makeScene(
     sprite.destroy = destroySprite;
     const addSprite = vi.fn(() => sprite);
     const markDirty = vi.fn();
+    // The feet of the avatars on the ground: the wild animals run from them.
+    const avatars: { x: number; y: number }[] = [];
     let reconcile: () => void = () => {};
     let update: () => void = () => {};
     let loadError: (file: { key: string }) => void = () => {};
@@ -142,6 +147,7 @@ function makeScene(
             getEntitiesManager: () => ({ getEntities: () => new Map(withDuck ? [["duck", entity]] : []) }),
             getWallBarriers: () => ({ equals: () => true, blocksMove: () => false }),
         }),
+        avatarFeetOnGround: () => avatars,
         getTerrainWater: () => ({
             version: () => water.version,
             coveredArea: () => ({ x: 0, y: 0, width: 320, height: 320 }),
@@ -184,6 +190,7 @@ function makeScene(
     } as unknown as GameScene;
     const manager = new WanderingCharactersManager(scene);
     return {
+        avatars,
         manager,
         sprite,
         addSprite,
@@ -332,6 +339,27 @@ describe("WanderingCharactersManager", () => {
             scene.update();
             expect(scene.sprite.visible).toBe(true);
             expect(manager.freeCharacterPose(LION.id)?.x).toBeCloseTo(start.x + 9.6, 5);
+            clock.mockRestore();
+        });
+
+        it("a wild animal runs from an avatar that comes close, unless it is brave today", () => {
+            // A day on which this lion fears the avatars.
+            const day = [0, 1, 2, 3, 4, 5, 6, 7].find((offset) => !isBrave(LION.id, (100 + offset) * DAY_MS));
+            if (day === undefined) throw new Error("The lion is brave every day");
+            const now = (100 + day) * DAY_MS;
+            const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+            const scene = makeScene([], undefined, { withDuck: false });
+            manager = scene.manager;
+            manager.setFreeCharacters([LION], manager.getWanderMap());
+            scene.update();
+            const start = manager.freeCharacterPose(LION.id);
+            if (!start) throw new Error("The lion is not shown");
+            scene.avatars.push({ x: start.x - 40, y: start.y });
+            clock.mockReturnValue(now + 50);
+            scene.update();
+            // Away from the avatar, at a run: 192 px/s for 50 ms.
+            expect(manager.freeCharacterPose(LION.id)?.x).toBeCloseTo(start.x + 9.6, 5);
+            expect(manager.freeCharacterPose(LION.id)?.moving).toBe(true);
             clock.mockRestore();
         });
 

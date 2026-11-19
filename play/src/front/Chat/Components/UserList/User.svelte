@@ -81,22 +81,27 @@
     }
 </script>
 
-<div class="flex flex-col px-2 pb-2 user">
+<div class="flex flex-col px-3 pb-1.5 user">
     <div
         class="wa-chat-item {isAdmin
             ? 'admin'
-            : 'user'} group/chatItem relative mb-[1px] text-md flex gap-2 flex-row items-center transition-all hover:bg-white/10 hover:rounded hover:!cursor-pointer px-2 py-2 cursor-pointer"
+            : 'user'} player-card group/chatItem relative text-md flex gap-2 flex-row items-center px-2 py-2 cursor-pointer"
+        class:me={isMe}
     >
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
-            class="relative shrink-0 wa-avatar {!$userStatus ? 'opacity-50' : ''} cursor-pointer"
+            class="player-avatar relative shrink-0 wa-avatar {!$userStatus ? 'opacity-50' : ''} cursor-pointer"
             onclick={(event) => {
                 event.stopPropagation();
                 openWokaMenu();
             }}
         >
             <Avatar compact {pictureStore} fallbackName={username || "?"} color={resolvedAvatarColor} />
+            {#if $userStatus}
+                <span class="player-status-dot" style="background:{getColorHexOfStatus($userStatus)}" aria-hidden="true"
+                ></span>
+            {/if}
         </div>
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -124,7 +129,7 @@
                         </div>
                     {/if}
                     {#if isAdmin}
-                        <div class="text-xxs bg-secondary rounded-sm px-1 py-0.5 ms-1" title={$LL.chat.role.admin()}>
+                        <div class="player-admin ms-1.5" title={$LL.chat.role.admin()}>
                             {$LL.chat.role.adminShort()}
                         </div>
                     {/if}
@@ -164,7 +169,7 @@
                     onmouseleave={() => (sendButtonTooltipVisible = false)}
                 >
                     <button
-                        class="transition-all hover:bg-white/10 p-2 rounded-md flex items-center justify-center m-0"
+                        class="player-key flex items-center justify-center m-0"
                         class:text-white={canSendMessage}
                         class:text-gray-400={!canSendMessage}
                         class:aspect-square={!openingDirectChat}

@@ -19,7 +19,6 @@
     import { followedUserUuidStore, listenAlongAvailableStore } from "../../Spotify/ListeningFollower";
     import { listeningByUserUuidStore } from "../../Spotify/SpotifyListeningDirectory";
     import { playersStore } from "../../Stores/PlayersStore";
-    import { lampEffectsEnabledStore } from "../../Stores/LampEffectsStore";
     import { jukeboxQueuesStore } from "../../Spotify/HomeJam";
     import { jamAudioSession } from "../../ListeningZone/GameJamAudioSession";
     import { jamMusicCapture } from "../../ListeningZone/JamMusicCapture";
@@ -31,7 +30,6 @@
     import JamAudioControls from "./JamAudioControls.svelte";
     import JamLinkStatus from "./JamLinkStatus.svelte";
     import JukeboxPlaybackControls from "./JukeboxPlaybackControls.svelte";
-    import LightEffectsToggle from "./LightEffectsToggle.svelte";
     import JukeboxQueue from "./JukeboxQueue.svelte";
     import { IconChevronDown, IconHeadphones, IconLayoutGrid, IconMicrophone, IconMusic, IconSearch } from "@wa-icons";
 
@@ -298,16 +296,6 @@
             {/if}
             <div class="flex flex-col gap-2 border-t border-white/10 p-3" data-testid="jam-room-details">
                 <JamAudience {room} />
-                <div class="flex justify-end">
-                    <LightEffectsToggle
-                        on={$lampEffectsEnabledStore}
-                        label={$lampEffectsEnabledStore
-                            ? $LL.spotify.listeningZone.lightsDisable()
-                            : $LL.spotify.listeningZone.lightsEnable()}
-                        onclick={() => lampEffectsEnabledStore.update((enabled) => !enabled)}
-                        testid="jam-lights-toggle"
-                    />
-                </div>
                 {#if !home && !live}
                     <JamLinkStatus {room} {mine} {joined} />
                 {/if}

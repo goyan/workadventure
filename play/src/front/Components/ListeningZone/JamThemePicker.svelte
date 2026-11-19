@@ -1,6 +1,8 @@
 <script lang="ts">
     import { LL } from "../../../i18n/i18n-svelte";
     import { JamStyle, JamTheme, jamStyleStore, jamThemeStore } from "../../ListeningZone/JamThemeStore";
+    import { lampEffectsEnabledStore } from "../../Stores/LampEffectsStore";
+    import LightEffectsToggle from "./LightEffectsToggle.svelte";
     import { IconBrandApple, IconBrandSpotify, IconMoon, IconSun, IconSunMoon } from "@wa-icons";
 
     let apple = $derived($jamStyleStore === JamStyle.AppleMusic);
@@ -44,4 +46,13 @@
     >
         {#if apple}<IconBrandApple font-size="18" />{:else}<IconBrandSpotify font-size="18" />{/if}
     </button>
+    <!-- The light effects of the lamps, for me only: with the other settings of the look of the lounge. -->
+    <LightEffectsToggle
+        on={$lampEffectsEnabledStore}
+        label={$lampEffectsEnabledStore
+            ? $LL.spotify.listeningZone.lightsDisable()
+            : $LL.spotify.listeningZone.lightsEnable()}
+        onclick={() => lampEffectsEnabledStore.update((enabled) => !enabled)}
+        testid="jam-lights-toggle"
+    />
 </div>

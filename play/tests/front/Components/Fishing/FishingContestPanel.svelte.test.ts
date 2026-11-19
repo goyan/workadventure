@@ -102,8 +102,8 @@ describe("FishingContestPanel", () => {
         expect(getByTestId("fishing-contest-remaining").textContent).toBe("03:12");
         const rows = getAllByTestId("fishing-contest-row");
         expect(rows.map((line) => line.textContent?.replace(/\s+/g, " ").trim())).toEqual([
-            "1. Hugo 4,81 kg (2,10)",
-            "2. Antoine 3,95 kg (1,24)",
+            "1 Hugo 4,81 kg (2,10)",
+            "2 Antoine 3,95 kg (1,24)",
         ]);
         expect(rows[1].getAttribute("aria-current")).toBe("true");
         expect(rows[0].getAttribute("aria-current")).toBeNull();

@@ -9,15 +9,23 @@
     interface Props {
         /** The floors of the map and the one of the avatar; undefined: nothing to show. */
         stack: FloorLevelStack | undefined;
+        onSelectFloor?: (elevation: number | undefined) => void;
+        allowAuto?: boolean;
+        fullWidth?: boolean;
     }
 
-    let { stack }: Props = $props();
+    let { stack, onSelectFloor, allowAuto = true, fullWidth = false }: Props = $props();
+    const menuId = $props.id();
     let value = $derived(stack?.viewed === undefined ? "" : String(stack.viewed));
     let options = $derived([
-        {
-            value: "",
-            label: `${$LL.mapEditor.mapLayer.floorLevel.auto()} · ${stack?.levels.find((level) => level.elevation === stack.current)?.name ?? ""}`,
-        },
+        ...(allowAuto
+            ? [
+                  {
+                      value: "",
+                      label: `${$LL.mapEditor.mapLayer.floorLevel.auto()} · ${stack?.levels.find((level) => level.elevation === stack.current)?.name ?? ""}`,
+                  },
+              ]
+            : []),
         ...(stack?.levels.map((level) => ({
             value: String(level.elevation),
             label: `${level.elevation === stack.current ? "● " : ""}${level.name}`,
@@ -40,7 +48,9 @@
     }
 
     function selectFloor(selected: string): void {
-        floorLevelViewedStore.set(selected === "" ? undefined : Number(selected));
+        const elevation = selected === "" ? undefined : Number(selected);
+        if (onSelectFloor) onSelectFloor(elevation);
+        else floorLevelViewedStore.set(elevation);
         close();
         trigger?.focus();
     }
@@ -90,6 +100,7 @@
 {#if stack}
     <div
         class="floor-level-stack relative z-10 rounded-lg bg-contrast/80 text-xs backdrop-blur"
+        class:full-width={fullWidth}
         class:pulse
         use:clickOutside={close}
     >
@@ -100,7 +111,7 @@
             aria-label={$LL.mapEditor.mapLayer.floorLevel.title()}
             aria-haspopup="menu"
             aria-expanded={open}
-            aria-controls="floor-level-menu"
+            aria-controls={menuId}
             onclick={async () => {
                 if (open) close();
                 else await showMenu();
@@ -122,11 +133,11 @@
         {#if open}
             <div
                 bind:this={menu}
-                id="floor-level-menu"
+                id={menuId}
                 role="menu"
                 tabindex="-1"
                 aria-label={$LL.mapEditor.mapLayer.floorLevel.title()}
-                class="absolute right-0 top-full z-10 mt-1 w-full rounded-lg border border-white/10 bg-contrast p-1 shadow-lg"
+                class="absolute right-0 top-full z-10 mt-1 max-h-72 overflow-y-auto w-full rounded-lg border border-white/10 bg-contrast p-1 shadow-lg"
                 onkeydown={navigate}
                 onfocusout={(event) => {
                     if (
@@ -161,6 +172,9 @@
     .floor-level-stack {
         pointer-events: auto;
         width: 176px;
+    }
+    .full-width {
+        width: 100%;
     }
     svg {
         fill: none;
