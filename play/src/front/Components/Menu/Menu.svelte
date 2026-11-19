@@ -9,6 +9,7 @@
         activeSubMenuStore,
         customMenuIframe,
         menuNarrowStore,
+        menuNavFoldedStore,
         menuVisiblilityStore,
         SubMenusInterface,
         subMenusStore,
@@ -150,7 +151,7 @@
     transition:fly={{ y: 1000, duration: 150 }}
     onblur={closeMenu}
 >
-    <div class="flex flex-row items-center gap-2">
+    <div class="flex flex-row items-center gap-2 {$menuNavFoldedStore ? 'menu-nav-folded' : ''}">
         <div
             class="menu-nav-sidebar retro-theme rounded-lg @md/main-layout:w-[200px] @md/main-layout:rounded-xl overflow-hidden bg-contrast/80 backdrop-blur w-md relative h-full"
         >
@@ -250,16 +251,45 @@
                 </svg>
             </button>
         </div>
+        <!-- The list of the menus folded away: only the open one shows, and more of the game. -->
+        <div class="p-2 rounded-lg bg-contrast/80 backdrop-blur-md flex items-center justify-center w-fit">
+            <button
+                type="button"
+                class="h-12 w-12 rounded bg-white/20 hover:bg-white/30 text-white flex items-center justify-center m-0"
+                aria-pressed={$menuNavFoldedStore}
+                aria-label={$menuNavFoldedStore ? $LL.menu.unfoldNav() : $LL.menu.foldNav()}
+                title={$menuNavFoldedStore ? $LL.menu.unfoldNav() : $LL.menu.foldNav()}
+                data-testid="menuNavFoldBtn"
+                onclick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    menuNavFoldedStore.update((folded) => !folded);
+                }}
+            >
+                <svg class="h-6 w-6 fill-none stroke-current" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    {#if $menuNavFoldedStore}
+                        <path d="M9 4v16M13 9l3 3-3 3" />
+                    {:else}
+                        <path d="M9 4v16M16 9l-3 3 3 3" />
+                    {/if}
+                </svg>
+            </button>
+        </div>
     </div>
 </div>
 
 <style>
     /* Half the width, against the right edge of the game (wide layouts only: a narrow one keeps the whole width). */
     @container main-layout (min-width: 28rem) {
+        /* Its left edge stays right of the middle of the game, where the avatar stands. */
         .menu-narrow {
-            width: 45.8333%;
+            width: 41.6667%;
             left: auto;
             margin-right: 4.1667%;
+        }
+        .menu-nav-folded {
+            display: none;
         }
     }
 

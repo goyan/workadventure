@@ -5,6 +5,8 @@ const menu: DeepPartial<Translation["menu"]> = {
     title: "Menu",
     narrow: "Réduire le panneau de moitié, à droite, pour voir le jeu",
     widen: "Rétablir la largeur du panneau",
+    foldNav: "Replier la liste des menus",
+    unfoldNav: "Déplier la liste des menus",
     icon: {
         open: {
             menu: "Ouvrir le menu",
