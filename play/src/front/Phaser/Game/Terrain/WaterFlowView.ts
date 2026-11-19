@@ -1,6 +1,7 @@
 import { TERRAIN_CELL, waterObjectsOf } from "@workadventure/map-editor";
 import type { WAMFileFormat, WaterObject } from "@workadventure/map-editor";
 import { FLOOR_OBJECT_DEPTH } from "../../ECS/EntityLayerDepth";
+import { distinguishable } from "../Weather/ScreenScale";
 import type { CurrentWater } from "./WaterCurrent";
 import { waterCurrentAt } from "./WaterCurrent";
 import type { FoamView } from "./WaterFoam";
@@ -53,6 +54,9 @@ const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").m
  * the server sends, the objects of the map): nothing is asked of the server. Nothing moves for someone who asked
  * for less motion.
  */
+/** About how long a streak of foam is, in map pixels: under two screen pixels it is not drawn. */
+const FOAM_STREAK_PX = 8;
+
 export class WaterFlowView {
     private readonly reducedMotion: boolean;
     private readonly foamGraphics: Phaser.GameObjects.Graphics;
@@ -75,7 +79,8 @@ export class WaterFlowView {
 
     /** `now` in ms of the game. */
     public update(now: number): void {
-        if (this.reducedMotion || !this.options.water.hasAnything()) {
+        // Seen from far a streak of foam is under a pixel: neither moved nor drawn.
+        if (this.reducedMotion || !this.options.water.hasAnything() || !distinguishable(this.scene, FOAM_STREAK_PX)) {
             this.clear();
             return;
         }

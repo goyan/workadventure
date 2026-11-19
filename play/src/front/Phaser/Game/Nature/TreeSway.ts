@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import { distinguishable } from "../Weather/ScreenScale";
 import { POSE_PAD, treePose } from "./TreePoses";
 
 export { swayAmplitude, swayFrequency, treeSwayAngle } from "./TreePoses";
@@ -58,6 +59,9 @@ const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").m
  * drawn a bent tree takes its bent image, and right after it gets its own back, so collisions, the map editor and
  * anything reading the tree never see it move.
  */
+/** How far the top of a tree moves at most, in map pixels: under one screen pixel it is not moved. */
+const SWAY_REACH_PX = 4;
+
 export class TreeSway {
     private readonly reducedMotion: boolean;
     private lastFrameAt = -Infinity;
@@ -82,7 +86,8 @@ export class TreeSway {
 
     /** `now` in ms, `epoch` the server time in ms (the same swing for everyone). */
     public update(now: number, epoch: number): void {
-        if (this.reducedMotion || !this.options.enabled()) {
+        // Seen from far the sway of a tree is under a pixel: the trees stand still (and their shadows with them).
+        if (this.reducedMotion || !this.options.enabled() || !distinguishable(this.scene, SWAY_REACH_PX, 1)) {
             if (this.poses.size > 0) {
                 this.poses.clear();
                 this.version += 1;

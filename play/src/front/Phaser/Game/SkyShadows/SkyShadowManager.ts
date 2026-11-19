@@ -56,6 +56,8 @@ export class SkyShadowManager {
     private castersSignature = "";
     private castersReadAt: number | undefined;
     private drawn: DrawnShadows | undefined;
+    /** The rooms last read under the drawn area, and the walls they were read from. */
+    private indoor: { grid: object; area: WeatherView; runs: ReturnType<typeof indoorRuns> } | undefined;
     private broken = false;
 
     constructor(
@@ -128,7 +130,25 @@ export class SkyShadowManager {
         }
         const area = shadowArea(frame.view);
         const grid = this.options.outdoorGrid();
-        const indoor = grid ? indoorRuns((column, row) => grid.isOutdoorCell(column, row), grid.cellSize, area) : [];
+        // The rooms under the area change with the walls and the area only: not read again when the light or the
+        // sway of the trees alone makes the shadows drawn again.
+        let indoor: ReturnType<typeof indoorRuns> = [];
+        if (grid) {
+            const kept = this.indoor;
+            if (
+                kept &&
+                kept.grid === grid &&
+                kept.area.x === area.x &&
+                kept.area.y === area.y &&
+                kept.area.width === area.width &&
+                kept.area.height === area.height
+            ) {
+                indoor = kept.runs;
+            } else {
+                indoor = indoorRuns((column, row) => grid.isOutdoorCell(column, row), grid.cellSize, area);
+                this.indoor = { grid, area, runs: indoor };
+            }
+        }
         this.layer.draw(
             area,
             frame.zoom,

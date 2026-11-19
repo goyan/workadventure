@@ -70,6 +70,7 @@ import {
 import type { CloudPalette } from "./Clouds";
 import { SnowGround } from "./SnowGround";
 import { createBlockSurface } from "./BlockSurface";
+import { screenScale, seenFromFar } from "./ScreenScale";
 import type { BlockCanvasArea, BlockSurface } from "./BlockSurface";
 import { WeatherSounds } from "./WeatherSounds";
 
@@ -88,6 +89,10 @@ const FOG_BLOCK = 16;
 const NO_SHIFT = { columns: 0, rows: 0 };
 /** Weather drawn beyond each edge of the screen, in a share of its size: a quick scroll never shows a bare band. */
 const DRAW_MARGIN = 0.1;
+/** The outdoors of the view is read for a view widened to whole steps of this many map pixels (see veilOver). */
+const VEIL_STEP = 256;
+/** A veil of more rectangles than this is painted in the canvas of the clouds instead (see fillVeil). */
+const VEIL_MAX_RECTS = 96;
 /**
  * The body of the clouds (their rim is fainter, cloudAlpha) and their shadows: shadows first, the clouds over them,
  * opaque enough to hide their own shadow and read as clouds, not mist.
@@ -155,6 +160,12 @@ export class WeatherManager {
     private lastFogKey: string | undefined;
     /** What the last drawing covered (the view and its margin), to draw again before a scroll reaches its edge. */
     private drawn: WeatherView | undefined;
+    /** A field that covers every cell of the canvas of the clouds: a veil painted in it (see fillVeil). */
+    private everyCell = new Uint8Array(0);
+    /** The outdoors last read, and what it was read from (see veilOver). */
+    private veil:
+        | (WeatherView & { grid: OutdoorGrid; cover: RaisedCover | undefined; rects: WeatherView[] })
+        | undefined;
 
     constructor(
         private readonly scene: GameScene,
@@ -213,7 +224,8 @@ export class WeatherManager {
         );
         const showWeather = enabled && weather !== WeatherType.Clear;
         // Autumn leaves fall on top of the map weather, even on a clear day, but not while it snows.
-        const showLeaves = enabled && theme === SeasonalTheme.Autumn && weather !== WeatherType.Snow;
+        const showLeaves =
+            enabled && theme === SeasonalTheme.Autumn && weather !== WeatherType.Snow && !seenFromFar(this.scene);
         // Clouds of a clear sky, still fading out over the first minutes of a bad weather; none at night, nor in the
         // Christmas snow.
         const cloudiness = theme === SeasonalTheme.Christmas ? 0 : (settings?.cloudiness ?? 0);
@@ -278,8 +290,7 @@ export class WeatherManager {
         const grid = this.options.outdoorGrid?.();
         // Veils cover the outdoor runs of the view only, so rooms stay as they are.
         const cover = grid ? this.options.raisedCover?.() : undefined;
-        const outdoorRuns = grid ? grid.outdoorRunsInView(view) : [view];
-        const veil = cover ? cover.uncovered(outdoorRuns) : outdoorRuns;
+        const veil = grid ? this.veilOver(view, grid, cover) : [view];
         if (veil.length === 0) {
             // Nothing outside on the screen: nothing to draw, and no reason to draw the map again.
             if (this.visible) {
@@ -309,8 +320,7 @@ export class WeatherManager {
         this.roofs = overRoofs > 0 ? { cells: outdoor.map((cell) => (cell ? 0 : 1)), share: overRoofs } : undefined;
         if (showWeather && weather === WeatherType.Fog) {
             const density = fogStrengthNow * (night ? FOG_NIGHT_FACTOR : 1);
-            this.graphics.fillStyle(FOG_COLOR, FOG_VEIL_ALPHA * density);
-            for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
+            this.fillVeil(canvas, outdoor, veil, FOG_COLOR, FOG_VEIL_ALPHA * density);
             // The patches stop at the walls: only outdoor cells are painted.
             const levels = fieldLevels(canvas, size, fogPatches(epoch, view, this.reducedMotion));
             this.blocks.paintField(canvas, levels, outdoor, NO_SHIFT, FOG_COLOR, (level) => {
@@ -318,8 +328,7 @@ export class WeatherManager {
             });
         } else if (showWeather) {
             if (weather !== WeatherType.Snow) {
-                this.graphics.fillStyle(0x27344b, storm ? 0.2 : rainVeilAlpha(rain));
-                for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
+                this.fillVeil(canvas, outdoor, veil, 0x27344b, storm ? 0.2 : rainVeilAlpha(rain));
             }
             // The rain falls from grey clouds, the storm from dark ones (not at night, with the personal switch).
             const covering =
@@ -388,6 +397,55 @@ export class WeatherManager {
     }
 
     /**
+     * A veil of one colour over the outdoors of the view. Its rectangles when they are few (seen from close: exact
+     * along the walls); seen from far they are hundreds, drawn again by the engine at every image: the veil is then
+     * painted in the canvas of the clouds, a cell at a time, under them.
+     */
+    private fillVeil(
+        canvas: BlockCanvasArea,
+        outdoor: Uint8Array,
+        veil: readonly WeatherView[],
+        color: number,
+        alpha: number,
+    ): void {
+        if (veil.length <= VEIL_MAX_RECTS) {
+            this.graphics.fillStyle(color, alpha);
+            for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
+            return;
+        }
+        if (this.everyCell.length !== outdoor.length) this.everyCell = new Uint8Array(outdoor.length).fill(1);
+        this.blocks.paintField(canvas, this.everyCell, outdoor, NO_SHIFT, color, () => alpha);
+    }
+
+    /**
+     * The outdoors of the view without what a raised floor covers. Reading it is the costly part of a drawing of the
+     * weather, and it only changes with the walls, the floors and the view: kept for a view widened to whole steps,
+     * so that a rain drawn 30 times a second, or a scroll, does not read the map again each time.
+     */
+    private veilOver(view: WeatherView, grid: OutdoorGrid, cover: RaisedCover | undefined): WeatherView[] {
+        const x = Math.floor(view.x / VEIL_STEP) * VEIL_STEP;
+        const y = Math.floor(view.y / VEIL_STEP) * VEIL_STEP;
+        const width = Math.ceil((view.x + view.width) / VEIL_STEP) * VEIL_STEP - x;
+        const height = Math.ceil((view.y + view.height) / VEIL_STEP) * VEIL_STEP - y;
+        const kept = this.veil;
+        if (
+            kept &&
+            kept.grid === grid &&
+            kept.cover === cover &&
+            kept.x === x &&
+            kept.y === y &&
+            kept.width === width &&
+            kept.height === height
+        ) {
+            return kept.rects;
+        }
+        const runs = grid.outdoorRunsInView({ x, y, width, height });
+        const rects = cover ? cover.uncovered(runs) : runs;
+        this.veil = { grid, cover, x, y, width, height, rects };
+        return rects;
+    }
+
+    /**
      * Clouds of a clear sky, outdoors only and over everything (avatars and objects too): the grey veil of an overcast
      * sky, the shadows cast away from the sun, then the clouds over them. Each cloud is a cumulus with a sharp edge, lit
      * from the north-west and grey on the other side, white by fine weather, greyer as the
@@ -407,10 +465,7 @@ export class WeatherManager {
         veilAlpha: number,
         zoom: number,
     ): void {
-        if (veilAlpha > 0) {
-            this.graphics.fillStyle(OVERCAST_COLOR, veilAlpha);
-            for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
-        }
+        if (veilAlpha > 0) this.fillVeil(canvas, outdoor, veil, OVERCAST_COLOR, veilAlpha);
         // One field of clouds for the clouds and their shadows (the same clouds, moved by whole cells), wide enough for
         // the shadows of clouds just out of the canvas.
         const shift = shadowOffset
@@ -538,7 +593,9 @@ export class WeatherManager {
      */
     private drawPuddles(wetness: number): void {
         const size = this.rainSettings.puddles;
-        if (wetness <= 0 || size <= 0) {
+        // Seen from far a puddle is a dot, and the whole map holds so many of them that drawing them again at every
+        // image took most of the time of an image: none under this scale.
+        if (wetness <= 0 || size <= 0 || seenFromFar(this.scene)) {
             this.lastPuddleKey = "";
             this.hidePuddles();
             return;
@@ -601,14 +658,8 @@ export class WeatherManager {
         return cloudZoomFade(this.screenScale(), this.cloudsHeight);
     }
 
-    /**
-     * Screen pixels a map pixel takes: the camera zoom over Phaser's display scale, which stretches the canvas while the
-     * camera stays at 1 (Retina screens). The camera zoom alone when the display scale is unknown.
-     */
     private screenScale(): number {
-        const zoom = this.scene.cameras.main.zoom;
-        const scale = zoom / this.scene.scale.displayScale.x;
-        return Number.isFinite(scale) && scale > 0 ? scale : zoom;
+        return screenScale(this.scene);
     }
 
     /** The flash of the last strike over everything outdoors, and its bolt (not when motion is reduced). */

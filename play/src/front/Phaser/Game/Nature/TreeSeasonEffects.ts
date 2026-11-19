@@ -1,6 +1,7 @@
 import { Season } from "@workadventure/map-editor";
 import type * as Phaser from "phaser";
 import { FLOOR_OBJECT_DEPTH, OVERHEAD_OBJECT_DEPTH } from "../../ECS/EntityLayerDepth";
+import { seenFromFar } from "../Weather/ScreenScale";
 import { groundLeaves, treeLeaves, type TreeBox } from "./TreeLeafFall";
 import { snowClumps, SNOW_DUMP_SECONDS, treeSnowCycle } from "./TreeSnowLoad";
 import { phaseOf } from "./TreeSway";
@@ -95,6 +96,7 @@ export class TreeSeasonEffects {
         const windFrom = this.options.windFrom();
         const coverage = winter ? this.options.snowCoverage() : 0;
         let drawn = false;
+        const far = seenFromFar(this.scene);
         for (const { id, object } of this.options.trees()) {
             if (!object.visible) continue;
             const box = { x: object.x, y: object.y, width: object.displayWidth, height: object.displayHeight };
@@ -111,12 +113,13 @@ export class TreeSeasonEffects {
                 // Evergreens and palms keep their leaves: their autumn image is their summer one.
                 const seasons = object.getPrefab().seasonal;
                 if (seasons && seasons[Season.Autumn] === seasons[Season.Summer]) continue;
-                for (const leaf of groundLeaves(phaseOf(id), fallen, box)) {
+                // Seen from far the carpet of a tree is a few pixels, and the view holds hundreds of trees: none.
+                for (const leaf of far ? [] : groundLeaves(phaseOf(id), fallen, box)) {
                     this.ground.fillStyle(leaf.color, 0.9);
                     this.ground.fillRect(leaf.x, leaf.y, leaf.vertical ? 3 : 4, leaf.vertical ? 4 : 3);
                     drawn = true;
                 }
-                for (const leaf of treeLeaves(seconds, wind, windFrom, phaseOf(id), box)) {
+                for (const leaf of far ? [] : treeLeaves(seconds, wind, windFrom, phaseOf(id), box)) {
                     this.graphics.fillStyle(leaf.color, 0.95 * leaf.alpha);
                     this.graphics.fillRect(
                         Math.round(leaf.x),

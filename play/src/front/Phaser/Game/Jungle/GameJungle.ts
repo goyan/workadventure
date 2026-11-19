@@ -35,6 +35,8 @@ export class GameJungle {
     private readonly manager: JungleManager;
     // The prefabs of the loaded collections, kept from their store rather than rebuilt twice a second.
     private loadedPrefabs: JunglePrefab[] = [];
+    /** The sheets of the species of the land found in the catalogues loaded (see sheetOf). */
+    private sheets: { prefabs: JunglePrefab[]; found: Map<string, string | undefined> } | undefined;
     private readonly unsubscribePrefabs: Unsubscriber;
     private readonly timer: Phaser.Time.TimerEvent;
     private readonly companions: JungleCompanions;
@@ -146,7 +148,12 @@ export class GameJungle {
 
     /** The sheet of a species in the catalogues of the map, for the animals the server runs. */
     public sheetOf(species: "antelope" | "lion" | "tiger"): string | undefined {
-        return landSheetOf(species, this.loadedPrefabs);
+        // Asked for every animal at every image: searched once in the catalogues as they are loaded.
+        if (this.sheets?.prefabs !== this.loadedPrefabs)
+            this.sheets = { prefabs: this.loadedPrefabs, found: new Map() };
+        const { found } = this.sheets;
+        if (!found.has(species)) found.set(species, landSheetOf(species, this.loadedPrefabs));
+        return found.get(species);
     }
 
     public tamedAnimalCount(): number {

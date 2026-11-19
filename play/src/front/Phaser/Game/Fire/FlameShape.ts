@@ -197,3 +197,17 @@ export function spreadTiles<T extends { x: number; y: number }>(
     if (kept.length === 0) return { tiles: [], scale: 1 };
     return { tiles: kept, scale: Math.min(FLAME_MAX_SPREAD_SCALE, Math.sqrt(tiles.length / kept.length)) };
 }
+
+/** Tiles on fire around a flame, itself counted, up to which it keeps its whole glow. */
+export const GLOW_FULL_NEIGHBOURS = 3;
+/** The glow of a flame is shared with the tiles on fire this far around it (a square of 5 tiles). */
+export const GLOW_NEIGHBOUR_REACH = 2;
+
+/**
+ * How much of its glow a flame keeps among `burning` tiles on fire around it, itself counted. The glows add up: on a
+ * thick front, each at its full would whiten the fire into one flat band, the flames lost in it. A flame alone keeps
+ * it all; in a thick fire each gives its share, and the front glows about as much as a few flames together.
+ */
+export function glowShare(burning: number): number {
+    return Math.min(1, GLOW_FULL_NEIGHBOURS / Math.max(1, burning));
+}

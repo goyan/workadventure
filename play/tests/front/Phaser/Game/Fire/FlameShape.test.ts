@@ -11,6 +11,7 @@ import {
     flameOf,
     flameOutline,
     flamePose,
+    glowShare,
     spreadTiles,
     smokeOf,
     tileSeed,
@@ -193,5 +194,16 @@ describe("tileSeed and spreadTiles", () => {
             { x: 30, y: 30 },
         ];
         expect(spreadTiles(tiles, 400)).toEqual({ tiles, scale: 1 });
+    });
+});
+
+describe("glowShare", () => {
+    it("leaves a flame alone its whole glow, and shares it in a thick fire", () => {
+        expect(glowShare(1)).toBe(1);
+        expect(glowShare(3)).toBe(1);
+        expect(glowShare(6)).toBe(0.5);
+        // The whole square around it on fire: about an eighth each, so the front does not whiten.
+        expect(glowShare(25)).toBeCloseTo(0.12, 5);
+        expect(glowShare(0)).toBe(1);
     });
 });

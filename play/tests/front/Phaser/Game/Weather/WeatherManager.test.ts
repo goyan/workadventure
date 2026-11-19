@@ -433,6 +433,46 @@ describe("weather rendering lifecycle", () => {
             }
         });
 
+        // Seen from far the outdoors is hundreds of runs: as rectangles, the engine drew them again at every image.
+        it("paints the veil in the canvas of the clouds when its rectangles are too many", () => {
+            const { scene, graphics, wam } = fixture();
+            wam.settings = { weather: WeatherType.Fog };
+            const runs = Array.from({ length: 200 }, (_, row) => ({ x: 0, y: row * 4, width: 1000, height: 4 }));
+            const grid = { outdoorRunsInView: () => runs, isOutdoorAt: () => true } as unknown as ReturnType<
+                typeof OutdoorGrid.fromWalls
+            >;
+            manager = new WeatherManager(scene, { outdoorGrid: () => grid });
+            manager.update(0, new Date(0));
+            // Still a veil of the colour of the fog, but none of the 200 runs drawn as a rectangle.
+            expect(fogFill(graphics).length).toBeGreaterThan(0);
+            expect(graphics.fillRect.mock.calls.some(([, , width]) => width === 1000)).toBe(false);
+        });
+
+        // Reading the outdoors of the view is the costly part of a drawing: not again while nothing changed.
+        it("reads the outdoors of the view once while the walls and the view stay the same", () => {
+            const { scene, wam } = fixture();
+            wam.settings = { weather: WeatherType.Fog };
+            const run = { x: 64, y: 32, width: 96, height: 32 };
+            const outdoorRunsInView = vi.fn(() => [run]);
+            const grid = { outdoorRunsInView, isOutdoorAt: () => true } as unknown as ReturnType<
+                typeof OutdoorGrid.fromWalls
+            >;
+            let walls = grid;
+            manager = new WeatherManager(scene, { outdoorGrid: () => walls });
+            manager.update(0, new Date(0));
+            manager.update(200, new Date(200));
+            manager.update(400, new Date(400));
+            expect(outdoorRunsInView).toHaveBeenCalledTimes(1);
+            // Read for a view widened to whole steps: a small scroll stays inside it.
+            const asked = outdoorRunsInView.mock.calls[0] as unknown as [{ x: number; width: number }];
+            expect(Math.abs(asked[0].x % 256)).toBe(0);
+            expect(asked[0].width % 256).toBe(0);
+            // A wall built or removed makes another grid: read again.
+            walls = { ...grid } as typeof grid;
+            manager.update(600, new Date(600));
+            expect(outdoorRunsInView).toHaveBeenCalledTimes(2);
+        });
+
         it("fog alone moves 5 times a second", () => {
             const { scene, graphics, wam } = fixture();
             wam.settings = { weather: WeatherType.Fog };
@@ -763,6 +803,22 @@ describe("puddles", () => {
         rainPuddlesStore.set(0);
         manager.update(40, new Date(40));
         expect(graphics.fillStyle.mock.calls.slice(drawn).some(([color]) => color === 0x4f7ba6)).toBe(false);
+    });
+
+    // The whole map seen from far holds so many puddles that drawing them took most of the time of an image.
+    it("draws no puddle when the map is seen from far, and draws them again closer", () => {
+        const { scene, graphics, wam } = fixture();
+        wam.settings = { weather: WeatherType.Rain };
+        scene.cameras.main.worldView.width = 640;
+        scene.cameras.main.worldView.height = 640;
+        scene.cameras.main.zoom = 0.3;
+        manager = new WeatherManager(scene);
+        rainPuddlesStore.set(1);
+        manager.update(0, new Date(0));
+        expect(graphics.fillStyle.mock.calls.some(([color]) => color === 0x4f7ba6)).toBe(false);
+        scene.cameras.main.zoom = 1;
+        manager.update(40, new Date(40));
+        expect(graphics.fillStyle.mock.calls.some(([color]) => color === 0x4f7ba6)).toBe(true);
     });
 
     it("leaves the puddles out where the ground has a relief: its own water is drawn there", () => {
