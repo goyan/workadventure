@@ -1279,6 +1279,8 @@
 /* The tab under the microphone and camera that opens the devices: a small key hanging under them, easy to aim. */
 @media (min-width: 640px) {
     .device-tab {
+        /* Centred under the junction of the microphone and the camera, whatever the size of their keys. */
+        inset-inline-start: calc(50% - 22px);
         bottom: -20px;
         width: 44px;
         height: 20px;
