@@ -401,7 +401,16 @@ message UpdateWAMSettingsMessage {
     UpdateWeatherSettingMessage updateWeatherSettingMessage = 5;
     UpdateWaterSettingMessage updateWaterSettingMessage = 6;
     UpdateLifeSettingMessage updateLifeSettingMessage = 7;
+    UpdateMeadowSettingMessage updateMeadowSettingMessage = 8;
   }
+}
+
+// The meadow of the map (MeadowSettings in libs/map-editor): the grass that grows by itself on its fertile soils.
+message UpdateMeadowSettingMessage {
+  bool enabled = 1;
+  double growMinutes = 2;
+  double thirstMinutes = 3;
+  double moistureHold = 4;
 }
 
 // The life in the water of the relief and the drinks of the land animals (LifeSettings in libs/map-editor).

@@ -6,14 +6,14 @@ import { describe, expect, it, vi } from "vitest";
 import { MeadowManager } from "../src/Model/MeadowManager";
 import type { VariablesRepositoryInterface } from "../src/Services/Repository/VariablesRepositoryInterface";
 
-function wamWith(weather: WeatherType): WAMFileFormat {
+function wamWith(weather: WeatherType, meadow?: NonNullable<WAMFileFormat["settings"]>["meadow"]): WAMFileFormat {
     return {
         version: "2.1.0",
         mapUrl: "map.tmj",
         areas: [],
         entityCollections: [],
         entities: {},
-        settings: { weather },
+        settings: { weather, meadow },
     };
 }
 
@@ -23,7 +23,9 @@ function createHarness({
     mapSize = () => ({ width: 16, height: 8 }),
     // A summer noon in Paris: the grass grows.
     now = Date.UTC(2026, 6, 14, 10),
+    meadow = undefined as NonNullable<WAMFileFormat["settings"]>["meadow"],
 }: {
+    meadow?: NonNullable<WAMFileFormat["settings"]>["meadow"];
     weather?: WeatherType;
     saved?: Record<string, string>;
     mapSize?: () => { width: number; height: number } | undefined;
@@ -38,7 +40,7 @@ function createHarness({
             return Promise.resolve(1);
         }),
     } satisfies VariablesRepositoryInterface;
-    const wam = wamWith(weather);
+    const wam = wamWith(weather, meadow);
     const room = {
         getWam: () => wam,
         sendSubMessageToRoom: (message: SubToPusherRoomMessage): void => {
@@ -56,7 +58,7 @@ function createHarness({
     const steps = (count: number): void => {
         for (let step = 0; step < count; step++) manager.step();
     };
-    return { manager, sent, store, steps };
+    return { manager, sent, store, steps, wam };
 }
 
 const grassOf = (message: MeadowMessage): Uint8Array => new Uint8Array(gunzipSync(message.grass));
@@ -120,5 +122,27 @@ describe("MeadowManager", () => {
         expect(after[0]).toBeGreaterThan(0);
         expect(Math.abs(after[0] - before[0])).toBeLessThanOrEqual(2);
         second.manager.stop();
+    });
+
+    it("follows the settings of the map: a faster growth, and a meadow turned off is wiped", () => {
+        const usual = createHarness();
+        const fast = createHarness({ meadow: { enabled: true, growMinutes: 2, thirstMinutes: 20, moistureHold: 1 } });
+        for (const harness of [usual, fast]) {
+            harness.manager.mapChanged();
+            harness.steps(250);
+        }
+        const coverOf = (harness: typeof usual): number => grassOf(harness.sent[harness.sent.length - 1])[0];
+        expect(coverOf(fast)).toBeGreaterThan(coverOf(usual) * 2);
+        // The map turns its meadow off: the room is told a bare map, once.
+        fast.wam.settings = {
+            ...fast.wam.settings,
+            meadow: { enabled: false, growMinutes: 2, thirstMinutes: 20, moistureHold: 1 },
+        };
+        const told = fast.sent.length;
+        fast.steps(20);
+        expect(fast.sent.length).toBe(told + 1);
+        expect(grassOf(fast.sent[told]).every((cover) => cover === 0)).toBe(true);
+        usual.manager.stop();
+        fast.manager.stop();
     });
 });

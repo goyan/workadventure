@@ -1,5 +1,6 @@
 import { gunzipSync, gzipSync } from "node:zlib";
 import {
+    DEFAULT_MEADOW_SETTINGS,
     landWallsOf,
     Meadow,
     MEADOW_STEP_SECONDS,
@@ -49,6 +50,8 @@ export class MeadowManager {
     private sentGrass: Uint8Array | undefined;
     private sentMoisture: Uint8Array | undefined;
     private changedSinceSave = false;
+    /** Whether the meadow was wiped because the map turned it off. */
+    private cleared = false;
 
     constructor(
         private readonly room: Pick<GameRoom, "getWam" | "sendSubMessageToRoom">,
@@ -145,6 +148,18 @@ export class MeadowManager {
             this.rainRate = rainRateAt(settings, this.now(), slots);
         }
         this.steps++;
+        const set = { ...DEFAULT_MEADOW_SETTINGS, ...settings?.meadow };
+        if (!set.enabled) {
+            // A map that turned its meadow off: bare at once, told once, and nothing more is stepped.
+            if (!this.cleared) {
+                this.cleared = true;
+                meadow.clear();
+                this.tell(meadow);
+                this.save();
+            }
+            return;
+        }
+        this.cleared = false;
         const minutes = minutesOfDayIn(date, settings?.weatherLocation?.timezone);
         const grid = this.water();
         meadow.step({
@@ -152,6 +167,9 @@ export class MeadowManager {
             rainMmPerHour: this.rainRate,
             daylight: minutes >= DAY_FROM && minutes < DAY_TO,
             season: seasonAt(date),
+            growSeconds: set.growMinutes * 60,
+            thirstSeconds: set.thirstMinutes * 60,
+            moistureHold: set.moistureHold,
             waterAt: grid
                 ? (tileX, tileY) => {
                       let deepest = 0;

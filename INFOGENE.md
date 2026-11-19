@@ -2217,7 +2217,10 @@ sans eau dessus, de jour (7 h à 19 h au lieu de la carte), en saison (pleine au
 rien en hiver), et **moins vite en altitude** (rien au-delà de 192 px, 6 cases) ; un pré plein en 10 minutes de
 bonnes conditions ; elle meurt de soif en 20 minutes sur un sol sec, noyée en 1 minute sous l'eau. Dehors seulement
 (ce que les murs de l'outil Carte ferment n'a pas de pré), jamais sur un sol posé par l'outil Carte. Résultat : un
-anneau d'herbe autour des lacs, un pré après la pluie. Automatique sur toutes les cartes, sans réglage. La salle
+anneau d'herbe autour des lacs, un pré après la pluie. Automatique sur toutes les cartes ; chaque carte règle la sienne dans l'outil Relief, bloc « Herbe de la
+carte » (`settings.meadow`, `UpdateMeadowSettingMessage`) : interrupteur (coupée, la carte est nue aussitôt), durée
+pour un pré plein (1 à 120 min, 10 par défaut), durée de la mort de soif (1 à 240 min, 20), tenue de l'humidité du
+sol (× 0,25 à × 8). La salle
 reçoit l'état entier toutes les 10 s quand il a changé (`MeadowMessage`, un octet par case pour l'herbe, un pour
 l'humidité, gzip) et à l'entrée ; le navigateur dessine l'herbe en voile vert moucheté sur le sol, sous l'eau
 (`Terrain/MeadowState.ts`, dans `TerrainView`), là où c'est dehors pour lui. Une argile détrempée (60 % d'humidité)

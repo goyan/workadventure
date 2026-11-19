@@ -219,4 +219,29 @@ describe("the grass", () => {
         expect(edited.grassAt(2, 2)).toBe(meadow.grassAt(2, 2));
         expect(edited.grassAt(13, 2)).toBe(0);
     });
+
+    it("follows the paces the map sets: a faster growth, a slower thirst, soils that hold their moisture longer", () => {
+        const usual = new Meadow(size, undefined, undefined);
+        const fast = new Meadow(size, undefined, undefined);
+        for (let step = 0; step < 60; step++) {
+            usual.set(5, 2, 0.5, usual.grassAt(5, 2));
+            fast.set(5, 2, 0.5, fast.grassAt(5, 2));
+            usual.step(dry);
+            fast.step({ ...dry, growSeconds: 300 });
+        }
+        expect(fast.grassAt(5, 2)).toBeCloseTo(usual.grassAt(5, 2) * 2, 1);
+        const slow = new Meadow(size, undefined, undefined);
+        slow.set(5, 2, 0, 1);
+        run(slow, 600, { ...dry, thirstSeconds: 2400 });
+        expect(slow.grassAt(5, 2)).toBeCloseTo(0.75, 1);
+        const holding = new Meadow({ width: 1, height: 1 }, undefined, undefined);
+        const leaking = new Meadow({ width: 1, height: 1 }, undefined, undefined);
+        holding.set(0, 0, 0.8, 0);
+        leaking.set(0, 0, 0.8, 0);
+        run(holding, 600, { ...dry, moistureHold: 4 });
+        run(leaking, 600);
+        expect(holding.moistureAt(0, 0)).toBeGreaterThan(leaking.moistureAt(0, 0) * 1.8);
+        holding.clear();
+        expect(holding.moistureAt(0, 0)).toBe(0);
+    });
 });

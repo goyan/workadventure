@@ -58,6 +58,11 @@ export interface MeadowStepInput {
     season: Season;
     /** The water lying on a tile, in pixels: the deepest of its cells. */
     waterAt: (tileX: number, tileY: number) => number;
+    /** What the map sets of its meadow; the usual paces when absent. */
+    growSeconds?: number;
+    thirstSeconds?: number;
+    /** How many times longer than usual the soils hold their moisture. */
+    moistureHold?: number;
 }
 
 /** The tiles a floor of the "Map" tool covers on the ground (a paved path, a terrace): nothing grows there. */
@@ -153,6 +158,11 @@ export class Meadow {
         const seconds = Number.isFinite(input.seconds) && input.seconds > 0 ? input.seconds : 0;
         if (seconds === 0) return;
         const rain = Number.isFinite(input.rainMmPerHour) && input.rainMmPerHour > 0 ? input.rainMmPerHour : 0;
+        const set = (value: number | undefined, usual: number): number =>
+            value !== undefined && Number.isFinite(value) && value > 0 ? value : usual;
+        const growSeconds = set(input.growSeconds, GROW_SECONDS);
+        const thirstSeconds = set(input.thirstSeconds, THIRST_SECONDS);
+        const holds = set(input.moistureHold, 1);
         const { width, height, moisture, next, grass, hold, ground, fertility, outdoor } = this;
         const water = new Float32Array(moisture.length);
         for (let tileY = 0; tileY < height; tileY++) {
@@ -167,7 +177,7 @@ export class Meadow {
                     moisture[index] = 1;
                 } else {
                     const kept = moisture[index] + rain * seconds * RAIN_GAIN;
-                    moisture[index] = Math.min(1, kept - kept * Math.min(1, seconds / hold[index]));
+                    moisture[index] = Math.min(1, kept - kept * Math.min(1, seconds / (hold[index] * holds)));
                 }
             }
         }
@@ -199,7 +209,7 @@ export class Meadow {
             if (fertility[index] <= 0 || water[index] >= DROWNING_WATER_PX) {
                 cover -= seconds / DROWN_SECONDS;
             } else if (moisture[index] < DRY_MOISTURE) {
-                cover -= seconds / THIRST_SECONDS;
+                cover -= seconds / thirstSeconds;
             } else if (
                 input.daylight &&
                 growth > 0 &&
@@ -207,10 +217,16 @@ export class Meadow {
                 moisture[index] >= GROWING_MOISTURE[0] &&
                 moisture[index] <= GROWING_MOISTURE[1]
             ) {
-                cover += (seconds / GROW_SECONDS) * fertility[index] * growth * altitudeGrowth(ground[index]);
+                cover += (seconds / growSeconds) * fertility[index] * growth * altitudeGrowth(ground[index]);
             }
             grass[index] = Math.min(1, Math.max(0, cover));
         }
+    }
+
+    /** A map that turns its meadow off: bare and dry at once. */
+    public clear(): void {
+        this.grass.fill(0);
+        this.moisture.fill(0);
     }
 
     /** The grass and the moisture of every tile, row by row, a byte each (0 to 255): told to the room and saved. */
