@@ -1,4 +1,4 @@
-import { DEFAULT_MAX_DEPTH_TILES, TERRAIN_CELL, TILE_PX } from "@workadventure/map-editor";
+import { cellInMap, DEFAULT_MAX_DEPTH_TILES, TERRAIN_CELL, TILE_PX } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 import type { EditMapCommandMessage } from "@workadventure/messages";
 import * as Phaser from "phaser";
@@ -65,8 +65,17 @@ export class TerrainEditorTool extends MapEditorTool {
         this.hover = undefined;
         this.cancelStroke();
     };
-    /** Outdoors, not under a raised floor or a wall of the map tool. Without a grid of the outdoors, everywhere. */
+    /**
+     * On the map, outdoors, not under a raised floor or a wall of the map tool. Without a grid of the outdoors,
+     * everywhere on the map. Never past the edges of the map: the ground shown there is only a picture.
+     */
     private readonly allowed = (cellX: number, cellY: number): boolean => {
+        const map = this.scene.Map;
+        const size = {
+            width: Math.ceil(map.widthInPixels / TERRAIN_CELL),
+            height: Math.ceil(map.heightInPixels / TERRAIN_CELL),
+        };
+        if (!cellInMap(cellX, cellY, size)) return false;
         const grid = this.scene.getOutdoorGrid();
         return !grid || grid.isOutdoorAt((cellX + 0.5) * TERRAIN_CELL, (cellY + 0.5) * TERRAIN_CELL);
     };

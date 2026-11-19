@@ -1,7 +1,8 @@
 import { TERRAIN_CHUNK } from "../types";
 import type { TerrainData } from "../types";
 import { CELL_AREA_M2, LITRES_PER_M3, metresOf } from "./Scale";
-import { cellKey, cellOf, dugCells, heightAt } from "./TerrainGrid";
+import { cellInMap, cellKey, cellOf, dugCells, heightAt } from "./TerrainGrid";
+import type { MapCells } from "./TerrainGrid";
 
 /** Litres over one cell of the relief under one pixel of water. */
 export const CELL_LITRES_PER_PX = CELL_AREA_M2 * -metresOf(-1) * LITRES_PER_M3;
@@ -84,16 +85,19 @@ export interface WaterGridBounds {
 /**
  * The cells to simulate for a map: its relief and its sources and sinks (which may stand on flat ground), with a
  * margin of flat ground around for a flood to spread. Undefined for a map without any: nothing to simulate.
+ * With the size of the map, the grid stops at its edges, and what was dug or put outside the map is left out.
  */
 export function gridBoundsOf(
     terrain: TerrainData | undefined,
     objects: readonly { cellX: number; cellY: number }[],
+    map?: MapCells,
 ): WaterGridBounds | undefined {
     let left = Infinity;
     let top = Infinity;
     let right = -Infinity;
     let bottom = -Infinity;
     const include = (x: number, y: number): void => {
+        if (!cellInMap(x, y, map)) return;
         left = Math.min(left, x);
         right = Math.max(right, x);
         top = Math.min(top, y);
@@ -120,6 +124,14 @@ export function gridBoundsOf(
     let height = bottom - top + 1 + 2 * WATER_GRID_MARGIN;
     let x = left - WATER_GRID_MARGIN;
     let y = top - WATER_GRID_MARGIN;
+    if (map) {
+        const endX = Math.min(map.width, x + width);
+        const endY = Math.min(map.height, y + height);
+        x = Math.max(0, x);
+        y = Math.max(0, y);
+        width = endX - x;
+        height = endY - y;
+    }
     if (width > MAX_GRID_SIDE) {
         x += Math.floor((width - MAX_GRID_SIDE) / 2);
         width = MAX_GRID_SIDE;

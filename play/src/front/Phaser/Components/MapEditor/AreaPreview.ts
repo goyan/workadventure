@@ -15,6 +15,7 @@ import { SpeechDomElement } from "../../Entity/SpeechDomElement";
 import LL from "../../../../i18n/i18n-svelte";
 import { SizeAlteringSquare, SizeAlteringSquareEvent, SizeAlteringSquarePosition as Edge } from "./SizeAlteringSquare";
 import { isAreaDuplicateGesture } from "./AreaDuplicateGesture";
+import { clampAreaCorner, clampAreaTopLeft, type MapPixelSize } from "./AreaMapBounds";
 
 import Rectangle = Phaser.GameObjects.Rectangle;
 import Key = Phaser.Input.Keyboard.Key;
@@ -345,8 +346,15 @@ export class AreaPreview extends Rectangle {
                 // On the grid of the floor of the map the area belongs to: drawn its altitude further north.
                 const level = this.areaData.elevation ?? 0;
                 const topLeftY = Math.round((dragY - this.displayHeight * 0.5 + level) / 32) * 32 - level;
-                this.x = Math.round(topLeftX + this.displayWidth * 0.5);
-                this.y = Math.round(topLeftY + this.displayHeight * 0.5);
+                // Never past the edges of the map: no avatar walks there.
+                const topLeft = clampAreaTopLeft(
+                    { x: topLeftX, y: topLeftY },
+                    { width: this.displayWidth, height: this.displayHeight },
+                    level,
+                    this.mapSize(),
+                );
+                this.x = Math.round(topLeft.x + this.displayWidth * 0.5);
+                this.y = Math.round(topLeft.y + this.displayHeight * 0.5);
                 this.updateSquaresPositions();
                 this.moved = true;
                 if (this.scene instanceof GameScene) {
@@ -392,9 +400,15 @@ export class AreaPreview extends Rectangle {
                 const oldX = square.x;
                 const oldY = square.y;
 
-                square.x = Math.round(dragX / 32) * 32;
                 const level = this.areaData.elevation ?? 0;
-                square.y = Math.round((dragY + level) / 32) * 32 - level;
+                // Never past the edges of the map: no avatar walks there.
+                const corner = clampAreaCorner(
+                    { x: Math.round(dragX / 32) * 32, y: Math.round((dragY + level) / 32) * 32 - level },
+                    level,
+                    this.mapSize(),
+                );
+                square.x = corner.x;
+                square.y = corner.y;
 
                 let newWidth = 0;
                 let newHeight = 0;
@@ -483,6 +497,13 @@ export class AreaPreview extends Rectangle {
                 this.emit(AreaPreviewEvent.Updated, data);
             });
         });
+    }
+
+    private mapSize(): MapPixelSize {
+        if (!(this.scene instanceof GameScene)) {
+            throw new Error("Not the Game Scene");
+        }
+        return { width: this.scene.Map.widthInPixels, height: this.scene.Map.heightInPixels };
     }
 
     private updateSquaresPositions(): void {

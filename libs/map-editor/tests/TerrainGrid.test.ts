@@ -1,6 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { cellKey, cellOf, dugCells, heightAt, withHeights } from "../src/Terrain/TerrainGrid";
+import { cellInMap, cellKey, cellOf, dugCells, heightAt, withHeights } from "../src/Terrain/TerrainGrid";
 import { WAMFileFormat } from "../src/types";
+
+describe("cellInMap", () => {
+    it("holds the cells of the map and none past its edges", () => {
+        const map = { width: 100, height: 80 };
+        expect(cellInMap(0, 0, map)).toBe(true);
+        expect(cellInMap(99, 79, map)).toBe(true);
+        expect(cellInMap(100, 79, map)).toBe(false);
+        expect(cellInMap(99, 80, map)).toBe(false);
+        expect(cellInMap(-1, 0, map)).toBe(false);
+        expect(cellInMap(0, -1, map)).toBe(false);
+    });
+
+    it("holds every cell while the size of the map is not known", () => {
+        expect(cellInMap(-5, 4000, undefined)).toBe(true);
+    });
+});
 
 describe("terrain grid", () => {
     it("reads 0 outside the relief and the stored height inside", () => {
