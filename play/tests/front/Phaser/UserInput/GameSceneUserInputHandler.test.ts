@@ -2,6 +2,7 @@ import * as Phaser from "phaser";
 import { get, readable } from "svelte/store";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { mock } from "vitest-mock-extended";
+import { CatastropheKind } from "@workadventure/messages";
 import { Vehicle, VehicleMode } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { localUserStore } from "@wa/front/Connection/LocalUserStore";
 import { waScaleManager } from "@wa/front/Phaser/Services/WaScaleManager";
@@ -31,11 +32,14 @@ import {
     fishingContestStore,
     rodEquippedStore,
 } from "../../../../src/front/Stores/FishingStore";
+import { catastrophePanelStore, toggleArmedCatastrophe } from "../../../../src/front/Stores/CatastropheStore";
+import type { RoomConnection } from "../../../../src/front/Connection/RoomConnection";
 import { torchEquippedStore } from "../../../../src/front/Stores/TorchStore";
 import type { TorchManager } from "../../../../src/front/Phaser/Game/Torch/TorchManager";
 import { findSeatAtPoint } from "../../../../src/front/Phaser/Player/Seat";
 import type { Seat } from "../../../../src/front/Phaser/Player/Seat";
 
+const setDefaultCursor = vi.fn();
 const tileSnap = vi.hoisted(() => ({ enabled: false }));
 vi.mock("../../../../src/front/Enum/EnvironmentVariable", async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
@@ -110,7 +114,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             value: { canvas: document.createElement("canvas") },
         });
         Object.defineProperty(scene, "events", { configurable: true, value: new Phaser.Events.EventEmitter() });
-        Object.defineProperty(scene, "input", { configurable: true, value: {} });
+        Object.defineProperty(scene, "input", { configurable: true, value: { setDefaultCursor } });
         scene.Map = mock<Phaser.Tilemaps.Tilemap>({ widthInPixels: 1504, heightInPixels: 1184 });
         scene.getCameraManager.mockReturnValue(cameraManager);
         scene.getActivatablesManager.mockReturnValue(activatablesManager);
@@ -668,6 +672,119 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             handler.handleKeyUpEvent(space("keyup"));
             expect(fishingManager.pressKey.mock.calls).toHaveLength(0);
             expect(fishingManager.releaseKey.mock.calls).toHaveLength(0);
+        });
+    });
+
+    describe("an armed catastrophe", () => {
+        const launch = vi.fn();
+
+        function arm(): void {
+            catastrophePanelStore.set(true);
+            toggleArmedCatastrophe("meteor");
+        }
+
+        beforeEach(() => {
+            scene.connection = mock<RoomConnection>({ emitLaunchCatastrophe: launch });
+        });
+
+        afterEach(() => {
+            catastrophePanelStore.set(false);
+        });
+
+        it("the canvas shows a crosshair while armed, and the usual cursor after", () => {
+            arm();
+            expect(setDefaultCursor).toHaveBeenLastCalledWith("crosshair");
+
+            catastrophePanelStore.set(false);
+            expect(setDefaultCursor).toHaveBeenLastCalledWith("auto");
+        });
+
+        it("an armed meteor takes the left click", () => {
+            arm();
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+
+            expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_METEOR, 480, 640]]);
+            expect(scene.moveTo.mock.calls).toEqual([]);
+        });
+
+        it("takes the click before an activatable object", () => {
+            arm();
+            vi.mocked(isActivatable).mockReturnValue(true);
+            handler.handlePointerUpEvent(pointer(0, 1), [mock<Phaser.GameObjects.GameObject>()]);
+
+            expect(launch).toHaveBeenCalledTimes(1);
+            expect(activatablesManager.handlePointerDownEvent.mock.calls).toEqual([]);
+        });
+
+        it("a double click while armed does not walk", () => {
+            arm();
+            handler.handlePointerUpEvent(pointer(0, 2), []);
+
+            expect(launch).toHaveBeenCalledTimes(1);
+            expect(scene.moveTo.mock.calls).toEqual([]);
+        });
+
+        it("a one-finger tap launches, a long press does not", () => {
+            arm();
+            const tap = pointer();
+            tap.wasTouch = true;
+            handler.handlePointerUpEvent(tap, []);
+            expect(launch).toHaveBeenCalledTimes(1);
+
+            const press = pointer();
+            press.wasTouch = true;
+            press.getDuration.mockReturnValue(600);
+            handler.handlePointerUpEvent(press, []);
+            expect(launch).toHaveBeenCalledTimes(1);
+        });
+
+        it("a drag of the map launches nothing", () => {
+            arm();
+            const down = pointer();
+            down.x = 100;
+            down.y = 100;
+            handler.handlePointerDownEvent(down, []);
+            const moved = pointer();
+            Object.defineProperty(moved, "id", { value: down.id });
+            moved.x = 160;
+            moved.y = 100;
+            handler.handlePointerMoveEvent(moved, []);
+            handler.handlePointerUpEvent(moved, []);
+
+            expect(launch).not.toHaveBeenCalled();
+        });
+
+        it("nothing is launched with the right button, in the editor, or unarmed", () => {
+            arm();
+            handler.handlePointerUpEvent(pointer(2, 1), []);
+            expect(launch).not.toHaveBeenCalled();
+
+            mapEditorModeStore.set(true);
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+            expect(launch).not.toHaveBeenCalled();
+            mapEditorModeStore.set(false);
+
+            catastrophePanelStore.set(false);
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+            expect(launch).not.toHaveBeenCalled();
+        });
+
+        it("launches nothing outside the map", () => {
+            arm();
+            camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(-5, 640));
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+
+            expect(launch).not.toHaveBeenCalled();
+        });
+
+        it("a click the canvas did not receive launches nothing", () => {
+            arm();
+            const windowListen = vi.spyOn(window, "addEventListener");
+            const documentListen = vi.spyOn(document, "addEventListener");
+            // Nothing reaches the handler: no pointer event, so nothing is launched, and it listens to nothing else.
+            expect(launch).not.toHaveBeenCalled();
+            expect(windowListen.mock.calls.filter(([type]) => String(type).startsWith("pointer"))).toEqual([]);
+            expect(documentListen.mock.calls.filter(([type]) => String(type).startsWith("pointer"))).toEqual([]);
         });
     });
 

@@ -1,6 +1,7 @@
 import * as Phaser from "phaser";
 import { get } from "svelte/store";
 import * as Sentry from "@sentry/svelte";
+import { CatastropheKind } from "@workadventure/messages";
 import { getTileCenter } from "@wa/front/Phaser/Player/TileSnap";
 import { Player } from "@wa/front/Phaser/Player/Player";
 import { findSeatAtPoint, isSeatTaken } from "@wa/front/Phaser/Player/Seat";
@@ -30,6 +31,7 @@ import { isHumanAvatar } from "@wa/front/Phaser/Entity/MusicHeadphonesEffect";
 import { AvatarAction } from "@wa/front/Phaser/Entity/AvatarAction";
 import { Swimwear } from "@wa/front/Phaser/Entity/Swimwear";
 import { ENABLE_TILE_SNAP, WOKA_SPEED } from "@wa/front/Enum/EnvironmentVariable";
+import { armedCatastropheStore } from "@wa/front/Stores/CatastropheStore";
 import { cameraDetachedStore } from "@wa/front/Stores/CameraStore";
 import { isKeyFromInteractiveElement } from "@wa/front/Utils/isKeyFromInteractiveElement";
 import { findShortcutAction } from "@wa/front/Stores/ShortcutsStore";
@@ -98,7 +100,15 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 this.gameScene.getCameraManager().panBy(deltaX * scale.x, deltaY * scale.y);
             },
         });
+        // The canvas shows a crosshair while a catastrophe is armed, through the same default cursor as the map drag.
+        let wasArmed = false;
+        const unsubscribeArmed = armedCatastropheStore.subscribe((armed) => {
+            if (wasArmed === (armed !== undefined)) return;
+            wasArmed = armed !== undefined;
+            this.gameScene.input.setDefaultCursor(wasArmed ? "crosshair" : this.idleCursor());
+        });
         gameScene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            unsubscribeArmed();
             this.pointerCapture.destroy();
             this.panShortcut.destroy();
             for (const listener of this.spaceListeners.values()) {
@@ -147,6 +157,12 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             return;
         }
         if (get(mapEditorModeStore)) {
+            return;
+        }
+        // An armed catastrophe takes the click that is not a drag (the drag test above): it walks, activates and
+        // picks nothing. The press itself is left to the map drag, which stays free.
+        if (get(armedCatastropheStore) !== undefined && (pointer.wasTouch || pointer.leftButtonReleased())) {
+            this.launchArmedCatastrophe(pointer);
             return;
         }
         if (pointer.wasTouch || pointer.leftButtonReleased()) {
@@ -252,6 +268,32 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 },
             )
             .finally(() => cameraManager.endWalkFraming(walk));
+    }
+
+    private launchArmedCatastrophe(pointer: Pointer): void {
+        // A long touch is a press, not a tap.
+        if (!this.gameScene.userInputManager.isControlsEnabled || (pointer.wasTouch && pointer.getDuration() > 250)) {
+            return;
+        }
+        const worldPoint = this.gameScene.getCameraManager().getCamera().getWorldPoint(pointer.x, pointer.y);
+        if (
+            worldPoint.x < 0 ||
+            worldPoint.y < 0 ||
+            worldPoint.x >= this.gameScene.Map.widthInPixels ||
+            worldPoint.y >= this.gameScene.Map.heightInPixels
+        ) {
+            return;
+        }
+        // The server decides: its cooldown refuses a second launch of a double click.
+        this.gameScene.connection?.emitLaunchCatastrophe(
+            CatastropheKind.CATASTROPHE_METEOR,
+            worldPoint.x,
+            worldPoint.y,
+        );
+    }
+
+    private idleCursor(): string {
+        return get(mapExplorationModeStore) ? "grab" : "auto";
     }
 
     private getTileCenterOf(x: number, y: number): { x: number; y: number } {
@@ -549,7 +591,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
 
     private restoreDragCursor(): void {
         if (this.draggingMap) {
-            this.gameScene.input.setDefaultCursor(get(mapExplorationModeStore) ? "grab" : "auto");
+            this.gameScene.input.setDefaultCursor(get(armedCatastropheStore) ? "crosshair" : this.idleCursor());
             this.draggingMap = false;
         }
     }

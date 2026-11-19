@@ -248,9 +248,10 @@ export class RoomConnection implements RoomConnection {
     public readonly terrainWaterMessageStream = this._terrainWaterMessageStream.asObservable();
     private readonly _aquaticLifeMessageStream = new Subject<AquaticLifeMessage>();
     public readonly aquaticLifeMessageStream = this._aquaticLifeMessageStream.asObservable();
-    /** The fishing lines of the room, whenever one changes. */
+    /** The catastrophes the room throws, each announced once with the time left before its impact. */
     private readonly _catastropheMessageStream = new Subject<CatastropheMessage>();
     public readonly catastropheMessageStream = this._catastropheMessageStream.asObservable();
+    /** The fishing lines of the room, whenever one changes. */
     private readonly _fishingMessageStream = new Subject<FishingMessage>();
     public readonly fishingMessageStream = this._fishingMessageStream.asObservable();
     private readonly _entityMessageStream = new Subject<EntityMessageTsProto>();
