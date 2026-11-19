@@ -164,6 +164,8 @@
 
 :root[data-retro-palette="light"] {
     color-scheme: light;
+    /* Shadows of the bevels stay dark on a light palette, where the darkest contrast is white. */
+    --rt-shade: 220 30% 15%;
     --ui-foreground: #263044;
     --ui-overlay: #fff;
     --contrast-100: 220 28% 21%;
@@ -226,6 +228,11 @@
         .btn-warning
     ):not(.btn-light) {
     color: hsl(var(--contrast-100));
+}
+
+/* The colour of the shadows of the bevels (keys, slots, panels): the darkest contrast of the palette. */
+:root {
+    --rt-shade: var(--contrast-1100);
 }
 
 /* The tokens of the menus are aliases of the design system: one source of colors for the whole interface. */
@@ -570,7 +577,7 @@
     background: hsl(var(--contrast-600) / 0.55);
     border: 2px solid hsl(var(--contrast-500) / 0.7);
     box-shadow:
-        inset 0 -3px 0 hsl(var(--contrast-1000) / 0.45),
+        inset 0 -3px 0 hsl(var(--rt-shade) / 0.45),
         inset 0 2px 0 hsl(var(--contrast-100) / 0.08);
     transition:
         transform 120ms ease,
@@ -586,7 +593,7 @@
 }
 .build-slot:active:not(:disabled) {
     transform: scale(0.94);
-    box-shadow: inset 0 2px 0 hsl(var(--contrast-1000) / 0.45);
+    box-shadow: inset 0 2px 0 hsl(var(--rt-shade) / 0.45);
 }
 .build-slot:focus-visible {
     outline: 2px solid hsl(var(--secondary-500));
@@ -604,7 +611,7 @@
     box-shadow:
         0 0 0 2px hsl(var(--secondary-500) / 0.18),
         0 0 8px hsl(var(--secondary-500) / 0.35),
-        inset 0 -3px 0 hsl(var(--contrast-1000) / 0.35);
+        inset 0 -3px 0 hsl(var(--rt-shade) / 0.35);
 }
 .build-slot[aria-pressed="true"]::after,
 .build-slot.active::after {
@@ -648,7 +655,7 @@
     padding: 8px;
     border-radius: 12px;
     background: hsl(var(--contrast-1000) / 0.35);
-    box-shadow: inset 0 2px 6px hsl(var(--contrast-1100) / 0.45);
+    box-shadow: inset 0 2px 6px hsl(var(--rt-shade) / 0.45);
 }
 /* The name of what is chosen, under the tray: one short line, no paragraph. */
 .build-caption {
@@ -678,7 +685,7 @@
     color: hsl(var(--contrast-100));
     background: hsl(var(--contrast-1000) / 0.95);
     border: 1px solid hsl(var(--secondary-500) / 0.5);
-    box-shadow: 0 6px 16px hsl(var(--contrast-1100) / 0.5);
+    box-shadow: 0 6px 16px hsl(var(--rt-shade) / 0.5);
     pointer-events: none;
     transform: translate(-50%, calc(-100% - 8px));
 }
@@ -698,11 +705,13 @@
    button a slot with a frame that sinks when pressed, the slots that are on lit with a glow and a pixel in their
    corner. The tray bevel is drawn with inset shadows only, so the trays made of one segment per button join without
    seams. */
+/* No tray behind the keys: each key floats over the map on its own, with its own frosted background. */
 .action-tray {
-    background-color: hsl(var(--contrast-1000) / 0.72);
-    box-shadow:
-        inset 0 2px 6px hsl(var(--contrast-1100) / 0.45),
-        inset 0 -1px 0 hsl(var(--contrast-100) / 0.06);
+    background: transparent !important;
+    backdrop-filter: none !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding-inline: 3px !important;
 }
 .action-slot {
     border-radius: 10px;
@@ -714,10 +723,12 @@
         box-shadow 120ms ease;
 }
 .action-slot:not(.is-active):not(.is-forbidden):not(.is-live) {
-    background-color: hsl(var(--contrast-600) / 0.55);
+    background-color: hsl(var(--contrast-900) / 0.88);
+    backdrop-filter: blur(8px);
     box-shadow:
-        inset 0 -3px 0 hsl(var(--contrast-1000) / 0.45),
-        inset 0 2px 0 hsl(var(--contrast-100) / 0.08);
+        inset 0 -3px 0 hsl(var(--rt-shade) / 0.5),
+        inset 0 2px 0 hsl(var(--contrast-100) / 0.08),
+        0 4px 10px hsl(var(--rt-shade) / 0.35);
 }
 .action-slot:not(:disabled):hover {
     filter: brightness(1.15);
@@ -731,7 +742,7 @@
 .action-slot.is-live {
     border-color: hsl(0 0% 100% / 0.35);
     box-shadow:
-        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.35),
+        inset 0 -3px 0 hsl(var(--rt-shade) / 0.35),
         inset 0 2px 0 hsl(0 0% 100% / 0.2);
 }
 .action-slot.is-active {
@@ -739,12 +750,12 @@
     box-shadow:
         0 0 0 2px hsl(var(--secondary-500) / 0.18),
         0 0 10px hsl(var(--secondary-500) / 0.45),
-        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.35);
+        inset 0 -3px 0 hsl(var(--rt-shade) / 0.35);
 }
 .action-slot.is-forbidden {
     box-shadow:
         0 0 10px hsl(var(--danger) / 0.5),
-        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.35);
+        inset 0 -3px 0 hsl(var(--rt-shade) / 0.35);
 }
 .action-slot.is-active::after,
 .action-slot.is-forbidden::after,
@@ -777,15 +788,8 @@
     border: 1px solid hsl(var(--contrast-600) / 0.7);
     box-shadow:
         inset 0 1px 0 hsl(var(--contrast-100) / 0.07),
-        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.35),
-        0 8px 24px hsl(var(--contrast-1100) / 0.35);
-}
-/* The segments of an action bar group draw their frame on the group only: no seam between two buttons. */
-:where(.action-tray) {
-    border-inline: 0;
-    box-shadow:
-        inset 0 1px 0 hsl(var(--contrast-100) / 0.08),
-        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.4);
+        inset 0 -3px 0 hsl(var(--rt-shade) / 0.35),
+        0 8px 24px hsl(var(--rt-shade) / 0.35);
 }
 :where(.chatWindow) {
     border-block: 0;
@@ -823,7 +827,7 @@
     height: 28px;
     border-radius: 7px;
     background: hsl(var(--contrast-600) / 0.55);
-    box-shadow: inset 0 -2px 0 hsl(var(--contrast-1100) / 0.4);
+    box-shadow: inset 0 -2px 0 hsl(var(--rt-shade) / 0.4);
 }
 .menu-slot:hover .menu-slot-icon {
     color: hsl(var(--secondary-500));
@@ -888,8 +892,8 @@
     border: 1px solid hsl(var(--contrast-600) / 0.8);
     box-shadow:
         inset 0 1px 0 hsl(var(--contrast-100) / 0.08),
-        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.4),
-        0 8px 24px hsl(var(--contrast-1100) / 0.35);
+        inset 0 -3px 0 hsl(var(--rt-shade) / 0.4),
+        0 8px 24px hsl(var(--rt-shade) / 0.35);
     backdrop-filter: blur(10px);
 }
 .fishing-head {
@@ -909,7 +913,7 @@
     border-radius: 7px;
     color: #6fc3ee;
     background: hsl(var(--contrast-600) / 0.6);
-    box-shadow: inset 0 -2px 0 hsl(var(--contrast-1100) / 0.45);
+    box-shadow: inset 0 -2px 0 hsl(var(--rt-shade) / 0.45);
 }
 .fishing-timer {
     display: inline-flex;
@@ -919,7 +923,7 @@
     border-radius: 999px;
     font-variant-numeric: tabular-nums;
     background: hsl(var(--contrast-1000) / 0.7);
-    box-shadow: inset 0 1px 2px hsl(var(--contrast-1100) / 0.6);
+    box-shadow: inset 0 1px 2px hsl(var(--rt-shade) / 0.6);
 }
 .fishing-timer.hurry {
     color: #fff;
@@ -1002,7 +1006,7 @@
     font-weight: 700;
     color: hsl(var(--contrast-100));
     background: hsl(var(--contrast-600) / 0.7);
-    box-shadow: inset 0 -3px 0 hsl(var(--contrast-1100) / 0.45);
+    box-shadow: inset 0 -3px 0 hsl(var(--rt-shade) / 0.45);
     transition:
         filter 120ms ease,
         transform 100ms ease;
@@ -1028,8 +1032,8 @@
     background: hsl(var(--contrast) / 0.9);
     border: 1px solid hsl(var(--contrast-600) / 0.8);
     box-shadow:
-        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.4),
-        0 8px 20px hsl(var(--contrast-1100) / 0.4);
+        inset 0 -3px 0 hsl(var(--rt-shade) / 0.4),
+        0 8px 20px hsl(var(--rt-shade) / 0.4);
     backdrop-filter: blur(10px);
     animation: fishing-pop 320ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
 }
@@ -1037,7 +1041,7 @@
     font-weight: 700;
     border-color: hsl(var(--secondary-500) / 0.8);
     box-shadow:
-        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.4),
+        inset 0 -3px 0 hsl(var(--rt-shade) / 0.4),
         0 0 14px hsl(var(--secondary-500) / 0.45);
 }
 .fishing-card.missed {
@@ -1067,6 +1071,118 @@
         transition: none;
     }
     .fishing-key:active {
+        transform: none;
+    }
+}
+
+/* The people of the map, in the chat side panel: one player card each, the avatar in a slot with its status in the
+   corner, the actions as small keys. */
+.player-card {
+    border-radius: 12px;
+    background: hsl(var(--contrast-900) / 0.55);
+    border: 1px solid hsl(var(--contrast-600) / 0.55);
+    box-shadow:
+        inset 0 1px 0 hsl(var(--contrast-100) / 0.06),
+        inset 0 -2px 0 hsl(var(--rt-shade) / 0.35);
+    transition:
+        border-color 120ms ease,
+        filter 120ms ease;
+}
+.player-card:hover {
+    filter: brightness(1.12);
+    border-color: hsl(var(--secondary-500) / 0.6);
+}
+.player-card.me {
+    border-inline-start: 3px solid hsl(var(--secondary-500));
+}
+.player-avatar {
+    padding: 3px;
+    border-radius: 10px;
+    background: hsl(var(--contrast-600) / 0.55);
+    box-shadow: inset 0 -2px 0 hsl(var(--rt-shade) / 0.45);
+}
+.player-status-dot {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+    border: 2px solid hsl(var(--contrast-900));
+}
+.player-admin {
+    padding: 1px 6px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.4;
+    color: #3a2a00;
+    border-radius: 5px;
+    background: linear-gradient(180deg, #ffe58a, #e0a821);
+    box-shadow: inset 0 -1px 0 hsl(0 0% 0% / 0.25);
+}
+.player-key {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid hsl(var(--contrast-500) / 0.6);
+    background: hsl(var(--contrast-600) / 0.45);
+    box-shadow: inset 0 -2px 0 hsl(var(--rt-shade) / 0.45);
+    transition:
+        filter 120ms ease,
+        transform 100ms ease;
+}
+.player-key:hover {
+    filter: brightness(1.2);
+    color: hsl(var(--secondary-500));
+}
+.player-key:active {
+    transform: scale(0.92);
+}
+@media (prefers-reduced-motion: reduce) {
+    .player-card,
+    .player-key {
+        transition: none;
+    }
+    .player-key:active {
+        transform: none;
+    }
+}
+
+/* Every button of the interface (the shared Button component: windows, popups, forms) is a key of the game: a bevel
+   that sinks when pressed. An outlined button becomes a framed slot instead of a bare line; ghost buttons stay flat. */
+.btn:not(.btn-ghost) {
+    box-shadow:
+        inset 0 -3px 0 hsl(var(--rt-shade) / 0.35),
+        inset 0 1px 0 hsl(0 0% 100% / 0.12);
+    transition:
+        transform 100ms ease,
+        filter 120ms ease,
+        border-color 120ms ease;
+}
+.btn:not(.btn-ghost):not(:disabled):hover {
+    filter: brightness(1.12);
+}
+.btn:not(.btn-ghost):not(:disabled):active {
+    transform: scale(0.97);
+}
+.btn.btn-border {
+    color: hsl(var(--contrast-100));
+    background-color: hsl(var(--contrast-600) / 0.55);
+    border: 2px solid hsl(var(--contrast-500) / 0.7);
+    border-radius: 10px;
+}
+.btn.btn-border:not(:disabled):hover {
+    border-color: hsl(var(--secondary-500) / 0.7);
+}
+.btn:disabled {
+    filter: saturate(0.4);
+    box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+    .btn {
+        transition: none;
+    }
+    .btn:not(.btn-ghost):not(:disabled):active {
         transform: none;
     }
 }
