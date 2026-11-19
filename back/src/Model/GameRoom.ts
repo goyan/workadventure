@@ -1288,14 +1288,8 @@ export class GameRoom implements BrothersFinder {
     }
 
     /** A player launches a catastrophe (a meteor) at a point of the map. */
-    public launchCatastrophe(
-        user: Pick<User, "id">,
-        kind: CatastropheKind,
-        x: number,
-        y: number,
-        radiusTiles: number,
-    ): void {
-        this.catastrophes?.launch(user.id, kind, x, y, radiusTiles);
+    public launchCatastrophe(kind: CatastropheKind, x: number, y: number, radiusTiles: number): void {
+        this.catastrophes?.launch(kind, x, y, radiusTiles);
     }
 
     /** A player casts their fishing line at a point of the map. */

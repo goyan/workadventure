@@ -10,10 +10,8 @@ export const METEOR_WAVE_CELLS_PER_STEP = 1;
 export const METEOR_CREST_PX = 0.5;
 /** The depth from which a cell is open water for the wave, in pixels. */
 export const METEOR_DEEP_PX = 8;
-/** The time a player waits between two meteors, in milliseconds. */
-export const METEOR_COOLDOWN_MS = 3000;
 /** How many meteors can be falling at once in a room. */
-export const METEORS_PER_ROOM = 5;
+export const METEORS_PER_ROOM = 20;
 
 /** The radius of the crater of a meteor, in tiles: what a player chooses, from a pebble to the end of a lake. */
 export const METEOR_MIN_TILES = 2;
