@@ -312,7 +312,8 @@ describe("the snow of the heights", () => {
 });
 
 describe("the dryness of the grass", () => {
-    const burning: MeadowStepInput = { ...dry, daylight: false, fireDanger: 1 };
+    // No luck for the fire: at this danger one could start by itself, which is not what is looked at here.
+    const burning: MeadowStepInput = { ...dry, daylight: false, fireDanger: 1, random: () => 1 };
 
     it("rises on a dry soil when it is hot, dry and windy: most of the way in a minute and a half", () => {
         const meadow = new Meadow(size, undefined, undefined);
