@@ -22,6 +22,14 @@ export function groundAlpha(height: number): number {
     return height >= 0 ? 0 : 0.5 * Math.min(1, -height / 96) ** 0.7;
 }
 
+/**
+ * How light the top of a mount is drawn (a white veil), by its height over the ground: nothing at its foot, all of it
+ * from three tiles up. Lighter than a hollow is dark: the slopes say most of a mount.
+ */
+export function raisedAlpha(height: number): number {
+    return height <= 0 ? 0 : 0.3 * Math.min(1, height / 96) ** 0.7;
+}
+
 /** How strongly a slope is lit (a white veil) or shaded (a black one), by how much it faces the light. */
 export function slopeAlpha(shade: number): number {
     return 0.25 * Math.min(1, Math.abs(shade));

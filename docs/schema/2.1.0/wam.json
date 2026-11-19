@@ -2186,7 +2186,7 @@
                 "items": {
                   "type": "integer",
                   "minimum": -256,
-                  "maximum": 0
+                  "maximum": 256
                 },
                 "minItems": 256,
                 "maxItems": 256

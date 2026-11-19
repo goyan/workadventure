@@ -9,6 +9,7 @@ import {
     DEEP_WATER_COLOR,
     deepWaterAlpha,
     groundAlpha,
+    raisedAlpha,
     SHALLOW_WATER,
     SHORE_PX,
     SHORE_WATER,
@@ -29,6 +30,8 @@ const SEE_THROUGH = 0.45;
 interface ReliefLayers extends BlockCanvasArea {
     terrain: TerrainData | undefined;
     ground: Uint8Array;
+    /** The height of the cells raised over the ground. */
+    raised: Uint8Array;
     shaded: Uint8Array;
     lit: Uint8Array;
     /** Whether any cell of the canvas is dug or sloped: nothing to paint otherwise. */
@@ -101,6 +104,9 @@ export class TerrainView {
             this.surface.paintField(canvas, relief.ground, everywhere, NO_SHIFT, 0x000000, (level) =>
                 groundAlpha(-level),
             );
+            this.surface.paintField(canvas, relief.raised, everywhere, NO_SHIFT, 0xffffff, (level) =>
+                raisedAlpha(level),
+            );
             this.surface.paintField(canvas, relief.shaded, everywhere, NO_SHIFT, 0x000000, (level) =>
                 slopeAlpha(level / 255),
             );
@@ -167,6 +173,7 @@ export class TerrainView {
             columns: canvas.columns,
             rows: canvas.rows,
             ground: new Uint8Array(size),
+            raised: new Uint8Array(size),
             shaded: new Uint8Array(size),
             lit: new Uint8Array(size),
             dug: false,
@@ -186,6 +193,9 @@ export class TerrainView {
                     const height = heightAt(terrain, left + column, top + row);
                     if (height < 0) {
                         layers.ground[index] = Math.min(255, -height);
+                        layers.dug = true;
+                    } else if (height > 0) {
+                        layers.raised[index] = Math.min(255, height);
                         layers.dug = true;
                     }
                     const shade = slopeShade(terrain, left + column, top + row);

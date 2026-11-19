@@ -42,8 +42,8 @@ describe("UpdateTerrainCommand", () => {
         await new UpdateTerrainCommand(wam, { cells: [{ x: 0, y: 0, height: -9999 }], maxDepthTiles: 99 }).execute();
         expect(heightAt(wam.terrain, 0, 0)).toBe(-256);
         expect(wam.terrain?.maxDepthTiles).toBe(8);
-        await new UpdateTerrainCommand(wam, { cells: [{ x: 1, y: 0, height: 40 }], maxDepthTiles: 0 }).execute();
-        expect(heightAt(wam.terrain, 1, 0)).toBe(0);
+        await new UpdateTerrainCommand(wam, { cells: [{ x: 1, y: 0, height: 9999 }], maxDepthTiles: 0 }).execute();
+        expect(heightAt(wam.terrain, 1, 0)).toBe(256);
         expect(wam.terrain?.maxDepthTiles).toBe(1);
     });
 

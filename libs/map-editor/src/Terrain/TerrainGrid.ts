@@ -1,4 +1,4 @@
-import { TERRAIN_CHUNK, TERRAIN_MIN_HEIGHT } from "../types";
+import { TERRAIN_CHUNK, TERRAIN_MAX_HEIGHT, TERRAIN_MIN_HEIGHT } from "../types";
 import type { TerrainData } from "../types";
 
 const CHUNK_CELLS = TERRAIN_CHUNK * TERRAIN_CHUNK;
@@ -36,7 +36,10 @@ export function cellInMap(cellX: number, cellY: number, map: MapCells | undefine
     return !map || (cellX >= 0 && cellY >= 0 && cellX < map.width && cellY < map.height);
 }
 
-/** The height of a cell in pixels of altitude: 0 on the ground of the map, negative where it was dug. */
+/**
+ * The height of a cell in pixels of altitude: 0 on the ground of the map, negative where it was dug, positive where
+ * it was raised.
+ */
 export function heightAt(terrain: TerrainData | undefined, cellX: number, cellY: number): number {
     if (!terrain) return 0;
     const { key, index } = chunkOf(cellX, cellY);
@@ -57,7 +60,9 @@ export function withHeights(terrain: TerrainData | undefined, changes: ReadonlyM
             chunks[key] = chunks[key] ? [...chunks[key]] : new Array<number>(CHUNK_CELLS).fill(0);
             copied.add(key);
         }
-        const kept = Number.isFinite(height) ? Math.round(Math.min(0, Math.max(TERRAIN_MIN_HEIGHT, height))) : 0;
+        const kept = Number.isFinite(height)
+            ? Math.round(Math.min(TERRAIN_MAX_HEIGHT, Math.max(TERRAIN_MIN_HEIGHT, height)))
+            : 0;
         // No negative zero in a saved map.
         chunks[key][index] = kept === 0 ? 0 : kept;
     }
@@ -75,6 +80,22 @@ export function dugCells(terrain: TerrainData | undefined): Map<string, number> 
         const [chunkX, chunkY] = key.split(",").map(Number);
         heights.forEach((height, index) => {
             if (height >= 0) return;
+            const x = chunkX * TERRAIN_CHUNK + (index % TERRAIN_CHUNK);
+            const y = chunkY * TERRAIN_CHUNK + Math.floor(index / TERRAIN_CHUNK);
+            cells.set(cellKey(x, y), height);
+        });
+    }
+    return cells;
+}
+
+/** The cells that are not at the level of the ground (dug or raised), by cell key, with their height. */
+export function reliefCells(terrain: TerrainData | undefined): Map<string, number> {
+    const cells = new Map<string, number>();
+    if (!terrain) return cells;
+    for (const [key, heights] of Object.entries(terrain.chunks)) {
+        const [chunkX, chunkY] = key.split(",").map(Number);
+        heights.forEach((height, index) => {
+            if (height === 0) return;
             const x = chunkX * TERRAIN_CHUNK + (index % TERRAIN_CHUNK);
             const y = chunkY * TERRAIN_CHUNK + Math.floor(index / TERRAIN_CHUNK);
             cells.set(cellKey(x, y), height);

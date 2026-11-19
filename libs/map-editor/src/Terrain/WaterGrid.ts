@@ -1,7 +1,7 @@
 import { TERRAIN_CHUNK } from "../types";
 import type { TerrainData } from "../types";
 import { CELL_AREA_M2, LITRES_PER_M3, metresOf } from "./Scale";
-import { cellInMap, cellKey, cellOf, dugCells, heightAt } from "./TerrainGrid";
+import { cellInMap, cellKey, cellOf, heightAt, reliefCells } from "./TerrainGrid";
 import type { MapCells } from "./TerrainGrid";
 
 /** Litres over one cell of the relief under one pixel of water. */
@@ -17,6 +17,14 @@ const MAX_GRID_SIDE = 600;
  * or the running water would pile over it.
  */
 export const MAX_WATER_SURFACE_PX = 18;
+
+/**
+ * The highest level the surface of the water may reach over a cell: MAX_WATER_SURFACE_PX over the ground of the map,
+ * and as much over the ground of a cell raised above it (a plateau keeps its water as the plain does).
+ */
+function highestSurface(groundPx: number): number {
+    return MAX_WATER_SURFACE_PX + Math.max(0, groundPx);
+}
 /** Under this depth a cell is dry: the water left by rounding does not keep the grid moving. */
 const DRY_PX = 0.01;
 /**
@@ -108,8 +116,8 @@ export function gridBoundsOf(
         include(x * TERRAIN_CHUNK, y * TERRAIN_CHUNK);
         include(x * TERRAIN_CHUNK + TERRAIN_CHUNK - 1, y * TERRAIN_CHUNK + TERRAIN_CHUNK - 1);
     }
-    // The chunks are coarser than the relief: the dug cells themselves, when there are few.
-    const dug = dugCells(terrain);
+    // The chunks are coarser than the relief: the dug and the raised cells themselves, when there are few.
+    const dug = reliefCells(terrain);
     if (dug.size > 0) {
         left = top = Infinity;
         right = bottom = -Infinity;
@@ -485,7 +493,7 @@ export class WaterGrid {
                 index = next;
             }
             if (left <= 0) continue;
-            const stays = Math.min(left, Math.max(0, MAX_WATER_SURFACE_PX - (ground[index] + depth[index])));
+            const stays = Math.min(left, Math.max(0, highestSurface(ground[index]) - (ground[index] + depth[index])));
             depth[index] += stays;
             kept += stays;
         }
@@ -859,7 +867,7 @@ export class WaterGrid {
             // Water runs from a cell to the next one only so fast: where more comes than can run away (a hard rain
             // on a wide hollow), it would pile up into a dome, its surface sloping everywhere. What stands over the
             // highest level is lost instead, as when it is poured: the surface stays level and under that level.
-            const over = ground[index] + next[index] - MAX_WATER_SURFACE_PX;
+            const over = ground[index] + next[index] - highestSurface(ground[index]);
             if (over > 0 && next[index] > 0) {
                 const taken = Math.min(over, next[index]);
                 next[index] -= taken;

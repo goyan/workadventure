@@ -716,3 +716,53 @@ describe("WaterGrid", () => {
         expect(copy.depthAt(0, 0)).toBeCloseTo(grid.depthAt(0, 0), 0);
     });
 });
+
+describe("water on a relief raised over the ground", () => {
+    it("gives a mount its grid, like a hollow", () => {
+        expect(gridBoundsOf(terrainOf([[10, 20, 32]]), [])).toEqual({
+            x: 10 - WATER_GRID_MARGIN,
+            y: 20 - WATER_GRID_MARGIN,
+            width: 1 + 2 * WATER_GRID_MARGIN,
+            height: 1 + 2 * WATER_GRID_MARGIN,
+        });
+    });
+
+    it("keeps the water poured on a plateau, which runs off it", () => {
+        // A plateau 5 cells wide, 64 px over the ground: far over the highest level of a flood on the ground.
+        const cells: [number, number, number][] = [];
+        for (let y = -2; y <= 2; y++) for (let x = -2; x <= 2; x++) cells.push([x, y, 64]);
+        const plateau = terrainOf(cells);
+        const grid = new WaterGrid(plateau, gridBoundsOf(plateau, []));
+        const tally = grid.step({ ...nothing, flows: [{ cellX: 0, cellY: 0, px: 6 }] });
+        // Nothing is lost for being over the level of a flood of the ground.
+        expect(tally.lostPx).toBe(0);
+        expect(grid.totalPx()).toBeCloseTo(6);
+        run(grid, 400);
+        // Left alone, the water has run down to the ground around the plateau.
+        expect(grid.depthAt(0, 0)).toBeLessThan(0.5);
+        expect(grid.depthAt(4, 0) + grid.depthAt(-4, 0) + grid.depthAt(0, 4) + grid.depthAt(0, -4)).toBeGreaterThan(0);
+    });
+
+    it("never lets the water of a plateau rise over its own highest level", () => {
+        const cells: [number, number, number][] = [];
+        for (let y = -3; y <= 3; y++) for (let x = -3; x <= 3; x++) cells.push([x, y, 64]);
+        const plateau = terrainOf(cells);
+        // Walls around the middle of the plateau: the water can only rise.
+        const yard = (x: number, y: number): boolean => Math.max(Math.abs(x), Math.abs(y)) === 2;
+        const grid = new WaterGrid(plateau, gridBoundsOf(plateau, []), yard);
+        run(grid, 2000, { ...nothing, flows: [{ cellX: 0, cellY: 0, px: 50 }] });
+        expect(grid.depthAt(0, 0)).toBeLessThanOrEqual(MAX_WATER_SURFACE_PX + 0.01);
+        expect(grid.depthAt(1, 1)).toBeGreaterThan(MAX_WATER_SURFACE_PX - 2);
+    });
+
+    it("stops a flood of the ground at the foot of a mount", () => {
+        const land = terrainOf([
+            [0, 0, -8],
+            [3, 0, 64],
+        ]);
+        const grid = new WaterGrid(land, gridBoundsOf(land, []));
+        run(grid, 3000, { ...nothing, flows: [{ cellX: 0, cellY: 0, px: 50 }] });
+        expect(grid.depthAt(2, 0)).toBeGreaterThan(1);
+        expect(grid.depthAt(3, 0)).toBe(0);
+    });
+});

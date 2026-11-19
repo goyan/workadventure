@@ -1,4 +1,4 @@
-import { cellOf, dugCells, heightAt, TERRAIN_CELL } from "@workadventure/map-editor";
+import { cellOf, heightAt, reliefCells, TERRAIN_CELL } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 
 /** A piece of a contour line of the relief, in map pixels: an edge between two cells of different levels. */
@@ -13,17 +13,19 @@ export interface ContourSegment {
 
 /**
  * The contour lines of the relief: an edge between two neighbouring cells is on a line when they are not on the same
- * step of `stepPx` of depth (0 to 7 px, 8 to 15 px… for a step of 8). The lines follow the edges of the cells, like
+ * step of `stepPx` of depth or of height (0 to 7 px, 8 to 15 px… for a step of 8, under the ground as over it). The lines follow the edges of the cells, like
  * everything else of the relief. Shown by the relief tool of the editor only.
  */
 export function contourSegments(terrain: TerrainData | undefined, stepPx: number, majorPx: number): ContourSegment[] {
     const segments: ContourSegment[] = [];
     if (!terrain || !(stepPx > 0) || !(majorPx > 0)) return segments;
+    // The steps are counted away from the ground: a mount has the lines of a hollow of the same size.
+    const stepOf = (height: number, px: number): number => Math.sign(height) * Math.floor(Math.abs(height) / px);
     const between = (a: number, b: number, x1: number, y1: number, x2: number, y2: number): void => {
-        if (Math.floor(-a / stepPx) === Math.floor(-b / stepPx)) return;
-        segments.push({ x1, y1, x2, y2, major: Math.floor(-a / majorPx) !== Math.floor(-b / majorPx) });
+        if (stepOf(a, stepPx) === stepOf(b, stepPx)) return;
+        segments.push({ x1, y1, x2, y2, major: stepOf(a, majorPx) !== stepOf(b, majorPx) });
     };
-    for (const [key, height] of dugCells(terrain)) {
+    for (const [key, height] of reliefCells(terrain)) {
         const { x, y } = cellOf(key);
         const left = x * TERRAIN_CELL;
         const top = y * TERRAIN_CELL;
@@ -31,11 +33,11 @@ export function contourSegments(terrain: TerrainData | undefined, stepPx: number
         const bottom = top + TERRAIN_CELL;
         between(height, heightAt(terrain, x + 1, y), right, top, right, bottom);
         between(height, heightAt(terrain, x, y + 1), left, bottom, right, bottom);
-        // The west and north edges belong to the neighbour there when it is dug too: drawn once.
+        // The west and north edges belong to the neighbour there when it is dug or raised too: drawn once.
         const west = heightAt(terrain, x - 1, y);
-        if (west >= 0) between(height, west, left, top, left, bottom);
+        if (west === 0) between(height, west, left, top, left, bottom);
         const north = heightAt(terrain, x, y - 1);
-        if (north >= 0) between(height, north, left, top, right, top);
+        if (north === 0) between(height, north, left, top, right, top);
     }
     return segments;
 }
