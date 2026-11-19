@@ -233,6 +233,19 @@ export class PusherRoom {
                             }
                             break;
                         }
+                        case "fireConditionsMessage": {
+                            // The conditions the fire goes by are the same for every player of the room
+                            const fireConditionsMessage = message.message.fireConditionsMessage;
+                            for (const listener of this.listeners) {
+                                listener.emitInBatch({
+                                    message: {
+                                        $case: "fireConditionsMessage",
+                                        fireConditionsMessage: fireConditionsMessage,
+                                    },
+                                });
+                            }
+                            break;
+                        }
                         case "meadowMessage": {
                             // The meadow of the map is the same for every player of the room
                             const meadowMessage = message.message.meadowMessage;

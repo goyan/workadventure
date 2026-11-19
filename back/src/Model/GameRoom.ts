@@ -36,7 +36,9 @@ import type {
     EntityEvent,
     EntityStateMessage,
     TerrainWaterMessage,
+    FireConditionsMessage,
     MeadowMessage,
+    SetFireConditionsMessage,
     AquaticLifeMessage,
     CatastropheKind,
     FishingMessage,
@@ -120,6 +122,7 @@ import { LockableAreaManager } from "./AreaPropertyEvents/LockableAreaManager";
 import { ListeningZoneManager } from "./AreaPropertyEvents/ListeningZoneManager";
 import { EntityStateManager } from "./EntityStateManager";
 import { SwitchTriggerEvaluator } from "./SwitchTriggerEvaluator";
+import { FireConditionsManager } from "./FireConditionsManager";
 import { MeadowManager } from "./MeadowManager";
 import { TerrainWaterManager } from "./TerrainWaterManager";
 import { AquaticLifeManager } from "./AquaticLifeManager";
@@ -167,6 +170,7 @@ export class GameRoom implements BrothersFinder {
     private switchTriggers: SwitchTriggerEvaluator | undefined;
     private terrainWater: TerrainWaterManager | undefined;
     private meadow: MeadowManager | undefined;
+    private fireConditions: FireConditionsManager | undefined;
     private aquaticLife: AquaticLifeManager | undefined;
     /** The size of the map in cells of the relief; undefined until its Tiled map is read. */
     private mapCells: { width: number; height: number } | undefined;
@@ -402,6 +406,12 @@ export class GameRoom implements BrothersFinder {
         gameRoom.aquaticLife = aquaticLife;
         await aquaticLife.restore();
         aquaticLife.start();
+        // The heat, the humidity of the air and the wind the fire of the room goes by: real, or set by hand.
+        const fireConditions = new FireConditionsManager(gameRoom, rainTimelineService);
+        gameRoom.fireConditions = fireConditions;
+        fireConditions.start();
+        // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
+        gameRoom.destroyRoomStream.subscribe(() => fireConditions.stop());
         // The moisture of the soil and the grass that grows by itself, over the whole map: saved across restarts.
         const meadow = new MeadowManager(
             gameRoom,
@@ -1222,6 +1232,16 @@ export class GameRoom implements BrothersFinder {
     /** The meadow of the map (its whole state), sent to a user who joins the room. */
     public getMeadow(): MeadowMessage | undefined {
         return this.meadow?.snapshot();
+    }
+
+    /** The conditions the fire of the room goes by, sent to a user who joins the room. */
+    public getFireConditions(): FireConditionsMessage | undefined {
+        return this.fireConditions?.snapshot();
+    }
+
+    /** A player sets the conditions the fire of the room goes by, or goes back to the real ones. */
+    public setFireConditions(user: Pick<User, "id">, sent: SetFireConditionsMessage): void {
+        this.fireConditions?.set(user.id, sent);
     }
 
     /** The size of the map in cells of the relief (16 px), for the life of its land; undefined until it is read. */
