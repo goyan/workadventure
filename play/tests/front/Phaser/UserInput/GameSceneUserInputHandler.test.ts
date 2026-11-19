@@ -778,13 +778,22 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
         });
 
         it("a click the canvas did not receive launches nothing", () => {
-            arm();
             const windowListen = vi.spyOn(window, "addEventListener");
             const documentListen = vi.spyOn(document, "addEventListener");
-            // Nothing reaches the handler: no pointer event, so nothing is launched, and it listens to nothing else.
-            expect(launch).not.toHaveBeenCalled();
-            expect(windowListen.mock.calls.filter(([type]) => String(type).startsWith("pointer"))).toEqual([]);
-            expect(documentListen.mock.calls.filter(([type]) => String(type).startsWith("pointer"))).toEqual([]);
+            try {
+                arm();
+                new GameSceneUserInputHandler(scene);
+
+                const pointerLike = /^(pointer|mouse|click|touch)/;
+                const listened = [...windowListen.mock.calls, ...documentListen.mock.calls].map(([type]) =>
+                    String(type),
+                );
+                expect(listened.filter((type) => pointerLike.test(type))).toEqual([]);
+                expect(launch.mock.calls).toEqual([]);
+            } finally {
+                windowListen.mockRestore();
+                documentListen.mockRestore();
+            }
         });
     });
 
