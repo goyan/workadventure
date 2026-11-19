@@ -361,8 +361,6 @@ export class GameRoom implements BrothersFinder {
             gameRoom,
             gameRoom.mapSizeInPixels.bind(gameRoom),
             terrainWater.strike.bind(terrainWater),
-            // The meadow is made further down: read when a downpour falls.
-            (downpour) => gameRoom.meadow?.soak(downpour),
         );
         terrainWater.setDownpours(() => catastrophes.downpours());
         gameRoom.catastrophes = catastrophes;
@@ -415,6 +413,8 @@ export class GameRoom implements BrothersFinder {
             gameRoom.mapSizeInCells.bind(gameRoom),
         );
         gameRoom.meadow = meadow;
+        // A downpour also soaks the ground of the meadow.
+        catastrophes.soakWith(meadow.soak.bind(meadow));
         await meadow.restore();
         meadow.start();
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe

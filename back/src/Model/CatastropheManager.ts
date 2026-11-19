@@ -37,7 +37,7 @@ export class CatastropheManager {
         private readonly mapSize: () => { width: number; height: number } | undefined,
         private readonly strike: (x: number, y: number, radiusTiles: number) => void,
         /** What a downpour wets besides the water, told at each message of its player. */
-        private readonly soak: (downpour: Downpour) => void = () => undefined,
+        private soak: (downpour: Downpour) => void = () => undefined,
         private readonly now: () => number = Date.now,
     ) {}
 
@@ -86,6 +86,11 @@ export class CatastropheManager {
             console.error("A downpour of the map could not soak the ground", error);
         }
         return true;
+    }
+
+    /** What a downpour wets besides the water is made after the catastrophes of a room: it is given here. */
+    public soakWith(soak: (downpour: Downpour) => void): void {
+        this.soak = soak;
     }
 
     /** The downpours falling now. */
