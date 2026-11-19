@@ -25,15 +25,18 @@ export const DROWN_SECONDS = 60;
 /** At the highest danger, without rain, a soil loses its moisture this many times faster: the hot wind dries it out. */
 const PARCHING = 20;
 /** A tile on fire burns its full grass in this many seconds, and its fire is at its height after FIRE_RISE_SECONDS. */
-export const BURN_SECONDS = 20;
+export const BURN_SECONDS = 30;
 const FIRE_RISE_SECONDS = 5;
 /** The fire a tile starts with, and from where it sets its neighbours on fire. */
 const FIRE_START = 0.2;
 const FIRE_SPREADS_FROM = 0.5;
-/** The chance a burning tile sets a neighbour of full, straw-dry grass on fire at each step, without wind. */
-const FIRE_SPREAD_CHANCE = 0.15;
+/**
+ * The chance a burning tile sets a straw-dry neighbour on fire at each step, without wind: a tile burns several steps,
+ * so a dry land is swept. Whatever the neighbour has to burn, as long as it has something.
+ */
+const FIRE_SPREAD_CHANCE = 0.35;
 /** Green grass still takes this share of that chance; a neighbour in a corner this share of a neighbour on a side. */
-const GREEN_SPREAD_SHARE = 0.15;
+const GREEN_SPREAD_SHARE = 0.05;
 const CORNER_SPREAD_SHARE = 0.7;
 /** The wind that doubles the chance downwind (km/h), and how far it may push or hold the fire. */
 const FIRE_WIND_KMH = 30;
@@ -43,7 +46,13 @@ const FIRE_WIND_BOUNDS: readonly [number, number] = [0.1, 3];
  * dry land, this much whatever its grass. A full meadow burns BURN_SECONDS, a tile with less in proportion.
  */
 const DRY_GROUND_BURNS = 0.5;
-const DRY_GROUND_FUEL = 0.4;
+const DRY_GROUND_FUEL = 0.8;
+/**
+ * Under a strong wind the fire leaps: a tile on fire throws embers downwind, a tile further for each EMBER_WIND_KMH
+ * of wind (EMBER_MAX_TILES at most), over what would stop the flames.
+ */
+const EMBER_WIND_KMH = 30;
+const EMBER_MAX_TILES = 6;
 /** What does not burn: too little to burn, a soil this wet, this much ash. */
 const FIRE_MIN_FUEL = 0.05;
 const FIRE_MAX_MOISTURE = 0.9;
@@ -485,12 +494,25 @@ export class Meadow {
                     const chance =
                         FIRE_SPREAD_CHANCE *
                         pace *
-                        this.fuelOf(other) *
                         (GREEN_SPREAD_SHARE + (1 - GREEN_SPREAD_SHARE) * dryness[other]) *
                         wind *
                         (corner ? CORNER_SPREAD_SHARE : 1);
                     if (random() < chance) this.light(other);
                 }
+            }
+            // Embers: further downwind than its neighbours, less likely the further they land.
+            const leaps = Math.min(EMBER_MAX_TILES, Math.floor(speed / EMBER_WIND_KMH));
+            for (let leap = 2; leap <= 1 + leaps; leap++) {
+                const x = tileX + Math.round(windX * leap);
+                const y = tileY + Math.round(windY * leap);
+                if (x < 0 || y < 0 || x >= width || y >= height) break;
+                const other = y * width + x;
+                if (!this.burns(other)) continue;
+                const chance =
+                    ((FIRE_SPREAD_CHANCE * 2) / leap) *
+                    pace *
+                    (GREEN_SPREAD_SHARE + (1 - GREEN_SPREAD_SHARE) * dryness[other]);
+                if (random() < chance) this.light(other);
             }
         }
     }

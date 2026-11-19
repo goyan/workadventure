@@ -70,8 +70,8 @@ describe("a patch of fire", () => {
         meadow.set(8, 8, 0.05, 0, 1);
         expect(meadow.ignite(6, 6, 0)).toBe(1);
         expect(meadow.ignite(8, 8, 0)).toBe(1);
-        // It burns eight seconds, long enough to set its neighbours on fire, then is ash.
-        run(meadow, 6);
+        // It burns twenty-four seconds, long enough to set its neighbours on fire, then is ash.
+        run(meadow, 22);
         expect(meadow.fireAt(8, 8)).toBe(1);
         run(meadow, 2);
         expect(meadow.fireAt(8, 8)).toBe(0);
@@ -86,14 +86,16 @@ describe("a patch of fire", () => {
 });
 
 describe("a tile on fire", () => {
-    it("burns for twenty seconds, then is ash: its grass is gone", () => {
+    it("burns for thirty seconds, then is ash: its grass is gone", () => {
         const meadow = prairie(1);
         meadow.ignite(10, 10, 0);
-        expect(BURN_SECONDS).toBe(20);
+        expect(BURN_SECONDS).toBe(30);
         run(meadow, 6);
         expect(meadow.fireAt(10, 10)).toBe(1);
         expect(meadow.grassAt(10, 10)).toBeLessThan(1);
-        run(meadow, 14);
+        run(meadow, 22);
+        expect(meadow.fireAt(10, 10)).toBe(1);
+        run(meadow, 2);
         expect(meadow.fireAt(10, 10)).toBe(0);
         expect(meadow.grassAt(10, 10)).toBe(0);
         expect(meadow.ashAt(10, 10)).toBe(1);
@@ -104,7 +106,7 @@ describe("a tile on fire", () => {
     it("leaves ash that does not burn again, until the grass is back", () => {
         const meadow = prairie(1);
         meadow.ignite(10, 10, 0);
-        run(meadow, 30);
+        run(meadow, 40);
         expect(meadow.ignite(10, 10, 0)).toBe(0);
         // The grass grows back: the ash goes as it comes.
         meadow.set(10, 10, 0.5, 0.3, 0);
@@ -170,18 +172,60 @@ describe("the fire spreading", () => {
     it("runs with the wind and hardly against it", () => {
         const meadow = prairie(1);
         meadow.ignite(10, 10, 0);
-        // A wind of 60 km/h from the west blows east. With this luck, only a chance over 0.2 spreads.
-        run(meadow, 12, { ...night, windFrom: 270, windSpeed: 60, random: () => 0.2 });
+        // A wind of 60 km/h from the west blows east. With this luck, only a chance over a half spreads: downwind.
+        run(meadow, 12, { ...night, windFrom: 270, windSpeed: 60, random: () => 0.5 });
         expect(meadow.fireAt(11, 10) + meadow.ashAt(11, 10)).toBeGreaterThan(0);
         expect(meadow.fireAt(13, 10) + meadow.ashAt(13, 10)).toBeGreaterThan(0);
         expect(meadow.fireAt(9, 10) + meadow.ashAt(9, 10)).toBe(0);
         expect(meadow.fireAt(10, 9) + meadow.ashAt(10, 9)).toBe(0);
     });
 
+    it("sweeps a dry land: without wind, a tile on fire sets most of its neighbours on fire before it is out", () => {
+        const meadow = prairie(1);
+        meadow.ignite(10, 10, 0);
+        // A middling luck: half the draws would fail a chance of a half.
+        run(meadow, 20, { ...night, random: () => 0.3 });
+        for (const [x, y] of [
+            [11, 10],
+            [9, 10],
+            [10, 11],
+            [10, 9],
+        ]) {
+            expect(meadow.fireAt(x, y) + meadow.ashAt(x, y)).toBeGreaterThan(0);
+        }
+    });
+
+    it("leaps ahead under a strong wind: embers carried several tiles downwind, over a firebreak too", () => {
+        const lucky = { ...night, random: () => 0 };
+        // Without wind the fire gains a tile at a step: two steps after it took, it is not three tiles away.
+        const still = prairie(1);
+        still.ignite(10, 10, 0);
+        run(still, 4, lucky);
+        expect(still.fireAt(13, 10)).toBe(0);
+        // At 120 km/h from the west its embers land four tiles further east at each step.
+        const gale = prairie(1);
+        gale.ignite(5, 10, 0);
+        run(gale, 4, { ...lucky, windFrom: 270, windSpeed: 120 });
+        expect(gale.fireAt(10, 10)).toBeGreaterThan(0);
+        expect(gale.fireAt(14, 10)).toBeGreaterThan(0);
+        // Nothing leaps upwind.
+        expect(gale.fireAt(2, 10)).toBe(0);
+        // A strip of sand two tiles wide does not stop them.
+        const sand = new Map<string, number>();
+        for (let y = 0; y < size.height; y++) {
+            for (const x of [8, 9]) for (const [key, value] of tile(x, y, soilCode("sand"))) sand.set(key, value);
+        }
+        const broken = prairie(1, withSoils(undefined, sand));
+        broken.ignite(6, 10, 0);
+        run(broken, 8, { ...lucky, windFrom: 270, windSpeed: 120 });
+        expect(broken.fireAt(11, 10) + broken.ashAt(11, 10)).toBeGreaterThan(0);
+        expect(broken.fireAt(8, 10)).toBe(0);
+    });
+
     it("hardly spreads over green grass", () => {
         const meadow = prairie(0);
         meadow.ignite(10, 10, 0);
-        // The chance over green grass is 0.15 × 0.15 = 0.0225 at most: this luck is not enough.
+        // The chance over green grass is 0.35 × 0.05 = 0.0175 at most: this luck is not enough.
         run(meadow, 30, { ...night, random: () => 0.03 });
         expect(meadow.ashAt(10, 10)).toBe(1);
         expect(meadow.ashAt(11, 10)).toBe(0);
@@ -223,7 +267,7 @@ describe("the ash", () => {
     it("is written with the meadow; the fire is not, and a state saved without ash is still read", () => {
         const meadow = prairie(1);
         meadow.ignite(10, 10, 0);
-        run(meadow, 30);
+        run(meadow, 40);
         meadow.ignite(3, 3, 0);
         const copy = new Meadow(size, undefined, undefined);
         expect(copy.read(meadow.writeGrass(), meadow.writeMoisture(), meadow.writeDryness(), meadow.writeAsh())).toBe(
@@ -241,7 +285,7 @@ describe("the ash", () => {
     it("follows the meadow that replaces it when the map is edited, the fire too", () => {
         const meadow = prairie(1);
         meadow.ignite(10, 10, 0);
-        run(meadow, 30);
+        run(meadow, 40);
         meadow.ignite(3, 3, 0);
         const next = new Meadow(size, undefined, undefined);
         next.takeFrom(meadow);
