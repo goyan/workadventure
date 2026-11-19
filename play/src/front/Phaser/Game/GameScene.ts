@@ -21,6 +21,7 @@ import {
     type SendUserMessage,
     type TerrainWaterMessage,
     type MeadowMessage,
+    type FireConditionsMessage,
     type AquaticLifeMessage,
 } from "@workadventure/messages";
 import { z } from "zod";
@@ -298,6 +299,7 @@ import {
     terrainWaterStatsStore,
 } from "../../Stores/TerrainEditorStore";
 import { jungleEnabledStore } from "../../Stores/JungleStore";
+import { fireConditionsStore } from "../../Stores/FireConditionsStore";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -308,7 +310,7 @@ import { levelUnderPoint } from "./MapEditor/MapLayer/FloorOperations";
 import { levelItems } from "./MapEditor/MapLayer/MapLayerLevels";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
 import { effectiveWeather, weatherAtTime } from "./Weather/WeatherFrame";
-import { shownWeatherSettings } from "./Weather/RealWeatherClient";
+import { setRoomConditions, shownWeatherSettings } from "./Weather/RealWeatherClient";
 import { isSwayingTree, TreeSway } from "./Nature/TreeSway";
 import { TreePoseTextures } from "./Nature/TreePoses";
 import { TreeSeasonEffects } from "./Nature/TreeSeasonEffects";
@@ -591,6 +593,7 @@ export class GameScene extends DirtyScene {
     /** The grass and the moisture of the soil of the map, as the server tells them. */
     private readonly meadow = new MeadowState();
     private meadowSubscription: Subscription | undefined;
+    private fireConditionsSubscription: Subscription | undefined;
     private meadowQueue: Promise<void> = Promise.resolve();
     private terrainWaterSubscription: Subscription | undefined;
     private meteorView: MeteorView | undefined;
@@ -1624,6 +1627,9 @@ export class GameScene extends DirtyScene {
         this.terrainWaterSubscription = undefined;
         this.meadowSubscription?.unsubscribe();
         this.meadowSubscription = undefined;
+        this.fireConditionsSubscription?.unsubscribe();
+        this.fireConditionsSubscription = undefined;
+        this.receiveFireConditions(undefined);
         this.aquaticLifeSubscription?.unsubscribe();
         this.aquaticLifeSubscription = undefined;
         this.entityStatesManager?.destroy();
@@ -2926,11 +2932,22 @@ export class GameScene extends DirtyScene {
             .catch((error: unknown) => console.warn("A state of the water of the relief could not be read", error));
     }
 
+    /** The conditions of the room: shown in the widget, and their wind, when set by hand, moves the whole scene. */
+    private receiveFireConditions(conditions: FireConditionsMessage | undefined): void {
+        fireConditionsStore.set(conditions);
+        setRoomConditions(conditions);
+    }
+
     private receiveMeadow(message: MeadowMessage): void {
         this.meadowQueue = this.meadowQueue
             .then(async () => {
-                const [grass, moisture] = await Promise.all([gunzip(message.grass), gunzip(message.moisture)]);
-                this.meadow.receive({ width: message.width, height: message.height, grass, moisture });
+                const [grass, moisture, dryness] = await Promise.all([
+                    gunzip(message.grass),
+                    gunzip(message.moisture),
+                    // Empty from a server that does not dry the grass.
+                    message.dryness.length > 0 ? gunzip(message.dryness) : Promise.resolve(new Uint8Array(0)),
+                ]);
+                this.meadow.receive({ width: message.width, height: message.height, grass, moisture, dryness });
             })
             .catch((error: unknown) => console.warn("A state of the meadow of the map could not be read", error));
     }
@@ -4020,6 +4037,12 @@ export class GameScene extends DirtyScene {
         this.terrainWaterSubscription?.unsubscribe();
         this.terrainWaterSubscription = this.connection.terrainWaterMessageStream.subscribe((message) => {
             this.receiveTerrainWater(message);
+        });
+        // The conditions the fire of the room goes by: what they are now, then every change.
+        this.receiveFireConditions(room.fireConditions);
+        this.fireConditionsSubscription?.unsubscribe();
+        this.fireConditionsSubscription = this.connection.fireConditionsMessageStream.subscribe((message) => {
+            this.receiveFireConditions(message);
         });
         // The meadow of the map: what the room holds now, then every change.
         if (room.meadow) this.receiveMeadow(room.meadow);

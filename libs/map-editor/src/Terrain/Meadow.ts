@@ -22,6 +22,10 @@ export const DRY_MOISTURE = 0.08;
 export const GROW_SECONDS = 600;
 export const THIRST_SECONDS = 1200;
 export const DROWN_SECONDS = 60;
+/** At the highest danger, without rain, a soil loses its moisture this many times faster: the hot wind dries it out. */
+const PARCHING = 20;
+/** The grass dries, or greens again, most of the way towards what the conditions make it in this many seconds. */
+export const DRYING_SECONDS = 90;
 /** An animal that grazes eats a full tile of grass in this many seconds. */
 export const GRAZE_SECONDS = 120;
 /** From this much grass under it, an animal that stands still is seen grazing. */
@@ -68,6 +72,8 @@ export interface MeadowStepInput {
     thirstSeconds?: number;
     /** How many times longer than usual the soils hold their moisture. */
     moistureHold?: number;
+    /** How ready the grass is to burn under the conditions of the room, from 0 to 1 (see fireDanger); 0 when absent. */
+    fireDanger?: number;
 }
 
 /** The tiles a floor of the "Map" tool covers on the ground (a paved path, a terrace): nothing grows there. */
@@ -93,6 +99,8 @@ export class Meadow {
     private readonly moisture: Float32Array;
     private readonly next: Float32Array;
     private readonly grass: Float32Array;
+    /** How dry the ground of each tile and its grass are, from 0 (green) to 1 (straw, ready to burn). */
+    private readonly dryness: Float32Array;
     /** For each tile: how long its soil holds its moisture (0: it holds none), how fertile it is, and its height. */
     private readonly hold: Float32Array;
     private readonly fertility: Float32Array;
@@ -111,6 +119,7 @@ export class Meadow {
         this.moisture = new Float32Array(tiles);
         this.next = new Float32Array(tiles);
         this.grass = new Float32Array(tiles);
+        this.dryness = new Float32Array(tiles);
         this.hold = new Float32Array(tiles);
         this.fertility = new Float32Array(tiles);
         this.ground = new Float32Array(tiles);
@@ -150,12 +159,19 @@ export class Meadow {
         return index === undefined ? 0 : this.grass[index];
     }
 
+    /** How dry the grass of a tile is, from 0 (green) to 1 (straw, ready to burn). */
+    public drynessAt(tileX: number, tileY: number): number {
+        const index = this.indexOf(tileX, tileY);
+        return index === undefined ? 0 : this.dryness[index];
+    }
+
     /** For the tests and a restored state: sets a tile. */
-    public set(tileX: number, tileY: number, moisture: number, grass: number): void {
+    public set(tileX: number, tileY: number, moisture: number, grass: number, dryness = 0): void {
         const index = this.indexOf(tileX, tileY);
         if (index === undefined) return;
         this.moisture[index] = Math.min(1, Math.max(0, moisture));
         this.grass[index] = Math.min(1, Math.max(0, grass));
+        this.dryness[index] = Math.min(1, Math.max(0, dryness));
     }
 
     /**
@@ -191,7 +207,13 @@ export class Meadow {
         const growSeconds = set(input.growSeconds, GROW_SECONDS);
         const thirstSeconds = set(input.thirstSeconds, THIRST_SECONDS);
         const holds = set(input.moistureHold, 1);
-        const { width, height, moisture, next, grass, hold, ground, fertility, outdoor } = this;
+        const danger =
+            input.fireDanger !== undefined && Number.isFinite(input.fireDanger)
+                ? Math.min(1, Math.max(0, input.fireDanger))
+                : 0;
+        // A hot, dry wind dries the soil itself, not under the rain.
+        const parching = rain > 0 ? 1 : 1 + PARCHING * danger;
+        const { width, height, moisture, next, grass, dryness, hold, ground, fertility, outdoor } = this;
         const water = new Float32Array(moisture.length);
         for (let tileY = 0; tileY < height; tileY++) {
             for (let tileX = 0; tileX < width; tileX++) {
@@ -205,7 +227,10 @@ export class Meadow {
                     moisture[index] = 1;
                 } else {
                     const kept = moisture[index] + rain * seconds * RAIN_GAIN;
-                    moisture[index] = Math.min(1, kept - kept * Math.min(1, seconds / (hold[index] * holds)));
+                    moisture[index] = Math.min(
+                        1,
+                        kept - kept * Math.min(1, (seconds * parching) / (hold[index] * holds)),
+                    );
                 }
             }
         }
@@ -252,6 +277,18 @@ export class Meadow {
             }
             grass[index] = Math.min(1, Math.max(0, cover));
         }
+        // The grass dries towards what the conditions and its soil make it: straw on a dry soil when it is hot, dry
+        // and windy, green again on a wet soil or when the conditions ease.
+        const share = 1 - Math.exp(-seconds / DRYING_SECONDS);
+        for (let index = 0; index < dryness.length; index++) {
+            // Every ground where grass can grow dries, bare or not; sand, rock and indoors have nothing to dry.
+            if (fertility[index] <= 0 || !outdoor[index]) {
+                dryness[index] = 0;
+                continue;
+            }
+            const target = water[index] >= SOAKED_WATER_PX ? 0 : danger * (1 - moisture[index]);
+            dryness[index] += (target - dryness[index]) * share;
+        }
     }
 
     /**
@@ -270,6 +307,7 @@ export class Meadow {
     public clear(): void {
         this.grass.fill(0);
         this.moisture.fill(0);
+        this.dryness.fill(0);
     }
 
     /** The grass and the moisture of every tile, row by row, a byte each (0 to 255): told to the room and saved. */
@@ -281,12 +319,21 @@ export class Meadow {
         return bytesOf(this.moisture);
     }
 
-    /** Reads a state written by a meadow of the same size. False (and nothing read) for any other. */
-    public read(grass: Uint8Array, moisture: Uint8Array): boolean {
+    public writeDryness(): Uint8Array {
+        return bytesOf(this.dryness);
+    }
+
+    /**
+     * Reads a state written by a meadow of the same size. False (and nothing read) for any other. A state saved
+     * before the grass could dry has no dryness: it is read green.
+     */
+    public read(grass: Uint8Array, moisture: Uint8Array, dryness?: Uint8Array): boolean {
         if (grass.length !== this.grass.length || moisture.length !== this.moisture.length) return false;
+        if (dryness && dryness.length !== this.dryness.length) return false;
         for (let index = 0; index < grass.length; index++) {
             this.grass[index] = this.outdoor[index] ? grass[index] / 255 : 0;
             this.moisture[index] = this.outdoor[index] ? moisture[index] / 255 : 0;
+            this.dryness[index] = this.outdoor[index] && dryness ? dryness[index] / 255 : 0;
         }
         return true;
     }
@@ -299,6 +346,7 @@ export class Meadow {
                 if (!this.outdoor[index]) continue;
                 this.moisture[index] = previous.moistureAt(tileX, tileY);
                 this.grass[index] = previous.grassAt(tileX, tileY);
+                this.dryness[index] = previous.drynessAt(tileX, tileY);
             }
         }
     }

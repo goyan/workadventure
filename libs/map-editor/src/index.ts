@@ -44,6 +44,7 @@ export * from "./Life/LifeHistory";
 export * from "./Life/Fishing";
 export * from "./Life/FishingContest";
 export * from "./Weather/SeasonClock";
+export * from "./Weather/FireConditions";
 export * from "./Weather/WeatherSchedule";
 export * from "./Weather/RealWeather";
 export * from "./Weather/RainRate";

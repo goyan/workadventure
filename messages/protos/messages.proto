@@ -747,6 +747,7 @@ message ClientToServerMessage {
     ReelFishingLineMessage reelFishingLineMessage = 61;
     StartFishingContestMessage startFishingContestMessage = 64;
     LaunchCatastropheMessage launchCatastropheMessage = 65;
+    SetFireConditionsMessage setFireConditionsMessage = 70;
     VideoQualityReportMessage videoQualityReportMessage = 50;
     AnalyticsEventReportMessage analyticsEventReportMessage = 52;
     EntityMessage entityMessage = 53;
@@ -824,6 +825,33 @@ enum CatastropheKind {
   CATASTROPHE_METEOR = 0;
   // A downpour: it rains hard under the pointer of a player (or on the whole map) for as long as they keep telling.
   CATASTROPHE_DOWNPOUR = 1;
+}
+
+// Browser to server: a player sets the conditions the fire of the room goes by (heat, humidity of the air, wind) by
+// hand, or goes back to the real ones; and from where they light a fire. The server keeps every value within bounds.
+message SetFireConditionsMessage {
+  bool manual = 1;
+  // Degrees Celsius, % of relative humidity, km/h, and where the wind comes from in degrees (0 north, 90 east).
+  double temperature = 2;
+  double humidity = 3;
+  double windSpeed = 4;
+  double windFrom = 5;
+  // Hotter than, drier than, windier than: 30, 30 and 30 by default.
+  double thresholdTemperature = 6;
+  double thresholdHumidity = 7;
+  double thresholdWindSpeed = 8;
+}
+
+// Server to room, and to a player who joins: the conditions the fire of the room goes by, set by hand or real.
+message FireConditionsMessage {
+  bool manual = 1;
+  double temperature = 2;
+  double humidity = 3;
+  double windSpeed = 4;
+  double windFrom = 5;
+  double thresholdTemperature = 6;
+  double thresholdHumidity = 7;
+  double thresholdWindSpeed = 8;
 }
 
 // Browser to server: a player launches a catastrophe at a point of the map, in map pixels. The server decides.
@@ -954,6 +982,8 @@ message MeadowMessage {
   bytes grass = 3;
   // A byte a tile (0: dry, 255: sodden), row by row, gzipped.
   bytes moisture = 4;
+  // A byte a tile (0: green grass, 255: straw, ready to burn), row by row, gzipped. Empty from an older server.
+  bytes dryness = 5;
 }
 
 // The water of the relief of the map (WaterGrid in libs/map-editor): the depth of the water over each cell of a
@@ -1706,6 +1736,7 @@ message SubMessage {
     FishingMessage fishingMessage = 40;
     MeadowMessage meadowMessage = 41;
     CatastropheMessage catastropheMessage = 42;
+    FireConditionsMessage fireConditionsMessage = 47;
   }
 }
 
@@ -1812,6 +1843,8 @@ message RoomJoinedMessage {
   optional FishingMessage fishing = 30;
   // The meadow of the map (its whole state), for a player who joins the room. Absent where nothing ever grew.
   optional MeadowMessage meadow = 31;
+  // The conditions the fire of the room goes by, for a player who joins it.
+  optional FireConditionsMessage fireConditions = 35;
 }
 
 message WebRtcStartMessage {
@@ -2356,6 +2389,7 @@ message PusherToBackMessage {
     ReelFishingLineMessage reelFishingLineMessage = 45;
     StartFishingContestMessage startFishingContestMessage = 48;
     LaunchCatastropheMessage launchCatastropheMessage = 49;
+    SetFireConditionsMessage setFireConditionsMessage = 54;
   }
 }
 
@@ -2381,6 +2415,7 @@ message SubToPusherRoomMessage {
     FishingMessage fishingMessage = 20;
     MeadowMessage meadowMessage = 21;
     CatastropheMessage catastropheMessage = 22;
+    FireConditionsMessage fireConditionsMessage = 27;
   }
 }
 

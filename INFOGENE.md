@@ -3191,6 +3191,53 @@ reconnexion. Protocole : `StartFishingContestMessage {minutes}` (navigateur → 
 **Limites.** Un concours ne survit pas à un redémarrage du serveur. Après une reconnexion, sa propre ligne n'est plus
 mise en gras avant sa prise suivante. Pas d'annonce sonore ni de carte d'annonce à part : le panneau apparaît.
 
+## Feu de végétation : conditions et sécheresse (lot 1)
+
+Premier lot du feu de végétation : la salle a des **conditions de feu**, réelles ou réglées à la main, et l'herbe du
+pré **sèche et jaunit** selon elles. Le feu lui-même et ses flammes viennent dans les lots suivants.
+
+**Conditions de la salle.** Température (°C), humidité de l'air (%), vent (km/h et provenance en degrés) et trois
+seuils. Le serveur (`back/src/Model/FireConditionsManager.ts`) les tient pour toute la salle :
+- **Manuel** quand un joueur l'a activé : ses valeurs valent pour tous.
+- Sinon **réel** : le quart d'heure en cours de la météo du lieu, quand la carte est en météo « Réel ». L'humidité de
+  l'air est lue chez Open-Meteo (`relative_humidity_2m`, champ facultatif `humidity` du créneau).
+- Sinon, ou pour ce que la météo réelle ne donne pas : conditions neutres 20 °C, 60 %, 10 km/h du nord-ouest. Une
+  carte en météo fixe ou automatique ne sèche donc qu'en manuel.
+
+Le serveur borne toute valeur (température −10 à 50 °C, humidité 0 à 100 %, vent 0 à 120 km/h ; seuils 0 à 50 °C,
+5 à 100 %, 5 à 120 km/h), refuse plus de 5 changements par seconde et par joueur, annonce les conditions à la salle à
+chaque changement (et quand la météo réelle avance) et à l'entrée d'un joueur. Rien n'est enregistré : après un
+redémarrage de `back`, la salle revient aux conditions réelles et aux seuils 30-30-30.
+
+**Danger** (`fireDanger`, `libs/map-editor/src/Weather/FireConditions.ts`, la même fonction pour le serveur et le
+navigateur) : de 0 à 1. Il vaut 1 à **30 °C, 30 % d'humidité et 30 km/h** (seuils par défaut, réglables), la moitié
+sans vent, 0 s'il fait frais (15 °C sous le seuil) ou humide (30 points au-dessus du seuil). La chaleur et la
+sécheresse de l'air doivent être là toutes les deux ; le vent double ce qu'elles font.
+
+**Sécheresse de l'herbe.** Par case, dans le pré du serveur (`Meadow.drynessAt`) : elle tend vers
+`danger × (1 − humidité du sol)` avec une constante de temps de 90 s, retombe quand le sol se mouille ou que les
+conditions s'apaisent, et vaut 0 sous l'eau ou sans herbe. Elle est annoncée avec le pré (`MeadowMessage.dryness`) et
+sauvegardée avec lui ; un pré sauvegardé avant ce lot se recharge, vert.
+
+**À l'écran.**
+- Le widget « Catastrophe » a deux onglets. L'onglet **« Météo »** : interrupteur « Manuel » (coupé, les curseurs
+  montrent les conditions réelles, grisés), curseurs de température, d'humidité, de vent, provenance du vent par les
+  huit points de la rose, trois seuils (réglables même hors manuel) et l'indicateur de danger (faible, modéré, fort,
+  extrême). Un geste envoie la demande au serveur, quatre fois par seconde au plus pendant un glisser ; l'annonce du
+  serveur déplace les curseurs de tous sans rien renvoyer.
+- L'herbe sèche est peinte en **paille** par-dessus le vert, d'autant plus qu'elle est sèche.
+- En manuel, le **vent de toute la scène** (nuages, arbres, pluie penchée) est celui de la salle.
+- Le bandeau météo affiche l'**humidité** pour « Maintenant » et, en manuel, la température et le vent de la salle
+  avec la mention « manuel ».
+
+**Protocole.** `SetFireConditionsMessage` (70 du navigateur au pusher, 54 du pusher à `back`),
+`FireConditionsMessage` (47 et 27, et `RoomJoinedMessage.fireConditions` = 35), `MeadowMessage.dryness` = 5.
+`play` et `back` se déploient ensemble ; `map-storage` n'est pas concerné.
+
+**Limites connues.** Le manuel ne change ni la pluie ni le ciel de la carte. Les conditions manuelles sont perdues
+au redémarrage de `back`. Rien n'a été vu à l'écran à l'écriture de cette section : onglet, teinte de l'herbe,
+bandeau et vent manuel ne sont validés que par les tests.
+
 ## Catastrophes : le météore
 
 Conception et plan dans le dépôt d'infra, `docs/superpowers/{specs,plans}/2026-11-19-catastrophes-meteore*`. Lot 1 :

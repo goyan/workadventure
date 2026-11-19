@@ -58,11 +58,13 @@ export function deepWaterAlpha(depthPx: number): number {
 
 /**
  * How a painted soil is drawn: a veil of its colour over the ground of the map, under the shades of the relief and
- * under the water. Rock and gravel cover the ground most, earth and meadow let it show.
+ * under the water. Rock and gravel cover the ground most, earth and meadow let it show. No soil is green: a
+ * fertile soil is not a meadow until grass grows on it.
  */
 export const SOIL_TINTS: Record<SoilName, { color: number; alpha: number }> = {
     earth: { color: 0x7a5a3a, alpha: 0.45 },
-    meadow: { color: 0x5fae4a, alpha: 0.45 },
+    // A rich, dark loam, not a green: the green of a map is its grass, which grows, dries and burns.
+    meadow: { color: 0x54401f, alpha: 0.5 },
     clay: { color: 0xc58a55, alpha: 0.55 },
     sand: { color: 0xe6d29a, alpha: 0.6 },
     rock: { color: 0x7d8189, alpha: 0.7 },

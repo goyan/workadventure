@@ -171,6 +171,35 @@ describe("cloudinessFromWmoCode", () => {
         ]);
     });
 
+    it("takes the humidity of the air (%) of each quarter hour when Open-Meteo gives it", () => {
+        expect(
+            slotsFromOpenMeteo({
+                minutely_15: {
+                    time: [0, 900],
+                    weather_code: [0, 0],
+                    temperature_2m: [5, 5],
+                    relative_humidity_2m: [73, null],
+                },
+            }),
+        ).toEqual([
+            { at: 0, weather: WeatherType.Clear, temperature: 5, humidity: 73 },
+            { at: SLOT, weather: WeatherType.Clear, temperature: 5 },
+        ]);
+    });
+
+    it("refuses a humidity column of another length", () => {
+        expect(
+            slotsFromOpenMeteo({
+                minutely_15: {
+                    time: [0, 900],
+                    weather_code: [0, 0],
+                    temperature_2m: [5, 5],
+                    relative_humidity_2m: [73],
+                },
+            }),
+        ).toBeUndefined();
+    });
+
     it("gives the wind of the quarter hour under way and of the one before, for turning", () => {
         const slots: RealWeatherSlot[] = [
             { at: 0, weather: WeatherType.Clear, temperature: 5, windFrom: 350 },

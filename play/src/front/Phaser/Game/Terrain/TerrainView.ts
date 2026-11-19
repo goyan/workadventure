@@ -28,7 +28,7 @@ import {
     SNOW_COLOR,
     snowAlpha,
 } from "./TerrainShading";
-import { GRASS_COLOR, grassAlpha, mottledCover } from "./MeadowState";
+import { GRASS_COLOR, grassAlpha, mottledCover, STRAW_COLOR, strawAlpha, strawLevel } from "./MeadowState";
 import type { MeadowState } from "./MeadowState";
 import type { TerrainWater } from "./TerrainWater";
 
@@ -53,6 +53,8 @@ interface ReliefLayers extends BlockCanvasArea {
     soils: Map<number, Uint8Array>;
     /** The grass of the meadow over the canvas, and the state of the meadow it was read from. */
     grass: Uint8Array | undefined;
+    /** The straw of the grass gone dry over the canvas (see strawLevel); undefined on a green meadow. */
+    straw: Uint8Array | undefined;
     meadowVersion: number;
     shaded: Uint8Array;
     lit: Uint8Array;
@@ -133,6 +135,10 @@ export class TerrainView {
         }
         if (relief.grass) {
             this.surface.paintField(canvas, relief.grass, everywhere, NO_SHIFT, GRASS_COLOR, grassAlpha);
+        }
+        if (relief.straw) {
+            // The grass gone dry under the heat and the wind: straw over the green.
+            this.surface.paintField(canvas, relief.straw, everywhere, NO_SHIFT, STRAW_COLOR, strawAlpha);
         }
         if (relief.dug) {
             this.surface.paintField(canvas, relief.ground, everywhere, NO_SHIFT, 0x000000, (level) =>
@@ -221,6 +227,7 @@ export class TerrainView {
             season,
             soils: new Map(),
             grass: undefined,
+            straw: undefined,
             meadowVersion: this.meadow?.version() ?? 0,
             shaded: new Uint8Array(size),
             lit: new Uint8Array(size),
@@ -289,21 +296,34 @@ export class TerrainView {
             const outdoor = this.scene.getOutdoorGrid?.();
             const cellsATile = TILE_PX / TERRAIN_CELL;
             const grass = new Uint8Array(size);
+            const straw = new Uint8Array(size);
             let any = false;
+            let dry = false;
             for (let row = 0; row < canvas.rows; row++) {
                 for (let column = 0; column < canvas.columns; column++) {
                     const cellX = left + column;
                     const cellY = top + row;
-                    const cover = this.meadow.grassAt(Math.floor(cellX / cellsATile), Math.floor(cellY / cellsATile));
-                    if (cover === 0) continue;
+                    const tileX = Math.floor(cellX / cellsATile);
+                    const tileY = Math.floor(cellY / cellsATile);
+                    const cover = this.meadow.grassAt(tileX, tileY);
+                    const dryness = this.meadow.drynessAt(tileX, tileY);
+                    if (cover === 0 && dryness === 0) continue;
                     if (outdoor && !outdoor.isOutdoorAt((cellX + 0.5) * TERRAIN_CELL, (cellY + 0.5) * TERRAIN_CELL)) {
                         continue;
                     }
-                    grass[row * canvas.columns + column] = mottledCover(cover, cellX, cellY);
-                    any = true;
+                    const drawn = cover === 0 ? 0 : mottledCover(cover, cellX, cellY);
+                    if (drawn > 0) {
+                        grass[row * canvas.columns + column] = drawn;
+                        any = true;
+                    }
+                    if (dryness === 0) continue;
+                    // A dry ground yellows with or without grass on it.
+                    straw[row * canvas.columns + column] = strawLevel(drawn, dryness);
+                    dry = true;
                 }
             }
             if (any) layers.grass = grass;
+            if (dry) layers.straw = straw;
         }
         this.relief = layers;
         return layers;

@@ -52,6 +52,8 @@ import type {
     ModifyTerrainMessage,
     TerrainWaterMessage,
     MeadowMessage,
+    FireConditionsMessage,
+    SetFireConditionsMessage,
     AquaticLifeMessage,
     CatastropheKind,
     CatastropheMessage,
@@ -249,6 +251,9 @@ export class RoomConnection implements RoomConnection {
     public readonly terrainWaterMessageStream = this._terrainWaterMessageStream.asObservable();
     private readonly _meadowMessageStream = new Subject<MeadowMessage>();
     public readonly meadowMessageStream = this._meadowMessageStream.asObservable();
+    /** The conditions the fire of the room goes by, whenever they change. */
+    private readonly _fireConditionsMessageStream = new Subject<FireConditionsMessage>();
+    public readonly fireConditionsMessageStream = this._fireConditionsMessageStream.asObservable();
     private readonly _aquaticLifeMessageStream = new Subject<AquaticLifeMessage>();
     public readonly aquaticLifeMessageStream = this._aquaticLifeMessageStream.asObservable();
     /** The catastrophes the room throws, each announced once with the time left before its impact. */
@@ -489,6 +494,10 @@ export class RoomConnection implements RoomConnection {
                                     this._meadowMessageStream.next(subMessage.meadowMessage);
                                     break;
                                 }
+                                case "fireConditionsMessage": {
+                                    this._fireConditionsMessageStream.next(subMessage.fireConditionsMessage);
+                                    break;
+                                }
                                 case "aquaticLifeMessage": {
                                     this._aquaticLifeMessageStream.next(subMessage.aquaticLifeMessage);
                                     break;
@@ -708,6 +717,7 @@ export class RoomConnection implements RoomConnection {
                         terrainWater: roomJoinedMessage.terrainWater,
                         aquaticLife: roomJoinedMessage.aquaticLife,
                         meadow: roomJoinedMessage.meadow,
+                        fireConditions: roomJoinedMessage.fireConditions,
                         fishing: roomJoinedMessage.fishing,
                         applications: applications,
                     } as RoomJoinedMessageInterface);
@@ -1225,6 +1235,11 @@ export class RoomConnection implements RoomConnection {
                 castFishingLineMessage: { x: Math.round(x), y: Math.round(y) },
             },
         });
+    }
+
+    /** Sets the conditions the fire of the room goes by, by hand or back to the real ones. The server decides. */
+    emitSetFireConditions(conditions: SetFireConditionsMessage): void {
+        this.send({ message: { $case: "setFireConditionsMessage", setFireConditionsMessage: conditions } });
     }
 
     /** Launches a catastrophe at a point of the map, in map pixels. The server decides. */
@@ -2470,6 +2485,7 @@ export class RoomConnection implements RoomConnection {
         this._entityStateMessageStream.complete();
         this._terrainWaterMessageStream.complete();
         this._meadowMessageStream.complete();
+        this._fireConditionsMessageStream.complete();
         this._aquaticLifeMessageStream.complete();
         this._fishingMessageStream.complete();
         this._catastropheMessageStream.complete();

@@ -25,7 +25,9 @@ function createHarness({
     now = Date.UTC(2026, 6, 14, 10),
     meadow = undefined as NonNullable<WAMFileFormat["settings"]>["meadow"],
     grazers = undefined as (() => { x: number; y: number }[]) | undefined,
+    danger = undefined as (() => number) | undefined,
 }: {
+    danger?: () => number;
     grazers?: () => { x: number; y: number }[];
     meadow?: NonNullable<WAMFileFormat["settings"]>["meadow"];
     weather?: WeatherType;
@@ -57,6 +59,7 @@ function createHarness({
         () => now,
         mapSize,
         grazers,
+        danger,
     );
     const steps = (count: number): void => {
         for (let step = 0; step < count; step++) manager.step();
@@ -65,6 +68,7 @@ function createHarness({
 }
 
 const grassOf = (message: MeadowMessage): Uint8Array => new Uint8Array(gunzipSync(message.grass));
+const drynessOf = (message: MeadowMessage): Uint8Array => new Uint8Array(gunzipSync(message.dryness));
 
 describe("MeadowManager", () => {
     it("does nothing until the size of the map is read", () => {
@@ -108,6 +112,29 @@ describe("MeadowManager", () => {
         expect(night.sent.length).toBe(told);
         expect(grassOf(night.sent[told - 1]).every((cover) => cover === 0)).toBe(true);
         night.manager.stop();
+    });
+
+    it("dries the grass by the danger of the room, and tells the room how dry it is", () => {
+        // Grass first, under the rain; then the rain stops and the danger is at its highest.
+        const danger = { now: 0 };
+        const { manager, sent, steps, wam } = createHarness({ danger: () => danger.now });
+        manager.mapChanged();
+        steps(400);
+        expect(drynessOf(sent[sent.length - 1]).every((dryness) => dryness === 0)).toBe(true);
+        if (!wam.settings) throw new Error("no settings");
+        wam.settings.weather = WeatherType.Clear;
+        danger.now = 1;
+        // The soil dries, the grass with it, until it dies of thirst: its driest is seen on the way.
+        let driest = 0;
+        for (let spell = 0; spell < 40; spell++) {
+            steps(50);
+            const last = sent[sent.length - 1];
+            expect(drynessOf(last)).toHaveLength(32);
+            expect(drynessOf(manager.snapshot() ?? last)).toEqual(drynessOf(last));
+            driest = Math.max(driest, ...drynessOf(last));
+        }
+        expect(driest).toBeGreaterThan(128);
+        manager.stop();
     });
 
     it("keeps its meadow across a restart", async () => {
