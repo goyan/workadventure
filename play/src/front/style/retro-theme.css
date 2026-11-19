@@ -1258,3 +1258,48 @@
     outline: 2px solid hsl(var(--secondary-500));
     outline-offset: 1px;
 }
+
+/* The number of people in the discussion, on the participants button of the action bar. */
+.participant-count {
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: #fff;
+    border-radius: 999px;
+    background: hsl(var(--secondary));
+    box-shadow: inset 0 -2px 0 hsl(var(--rt-shade) / 0.35);
+}
+
+/* The tab under the microphone and camera that opens the devices: a small key hanging under them, easy to aim. */
+@media (min-width: 640px) {
+    .device-tab {
+        bottom: -20px;
+        width: 44px;
+        height: 20px;
+        padding: 0;
+        border: 2px solid hsl(var(--contrast-500) / 0.7);
+        border-top: 0;
+        border-radius: 0 0 10px 10px;
+        background: hsl(var(--contrast-900) / 0.92);
+        box-shadow:
+            inset 0 -3px 0 hsl(var(--rt-shade) / 0.45),
+            0 4px 10px hsl(var(--rt-shade) / 0.3);
+    }
+    .device-tab .device-tab-key {
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: 0 0 8px 8px;
+        color: hsl(var(--contrast-200));
+    }
+    .device-tab .device-tab-key:hover {
+        color: hsl(var(--secondary-500));
+        background: transparent;
+    }
+}
