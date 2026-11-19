@@ -95,6 +95,10 @@ export class UpperDoors {
         return pieces;
     }
 
+    public isInOpenVerticalPassage(x: number, y: number, elevation: number): boolean {
+        return this.animators.get(elevation)?.isInOpenVerticalPassage(x, y + elevation) ?? false;
+    }
+
     /**
      * @param characters Everyone standing on a raised floor, at their place on the screen.
      * @param listener The local player, at their place on the screen: sets how loud the doors are.

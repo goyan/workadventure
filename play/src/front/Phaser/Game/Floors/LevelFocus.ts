@@ -53,11 +53,16 @@ export function fadeToward(value: number, target: number, delta: number, span: n
  * up to it stay, see StairHints). Outdoors on the ground a building stays whole; a floor that hides the avatar lets it
  * show through a window around it.
  */
-export function aboveLevelShows(where: { indoors: boolean; raised: boolean; hidesAvatar: boolean }): {
+export function aboveLevelShows(where: {
+    indoors: boolean;
+    raised: boolean;
+    hidesAvatar: boolean;
+    underFloor?: boolean;
+}): {
     alpha: number;
     window?: true;
 } {
-    if (where.indoors || where.raised) return { alpha: 0 };
+    if (where.indoors || where.raised || where.underFloor) return { alpha: 0 };
     return where.hidesAvatar ? { alpha: 1, window: true } : { alpha: 1 };
 }
 

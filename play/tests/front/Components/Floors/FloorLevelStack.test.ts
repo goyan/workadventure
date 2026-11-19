@@ -1,8 +1,16 @@
 // @vitest-environment node
 
 import { render } from "svelte/server";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import FloorLevelStack from "../../../../src/front/Components/Floors/FloorLevelStack.svelte";
+
+import { setLocale } from "../../../../src/i18n/i18n-svelte";
+import { loadLocale } from "../../../../src/i18n/i18n-util.sync";
+
+beforeAll(() => {
+    loadLocale("fr-FR");
+    setLocale("fr-FR");
+});
 
 const stack = {
     levels: [
@@ -17,10 +25,18 @@ describe("FloorLevelStack", () => {
         expect(render(FloorLevelStack, { props: { stack: undefined } }).body).not.toContain("Sol");
     });
 
-    it("lists the floors, the current one in white after ▶, the others in grey", () => {
+    it("stays collapsed by default and shows auto mode with the current floor", () => {
         const { body } = render(FloorLevelStack, { props: { stack } });
-        expect(body.indexOf("Niveau 2")).toBeLessThan(body.indexOf("Sol"));
-        expect(body).toMatch(/text-white[^>]*>\s*<span[^>]*>▶<\/span>\s*Niveau 2/);
-        expect(body).toMatch(/text-gray-400[^>]*>\s*Sol/);
+        expect(body).toContain('aria-haspopup="menu"');
+        expect(body).toContain('aria-expanded="false"');
+        expect(body).toContain("Auto · Niveau 2");
+        expect(body).not.toContain("<select");
+        expect(body).not.toContain('role="menu"');
+    });
+
+    it("shows the manually viewed floor", () => {
+        const { body } = render(FloorLevelStack, { props: { stack: { ...stack, viewed: 0 } } });
+        expect(body).toContain(">Sol</span>");
+        expect(body).not.toContain("Auto ·");
     });
 });

@@ -3,6 +3,7 @@ import { get } from "svelte/store";
 import { LL } from "../../../../i18n/i18n-svelte";
 import {
     floorLevelCurrentStore,
+    floorLevelViewedStore,
     floorLevelName,
     floorLevelsBuiltStore,
     floorLevelsHiddenStore,
@@ -344,6 +345,7 @@ export class FloorSpike {
         this.hints.destroy();
         floorLevelsBuiltStore.set([]);
         floorLevelCurrentStore.set(0);
+        floorLevelViewedStore.set(undefined);
     }
 
     /** For the tests in the browser. */
@@ -397,6 +399,9 @@ export class FloorSpike {
             if (state || moved || this.restoring.left <= 0) this.restoring = undefined;
             // The slabs are read again soon: they may not be loaded yet.
             else this.mapAge = Math.min(this.mapAge, RESTORE_RETRY_MS);
+        }
+        if (this.prev && Math.hypot(p.x - this.prev.x, p.y - this.prev.y) > 0.01) {
+            floorLevelViewedStore.set(undefined);
         }
         const result = floorStep(this.model, this.state, this.prev ?? p, p, this.closed);
         if (result.p.x !== p.x || result.p.y !== p.y) {
@@ -496,20 +501,26 @@ export class FloorSpike {
     /** The floors above the avatar are hidden indoors and up a floor (LevelFocus), the stairs always show. */
     private fade(model: FloorModel, p: { x: number; y: number }, delta: number): void {
         const editor = this.editor();
+        const viewed = get(floorLevelViewedStore);
         // Where the avatar is on the ground: its altitude further south than where it is drawn.
         const room = this.room(p);
         // The floors that hide the avatar outdoors: they let it show through a window around it.
         const windowed = new Set<LevelDrawing>();
         // The floors the avatar is on: its own, or both floors of the stair it climbs.
-        const current = currentLevels(this.state, model.getStairs());
+        const current = viewed === undefined ? currentLevels(this.state, model.getStairs()) : new Set([viewed]);
         for (const level of this.levels) {
             let target = 1;
             if (editor.open) {
                 // In the editor, the floors above the one being edited let it show through.
                 if (level.elevation > editor.level) target = EDITOR_ABOVE_ALPHA;
+            } else if (viewed !== undefined) {
+                target = level.elevation > viewed ? 0 : 1;
             } else if (levelLook(level.elevation, current) === "above") {
                 const shows = aboveLevelShows({
                     indoors: room !== undefined,
+                    underFloor: level.cells.has(
+                        `${Math.floor(p.x / TILE)}:${Math.floor((p.y + this.state.elevation) / TILE)}`,
+                    ),
                     raised: this.state.elevation > 0 || this.state.stair !== undefined,
                     hidesAvatar: level.slabEntities.some((slab) => slabCoversAvatar(slab, p)),
                 });
@@ -692,7 +703,10 @@ export class FloorSpike {
             }),
         );
         this.model = model;
-        this.onLevels(model.getLevels());
+        const built = model.getLevels();
+        this.onLevels(built);
+        const viewed = get(floorLevelViewedStore);
+        if (viewed !== undefined && viewed !== 0 && !built.includes(viewed)) floorLevelViewedStore.set(undefined);
         const stairBoxes = model.getStairs().map((placed) => this.stairScreenBox(placed));
         const alphas = new Map(this.levels.map((level) => [level.key, level.alpha]));
         const seeThroughBefore = new Map(this.levels.map((level) => [level.key, level.seeThrough]));

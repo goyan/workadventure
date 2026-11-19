@@ -2,6 +2,7 @@ import { get } from "svelte/store";
 import { describe, expect, it } from "vitest";
 import {
     floorLevelCurrentStore,
+    floorLevelViewedStore,
     floorLevelStack,
     floorLevelsBuiltStore,
     floorLevelsHiddenStore,
@@ -38,6 +39,16 @@ describe("the stack of the floors", () => {
         expect(get(floorLevelsStore)?.levels.map((level) => level.elevation)).toEqual([52, 0]);
         floorLevelsBuiltStore.set([]);
         expect(get(floorLevelsStore)).toBeUndefined();
+    });
+
+    it("can display another floor while retaining the physical floor of the avatar", () => {
+        floorLevelsBuiltStore.set([52, 116]);
+        floorLevelCurrentStore.set(0);
+        floorLevelViewedStore.set(116);
+        expect(get(floorLevelsStore)).toMatchObject({ current: 0, viewed: 116 });
+        floorLevelViewedStore.set(undefined);
+        expect(get(floorLevelsStore)).toMatchObject({ current: 0, viewed: undefined });
+        floorLevelsBuiltStore.set([]);
     });
 
     it("pulses once at a change of floor, never when motion is reduced", () => {

@@ -77,3 +77,33 @@ describe("getHitboxBounds", () => {
         expect(getHitboxBounds({ collisionGrid: [[0, 0]] }, 32)).toBeUndefined();
     });
 });
+
+describe("high vertical map-layer hitboxes", () => {
+    it("keeps a high vertical wall's collision under its visible strip", () => {
+        const prefab = {
+            collectionName: "Carte Murs",
+            id: "Carte Murs:mur-vertical-blanc-h2:Default:Down",
+            collisionRectangles: [{ x: -3, y: 46, width: 18, height: 32 }],
+        };
+        expect(getSolidRectangles({ x: 4410, y: 2732 }, prefab, 32)).toEqual([{ x: -3, y: 14, width: 18, height: 32 }]);
+        expect(getHitboxBounds(prefab, 32)).toEqual({ x: -3, y: 14, width: 18, height: 32 });
+    });
+
+    it("keeps the bottom of a high vertical doorway aligned with its leaf", () => {
+        const prefab = {
+            collectionName: "Carte Portes",
+            id: "Carte Portes:porte-v-gris-bas-h3:Default:Down",
+            collisionRectangles: [{ x: 26, y: 84, width: 12, height: 12 }],
+        };
+        expect(getSolidRectangles({ x: 96, y: 128 }, prefab, 32)).toEqual([{ x: 26, y: 20, width: 12, height: 12 }]);
+    });
+
+    it("keeps the projection at the foot of horizontal walls", () => {
+        const prefab = {
+            collectionName: "Carte Murs",
+            id: "Carte Murs:facade-blanc-mid-h2:Default:Down",
+            collisionRectangles: [{ x: 0, y: 58, width: 32, height: 6 }],
+        };
+        expect(getSolidRectangles({ x: 64, y: 128 }, prefab, 32)).toEqual(prefab.collisionRectangles);
+    });
+});

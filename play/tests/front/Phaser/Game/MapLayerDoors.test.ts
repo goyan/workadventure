@@ -254,3 +254,14 @@ describe("hearing doors", () => {
         expect(isDoorInZone({ left: 320, top: 320, right: 384, bottom: 352 }, "h", room)).toBe(false);
     });
 });
+
+it("routes through a high vertical door at its visible row and blocks the wall below", () => {
+    const model = new MapLayerModel();
+    applyWalls(model, lineWallEdges({ x: 4, y: 2 }, { x: 4, y: 10 }), "gris", bounds, 2);
+    model.setDoor({ orientation: "v", x: 4, y: 5 });
+    const barriers = wallBarriers(placed(model));
+    // The first leaf is drawn at y = 108: its passing tile centre is y = 144, without a second height offset.
+    expect(barriers.blocksMove({ x: 3, y: 4 }, { x: 4, y: 4 })).toBe(false);
+    expect(barriers.blocksMove({ x: 3, y: 5 }, { x: 4, y: 5 })).toBe(true);
+    expect(barriers.blocksMove({ x: 3, y: 6 }, { x: 4, y: 6 })).toBe(true);
+});

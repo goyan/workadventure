@@ -4,6 +4,7 @@ import { getBlockingRectangles, getSolidRectangles } from "../../../Utils/Entity
 import type { Entity } from "../../ECS/Entity";
 import { isMapLayerPrefab } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { parseAnyLevelPrefab } from "../MapEditor/MapLayer/MapLayerLevels";
+import { CHARACTER_BODY_OFFSET_Y } from "../../Entity/Character";
 import type { Player } from "../../Player/Player";
 import type { ObstacleRectangle } from "../../../Utils/RectangleObstacles";
 import { isPathClearOfStaticGroups, staticGroupsRectangles } from "./StaticGroupsPath";
@@ -113,13 +114,15 @@ export class EntityCollisionRectangles {
         const prefab = state.entity.getPrefab();
         // The walls of the map layer are barriers for the pathfinder: a path never goes through them. While the avatar
         // walks one, the collision would only push it out of the wall it runs along, in jerks.
-        const isWall = isMapLayerPrefab(prefab.collectionName, prefab.id);
+        const isWall = parseAnyLevelPrefab(prefab.collectionName, prefab.id) !== undefined;
+        const scene = this.scene as Phaser.Scene & { isInOpenVerticalDoorPassage?(x: number, y: number): boolean };
         return this.scene.physics.add.collider(
             player,
             state.group,
             undefined,
             () =>
                 !(isWall && player.isWalkingPath()) &&
+                !(isWall && scene.isInOpenVerticalDoorPassage?.(player.x, player.y + CHARACTER_BODY_OFFSET_Y)) &&
                 !player.isSittingOn(state.entity.entityId) &&
                 player.isOnFloor(elevationOf(state.entity)),
         );
