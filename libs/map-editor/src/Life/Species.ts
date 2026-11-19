@@ -9,6 +9,7 @@ import {
     STARVE_HUNTS,
 } from "./LifeConstants";
 import { DRY_LAND_PX, WADE_DEPTH_PX } from "./LandPlaces";
+import type { GroupKind } from "./Groups";
 import { DOLPHIN_DEPTH_PX, FISH_DEPTH_PX } from "./WaterBodies";
 
 /** The species the life of a map knows, in the order its rules go through them. */
@@ -50,6 +51,8 @@ export interface Species {
     roomCap: number;
     /** Whether a player may tame one (see Taming): it then lets an avatar come close while it is fed. */
     tamable: boolean;
+    /** How its kind lives together (see Groups); undefined for a species whose animals live each on its own. */
+    group?: GroupKind;
 }
 
 export const SPECIES: Record<SpeciesId, Species> = {
@@ -95,6 +98,7 @@ export const SPECIES: Record<SpeciesId, Species> = {
         starveHunts: undefined,
         roomCap: MAX_ANTELOPES,
         tamable: false,
+        group: "herd",
     },
     lion: {
         id: "lion",
@@ -111,6 +115,7 @@ export const SPECIES: Record<SpeciesId, Species> = {
         starveHunts: STARVE_HUNTS,
         roomCap: MAX_LAND_PREDATORS,
         tamable: true,
+        group: "pride",
     },
     tiger: {
         id: "tiger",
