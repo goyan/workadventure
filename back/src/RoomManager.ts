@@ -253,6 +253,10 @@ const roomManager = {
                             room.reelFishingLine(user);
                             break;
                         }
+                        case "startFishingContestMessage": {
+                            room.startFishingContest(user, message.message.startFishingContestMessage.minutes);
+                            break;
+                        }
                         default: {
                             const _exhaustiveCheck: never = message.message;
                         }

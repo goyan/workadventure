@@ -13,6 +13,7 @@ const EVENT_BITE = 0;
 const EVENT_RETRIEVED = 3;
 const EVENT_REFUSED = 4;
 const EVENT_CAUGHT = 5;
+const EVENT_CONTEST_REFUSED = 6;
 const FEMALE_FISH = 1;
 
 const repositoryOf = (saved: Record<string, string>) =>
@@ -77,12 +78,17 @@ function harness(options: { savedFishing?: Record<string, string>; failing?: boo
         },
     };
     const anglers = new Map<number, { x: number; y: number }>([[1, { x: 150, y: 150 }]]);
+    const players = new Map<number, { key: string; name: string }>([
+        [1, { key: "uuid-hugo", name: "Hugo" }],
+        [2, { key: "uuid-antoine", name: "Antoine" }],
+    ]);
     const fishing = new FishingManager(
         room,
         () => anglers,
         { repository: repositoryOf(savedFishing), roomUrl: "room" },
         () => clock.now,
         () => 0,
+        (userId) => players.get(userId),
     );
     let seed = 7;
     const random = (): number => {
@@ -123,7 +129,29 @@ function harness(options: { savedFishing?: Record<string, string>; failing?: boo
         }
         return false;
     };
-    return { manager, fishing, sent, lifeSent, steps, last, until, anglers, savedFishing, clock, wam, life };
+    /** Casts at the fish of the lake, hooks it and brings it in. */
+    const catchFish = (): void => {
+        fishing.cast(1, 24, 24);
+        if (!until(EVENT_BITE)) throw new Error("no bite");
+        fishing.reel(1);
+        if (!until(EVENT_CAUGHT)) throw new Error("no catch");
+    };
+    return {
+        manager,
+        fishing,
+        sent,
+        lifeSent,
+        steps,
+        last,
+        until,
+        catchFish,
+        anglers,
+        players,
+        savedFishing,
+        clock,
+        wam,
+        life,
+    };
 }
 
 describe("FishingManager", () => {
@@ -174,12 +202,12 @@ describe("FishingManager", () => {
         expect(caught).toMatchObject({ userId: 1, kind: FEMALE_FISH });
         expect(caught?.grams).toBeGreaterThan(0);
         expect(last()).toMatchObject({ lines: [], caughtTotal: 1 });
-        expect(JSON.parse(savedFishing.state)).toEqual({ caughtTotal: 1 });
+        expect(JSON.parse(savedFishing.state)).toMatchObject({ caughtTotal: 1 });
         // Let go: it still swims.
         steps(2);
         expect(lifeSent[lifeSent.length - 1].animals.some((animal) => animal.id === 1)).toBe(true);
         // Nothing left in the water: a player who joins is still told the count.
-        expect(fishing.snapshot()).toEqual({ lines: [], events: [], caughtTotal: 1 });
+        expect(fishing.snapshot()).toMatchObject({ lines: [], events: [], caughtTotal: 1 });
     });
 
     it("brings the line back when the key is pressed without a bite", async () => {
@@ -249,5 +277,130 @@ describe("FishingManager", () => {
         expect(lifeSent.length).toBe(2);
         expect(error).toHaveBeenCalled();
         error.mockRestore();
+    });
+
+    describe("a contest", () => {
+        it("starts for the whole room, with nobody ranked yet", async () => {
+            const { manager, fishing, steps, last } = harness();
+            await manager.restore();
+            steps(1);
+            fishing.startContest(1, 3);
+            expect(last()).toEqual({
+                lines: [],
+                events: [],
+                caughtTotal: 0,
+                contest: { hostName: "Hugo", minutes: 3, remainingMs: 180_000, finished: false, entries: [] },
+            });
+            expect(fishing.snapshot()?.contest).toMatchObject({ hostName: "Hugo", finished: false });
+        });
+
+        it("is refused while one runs, for a length that is not allowed, and before the life was seen", async () => {
+            const { manager, fishing, steps, last } = harness();
+            await manager.restore();
+            const refused = { userId: 2, type: EVENT_CONTEST_REFUSED, grams: 0, kind: 0 };
+            fishing.startContest(2, 3);
+            expect(last()?.events).toEqual([refused]);
+            expect(last()?.contest).toBeUndefined();
+            steps(1);
+            fishing.startContest(2, 4);
+            expect(last()?.events).toEqual([refused]);
+            expect(last()?.contest).toBeUndefined();
+            fishing.startContest(1, 5);
+            fishing.startContest(2, 3);
+            expect(last()?.events).toEqual([refused]);
+            expect(last()?.contest).toMatchObject({ hostName: "Hugo", minutes: 5 });
+        });
+
+        it("is refused to who is not in the room", async () => {
+            const { manager, fishing, steps, last } = harness();
+            await manager.restore();
+            steps(1);
+            fishing.startContest(9, 3);
+            expect(last()?.contest).toBeUndefined();
+        });
+
+        it("ranks who catches a fish, and the same fish counts once", async () => {
+            const { manager, fishing, steps, last, catchFish, sent, clock } = harness();
+            await manager.restore();
+            steps(1);
+            fishing.startContest(1, 10);
+            catchFish();
+            const grams = sent.flatMap((message) => message.events).find((event) => event.type === EVENT_CAUGHT)?.grams;
+            expect(grams).toBeGreaterThan(0);
+            expect(last()?.contest?.entries).toEqual([
+                { name: "Hugo", totalGrams: grams, bestGrams: grams, catches: 1, userId: 1 },
+            ]);
+            expect(last()?.contest?.remainingMs).toBeLessThan(600_000);
+            // The fish is wary for a minute, then bites again: caught again, it adds nothing.
+            clock.now += 61_000;
+            steps(1);
+            catchFish();
+            expect(last()?.caughtTotal).toBe(2);
+            expect(last()?.contest?.entries).toMatchObject([{ name: "Hugo", catches: 1 }]);
+            expect(last()?.contest?.entries[0].totalGrams).toBe(grams);
+        });
+
+        it("ends on time though who started it left, and nothing of it is kept", async () => {
+            const { manager, fishing, steps, last, catchFish, sent, anglers, players } = harness();
+            await manager.restore();
+            steps(1);
+            fishing.startContest(1, 3);
+            catchFish();
+            anglers.delete(1);
+            players.delete(1);
+            const told = sent.length;
+            // Three minutes, two steps a second.
+            steps(360);
+            const end = sent.slice(told).filter((message) => message.contest?.finished === true);
+            expect(end).toHaveLength(1);
+            expect(end[0].contest).toMatchObject({
+                hostName: "Hugo",
+                remainingMs: 0,
+                finished: true,
+                entries: [{ name: "Hugo", catches: 1 }],
+            });
+            expect(fishing.snapshot()?.contest).toBeUndefined();
+            // Another one may start.
+            players.set(2, { key: "uuid-antoine", name: "Antoine" });
+            fishing.startContest(2, 3);
+            expect(last()?.contest).toMatchObject({ hostName: "Antoine", finished: false, entries: [] });
+        });
+
+        it("ends at once when the life of the map is turned off", async () => {
+            const { manager, fishing, steps, sent, life } = harness();
+            await manager.restore();
+            steps(1);
+            fishing.startContest(1, 3);
+            life.enabled = false;
+            manager.mapChanged();
+            expect(sent.filter((message) => message.contest?.finished === true)).toHaveLength(1);
+            expect(fishing.snapshot()).toBeUndefined();
+        });
+    });
+
+    describe("the record of the map", () => {
+        it("is the heaviest catch, told with every message and saved", async () => {
+            const { manager, fishing, steps, last, catchFish, sent, savedFishing, clock } = harness();
+            await manager.restore();
+            steps(1);
+            catchFish();
+            const grams = sent.flatMap((message) => message.events).find((event) => event.type === EVENT_CAUGHT)?.grams;
+            const record = { name: "Hugo", grams, kind: FEMALE_FISH };
+            expect(last()?.record).toMatchObject(record);
+            // The clock of the test went one step further since the catch.
+            expect(clock.now / 1000 - (last()?.record?.atSeconds ?? 0)).toBeLessThan(2);
+            expect(JSON.parse(savedFishing.state)).toMatchObject({ record: { name: "Hugo", grams, female: true } });
+            expect(fishing.snapshot()?.record).toMatchObject(record);
+        });
+
+        it("comes back after a restart", async () => {
+            const record = { name: "Hugo", grams: 2100, female: false, at: 1_700_000_000_000 };
+            const { fishing } = harness({ savedFishing: { state: JSON.stringify({ caughtTotal: 3, record }) } });
+            await fishing.restore();
+            expect(fishing.snapshot()).toMatchObject({
+                caughtTotal: 3,
+                record: { name: "Hugo", grams: 2100, kind: 0, atSeconds: 1_700_000_000 },
+            });
+        });
     });
 });

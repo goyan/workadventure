@@ -719,6 +719,7 @@ message ClientToServerMessage {
     ReleaseAnimalsMessage releaseAnimalsMessage = 63;
     CastFishingLineMessage castFishingLineMessage = 60;
     ReelFishingLineMessage reelFishingLineMessage = 61;
+    StartFishingContestMessage startFishingContestMessage = 64;
     VideoQualityReportMessage videoQualityReportMessage = 50;
     AnalyticsEventReportMessage analyticsEventReportMessage = 52;
     EntityMessage entityMessage = 53;
@@ -832,6 +833,48 @@ message FishingMessage {
   repeated FishingEventMessage events = 2;
   // How many fish were caught (and let go) since the life of the map began.
   int32 caughtTotal = 3;
+  // The fishing contest of the room: while one runs, and once more when it ends (finished).
+  optional FishingContestMessage contest = 4;
+  // The heaviest fish ever caught on the map.
+  optional FishingRecordMessage record = 5;
+}
+
+// A player starts a fishing contest in the room: 3, 5 or 10 minutes. Refused while one runs. Every catch made
+// meanwhile counts for the player who makes it; the server keeps the scores and ends the contest on time.
+message StartFishingContestMessage {
+  uint32 minutes = 1;
+}
+
+// A player of a fishing contest, in the order of the ranking.
+message FishingContestEntryMessage {
+  string name = 1;
+  uint32 totalGrams = 2;
+  // The heaviest catch of the player.
+  uint32 bestGrams = 3;
+  uint32 catches = 4;
+  // The player in the room when they last caught a fish (their id changes when they reconnect); 0 when unknown.
+  int32 userId = 5;
+}
+
+message FishingContestMessage {
+  // The name of the player who started the contest.
+  string hostName = 1;
+  uint32 minutes = 2;
+  // How long the contest still lasts when this is sent: no clock of a browser is trusted.
+  uint32 remainingMs = 3;
+  // The contest just ended: this is its final ranking.
+  bool finished = 4;
+  repeated FishingContestEntryMessage entries = 5;
+}
+
+message FishingRecordMessage {
+  // The name of the player who caught it.
+  string name = 1;
+  uint32 grams = 2;
+  // The kind of the fish, as in AquaticAnimalMessage.
+  uint32 kind = 3;
+  // When, in seconds since 1970.
+  uint32 atSeconds = 4;
 }
 
 // The state of an entity changed (or its initial state, on joining the room). An entity without message has the
@@ -2236,6 +2279,7 @@ message PusherToBackMessage {
     ReleaseAnimalsMessage releaseAnimalsMessage = 47;
     CastFishingLineMessage castFishingLineMessage = 44;
     ReelFishingLineMessage reelFishingLineMessage = 45;
+    StartFishingContestMessage startFishingContestMessage = 48;
   }
 }
 

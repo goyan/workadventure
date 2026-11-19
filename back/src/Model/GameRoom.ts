@@ -351,10 +351,15 @@ export class GameRoom implements BrothersFinder {
         gameRoom.destroyRoomStream.subscribe(() => terrainWater.stop());
         // The life in that water (fish, dolphins): its own pace, nothing on a map whose life is off.
         // The fishing lines in that water: stepped with the life, just before it.
-        const fishing = new FishingManager(gameRoom, gameRoom.groundAnglers.bind(gameRoom), {
-            repository: await getVariablesRepository(),
-            roomUrl,
-        });
+        const fishing = new FishingManager(
+            gameRoom,
+            gameRoom.groundAnglers.bind(gameRoom),
+            { repository: await getVariablesRepository(), roomUrl },
+            undefined,
+            undefined,
+            // A fishing contest knows its players by their uuid: the id of a user changes when they reconnect.
+            gameRoom.fishingPlayer.bind(gameRoom),
+        );
         gameRoom.fishing = fishing;
         await fishing.restore();
         const aquaticLife = new AquaticLifeManager(
@@ -1246,6 +1251,17 @@ export class GameRoom implements BrothersFinder {
     /** A player hooks the fish that bites their line, or brings their line back. */
     public reelFishingLine(user: Pick<User, "id">): void {
         this.fishing?.reel(user.id);
+    }
+
+    /** Who a player of the room is for a fishing contest; undefined once they left. */
+    public fishingPlayer(userId: number): { key: string; name: string } | undefined {
+        const user = this.users.get(userId);
+        return user ? { key: user.uuid, name: user.name } : undefined;
+    }
+
+    /** A player starts a fishing contest in the room. */
+    public startFishingContest(user: Pick<User, "id">, minutes: number): void {
+        this.fishing?.startContest(user.id, minutes);
     }
 
     /** The fishing lines of the room, sent to a user who joins it. */
