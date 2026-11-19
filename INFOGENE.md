@@ -2196,6 +2196,13 @@ marquée par case (`Terrain/TerrainContours.ts`), le long des bords des cases, p
 interrupteur les masque ; au-delà de 30 000 morceaux, seules les lignes marquées sont dessinées). Rien ne change
 dans la carte enregistrée ni sur le fil : un geste envoie toujours des hauteurs par case.
 
+**Altitude de l'avatar.** Sur une carte qui a un relief, la pile des étages sous l'horloge dit l'altitude de
+l'avatar, en mètres (une case d'altitude ≈ 1,10 m, `metresOf`) : la hauteur du relief sous ses pieds quand il est au
+sol (négative dans un creux, positive sur un mont), l'altitude de son palier quand il est en hauteur
+(`Floors/AvatarAltitude.ts`, `avatarAltitudeStore`). La pile s'affiche donc aussi sur une carte sans étage dès qu'elle
+a un relief ; rien ne change sur une carte sans relief, ni dans l'éditeur (la pile y est masquée, l'outil Relief dit
+la hauteur sous le curseur).
+
 **Monts : le relief monte au-dessus du sol.** Une case du relief va de −256 à +256 px (`TERRAIN_MAX_HEIGHT`) :
 négative creusée, positive élevée. Le mode « Élever » de l'outil Relief ajoute de la matière au pinceau, comme
 « Creuser » en enlève, jusqu'à la « profondeur et hauteur maximales » de la carte (le même réglage vaut pour les

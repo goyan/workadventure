@@ -11,6 +11,8 @@ export interface FloorLevelStack {
     current: number;
     /** Manual display ceiling; undefined follows the avatar. */
     viewed?: number;
+    /** The altitude of the avatar over the ground of the map, in pixels of altitude (maps with a relief only). */
+    altitude?: number;
 }
 
 /** The raised floors that have slabs on the map, the floor of the avatar, and whether the map editor is open. */
@@ -18,6 +20,8 @@ export const floorLevelsBuiltStore = writable<readonly number[]>([]);
 export const floorLevelCurrentStore = writable<number>(0);
 export const floorLevelsHiddenStore = writable<boolean>(false);
 export const floorLevelViewedStore = writable<number | undefined>(undefined);
+/** The altitude of the avatar (see avatarAltitude); undefined on a map without relief. */
+export const avatarAltitudeStore = writable<number | undefined>(undefined);
 
 /**
  * A floor named as in the map editor, counted from the ground: "Sol", "Étage 1", "Étage 2"… among the floors that have
@@ -31,17 +35,26 @@ export function floorLevelName(ll: TranslationFunctions, elevation: number, buil
         : ll.mapEditor.mapLayer.floorLevel.level({ height: floorLevelTiles(elevation) });
 }
 
-/** The stack shown under the clock: none on a map without raised floors, nor while the map editor is open. */
+/**
+ * The stack shown under the clock: none on a map without raised floors nor relief, nor while the map editor is open.
+ * On a map with a relief it tells the altitude of the avatar.
+ */
 export function floorLevelStack(
     built: readonly number[],
     current: number,
     hidden: boolean,
     name: (elevation: number) => string,
     viewed?: number,
+    altitude?: number,
 ): FloorLevelStack | undefined {
-    if (hidden || built.length === 0) return undefined;
+    if (hidden || (built.length === 0 && altitude === undefined)) return undefined;
     const levels = [...new Set([0, ...built])].sort((a, b) => b - a);
-    return { levels: levels.map((elevation) => ({ elevation, name: name(elevation) })), current, viewed };
+    return {
+        levels: levels.map((elevation) => ({ elevation, name: name(elevation) })),
+        current,
+        viewed,
+        ...(altitude === undefined ? {} : { altitude }),
+    };
 }
 
 /** Whether the stack pulses: once, when the floor of the avatar changes; never when motion is reduced. */
@@ -50,7 +63,14 @@ export function levelChangePulses(previous: number | undefined, next: number, re
 }
 
 export const floorLevelsStore: Readable<FloorLevelStack | undefined> = derived(
-    [floorLevelsBuiltStore, floorLevelCurrentStore, floorLevelsHiddenStore, LL, floorLevelViewedStore],
-    ([built, current, hidden, ll, viewed]) =>
-        floorLevelStack(built, current, hidden, (elevation) => floorLevelName(ll, elevation, built), viewed),
+    [
+        floorLevelsBuiltStore,
+        floorLevelCurrentStore,
+        floorLevelsHiddenStore,
+        LL,
+        floorLevelViewedStore,
+        avatarAltitudeStore,
+    ],
+    ([built, current, hidden, ll, viewed, altitude]) =>
+        floorLevelStack(built, current, hidden, (elevation) => floorLevelName(ll, elevation, built), viewed, altitude),
 );

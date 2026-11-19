@@ -29,6 +29,17 @@ describe("the stack of the floors", () => {
         expect(floorLevelStack([52], 0, true, name)).toBeUndefined();
     });
 
+    it("is there on a map with a relief and no floor, with the altitude of the avatar", () => {
+        expect(floorLevelStack([], 0, false, name, undefined, 48)).toEqual({
+            levels: [{ elevation: 0, name: "Sol" }],
+            current: 0,
+            viewed: undefined,
+            altitude: 48,
+        });
+        expect(floorLevelStack([], 0, true, name, undefined, 48)).toBeUndefined();
+        expect(floorLevelStack([52], 52, false, name, undefined, 0)?.altitude).toBe(0);
+    });
+
     it("follows the floor of the avatar", () => {
         floorLevelsBuiltStore.set([52]);
         floorLevelsHiddenStore.set(false);
