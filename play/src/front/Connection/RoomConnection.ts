@@ -52,6 +52,7 @@ import type {
     ModifyTerrainMessage,
     TerrainWaterMessage,
     AquaticLifeMessage,
+    FishingMessage,
     UploadEntityMessage,
     UserJoinedMessage as UserJoinedMessageTsProto,
     UserLeftMessage as UserLeftMessageTsProto,
@@ -245,6 +246,9 @@ export class RoomConnection implements RoomConnection {
     public readonly terrainWaterMessageStream = this._terrainWaterMessageStream.asObservable();
     private readonly _aquaticLifeMessageStream = new Subject<AquaticLifeMessage>();
     public readonly aquaticLifeMessageStream = this._aquaticLifeMessageStream.asObservable();
+    /** The fishing lines of the room, whenever one changes. */
+    private readonly _fishingMessageStream = new Subject<FishingMessage>();
+    public readonly fishingMessageStream = this._fishingMessageStream.asObservable();
     private readonly _entityMessageStream = new Subject<EntityMessageTsProto>();
     public readonly entityMessageStream = this._entityMessageStream.asObservable();
     private readonly _editMapCommandMessageStream = new Subject<EditMapCommandMessage>();
@@ -477,6 +481,10 @@ export class RoomConnection implements RoomConnection {
                                     this._aquaticLifeMessageStream.next(subMessage.aquaticLifeMessage);
                                     break;
                                 }
+                                case "fishingMessage": {
+                                    this._fishingMessageStream.next(subMessage.fishingMessage);
+                                    break;
+                                }
                                 case "entityMessage": {
                                     this._entityMessageStream.next(subMessage.entityMessage);
                                     break;
@@ -683,6 +691,7 @@ export class RoomConnection implements RoomConnection {
                         entityStates: roomJoinedMessage.entityState ?? [],
                         terrainWater: roomJoinedMessage.terrainWater,
                         aquaticLife: roomJoinedMessage.aquaticLife,
+                        fishing: roomJoinedMessage.fishing,
                         applications: applications,
                     } as RoomJoinedMessageInterface);
                     this.isRoomJoined = true;
@@ -1187,6 +1196,26 @@ export class RoomConnection implements RoomConnection {
             message: {
                 $case: "setEntityStateMessage",
                 setEntityStateMessage: { switchId, entityIds, key, value },
+            },
+        });
+    }
+
+    /** Casts the fishing line of the player: where the float should land, in map pixels. The server decides. */
+    emitCastFishingLine(x: number, y: number): void {
+        this.send({
+            message: {
+                $case: "castFishingLineMessage",
+                castFishingLineMessage: { x: Math.round(x), y: Math.round(y) },
+            },
+        });
+    }
+
+    /** The key of the fishing rod again: hooks a biting fish, or brings the line back. */
+    emitReelFishingLine(): void {
+        this.send({
+            message: {
+                $case: "reelFishingLineMessage",
+                reelFishingLineMessage: {},
             },
         });
     }
@@ -2404,6 +2433,7 @@ export class RoomConnection implements RoomConnection {
         this._entityStateMessageStream.complete();
         this._terrainWaterMessageStream.complete();
         this._aquaticLifeMessageStream.complete();
+        this._fishingMessageStream.complete();
         this._entityMessageStream.complete();
         this._editMapCommandMessageStream.complete();
         this._playerDetailsUpdatedMessageStream.complete();

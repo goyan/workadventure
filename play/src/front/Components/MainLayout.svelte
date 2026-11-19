@@ -80,6 +80,7 @@
     import WaveCards from "./Wave/WaveCards.svelte";
     import JamLinkRequestCard from "./ListeningZone/JamLinkRequestCard.svelte";
     import NerfHearts from "./Nerf/NerfHearts.svelte";
+    import FishingCards from "./Fishing/FishingCards.svelte";
     import WeatherForecastBanner from "./Weather/WeatherForecastBanner.svelte";
     import CoffeeCards from "./Coffee/CoffeeCards.svelte";
     import HelpPopUpBlocked from "./HelpSettings/HelpPopUpBlocked.svelte";
@@ -475,6 +476,9 @@
 
             <!-- The hearts of the local player while they carry a Nerf, top left under the chat buttons. -->
             <NerfHearts />
+
+            <!-- What just happened at the end of a fishing line (a catch and its weight, a fish that got away). -->
+            <FishingCards />
 
             <!-- Toast stack, below the action bar, with the meeting reminders and the host-side raised-hands dock
                  stacked under it so nothing covers anything else's buttons (the dock self-gates on

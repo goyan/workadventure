@@ -23,6 +23,7 @@ import { localUserStore } from "@wa/front/Connection/LocalUserStore";
 import { wokaMenuStore } from "@wa/front/Stores/WokaMenuStore";
 import { nerfEquippedStore } from "@wa/front/Stores/NerfStore";
 import { torchEquippedStore } from "@wa/front/Stores/TorchStore";
+import { rodEquippedStore } from "@wa/front/Stores/FishingStore";
 import { characterPickerStore, type CharacterPickerCandidate } from "@wa/front/Stores/CharacterPickerStore";
 import { Vehicle, VehicleMode } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { isHumanAvatar } from "@wa/front/Phaser/Entity/MusicHeadphonesEffect";
@@ -71,6 +72,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     private readonly panShortcut: MapPanShortcut;
     private readonly spaceKey: Phaser.Input.Keyboard.Key | undefined;
     private nerfSpacePressed = false;
+    /** The space key went down for the fishing rod: its release casts, and nothing else. */
+    private rodSpacePressed = false;
     private readonly spaceListeners = new Map<() => void, () => void>();
 
     constructor(gameScene: GameScene) {
@@ -332,6 +335,15 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 wokaMenuStore.clear();
             },
         });
+        wokaMenuStore.addAction({
+            actionName: get(rodEquippedStore) ? get(LL).actionbar.rod.unequip() : get(LL).actionbar.rod.equip(),
+            icon: "rod",
+            testId: "avatar-rod",
+            callback: () => {
+                this.gameScene.fishingManager?.toggleEquipment();
+                wokaMenuStore.clear();
+            },
+        });
         // The interaction key lets a companion go only next to it: here, all of them, from anywhere.
         const tamed = this.gameScene.tamedAnimalCount() ?? 0;
         if (tamed > 0) {
@@ -579,9 +591,27 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         }
     }
     public handleKeyDownEvent(event: KeyboardEvent): KeyboardEvent {
-        if (event.code === "Space" && !event.repeat) this.nerfSpacePressed = false;
+        if (event.code === "Space" && !event.repeat) {
+            this.nerfSpacePressed = false;
+            this.rodSpacePressed = false;
+        }
         const hasExecutedCommand = this.gameScene.getMapEditorModeManager()?.handleKeyDownEvent(event);
         if (hasExecutedCommand) {
+            return event;
+        }
+
+        // The fishing rod takes the space key only when nothing else asks for it: a prompt (seat, door, animal) wins.
+        if (
+            event.code === "Space" &&
+            this.gameScene.fishingManager?.isEquipped &&
+            !get(mapEditorModeStore) &&
+            (this.rodSpacePressed || !this.isSpaceAskedFor())
+        ) {
+            if (!isKeyFromInteractiveElement(event) && !event.ctrlKey && !event.altKey && !event.metaKey) {
+                event.preventDefault();
+                this.rodSpacePressed = true;
+                this.gameScene.fishingManager.pressKey(event.repeat);
+            }
             return event;
         }
 
@@ -701,6 +731,10 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             }
             // SPACE
             case " ": {
+                if (this.rodSpacePressed) {
+                    this.gameScene.fishingManager?.releaseKey();
+                    break;
+                }
                 const shotPressed = this.nerfSpacePressed;
                 if (shotPressed || this.gameScene.nerfManager?.isEquipped) break;
                 if (isKeyFromInteractiveElement(event)) break;
@@ -723,6 +757,14 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         return event;
     }
 
+    /** Whether the space key has something to do now: a prompt is shown, or an object next to the avatar is selected. */
+    private isSpaceAskedFor(): boolean {
+        if (this.spaceListeners.size > 0) return true;
+        const activatableManager = this.gameScene.getActivatablesManager();
+        const activatable = activatableManager.getSelectedActivatableObject();
+        return Boolean(activatable?.isActivatable() && activatableManager.isSelectingByDistanceEnabled());
+    }
+
     public handleActivableEntity() {
         const activatableManager = this.gameScene.getActivatablesManager();
         const activatable = activatableManager.getSelectedActivatableObject();
@@ -737,6 +779,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         const previous = this.spaceListeners.get(callback);
         if (previous) this.gameScene.input.keyboard?.removeListener("keyup-SPACE", previous);
         const listener = (): void => {
+            if (this.rodSpacePressed) return;
             if (!this.nerfSpacePressed && !this.gameScene.nerfManager?.isEquipped) callback();
         };
         this.spaceListeners.set(callback, listener);

@@ -4,6 +4,7 @@
     import { LL } from "../../../i18n/i18n-svelte";
     import { formatDuration } from "../../Phaser/Game/Life/LifeDurations";
     import { chartPoints } from "../../Phaser/Game/Life/LifeStats";
+    import { fishingCaughtStore } from "../../Stores/FishingStore";
     import { aquaticLifeStatsStore, lifeRangeStore } from "../../Stores/TerrainEditorStore";
 
     /** The curves are drawn in a box of this size; each has its own scale, with a little room above its largest value. */
@@ -173,6 +174,11 @@
                     <span class="text-right" data-testid="life-minute-{event}">{stats.lastMinute[event]}</span>
                     <span class="text-right" data-testid="life-total-{event}">{totals[event]}</span>
                 {/each}
+                {#if $fishingCaughtStore}
+                    <span>{$LL.mapEditor.life.dashboard.fished()}</span>
+                    <span class="text-right" data-testid="life-minute-fished">{$fishingCaughtStore.lastMinute}</span>
+                    <span class="text-right" data-testid="life-total-fished">{$fishingCaughtStore.total}</span>
+                {/if}
             </div>
             <span class="text-right text-xs text-white/50" data-testid="life-since">
                 {$LL.mapEditor.life.dashboard.since({

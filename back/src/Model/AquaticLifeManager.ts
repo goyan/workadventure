@@ -118,6 +118,26 @@ const STEPS_PER_LAND = 10;
 /** The water of a map that has none: the life of the land goes on without it. */
 const NO_WATER = new LifeWaterGrid(undefined, undefined);
 const NO_BODIES = waterBodiesOf(NO_WATER);
+/** The life of a room as one of its steps is about to find it, for what acts on the animals before it (fishing). */
+export interface LifeAtStep {
+    /** The animals themselves: one told where to swim goes there during the step. */
+    animals: Animal[];
+    bodies: WaterBodies;
+    /** The fastest a fish swims, in map pixels a second. */
+    maxSpeedPxPerS: number;
+    now: number;
+}
+
+/** What follows the life of a room: none of it can stop the life. */
+export interface LifeHooks {
+    beforeStep?: (life: LifeAtStep) => void;
+    /** The life stopped: turned off (`emptied`, it will start over), or its map has no water any more. */
+    stopped?: (emptied: boolean) => void;
+}
+
+/** A tile is 32 map pixels: the speed of the map is set in tiles a second. */
+const TILE_PX = 32;
+
 
 /**
  * Keeps the life in the water of the relief of a room: fish that swim, breed and die, dolphins that hunt them
@@ -172,6 +192,7 @@ export class AquaticLifeManager {
          */
         private readonly masterAt: (userId: number) => { x: number; y: number; ground: boolean } | undefined = () =>
             undefined,
+        private readonly hooks: LifeHooks = {},
     ) {}
 
     /** When each player last asked to tame an animal, to answer them TAME_ASKS_A_SECOND times a second at most. */
@@ -276,6 +297,7 @@ export class AquaticLifeManager {
             this.ranges.clear();
             this.land = undefined;
             this.clearTimer();
+            this.tellStopped(true);
             if (had || this.toldSome) {
                 this.tell();
                 this.save(true);
@@ -313,6 +335,7 @@ export class AquaticLifeManager {
             this.timer.unref?.();
         } else if (!land && !grid) {
             this.clearTimer();
+            this.tellStopped(false);
         }
     }
 
@@ -379,11 +402,22 @@ export class AquaticLifeManager {
         this.since ??= now;
         // The tamed animals go with their masters; those whose master left are free again.
         leadTamed(this.population, this.masterAt, this.land);
+        const lifeSettings = { ...DEFAULT_LIFE_SETTINGS, ...settings, enabled: water };
+        try {
+            this.hooks.beforeStep?.({
+                animals: this.population.animals,
+                bodies: this.bodies,
+                maxSpeedPxPerS: lifeSettings.maxSpeed * TILE_PX,
+                now,
+            });
+        } catch (error) {
+            console.error("What follows the life of the water of the map failed", error);
+        }
         const tally = stepPopulation(
             this.population,
             grid ?? NO_WATER,
             this.bodies,
-            { ...DEFAULT_LIFE_SETTINGS, ...settings, enabled: water },
+            lifeSettings,
             LIFE_STEP_MS,
             now,
             this.random,
@@ -516,6 +550,14 @@ export class AquaticLifeManager {
         this.store.repository
             .saveVariable(this.hashKey(), "state", state)
             .catch((error) => console.error("Could not save the life of the water of the map", error));
+    }
+
+    private tellStopped(emptied: boolean): void {
+        try {
+            this.hooks.stopped?.(emptied);
+        } catch (error) {
+            console.error("What follows the life of the water of the map failed", error);
+        }
     }
 
     private clearTimer(): void {

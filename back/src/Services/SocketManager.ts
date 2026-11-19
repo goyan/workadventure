@@ -249,6 +249,7 @@ export class SocketManager {
             entityState: room.getEntityStates(),
             terrainWater: room.getTerrainWater(),
             aquaticLife: room.getAquaticLife(),
+            fishing: room.getFishing(),
         };
 
         user.write({

@@ -2942,3 +2942,51 @@ Tests de régression avec une caméra Phaser aux densités 1 et 2.
 Recette : entrer dans une zone de cadrage, dézoomer, puis ouvrir et fermer Réglages ;
 vérifier la conservation du zoom, puis sortir de la zone et vérifier le suivi de l’avatar.
 Validation en beta à effectuer après fusion.
+
+## Pêche (canne, lancer, prise remise à l'eau)
+
+Conception et plan dans le dépôt d'infra, `docs/superpowers/{specs,plans}/2026-11-18-peche*`. Lot 1 : pêcher. Le
+concours de pêche est le lot 2, non fait.
+
+**En jeu.** La **canne à pêche** se prend dans la roue de son avatar (« Équiper la canne à pêche ») : troisième outil
+de la main avec le Nerf et la torche, un seul à la fois ; les autres voient la canne. Canne en main, debout ou en
+canoë (pas en nageant) et à l'arrêt : **ESPACE maintenu** remplit une jauge (1 à 8 cases en 1,5 s), **relâché** lance
+droit devant l'avatar. Le bouchon ne se pose que dans une eau du relief où vivent des poissons (8 px et plus, vie de
+la carte activée) ; sinon « Raté ». Un poisson de la carte, libre et à moins de 4 cellules du bouchon, finit par s'y
+intéresser et y nage : on le voit venir. Arrivé dessus, **touche** : le bouchon plonge, un « ! » s'affiche, il reste
+**2 s pour ferrer avec ESPACE**. Trop tard : le poisson repart et ne mord plus à aucune ligne pendant 60 s. Ferré, il
+est ramené en 1 à 4 s selon son poids, puis une carte dit « Poisson rose · 1,24 kg » (vue aussi par les joueurs qui
+ont le pêcheur à l'écran) et le poisson est **remis à l'eau** : la pêche ne retire rien à la vie de la carte. Pendant
+la remontée le poisson reste un poisson de la carte : un dauphin peut le manger. ESPACE sans touche ramène la ligne ;
+marcher, ranger la canne ou quitter la salle aussi.
+
+ESPACE garde ses autres usages : une invite affichée (siège, porte, animal à apprivoiser) ou un objet à activer à
+côté de l'avatar passent avant la canne.
+
+**Les poissons s'écartent des avatars** à moins de trois cases : un bouchon posé au pied de l'avatar n'attire rien,
+il faut lancer loin.
+
+**Poids.** Chaque poisson a un poids adulte entre 0,3 et 3 kg, tiré de son identifiant (le même pour tous, rien
+n'est enregistré ; les gros sont plus rares) ; il pèse 5 % de ce poids à la naissance et l'atteint à la moitié de sa
+vie.
+
+**Qui décide.** Le serveur (`back`, `FishingManager`) : le navigateur n'envoie que « lancer ici » et « ramener », et
+dessine ce qu'on lui annonce. Refusés par le serveur : un lancer à plus de 9 cases de l'avatar, hors de l'eau à
+poissons, depuis un palier, moins d'une seconde après le précédent, ou quand la carte a déjà 20 lignes à l'eau. Une
+ligne par joueur. Les lignes ne survivent pas à un redémarrage du serveur ; le nombre de prises depuis le début de
+la vie de la carte, si (Redis `fishing:<salle>`).
+
+**Outil Vie.** Le tableau de bord gagne la ligne « Pêchés (remis à l'eau) » : depuis le début (compté par le
+serveur) et dernière minute (ce que ce navigateur a vu).
+
+**Technique.** Règles pures dans `libs/map-editor/src/Life/Fishing.ts` (`castLine`, `reelLine`, `stepFishing`) ; le
+moteur de vie n'est pas modifié : juste avant chaque pas, la pêche donne au poisson mené sa destination (le bouchon),
+et `stepPopulation` l'y fait nager. `AquaticLifeManager` reçoit deux crochets (`beforeStep`, `stopped`). Protocole :
+`CastFishingLineMessage`, `ReelFishingLineMessage` (navigateur → serveur), `FishingMessage` (toutes les lignes de la
+salle et ce qui vient d'arriver, envoyé seulement quand une ligne change, et à l'entrée dans la salle). Navigateur :
+`play/src/front/Phaser/Game/Fishing/`, `Stores/FishingStore.ts`, `Components/Fishing/FishingCards.svelte`, variable
+de joueur `_rodEquipped`. `play`, `back` et `map-storage` se déploient ensemble.
+
+**Limites.** Pas de son. Pas d'animation du lancer (la ligne apparaît posée). Le poisson ramené reste dessiné au
+bouchon jusqu'à la prise. Eau du relief au sol seulement (ni piscine de la carte, ni palier). La canne est un trait,
+dessinée par-dessus tous les avatars.

@@ -24,6 +24,18 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
             jailed: "En prison — sortez à pied pour revenir",
         },
     },
+    rod: {
+        equip: "Équiper la canne à pêche",
+        unequip: "Ranger la canne à pêche",
+        help: "ESPACE maintenu : lancer devant soi. ESPACE quand le bouchon plonge : ferrer. ESPACE sinon : ramener la ligne.",
+        pinkFish: "Poisson rose",
+        blueFish: "Poisson bleu",
+        caught: "{fish} · {weight} kg",
+        caughtBy: "{name} : {fish} · {weight} kg",
+        missed: "Trop tard : le poisson est reparti.",
+        lost: "Un dauphin a mangé votre prise.",
+        refused: "Raté. Lancez dans une eau où vivent des poissons, à huit cases au plus.",
+    },
     torch: {
         equip: "Équiper la torche",
         unequip: "Ranger la torche",

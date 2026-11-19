@@ -37,6 +37,7 @@ import type {
     EntityStateMessage,
     TerrainWaterMessage,
     AquaticLifeMessage,
+    FishingMessage,
     JoinRoomMessage,
     MapBbbData,
     MapDetailsData,
@@ -119,6 +120,7 @@ import { EntityStateManager } from "./EntityStateManager";
 import { SwitchTriggerEvaluator } from "./SwitchTriggerEvaluator";
 import { TerrainWaterManager } from "./TerrainWaterManager";
 import { AquaticLifeManager } from "./AquaticLifeManager";
+import { FishingManager } from "./FishingManager";
 import { rainTimelineService } from "./Services/RainTimelineService";
 import { KaraokeLeaderboardManager } from "./AreaPropertyEvents/KaraokeLeaderboardManager";
 import { MaxUsersInAreaManager } from "./AreaPropertyEvents/MaxUsersInAreaManager";
@@ -163,6 +165,7 @@ export class GameRoom implements BrothersFinder {
     private aquaticLife: AquaticLifeManager | undefined;
     /** The size of the map in cells of the relief; undefined until its Tiled map is read. */
     private mapCells: { width: number; height: number } | undefined;
+    private fishing: FishingManager | undefined;
     private karaokeLeaderboard: KaraokeLeaderboardManager | undefined;
     private readonly wamManager?: WamManager;
     private versionNumber = 1;
@@ -347,6 +350,13 @@ export class GameRoom implements BrothersFinder {
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => terrainWater.stop());
         // The life in that water (fish, dolphins): its own pace, nothing on a map whose life is off.
+        // The fishing lines in that water: stepped with the life, just before it.
+        const fishing = new FishingManager(gameRoom, gameRoom.groundAnglers.bind(gameRoom), {
+            repository: await getVariablesRepository(),
+            roomUrl,
+        });
+        gameRoom.fishing = fishing;
+        await fishing.restore();
         const aquaticLife = new AquaticLifeManager(
             gameRoom,
             terrainWater,
@@ -359,6 +369,10 @@ export class GameRoom implements BrothersFinder {
             gameRoom.mapSizeInCells.bind(gameRoom),
             // The animals a player tamed follow them.
             gameRoom.masterPosition.bind(gameRoom),
+            {
+                beforeStep: (life) => fishing.beforeStep(life),
+                stopped: (emptied) => fishing.lifeStopped(emptied),
+            },
         );
         gameRoom.aquaticLife = aquaticLife;
         await aquaticLife.restore();
@@ -1211,6 +1225,32 @@ export class GameRoom implements BrothersFinder {
     /** A player lets go one of the animals they tamed, or all of them. */
     public releaseAnimals(user: Pick<User, "id">, animalId?: number): void {
         this.aquaticLife?.release(user.id, animalId);
+    }
+
+    /** Where the players who may fish stand, by user id: those on the ground, where the water is. */
+    public groundAnglers(): Map<number, { x: number; y: number }> {
+        const anglers = new Map<number, { x: number; y: number }>();
+        for (const user of this.users.values()) {
+            if (!sameFloor(user.getFloorZ(), 0)) continue;
+            const { x, y } = user.getPosition();
+            anglers.set(user.id, { x, y });
+        }
+        return anglers;
+    }
+
+    /** A player casts their fishing line at a point of the map. */
+    public castFishingLine(user: Pick<User, "id">, x: number, y: number): void {
+        this.fishing?.cast(user.id, x, y);
+    }
+
+    /** A player hooks the fish that bites their line, or brings their line back. */
+    public reelFishingLine(user: Pick<User, "id">): void {
+        this.fishing?.reel(user.id);
+    }
+
+    /** The fishing lines of the room, sent to a user who joins it. */
+    public getFishing(): FishingMessage | undefined {
+        return this.fishing?.snapshot();
     }
 
     /** The animals of the water of the relief, sent to a user who joins the room. */

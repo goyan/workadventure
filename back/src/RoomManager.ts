@@ -244,6 +244,15 @@ const roomManager = {
                             socketManager.handleSetEntityStateEvent(room, user, message.message.setEntityStateMessage);
                             break;
                         }
+                        case "castFishingLineMessage": {
+                            const { x, y } = message.message.castFishingLineMessage;
+                            room.castFishingLine(user, x, y);
+                            break;
+                        }
+                        case "reelFishingLineMessage": {
+                            room.reelFishingLine(user);
+                            break;
+                        }
                         default: {
                             const _exhaustiveCheck: never = message.message;
                         }

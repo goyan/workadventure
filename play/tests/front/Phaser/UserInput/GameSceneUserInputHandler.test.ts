@@ -24,6 +24,9 @@ import { Swimwear } from "../../../../src/front/Phaser/Entity/Swimwear";
 import { LL, setLocale } from "../../../../src/i18n/i18n-svelte";
 import { nerfEquippedStore } from "../../../../src/front/Stores/NerfStore";
 import type { NerfManager } from "../../../../src/front/Phaser/Game/Nerf/NerfManager";
+import type { FishingManager } from "../../../../src/front/Phaser/Game/Fishing/FishingManager";
+import type { ActivatableInterface } from "../../../../src/front/Phaser/Game/ActivatableInterface";
+import { rodEquippedStore } from "../../../../src/front/Stores/FishingStore";
 import { torchEquippedStore } from "../../../../src/front/Stores/TorchStore";
 import type { TorchManager } from "../../../../src/front/Phaser/Game/Torch/TorchManager";
 import { findSeatAtPoint } from "../../../../src/front/Phaser/Player/Seat";
@@ -350,6 +353,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 "avatar-profile",
                 "avatar-nerf",
                 "avatar-torch",
+                "avatar-rod",
                 "avatar-action-dance",
                 "avatar-action-coffee",
                 "avatar-change-outfit",
@@ -372,6 +376,25 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 ?.callback();
             expect(setSwimwear).toHaveBeenCalledWith(Swimwear.TwoPiece);
             expect(get(avatarActionsOpenStore)).toBe(false);
+        });
+
+        it.each([false, true])("toggles the fishing rod from the own-avatar wheel when equipped is %s", (equipped) => {
+            rodEquippedStore.set(equipped);
+            const fishingManager = mock<FishingManager>();
+            fishingManager.toggleEquipment.mockImplementation(() => rodEquippedStore.update((value) => !value));
+            Object.defineProperty(scene, "fishingManager", { configurable: true, value: fishingManager });
+            const self = Object.assign(Object.create(Player.prototype) as Player, {
+                playerName: "Me",
+                sprites: new Map([["body1", mock<Phaser.GameObjects.Sprite>()]]),
+            });
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            const action = get(wokaMenuStore)?.actions.find(({ testId }) => testId === "avatar-rod");
+            expect(action?.actionName).toBe(equipped ? get(LL).actionbar.rod.unequip() : get(LL).actionbar.rod.equip());
+            expect(action?.icon).toBe("rod");
+            action?.callback();
+            expect(fishingManager.toggleEquipment.mock.calls).toHaveLength(1);
+            expect(get(wokaMenuStore)).toBeUndefined();
+            rodEquippedStore.set(false);
         });
 
         it.each([false, true])("toggles the Nerf from the own-avatar wheel when equipped is %s", (equipped) => {
@@ -543,6 +566,76 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
         await Promise.resolve();
 
         expect(warning).toHaveBeenCalledWith(error);
+    });
+
+    describe("the space key and the fishing rod", () => {
+        const space = (type: "keydown" | "keyup", repeat = false): KeyboardEvent =>
+            new KeyboardEvent(type, { code: "Space", key: " ", repeat, cancelable: true });
+        let fishingManager: ReturnType<typeof mock<FishingManager>>;
+
+        beforeEach(() => {
+            fishingManager = mock<FishingManager>();
+            Object.defineProperty(fishingManager, "isEquipped", { configurable: true, value: true });
+            Object.defineProperty(scene, "fishingManager", { configurable: true, value: fishingManager });
+            // What the key does without the rod: the texts of the player.
+            Object.assign(scene.CurrentPlayer, { handlePressSpacePlayerTextCallback: vi.fn() });
+        });
+
+        afterEach(() => {
+            // clearAllMocks keeps the values a test made a mock return.
+            activatablesManager.getSelectedActivatableObject.mockReset();
+            activatablesManager.isSelectingByDistanceEnabled.mockReset();
+        });
+
+        it("charges the cast while the key is held and casts when it goes up", () => {
+            const down = handler.handleKeyDownEvent(space("keydown"));
+            expect(down.defaultPrevented).toBe(true);
+            handler.handleKeyDownEvent(space("keydown", true));
+            expect(fishingManager.pressKey.mock.calls).toEqual([[false], [true]]);
+            handler.handleKeyUpEvent(space("keyup"));
+            expect(fishingManager.releaseKey.mock.calls).toHaveLength(1);
+        });
+
+        it("leaves the key to a prompt that is shown", () => {
+            const prompt = vi.fn();
+            handler.addSpaceEventListener(prompt);
+            handler.handleKeyDownEvent(space("keydown"));
+            handler.handleKeyUpEvent(space("keyup"));
+            expect(fishingManager.pressKey.mock.calls).toHaveLength(0);
+            expect(fishingManager.releaseKey.mock.calls).toHaveLength(0);
+            handler.removeSpaceEventListener(prompt);
+            handler.handleKeyDownEvent(space("keydown"));
+            expect(fishingManager.pressKey.mock.calls).toHaveLength(1);
+        });
+
+        it("leaves the key to an object the avatar stands next to", () => {
+            activatablesManager.getSelectedActivatableObject.mockReturnValue(
+                mock<ActivatableInterface>({ isActivatable: () => true }),
+            );
+            activatablesManager.isSelectingByDistanceEnabled.mockReturnValue(true);
+            handler.handleKeyDownEvent(space("keydown"));
+            expect(fishingManager.pressKey.mock.calls).toHaveLength(0);
+        });
+
+        it("still casts when a prompt came up while the key was held", () => {
+            handler.handleKeyDownEvent(space("keydown"));
+            handler.addSpaceEventListener(vi.fn());
+            handler.handleKeyDownEvent(space("keydown", true));
+            handler.handleKeyUpEvent(space("keyup"));
+            expect(fishingManager.pressKey.mock.calls).toHaveLength(2);
+            expect(fishingManager.releaseKey.mock.calls).toHaveLength(1);
+        });
+
+        it("does nothing with the rod in the map editor, nor with the rod put away", () => {
+            mapEditorModeStore.set(true);
+            handler.handleKeyDownEvent(space("keydown"));
+            mapEditorModeStore.set(false);
+            Object.defineProperty(fishingManager, "isEquipped", { configurable: true, value: false });
+            handler.handleKeyDownEvent(space("keydown"));
+            handler.handleKeyUpEvent(space("keyup"));
+            expect(fishingManager.pressKey.mock.calls).toHaveLength(0);
+            expect(fishingManager.releaseKey.mock.calls).toHaveLength(0);
+        });
     });
 
     describe("camera panning", () => {

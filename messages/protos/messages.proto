@@ -717,6 +717,8 @@ message ClientToServerMessage {
     ReportSwitchPresenceMessage reportSwitchPresenceMessage = 56;
     TameAnimalMessage tameAnimalMessage = 62;
     ReleaseAnimalsMessage releaseAnimalsMessage = 63;
+    CastFishingLineMessage castFishingLineMessage = 60;
+    ReelFishingLineMessage reelFishingLineMessage = 61;
     VideoQualityReportMessage videoQualityReportMessage = 50;
     AnalyticsEventReportMessage analyticsEventReportMessage = 52;
     EntityMessage entityMessage = 53;
@@ -788,6 +790,48 @@ message SetEntityStateMessage {
 // animals nor the walls of the map). All of them at each report, none once nothing is sensed any more.
 message ReportSwitchPresenceMessage {
   repeated string switchIds = 1;
+}
+
+// A player casts their fishing line: where the float lands, in map pixels. The server decides whether it does
+// (reach, water where fish live, one cast a second, lines of the room), and everything that follows.
+message CastFishingLineMessage {
+  int32 x = 1;
+  int32 y = 2;
+}
+
+// The key of the fishing rod again: hooks a biting fish, brings back a line that has none.
+message ReelFishingLineMessage {
+}
+
+// A fishing line in the water.
+message FishingLineMessage {
+  int32 userId = 1;
+  // Where the float is, in map pixels.
+  int32 x = 2;
+  int32 y = 3;
+  // 0 waiting, 1 a fish bites (to hook within two seconds), 2 the fish is brought in.
+  int32 state = 4;
+  // The animal (see AquaticAnimalMessage.id) that comes to the float, bites or is brought in; 0 when none.
+  int32 fishId = 5;
+}
+
+// What just happened to the line of a player.
+message FishingEventMessage {
+  int32 userId = 1;
+  // 0 a bite, 1 the fish got away (hooked too late), 2 the fish was eaten or died on its way in, 3 the line came
+  // back, 4 the cast was refused, 5 a catch (let go at once).
+  int32 type = 2;
+  // A catch: its weight in grams, and its kind as in AquaticAnimalMessage.
+  int32 grams = 3;
+  int32 kind = 4;
+}
+
+// All the fishing lines of the room, sent whenever one changes, with what just happened.
+message FishingMessage {
+  repeated FishingLineMessage lines = 1;
+  repeated FishingEventMessage events = 2;
+  // How many fish were caught (and let go) since the life of the map began.
+  int32 caughtTotal = 3;
 }
 
 // The state of an entity changed (or its initial state, on joining the room). An entity without message has the
@@ -1545,6 +1589,7 @@ message SubMessage {
     EntityStateMessage entityStateMessage = 34;
     TerrainWaterMessage terrainWaterMessage = 35;
     AquaticLifeMessage aquaticLifeMessage = 36;
+    FishingMessage fishingMessage = 40;
   }
 }
 
@@ -1647,6 +1692,8 @@ message RoomJoinedMessage {
   optional TerrainWaterMessage terrainWater = 22;
   // The animals of the water of the relief, for a player who joins the room. Absent on a map without any.
   optional AquaticLifeMessage aquaticLife = 23;
+  // The fishing lines in the water of the relief, for a player who joins the room. Absent when there is none.
+  optional FishingMessage fishing = 30;
 }
 
 message WebRtcStartMessage {
@@ -2187,6 +2234,8 @@ message PusherToBackMessage {
     ReportSwitchPresenceMessage reportSwitchPresenceMessage = 38;
     TameAnimalMessage tameAnimalMessage = 46;
     ReleaseAnimalsMessage releaseAnimalsMessage = 47;
+    CastFishingLineMessage castFishingLineMessage = 44;
+    ReelFishingLineMessage reelFishingLineMessage = 45;
   }
 }
 
@@ -2209,6 +2258,7 @@ message SubToPusherRoomMessage {
     EntityStateMessage entityStateMessage = 10;
     TerrainWaterMessage terrainWaterMessage = 11;
     AquaticLifeMessage aquaticLifeMessage = 12;
+    FishingMessage fishingMessage = 20;
   }
 }
 

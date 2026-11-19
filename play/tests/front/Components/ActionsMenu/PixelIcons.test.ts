@@ -26,6 +26,7 @@ describe("PixelIcons", () => {
                 "onePiece",
                 "outfit",
                 "paw",
+                "rod",
                 "shorts",
                 "skateboard",
                 "swimwear",
