@@ -229,6 +229,17 @@ export interface WaterStepInput {
     flowSteps?: number;
 }
 
+/** What a splash did, in pixels of water over one cell. */
+export interface WaterSplash {
+    /** The water taken from the disc. */
+    takenPx: number;
+    /** The water brought to the disc. */
+    addedPx: number;
+    /** What did not fit over the ring (the water at its highest level) and is gone. */
+    lostPx: number;
+    moved: boolean;
+}
+
 /** What came in and went out during one step, in pixels of water over one cell (CELL_LITRES_PER_PX litres each). */
 export interface WaterTally {
     rainPx: number;
@@ -370,6 +381,45 @@ export class WaterGrid {
         let wet = 0;
         for (let index = 0; index < this.depth.length; index++) if (this.depth[index] > DRY_PX) wet++;
         return wet;
+    }
+
+    /**
+     * An impact at a cell: empties the disc around it, then spreads that water and `addedPxPerCell` more for each cell
+     * of the disc evenly over the ring of cells around the disc (never behind a wall). Water that does not fit under
+     * the highest level is lost. It does not go through `pour`: its parcels would run downhill, back into the disc.
+     */
+    public splash(
+        cellX: number,
+        cellY: number,
+        discCells: number,
+        ringCells: number,
+        addedPxPerCell: number,
+    ): WaterSplash {
+        const none: WaterSplash = { takenPx: 0, addedPx: 0, lostPx: 0, moved: false };
+        const centre = this.indexOf(cellX, cellY);
+        if (centre === undefined || this.blocked[centre]) return none;
+        const disc = this.discAround(centre, discCells);
+        const inDisc = new Set(disc);
+        const ring = this.discAround(centre, ringCells).filter((index) => !inDisc.has(index));
+        if (ring.length === 0) return none;
+        let takenPx = 0;
+        for (const index of disc) {
+            takenPx += this.depth[index];
+            this.depth[index] = 0;
+        }
+        const addedPx = addedPxPerCell * disc.length;
+        const share = (takenPx + addedPx) / ring.length;
+        let landed = 0;
+        for (const index of ring) {
+            const room = Math.max(
+                0,
+                this.spill[index] + MAX_WATER_SURFACE_PX - (this.ground[index] + this.depth[index]),
+            );
+            const stays = Math.min(share, room);
+            this.depth[index] += stays;
+            landed += stays;
+        }
+        return { takenPx, addedPx, lostPx: takenPx + addedPx - landed, moved: true };
     }
 
     /** One step: what comes in and goes out, then the water moves towards the lower neighbours. */
