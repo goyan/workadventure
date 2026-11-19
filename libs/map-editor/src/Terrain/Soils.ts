@@ -38,3 +38,20 @@ export function soilDrinks(code: number, hollow: boolean): number {
     if (!name) return hollow ? 0 : 1;
     return hollow ? DRINKS[name].hollow : DRINKS[name].flat;
 }
+
+/** Water lying on clay from which it is mud, in pixels. */
+export const MUD_WATER_PX = 0.5;
+/** How much of one's speed is left on sand, and in the mud of a wet clay. */
+export const SAND_PACE = 0.8;
+export const MUD_PACE = 0.55;
+
+/**
+ * How fast one walks on a soil, as a share of the usual speed: slower on sand, much slower in the mud of a clay the
+ * water lies on. `waterPx` is the water over the cell. Every other soil, and a cell not painted: the usual speed.
+ */
+export function soilPace(code: number, waterPx: number): number {
+    const name = soilName(code);
+    if (name === "sand") return SAND_PACE;
+    if (name === "clay" && waterPx >= MUD_WATER_PX) return MUD_PACE;
+    return 1;
+}

@@ -2205,7 +2205,9 @@ chaque sol boit une part de l'« absorption du sol » de la carte (`soilDrinks`)
 terre et prairie comme le sol d'origine, sable et gravier cinq fois plus et **même dans un creux** : un lac tient
 sur du rocher ou de l'argile, une mare creusée dans le sable se vide. Une case non peinte se comporte exactement
 comme avant (le sol plat boit, un creux garde son eau). Le sol ne compte que là où le serveur simule l'eau (le
-relief, les sources, et leur marge). Lots suivants, pas faits : marche (boue, sable), humidité du sol et herbe qui
+relief, les sources, et leur marge). **Marche** : le sable ralentit (80 % de la vitesse) et une argile sur laquelle de l'eau repose est de la boue
+(55 %), pour l'avatar au sol, à pied ou en véhicule, pas à la nage (`soilPace`, `Terrain/GroundPace.ts`) ; chaque
+navigateur le calcule pour son avatar, rien sur le fil. Lot suivant, pas fait : humidité du sol et herbe qui
 pousse seule. `play`, `back` et `map-storage` à déployer ensemble.
 
 **Altitude de l'avatar.** Sur une carte qui a un relief, la pile des étages sous l'horloge dit l'altitude de

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { soilStrokeChanges } from "../src/Terrain/TerrainBrush";
 import { cellKey, soilAt, withHeights, withSoils } from "../src/Terrain/TerrainGrid";
-import { SOILS, soilCode, soilDrinks, soilName } from "../src/Terrain/Soils";
+import { MUD_PACE, SAND_PACE, SOILS, soilCode, soilDrinks, soilName, soilPace } from "../src/Terrain/Soils";
 import { gridBoundsOf, WaterGrid } from "../src/Terrain/WaterGrid";
 import type { WaterStepInput } from "../src/Terrain/WaterGrid";
 import { TerrainData } from "../src/types";
@@ -94,5 +94,19 @@ describe("the water on the soils", () => {
         // One step of absorption alone, larger than what the water moves in a step.
         grid.step({ ...nothing, absorptionPx: 0.5 });
         expect(rockBefore - grid.depthAt(3, 0)).toBeLessThan(earthBefore - grid.depthAt(-3, 0));
+    });
+});
+
+describe("walking on the soils", () => {
+    it("slows one down on sand, and in the mud of a clay the water lies on", () => {
+        expect(soilPace(0, 0)).toBe(1);
+        expect(soilPace(soilCode("earth"), 5)).toBe(1);
+        expect(soilPace(soilCode("rock"), 5)).toBe(1);
+        expect(soilPace(soilCode("sand"), 0)).toBe(SAND_PACE);
+        expect(soilPace(soilCode("clay"), 0)).toBe(1);
+        expect(soilPace(soilCode("clay"), 0.4)).toBe(1);
+        expect(soilPace(soilCode("clay"), 2)).toBe(MUD_PACE);
+        expect(MUD_PACE).toBeLessThan(SAND_PACE);
+        expect(SAND_PACE).toBeLessThan(1);
     });
 });
