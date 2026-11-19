@@ -131,6 +131,11 @@ export class UsernameDisplay {
         this.raisedHandDisplay.show(raised, forceClose);
     }
 
+    /** In the discussion of the local player: the name tag gets a ring of the accent colour (see retro-theme.css). */
+    public setInDiscussion(inDiscussion: boolean): void {
+        this.element.classList.toggle("in-discussion", inDiscussion);
+    }
+
     public setListeningMusic(listening: boolean): void {
         this.musicDisplay.show(listening);
     }

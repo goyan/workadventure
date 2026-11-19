@@ -61,6 +61,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         percent: "{percent} %",
     },
     participantListPlaceholder: "Liste des participants",
+    inDiscussion: "Dans la discussion",
     participantSendMessage: "Écrire un message",
     participantInviteUser: "Inviter un utilisateur",
     participantExitFullscreen: "Quitter le mode plein écran",

@@ -612,6 +612,11 @@ export abstract class Character extends Container implements OutlineableInterfac
         });
     }
 
+    /** Marks the name of a player who is in the discussion of the local player. */
+    public setInDiscussion(inDiscussion: boolean): void {
+        this.usernameDisplay?.setInDiscussion(inDiscussion);
+    }
+
     public toggleTalk(show = true): void {
         this.usernameDisplay?.setTalking(show, this.getAvailabilityStatus() === AvailabilityStatus.SPEAKER);
     }

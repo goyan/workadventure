@@ -51,4 +51,25 @@ describe("username hover", () => {
         expect(onHover).not.toHaveBeenCalled();
         expect(layer.children).toHaveLength(0);
     });
+
+    it("marks the name of a player in the discussion of the local player, and unmarks it when they leave", () => {
+        const layer = document.createElement("div");
+        document.body.append(layer);
+        const scene = Object.assign(mock<GameScene>(), {
+            events: mock<GameScene["events"]>(),
+            game: { events: mock<GameScene["game"]["events"]>() },
+            usernameDomLayer: mock<UsernameDomLayer>({
+                addUsername: (node) => layer.append(node),
+                getAncestorScale: () => 1,
+            }),
+        });
+        const display = new UsernameDisplay(scene, 100, 200, "Bob", undefined, vi.fn());
+        const node = layer.querySelector<HTMLDivElement>(".username-display");
+        expect(node?.classList.contains("in-discussion")).toBe(false);
+        display.setInDiscussion(true);
+        expect(node?.classList.contains("in-discussion")).toBe(true);
+        display.setInDiscussion(false);
+        expect(node?.classList.contains("in-discussion")).toBe(false);
+        display.destroy();
+    });
 });
