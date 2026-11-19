@@ -2194,6 +2194,12 @@ source ou un puits posé hors carte ne compte plus. Tant que la taille de la car
 pas l'être), rien n'est coupé. `map-storage` ne connaît pas la taille de la carte : un navigateur modifié peut
 encore y écrire un relief hors carte, qui restera à sec.
 
+**Les zones aussi s'arrêtent aux bords de la carte.** Objets, sols, murs, dalles et escaliers y étaient déjà
+refusés ; l'outil Zones ne l'était pas. Une zone ne se trace, ne se déplace et ne s'étire plus au-delà des bords : le
+coin ou la zone revient sur le bord (`Components/MapEditor/AreaMapBounds.ts`, `clampAreaCorner`,
+`clampAreaTopLeft`). La zone d'un palier se lit sur le sol sous elle (elle est dessinée son altitude plus au nord).
+Une zone déjà posée hors carte ne bouge pas toute seule : elle revient dans la carte dès qu'on la déplace.
+
 **Sources et puits.** N'importe quel objet devient une source ou un puits depuis ses propriétés. Le débit se règle
 par un nombre, deux boutons − et + (pas de la taille de la valeur : 1, 2… 10, 20… 100, 200…) et une unité au choix
 (m³/h, L/s, L/min, m³/s ; le choix est gardé dans le navigateur, le débit est enregistré en litres par minute). L'eau

@@ -31,6 +31,7 @@ import { LL } from "../../../../../i18n/i18n-svelte";
 import { MAP_LAYER_TILE_SIZE } from "../MapLayer/MapLayerCatalog";
 import { modelFromPlacedPrefabs } from "../MapLayer/MapLayerOperations";
 import { snapRectToFloors } from "../MapLayer/MapLayerAreaSnap";
+import { clampAreaCorner } from "../../../Components/MapEditor/AreaMapBounds";
 import { MapEditorTool } from "./MapEditorTool";
 import { modals } from "@wa-modals";
 
@@ -528,7 +529,12 @@ export class AreaEditorTool extends MapEditorTool {
      */
     private snapToCorner(worldX: number, worldY: number, level = this.drawingLevel): { x: number; y: number } {
         const size = MAP_LAYER_TILE_SIZE;
-        return { x: Math.round(worldX / size) * size, y: Math.round((worldY + level) / size) * size - level };
+        // Never past the edges of the map: no avatar walks there.
+        return clampAreaCorner(
+            { x: Math.round(worldX / size) * size, y: Math.round((worldY + level) / size) * size - level },
+            level,
+            { width: this.scene.Map.widthInPixels, height: this.scene.Map.heightInPixels },
+        );
     }
 
     /** The floor an area drawn from this point goes on: the level chosen in the panel, on "auto" the one drawn there. */
