@@ -259,7 +259,7 @@ const roomManager = {
                         }
                         case "launchCatastropheMessage": {
                             const { kind, x, y, radiusTiles } = message.message.launchCatastropheMessage;
-                            room.launchCatastrophe(user, kind, x, y, radiusTiles);
+                            room.launchCatastrophe(kind, x, y, radiusTiles);
                             break;
                         }
                         default: {
