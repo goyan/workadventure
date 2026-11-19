@@ -12,6 +12,18 @@ const terrainOf = (cells: [number, number, number][]): TerrainData =>
 const hollow: [number, number, number][] = [];
 for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) hollow.push([x, y, -32]);
 const lake = terrainOf(hollow);
+// A hollow of 30 × 30 cells, wide enough for the crater and the ring of a meteor.
+const widePool: [number, number, number][] = [];
+for (let y = 0; y < 30; y++) for (let x = 0; x < 30; x++) widePool.push([x, y, -32]);
+const wideLake = terrainOf(widePool);
+/** Fills every cell of the grid with 8 px of water. */
+const fillWithWater = (manager: TerrainWaterManager): void => {
+    const grid = manager.getGrid();
+    if (!grid) throw new Error("no grid");
+    const bytes = new Uint8Array(grid.writeDepths().length);
+    for (let index = 0; index < bytes.length; index += 2) bytes[index] = 64;
+    grid.readDepths(bytes);
+};
 const prefabRef = { collectionName: "eau", id: "x" };
 const sourceAt = (x: number, y: number, flow: number) => ({
     x: x * 16 + 8,
@@ -123,6 +135,33 @@ describe("TerrainWaterManager", () => {
         manager.mapChanged();
         manager.stop();
         expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("a strike moves the water, counts what it brings and tells the room at once", () => {
+        const { manager, sent } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        fillWithWater(manager);
+        manager.strike(240, 240);
+        expect(manager.getGrid()?.depthAt(15, 15)).toBe(0);
+        expect(sent).toHaveLength(1);
+        expect(sent[0].stats?.sources).toBeGreaterThan(0);
+    });
+
+    it("a strike on a map without water does nothing", () => {
+        const { manager, sent } = createHarness({ wam: wamWith(undefined) });
+        manager.mapChanged();
+        manager.strike(24, 24);
+        expect(sent).toHaveLength(0);
+    });
+
+    it("a strike reads the grid of the moment", () => {
+        const { manager, wam, sent } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        fillWithWater(manager);
+        wam.terrain = undefined;
+        manager.mapChanged();
+        manager.strike(240, 240);
+        expect(sent).toHaveLength(0);
     });
 
     it("pours a source at its foot and tells the room once a second, the whole state first", () => {

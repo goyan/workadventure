@@ -258,7 +258,8 @@ const roomManager = {
                             break;
                         }
                         case "launchCatastropheMessage": {
-                            // Provisional: the next task wires the launch to the room
+                            const { kind, x, y } = message.message.launchCatastropheMessage;
+                            room.launchCatastrophe(user, kind, x, y);
                             break;
                         }
                         default: {

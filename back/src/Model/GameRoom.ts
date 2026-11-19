@@ -37,6 +37,7 @@ import type {
     EntityStateMessage,
     TerrainWaterMessage,
     AquaticLifeMessage,
+    CatastropheKind,
     FishingMessage,
     JoinRoomMessage,
     MapBbbData,
@@ -120,6 +121,7 @@ import { EntityStateManager } from "./EntityStateManager";
 import { SwitchTriggerEvaluator } from "./SwitchTriggerEvaluator";
 import { TerrainWaterManager } from "./TerrainWaterManager";
 import { AquaticLifeManager } from "./AquaticLifeManager";
+import { CatastropheManager } from "./CatastropheManager";
 import { anglersOf, FishingManager } from "./FishingManager";
 import { rainTimelineService } from "./Services/RainTimelineService";
 import { KaraokeLeaderboardManager } from "./AreaPropertyEvents/KaraokeLeaderboardManager";
@@ -166,6 +168,7 @@ export class GameRoom implements BrothersFinder {
     /** The size of the map in cells of the relief; undefined until its Tiled map is read. */
     private mapCells: { width: number; height: number } | undefined;
     private fishing: FishingManager | undefined;
+    private catastrophes: CatastropheManager | undefined;
     private karaokeLeaderboard: KaraokeLeaderboardManager | undefined;
     private readonly wamManager?: WamManager;
     private versionNumber = 1;
@@ -349,6 +352,16 @@ export class GameRoom implements BrothersFinder {
             gameRoom.mapSizeInCells.bind(gameRoom),
         );
         gameRoom.terrainWater = terrainWater;
+
+        // The meteors that fall on that water; the map size is read in cells of the relief.
+        const catastrophes = new CatastropheManager(
+            gameRoom,
+            gameRoom.mapSizeInPixels.bind(gameRoom),
+            terrainWater.strike.bind(terrainWater),
+        );
+        gameRoom.catastrophes = catastrophes;
+        // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
+        gameRoom.destroyRoomStream.subscribe(() => catastrophes.stop());
         await terrainWater.restore();
         terrainWater.start();
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
@@ -1191,6 +1204,12 @@ export class GameRoom implements BrothersFinder {
         return this.mapCells;
     }
 
+    /** The size of the map in pixels, for the meteors; undefined until it is read. */
+    public mapSizeInPixels(): { width: number; height: number } | undefined {
+        const cells = this.mapCells;
+        return cells && { width: cells.width * TERRAIN_CELL, height: cells.height * TERRAIN_CELL };
+    }
+
     /** Reads the size of the map in its Tiled map; a map that cannot be read has no life on its land. */
     private readMapSize(onRead: () => void): void {
         this.getMap()
@@ -1243,6 +1262,11 @@ export class GameRoom implements BrothersFinder {
     /** Where the players of the room cast their fishing line from, by user id: on the ground or over it. */
     public anglers(): Map<number, { x: number; y: number }> {
         return anglersOf(this.users.values());
+    }
+
+    /** A player launches a catastrophe (a meteor) at a point of the map. */
+    public launchCatastrophe(user: Pick<User, "id">, kind: CatastropheKind, x: number, y: number): void {
+        this.catastrophes?.launch(user.id, kind, x, y);
     }
 
     /** A player casts their fishing line at a point of the map. */

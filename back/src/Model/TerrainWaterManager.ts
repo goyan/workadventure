@@ -5,9 +5,13 @@ import {
     DEFAULT_WATER_SETTINGS,
     gridBoundsOf,
     LITRES_PER_M3,
+    METEOR_ADDED_PX,
+    METEOR_DISC_CELLS,
+    METEOR_RING_CELLS,
     rainRateAt,
     ratesOf,
     stepInputOf,
+    TERRAIN_CELL,
     WATER_MESSAGE_MS,
     WATER_STEP_MS,
     WaterGrid,
@@ -189,6 +193,29 @@ export class TerrainWaterManager {
         }
         if (this.steps % STEPS_PER_MESSAGE === 0) this.tell(grid);
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
+    }
+
+    /**
+     * A meteor lands at a point of the map (pixels): the water of its crater is thrown out over the ring around it.
+     * The room is told at once. Nothing on a map without water.
+     */
+    public strike(x: number, y: number): void {
+        const grid = this.grid;
+        if (!grid) return;
+        const splash = grid.splash(
+            Math.floor(x / TERRAIN_CELL),
+            Math.floor(y / TERRAIN_CELL),
+            METEOR_DISC_CELLS,
+            METEOR_RING_CELLS,
+            METEOR_ADDED_PX,
+        );
+        if (!splash.moved) return;
+        this.sums.sourcesPx += splash.addedPx;
+        this.sums.lostPx += splash.lostPx;
+        this.moving = true;
+        this.version++;
+        this.changedSinceSave = true;
+        this.tell(grid);
     }
 
     /** The grid of the water, for what lives in it. Undefined on a map without water. */
