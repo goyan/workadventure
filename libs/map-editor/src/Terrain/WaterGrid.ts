@@ -19,11 +19,67 @@ const MAX_GRID_SIDE = 600;
 export const MAX_WATER_SURFACE_PX = 18;
 
 /**
- * The highest level the surface of the water may reach over a cell: MAX_WATER_SURFACE_PX over the ground of the map,
- * and as much over the ground of a cell raised above it (a plateau keeps its water as the plain does).
+ * For each cell, the level its water spills at: the lowest level a water standing there must reach to run away to
+ * the edge of the grid, over the relief alone (the walls are not looked at). It is the level of the rim of the
+ * hollow the cell is in (the ground of the map for a hollow dug in the plain, the rim of a crater on a mount), and
+ * the ground of the cell itself where water cannot stay (the plain, a slope, the top of a mount). Never under the
+ * ground of the map: what is dug under it is a hollow whatever is around.
  */
-function highestSurface(groundPx: number): number {
-    return MAX_WATER_SURFACE_PX + Math.max(0, groundPx);
+export function spillLevels(ground: Float32Array, width: number, height: number): Float32Array {
+    const size = width * height;
+    const spill = new Float32Array(size);
+    const done = new Uint8Array(size);
+    // A binary heap of cells, the lowest level first: the levels rise from the edge of the grid inwards.
+    const heap = new Int32Array(size);
+    let count = 0;
+    const push = (index: number, level: number): void => {
+        spill[index] = level;
+        done[index] = 1;
+        let at = count++;
+        while (at > 0) {
+            const parent = (at - 1) >> 1;
+            if (spill[heap[parent]] <= level) break;
+            heap[at] = heap[parent];
+            at = parent;
+        }
+        heap[at] = index;
+    };
+    const pop = (): number => {
+        const top = heap[0];
+        const last = heap[--count];
+        let at = 0;
+        for (;;) {
+            let child = 2 * at + 1;
+            if (child >= count) break;
+            if (child + 1 < count && spill[heap[child + 1]] < spill[heap[child]]) child++;
+            if (spill[heap[child]] >= spill[last]) break;
+            heap[at] = heap[child];
+            at = child;
+        }
+        heap[at] = last;
+        return top;
+    };
+    for (let row = 0; row < height; row++) {
+        for (let column = 0; column < width; column++) {
+            if (row === 0 || column === 0 || row === height - 1 || column === width - 1) {
+                const index = row * width + column;
+                push(index, Math.max(0, ground[index]));
+            }
+        }
+    }
+    while (count > 0) {
+        const index = pop();
+        const column = index % width;
+        const level = spill[index];
+        const visit = (next: number): void => {
+            if (!done[next]) push(next, Math.max(level, ground[next]));
+        };
+        if (column > 0) visit(index - 1);
+        if (column + 1 < width) visit(index + 1);
+        if (index >= width) visit(index - width);
+        if (index + width < size) visit(index + width);
+    }
+    return spill;
 }
 /** Under this depth a cell is dry: the water left by rounding does not keep the grid moving. */
 const DRY_PX = 0.01;
@@ -197,6 +253,8 @@ export interface WaterTally {
 export class WaterGrid {
     public readonly bounds: WaterGridBounds;
     private readonly ground: Float32Array;
+    /** The level the water of each cell spills at (see spillLevels): a cell under it is in a hollow. */
+    private readonly spill: Float32Array;
     private readonly blocked: Uint8Array;
     /**
      * For each cell, the sides the water cannot cross (a wall between two cells, or a blocked neighbour): a bit for
@@ -246,6 +304,7 @@ export class WaterGrid {
                 if (blocked?.(cellX, cellY)) this.blocked[index] = 1;
             }
         }
+        this.spill = spillLevels(this.ground, this.bounds.width, this.bounds.height);
         this.closed = new Uint8Array(size);
         const { width, height } = this.bounds;
         for (let row = 0; row < height; row++) {
@@ -319,7 +378,8 @@ export class WaterGrid {
         if (rain > 0 || evaporation > 0 || absorption > 0) {
             for (let index = 0; index < depth.length; index++) {
                 if (this.blocked[index]) continue;
-                const dug = this.ground[index] < 0;
+                // In a hollow: dug under the ground of the map, or under the rim of a crater on a mount.
+                const dug = this.ground[index] < this.spill[index];
                 if (rain > 0 && dug) {
                     depth[index] += rain;
                     tally.rainPx += rain;
@@ -493,7 +553,10 @@ export class WaterGrid {
                 index = next;
             }
             if (left <= 0) continue;
-            const stays = Math.min(left, Math.max(0, highestSurface(ground[index]) - (ground[index] + depth[index])));
+            const stays = Math.min(
+                left,
+                Math.max(0, this.spill[index] + MAX_WATER_SURFACE_PX - (ground[index] + depth[index])),
+            );
             depth[index] += stays;
             kept += stays;
         }
@@ -867,7 +930,7 @@ export class WaterGrid {
             // Water runs from a cell to the next one only so fast: where more comes than can run away (a hard rain
             // on a wide hollow), it would pile up into a dome, its surface sloping everywhere. What stands over the
             // highest level is lost instead, as when it is poured: the surface stays level and under that level.
-            const over = ground[index] + next[index] - highestSurface(ground[index]);
+            const over = ground[index] + next[index] - (this.spill[index] + MAX_WATER_SURFACE_PX);
             if (over > 0 && next[index] > 0) {
                 const taken = Math.min(over, next[index]);
                 next[index] -= taken;

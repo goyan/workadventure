@@ -766,3 +766,38 @@ describe("water on a relief raised over the ground", () => {
         expect(grid.depthAt(3, 0)).toBe(0);
     });
 });
+
+describe("a lake on a mount", () => {
+    // A mount 9 cells wide, 64 px high, with a crater 3 cells wide dug 32 px into its top.
+    const cells: [number, number, number][] = [];
+    for (let y = -4; y <= 4; y++) {
+        for (let x = -4; x <= 4; x++) cells.push([x, y, Math.max(Math.abs(x), Math.abs(y)) <= 1 ? 32 : 64]);
+    }
+    const mount = terrainOf(cells);
+    const gridOf = (): WaterGrid => new WaterGrid(mount, gridBoundsOf(mount, []));
+
+    it("fills the crater up to its rim, deeper than a flood of the ground ever is", () => {
+        const grid = gridOf();
+        run(grid, 3000, { ...nothing, flows: [{ cellX: 0, cellY: 0, px: 20 }] });
+        expect(grid.depthAt(0, 0)).toBeGreaterThan(31);
+        expect(grid.depthAt(1, 1)).toBeGreaterThan(31);
+        // Over its rim the water runs down the mount.
+        expect(grid.depthAt(0, 0)).toBeLessThanOrEqual(32 + MAX_WATER_SURFACE_PX + 0.01);
+    });
+
+    it("rains into the crater as into a hollow of the ground, not on the top of the mount", () => {
+        const grid = gridOf();
+        const tally = grid.step({ ...nothing, rainPx: 2 });
+        expect(grid.depthAt(0, 0)).toBeCloseTo(2);
+        expect(grid.depthAt(3, 0)).toBe(0);
+        expect(tally.rainPx).toBeCloseTo(18);
+    });
+
+    it("keeps the water of the crater: the ground drinks only what lies where it cannot stay", () => {
+        const grid = gridOf();
+        grid.step({ ...nothing, rainPx: 10 });
+        const tally = grid.step({ ...nothing, absorptionPx: 1 });
+        expect(tally.absorptionPx).toBe(0);
+        expect(grid.depthAt(0, 0)).toBeCloseTo(10);
+    });
+});
