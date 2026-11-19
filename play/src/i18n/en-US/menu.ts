@@ -2,6 +2,10 @@ import type { BaseTranslation } from "../i18n-types";
 
 const menu: BaseTranslation = {
     title: "Menu",
+    narrow: "Halve the panel, on the right, to see the game",
+    widen: "Bring the panel back to its width",
+    foldNav: "Fold the list of the menus",
+    unfoldNav: "Unfold the list of the menus",
     icon: {
         open: {
             menu: "Open menu",
@@ -253,7 +257,7 @@ const menu: BaseTranslation = {
                 low: "Optional effects off: no weather, clouds, sky shadows, indirect lighting or tile animations.",
                 medium: "Light weather and simple shadows; clouds, detailed silhouettes and light bounces off.",
                 high: "Clouds, realistic silhouettes, soft light edges and one light bounce.",
-                ultra: "All rendering effects, realistic attenuation and maximum rain, shadow length, soft edges and two light bounces.",
+                ultra: "All rendering effects: dark night, realistic attenuation, thin soft edges, two light bounces, maximum rain and shadow length.",
                 custom: "A detail differs from the presets. Your individual settings are kept.",
             },
             metrics: "{fps} FPS · CPU frame: {cpu} ms · {budget}% of the 60 FPS budget",

@@ -3,6 +3,10 @@ import type { Translation } from "../i18n-types";
 
 const menu: DeepPartial<Translation["menu"]> = {
     title: "Menu",
+    narrow: "Réduire le panneau de moitié, à droite, pour voir le jeu",
+    widen: "Rétablir la largeur du panneau",
+    foldNav: "Replier la liste des menus",
+    unfoldNav: "Déplier la liste des menus",
     icon: {
         open: {
             menu: "Ouvrir le menu",
@@ -268,7 +272,7 @@ const menu: DeepPartial<Translation["menu"]> = {
                 low: "Effets optionnels coupés : météo, nuages, ombres du ciel, éclairage indirect et animations de tuiles.",
                 medium: "Météo légère et ombres simples ; nuages, silhouettes détaillées et rebonds coupés.",
                 high: "Nuages, silhouettes réalistes, bords de lumière adoucis et un rebond.",
-                ultra: "Tous les effets de rendu, atténuation réaliste et maximum de pluie, longueur d’ombres, bords adoucis et deux rebonds.",
+                ultra: "Tous les effets de rendu : nuit sombre, atténuation réaliste, bords de lumière fins, deux rebonds légers, maximum de pluie et de longueur d’ombres.",
                 custom: "Un détail diffère des préréglages. Tes réglages individuels sont conservés.",
             },
             metrics: "{fps} FPS · Image CPU : {cpu} ms · {budget}% du budget à 60 FPS",

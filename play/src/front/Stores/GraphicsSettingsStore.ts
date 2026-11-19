@@ -44,7 +44,13 @@ export interface GraphicsProfile {
     lights: Readonly<Record<string, LightSettingValue>>;
 }
 
-/** Optional rendering effects only: choosing a quality never changes the map weather or the day/night clock. */
+/**
+ * Optional rendering effects only: choosing a quality never changes the map weather or the day/night clock.
+ *
+ * The lights of Ultra are the settings a player tuned on the team map and shared as a code (2026-11-19): a dark
+ * night, no room-wide ambience, thin soft edges, a light bounce. The other qualities are derived from it: the same
+ * doses, fewer effects turned on, a shorter reach for the sky.
+ */
 export function graphicsProfile(quality: GraphicsPreset): GraphicsProfile {
     const low = quality === GraphicsQuality.Low;
     const high = quality === GraphicsQuality.High || quality === GraphicsQuality.Ultra;
@@ -71,12 +77,21 @@ export function graphicsProfile(quality: GraphicsPreset): GraphicsProfile {
             nightRealistic: high,
             lightRealFalloff: high,
             ambienceOn: !low,
-            ambienceStrength: ultra ? 1 : 0.25,
-            ambienceFullShare: ultra ? 0.05 : 0.3,
+            nightDarkness: 0.75,
+            noAreaHighlight: true,
+            moonPhaseCurve: "realistic",
+            sunIntensityMin: 0.05,
+            moonIntensityMin: 0.15,
+            sunColorMin: 0.35,
+            moonColorMin: 0.2,
+            sunShadowMin: 0.75,
+            moonShadowMin: 0.75,
+            ambienceStrength: 0,
+            ambienceFullShare: 1,
             lightSoftEdgeOn: high,
-            lightSoftEdge: ultra ? 32 : 8,
+            lightSoftEdge: 2,
             lightBounceOn: high,
-            lightBounce: ultra ? 1 : 0.4,
+            lightBounce: 0.3,
             lightSecondBounceOn: ultra,
             sunIntensityMax: ultra ? 2 : 1,
             moonIntensityMax: ultra ? 2 : 1,
