@@ -7,6 +7,7 @@ import type {
     PositionMessage,
     SayMessage,
     TerrainWaterMessage,
+    MeadowMessage,
     AquaticLifeMessage,
     FishingMessage,
 } from "@workadventure/messages";
@@ -93,6 +94,8 @@ export interface RoomJoinedMessageInterface {
     /** The water of the relief of the map (its whole state) as the server computes it; absent on a dry map. */
     terrainWater?: TerrainWaterMessage;
     aquaticLife?: AquaticLifeMessage;
+    /** The meadow of the map (its whole state) as the server computes it; absent where nothing ever grew. */
+    meadow?: MeadowMessage;
     /** The fishing lines of the room when it was joined; absent when nobody ever fished there. */
     fishing?: FishingMessage;
     characterTextures: WokaTextureDescriptionInterface[];

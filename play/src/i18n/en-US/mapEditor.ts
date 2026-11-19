@@ -666,6 +666,7 @@ const mapEditor: BaseTranslation = {
             'Paint a soil on the map. Rock and clay keep the water; sand and gravel drink it, in a hollow too; earth and meadow drink a flood like the ground of the map. "Ground of the map" wipes the paint.',
         soilErase: "Ground of the map (wipe)",
         hoverSoil: "Soil under the pointer: {soil}",
+        hoverMeadow: "Moisture of the soil: {moisture}% · grass: {grass}%",
         soils: {
             earth: "Earth",
             meadow: "Meadow",

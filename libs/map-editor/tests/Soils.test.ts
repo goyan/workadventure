@@ -106,6 +106,9 @@ describe("walking on the soils", () => {
         expect(soilPace(soilCode("clay"), 0)).toBe(1);
         expect(soilPace(soilCode("clay"), 0.4)).toBe(1);
         expect(soilPace(soilCode("clay"), 2)).toBe(MUD_PACE);
+        // A clay wet through by the rain is mud too, without any water lying on it.
+        expect(soilPace(soilCode("clay"), 0, 0.5)).toBe(1);
+        expect(soilPace(soilCode("clay"), 0, 0.7)).toBe(MUD_PACE);
         expect(MUD_PACE).toBeLessThan(SAND_PACE);
         expect(SAND_PACE).toBeLessThan(1);
     });

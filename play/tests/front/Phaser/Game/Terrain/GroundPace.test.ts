@@ -23,5 +23,8 @@ describe("groundPace", () => {
         expect(groundPace(water(0), 168, 88, 0)).toBe(SAND_PACE);
         expect(groundPace(water(0), 328, 88, 0)).toBe(1);
         expect(groundPace(water(3), 328, 88, 0)).toBe(MUD_PACE);
+        // A clay wet through by the rain, without water lying on it.
+        expect(groundPace(water(0), 328, 88, 0, () => 0.8)).toBe(MUD_PACE);
+        expect(groundPace(water(0), 328, 88, 0, () => 0.3)).toBe(1);
     });
 });

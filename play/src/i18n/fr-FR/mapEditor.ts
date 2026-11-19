@@ -677,6 +677,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             "Peignez un sol sur la carte. Rocher et argile gardent l'eau ; sable et gravier la boivent, même dans un creux ; terre et prairie boivent une crue comme le sol d'origine. « Sol d'origine » efface la peinture.",
         soilErase: "Sol d'origine (effacer)",
         hoverSoil: "Sol sous le curseur : {soil}",
+        hoverMeadow: "Humidité du sol : {moisture} % · herbe : {grass} %",
         soils: {
             earth: "Terre",
             meadow: "Prairie",

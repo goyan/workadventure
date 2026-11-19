@@ -18,6 +18,9 @@ export const terrainHoverHeightStore = writable<number | undefined>(undefined);
 /** The soil of the ground under the pointer of the relief tool, as kept in the map (0: not painted); undefined off the map. */
 export const terrainHoverSoilStore = writable<number | undefined>(undefined);
 
+/** The moisture of the soil and the grass under the pointer of the relief tool (0 to 1 each); undefined off the map. */
+export const terrainHoverMeadowStore = writable<{ moisture: number; grass: number } | undefined>(undefined);
+
 /** Whether the relief tool draws the contour lines of the relief (for the one who edits only). */
 export const terrainContoursStore = writable(true);
 

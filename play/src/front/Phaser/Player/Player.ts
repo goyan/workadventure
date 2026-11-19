@@ -598,7 +598,14 @@ export class Player extends Character {
         const water = this.getFloorZ() < 2 ? this.scene?.getTerrainWater?.() : undefined;
         if (!water) return 1;
         const feet = this.getFeet();
-        return groundPace(water, feet.x, feet.y, this.scene.time.now);
+        const meadow = this.scene.getMeadow?.();
+        return groundPace(
+            water,
+            feet.x,
+            feet.y,
+            this.scene.time.now,
+            meadow ? (x, y) => meadow.moistureAt(x, y) : undefined,
+        );
     }
 
     /** The local player knows it swims: near an edge its body center may be out of the water while it still swims. */

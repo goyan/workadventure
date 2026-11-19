@@ -17,6 +17,7 @@
         terrainBrushStore,
         terrainContoursStore,
         terrainHoverHeightStore,
+        terrainHoverMeadowStore,
         terrainHoverSoilStore,
     } from "../../Stores/TerrainEditorStore";
     import { SOIL_TINTS } from "../../Phaser/Game/Terrain/TerrainShading";
@@ -170,6 +171,14 @@
                 {$LL.mapEditor.terrain.hoverSoil({ soil: $LL.mapEditor.terrain.soils[hovered]() })}
             </p>
         {/if}
+    {/if}
+    {#if $terrainHoverMeadowStore}
+        <p class="m-0 text-sm text-white" role="status" data-testid="terrain-hover-meadow">
+            {$LL.mapEditor.terrain.hoverMeadow({
+                moisture: Math.round($terrainHoverMeadowStore.moisture * 100),
+                grass: Math.round($terrainHoverMeadowStore.grass * 100),
+            })}
+        </p>
     {/if}
     <div data-testid="terrain-contours">
         <InputSwitch
