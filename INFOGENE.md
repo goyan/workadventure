@@ -2201,7 +2201,9 @@ l'avatar, en mètres (une case d'altitude ≈ 1,10 m, `metresOf`) : la hauteur d
 sol (négative dans un creux, positive sur un mont), l'altitude de son palier quand il est en hauteur
 (`Floors/AvatarAltitude.ts`, `avatarAltitudeStore`). La pile s'affiche donc aussi sur une carte sans étage dès qu'elle
 a un relief ; rien ne change sur une carte sans relief, ni dans l'éditeur (la pile y est masquée, l'outil Relief dit
-la hauteur sous le curseur).
+la hauteur sous le curseur). À côté, après un viseur, **l'altitude du sol sous le curseur** (`pointerAltitude`,
+`pointerAltitudeStore`) : la hauteur du relief à cet endroit, même sous un étage ; rien quand le curseur est hors du
+jeu (sur un panneau, hors de la fenêtre).
 
 **Monts : le relief monte au-dessus du sol.** Une case du relief va de −256 à +256 px (`TERRAIN_MAX_HEIGHT`) :
 négative creusée, positive élevée. Le mode « Élever » de l'outil Relief ajoute de la matière au pinceau, comme

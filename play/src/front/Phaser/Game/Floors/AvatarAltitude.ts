@@ -17,6 +17,18 @@ export function avatarAltitude(
     return heightAt(terrain, Math.floor(feetX / TERRAIN_CELL), Math.floor(feetY / TERRAIN_CELL));
 }
 
+/**
+ * The altitude of the ground of the map under the pointer, in pixels of altitude: the height of the relief there,
+ * whatever floor is built over it. Undefined on a map without relief, and while the pointer is off the game.
+ */
+export function pointerAltitude(
+    terrain: TerrainData | undefined,
+    pointer: { x: number; y: number } | undefined,
+): number | undefined {
+    if (!pointer || !terrain || Object.keys(terrain.chunks).length === 0) return undefined;
+    return heightAt(terrain, Math.floor(pointer.x / TERRAIN_CELL), Math.floor(pointer.y / TERRAIN_CELL));
+}
+
 /** An altitude as shown to the players: in metres, signed, to the decimetre ("+1,6 m"). */
 export function altitudeLabel(altitudePx: number, locale?: string): string {
     const metres = Math.round(metresOf(altitudePx) * 10) / 10;
