@@ -899,6 +899,8 @@ export const TERRAIN_CELL = 16;
 export const TERRAIN_CHUNK = 16;
 /** The lowest height a cell can have, in pixels of altitude: 8 tiles under the ground. */
 export const TERRAIN_MIN_HEIGHT = -256;
+/** The largest number a soil is kept as in a map (see Terrain/Soils.ts). */
+export const TERRAIN_MAX_SOIL = 6;
 /** The highest height a cell can have, in pixels of altitude: 8 tiles over the ground. */
 export const TERRAIN_MAX_HEIGHT = 256;
 /**
@@ -918,6 +920,17 @@ export const TerrainData = z.object({
         z.array(z.number().int().min(TERRAIN_MIN_HEIGHT).max(TERRAIN_MAX_HEIGHT)).length(TERRAIN_CHUNK * TERRAIN_CHUNK),
     ),
     maxDepthTiles: z.number().int().min(1).max(MAX_DEPTH_TILES).optional(),
+    /**
+     * The soil of the cells that were painted (see Terrain/Soils.ts), by the same chunks as the heights: 0 for a cell
+     * not painted. Absent from a map where no soil was painted.
+     */
+    soil: z
+        .record(
+            z.string().regex(/^-?\d{1,6},-?\d{1,6}$/),
+            z.array(z.number().int().min(0).max(TERRAIN_MAX_SOIL)).length(TERRAIN_CHUNK * TERRAIN_CHUNK),
+        )
+        .optional()
+        .catch(undefined),
 });
 export type TerrainData = z.infer<typeof TerrainData>;
 

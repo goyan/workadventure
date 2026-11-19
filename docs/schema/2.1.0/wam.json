@@ -2199,6 +2199,22 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 8
+            },
+            "soil": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 6
+                },
+                "minItems": 256,
+                "maxItems": 256
+              },
+              "propertyNames": {
+                "pattern": "^-?\\d{1,6},-?\\d{1,6}$"
+              }
             }
           },
           "required": [

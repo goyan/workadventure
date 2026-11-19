@@ -1,4 +1,4 @@
-import { cellOf, heightAt, TERRAIN_CELL, TERRAIN_CHUNK } from "@workadventure/map-editor";
+import { cellOf, heightAt, SOILS, soilAt, TERRAIN_CELL, TERRAIN_CHUNK } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 import type { GameScene } from "../GameScene";
 import { createBlockSurface } from "../Weather/BlockSurface";
@@ -10,6 +10,7 @@ import {
     deepWaterAlpha,
     groundAlpha,
     raisedAlpha,
+    SOIL_TINTS,
     SHALLOW_WATER,
     SHORE_PX,
     SHORE_WATER,
@@ -32,6 +33,8 @@ interface ReliefLayers extends BlockCanvasArea {
     ground: Uint8Array;
     /** The height of the cells raised over the ground. */
     raised: Uint8Array;
+    /** For each soil painted on the canvas (by its number in the map): 1 on its cells. */
+    soils: Map<number, Uint8Array>;
     shaded: Uint8Array;
     lit: Uint8Array;
     /** Whether any cell of the canvas is dug or sloped: nothing to paint otherwise. */
@@ -100,6 +103,11 @@ export class TerrainView {
             this.shore = new Uint8Array(size);
         }
         const { everywhere, wet, shore } = this;
+        // The soils first: the shades of the relief and the water are drawn over them.
+        for (const [code, cells] of relief.soils) {
+            const tint = SOIL_TINTS[SOILS[code - 1]];
+            if (tint) this.surface.paintField(canvas, cells, everywhere, NO_SHIFT, tint.color, () => tint.alpha);
+        }
         if (relief.dug) {
             this.surface.paintField(canvas, relief.ground, everywhere, NO_SHIFT, 0x000000, (level) =>
                 groundAlpha(-level),
@@ -174,12 +182,32 @@ export class TerrainView {
             rows: canvas.rows,
             ground: new Uint8Array(size),
             raised: new Uint8Array(size),
+            soils: new Map(),
             shaded: new Uint8Array(size),
             lit: new Uint8Array(size),
             dug: false,
         };
         const left = canvas.x / TERRAIN_CELL;
         const top = canvas.y / TERRAIN_CELL;
+        for (const key of Object.keys(terrain?.soil ?? {})) {
+            const chunk = cellOf(key);
+            const firstColumn = Math.max(0, chunk.x * TERRAIN_CHUNK - left);
+            const lastColumn = Math.min(canvas.columns, (chunk.x + 1) * TERRAIN_CHUNK - left);
+            const firstRow = Math.max(0, chunk.y * TERRAIN_CHUNK - top);
+            const lastRow = Math.min(canvas.rows, (chunk.y + 1) * TERRAIN_CHUNK - top);
+            for (let row = firstRow; row < lastRow; row++) {
+                for (let column = firstColumn; column < lastColumn; column++) {
+                    const code = soilAt(terrain, left + column, top + row);
+                    if (code === 0) continue;
+                    let cells = layers.soils.get(code);
+                    if (!cells) {
+                        cells = new Uint8Array(size);
+                        layers.soils.set(code, cells);
+                    }
+                    cells[row * canvas.columns + column] = 1;
+                }
+            }
+        }
         for (const key of Object.keys(terrain?.chunks ?? {})) {
             const chunk = cellOf(key);
             // The cells of the chunk and one more around: a slope shows on the rim of a hollow too.

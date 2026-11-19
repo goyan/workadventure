@@ -1,7 +1,8 @@
 import { TERRAIN_CHUNK } from "../types";
 import type { TerrainData } from "../types";
 import { CELL_AREA_M2, LITRES_PER_M3, metresOf } from "./Scale";
-import { cellInMap, cellKey, cellOf, heightAt, reliefCells } from "./TerrainGrid";
+import { soilDrinks } from "./Soils";
+import { cellInMap, cellKey, cellOf, heightAt, reliefCells, soilAt } from "./TerrainGrid";
 import type { MapCells } from "./TerrainGrid";
 
 /** Litres over one cell of the relief under one pixel of water. */
@@ -255,6 +256,8 @@ export class WaterGrid {
     private readonly ground: Float32Array;
     /** The level the water of each cell spills at (see spillLevels): a cell under it is in a hollow. */
     private readonly spill: Float32Array;
+    /** The share of the absorption of the map the soil of each cell drinks (see soilDrinks). */
+    private readonly drinks: Float32Array;
     private readonly blocked: Uint8Array;
     /**
      * For each cell, the sides the water cannot cross (a wall between two cells, or a blocked neighbour): a bit for
@@ -305,6 +308,16 @@ export class WaterGrid {
             }
         }
         this.spill = spillLevels(this.ground, this.bounds.width, this.bounds.height);
+        this.drinks = new Float32Array(size);
+        for (let row = 0; row < this.bounds.height; row++) {
+            for (let column = 0; column < this.bounds.width; column++) {
+                const index = row * this.bounds.width + column;
+                this.drinks[index] = soilDrinks(
+                    soilAt(terrain, this.bounds.x + column, this.bounds.y + row),
+                    this.ground[index] < this.spill[index],
+                );
+            }
+        }
         this.closed = new Uint8Array(size);
         const { width, height } = this.bounds;
         for (let row = 0; row < height; row++) {
@@ -392,8 +405,8 @@ export class WaterGrid {
                     tally.evaporationPx += taken;
                     tally.moved = true;
                 }
-                if (absorption > 0 && !dug && depth[index] > 0) {
-                    const taken = Math.min(depth[index], absorption);
+                if (absorption > 0 && this.drinks[index] > 0 && depth[index] > 0) {
+                    const taken = Math.min(depth[index], absorption * this.drinks[index]);
                     depth[index] -= taken;
                     tally.absorptionPx += taken;
                     tally.moved = true;

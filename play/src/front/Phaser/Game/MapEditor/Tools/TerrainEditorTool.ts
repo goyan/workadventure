@@ -1,4 +1,4 @@
-import { cellInMap, DEFAULT_MAX_DEPTH_TILES, heightAt, TERRAIN_CELL, TILE_PX } from "@workadventure/map-editor";
+import { cellInMap, DEFAULT_MAX_DEPTH_TILES, heightAt, soilAt, TERRAIN_CELL, TILE_PX } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 import type { EditMapCommandMessage } from "@workadventure/messages";
 import * as Phaser from "phaser";
@@ -9,13 +9,14 @@ import {
     terrainBrushStore,
     terrainContoursStore,
     terrainHoverHeightStore,
+    terrainHoverSoilStore,
 } from "../../../../Stores/TerrainEditorStore";
 import { MapDragPointerCapture } from "../../../UserInput/MapDragPointerCapture";
 import { DEPTH_MAP_EDITOR_AREAS_INDEX } from "../../DepthIndexes";
 import type { GameMapFrontWrapper } from "../../GameMap/GameMapFrontWrapper";
 import type { GameScene } from "../../GameScene";
 import { contourSegments } from "../../Terrain/TerrainContours";
-import { brushSettingsOf, commitStroke } from "../../Terrain/TerrainStroke";
+import { brushSettingsOf, commitSoilStroke, commitStroke } from "../../Terrain/TerrainStroke";
 import { WaterMarksView } from "../../Terrain/WaterMarksView";
 import { executeUpdateTerrain } from "../Commands/Facades";
 import { UpdateTerrainFrontCommand } from "../Commands/Terrain/UpdateTerrainFrontCommand";
@@ -65,16 +66,32 @@ export class TerrainEditorTool extends MapEditorTool {
         const cellY = this.cellOf(this.hover.y);
         terrainBlockedStore.set(!this.allowed(cellX, cellY));
         terrainHoverHeightStore.set(this.onMap(cellX, cellY) ? heightAt(this.terrain(), cellX, cellY) : undefined);
+        terrainHoverSoilStore.set(this.onMap(cellX, cellY) ? soilAt(this.terrain(), cellX, cellY) : undefined);
         this.redraw();
     };
     private readonly pointerUpEventHandler = (pointer: Phaser.Input.Pointer): void => {
         if (!this.path || pointer.id !== this.pointerId) return;
         const path = this.path;
         this.cancelStroke();
-        const start = heightAt(this.terrain(), this.cellOf(path[0].x), this.cellOf(path[0].y));
-        commitStroke(path, this.settings(start), this.terrain(), this.allowed, (changes) =>
-            executeUpdateTerrain(changes),
-        ).catch((error: unknown) => console.error("The relief could not be edited", error));
+        const brush = get(terrainBrushStore);
+        const { mode } = brush;
+        const done =
+            mode === "soil"
+                ? commitSoilStroke(path, brush.diameterTiles, brush.soil ?? 0, this.terrain(), this.allowed, (soils) =>
+                      executeUpdateTerrain(new Map(), undefined, soils),
+                  )
+                : commitStroke(
+                      path,
+                      brushSettingsOf(
+                          { ...brush, mode },
+                          this.terrain()?.maxDepthTiles ?? DEFAULT_MAX_DEPTH_TILES,
+                          heightAt(this.terrain(), this.cellOf(path[0].x), this.cellOf(path[0].y)),
+                      ),
+                      this.terrain(),
+                      this.allowed,
+                      (changes) => executeUpdateTerrain(changes),
+                  );
+        done.catch((error: unknown) => console.error("The relief could not be edited", error));
     };
     private readonly cancelEventHandler = (): void => {
         this.cancelStroke();
@@ -84,6 +101,7 @@ export class TerrainEditorTool extends MapEditorTool {
         if (this.pointerCapture?.active) return;
         this.hover = undefined;
         terrainHoverHeightStore.set(undefined);
+        terrainHoverSoilStore.set(undefined);
         this.cancelStroke();
     };
     /**
@@ -215,14 +233,6 @@ export class TerrainEditorTool extends MapEditorTool {
 
     private terrain(): TerrainData | undefined {
         return this.scene.getGameMap().getWamFile()?.getWam().terrain;
-    }
-
-    private settings(startHeightPx = 0) {
-        return brushSettingsOf(
-            get(terrainBrushStore),
-            this.terrain()?.maxDepthTiles ?? DEFAULT_MAX_DEPTH_TILES,
-            startHeightPx,
-        );
     }
 
     private cellOf(pixels: number): number {

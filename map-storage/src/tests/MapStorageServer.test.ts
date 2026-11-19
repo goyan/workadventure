@@ -219,7 +219,7 @@ describe("MapStorageServer entity edit permissions", () => {
     describe("relief", () => {
         const dig = (cells: { x: number; y: number; height: number }[]): EditMapMessage => ({
             $case: "modifyTerrainMessage",
-            modifyTerrainMessage: { cells },
+            modifyTerrainMessage: { cells, soils: [] },
         });
 
         it("lets a map editor dig, saves the relief and broadcasts the command", async () => {

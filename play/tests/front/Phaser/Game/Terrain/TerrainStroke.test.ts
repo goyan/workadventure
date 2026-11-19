@@ -1,7 +1,11 @@
 import { cellKey, cellOf, heightAt, MAX_STROKE_CELLS, strokeChanges, withHeights } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 import { describe, expect, it, vi } from "vitest";
-import { brushSettingsOf, commitStroke } from "../../../../../src/front/Phaser/Game/Terrain/TerrainStroke";
+import {
+    brushSettingsOf,
+    commitSoilStroke,
+    commitStroke,
+} from "../../../../../src/front/Phaser/Game/Terrain/TerrainStroke";
 
 const brush = { mode: "dig" as const, diameterTiles: 4, forcePx: undefined };
 const everywhere = (): boolean => true;
@@ -72,5 +76,18 @@ describe("commitStroke", () => {
         expect(send.mock.calls.length).toBeGreaterThan(1);
         for (const size of order) expect(size).toBeLessThanOrEqual(MAX_STROKE_CELLS);
         for (let cell = 0; cell <= 1250; cell += 25) expect(heightAt(terrain, cell, 0)).toBe(-48);
+    });
+});
+
+describe("commitSoilStroke", () => {
+    it("sends the soils of the disc of the brush, and nothing for an empty stroke or a ground already painted", async () => {
+        const send = vi.fn((_soils: ReadonlyMap<string, number>) => Promise.resolve());
+        await commitSoilStroke([], 4, 5, undefined, () => true, send);
+        expect(send).not.toHaveBeenCalled();
+        await commitSoilStroke([{ x: 200, y: 200 }], 4, 5, undefined, () => true, send);
+        expect(send).toHaveBeenCalledTimes(1);
+        const soils = send.mock.calls[0][0];
+        expect(soils.get("12,12")).toBe(5);
+        expect([...soils.values()].every((soil) => soil === 5)).toBe(true);
     });
 });

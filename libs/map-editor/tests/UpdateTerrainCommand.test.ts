@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MAX_TERRAIN_COMMAND_CELLS, UpdateTerrainCommand } from "../src/Commands/Terrain/UpdateTerrainCommand";
 import { UpdateWAMSettingCommand } from "../src/Commands/WAM/UpdateWAMSettingCommand";
 import { MAX_STROKE_CELLS } from "../src/Terrain/TerrainBrush";
-import { heightAt } from "../src/Terrain/TerrainGrid";
+import { heightAt, soilAt } from "../src/Terrain/TerrainGrid";
 import type { WAMFileFormat } from "../src/types";
 
 const emptyWam = (): WAMFileFormat => ({
@@ -19,7 +19,11 @@ describe("UpdateTerrainCommand", () => {
         const command = new UpdateTerrainCommand(wam, { cells: [{ x: 3, y: 4, height: -24 }] });
         await command.execute();
         expect(heightAt(wam.terrain, 3, 4)).toBe(-24);
-        expect(command.previous()).toEqual({ cells: [{ x: 3, y: 4, height: 0 }], maxDepthTiles: undefined });
+        expect(command.previous()).toEqual({
+            cells: [{ x: 3, y: 4, height: 0 }],
+            maxDepthTiles: undefined,
+            soils: [],
+        });
         // What it was, applied again, gives the flat map back.
         await new UpdateTerrainCommand(wam, command.previous()).execute();
         expect(wam.terrain?.chunks).toEqual({});
@@ -85,5 +89,30 @@ describe("UpdateTerrainCommand", () => {
             message: { $case: "updateWaterSettingMessage", updateWaterSettingMessage: { runoff: 4, evaporation: 0.5 } },
         }).execute();
         expect(wam.settings?.water).toMatchObject({ speed: 1, absorption: 2, current: 2 });
+    });
+});
+
+describe("UpdateTerrainCommand, soils", () => {
+    it("paints soils, and gives back what undoes it", async () => {
+        const wam = emptyWam();
+        await new UpdateTerrainCommand(wam, { cells: [], soils: [{ x: 1, y: 2, soil: 5 }] }).execute();
+        expect(soilAt(wam.terrain, 1, 2)).toBe(5);
+        const second = new UpdateTerrainCommand(wam, {
+            cells: [{ x: 1, y: 2, height: -8 }],
+            soils: [{ x: 1, y: 2, soil: 3 }],
+        });
+        await second.execute();
+        expect(soilAt(wam.terrain, 1, 2)).toBe(3);
+        expect(second.previous().soils).toEqual([{ x: 1, y: 2, soil: 5 }]);
+        await new UpdateTerrainCommand(wam, second.previous()).execute();
+        expect(soilAt(wam.terrain, 1, 2)).toBe(5);
+        expect(heightAt(wam.terrain, 1, 2)).toBe(0);
+    });
+
+    it("refuses a command with too many cells, heights and soils together", async () => {
+        const soils = Array.from({ length: MAX_TERRAIN_COMMAND_CELLS }, (_, index) => ({ x: index, y: 0, soil: 1 }));
+        await expect(
+            new UpdateTerrainCommand(emptyWam(), { cells: [{ x: 0, y: 1, height: -8 }], soils }).execute(),
+        ).rejects.toThrow();
     });
 });

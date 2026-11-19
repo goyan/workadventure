@@ -1,9 +1,12 @@
-import { chunkedChanges, defaultForcePx, strokeChanges } from "@workadventure/map-editor";
+import { chunkedChanges, defaultForcePx, soilStrokeChanges, strokeChanges } from "@workadventure/map-editor";
 import type { BrushSettings, TerrainData } from "@workadventure/map-editor";
 
 /** What the panel of the relief tool sets: the force is automatic (an eighth of the diameter) until chosen. */
 export interface TerrainBrush {
-    mode: BrushSettings["mode"];
+    /** A mode of the brush of the relief, or "soil": the brush paints the soil chosen, and no height. */
+    mode: BrushSettings["mode"] | "soil";
+    /** The soil the soil mode paints, as kept in the map (0 wipes the soil). */
+    soil?: number;
     diameterTiles: number;
     forcePx: number | undefined;
     /**
@@ -17,7 +20,11 @@ export interface TerrainBrush {
  * The brush as the relief works with it, with the maximum depth of the map. `startHeightPx` is the height of the
  * ground where the stroke starts: what the flatten mode brings the ground to, unless the panel sets a level.
  */
-export function brushSettingsOf(brush: TerrainBrush, maxDepthTiles: number, startHeightPx = 0): BrushSettings {
+export function brushSettingsOf(
+    brush: TerrainBrush & { mode: BrushSettings["mode"] },
+    maxDepthTiles: number,
+    startHeightPx = 0,
+): BrushSettings {
     return {
         mode: brush.mode,
         diameterTiles: brush.diameterTiles,
@@ -41,6 +48,22 @@ export async function commitStroke(
 ): Promise<void> {
     if (path.length === 0) return;
     for (const part of chunkedChanges(strokeChanges(terrain, path, settings, allowed))) {
+        // eslint-disable-next-line no-await-in-loop -- the commands of one stroke are applied in order
+        await send(part);
+    }
+}
+
+/** Ends a stroke of the brush in its soil mode: the soils of its disc are sent like the heights of a stroke. */
+export async function commitSoilStroke(
+    path: readonly { x: number; y: number }[],
+    diameterTiles: number,
+    soil: number,
+    terrain: TerrainData | undefined,
+    allowed: (cellX: number, cellY: number) => boolean,
+    send: (soils: ReadonlyMap<string, number>) => Promise<void>,
+): Promise<void> {
+    if (path.length === 0) return;
+    for (const part of chunkedChanges(soilStrokeChanges(terrain, path, diameterTiles, soil, allowed))) {
         // eslint-disable-next-line no-await-in-loop -- the commands of one stroke are applied in order
         await send(part);
     }

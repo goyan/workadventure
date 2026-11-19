@@ -117,6 +117,17 @@ describe("TerrainEditor", () => {
         expect(get(terrainBrushStore).mode).toBe("dig");
     });
 
+    it("chooses the soil the brush paints", () => {
+        render();
+        byTestId("terrain-mode-soil").click();
+        expect(get(terrainBrushStore).mode).toBe("soil");
+        flushSync();
+        byTestId("terrain-soil-rock").click();
+        expect(get(terrainBrushStore).soil).toBe(5);
+        byTestId("terrain-soil-none").click();
+        expect(get(terrainBrushStore).soil).toBe(0);
+    });
+
     it("sets the diameter of the brush, the force following it while it is automatic", () => {
         render();
         setRange("terrain-diameter", 8);

@@ -15,6 +15,9 @@ export const terrainBlockedStore = writable(false);
 /** The height of the ground under the pointer of the relief tool, in pixels of altitude; undefined off the map. */
 export const terrainHoverHeightStore = writable<number | undefined>(undefined);
 
+/** The soil of the ground under the pointer of the relief tool, as kept in the map (0: not painted); undefined off the map. */
+export const terrainHoverSoilStore = writable<number | undefined>(undefined);
+
 /** Whether the relief tool draws the contour lines of the relief (for the one who edits only). */
 export const terrainContoursStore = writable(true);
 
