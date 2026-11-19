@@ -33,6 +33,7 @@ export * from "./Life/Animal";
 export * from "./Life/Swim";
 export * from "./Life/Population";
 export * from "./Life/Taming";
+export * from "./Life/Gulls";
 export * from "./Life/LifeHistory";
 export * from "./Life/Fishing";
 export * from "./Weather/SeasonClock";

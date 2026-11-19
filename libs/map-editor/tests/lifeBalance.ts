@@ -57,7 +57,7 @@ export function runBalance(seed: number, hours: number, custom: Record<string, u
         walls: { east: new Set(), south: new Set() },
         depthAt: (x, y) => grid.depthAt(x, y),
     });
-    const settings = LifeSettings.parse({ enabled: true, landEnabled: true, ...custom });
+    const settings = LifeSettings.parse({ enabled: true, landEnabled: true, gullsEnabled: true, ...custom });
     const random = mulberry32(seed);
     const population = emptyPopulation();
     const bySpecies: SpeciesTallies = {};

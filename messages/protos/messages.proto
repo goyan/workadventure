@@ -415,6 +415,11 @@ message UpdateLifeSettingMessage {
   optional double landHuntInterval = 12;
   optional double landPredatorReproductionDelay = 13;
   optional double landPredatorMaxLifespan = 14;
+  // The gulls: absent from an older client, the map keeps what it has.
+  optional bool gullsEnabled = 15;
+  optional double gullHuntInterval = 16;
+  optional double gullReproductionDelay = 17;
+  optional double gullMaxLifespan = 18;
 }
 
 // How fast the water of the relief comes and goes (WaterSettings in libs/map-editor).

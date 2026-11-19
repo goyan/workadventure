@@ -6,6 +6,8 @@ import {
     DEFAULT_LIFE_SETTINGS,
     DEFAULT_WATER_SETTINGS,
     LAND_LIFE_BOUNDS,
+    AIR_LIFE_BOUNDS,
+    DEFAULT_AIR_LIFE_SETTINGS,
     DEFAULT_LAND_LIFE_SETTINGS,
     LIFE_BOUNDS,
     MAX_WATER_CURRENT,
@@ -19,6 +21,7 @@ import {
 } from "../../types";
 import { Command } from "../Command";
 
+const AIR_LIFE_KEYS = ["gullHuntInterval", "gullReproductionDelay", "gullMaxLifespan"] as const;
 const LAND_LIFE_KEYS = [
     "antelopeReproductionDelay",
     "antelopeMaxLifespan",
@@ -175,6 +178,20 @@ export class UpdateWAMSettingCommand extends Command {
                         land[key] = Number.isFinite(value)
                             ? Math.min(max, Math.max(min, value))
                             : DEFAULT_LAND_LIFE_SETTINGS[key];
+                    }
+                }
+                // The gulls, the same way.
+                const gullsEnabled = sent.gullsEnabled ?? kept?.gullsEnabled;
+                if (gullsEnabled !== undefined) land.gullsEnabled = gullsEnabled;
+                for (const key of AIR_LIFE_KEYS) {
+                    const [min, max] = AIR_LIFE_BOUNDS[key];
+                    const value = sent[key];
+                    if (value === undefined) {
+                        if (kept?.[key] !== undefined) land[key] = kept[key];
+                    } else {
+                        land[key] = Number.isFinite(value)
+                            ? Math.min(max, Math.max(min, value))
+                            : DEFAULT_AIR_LIFE_SETTINGS[key];
                     }
                 }
                 break;

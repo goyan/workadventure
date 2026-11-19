@@ -984,6 +984,23 @@ export const LAND_LIFE_BOUNDS = {
     landPredatorReproductionDelay: [30, 7200],
     landPredatorMaxLifespan: [60, 172800],
 } as const;
+/**
+ * The gulls of a map (they fish in its water, land on its shores), kept by the server. Absent from a map saved
+ * before they existed: off, with these values. They need the life of the water (`enabled`).
+ */
+export const DEFAULT_AIR_LIFE_SETTINGS = {
+    gullsEnabled: false,
+    gullHuntInterval: 45,
+    gullReproductionDelay: 300,
+    gullMaxLifespan: 1800,
+} as const;
+export const AIR_LIFE_BOUNDS = {
+    gullHuntInterval: [5, 3600],
+    gullReproductionDelay: [30, 7200],
+    gullMaxLifespan: [60, 172800],
+} as const;
+const airDuration = (key: keyof typeof AIR_LIFE_BOUNDS) =>
+    z.number().min(AIR_LIFE_BOUNDS[key][0]).max(AIR_LIFE_BOUNDS[key][1]).optional().catch(undefined);
 const landDuration = (key: keyof typeof LAND_LIFE_BOUNDS) =>
     z.number().min(LAND_LIFE_BOUNDS[key][0]).max(LAND_LIFE_BOUNDS[key][1]).optional().catch(undefined);
 export const LifeSettings = z.object({
@@ -1042,6 +1059,12 @@ export const LifeSettings = z.object({
     landHuntInterval: landDuration("landHuntInterval"),
     landPredatorReproductionDelay: landDuration("landPredatorReproductionDelay"),
     landPredatorMaxLifespan: landDuration("landPredatorMaxLifespan"),
+    /** Whether gulls fish in the water of the map (they need `enabled`). */
+    gullsEnabled: z.boolean().optional().catch(undefined),
+    /** The gulls: between two hunts, between two broods, and their longest life, in seconds. */
+    gullHuntInterval: airDuration("gullHuntInterval"),
+    gullReproductionDelay: airDuration("gullReproductionDelay"),
+    gullMaxLifespan: airDuration("gullMaxLifespan"),
 });
 export type LifeSettings = z.infer<typeof LifeSettings>;
 

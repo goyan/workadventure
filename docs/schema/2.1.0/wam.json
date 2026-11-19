@@ -2033,6 +2033,24 @@
                   "type": "number",
                   "minimum": 60,
                   "maximum": 172800
+                },
+                "gullsEnabled": {
+                  "type": "boolean"
+                },
+                "gullHuntInterval": {
+                  "type": "number",
+                  "minimum": 5,
+                  "maximum": 3600
+                },
+                "gullReproductionDelay": {
+                  "type": "number",
+                  "minimum": 30,
+                  "maximum": 7200
+                },
+                "gullMaxLifespan": {
+                  "type": "number",
+                  "minimum": 60,
+                  "maximum": 172800
                 }
               },
               "additionalProperties": false
