@@ -69,3 +69,27 @@ export function waveCircles(sinceImpactMs: number): { radius: number; alpha: num
         alpha: WAVE_FRONT_ALPHA * fade * strength,
     })).filter((circle) => circle.radius > 0);
 }
+
+/**
+ * The stretches of a circle that lie on water, from what was read at `wet.length` points evenly spaced along it:
+ * each from a point to the one after its last (so `to` goes past the number of points for the stretch that goes
+ * round the start). The whole circle is one stretch from 0.
+ */
+export function wetStretches(wet: readonly boolean[]): { from: number; to: number }[] {
+    const count = wet.length;
+    const firstDry = wet.indexOf(false);
+    if (firstDry === -1) return count > 0 ? [{ from: 0, to: count }] : [];
+    const stretches: { from: number; to: number }[] = [];
+    // Start right after a dry point, so that no stretch is cut in two by the start of the circle.
+    let from: number | undefined;
+    for (let step = 1; step <= count; step++) {
+        const point = firstDry + step;
+        if (wet[point % count]) {
+            from ??= point;
+        } else if (from !== undefined) {
+            stretches.push({ from: from % count, to: (from % count) + (point - from) });
+            from = undefined;
+        }
+    }
+    return stretches.sort((one, other) => one.from - other.from);
+}

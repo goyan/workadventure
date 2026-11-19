@@ -3202,7 +3202,8 @@ plafond et 93 % de l'eau était perdue, sans vague visible.)
 
 **Les cercles de la vague.** Quand le météore tombe dans l'eau, trois cercles clairs partent du bord du cratère et
 suivent le front de l'onde du serveur (même vitesse, même portée), de plus en plus pâles ; rien sur sol sec ni pour
-qui a demandé moins de mouvement. Dessinés par le navigateur (`waveCircles`), ils passent aussi par-dessus la terre.
+qui a demandé moins de mouvement. Dessinés par le navigateur (`waveCircles`), seulement là où il y a de l'eau (au moins 2 px, lue tous les 12 px le
+long du cercle, `wetStretches`) : sur la terre le cercle s'interrompt.
 
 **Qui décide.** Le serveur (`back`, `CatastropheManager`) : le navigateur n'envoie que « météore ici »
 (`LaunchCatastropheMessage`, pixels de la carte). Refusés **sans rien dire** : un point hors de la carte ou non
@@ -3233,7 +3234,7 @@ déploient ensemble ; `map-storage` n'est pas concerné.
 
 **Limites connues.** La gerbe bleue ou brune et les cercles sont décidés avec l'eau que le navigateur connaît à
 l'annonce du météore. La vague ne monte pas plus haut que le plafond de l'eau (18 px au-dessus du niveau de
-débordement). Les cercles sont dessinés ronds, même derrière un mur que l'onde ne traverse pas. Un poisson dans le cratère vidé peut
+débordement). Les cercles sont dessinés sur toute eau à leur portée, même derrière un mur que l'onde ne traverse pas. Un poisson dans le cratère vidé peut
 mourir à sec après 5 s. N'importe quel joueur peut inonder une carte à la longue (une rafale de 5 météores tous les
 3 s par joueur, avec 8 px apportés par cellule du cratère). Pas de son. Rien n'a été vu à l'écran à l'écriture de
 cette section : widget, viseur, chute, éclair et gerbe ne sont validés que par les tests ; l'effet sur l'eau en jeu

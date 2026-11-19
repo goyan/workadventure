@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { flashAllowed, meteorFrame, waveCircles } from "../../../../../src/front/Phaser/Game/Catastrophe/MeteorFall";
+import {
+    flashAllowed,
+    meteorFrame,
+    waveCircles,
+    wetStretches,
+} from "../../../../../src/front/Phaser/Game/Catastrophe/MeteorFall";
 
 const FALL_MS = 1200;
 
@@ -108,5 +113,26 @@ describe("waveCircles", () => {
 
     it("has nothing to show before the impact", () => {
         expect(waveCircles(-1)).toEqual([]);
+    });
+});
+
+describe("wetStretches", () => {
+    it("has nothing to draw on dry ground", () => {
+        expect(wetStretches([false, false, false, false])).toEqual([]);
+    });
+
+    it("draws the whole circle on open water", () => {
+        expect(wetStretches([true, true, true, true])).toEqual([{ from: 0, to: 4 }]);
+    });
+
+    it("draws only the stretches on water", () => {
+        expect(wetStretches([false, true, true, false, true, false])).toEqual([
+            { from: 1, to: 3 },
+            { from: 4, to: 5 },
+        ]);
+    });
+
+    it("joins the stretch that goes round the start of the circle", () => {
+        expect(wetStretches([true, false, false, true])).toEqual([{ from: 3, to: 5 }]);
     });
 });

@@ -2,7 +2,7 @@ import type { CatastropheMessage } from "@workadventure/messages";
 import { METEOR_FALL_MS } from "@workadventure/map-editor";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import { LAMP_MIN_FLASH_INTERVAL_MS } from "../Lamps/LampSignal";
-import { flashAllowed, meteorFrame, waveCircles } from "./MeteorFall";
+import { flashAllowed, meteorFrame, waveCircles, wetStretches } from "./MeteorFall";
 
 const SHADOW_RADIUS_PX = 48;
 const METEOR_RADIUS_PX = 10;
@@ -15,6 +15,9 @@ const WET_BURST_COLOR = 0x8fd3ff;
 const DRY_BURST_COLOR = 0x8a6a45;
 const WAVE_COLOR = 0xdff3ff;
 const WAVE_WIDTHS = [4, 3, 2];
+/** A circle of the wave is read on the water every so many pixels along it, and at this many points at most. */
+const WAVE_SAMPLE_PX = 12;
+const WAVE_MAX_SAMPLES = 360;
 
 interface Meteor {
     x: number;
@@ -122,10 +125,35 @@ export class MeteorView {
         this.graphics.fillCircle(meteor.x + offset.x, meteor.y + offset.y, METEOR_RADIUS_PX);
     }
 
+    /** The circles of the wave, only where they lie on water: a wave does not run over the land. */
     private drawWave(meteor: Meteor, circles: { radius: number; alpha: number }[]): void {
         circles.forEach((circle, index) => {
+            const samples = Math.max(
+                8,
+                Math.min(WAVE_MAX_SAMPLES, Math.ceil((2 * Math.PI * circle.radius) / WAVE_SAMPLE_PX)),
+            );
+            const turn = (2 * Math.PI) / samples;
+            const wet: boolean[] = [];
+            for (let sample = 0; sample < samples; sample++) {
+                wet.push(
+                    this.isWet(
+                        meteor.x + Math.cos(sample * turn) * circle.radius,
+                        meteor.y + Math.sin(sample * turn) * circle.radius,
+                    ),
+                );
+            }
             this.graphics.lineStyle(WAVE_WIDTHS[index] ?? 2, WAVE_COLOR, circle.alpha);
-            this.graphics.strokeCircle(meteor.x, meteor.y, circle.radius);
+            for (const stretch of wetStretches(wet)) {
+                this.graphics.beginPath();
+                this.graphics.arc(
+                    meteor.x,
+                    meteor.y,
+                    circle.radius,
+                    (stretch.from - 0.5) * turn,
+                    (stretch.to - 0.5) * turn,
+                );
+                this.graphics.strokePath();
+            }
         });
     }
 
