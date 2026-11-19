@@ -1,6 +1,12 @@
 <script lang="ts">
     import { untrack } from "svelte";
-    import { DEFAULT_LAND_LIFE_SETTINGS, LAND_LIFE_BOUNDS, LIFE_BOUNDS } from "@workadventure/map-editor";
+    import {
+        AIR_LIFE_BOUNDS,
+        DEFAULT_AIR_LIFE_SETTINGS,
+        DEFAULT_LAND_LIFE_SETTINGS,
+        LAND_LIFE_BOUNDS,
+        LIFE_BOUNDS,
+    } from "@workadventure/map-editor";
     import type { LifeSettings } from "@workadventure/map-editor";
     import { LL } from "../../../i18n/i18n-svelte";
     import { executeUpdateWAMSettings } from "../../Phaser/Game/MapEditor/Commands/Facades";
@@ -68,6 +74,25 @@
         ),
     });
 
+    // The gulls: absent from a map that never had them.
+    let gullsEnabled = $state(start.gullsEnabled ?? DEFAULT_AIR_LIFE_SETTINGS.gullsEnabled);
+    const AIR_DURATIONS = ["gullHuntInterval", "gullReproductionDelay", "gullMaxLifespan"] as const;
+    type AirDuration = (typeof AIR_DURATIONS)[number];
+    const airStart = (key: AirDuration): number => start[key] ?? DEFAULT_AIR_LIFE_SETTINGS[key];
+    let air = $state<Record<AirDuration, number>>({
+        gullHuntInterval: airStart("gullHuntInterval"),
+        gullReproductionDelay: airStart("gullReproductionDelay"),
+        gullMaxLifespan: airStart("gullMaxLifespan"),
+    });
+    let airPositions = $state<Record<AirDuration, number>>({
+        gullHuntInterval: sliderOfDuration(airStart("gullHuntInterval"), ...AIR_LIFE_BOUNDS.gullHuntInterval),
+        gullReproductionDelay: sliderOfDuration(
+            airStart("gullReproductionDelay"),
+            ...AIR_LIFE_BOUNDS.gullReproductionDelay,
+        ),
+        gullMaxLifespan: sliderOfDuration(airStart("gullMaxLifespan"), ...AIR_LIFE_BOUNDS.gullMaxLifespan),
+    });
+
     // The durations go from seconds to hours: their sliders move by steps that grow with them.
     let reproductionPosition = $state(sliderOfDuration(start.reproductionDelay, ...LIFE_BOUNDS.reproductionDelay));
     let lifespanPosition = $state(sliderOfDuration(start.maxLifespan, ...LIFE_BOUNDS.maxLifespan));
@@ -92,6 +117,8 @@
                 drinkInterval,
                 landEnabled,
                 ...land,
+                gullsEnabled,
+                ...air,
             },
         }).catch((error: unknown) => console.error("The life of the water could not be saved", error));
     }
@@ -257,6 +284,41 @@
                 onchange={(position) => {
                     const [shortest, longest] = LAND_LIFE_BOUNDS[key];
                     land[key] = durationAtSlider(position, shortest, longest);
+                    save();
+                }}
+                buttonShape="square"
+            />
+        </div>
+    {/each}
+{/if}
+
+<!-- The gulls: they fish in the water of the map, so they need its life. -->
+<span class="retro-title mt-2">{$LL.mapEditor.life.air.title()}</span>
+<div data-testid="life-air-enabled">
+    <InputSwitch
+        id="terrain-life-air-enabled"
+        bind:value={gullsEnabled}
+        label={$LL.mapEditor.life.air.enabled()}
+        labelPosition="right"
+        onchange={save}
+    />
+</div>
+<p class="retro-hint m-0">{$LL.mapEditor.life.air.hint()}</p>
+{#if gullsEnabled}
+    {#each AIR_DURATIONS as key (key)}
+        <div data-testid="life-air-{key}">
+            <RangeSlider
+                id="terrain-life-air-{key}"
+                label={$LL.mapEditor.life.air[key]()}
+                unit=""
+                min={0}
+                max={LIFE_SLIDER_STEPS}
+                step={1}
+                bind:value={airPositions[key]}
+                valueFormatter={() => formatDuration(air[key])}
+                onchange={(position) => {
+                    const [shortest, longest] = AIR_LIFE_BOUNDS[key];
+                    air[key] = durationAtSlider(position, shortest, longest);
                     save();
                 }}
                 buttonShape="square"
