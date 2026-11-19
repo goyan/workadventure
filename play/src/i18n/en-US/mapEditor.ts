@@ -623,6 +623,8 @@ const mapEditor: BaseTranslation = {
             predatorBirths: "Dolphin calves",
             predatorDeaths: "Dolphins dead (age, hunger)",
             fished: "Fished (let go)",
+            fishingRecord: "Fishing record",
+            fishingRecordValue: "{weight} kg · {name} · {date}",
             history: "Prey and predators over time",
             ago: "{duration} ago",
             now: "now",

@@ -1210,6 +1210,16 @@ export class RoomConnection implements RoomConnection {
         });
     }
 
+    /** Starts a fishing contest in the room: 3, 5 or 10 minutes. The server refuses it while one runs. */
+    emitStartFishingContest(minutes: number): void {
+        this.send({
+            message: {
+                $case: "startFishingContestMessage",
+                startFishingContestMessage: { minutes },
+            },
+        });
+    }
+
     /** The key of the fishing rod again: hooks a biting fish, or brings the line back. */
     emitReelFishingLine(): void {
         this.send({

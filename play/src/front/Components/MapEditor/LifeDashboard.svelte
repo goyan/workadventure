@@ -1,10 +1,11 @@
 <script lang="ts">
     import { LIFE_RANGES } from "@workadventure/map-editor";
     import type { LifeRangeName } from "@workadventure/map-editor";
-    import { LL } from "../../../i18n/i18n-svelte";
+    import { LL, locale } from "../../../i18n/i18n-svelte";
     import { formatDuration } from "../../Phaser/Game/Life/LifeDurations";
     import { chartPoints } from "../../Phaser/Game/Life/LifeStats";
-    import { fishingCaughtStore } from "../../Stores/FishingStore";
+    import { fishingCaughtStore, fishingRecordStore } from "../../Stores/FishingStore";
+    import { formatKilograms } from "../../Phaser/Game/Fishing/FishingProtocol";
     import { aquaticLifeStatsStore, lifeRangeStore } from "../../Stores/TerrainEditorStore";
 
     /** The curves are drawn in a box of this size; each has its own scale, with a little room above its largest value. */
@@ -178,6 +179,16 @@
                     <span>{$LL.mapEditor.life.dashboard.fished()}</span>
                     <span class="text-right" data-testid="life-minute-fished">{$fishingCaughtStore.lastMinute}</span>
                     <span class="text-right" data-testid="life-total-fished">{$fishingCaughtStore.total}</span>
+                {/if}
+                {#if $fishingRecordStore}
+                    <span>{$LL.mapEditor.life.dashboard.fishingRecord()}</span>
+                    <span class="col-span-2 text-right" data-testid="life-fishing-record"
+                        >{$LL.mapEditor.life.dashboard.fishingRecordValue({
+                            weight: formatKilograms($fishingRecordStore.grams, $locale),
+                            name: $fishingRecordStore.name,
+                            date: new Date($fishingRecordStore.at).toLocaleDateString($locale),
+                        })}</span
+                    >
                 {/if}
             </div>
             <span class="text-right text-xs text-white/50" data-testid="life-since">

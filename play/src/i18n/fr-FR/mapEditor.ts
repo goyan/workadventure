@@ -634,6 +634,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             predatorBirths: "Naissances de dauphins",
             predatorDeaths: "Dauphins morts (âge, faim)",
             fished: "Pêchés (remis à l'eau)",
+            fishingRecord: "Record de pêche",
+            fishingRecordValue: "{weight} kg · {name} · {date}",
             history: "Proies et prédateurs dans le temps",
             ago: "il y a {duration}",
             now: "maintenant",

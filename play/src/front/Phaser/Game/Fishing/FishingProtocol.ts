@@ -12,7 +12,15 @@ export function decodeRodEquipped(value: unknown): boolean {
 /** The states of a line, as FishingLineMessage.state carries them. */
 export const FISHING_LINE = { waiting: 0, bite: 1, reeling: 2 } as const;
 /** What happens to a line, as FishingEventMessage.type carries it. */
-export const FISHING_EVENT = { bite: 0, missed: 1, lost: 2, retrieved: 3, refused: 4, caught: 5 } as const;
+export const FISHING_EVENT = {
+    bite: 0,
+    missed: 1,
+    lost: 2,
+    retrieved: 3,
+    refused: 4,
+    caught: 5,
+    contestRefused: 6,
+} as const;
 
 /** The way the avatar faces, for the rules of the cast. */
 export function fishingDirection(direction: PositionMessage_Direction): FishingDirection {
