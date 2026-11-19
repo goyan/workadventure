@@ -2233,6 +2233,13 @@ l'humidité, gzip) et à l'entrée ; le navigateur dessine l'herbe en voile vert
 (`Terrain/MeadowState.ts`, dans `TerrainView`), là où c'est dehors pour lui. Une argile détrempée (60 % d'humidité)
 est de la boue même sans eau dessus. L'outil Relief dit l'humidité et l'herbe sous le curseur. `play`, `back` et `map-storage` à déployer ensemble.
 
+**Les antilopes broutent.** À chaque pas du pré (2 s), chaque antilope libre de la vie de la terre mange l'herbe de
+la case sous elle (`Meadow.graze`, une case pleine en 2 minutes, `GRAZE_SECONDS` ; `AquaticLifeManager.grazers`,
+donné au `MeadowManager` par `GameRoom`). L'herbe repousse comme ailleurs : un troupeau qui reste au même endroit y
+laisse le sol nu. À l'écran, une antilope immobile sur une case qui a de l'herbe (15 % et plus) baisse la tête, dans
+la pose de la boisson (`LandLifeView`, calculé par le navigateur à partir du pré qu'il reçoit). Brouter ne change
+rien à la vie des antilopes : elles ne cherchent pas l'herbe et n'ont pas faim sans elle. Rien sur le fil.
+
 **Neige en altitude** (`Terrain/SnowLine.ts`). La neige tient sur les monts à partir d'une altitude qui dépend de la
 saison du calendrier de Paris : 96 px (3 cases) en hiver, 160 px au printemps et en automne, 224 px en été ; fine à
 la limite, complète 32 px plus haut (`snowCover`). Le navigateur la dessine en voile blanc sur le sol et l'herbe,

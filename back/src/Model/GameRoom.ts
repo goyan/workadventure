@@ -410,6 +410,8 @@ export class GameRoom implements BrothersFinder {
             { repository: await getVariablesRepository(), roomUrl },
             undefined,
             gameRoom.mapSizeInCells.bind(gameRoom),
+            // The antelopes of the life of the land graze the meadow.
+            () => aquaticLife.grazers(),
         );
         gameRoom.meadow = meadow;
         await meadow.restore();

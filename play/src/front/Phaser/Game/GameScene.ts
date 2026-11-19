@@ -30,6 +30,7 @@ import {
     type EntityPrefabType,
     GameMap,
     GameMapProperties,
+    GRAZING_COVER,
     listeningZoneJamKey,
     type Season,
     seasonAt,
@@ -3719,6 +3720,7 @@ export class GameScene extends DirtyScene {
                     () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
                     (species) => this.gameJungle?.sheetOf(species),
                     (animal, now) => companions.poseOf(animal.id, now),
+                    (x, y) => this.meadow.coverAt(x, y) >= GRAZING_COVER,
                 );
                 // The shadows of the sun and of the moon, outdoors. One set at a time.
                 this.skyShadowManager?.destroy();

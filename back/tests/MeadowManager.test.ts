@@ -24,7 +24,9 @@ function createHarness({
     // A summer noon in Paris: the grass grows.
     now = Date.UTC(2026, 6, 14, 10),
     meadow = undefined as NonNullable<WAMFileFormat["settings"]>["meadow"],
+    grazers = undefined as (() => { x: number; y: number }[]) | undefined,
 }: {
+    grazers?: () => { x: number; y: number }[];
     meadow?: NonNullable<WAMFileFormat["settings"]>["meadow"];
     weather?: WeatherType;
     saved?: Record<string, string>;
@@ -54,6 +56,7 @@ function createHarness({
         { repository, roomUrl: "room" },
         () => now,
         mapSize,
+        grazers,
     );
     const steps = (count: number): void => {
         for (let step = 0; step < count; step++) manager.step();
@@ -144,5 +147,26 @@ describe("MeadowManager", () => {
         expect(grassOf(fast.sent[told]).every((cover) => cover === 0)).toBe(true);
         usual.manager.stop();
         fast.manager.stop();
+    });
+
+    it("lets the animals that graze eat the grass under them", () => {
+        // An antelope that stays on the tile (2, 1): pixels 64 to 95 by 32 to 63.
+        const grazed = createHarness({ grazers: () => [{ x: 70, y: 40 }] });
+        const free = createHarness();
+        for (const harness of [grazed, free]) {
+            harness.manager.mapChanged();
+            harness.steps(400);
+        }
+        const tile = 1 * 8 + 2;
+        const eaten = grassOf(grazed.sent[grazed.sent.length - 1]);
+        const whole = grassOf(free.sent[free.sent.length - 1]);
+        expect(whole[tile]).toBeGreaterThan(0);
+        // It eats faster than the grass grows: its tile stays bare, the others are as without it.
+        expect(eaten[tile]).toBe(0);
+        expect([...eaten].filter((_, index) => index !== tile)).toEqual(
+            [...whole].filter((_, index) => index !== tile),
+        );
+        grazed.manager.stop();
+        free.manager.stop();
     });
 });
