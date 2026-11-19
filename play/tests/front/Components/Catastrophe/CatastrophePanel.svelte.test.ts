@@ -13,6 +13,10 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 idleHelp: label("Pick a disaster"),
                 size: ({ tiles }: { tiles: number }) => `${tiles} tiles`,
                 sizeLabel: label("Size of the meteor: radius of its crater, in tiles"),
+                downpour: label("Downpour"),
+                wholeMap: label("Whole map"),
+                downpourSizeLabel: label("Size of the downpour"),
+                downpourArmedHelp: label("Hold the click on the map · Esc to cancel"),
             },
         },
     });
@@ -22,6 +26,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
 import CatastrophePanel from "../../../../src/front/Components/Catastrophe/CatastrophePanel.svelte";
 import {
     armedCatastropheStore,
+    downpourWholeMapStore,
     meteorRadiusTilesStore,
     catastrophePanelStore,
     disarmCatastrophe,
@@ -86,6 +91,25 @@ describe("CatastrophePanel", () => {
         expect(get(meteorRadiusTilesStore)).toBe(12);
         expect(target.textContent).toContain("12 tiles");
         meteorRadiusTilesStore.set(4);
+    });
+
+    it("arms the downpour, shows its size from 1 to 16 tiles, and hides it for the whole map", () => {
+        render();
+        target.querySelector<HTMLElement>('[data-testid="catastrophe-downpour"]')?.click();
+        flushSync();
+        expect(get(armedCatastropheStore)).toBe("downpour");
+        expect(target.textContent).toContain("Hold the click on the map · Esc to cancel");
+        const slider = target.querySelector<HTMLInputElement>('[data-testid="catastrophe-downpour-size"]');
+        expect(slider?.min).toBe("1");
+        expect(slider?.max).toBe("16");
+        expect(target.querySelector('[data-testid="catastrophe-meteor-size"]')).toBeNull();
+
+        const wholeMap = target.querySelector<HTMLInputElement>('[data-testid="catastrophe-downpour-whole-map"]');
+        wholeMap?.click();
+        flushSync();
+        expect(get(downpourWholeMapStore)).toBe(true);
+        expect(target.querySelector('[data-testid="catastrophe-downpour-size"]')).toBeNull();
+        downpourWholeMapStore.set(false);
     });
 
     it("disarms on Escape", () => {

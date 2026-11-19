@@ -1,4 +1,11 @@
-import { METEOR_FALL_MS, METEORS_PER_ROOM } from "@workadventure/map-editor";
+import {
+    DOWNPOUR_DEFAULT_TILES,
+    DOWNPOUR_LASTS_MS,
+    DOWNPOUR_MAX_TILES,
+    DOWNPOURS_PER_ROOM,
+    METEOR_FALL_MS,
+    METEORS_PER_ROOM,
+} from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
 import type { CatastropheMessage, SubToPusherRoomMessage } from "@workadventure/messages";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -118,5 +125,83 @@ describe("CatastropheManager", () => {
         vi.advanceTimersByTime(2000);
         expect(sent).toHaveLength(0);
         expect(strike).not.toHaveBeenCalled();
+    });
+});
+
+describe("CatastropheManager, downpours", () => {
+    const DOWNPOUR = CatastropheKind.CATASTROPHE_DOWNPOUR;
+
+    function rainHarness() {
+        vi.useFakeTimers();
+        vi.setSystemTime(0);
+        const sent: CatastropheMessage[] = [];
+        const room = {
+            sendSubMessageToRoom: (message: SubToPusherRoomMessage): void => {
+                if (message.message?.$case === "catastropheMessage") sent.push(message.message.catastropheMessage);
+            },
+        };
+        const soaked: { x: number; y: number; radiusTiles: number; wholeMap: boolean }[] = [];
+        const manager = new CatastropheManager(
+            room,
+            () => MAP,
+            () => undefined,
+            (downpour) => soaked.push(downpour),
+        );
+        return { manager, sent, soaked };
+    }
+
+    it("a downpour begins, is told to the room, soaks the ground and ends a second after the last message", () => {
+        const { manager, sent, soaked } = rainHarness();
+        expect(manager.rain(7, 100, 80, 3, false)).toBe(true);
+        expect(sent[0]).toMatchObject({ kind: DOWNPOUR, x: 100, y: 80, radiusTiles: 3, wholeMap: false });
+        expect(sent[0].impactInMs).toBe(DOWNPOUR_LASTS_MS);
+        expect(soaked).toHaveLength(1);
+        expect(manager.downpours()).toHaveLength(1);
+        vi.advanceTimersByTime(DOWNPOUR_LASTS_MS - 1);
+        expect(manager.downpours()).toHaveLength(1);
+        vi.advanceTimersByTime(1);
+        expect(manager.downpours()).toHaveLength(0);
+    });
+
+    it("follows its player under the same id, and ignores messages that come too fast", () => {
+        const { manager, sent } = rainHarness();
+        manager.rain(7, 100, 80, 3, false);
+        vi.advanceTimersByTime(50);
+        expect(manager.rain(7, 110, 80, 3, false)).toBe(false);
+        vi.advanceTimersByTime(150);
+        expect(manager.rain(7, 120, 90, 3, false)).toBe(true);
+        expect(sent).toHaveLength(2);
+        expect(sent[1].id).toBe(sent[0].id);
+        expect(manager.downpours()).toMatchObject([{ x: 120, y: 90 }]);
+    });
+
+    it("keeps the size within its bounds and carries the whole map", () => {
+        const { manager } = rainHarness();
+        manager.rain(1, 10, 10, 999, true);
+        manager.rain(2, 10, 10, Number.NaN, false);
+        expect(manager.downpours()).toMatchObject([
+            { radiusTiles: DOWNPOUR_MAX_TILES, wholeMap: true },
+            { radiusTiles: DOWNPOUR_DEFAULT_TILES, wholeMap: false },
+        ]);
+    });
+
+    it("refuses a point outside the map, and one downpour more than the room may have", () => {
+        const { manager } = rainHarness();
+        expect(manager.rain(1, -1, 10, 3, false)).toBe(false);
+        expect(manager.rain(1, MAP.width, 10, 3, false)).toBe(false);
+        for (let player = 1; player <= DOWNPOURS_PER_ROOM; player++) {
+            expect(manager.rain(player, 10, 10, 3, false)).toBe(true);
+        }
+        expect(manager.rain(99, 10, 10, 3, false)).toBe(false);
+        vi.advanceTimersByTime(DOWNPOUR_LASTS_MS);
+        expect(manager.rain(99, 10, 10, 3, false)).toBe(true);
+    });
+
+    it("rains no more once the room stops", () => {
+        const { manager } = rainHarness();
+        manager.rain(1, 10, 10, 3, false);
+        manager.stop();
+        expect(manager.downpours()).toHaveLength(0);
+        expect(manager.rain(1, 10, 10, 3, false)).toBe(false);
     });
 });

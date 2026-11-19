@@ -158,6 +158,29 @@ export class Meadow {
         this.grass[index] = Math.min(1, Math.max(0, grass));
     }
 
+    /**
+     * A downpour soaks the soil of the tiles within `radius` tiles of a tile (of every tile when `radius` is
+     * undefined): outdoors only, and only a soil that holds water. Returns whether anything changed.
+     */
+    public soak(tileX: number, tileY: number, radius: number | undefined): boolean {
+        const { width, height, moisture, hold, outdoor } = this;
+        const fromY = radius === undefined ? 0 : Math.max(0, Math.floor(tileY - radius));
+        const toY = radius === undefined ? height - 1 : Math.min(height - 1, Math.ceil(tileY + radius));
+        const fromX = radius === undefined ? 0 : Math.max(0, Math.floor(tileX - radius));
+        const toX = radius === undefined ? width - 1 : Math.min(width - 1, Math.ceil(tileX + radius));
+        let changed = false;
+        for (let y = fromY; y <= toY; y++) {
+            for (let x = fromX; x <= toX; x++) {
+                if (radius !== undefined && (x - tileX) ** 2 + (y - tileY) ** 2 > radius * radius) continue;
+                const index = y * width + x;
+                if (!outdoor[index] || hold[index] <= 0 || moisture[index] >= 1) continue;
+                moisture[index] = 1;
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
     /** One step: the soil gains and loses its moisture, which spreads; then the grass grows or dies. */
     public step(input: MeadowStepInput): void {
         const seconds = Number.isFinite(input.seconds) && input.seconds > 0 ? input.seconds : 0;

@@ -3276,3 +3276,38 @@ mourir à sec après 5 s. N'importe quel joueur peut inonder une carte à la lon
 avec 8 px apportés par cellule du cratère). Pas de son. Rien n'a été vu à l'écran à l'écriture de
 cette section : widget, viseur, chute, éclair et gerbe ne sont validés que par les tests ; l'effet sur l'eau en jeu
 n'est pas vu.
+
+## Catastrophes : l'averse
+
+Deuxième catastrophe du widget (bouton « Catastrophe » du menu des applications) : une **grosse pluie sous le
+pointeur**, pensée pour éteindre des incendies. **Rien ne brûle encore dans le jeu** : aujourd'hui l'averse apporte de
+l'eau et trempe le sol.
+
+**En jeu.** La tuile « Averse » s'arme comme le météore (viseur, Échap annule). Tant que le **clic gauche est
+maintenu** sur la carte (ou le doigt posé), il pleut sous le pointeur, et le nuage le suit ; relâcher arrête la pluie.
+Pendant ce temps le glisser ne déplace pas la carte (molette et deux doigts restent libres). Le widget montre, pour
+l'averse, un curseur de taille (rayon de **1 à 16 cases**, 3 par défaut) et une case **« Toute la carte »** : cochée,
+il pleut partout tant que le clic est maintenu, où que soit le pointeur.
+
+**Le serveur décide.** Le navigateur redit où est le pointeur toutes les 200 ms (`LaunchCatastropheMessage`, genre
+`CATASTROPHE_DOWNPOUR`, champ `wholeMap`). `CatastropheManager.rain` tient **une averse par joueur**, qui dure 1 s
+après son dernier message (un onglet fermé n'arrose donc pas sans fin), 8 averses à la fois par salle, messages plus
+rapprochés que 100 ms ignorés, point dans la carte, taille ramenée dans ses bornes (`downpourTiles`). Chaque message
+accepté est annoncé à la salle (`CatastropheMessage`, même `id` tant que l'averse dure, `impactInMs` = temps restant
+sans autre message).
+
+**Ce qu'elle fait.** À chaque pas de l'eau (10 par seconde), chaque cellule sous l'averse reçoit de l'eau
+(`WaterGrid.rainOn`, **4 px par seconde**, jamais au-dessus de la hauteur maximale de l'eau, rien dans un mur ; la
+pluie tombe du ciel, aucun mur ne l'arrête), comptée dans la **pluie** du bilan ; la salle reçoit l'eau cinq fois par
+seconde tant qu'il pleut. Le sol des cases arrosées est **trempé** aussitôt (`Meadow.soak`, dehors seulement, pas un
+sol qui ne retient rien), ce que la salle voit à l'annonce suivante du pré. L'eau n'existe que là où la carte a une
+grille d'eau (un relief ou un objet d'eau) ; ailleurs l'averse se voit et trempe le sol, sans flaque.
+
+**Ce que tout le monde voit** (`Catastrophe/DownpourView.ts`, règles pures dans `DownpourFall.ts`) : un nuage sombre
+au-dessus du disque, des gouttes qui tombent toujours aux mêmes endroits du disque et y éclaboussent, le sol assombri ;
+sur toute la carte, un voile et des gouttes sur toute la vue. En mouvement réduit les gouttes sont immobiles.
+
+**Limites.** Il pleut aussi dans les bâtiments (le serveur d'eau ne connaît pas les toits) ; tout joueur peut inonder
+une carte ; pas de son ; l'averse des autres suit leur pointeur avec le retard du réseau. `play` et `back` se
+déploient ensemble.
+
