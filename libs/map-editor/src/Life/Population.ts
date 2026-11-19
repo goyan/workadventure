@@ -3,6 +3,7 @@ import { DEFAULT_AIR_LIFE_SETTINGS, DEFAULT_LAND_LIFE_SETTINGS, TERRAIN_CELL } f
 import type { LifeSettings } from "../types";
 import type { Animal } from "./Animal";
 import { MAX_ANIMALS, MAX_ANTELOPES, MAX_DOLPHINS, MAX_LAND_ANIMALS } from "./LifeConstants";
+import { GROUP_REACH_PX, leaderOf, leadersOf, PRIDE_SHARE_PX } from "./Groups";
 import { spawnGulls, stepGulls } from "./Gulls";
 import type { GullContext } from "./Gulls";
 import { cellAt, levelOf, swim, WANDER_REACH_CELLS } from "./Swim";
@@ -473,6 +474,18 @@ export function stepPopulation(
     const predators = SPECIES_IDS.map((id) => SPECIES[id]).filter(isPredator);
     const preys = SPECIES_IDS.map((id) => SPECIES[id]).filter((species) => !isPredator(species));
 
+    // Who leads the groups (see Groups): read again at each step among those that live, the tamed ones left out.
+    const leaders = new Map<SpeciesId, Map<number, Animal[]>>();
+    for (const species of SPECIES_IDS) {
+        const kind = SPECIES[species].group;
+        if (!kind) continue;
+        const byBody = new Map<number, Animal[]>();
+        for (const [body, list] of living.get(species) ?? []) if (body !== 0) byBody.set(body, leadersOf(kind, list));
+        leaders.set(species, byBody);
+    }
+    const leadersIn = (animal: Animal): readonly Animal[] =>
+        leaders.get(animal.kind)?.get(bodyOf(animal, where(animal))) ?? [];
+
     // The prey of the land that became scarce where they live: not hunted (see SCARCE_PREY_SHARE).
     const scarce = (prey: Animal): boolean => {
         if (SPECIES[prey.kind].habitat !== "land" || !land) return false;
@@ -486,6 +499,8 @@ export function stepPopulation(
     };
     for (const species of predators) {
         const { huntIntervalMs } = timesOf(species.id, settings);
+        // A pride hunts one prey: the one its first hunter chose, place by place.
+        const quarry = new Map<number, Animal>();
         for (const hunter of animals) {
             if (hunter.kind !== species.id || dead.has(hunter) || now < hunter.readyAt) continue;
             if (frightened.has(hunter)) continue;
@@ -500,21 +515,26 @@ export function stepPopulation(
             const level = levelOf(hunter);
             const body = bodyOf(hunter, places);
             // Where the hunter cannot go is a refuge: a prey is one only in the hunter's own body, where it can be.
+            const shared = species.group === "pride" ? quarry.get(body) : undefined;
             const prey =
                 body === 0
                     ? undefined
-                    : nearest(
-                          hunter,
-                          animals.filter(
-                              (other) =>
-                                  species.prey.includes(other.kind) &&
-                                  !dead.has(other) &&
-                                  !scarce(other) &&
-                                  bodyOf(other, places) === body &&
-                                  places.passable(cellAt(other.x), cellAt(other.y), level),
-                          ),
-                      );
+                    : shared && !dead.has(shared)
+                      ? shared
+                      : nearest(
+                            hunter,
+                            animals.filter(
+                                (other) =>
+                                    species.prey.includes(other.kind) &&
+                                    !dead.has(other) &&
+                                    !scarce(other) &&
+                                    bodyOf(other, places) === body &&
+                                    places.passable(cellAt(other.x), cellAt(other.y), level),
+                            ),
+                        );
             if (!prey) continue;
+            // Only a prey worth sharing: an antelope, not a fish.
+            if (species.group === "pride" && SPECIES[prey.kind].habitat === "land") quarry.set(body, prey);
             if (distance(hunter, prey) < REACH_PX) {
                 dead.add(prey);
                 tally.eaten++;
@@ -527,6 +547,18 @@ export function stepPopulation(
                 hunter.huntSince = undefined;
                 hunter.readyAt = now + huntIntervalMs;
                 hunter.targetX = hunter.targetY = undefined;
+                // The hungry ones of its pride beside the catch eat of it: fed, but it is one meal, and it counts
+                // towards a young for the one that made it only.
+                if (species.group === "pride" && SPECIES[prey.kind].habitat === "land") {
+                    for (const other of living.get(species.id)?.get(body) ?? []) {
+                        if (other === hunter || dead.has(other) || now < other.readyAt) continue;
+                        if (frightened.has(other) || distance(other, prey) > PRIDE_SHARE_PX) continue;
+                        other.ateAt = now;
+                        other.huntSince = undefined;
+                        other.readyAt = now + huntIntervalMs;
+                        other.targetX = other.targetY = undefined;
+                    }
+                }
             } else {
                 pursue(hunter, prey, maxSpeed * species.speedFactor);
                 // A prey that runs from its hunter is no longer where it was: the hunter runs on past that point.
@@ -566,6 +598,8 @@ export function stepPopulation(
             for (const male of list) {
                 // A predator on a hunt does not court.
                 if (male.sex !== "male" || !canBreed(male) || pursuing.has(male) || detouring(male)) continue;
+                // In a pride, the oldest male alone has young.
+                if (species.group === "pride" && !leadersIn(male).includes(male)) continue;
                 if (frightened.has(male)) continue;
                 if (inBody >= cap || ofSpecies >= species.roomCap) break;
                 if (total(species.habitat) >= room) break;
@@ -683,6 +717,20 @@ export function stepPopulation(
     if (land) {
         const drinkIntervalMs = settings.drinkInterval * 1000;
         const middle = (cell: number): number => cell * TERRAIN_CELL + TERRAIN_CELL / 2;
+        // A group goes to the water with its leader: those that follow one that sets out are thirsty too.
+        const settingOut = (leader: Animal): boolean =>
+            !dead.has(leader) &&
+            leader.drinkAt !== undefined &&
+            now >= leader.drinkAt &&
+            leader.drinkUntil === undefined &&
+            !frightened.has(leader) &&
+            !pursuing.has(leader);
+        for (const animal of animals) {
+            if (dead.has(animal) || SPECIES[animal.kind].group === undefined) continue;
+            if (animal.drinkUntil !== undefined || animal.drinkAt === undefined || now >= animal.drinkAt) continue;
+            const leader = leaderOf(animal, leadersIn(animal));
+            if (leader && settingOut(leader)) animal.drinkAt = now;
+        }
         for (const animal of animals) {
             if (dead.has(animal) || SPECIES[animal.kind].habitat !== "land") continue;
             // Without a draw: the same numbers as before for everything else. Spread over an interval by its id.
@@ -732,7 +780,29 @@ export function stepPopulation(
                 animal.thirstySince = undefined;
                 animal.drinkAt = now + drinkIntervalMs;
             }
-            if (animal.homeX === undefined || animal.homeY === undefined) continue;
+            if (animal.homeX === undefined || animal.homeY === undefined) {
+                // Without a tree, an animal of a group strolls around its leader.
+                const leader = leaderOf(animal, leadersIn(animal));
+                if (!leader || dead.has(leader) || distance(animal, leader) <= GROUP_REACH_PX) continue;
+                const idle =
+                    animal.targetX === undefined ||
+                    animal.targetY === undefined ||
+                    Math.hypot(animal.targetX - animal.x, animal.targetY - animal.y) < 1 ||
+                    Math.hypot(animal.targetX - leader.x, animal.targetY - leader.y) > 2 * GROUP_REACH_PX;
+                if (!idle) continue;
+                const near = land.randomCell(
+                    body,
+                    { cellX: cellAt(leader.x), cellY: cellAt(leader.y) },
+                    GROUP_REACH_PX / TERRAIN_CELL,
+                    level,
+                    random,
+                );
+                if (!near) continue;
+                animal.targetX = (near.cellX + 0.2 + 0.6 * random()) * TERRAIN_CELL;
+                animal.targetY = (near.cellY + 0.2 + 0.6 * random()) * TERRAIN_CELL;
+                animal.speed = maxSpeed * STROLL_SHARE;
+                continue;
+            }
             const homeCell = { cellX: cellAt(animal.homeX), cellY: cellAt(animal.homeY) };
             if (land.bodyAt(homeCell.cellX, homeCell.cellY) !== body) {
                 // Its tree is gone from its land (cut, or the water rose between them).

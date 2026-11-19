@@ -2516,6 +2516,27 @@ défaut ; sans effet si la vie de l'eau est coupée), trois durées : intervalle
   cela, des prédateurs qui ne manquent jamais de poissons tenaient les antilopes à zéro deux fois sur trois (4 h
   simulées, trois graines). Une petite terre (moins de dix antilopes de capacité) n'a pas ce refuge.
 
+**Groupes : troupeaux et meutes.** Sans réglage ni changement de carte ou de fil : dès que la vie de la terre est
+activée (`Life/Groups.ts`, champ `group` de la table des espèces). Rien d'un groupe n'est gardé : qui mène est relu à
+chaque pas parmi les animaux vivants et libres d'une terre, donc un chef mort, apprivoisé ou parti est remplacé
+aussitôt.
+
+- **Antilopes, troupeau mené par une matriarche** : la plus vieille femelle d'une terre mène, et une de plus par
+  tranche de 8 antilopes (`HERD_SIZE`). Une antilope suit la meneuse la plus proche : à plus de 4 cases d'elle
+  (`GROUP_REACH_PX`), elle revient se promener autour. Quand la meneuse part boire, celles qui la suivent ont soif
+  aussi.
+- **Lions, meute menée par un patriarche** : le plus vieux mâle d'une terre. Lui seul a des petits. Les lions prêts à
+  chasser visent la même antilope, celle du premier chasseur ; les lions affamés à moins de 5 cases de la prise
+  (`PRIDE_SHARE_PX`) sont nourris, mais c'est un seul repas au tableau de bord, et il ne compte pour un petit que
+  pour le lion qui l'a faite. Un poisson ou une mouette ne se partage pas. Un lion sans arbre d'attache se promène
+  autour du patriarche ; avec un arbre, autour de l'arbre comme avant.
+- **Tigre** : solitaire, rien ne change. Dauphins, poissons, mouettes : rien non plus.
+- **Équilibre** mesuré sur 4 h simulées et trois graines, avant puis après : antilopes jamais éteintes dans les deux
+  cas, aucun lion mort de faim ; antilopes mangées 1 398 / 1 544 / 1 611 avant, 1 168 / 1 181 / 965 après (les lions
+  partagent, et prennent plus de poissons).
+- **Limites** : pas de territoires entre groupes, pas de marque à l'écran sur un chef, la fuite reste celle de
+  chaque animal (le troupeau se reforme ensuite), un jeune mâle ne quitte pas la meute.
+
 **Limites.** Les animaux de terre traversent les objets et les murs dessinés dans Tiled (le serveur ne connaît que
 les murs de l'outil Carte) ; pas de recherche de chemin : un couple séparé par un obstacle met du temps à se
 retrouver ; les prédateurs sont limités par leur plafond plus que par la faim (les poissons leur servent de repli).
