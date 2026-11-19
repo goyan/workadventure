@@ -259,6 +259,19 @@ export class PusherRoom {
                             }
                             break;
                         }
+                        case "catastropheMessage": {
+                            // A catastrophe on its way is the same for every player of the room
+                            const catastropheMessage = message.message.catastropheMessage;
+                            for (const listener of this.listeners) {
+                                listener.emitInBatch({
+                                    message: {
+                                        $case: "catastropheMessage",
+                                        catastropheMessage: catastropheMessage,
+                                    },
+                                });
+                            }
+                            break;
+                        }
                         case "entityMessage": {
                             // Entity events are room-wide: a sound carries further than a zone
                             const entityMessage = message.message.entityMessage;

@@ -1073,6 +1073,7 @@ export class IoSocketController {
                             case "castFishingLineMessage":
                             case "reelFishingLineMessage":
                             case "startFishingContestMessage":
+                            case "launchCatastropheMessage":
                             case "entityMessage":
                             case "emotePromptMessage":
                             case "duckRushPromptMessage":

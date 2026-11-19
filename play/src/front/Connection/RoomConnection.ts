@@ -52,6 +52,8 @@ import type {
     ModifyTerrainMessage,
     TerrainWaterMessage,
     AquaticLifeMessage,
+    CatastropheKind,
+    CatastropheMessage,
     FishingMessage,
     UploadEntityMessage,
     UserJoinedMessage as UserJoinedMessageTsProto,
@@ -247,6 +249,8 @@ export class RoomConnection implements RoomConnection {
     private readonly _aquaticLifeMessageStream = new Subject<AquaticLifeMessage>();
     public readonly aquaticLifeMessageStream = this._aquaticLifeMessageStream.asObservable();
     /** The fishing lines of the room, whenever one changes. */
+    private readonly _catastropheMessageStream = new Subject<CatastropheMessage>();
+    public readonly catastropheMessageStream = this._catastropheMessageStream.asObservable();
     private readonly _fishingMessageStream = new Subject<FishingMessage>();
     public readonly fishingMessageStream = this._fishingMessageStream.asObservable();
     private readonly _entityMessageStream = new Subject<EntityMessageTsProto>();
@@ -479,6 +483,10 @@ export class RoomConnection implements RoomConnection {
                                 }
                                 case "aquaticLifeMessage": {
                                     this._aquaticLifeMessageStream.next(subMessage.aquaticLifeMessage);
+                                    break;
+                                }
+                                case "catastropheMessage": {
+                                    this._catastropheMessageStream.next(subMessage.catastropheMessage);
                                     break;
                                 }
                                 case "fishingMessage": {
@@ -1206,6 +1214,16 @@ export class RoomConnection implements RoomConnection {
             message: {
                 $case: "castFishingLineMessage",
                 castFishingLineMessage: { x: Math.round(x), y: Math.round(y) },
+            },
+        });
+    }
+
+    /** Launches a catastrophe at a point of the map, in map pixels. The server decides. */
+    emitLaunchCatastrophe(kind: CatastropheKind, x: number, y: number): void {
+        this.send({
+            message: {
+                $case: "launchCatastropheMessage",
+                launchCatastropheMessage: { kind, x: Math.round(x), y: Math.round(y) },
             },
         });
     }
@@ -2444,6 +2462,7 @@ export class RoomConnection implements RoomConnection {
         this._terrainWaterMessageStream.complete();
         this._aquaticLifeMessageStream.complete();
         this._fishingMessageStream.complete();
+        this._catastropheMessageStream.complete();
         this._entityMessageStream.complete();
         this._editMapCommandMessageStream.complete();
         this._playerDetailsUpdatedMessageStream.complete();

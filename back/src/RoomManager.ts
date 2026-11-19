@@ -257,6 +257,10 @@ const roomManager = {
                             room.startFishingContest(user, message.message.startFishingContestMessage.minutes);
                             break;
                         }
+                        case "launchCatastropheMessage": {
+                            // Provisional: the next task wires the launch to the room
+                            break;
+                        }
                         default: {
                             const _exhaustiveCheck: never = message.message;
                         }
