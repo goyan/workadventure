@@ -12,6 +12,7 @@
     import { LL } from "../../../i18n/i18n-svelte";
     import { COMPASS_POINTS, compassPointOf } from "../../Phaser/Game/Weather/WindDirection";
     import { fireConditionsStore } from "../../Stores/FireConditionsStore";
+    import { cloudsShownStore } from "../../Stores/WeatherStore";
     import { sendFireConditions } from "./fireConditionsActions";
 
     /** A slider being dragged asks the server this often at most; its last value is always sent. */
@@ -184,6 +185,11 @@
                 <option value={point}>{$LL.actionbar.weatherBanner.windPoint[point]()}</option>
             {/each}
         </select>
+    </label>
+    <!-- One's own clouds, the personal setting of the Ambiance menu: off, the ground and its grass are seen plainly. -->
+    <label class="flex items-center gap-2">
+        <input type="checkbox" data-testid="fire-clouds" bind:checked={$cloudsShownStore} />
+        <span>{$LL.actionbar.catastrophe.weather.clouds()}</span>
     </label>
     <span class="mt-1 text-white/60">{$LL.actionbar.catastrophe.weather.thresholds()}</span>
     {#each thresholdRows as row (row.field)}
