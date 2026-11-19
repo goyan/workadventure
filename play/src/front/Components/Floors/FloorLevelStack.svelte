@@ -2,7 +2,8 @@
     import { tick } from "svelte";
     import { clickOutside } from "svelte-outside";
     import type { FloorLevelStack } from "../../Stores/FloorLevelsStore";
-    import { LL } from "../../../i18n/i18n-svelte";
+    import { LL, locale } from "../../../i18n/i18n-svelte";
+    import { altitudeLabel } from "../../Phaser/Game/Floors/AvatarAltitude";
     import { floorLevelViewedStore, levelChangePulses } from "../../Stores/FloorLevelsStore";
     import { IconCheck, IconChevronDown } from "@wa-icons";
 
@@ -128,6 +129,16 @@
                 <path d="m12 3 9 5-9 5-9-5zM3 12l9 5 9-5M3 16l9 5 9-5" />
             </svg>
             <span class="flex-1 truncate text-left">{selectedLabel}</span>
+            {#if stack.altitude !== undefined}
+                <span
+                    class="shrink-0 tabular-nums opacity-80"
+                    title={$LL.mapEditor.mapLayer.floorLevel.altitude()}
+                    data-testid="avatar-altitude"
+                >
+                    <span class="sr-only">{$LL.mapEditor.mapLayer.floorLevel.altitude()}</span>
+                    {altitudeLabel(stack.altitude, $locale)}
+                </span>
+            {/if}
             <IconChevronDown class="h-3 w-3 shrink-0 opacity-60" />
         </button>
         {#if open}

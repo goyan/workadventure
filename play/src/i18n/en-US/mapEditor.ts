@@ -785,6 +785,7 @@ const mapEditor: BaseTranslation = {
             groundHint: "The ground of the map",
             cursor: "Level {height}",
             title: "Level",
+            altitude: "Altitude of the avatar",
             ground: "Ground",
             level: "Level {height}",
             built: "floor {rank}",

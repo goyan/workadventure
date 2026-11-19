@@ -284,7 +284,7 @@ import { aquaticLifeShownStore, cloudsShownStore, weatherEffectsEnabledStore } f
 import { skyShadowCategoriesStore } from "../../Stores/SkyLightStore";
 import type { SkyShadowCategories } from "../../Stores/SkyLightStore";
 import { mapLayerBuiltLevelsStore, mapLayerLevelStore } from "../../Stores/MapLayerStore";
-import { floorLevelsBuiltStore } from "../../Stores/FloorLevelsStore";
+import { avatarAltitudeStore, floorLevelsBuiltStore } from "../../Stores/FloorLevelsStore";
 import { areaHighlightHiddenStore } from "../../Stores/NightStore";
 import {
     aquaticLifeSpeciesStore,
@@ -306,6 +306,7 @@ import { shownWeatherSettings } from "./Weather/RealWeatherClient";
 import { isSwayingTree, TreeSway } from "./Nature/TreeSway";
 import { TreePoseTextures } from "./Nature/TreePoses";
 import { TreeSeasonEffects } from "./Nature/TreeSeasonEffects";
+import { avatarAltitude } from "./Floors/AvatarAltitude";
 import { FloorSpike } from "./Floors/FloorSpike";
 import { FLOOR_Z_VARIABLE, decodeFloorZ } from "./Floors/FloorProtocol";
 import { UpperDoors } from "./Floors/UpperDoors";
@@ -2241,7 +2242,12 @@ export class GameScene extends DirtyScene {
                 this.nightManager?.sunPosition(),
             );
             // The relief may have been edited: the water follows it (nothing is done while it stays the same).
-            this.terrainWater.setTerrain(this.getGameMap().getWamFile()?.getWam().terrain);
+            const terrain = this.getGameMap().getWamFile()?.getWam().terrain;
+            this.terrainWater.setTerrain(terrain);
+            // Told under the clock, with the floor of the avatar.
+            avatarAltitudeStore.set(
+                avatarAltitude(terrain, this.CurrentPlayer.x, this.CurrentPlayer.y, this.CurrentPlayer.getFloorZ()),
+            );
             this.terrainView?.update(time);
             this.waterFlowView?.update(time);
             this.aquaticLifeView?.update(time);

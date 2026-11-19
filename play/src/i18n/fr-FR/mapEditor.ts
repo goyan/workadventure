@@ -797,6 +797,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             groundHint: "Le sol de la carte",
             cursor: "Niveau {height}",
             title: "Niveau",
+            altitude: "Altitude de l'avatar",
             ground: "Sol",
             level: "Niveau {height}",
             built: "palier {rank}",

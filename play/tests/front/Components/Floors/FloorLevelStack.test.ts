@@ -39,4 +39,11 @@ describe("FloorLevelStack", () => {
         expect(body).toContain(">Sol</span>");
         expect(body).not.toContain("Auto ·");
     });
+
+    it("tells the altitude of the avatar on a map with a relief", () => {
+        const { body } = render(FloorLevelStack, { props: { stack: { ...stack, altitude: 48 } } });
+        expect(body).toContain('data-testid="avatar-altitude"');
+        expect(body).toContain("+1,6 m");
+        expect(render(FloorLevelStack, { props: { stack } }).body).not.toContain("avatar-altitude");
+    });
 });
