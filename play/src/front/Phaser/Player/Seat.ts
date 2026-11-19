@@ -47,17 +47,25 @@ function toPositionDirection(direction: string): PositionMessage_Direction {
     }
 }
 
-let seatsCache: { scene: GameScene; frame: number; seats: Seat[]; ground: Seat[] } | undefined;
+/** The seats of a map are read again this long after they were, at the soonest (they change with an edit only). */
+const SEATS_KEPT_MS = 200;
+
+let seatsCache: { scene: GameScene; frame: number; at: number; seats: Seat[]; ground: Seat[] } | undefined;
 
 /**
- * Every seat of the map. Asked every frame by every character (depth) and animal: computed once per frame, since the
- * map editor may move, add or change seats at any time.
+ * Every seat of the map. Asked every frame by every character (depth) and animal: read from the map a few times a
+ * second at most (every object of the map is looked at), since the map editor may move, add or change seats.
  */
 export function getSeats(scene: GameScene, elevation = 0): Seat[] {
     const frame = scene.game?.loop?.frame ?? -1;
-    if (!seatsCache || seatsCache.scene !== scene || seatsCache.frame !== frame) {
+    const at = performance.now();
+    if (
+        !seatsCache ||
+        seatsCache.scene !== scene ||
+        (seatsCache.frame !== frame && at - seatsCache.at >= SEATS_KEPT_MS)
+    ) {
         const seats = computeSeats(scene);
-        seatsCache = { scene, frame, seats, ground: seats.filter((seat) => (seat.elevation ?? 0) === 0) };
+        seatsCache = { scene, frame, at, seats, ground: seats.filter((seat) => (seat.elevation ?? 0) === 0) };
     }
     // The seats of one floor: a seat of another floor is drawn over a place it does not stand on.
     if (elevation < 2) return seatsCache.ground;
