@@ -90,6 +90,8 @@ const NO_SHIFT = { columns: 0, rows: 0 };
 const DRAW_MARGIN = 0.1;
 /** The outdoors of the view is read for a view widened to whole steps of this many map pixels (see veilOver). */
 const VEIL_STEP = 256;
+/** Puddles are drawn from this many screen pixels a map pixel: under it, the map is seen from too far. */
+const PUDDLE_MIN_SCALE = 0.5;
 /**
  * The body of the clouds (their rim is fainter, cloudAlpha) and their shadows: shadows first, the clouds over them,
  * opaque enough to hide their own shadow and read as clouds, not mist.
@@ -571,7 +573,9 @@ export class WeatherManager {
      */
     private drawPuddles(wetness: number): void {
         const size = this.rainSettings.puddles;
-        if (wetness <= 0 || size <= 0) {
+        // Seen from far a puddle is a dot, and the whole map holds so many of them that drawing them again at every
+        // image took most of the time of an image: none under this scale.
+        if (wetness <= 0 || size <= 0 || this.screenScale() < PUDDLE_MIN_SCALE) {
             this.lastPuddleKey = "";
             this.hidePuddles();
             return;

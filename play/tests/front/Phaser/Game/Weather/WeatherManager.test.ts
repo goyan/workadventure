@@ -790,6 +790,22 @@ describe("puddles", () => {
         expect(graphics.fillStyle.mock.calls.slice(drawn).some(([color]) => color === 0x4f7ba6)).toBe(false);
     });
 
+    // The whole map seen from far holds so many puddles that drawing them took most of the time of an image.
+    it("draws no puddle when the map is seen from far, and draws them again closer", () => {
+        const { scene, graphics, wam } = fixture();
+        wam.settings = { weather: WeatherType.Rain };
+        scene.cameras.main.worldView.width = 640;
+        scene.cameras.main.worldView.height = 640;
+        scene.cameras.main.zoom = 0.3;
+        manager = new WeatherManager(scene);
+        rainPuddlesStore.set(1);
+        manager.update(0, new Date(0));
+        expect(graphics.fillStyle.mock.calls.some(([color]) => color === 0x4f7ba6)).toBe(false);
+        scene.cameras.main.zoom = 1;
+        manager.update(40, new Date(40));
+        expect(graphics.fillStyle.mock.calls.some(([color]) => color === 0x4f7ba6)).toBe(true);
+    });
+
     it("leaves the puddles out where the ground has a relief: its own water is drawn there", () => {
         const { scene, graphics, wam } = fixture();
         wam.settings = { weather: WeatherType.Rain };
