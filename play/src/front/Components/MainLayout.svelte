@@ -81,6 +81,7 @@
     import JamLinkRequestCard from "./ListeningZone/JamLinkRequestCard.svelte";
     import NerfHearts from "./Nerf/NerfHearts.svelte";
     import FishingCards from "./Fishing/FishingCards.svelte";
+    import CallStrip from "./Video/CallStrip/CallStrip.svelte";
     import FishingContestPanel from "./Fishing/FishingContestPanel.svelte";
     import WeatherForecastBanner from "./Weather/WeatherForecastBanner.svelte";
     import CatastrophePanel from "./Catastrophe/CatastrophePanel.svelte";
@@ -471,6 +472,9 @@
 
             <!-- The hearts of the local player while they carry a Nerf, top left under the chat buttons. -->
             <NerfHearts />
+
+            <!-- The participants of the call out of the view of the map: who is there, talks, and has the mic or camera on. -->
+            <CallStrip />
 
             <!-- What just happened at the end of a fishing line (a catch and its weight, a fish that got away). -->
             <FishingCards />

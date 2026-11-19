@@ -1,5 +1,6 @@
 import {
     DEFAULT_SINK_RADIUS_TILES,
+    metresOf,
     TERRAIN_CELL,
     TILE_PX,
     WaterSinkPropertyData,
@@ -18,6 +19,8 @@ export interface WaterMark {
     litresPerMinute: number;
     /** The radius of the disc it pours over or takes from, in map pixels (0: at its foot only). */
     discPx: number;
+    /** The level it holds, in pixels of altitude: absent when it always runs. */
+    levelPx?: number;
 }
 
 /**
@@ -47,17 +50,24 @@ export function waterMarksOf(wam: Pick<WAMFileFormat, "entities"> | undefined): 
                 y: cell(entity.y + (found.anchorY ?? 0)),
                 litresPerMinute: found.flow,
                 discPx: (found.radius ?? (kind === "source" ? 0 : DEFAULT_SINK_RADIUS_TILES)) * TILE_PX,
+                ...(found.level === undefined ? {} : { levelPx: found.level }),
             });
         }
     }
     return marks;
 }
 
-/** The flow of a mark as written next to it: in the unit of the dashboard, + for a source, − for a sink. */
+/**
+ * The flow of a mark as written next to it: in the unit of the dashboard, + for a source, − for a sink, then the
+ * level it holds, in metres.
+ */
 export function waterMarkLabel(mark: WaterMark): string {
     const sign = mark.litresPerMinute === 0 ? "" : mark.kind === "source" ? "+" : "−";
     const unit = waterFlowUnit(DEFAULT_WATER_FLOW_UNIT);
-    return `${sign}${flowInUnit(mark.litresPerMinute, unit.id)} ${unit.label}`;
+    const flow = `${sign}${flowInUnit(mark.litresPerMinute, unit.id)} ${unit.label}`;
+    if (mark.levelPx === undefined) return flow;
+    const metres = Math.round(metresOf(mark.levelPx) * 10) / 10;
+    return `${flow} → ${metres < 0 ? "−" : ""}${Math.abs(metres).toFixed(1)} m`;
 }
 
 /** A mark is this wide on the screen (pixels), whatever the zoom, and never smaller than this on the map. */

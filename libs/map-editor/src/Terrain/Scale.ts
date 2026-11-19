@@ -15,3 +15,8 @@ export const LITRES_PER_M3 = 1000;
 export function metresOf(heightPx: number): number {
     return heightPx === 0 ? 0 : (heightPx / TILE_PX) * Math.sqrt(TILE_AREA_M2);
 }
+
+/** The height in pixels of altitude of that many metres: the reverse of metresOf. */
+export function heightOfMetres(metres: number): number {
+    return metres === 0 ? 0 : (metres / Math.sqrt(TILE_AREA_M2)) * TILE_PX;
+}

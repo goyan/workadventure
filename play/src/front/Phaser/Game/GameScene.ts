@@ -32,6 +32,8 @@ import {
     GameMapProperties,
     GRAZING_COVER,
     listeningZoneJamKey,
+    type Season,
+    seasonAt,
     type WAMFileFormat,
     WAMSettingsUtils,
     WeatherType,
@@ -255,6 +257,7 @@ import {
     videoStreamStore,
     videoStreamElementsStore,
 } from "@wa/front/Stores/PeerStore";
+import { isOffscreen, offscreenCallUsersStore } from "@wa/front/Stores/CallStripStore";
 import type { ChatConnectionInterface, ChatUser } from "@wa/front/Chat/Connection/ChatConnection";
 import { selectedRoomStore } from "@wa/front/Chat/Stores/SelectRoomStore";
 import { getCustomEntityCollectionUrl } from "@wa/front/Utils/MapStorageUrl";
@@ -435,7 +438,9 @@ const CONVERSATION_BUBBLE_SPATIAL_GRID_SIZE = 64;
 /** How often the volumes of an overheard bubble follow the players: often enough for a walk, not every frame. */
 const OVERHEARD_LOUDNESS_PERIOD_MS = 200;
 /** How often the names of the players in the discussion of the local player are marked again. */
-const DISCUSSION_MARKS_PERIOD_MS = 500;
+const DISCUSSION_MARKS_PERIOD_MS = 250;
+/** How high over the feet of an avatar its video bubble stands, in map pixels (AvatarVideoBubble). */
+const CALL_BUBBLE_ABOVE_FEET_PX = 40;
 
 export interface GameSceneInitInterface {
     reconnecting: boolean;
@@ -1516,6 +1521,7 @@ export class GameScene extends DirtyScene {
     }
 
     public cleanupClosingScene(): void {
+        offscreenCallUsersStore.set(new Set());
         this.saveCurrentPosition();
         window.removeEventListener("pagehide", this.saveCurrentPosition);
         this.abortController?.abort();
@@ -1795,7 +1801,7 @@ export class GameScene extends DirtyScene {
 
     /**
      * The players in the discussion of the local player (a bubble or a meeting room) get their name marked on the map:
-     * one sees who is in the call, even with the cameras off. Read twice a second; only the changes are applied.
+     * one sees who is in the call, even with the cameras off. Only the changes are applied.
      */
     private updateDiscussionMarks(): void {
         const now = performance.now();
@@ -1812,6 +1818,30 @@ export class GameScene extends DirtyScene {
             this.MapPlayersByKey.get(userId)?.setInDiscussion(true);
         }
         this.discussionMarked = inDiscussion;
+        this.updateOffscreenCallUsers();
+    }
+
+    /** The players of the discussion out of the view (or not on the map shown): the call strip lists them. */
+    private updateOffscreenCallUsers(): void {
+        const view = this.cameras.main.worldView;
+        const previous = get(offscreenCallUsersStore);
+        const offscreen = new Set<string>();
+        for (const { spaceUser } of get(videoStreamElementsStore)) {
+            const player = this.MapPlayersByKey.get(userIdOfSpaceUser(spaceUser.spaceUserId));
+            // The video bubble stands over the head: that is what must be seen.
+            // Found by its user id, like the names marked in the discussion (updateDiscussionMarks): the uuid of a
+            // guest's space user is not the one of its player.
+            const bubble = player && { x: player.x, y: player.y - CALL_BUBBLE_ABOVE_FEET_PX };
+            if (!bubble || isOffscreen(previous.has(spaceUser.spaceUserId), bubble, view)) {
+                offscreen.add(spaceUser.spaceUserId);
+            }
+        }
+        if (get(videoStreamElementsStore).length > 0) {
+            const localBubble = { x: this.CurrentPlayer.x, y: this.CurrentPlayer.y - CALL_BUBBLE_ABOVE_FEET_PX };
+            if (isOffscreen(previous.has("local"), localBubble, view)) offscreen.add("local");
+        }
+        const changed = offscreen.size !== previous.size || [...offscreen].some((userId) => !previous.has(userId));
+        if (changed) offscreenCallUsersStore.set(offscreen);
     }
 
     /** Only the local player hears their footsteps and rolling skateboard. */
@@ -2899,6 +2929,15 @@ export class GameScene extends DirtyScene {
             .catch((error: unknown) => console.warn("A state of the meadow of the map could not be read", error));
     }
 
+    /**
+     * The season of the ground of the map, by the calendar of Paris like the meadow of the server (not the personal
+     * theme: the snow of the heights slows everyone alike). Unknown until the time of the server is.
+     */
+    public getGroundSeason(): Season | undefined {
+        const date = this.nightManager?.serverDate();
+        return date && Number.isFinite(date.getTime()) ? seasonAt(date) : undefined;
+    }
+
     /** The meadow of the map, for what reads its grass and the moisture of its soil. */
     public getMeadow(): MeadowState {
         return this.meadow;
@@ -3616,7 +3655,9 @@ export class GameScene extends DirtyScene {
                 });
                 // The relief of the ground and the water of its hollows.
                 this.terrainView?.destroy();
-                this.terrainView = new TerrainView(this, this.terrainWater, undefined, this.meadow);
+                this.terrainView = new TerrainView(this, this.terrainWater, undefined, this.meadow, () =>
+                    this.getGroundSeason(),
+                );
                 // The water seen moving: foam on its current, whirls over the sinks, rings over the sources.
                 this.waterFlowView?.destroy();
                 this.waterFlowView = new WaterFlowView(this, {

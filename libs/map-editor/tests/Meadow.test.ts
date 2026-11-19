@@ -9,6 +9,7 @@ import {
     seasonGrowth,
 } from "../src/Terrain/Meadow";
 import type { MeadowStepInput } from "../src/Terrain/Meadow";
+import { SNOW_FULL_PX, SNOW_LINES, SNOW_PACE, snowCover, snowPace } from "../src/Terrain/SnowLine";
 import { soilCode } from "../src/Terrain/Soils";
 import { cellKey, withHeights, withSoils } from "../src/Terrain/TerrainGrid";
 import { Season } from "../src/types";
@@ -266,5 +267,45 @@ describe("an animal that grazes", () => {
         expect(meadow.graze(70, 40, 0)).toBe(0);
         expect(meadow.graze(70, 40, Number.NaN)).toBe(0);
         expect(meadow.grassAt(2, 1)).toBe(1);
+    });
+});
+
+describe("the snow of the heights", () => {
+    it("holds from a line that goes down in winter, and thickens above it", () => {
+        expect(snowCover(0, Season.Winter)).toBe(0);
+        expect(snowCover(SNOW_LINES[Season.Winter], Season.Winter)).toBe(0);
+        expect(snowCover(SNOW_LINES[Season.Winter] + SNOW_FULL_PX / 2, Season.Winter)).toBe(0.5);
+        expect(snowCover(SNOW_LINES[Season.Winter] + SNOW_FULL_PX, Season.Winter)).toBe(1);
+        expect(snowCover(256, Season.Winter)).toBe(1);
+        // The same mount keeps less snow, or none, in the other seasons.
+        expect(snowCover(128, Season.Winter)).toBe(1);
+        expect(snowCover(128, Season.Spring)).toBe(0);
+        expect(snowCover(176, Season.Autumn)).toBe(0.5);
+        expect(snowCover(176, Season.Summer)).toBe(0);
+        expect(snowCover(256, Season.Summer)).toBe(1);
+        expect(snowCover(Number.NaN, Season.Winter)).toBe(0);
+    });
+
+    it("slows the walk down with its cover", () => {
+        expect(snowPace(0)).toBe(1);
+        expect(snowPace(1)).toBe(SNOW_PACE);
+        expect(snowPace(0.5)).toBeCloseTo((1 + SNOW_PACE) / 2);
+        expect(snowPace(7)).toBe(SNOW_PACE);
+    });
+
+    it("kills the grass it covers, and leaves the grass under its line", () => {
+        // Two tiles of a moist earth: one at the ground, one on a top the winter snow covers.
+        const terrain: TerrainData = withHeights(undefined, new Map(tile(3, 2, 200)));
+        const meadow = new Meadow(size, terrain, undefined);
+        const winter: MeadowStepInput = { ...dry, season: Season.Winter, rainMmPerHour: 5 };
+        meadow.set(1, 2, 0.5, 1);
+        meadow.set(3, 2, 0.5, 1);
+        run(meadow, 1300, winter);
+        expect(meadow.grassAt(1, 2)).toBe(1);
+        expect(meadow.grassAt(3, 2)).toBe(0);
+        // In summer the same top is under the snow line: its grass stays.
+        meadow.set(3, 2, 0.5, 1);
+        run(meadow, 1300, { ...winter, season: Season.Summer });
+        expect(meadow.grassAt(3, 2)).toBe(1);
     });
 });

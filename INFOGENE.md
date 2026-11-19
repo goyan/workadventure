@@ -2155,6 +2155,13 @@ n'importe quel objet depuis son panneau : une source verse à son pied, un puits
 pied (milieu du bas de l'image) est écrit dans la propriété par l'éditeur (`anchorX`, `anchorY`,
 `Terrain/WaterAnchor.ts`), car `back` ne connaît pas la taille des objets.
 
+**Niveau tenu** (champ facultatif `level` des deux propriétés, en pixels d'altitude, réglé en mètres dans le panneau,
+interrupteur « Tenir un niveau ») : une source ne verse que tant que l'eau à son pied est sous ce niveau, un puits ne
+prend que l'eau au-dessus (trop-plein). À chaque pas, l'un et l'autre sont limités à ce qui amène l'eau de leur disque
+au niveau (`heldFlow` de `WaterGrid.ts`) ; un puits à niveau ne prend que dans son disque, il n'aspire pas le plan
+d'eau. Un lac reste ainsi plein quelle que soit la météo, sans déborder. Sans `level`, rien ne change. Le repère de
+l'outil Relief écrit le niveau après le débit (« +60 m³/h → −0.5 m »).
+
 **Modèle** (`libs/map-editor/src/Terrain/`, lu à l'identique par `back` et par le front). Le relief est un champ
 facultatif du WAM (`terrain` : hauteurs par cellule de 16 px, 0 au sol, négatif creusé, par blocs de 16 × 16 ; absent =
 carte plate, aucune migration). Échelle des lampes : une case = 1,2 m² de sol (`TILE_AREA_M2`), donc 1 mm de pluie =
@@ -2232,6 +2239,14 @@ donné au `MeadowManager` par `GameRoom`). L'herbe repousse comme ailleurs : un 
 laisse le sol nu. À l'écran, une antilope immobile sur une case qui a de l'herbe (15 % et plus) baisse la tête, dans
 la pose de la boisson (`LandLifeView`, calculé par le navigateur à partir du pré qu'il reçoit). Brouter ne change
 rien à la vie des antilopes : elles ne cherchent pas l'herbe et n'ont pas faim sans elle. Rien sur le fil.
+
+**Neige en altitude** (`Terrain/SnowLine.ts`). La neige tient sur les monts à partir d'une altitude qui dépend de la
+saison du calendrier de Paris : 96 px (3 cases) en hiver, 160 px au printemps et en automne, 224 px en été ; fine à
+la limite, complète 32 px plus haut (`snowCover`). Le navigateur la dessine en voile blanc sur le sol et l'herbe,
+sous les ombres des pentes, dehors seulement (`TerrainView`, `snowAlpha`) ; on y marche moins vite (85 % sous une
+couverture complète, `snowPace` dans `GroundPace.ts`) ; le serveur y fait mourir l'herbe, à l'allure de la soif sous
+une couverture complète (`Meadow.step`). Tout se calcule à partir du relief et de la saison : rien dans la carte ni
+sur le fil, aucun réglage. Indépendante de la neige de la météo (qui blanchit toute la carte) et du thème personnel.
 
 **Altitude de l'avatar.** Sur une carte qui a un relief, la pile des étages sous l'horloge dit l'altitude de
 l'avatar, en mètres (une case d'altitude ≈ 1,10 m, `metresOf`) : la hauteur du relief sous ses pieds quand il est au

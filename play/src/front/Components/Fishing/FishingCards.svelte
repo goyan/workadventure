@@ -19,7 +19,7 @@
 
 <!-- What just happened at the end of a fishing line: under the action bar, never in the way of a click. -->
 <div
-    class="pointer-events-none absolute left-1/2 top-24 z-[300] flex -translate-x-1/2 flex-col items-center gap-1 select-none"
+    class="pointer-events-none absolute left-1/2 top-40 z-[300] flex -translate-x-1/2 flex-col items-center gap-1 select-none"
     aria-live="polite"
     data-testid="fishing-cards"
 >

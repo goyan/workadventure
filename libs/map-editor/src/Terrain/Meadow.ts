@@ -1,5 +1,6 @@
 import { Season, TERRAIN_CELL, TILE_PX } from "../types";
 import type { TerrainData, WAMFileFormat } from "../types";
+import { snowCover } from "./SnowLine";
 import { soilName } from "./Soils";
 import type { SoilName } from "./Soils";
 import { cellOf, heightAt, soilAt } from "./TerrainGrid";
@@ -84,7 +85,7 @@ export function pavedTilesOf(wam: Pick<WAMFileFormat, "entities"> | undefined): 
  * same meadow. The soil takes its moisture from the rain and from the water lying on it; the moisture spreads to the
  * neighbouring tiles and runs down the slopes, and each soil loses it at its own pace. Grass grows by itself on a
  * fertile soil that is moist without being under water, by day, in its season, slower with the altitude; it dies of
- * thirst on a dry soil and drowns under water. Outdoors only: what walls close has no meadow.
+ * thirst on a dry soil, drowns under water and dies back under the snow of the heights (see SnowLine.ts). Outdoors only: what walls close has no meadow.
  */
 export class Meadow {
     public readonly width: number;
@@ -212,6 +213,9 @@ export class Meadow {
             let cover = grass[index];
             if (fertility[index] <= 0 || water[index] >= DROWNING_WATER_PX) {
                 cover -= seconds / DROWN_SECONDS;
+            } else if (snowCover(ground[index], input.season) > 0) {
+                // Under the snow of the heights the grass dies back, as fast as of thirst under a full cover.
+                cover -= (seconds / thirstSeconds) * snowCover(ground[index], input.season);
             } else if (moisture[index] < DRY_MOISTURE) {
                 cover -= seconds / thirstSeconds;
             } else if (

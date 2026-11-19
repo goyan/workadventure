@@ -405,6 +405,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             unit: "Unité du débit",
             radius: "Rayon (cases)",
             radiusHint: "L'eau est versée sur tout ce disque. À 0, elle sort au pied de l'objet.",
+            level: "Tenir un niveau",
+            levelValue: "Altitude de l'eau à tenir, en mètres",
+            levelHint:
+                "La source ne verse que tant que l'eau à son pied est sous cette altitude : un lac reste plein, sans déborder. 0 m : le niveau du sol de la carte ; négatif dans un creux, positif sur un mont. L'altitude du sol sous le curseur s'affiche sous l'horloge.",
         },
         waterSink: {
             label: "Puits (évacuation)",
@@ -418,6 +422,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             radius: "Rayon (cases)",
             radiusHint:
                 "Le puits vide d'abord ce disque. S'il demande plus, il aspire le plan d'eau relié à lui, plus fort près de lui : l'eau y court vers le puits.",
+            level: "Tenir un niveau (trop-plein)",
+            levelValue: "Altitude de l'eau à tenir, en mètres",
+            levelHint:
+                "Le puits ne prend que l'eau au-dessus de cette altitude, dans son disque : un trop-plein, qui ne vide pas le lac. 0 m : le niveau du sol de la carte ; négatif dans un creux, positif sur un mont.",
         },
         lamp: {
             label: "Zone de lumière",

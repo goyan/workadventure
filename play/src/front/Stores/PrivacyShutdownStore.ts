@@ -35,6 +35,11 @@ function createPrivacyShutdownStore() {
         if (peerElements.length === 0 && hasFocus === false && !isLiveStreaming) {
             privacyEnabled = true;
             set(true);
+        } else if (peerElements.length > 0 && privacyEnabled) {
+            // A discussion starts: the camera comes back, even if the window does not have the focus (another
+            // window, or the toolbar of the desktop app). Otherwise one joins a call with an empty tile.
+            privacyEnabled = false;
+            set(false);
         }
     });
 

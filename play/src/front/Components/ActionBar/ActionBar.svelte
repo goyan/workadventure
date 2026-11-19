@@ -85,7 +85,7 @@
 
                                 {#if smallArrowVisible}
                                     <div
-                                        class="absolute h-3 mobile:h-6 w-7 rounded-b mobile:rounded-t bg-contrast/80 backdrop-blur start-[2.3rem] @xl/actions:start-[2.86rem] m-auto p-1 z-10 transition-all -bottom-3 hidden opacity-0 sm:block mobile:-top-12 mobile:block {$inExternalServiceStore
+                                        class="device-tab absolute h-3 mobile:h-6 w-7 rounded-b mobile:rounded-t bg-contrast/80 backdrop-blur start-[2.3rem] @xl/actions:start-[2.86rem] m-auto p-1 z-10 transition-all -bottom-3 hidden opacity-0 sm:block mobile:-top-12 mobile:block {$inExternalServiceStore
                                             ? ''
                                             : 'mobile:opacity-100'}
                                         {$mediaSettingsOpenStore || $isInRemoteConversation
@@ -96,7 +96,7 @@
                                         <!-- svelte-ignore a11y_no_static_element_interactions -->
                                         <div
                                             data-testid="media-settings-toggle-button"
-                                            class="absolute bottom-1 start-0 end-0 m-auto hover:bg-white/10 h-5 w-5 flex items-center justify-center rounded-sm mobile:rotate-180"
+                                            class="device-tab-key absolute bottom-1 start-0 end-0 m-auto hover:bg-white/10 h-5 w-5 flex items-center justify-center rounded-sm mobile:rotate-180"
                                             onclick={(event) => {
                                                 event.stopPropagation();
                                                 event.preventDefault();

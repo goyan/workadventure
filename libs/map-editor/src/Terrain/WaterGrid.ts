@@ -208,6 +208,18 @@ export function gridBoundsOf(
     return { x, y, width, height };
 }
 
+/**
+ * What a source (positive) or a sink (negative) that holds a level gives or takes during a step: its flow, and no
+ * more than what brings the water of its disc from `surface` to the level. Its flow when it holds none.
+ */
+export function heldFlow(px: number, level: number | undefined, surface: number, radius: number | undefined): number {
+    if (level === undefined || !Number.isFinite(level)) return px;
+    const gap = px > 0 ? level - surface : surface - level;
+    if (gap <= 0) return 0;
+    const cells = Math.max(1, Math.PI * (radius ?? 0) ** 2);
+    return Math.sign(px) * Math.min(Math.abs(px), gap * cells);
+}
+
 /** What happens to the water during one step, in pixels of water over one cell each. */
 export interface WaterStepInput {
     /** Rain falling on each dug cell (the runoff of the ground around included). */
@@ -218,9 +230,11 @@ export interface WaterStepInput {
     absorptionPx: number;
     /**
      * Sources (positive) and sinks (negative), each at a cell of the map. `radius` is the disc, in cells, a source
-     * pours over (its cell only when absent) or a sink takes from (a tile and a half when absent).
+     * pours over (its cell only when absent) or a sink takes from (a tile and a half when absent). `level` is the
+     * altitude of the water, in pixels, a source stops pouring at and a sink stops taking at: at each step it gives
+     * or takes no more than what brings the water of its disc there.
      */
-    flows: readonly { cellX: number; cellY: number; px: number; radius?: number }[];
+    flows: readonly { cellX: number; cellY: number; px: number; radius?: number; level?: number }[];
     /**
      * How many times the water moves towards a sink that asks for more than it finds, during the step (1 when
      * absent, MAX_FLOW_STEPS at most): more on a map whose water goes faster than reality, so that it runs to the
@@ -505,20 +519,24 @@ export class WaterGrid {
                 if (flow.px > 0) tally.lostPx += flow.px;
                 continue;
             }
-            if (flow.px > 0) {
-                tally.sourcesPx += flow.px;
-                tally.lostPx += flow.px - this.pour(index, flow.px, radiusOf(flow.radius, 0));
+            // A source or a sink that holds a level: no more than what brings the water of its disc there.
+            const px = heldFlow(flow.px, flow.level, this.ground[index] + depth[index], flow.radius);
+            if (px === 0) continue;
+            if (px > 0) {
+                tally.sourcesPx += px;
+                tally.lostPx += px - this.pour(index, px, radiusOf(flow.radius, 0));
                 tally.moved = true;
             } else {
                 const radius = radiusOf(flow.radius, SINK_RADIUS_CELLS);
-                let taken = this.drain(index, -flow.px, radius);
-                // Its disc did not hold what it asks: the rest comes from the water joined to it.
-                if (taken < -flow.px) taken += this.lowerBasin(index, -flow.px - taken, radius);
+                let taken = this.drain(index, -px, radius);
+                // Its disc did not hold what it asks: the rest comes from the water joined to it. A sink that holds
+                // a level takes from its disc only: the lake runs to it by itself.
+                if (taken < -px && flow.level === undefined) taken += this.lowerBasin(index, -px - taken, radius);
                 tally.sinksPx += taken;
                 // A sink with nothing to take does not keep a grid at rest awake.
                 if (taken > 0) tally.moved = true;
                 // What it still asks for: taken as the water runs to it, between the moves of this step.
-                if (-flow.px - taken > 0) sinks.push({ index, radius, left: -flow.px - taken });
+                if (-px - taken > 0 && flow.level === undefined) sinks.push({ index, radius, left: -px - taken });
             }
         }
         if (this.flow(tally)) tally.moved = true;

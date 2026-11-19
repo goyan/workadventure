@@ -1258,3 +1258,192 @@
     outline: 2px solid hsl(var(--secondary-500));
     outline-offset: 1px;
 }
+
+/* The number of people in the discussion, on the participants button of the action bar. */
+.participant-count {
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: #fff;
+    border-radius: 999px;
+    background: hsl(var(--secondary));
+    box-shadow: inset 0 -2px 0 hsl(var(--rt-shade) / 0.35);
+}
+
+/* The tab under the microphone and camera that opens the devices: a small key hanging under them, easy to aim. */
+@media (min-width: 640px) {
+    .device-tab {
+        /* Centred under the junction of the microphone and the camera, whatever the size of their keys. */
+        inset-inline-start: calc(50% - 22px);
+        bottom: -20px;
+        width: 44px;
+        height: 20px;
+        padding: 0;
+        border: 2px solid hsl(var(--contrast-500) / 0.7);
+        border-top: 0;
+        border-radius: 0 0 10px 10px;
+        background: hsl(var(--contrast-900) / 0.92);
+        box-shadow:
+            inset 0 -3px 0 hsl(var(--rt-shade) / 0.45),
+            0 4px 10px hsl(var(--rt-shade) / 0.3);
+    }
+    .device-tab .device-tab-key {
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: 0 0 8px 8px;
+        color: hsl(var(--contrast-200));
+    }
+    .device-tab .device-tab-key:hover {
+        color: hsl(var(--secondary-500));
+        background: transparent;
+    }
+}
+
+/* A slot with its name under the icon (map editor build kit and object categories): one reads instead of guessing,
+   the name cut to one line when it is long; the full name stays in the tooltip. */
+.build-slot.labeled {
+    flex-direction: column;
+    gap: 3px;
+    width: 64px;
+    height: 58px;
+    padding: 4px 3px 3px;
+}
+.build-slot .build-label {
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 10px;
+    line-height: 1.1;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    opacity: 0.85;
+}
+.build-slot.labeled[aria-pressed="true"] .build-label,
+.build-slot.labeled[aria-selected="true"] .build-label {
+    opacity: 1;
+    font-weight: 700;
+}
+
+/* The call strip: under the action bar, the participants of the call out of the view, one small chip each. */
+.call-strip {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    z-index: 290;
+    display: flex;
+    width: max-content;
+    max-width: calc(100% - 32px);
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+.call-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 180px;
+    min-width: 0;
+    box-sizing: border-box;
+    min-height: 44px;
+    padding: 4px 6px;
+    font-size: 12px;
+    color: hsl(var(--contrast-100));
+    border-radius: 999px;
+    background: hsl(var(--contrast-900) / 0.9);
+    border: 2px solid hsl(var(--contrast-500) / 0.6);
+    box-shadow:
+        inset 0 -2px 0 hsl(var(--rt-shade) / 0.4),
+        0 4px 10px hsl(var(--rt-shade) / 0.3);
+    backdrop-filter: blur(8px);
+    transition:
+        border-color 150ms ease,
+        box-shadow 150ms ease;
+}
+.call-chip.speaking {
+    border-color: hsl(var(--secondary-500));
+    box-shadow:
+        0 0 0 2px hsl(var(--secondary-500) / 0.25),
+        0 0 10px hsl(var(--secondary-500) / 0.5);
+}
+.call-chip.more {
+    padding: 4px 10px;
+    font-weight: 700;
+    cursor: pointer;
+    pointer-events: auto;
+    list-style: none;
+}
+.call-chip.more::-webkit-details-marker {
+    display: none;
+}
+.call-strip-overflow {
+    flex-shrink: 0;
+}
+.call-strip-list {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: min(60vh, 400px);
+    overflow-y: auto;
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    pointer-events: auto;
+}
+.call-strip-list .call-chip {
+    flex-shrink: 0;
+    width: 180px;
+}
+.call-chip-avatar {
+    display: inline-flex;
+    flex-shrink: 0;
+    width: 28px;
+}
+.call-chip-video {
+    display: block;
+    overflow: hidden;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    object-fit: cover;
+}
+.call-chip-name {
+    min-width: 0;
+    overflow: hidden;
+    font-weight: 600;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+.call-chip-state {
+    display: inline-flex;
+    flex-shrink: 0;
+    color: hsl(var(--secondary-500));
+}
+.call-chip-state.off {
+    color: hsl(var(--danger));
+}
+@media (max-width: 640px) {
+    .call-strip > .call-chip {
+        gap: 3px;
+        padding: 3px;
+    }
+    .call-strip > .call-chip .call-chip-avatar {
+        display: none;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .call-chip {
+        transition: none;
+    }
+}
