@@ -22,6 +22,7 @@ describe("PixelIcons", () => {
                 "door",
                 "electricUnicycle",
                 "footsteps",
+                "meteor",
                 "nerf",
                 "onePiece",
                 "outfit",
