@@ -201,6 +201,17 @@ describe("TerrainWaterManager", () => {
         expect(sent.at(-1)?.stats?.rain).toBeGreaterThan(0);
     });
 
+    it("a downpour goes on raining while the wave of a meteor runs", () => {
+        const { manager, sent, steps } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        fillWithWater(manager);
+        manager.strike(240, 240, 4);
+        manager.setDownpours(() => [{ id: 1, x: 40, y: 40, radiusTiles: 1, wholeMap: false }]);
+        sent.length = 0;
+        steps(4);
+        expect(sent.some((message) => (message.stats?.rain ?? 0) > 0)).toBe(true);
+    });
+
     it("a downpour on the whole map rains on every cell, and nothing falls once it ended", () => {
         const { manager, steps } = createHarness({ wam: wamWith(wideLake) });
         manager.mapChanged();

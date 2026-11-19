@@ -90,7 +90,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         this.gameScene = gameScene;
         this.pointerCapture = new MapDragPointerCapture(
             gameScene.game.canvas,
-            () => this.canDragMap(),
+            // A held downpour keeps the pointer too: its release is seen even over a panel.
+            () => this.canDragMap() || (get(armedCatastropheStore) === "downpour" && !get(mapEditorModeStore)),
             () => this.handlePointerCancelEvent(),
         );
         // Same Key object as the "interact" key: addKey returns the existing one.

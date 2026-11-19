@@ -203,7 +203,9 @@ export class TerrainWaterManager {
             this.rainRate = rainRateAt(settings, this.now(), slots);
         }
         this.steps++;
-        const waving = this.waves.length > 0 || this.pourDownpours(grid);
+        // Both each step: a downpour goes on raining while the wave of a meteor runs.
+        const raining = this.pourDownpours(grid);
+        const waving = this.waves.length > 0 || raining;
         if (this.waves.length > 0) this.advanceWaves(grid);
         const pouring = this.rainRate > 0 || this.objects.some((object) => object.litresPerMinute > 0);
         if (this.moving || pouring) {
@@ -230,8 +232,8 @@ export class TerrainWaterManager {
     }
 
     /**
-     * The downpours rain on the water during a step: counted with the rain. True while one is falling, so that the
-     * room sees the water rise as often as under a wave.
+     * The downpours rain on the water during a step: counted with the rain. True when water fell, so that the room
+     * sees it rise as often as under a wave.
      */
     private pourDownpours(grid: WaterGrid): boolean {
         const falling = this.downpours();
@@ -252,7 +254,7 @@ export class TerrainWaterManager {
             this.version++;
             this.changedSinceSave = true;
         }
-        return true;
+        return laid > 0;
     }
 
     /** The waves of the impacts move on; one that ended is forgotten, and what it lost is counted. */
