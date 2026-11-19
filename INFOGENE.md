@@ -3243,14 +3243,21 @@ bandeau et vent manuel ne sont validés que par les tests.
 Le lot 2 fait brûler le sol sec (patch de feu au clic maintenu, propagation au vent, cendres, extinction par l'eau) ;
 ce lot dessine le feu. Rien ne change côté serveur ni sur le fil.
 
-- `Fire/FlameShape.ts` (pur, testé) : pour une case en feu, la flamme (hauteur, penchée sous le vent, contour à
-  pointes), ses braises et ses bouffées de fumée, selon l'intensité de la case, le temps et une graine propre à la case.
-- `Fire/FireView.ts` : une couche de dessin par rangée de cases, à la profondeur du pied (une flamme passe devant ce
-  qui est plus au nord et derrière ce qui est plus au sud) ; quatre langues emboîtées, du rouge au blanc chaud ;
-  fumée sous le voile de nuit ; lueur en fusion additive au-dessus des lumières des lampes.
-- 600 flammes au plus à l'écran, au-delà une part des cases en feu, réparties sur toute la vue et dessinées plus grosses (`spreadTiles`).
-- Mouvement réduit : flammes fixes, sans braises. Le scintillement reste doux (pas de flash).
-- Chaque navigateur dessine ses flammes : deux joueurs voient le même feu, pas les mêmes langues.
+- `Fire/FlameShape.ts` (pur, testé) : la boucle d'une flamme en 14 images (`drawnFlame`, `drawnEmbers` : elle
+  respire, ondule, ses braises montent), et la pose d'une image sur une case (`flamePose` : laquelle, sa taille selon
+  l'intensité du feu, tournée du côté où va le vent ; chaque case entre dans la boucle à son instant et à son allure).
+- `Fire/FireView.ts` : les 14 images sont dessinées une fois dans une texture (quatre langues emboîtées, du rouge au
+  blanc chaud, braises), puis posées comme des images à la profondeur du pied de chaque case (une flamme passe devant
+  ce qui est plus au nord et derrière ce qui est plus au sud) ; fumée sous le voile de nuit ; lueur en fusion
+  additive au-dessus des lumières des lampes. Les flammes bougent 12 fois par seconde et la scène n'est redessinée
+  qu'à ce rythme.
+- 600 flammes au plus à l'écran, au-delà une part des cases en feu, réparties sur toute la vue et dessinées plus
+  grosses (`spreadTiles`).
+- Mouvement réduit : une image fixe, sans braises. Le scintillement reste doux (pas de flash).
+- Chaque navigateur dessine ses flammes : deux joueurs voient le même feu, pas forcément la même image de la boucle.
+- **Sol gardé en mémoire** (`TerrainView`, `BlockSurface.snapshot` / `restore`) : sols, herbe, paille, cendres et
+  relief sont composés une fois pour un relief, un pré et une vue, puis reposés sous l'eau ; tant que l'eau bouge
+  (10 dessins par seconde) seule l'eau est repeinte.
 
 Limites : flammes au sol seulement (les arbres ne brûlent pas encore), pas de son, la lueur n'éclaire pas la nuit
 comme une lampe (elle ne perce pas le voile).

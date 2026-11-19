@@ -11,7 +11,7 @@ import {
 import type { Season, TerrainData } from "@workadventure/map-editor";
 import type { GameScene } from "../GameScene";
 import { createBlockSurface } from "../Weather/BlockSurface";
-import type { BlockCanvasArea, BlockSurface } from "../Weather/BlockSurface";
+import type { BlockCanvasArea, BlockSnapshot, BlockSurface } from "../Weather/BlockSurface";
 import { paddedView, wellInside } from "../Weather/WeatherFrame";
 import type { WeatherView } from "../Weather/WeatherFrame";
 import {
@@ -70,6 +70,8 @@ interface ReliefLayers extends BlockCanvasArea {
     ash: Uint8Array | undefined;
     fire: Uint8Array | undefined;
     meadowVersion: number;
+    /** These layers once painted on the canvas, kept while the water alone moves: laid back, not painted again. */
+    painted?: BlockSnapshot;
     shaded: Uint8Array;
     lit: Uint8Array;
     /** Whether any cell of the canvas is dug or sloped: nothing to paint otherwise. */
@@ -142,44 +144,49 @@ export class TerrainView {
             this.shore = new Uint8Array(size);
         }
         const { everywhere, wet, shore } = this;
-        // The soils first: the shades of the relief and the water are drawn over them.
-        for (const [code, cells] of relief.soils) {
-            const tint = SOIL_TINTS[SOILS[code - 1]];
-            if (tint) this.surface.paintField(canvas, cells, everywhere, NO_SHIFT, tint.color, () => tint.alpha);
-        }
-        if (relief.grass) {
-            this.surface.paintField(canvas, relief.grass, everywhere, NO_SHIFT, GRASS_COLOR, grassAlpha);
-        }
-        if (relief.straw) {
-            // The grass gone dry under the heat and the wind: straw over the green.
-            this.surface.paintField(canvas, relief.straw, everywhere, NO_SHIFT, STRAW_COLOR, strawAlpha);
-        }
-        if (relief.ash) {
-            // What a fire left: the ground blackened, until the grass grows back.
-            this.surface.paintField(canvas, relief.ash, everywhere, NO_SHIFT, ASH_COLOR, ashAlpha);
-        }
-        if (relief.fire) {
-            // The tiles on fire glow on the ground, under their flames.
-            this.surface.paintField(canvas, relief.fire, everywhere, NO_SHIFT, FIRE_GLOW_COLOR, fireGlowAlpha);
-        }
-        if (relief.dug) {
-            this.surface.paintField(canvas, relief.ground, everywhere, NO_SHIFT, 0x000000, (level) =>
-                groundAlpha(-level),
-            );
-            this.surface.paintField(canvas, relief.raised, everywhere, NO_SHIFT, 0xffffff, (level) =>
-                raisedAlpha(level),
-            );
-            if (relief.snow) {
-                this.surface.paintField(canvas, relief.snow, everywhere, NO_SHIFT, SNOW_COLOR, (level) =>
-                    snowAlpha(level / 255),
+        // The ground changes seldom, the water ten times a second while it moves: the ground is painted once for a
+        // relief, a meadow and a canvas, then laid back under the water.
+        if (!relief.painted || !this.surface.restore?.(relief.painted)) {
+            // The soils first: the shades of the relief and the water are drawn over them.
+            for (const [code, cells] of relief.soils) {
+                const tint = SOIL_TINTS[SOILS[code - 1]];
+                if (tint) this.surface.paintField(canvas, cells, everywhere, NO_SHIFT, tint.color, () => tint.alpha);
+            }
+            if (relief.grass) {
+                this.surface.paintField(canvas, relief.grass, everywhere, NO_SHIFT, GRASS_COLOR, grassAlpha);
+            }
+            if (relief.straw) {
+                // The grass gone dry under the heat and the wind: straw over the green.
+                this.surface.paintField(canvas, relief.straw, everywhere, NO_SHIFT, STRAW_COLOR, strawAlpha);
+            }
+            if (relief.ash) {
+                // What a fire left: the ground blackened, until the grass grows back.
+                this.surface.paintField(canvas, relief.ash, everywhere, NO_SHIFT, ASH_COLOR, ashAlpha);
+            }
+            if (relief.fire) {
+                // The tiles on fire glow on the ground, under their flames.
+                this.surface.paintField(canvas, relief.fire, everywhere, NO_SHIFT, FIRE_GLOW_COLOR, fireGlowAlpha);
+            }
+            if (relief.dug) {
+                this.surface.paintField(canvas, relief.ground, everywhere, NO_SHIFT, 0x000000, (level) =>
+                    groundAlpha(-level),
+                );
+                this.surface.paintField(canvas, relief.raised, everywhere, NO_SHIFT, 0xffffff, (level) =>
+                    raisedAlpha(level),
+                );
+                if (relief.snow) {
+                    this.surface.paintField(canvas, relief.snow, everywhere, NO_SHIFT, SNOW_COLOR, (level) =>
+                        snowAlpha(level / 255),
+                    );
+                }
+                this.surface.paintField(canvas, relief.shaded, everywhere, NO_SHIFT, 0x000000, (level) =>
+                    slopeAlpha(level / 255),
+                );
+                this.surface.paintField(canvas, relief.lit, everywhere, NO_SHIFT, 0xffffff, (level) =>
+                    slopeAlpha(level / 255),
                 );
             }
-            this.surface.paintField(canvas, relief.shaded, everywhere, NO_SHIFT, 0x000000, (level) =>
-                slopeAlpha(level / 255),
-            );
-            this.surface.paintField(canvas, relief.lit, everywhere, NO_SHIFT, 0xffffff, (level) =>
-                slopeAlpha(level / 255),
-            );
+            relief.painted = this.surface.snapshot?.();
         }
         // Water lies in the hollows, and on flat ground where they overflow or where a source pours.
         const anyWater = this.water.levelsOver(

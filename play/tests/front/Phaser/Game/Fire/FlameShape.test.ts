@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
-    embersOf,
+    drawnEmbers,
+    drawnFlame,
+    FLAME_FRAME_HEIGHT_PX,
+    FLAME_FRAME_WIDTH_PX,
+    FLAME_FRAMES,
     FLAME_MAX_HEIGHT_PX,
     FLAME_MAX_SPREAD_SCALE,
     FLAME_MIN_HEIGHT_PX,
     flameOf,
     flameOutline,
+    flamePose,
     spreadTiles,
     smokeOf,
     tileSeed,
@@ -37,27 +42,77 @@ describe("flameOf", () => {
         expect(gale.height - gale.tip.y).toBeGreaterThan(20);
         expect(flameOf({ ...still, intensity: 1 }).tip).toEqual({ x: 0, y: 0 });
     });
+});
 
-    it("flickers gently, each tile in its own time: never a flash, never more than a fifth of its height", () => {
+describe("drawnFlame and flamePose", () => {
+    it("draws a loop that flickers gently: never a flash, never more than a fifth of its height, and closes", () => {
         const heights: number[] = [];
-        for (let ms = 0; ms < 4000; ms += 16) {
-            heights.push(flameOf({ ...still, reducedMotion: false, intensity: 1, seconds: ms / 1000 }).height);
-        }
+        for (let frame = 0; frame <= FLAME_FRAMES; frame++) heights.push(drawnFlame(frame).height);
         expect(Math.min(...heights)).toBeGreaterThanOrEqual(64 * 0.8);
         expect(Math.max(...heights)).toBeLessThanOrEqual(64 * 1.2);
         expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(8);
-        // From a frame to the next the height hardly moves: a flicker, not a blink.
+        // From a frame to the next the height moves by little: a flicker, not a blink. The last joins the first.
         for (let index = 1; index < heights.length; index++) {
-            expect(Math.abs(heights[index] - heights[index - 1])).toBeLessThan(3);
+            expect(Math.abs(heights[index] - heights[index - 1])).toBeLessThan(6);
         }
-        const other = flameOf({ ...still, reducedMotion: false, intensity: 1, seconds: 1, seed: 0.8 }).height;
-        expect(other).not.toBe(flameOf({ ...still, reducedMotion: false, intensity: 1, seconds: 1 }).height);
+        expect(drawnFlame(FLAME_FRAMES).height).toBeCloseTo(drawnFlame(0).height, 9);
+        expect(drawnFlame(FLAME_FRAMES).tip.x).toBeCloseTo(drawnFlame(0).tip.x, 9);
     });
 
-    it("stands still for who asked for less motion", () => {
-        const one = flameOf({ ...still, intensity: 1, seconds: 1 });
-        const two = flameOf({ ...still, intensity: 1, seconds: 2.37 });
-        expect(two).toEqual(one);
+    it("keeps every drawn flame and ember inside its frame", () => {
+        for (let frame = 0; frame < FLAME_FRAMES; frame++) {
+            const flame = drawnFlame(frame);
+            for (const point of flameOutline(flame, 1)) {
+                expect(Math.abs(point.x)).toBeLessThanOrEqual(FLAME_FRAME_WIDTH_PX / 2);
+                expect(-point.y).toBeLessThanOrEqual(FLAME_FRAME_HEIGHT_PX);
+            }
+            const embers = drawnEmbers(frame);
+            expect(embers).toHaveLength(3);
+            for (const ember of embers) {
+                expect(Math.abs(ember.x) + 1).toBeLessThanOrEqual(FLAME_FRAME_WIDTH_PX / 2);
+                expect(-ember.y + 1).toBeLessThanOrEqual(FLAME_FRAME_HEIGHT_PX);
+                expect(ember.y).toBeLessThan(0);
+                expect(ember.alpha).toBeGreaterThanOrEqual(0);
+                expect(ember.alpha).toBeLessThanOrEqual(1);
+            }
+        }
+    });
+
+    it("lays a frame as tall as the fire is strong, upright without wind", () => {
+        expect(flamePose({ ...still, intensity: 1 })).toEqual({
+            frame: FLAME_FRAMES,
+            scaleX: 1,
+            scaleY: 1,
+            rotation: 0,
+        });
+        const weak = flamePose({ ...still, intensity: 0 });
+        expect(weak.scaleY).toBeCloseTo(18 / 64, 9);
+        expect(weak.scaleX).toBeCloseTo(26 / 44, 9);
+    });
+
+    it("turns the frame the way the wind goes", () => {
+        // A wind from the west blows east: the flame turns clockwise, and is as long as its laid tip is far.
+        const west = flamePose({ ...still, intensity: 1, windFrom: 270, windSpeed: 80 });
+        expect(west.rotation).toBeCloseTo(Math.atan2(0.75, 1), 5);
+        expect(west.scaleY).toBeCloseTo(Math.hypot(0.75, 1), 5);
+        expect(flamePose({ ...still, intensity: 1, windFrom: 90, windSpeed: 80 }).rotation).toBeCloseTo(
+            -west.rotation,
+            5,
+        );
+    });
+
+    it("runs the loop on each tile in its own time, and stands still for who asked for less motion", () => {
+        const moving = { ...still, reducedMotion: false, intensity: 1 };
+        const frames = new Set<number>();
+        for (let ms = 0; ms < 3000; ms += 50) frames.add(flamePose({ ...moving, seconds: ms / 1000 }).frame);
+        expect(frames.size).toBe(FLAME_FRAMES);
+        expect(Math.max(...frames)).toBe(FLAME_FRAMES - 1);
+        const seeds = new Set<number>();
+        for (let seed = 0; seed < 1; seed += 0.05) seeds.add(flamePose({ ...moving, seconds: 1, seed }).frame);
+        expect(seeds.size).toBeGreaterThan(5);
+        expect(flamePose({ ...still, intensity: 1, seconds: 1 })).toEqual(
+            flamePose({ ...still, intensity: 1, seconds: 2.37 }),
+        );
     });
 });
 
@@ -85,29 +140,7 @@ describe("flameOutline", () => {
     });
 });
 
-describe("embersOf and smokeOf", () => {
-    it("send a few embers up and downwind, fading as they rise; none for who asked for less motion", () => {
-        const embers = embersOf({
-            ...still,
-            reducedMotion: false,
-            intensity: 1,
-            windFrom: 270,
-            windSpeed: 40,
-            seconds: 3.3,
-        });
-        expect(embers.length).toBeGreaterThan(0);
-        expect(embers.length).toBeLessThanOrEqual(3);
-        for (const ember of embers) {
-            expect(ember.y).toBeLessThanOrEqual(0);
-            expect(ember.y).toBeGreaterThanOrEqual(-140);
-            expect(ember.x).toBeGreaterThanOrEqual(-6);
-            expect(ember.alpha).toBeGreaterThanOrEqual(0);
-            expect(ember.alpha).toBeLessThanOrEqual(1);
-        }
-        expect(embersOf({ ...still, intensity: 1, seconds: 3.3 })).toEqual([]);
-        expect(embersOf({ ...still, reducedMotion: false, intensity: 0.1, seconds: 3.3 })).toEqual([]);
-    });
-
+describe("smokeOf", () => {
     it("lift smoke over a strong fire, drifting downwind as it rises", () => {
         const puffs = smokeOf({
             ...still,

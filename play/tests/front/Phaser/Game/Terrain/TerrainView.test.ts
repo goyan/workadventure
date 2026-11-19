@@ -163,4 +163,33 @@ describe("TerrainView", () => {
         expect(fields[0][(2 + 8) * 62 + (2 + 10)]).toBe(255);
         expect(fields[0].reduce((sum, level) => sum + level, 0)).toBe(255);
     });
+
+    // While the water moves the ground does not change: it is painted once, then laid back under the water.
+    it("paints the ground once and lays it back while the water alone moves", () => {
+        const { view, water, surface } = fixture();
+        const kept = { pixels: new Uint8ClampedArray(4), painted: true };
+        const keeping = Object.assign(surface, {
+            snapshot: vi.fn(() => kept),
+            restore: vi.fn(() => true),
+        });
+        water.receive(stateOf(1, 32), 0);
+        view.update(0);
+        const first = surface.paintField.mock.calls.length;
+        expect(keeping.snapshot).toHaveBeenCalledTimes(1);
+        expect(keeping.restore).not.toHaveBeenCalled();
+        // More water comes: drawn again, the ground laid back, only the water painted.
+        water.receive(stateOf(2, 40), 1000);
+        view.update(1016);
+        expect(surface.begin).toHaveBeenCalledTimes(2);
+        expect(keeping.restore).toHaveBeenCalledWith(kept);
+        expect(keeping.snapshot).toHaveBeenCalledTimes(1);
+        const second = surface.paintField.mock.calls.length - first;
+        expect(second).toBeGreaterThan(0);
+        expect(second).toBeLessThan(first);
+        // A canvas of another size cannot take it back: everything is painted again.
+        keeping.restore.mockReturnValue(false);
+        water.receive(stateOf(3, 48), 2000);
+        view.update(2016);
+        expect(surface.paintField.mock.calls.length - first - second).toBe(first);
+    });
 });
