@@ -935,10 +935,19 @@ export const TerrainData = z.object({
 export type TerrainData = z.infer<typeof TerrainData>;
 
 /** How fast the water of the relief comes and goes on a map. */
-export const DEFAULT_WATER_SETTINGS = { runoff: 10, evaporation: 0.2, speed: 60, absorption: 5, current: 1 } as const;
+export const DEFAULT_WATER_SETTINGS = {
+    runoff: 10,
+    evaporation: 0.2,
+    speed: 60,
+    absorption: 5,
+    current: 1,
+    maxSurface: 18,
+} as const;
 /** The strongest current a map may set: twice the usual one. */
 export const MAX_WATER_CURRENT = 2;
 export const MAX_WATER_SPEED = 1000;
+/** The highest a map may let its water stand over the level it spills at, in pixels: as high as its relief goes. */
+export const MAX_WATER_MAX_SURFACE = 256;
 export const WaterSettings = z.object({
     /** Ground around a hollow whose rain runs into it, in times the surface of the hollow. */
     runoff: z.number().min(0).max(100).default(DEFAULT_WATER_SETTINGS.runoff),
@@ -956,6 +965,15 @@ export const WaterSettings = z.object({
      * hardest, up to twice that.
      */
     current: z.number().min(0).max(MAX_WATER_CURRENT).default(DEFAULT_WATER_SETTINGS.current),
+    /**
+     * How high the water may stand over the level it spills at, in pixels: 18 by default, just over the depth one
+     * swims at and under the floors of the buildings. Higher, a flood or the wave of a meteor drowns the ground deep.
+     */
+    maxSurface: z
+        .number()
+        .min(DEFAULT_WATER_SETTINGS.maxSurface)
+        .max(MAX_WATER_MAX_SURFACE)
+        .default(DEFAULT_WATER_SETTINGS.maxSurface),
 });
 export type WaterSettings = z.infer<typeof WaterSettings>;
 

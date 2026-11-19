@@ -6,7 +6,7 @@ import type { WAMFileFormat } from "../src/types";
 const prefabRef = { collectionName: "eau", id: "x" };
 const wam = (entities: Record<string, unknown>): WAMFileFormat =>
     ({ version: "2.1.0", mapUrl: "m.tmj", areas: [], entityCollections: [], entities }) as WAMFileFormat;
-const water = { runoff: 10, evaporation: 1, speed: 1, absorption: 5, current: 1 };
+const water = { runoff: 10, evaporation: 1, speed: 1, absorption: 5, current: 1, maxSurface: 18 };
 
 describe("waterObjectsOf", () => {
     it("reads the sources and the sinks of the map, at the foot of their object", () => {
@@ -116,7 +116,14 @@ describe("stepInputOf", () => {
         expect(fast.rainPx).toBeCloseTo(real.rainPx);
         expect(fast.flows[0].px).toBeCloseTo(real.flows[0].px);
         const broken = stepInputOf(
-            { runoff: Number.NaN, evaporation: -3, speed: Number.NaN, absorption: Number.NaN, current: Number.NaN },
+            {
+                runoff: Number.NaN,
+                evaporation: -3,
+                speed: Number.NaN,
+                absorption: Number.NaN,
+                current: Number.NaN,
+                maxSurface: Number.NaN,
+            },
             Number.NaN,
             [],
             1,

@@ -39,7 +39,10 @@ function wamWith(terrain: TerrainData | undefined, weather: WeatherType = Weathe
         areas: [],
         entityCollections: [],
         entities: {},
-        settings: { weather, water: { runoff: 10, evaporation: 0, speed: 1, absorption: 0, current: 1 } },
+        settings: {
+            weather,
+            water: { runoff: 10, evaporation: 0, speed: 1, absorption: 0, current: 1, maxSurface: 18 },
+        },
         terrain,
     };
 }
@@ -172,6 +175,16 @@ describe("TerrainWaterManager", () => {
         manager.mapChanged();
         expect(() => steps(20)).not.toThrow();
         expect(sent.length).toBe(afterImpact);
+    });
+
+    it("lets the water stand as high as the map says", () => {
+        const { manager, wam, steps } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        expect(manager.getGrid()?.maxSurface()).toBe(18);
+        if (!wam.settings?.water) throw new Error("no water settings");
+        wam.settings.water.maxSurface = 120;
+        steps(1);
+        expect(manager.getGrid()?.maxSurface()).toBe(120);
     });
 
     it("a strike on a map without water does nothing", () => {
@@ -361,7 +374,7 @@ describe("TerrainWaterManager", () => {
         const wam = wamWith(undefined);
         wam.settings = {
             weather: WeatherType.Clear,
-            water: { runoff: 0, evaporation: 0, speed: 60, absorption: 0, current: 1 },
+            water: { runoff: 0, evaporation: 0, speed: 60, absorption: 0, current: 1, maxSurface: 18 },
         };
         wam.entities = { spring: sourceAt(4, 4, 600) };
         const wallPiece = (column: number) => ({

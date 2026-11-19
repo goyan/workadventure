@@ -2,7 +2,9 @@
     import {
         defaultForcePx,
         MAX_DEPTH_TILES,
+        DEFAULT_WATER_SETTINGS,
         MAX_WATER_CURRENT,
+        MAX_WATER_MAX_SURFACE,
         MAX_WATER_SPEED,
         MEADOW_BOUNDS,
         SOILS,
@@ -40,6 +42,7 @@
     let speed = $state(saved.speed);
     let absorption = $state(saved.absorption);
     let current = $state(saved.current);
+    let maxSurface = $state(saved.maxSurface);
 
     let diameterTiles = $state($terrainBrushStore.diameterTiles);
     let forceAuto = $state($terrainBrushStore.forcePx === undefined);
@@ -63,7 +66,7 @@
     function saveWater(): void {
         executeUpdateWAMSettings({
             $case: "updateWaterSettingMessage",
-            updateWaterSettingMessage: { runoff, evaporation, speed, absorption, current },
+            updateWaterSettingMessage: { runoff, evaporation, speed, absorption, current, maxSurface },
         }).catch((error: unknown) => console.error("The pace of the water could not be saved", error));
     }
 
@@ -344,6 +347,20 @@
             buttonShape="square"
         />
         <p class="retro-hint m-0">{$LL.mapEditor.terrain.real.current()}</p>
+    </div>
+    <div data-testid="terrain-max-surface">
+        <RangeSlider
+            id="terrain-max-surface"
+            label={$LL.mapEditor.terrain.maxSurface()}
+            unit="px"
+            min={DEFAULT_WATER_SETTINGS.maxSurface}
+            max={MAX_WATER_MAX_SURFACE}
+            step={1}
+            bind:value={maxSurface}
+            onchange={saveWater}
+            buttonShape="square"
+        />
+        <p class="retro-hint m-0">{$LL.mapEditor.terrain.real.maxSurface()}</p>
     </div>
     <p class="retro-hint m-0">{$LL.mapEditor.terrain.paceHint()}</p>
 

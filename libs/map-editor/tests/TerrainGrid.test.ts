@@ -91,7 +91,14 @@ describe("terrain grid", () => {
         const wam = { version: "2.1.0", mapUrl: "m.tmj", entities: {}, areas: [], entityCollections: [] };
         const parsed = WAMFileFormat.parse({ ...wam, settings: { water: { runoff: 10, evaporation: 0.2 } } });
         // A map saved before the speed of the water has the default one.
-        expect(parsed.settings?.water).toEqual({ runoff: 10, evaporation: 0.2, speed: 60, absorption: 5, current: 1 });
+        expect(parsed.settings?.water).toEqual({
+            runoff: 10,
+            evaporation: 0.2,
+            speed: 60,
+            absorption: 5,
+            current: 1,
+            maxSurface: 18,
+        });
         expect(WAMFileFormat.parse({ ...wam, settings: { water: { runoff: -4 } } }).settings?.water).toBeUndefined();
     });
 });
