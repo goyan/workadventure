@@ -139,6 +139,25 @@
                     {altitudeLabel(stack.altitude, $locale)}
                 </span>
             {/if}
+            {#if stack.pointerAltitude !== undefined}
+                <span
+                    class="flex shrink-0 items-center gap-0.5 tabular-nums opacity-60"
+                    title={$LL.mapEditor.mapLayer.floorLevel.pointerAltitude()}
+                    data-testid="pointer-altitude"
+                >
+                    <svg
+                        class="h-3 w-3 shrink-0 fill-none stroke-current"
+                        viewBox="0 0 24 24"
+                        stroke-width="2"
+                        aria-hidden="true"
+                    >
+                        <circle cx="12" cy="12" r="6" />
+                        <path d="M12 2v6M12 16v6M2 12h6M16 12h6" />
+                    </svg>
+                    <span class="sr-only">{$LL.mapEditor.mapLayer.floorLevel.pointerAltitude()}</span>
+                    {altitudeLabel(stack.pointerAltitude, $locale)}
+                </span>
+            {/if}
             <IconChevronDown class="h-3 w-3 shrink-0 opacity-60" />
         </button>
         {#if open}

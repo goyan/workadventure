@@ -13,6 +13,8 @@ export interface FloorLevelStack {
     viewed?: number;
     /** The altitude of the avatar over the ground of the map, in pixels of altitude (maps with a relief only). */
     altitude?: number;
+    /** The altitude of the ground under the pointer (see pointerAltitude), told with the one of the avatar. */
+    pointerAltitude?: number;
 }
 
 /** The raised floors that have slabs on the map, the floor of the avatar, and whether the map editor is open. */
@@ -22,6 +24,8 @@ export const floorLevelsHiddenStore = writable<boolean>(false);
 export const floorLevelViewedStore = writable<number | undefined>(undefined);
 /** The altitude of the avatar (see avatarAltitude); undefined on a map without relief. */
 export const avatarAltitudeStore = writable<number | undefined>(undefined);
+/** The altitude of the ground under the pointer (see pointerAltitude); undefined off the game or without relief. */
+export const pointerAltitudeStore = writable<number | undefined>(undefined);
 
 /**
  * A floor named as in the map editor, counted from the ground: "Sol", "Étage 1", "Étage 2"… among the floors that have
@@ -37,7 +41,7 @@ export function floorLevelName(ll: TranslationFunctions, elevation: number, buil
 
 /**
  * The stack shown under the clock: none on a map without raised floors nor relief, nor while the map editor is open.
- * On a map with a relief it tells the altitude of the avatar.
+ * On a map with a relief it tells the altitude of the avatar, and the one of the ground under the pointer.
  */
 export function floorLevelStack(
     built: readonly number[],
@@ -46,6 +50,7 @@ export function floorLevelStack(
     name: (elevation: number) => string,
     viewed?: number,
     altitude?: number,
+    pointerAltitude?: number,
 ): FloorLevelStack | undefined {
     if (hidden || (built.length === 0 && altitude === undefined)) return undefined;
     const levels = [...new Set([0, ...built])].sort((a, b) => b - a);
@@ -54,6 +59,7 @@ export function floorLevelStack(
         current,
         viewed,
         ...(altitude === undefined ? {} : { altitude }),
+        ...(altitude === undefined || pointerAltitude === undefined ? {} : { pointerAltitude }),
     };
 }
 
@@ -70,7 +76,16 @@ export const floorLevelsStore: Readable<FloorLevelStack | undefined> = derived(
         LL,
         floorLevelViewedStore,
         avatarAltitudeStore,
+        pointerAltitudeStore,
     ],
-    ([built, current, hidden, ll, viewed, altitude]) =>
-        floorLevelStack(built, current, hidden, (elevation) => floorLevelName(ll, elevation, built), viewed, altitude),
+    ([built, current, hidden, ll, viewed, altitude, pointer]) =>
+        floorLevelStack(
+            built,
+            current,
+            hidden,
+            (elevation) => floorLevelName(ll, elevation, built),
+            viewed,
+            altitude,
+            pointer,
+        ),
 );
