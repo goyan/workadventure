@@ -9,6 +9,8 @@ export const LifeSample = z.object({
     at: z.number().finite(),
     prey: z.number().int().min(0),
     predators: z.number().int().min(0),
+    /** How many of each species lived then; absent from a sample taken before the species were counted. */
+    counts: z.record(z.string(), z.number().int().min(0)).optional(),
 });
 export type LifeSample = z.infer<typeof LifeSample>;
 

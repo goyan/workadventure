@@ -4,7 +4,7 @@
     import { LL } from "../../../i18n/i18n-svelte";
     import { formatDuration } from "../../Phaser/Game/Life/LifeDurations";
     import { chartPoints } from "../../Phaser/Game/Life/LifeStats";
-    import { aquaticLifeStatsStore } from "../../Stores/TerrainEditorStore";
+    import { aquaticLifeStatsStore, lifeRangeStore } from "../../Stores/TerrainEditorStore";
 
     /** The curves are drawn in a box of this size; each has its own scale, with a little room above its largest value. */
     const CHART_WIDTH = 300;
@@ -20,6 +20,8 @@
     /** The curve shows one range of time at once: the last five minutes, hour, four hours, day, or the whole life. */
     const RANGES = [...LIFE_RANGES.map((range) => range.name), "all"] as const;
     let chosen = $state<LifeRangeName | "all">("5min");
+    // The curves of the species, under this dashboard, show the same range.
+    $effect(() => lifeRangeStore.set(chosen));
     let range = $derived(LIFE_RANGES.find((candidate) => candidate.name === chosen));
     let history = $derived((chosen === "all" ? stats?.history : stats?.ranges[chosen]) ?? []);
     let maxPrey = $derived(Math.max(1, ...history.map((sample) => sample.prey)));

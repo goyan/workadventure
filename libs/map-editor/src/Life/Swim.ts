@@ -1,7 +1,8 @@
 import type { WaterGrid } from "../Terrain/WaterGrid";
 import { TERRAIN_CELL } from "../types";
 import type { Animal } from "./Animal";
-import { canSwimAcross, DOLPHIN_DEPTH_PX, FISH_DEPTH_PX } from "./WaterBodies";
+import { SPECIES } from "./Species";
+import { canSwimAcross } from "./WaterBodies";
 import type { WaterBodies } from "./WaterBodies";
 
 /** An animal whose cell holds too little water dies after this long without finding some. */
@@ -11,7 +12,7 @@ export const WANDER_REACH_CELLS = 6;
 /** A wandering animal swims between this share of the fastest speed and the fastest. */
 const SLOWEST_SHARE = 0.4;
 
-export const minDepthOf = (animal: Animal): number => (animal.kind === "dolphin" ? DOLPHIN_DEPTH_PX : FISH_DEPTH_PX);
+export const minDepthOf = (animal: Animal): number => SPECIES[animal.kind].minDepthPx;
 export const cellAt = (pixel: number): number => Math.floor(pixel / TERRAIN_CELL);
 const middleOf = (cell: number): number => cell * TERRAIN_CELL + TERRAIN_CELL / 2;
 

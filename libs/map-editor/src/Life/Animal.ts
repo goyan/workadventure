@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SPECIES_IDS } from "./Species";
 
 /**
  * An animal of the water of the relief, as the server keeps and saves it. Positions are in map pixels, so an animal
@@ -6,7 +7,7 @@ import { z } from "zod";
  */
 export const Animal = z.object({
     id: z.number().int().min(1),
-    kind: z.enum(["fish", "dolphin"]),
+    kind: z.enum(SPECIES_IDS),
     /** Males and females; fish are blue and pink. A dolphin kept from before dolphins had a sex gets one. */
     sex: z.enum(["male", "female"]).optional(),
     x: z.number().finite(),

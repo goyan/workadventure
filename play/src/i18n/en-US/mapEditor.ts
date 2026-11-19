@@ -566,6 +566,32 @@ const mapEditor: BaseTranslation = {
         drinkInterval: "Time between two drinks",
         landAnimalsHint:
             "The wandering animals (jungle, dogs, cats, ducks) never enter the water of the relief and run to dry ground when it rises. At this interval, each one goes to drink at the shore nearest to its territory.",
+        species: {
+            title: "By species",
+            name: {
+                fish: "Fish",
+                dolphin: "Dolphin",
+                antelope: "Antelope",
+                lion: "Lion",
+                tiger: "Tiger",
+                gull: "Gull",
+            },
+            males: "Males",
+            females: "Females",
+            fill: "Fill",
+            events: {
+                arrivals: "Arrivals",
+                births: "Births",
+                diedOfAge: "Died of old age",
+                eaten: "Eaten",
+                starved: "Starved",
+                diedDry: "Died out of water",
+            },
+            max: "max {max}",
+            meals: "Who eats whom",
+            curves: "Number of each species over time",
+            extinct: "Extinct species: {name}, since {time}",
+        },
         dashboard: {
             empty: "No life on this map yet. Turn it on below; the relief needs water.",
             population: "Population",

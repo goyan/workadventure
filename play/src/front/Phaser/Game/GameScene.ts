@@ -278,7 +278,11 @@ import type { SkyShadowCategories } from "../../Stores/SkyLightStore";
 import { mapLayerBuiltLevelsStore, mapLayerLevelStore } from "../../Stores/MapLayerStore";
 import { floorLevelsBuiltStore } from "../../Stores/FloorLevelsStore";
 import { areaHighlightHiddenStore } from "../../Stores/NightStore";
-import { aquaticLifeStatsStore, terrainWaterStatsStore } from "../../Stores/TerrainEditorStore";
+import {
+    aquaticLifeSpeciesStore,
+    aquaticLifeStatsStore,
+    terrainWaterStatsStore,
+} from "../../Stores/TerrainEditorStore";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -351,6 +355,7 @@ import { WeatherManager } from "./Weather/WeatherManager";
 import { TerrainWater } from "./Terrain/TerrainWater";
 import { AquaticLife } from "./Life/AquaticLife";
 import { AquaticLifeView } from "./Life/AquaticLifeView";
+import { LifeSpeciesStats, withoutSpeciesCounts } from "./Life/LifeSpeciesStats";
 import { LifeStats } from "./Life/LifeStats";
 import { TerrainView } from "./Terrain/TerrainView";
 import { WaterFlowView } from "./Terrain/WaterFlowView";
@@ -551,6 +556,7 @@ export class GameScene extends DirtyScene {
     private readonly aquaticLife = new AquaticLife();
     private aquaticLifeView: AquaticLifeView | undefined;
     private readonly aquaticLifeStats = new LifeStats();
+    private readonly aquaticLifeSpecies = new LifeSpeciesStats();
     private aquaticLifeSubscription: Subscription | undefined;
     private terrainView: TerrainView | undefined;
     private waterFlowView: WaterFlowView | undefined;
@@ -2711,10 +2717,20 @@ export class GameScene extends DirtyScene {
     private receiveAquaticLife(message: AquaticLifeMessage): void {
         this.aquaticLife.receive(message.animals, this.time.now);
         // The dashboard of the life tool: nothing to show on a map that never had any life.
-        this.aquaticLifeStats.receive(message.animals, message.stats, Date.now());
+        this.aquaticLifeStats.receive(
+            message.animals,
+            message.stats ? withoutSpeciesCounts(message.stats) : undefined,
+            Date.now(),
+        );
         aquaticLifeStatsStore.set(
             message.stats || message.animals.length > 0 ? this.aquaticLifeStats.view(Date.now()) : undefined,
         );
+        this.aquaticLifeSpecies.receive(
+            message.animals,
+            message.stats ? { ...message.stats, species: message.species } : undefined,
+            Date.now(),
+        );
+        aquaticLifeSpeciesStore.set(message.stats ? this.aquaticLifeSpecies.view(Date.now()) : undefined);
     }
 
     private receiveTerrainWater(message: TerrainWaterMessage): void {
@@ -3739,7 +3755,7 @@ export class GameScene extends DirtyScene {
             this.receiveTerrainWater(message);
         });
         // The life of that water: the animals of the room now, then all of them every second.
-        this.receiveAquaticLife(room.aquaticLife ?? { animals: [] });
+        this.receiveAquaticLife(room.aquaticLife ?? { animals: [], species: [] });
         this.aquaticLifeSubscription?.unsubscribe();
         this.aquaticLifeSubscription = this.connection.aquaticLifeMessageStream.subscribe((message) => {
             this.receiveAquaticLife(message);
