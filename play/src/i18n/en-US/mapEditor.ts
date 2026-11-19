@@ -776,6 +776,7 @@ const mapEditor: BaseTranslation = {
             ground: "Ground",
             level: "Level {height}",
             built: "floor {rank}",
+            storey: "Floor {rank}",
             pick: "Pick the level under the pointer",
             pickArmed: "Click on the map…",
             pickHint:

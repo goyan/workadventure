@@ -788,6 +788,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             ground: "Sol",
             level: "Niveau {height}",
             built: "palier {rank}",
+            storey: "Étage {rank}",
             pick: "Prendre le niveau sous le pointeur",
             pickArmed: "Cliquez sur la carte…",
             pickHint:

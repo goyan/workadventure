@@ -693,3 +693,53 @@
         transform: none;
     }
 }
+
+/* The action bar, like the hotbar of a game: each group a tray with a bevel, each button a key that sinks when
+   pressed, a glow on the keys that are on (active, muted, live). The bevel is drawn with inset shadows only, so the
+   trays made of one segment per button join without seams. */
+.action-tray {
+    box-shadow:
+        inset 0 1px 0 hsl(var(--contrast-100) / 0.08),
+        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.4);
+}
+.action-slot {
+    border-radius: 10px;
+    transition:
+        transform 100ms ease,
+        filter 120ms ease,
+        box-shadow 120ms ease;
+}
+.action-slot:not(:disabled):hover {
+    filter: brightness(1.15);
+    box-shadow: inset 0 -3px 0 hsl(var(--contrast-1100) / 0.35);
+}
+.action-slot:not(:disabled):active {
+    transform: scale(0.92);
+}
+.action-slot.is-active,
+.action-slot.is-forbidden,
+.action-slot.is-live {
+    box-shadow:
+        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.35),
+        inset 0 1px 0 hsl(0 0% 100% / 0.18);
+}
+.action-slot.is-active {
+    box-shadow:
+        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.35),
+        inset 0 1px 0 hsl(0 0% 100% / 0.18),
+        0 0 10px hsl(var(--secondary-500) / 0.45);
+}
+.action-slot.is-forbidden {
+    box-shadow:
+        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.35),
+        inset 0 1px 0 hsl(0 0% 100% / 0.18),
+        0 0 10px hsl(var(--danger) / 0.5);
+}
+@media (prefers-reduced-motion: reduce) {
+    .action-slot {
+        transition: none;
+    }
+    .action-slot:not(:disabled):active {
+        transform: none;
+    }
+}

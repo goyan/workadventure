@@ -431,7 +431,9 @@ export class FloorSpike {
         const tile = avatarGroundTile(p, this.state.elevation);
         const labels = editorOpen
             ? []
-            : stairLabels(stairs, tile, this.state, (elevation) => floorLevelName(get(LL), elevation));
+            : stairLabels(stairs, tile, this.state, (elevation) =>
+                  floorLevelName(get(LL), elevation, get(floorLevelsBuiltStore)),
+              );
         this.hints.update(stairs, labels);
         // The stack of the floors under the clock: the floor stood on, the last one while on a stair.
         floorLevelsHiddenStore.set(editorOpen);

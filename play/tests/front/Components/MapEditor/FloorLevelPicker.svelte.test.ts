@@ -48,14 +48,24 @@ describe("construction floor picker", () => {
         expect(target.querySelector("select")).toBeNull();
         await openMenu();
         const option = [...target.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find((button) =>
-            button.textContent?.includes("Niveau 4"),
+            button.textContent?.includes("Étage 2"),
         );
         expect(option).toBeDefined();
         flushSync(() => option?.click());
         expect(get(mapEditorPlacementLevelStore)).toBe(116);
         expect(get(floorLevelViewedStore)).toBeUndefined();
         expect(target.querySelector('[role="menu"]')).toBeNull();
-        expect(target.querySelector('[aria-haspopup="menu"]')?.textContent).toContain("Niveau 4");
+        expect(target.querySelector('[aria-haspopup="menu"]')?.textContent).toContain("Étage 2");
+    });
+    it("names the floors one after the other from the ground, without the wall heights that have no slab", async () => {
+        flushSync(() => {
+            component = mount(FloorLevelPicker, { target });
+        });
+        await openMenu();
+        const names = [...target.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].map((button) =>
+            button.textContent?.replace("●", "").trim(),
+        );
+        expect(names.filter((name) => !name?.startsWith("Auto"))).toEqual(["Étage 2", "Étage 1", "Sol"]);
     });
     it("moves a selected object without changing the working floor or offering auto", async () => {
         const move = vi.fn();
@@ -65,7 +75,7 @@ describe("construction floor picker", () => {
         await openMenu();
         const options = [...target.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
         expect(options.some((button) => button.textContent?.includes("Auto"))).toBe(false);
-        flushSync(() => options.find((button) => button.textContent?.includes("Niveau 4"))?.click());
+        flushSync(() => options.find((button) => button.textContent?.includes("Étage 2"))?.click());
         expect(move).toHaveBeenCalledWith(116);
         expect(get(mapEditorPlacementLevelStore)).toBe(52);
     });

@@ -1,5 +1,6 @@
 <script lang="ts">
     import FloorLevelStack from "../Floors/FloorLevelStack.svelte";
+    import { floorLevelName } from "../../Stores/FloorLevelsStore";
     import { LL } from "../../../i18n/i18n-svelte";
     import { mapEditorPlacementLevelStore } from "../../Stores/MapEditorStore";
     import {
@@ -8,7 +9,6 @@
         mapLayerLevelsStore,
         mapLayerPickLevelStore,
     } from "../../Stores/MapLayerStore";
-    import { floorLevelTiles } from "../../Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
     import { stepLevel, steppableLevels } from "../../Phaser/Game/MapEditor/MapLayer/FloorOperations";
     import { IconChevronDown, IconChevronUp, IconColorPicker } from "@wa-icons";
 
@@ -32,22 +32,11 @@
     let current = $derived(choice === "auto" ? $mapLayerLevelStore : choice);
     // The ground, the floors that have slabs, and the level chosen when it is none of them.
     let chips = $derived(
-        [
-            ...new Set([
-                0,
-                ...$mapLayerBuiltLevelsStore,
-                ...$mapLayerLevelsStore,
-                ...(choice === "auto" ? [] : [choice]),
-            ]),
-        ].sort((a, b) => a - b),
+        [...new Set([0, ...$mapLayerBuiltLevelsStore, ...(choice === "auto" ? [] : [choice])])].sort((a, b) => a - b),
     );
 
-    function label(level: number): string {
-        if (level === 0) return $LL.mapEditor.mapLayer.floorLevel.ground();
-        const name = $LL.mapEditor.mapLayer.floorLevel.level({ height: floorLevelTiles(level) });
-        const rank = $mapLayerBuiltLevelsStore.indexOf(level) + 1;
-        return rank > 0 ? `${name} · ${$LL.mapEditor.mapLayer.floorLevel.built({ rank })}` : name;
-    }
+    // The same names as the floors of the game: "Sol", "Étage 1", "Étage 2"…
+    const label = (level: number): string => floorLevelName($LL, level, $mapLayerBuiltLevelsStore);
 
     function choose(level: "auto" | number): void {
         if (forObject) {
