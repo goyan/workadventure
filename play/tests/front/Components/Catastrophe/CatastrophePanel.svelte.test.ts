@@ -27,7 +27,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
 });
 
 vi.mock("../../../../src/front/Components/Catastrophe/WeatherTab.svelte", async () => ({
-    default: (await import("./WeatherTabStub.svelte")).default,
+    default: ((await import("./WeatherTabStub.svelte")) as { default: unknown }).default,
 }));
 
 import CatastrophePanel from "../../../../src/front/Components/Catastrophe/CatastrophePanel.svelte";

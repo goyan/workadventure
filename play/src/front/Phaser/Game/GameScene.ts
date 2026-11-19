@@ -299,6 +299,7 @@ import {
     terrainWaterStatsStore,
 } from "../../Stores/TerrainEditorStore";
 import { jungleEnabledStore } from "../../Stores/JungleStore";
+import { fireConditionsStore } from "../../Stores/FireConditionsStore";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -310,7 +311,6 @@ import { levelItems } from "./MapEditor/MapLayer/MapLayerLevels";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
 import { effectiveWeather, weatherAtTime } from "./Weather/WeatherFrame";
 import { setRoomConditions, shownWeatherSettings } from "./Weather/RealWeatherClient";
-import { fireConditionsStore } from "../../Stores/FireConditionsStore";
 import { isSwayingTree, TreeSway } from "./Nature/TreeSway";
 import { TreePoseTextures } from "./Nature/TreePoses";
 import { TreeSeasonEffects } from "./Nature/TreeSeasonEffects";
