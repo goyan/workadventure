@@ -2196,6 +2196,18 @@ marquée par case (`Terrain/TerrainContours.ts`), le long des bords des cases, p
 interrupteur les masque ; au-delà de 30 000 morceaux, seules les lignes marquées sont dessinées). Rien ne change
 dans la carte enregistrée ni sur le fil : un geste envoie toujours des hauteurs par case.
 
+**Sols.** L'outil Relief a un mode « Sol » : le pinceau peint un des six sols sur tout son disque (terre,
+prairie, argile, sable, rocher, gravier), « Sol d'origine » efface. Le sol d'une case est gardé à côté de sa hauteur
+(`TerrainData.soil`, mêmes morceaux de 16 × 16 cases, 0 = non peinte ; `Terrain/Soils.ts`, `soilAt`, `withSoils`) et
+voyage dans le message du relief (`ModifyTerrainMessage.soils`, facultatif pour un ancien client), avec la même
+annulation. Dessin : un voile de la couleur du sol sous les ombres du relief et sous l'eau (`SOIL_TINTS`). **Eau** :
+chaque sol boit une part de l'« absorption du sol » de la carte (`soilDrinks`) — rocher rien, argile un dixième,
+terre et prairie comme le sol d'origine, sable et gravier cinq fois plus et **même dans un creux** : un lac tient
+sur du rocher ou de l'argile, une mare creusée dans le sable se vide. Une case non peinte se comporte exactement
+comme avant (le sol plat boit, un creux garde son eau). Le sol ne compte que là où le serveur simule l'eau (le
+relief, les sources, et leur marge). Lots suivants, pas faits : marche (boue, sable), humidité du sol et herbe qui
+pousse seule. `play`, `back` et `map-storage` à déployer ensemble.
+
 **Altitude de l'avatar.** Sur une carte qui a un relief, la pile des étages sous l'horloge dit l'altitude de
 l'avatar, en mètres (une case d'altitude ≈ 1,10 m, `metresOf`) : la hauteur du relief sous ses pieds quand il est au
 sol (négative dans un creux, positive sur un mont), l'altitude de son palier quand il est en hauteur

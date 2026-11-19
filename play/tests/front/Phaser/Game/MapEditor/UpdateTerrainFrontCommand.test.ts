@@ -33,6 +33,7 @@ describe("UpdateTerrainFrontCommand", () => {
         await command.execute();
         const emitModifyTerrain = vi.fn();
         command.emitEvent({ emitModifyTerrain } as unknown as RoomConnection);
-        expect(emitModifyTerrain).toHaveBeenCalledWith("id-1", { cells: [{ x: 2, y: 2, height: -8 }] });
+        // The soils go along, empty when the command paints none.
+        expect(emitModifyTerrain).toHaveBeenCalledWith("id-1", { cells: [{ x: 2, y: 2, height: -8 }], soils: [] });
     });
 });

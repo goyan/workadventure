@@ -369,6 +369,15 @@ message EditMapMessage {
 message ModifyTerrainMessage {
   repeated TerrainCellMessage cells = 1;
   optional int32 maxDepthTiles = 2;
+  // The soils painted on cells (absent from an older client: no soil is changed).
+  repeated TerrainSoilMessage soils = 3;
+}
+
+// A cell of the relief and the soil painted on it (see Terrain/Soils.ts in libs/map-editor): 0 wipes it.
+message TerrainSoilMessage {
+  sint32 x = 1;
+  sint32 y = 2;
+  uint32 soil = 3;
 }
 
 // A cell of the relief (16 map pixels wide) and its height in pixels of altitude: 0 on the ground, negative when dug,

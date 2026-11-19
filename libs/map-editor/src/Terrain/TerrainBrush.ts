@@ -1,6 +1,6 @@
 import { TERRAIN_CELL, TILE_PX } from "../types";
 import type { TerrainData } from "../types";
-import { cellKey, cellOf, heightAt } from "./TerrainGrid";
+import { cellKey, cellOf, heightAt, soilAt } from "./TerrainGrid";
 
 /** The brush of the relief: a sphere pressed into the ground (dig) or the same shape put back (fill). */
 export interface BrushSettings {
@@ -157,6 +157,41 @@ export function strokeChanges(
             else next = Math.max(current, Math.min(ceiling, next));
         }
         if (next !== current) changes.set(key, next === 0 ? 0 : next);
+    }
+    return changes;
+}
+
+/**
+ * The soils (by cell key) one stroke of the brush paints along a path in map pixels: every cell of its disc, where
+ * the ground may be edited, that is not of this soil already. 0 wipes the soil of the cells.
+ */
+export function soilStrokeChanges(
+    terrain: TerrainData | undefined,
+    path: readonly { x: number; y: number }[],
+    diameterTiles: number,
+    soil: number,
+    allowed: (cellX: number, cellY: number) => boolean,
+): Map<string, number> {
+    const changes = new Map<string, number>();
+    if (!Number.isFinite(diameterTiles) || diameterTiles <= 0) return changes;
+    const radius = (diameterTiles * TILE_PX) / 2;
+    const reach = Math.ceil(radius / TERRAIN_CELL);
+    const seen = new Set<string>();
+    let lastCell: string | undefined;
+    for (const point of sampled(path)) {
+        const here = cellKey(Math.floor(point.x / TERRAIN_CELL), Math.floor(point.y / TERRAIN_CELL));
+        if (here === lastCell) continue;
+        lastCell = here;
+        const centre = cellOf(here);
+        for (let cellY = centre.y - reach; cellY <= centre.y + reach; cellY++) {
+            for (let cellX = centre.x - reach; cellX <= centre.x + reach; cellX++) {
+                if (Math.hypot(cellX - centre.x, cellY - centre.y) * TERRAIN_CELL >= radius) continue;
+                const key = cellKey(cellX, cellY);
+                if (seen.has(key)) continue;
+                seen.add(key);
+                if (allowed(cellX, cellY) && soilAt(terrain, cellX, cellY) !== soil) changes.set(key, soil);
+            }
+        }
     }
     return changes;
 }

@@ -1,4 +1,4 @@
-import { TERRAIN_CHUNK, TERRAIN_MAX_HEIGHT, TERRAIN_MIN_HEIGHT } from "../types";
+import { TERRAIN_CHUNK, TERRAIN_MAX_HEIGHT, TERRAIN_MAX_SOIL, TERRAIN_MIN_HEIGHT } from "../types";
 import type { TerrainData } from "../types";
 
 const CHUNK_CELLS = TERRAIN_CHUNK * TERRAIN_CHUNK;
@@ -102,4 +102,36 @@ export function reliefCells(terrain: TerrainData | undefined): Map<string, numbe
         });
     }
     return cells;
+}
+
+/** The soil of a cell as kept in the map (see Soils.ts): 0 when it was not painted. */
+export function soilAt(terrain: TerrainData | undefined, cellX: number, cellY: number): number {
+    if (!terrain?.soil) return 0;
+    const { key, index } = chunkOf(cellX, cellY);
+    return terrain.soil[key]?.[index] ?? 0;
+}
+
+/**
+ * The relief with these cells painted with these soils (by cell key; 0 wipes the soil of a cell). A number no soil
+ * has paints nothing. A chunk wiped clean is dropped, and so is the whole layer. The relief given is left as it is.
+ */
+export function withSoils(terrain: TerrainData | undefined, changes: ReadonlyMap<string, number>): TerrainData {
+    const soil: Record<string, number[]> = { ...(terrain?.soil ?? {}) };
+    const copied = new Set<string>();
+    for (const [cell, code] of changes) {
+        const { x, y } = cellOf(cell);
+        const { key, index } = chunkOf(x, y);
+        if (!copied.has(key)) {
+            soil[key] = soil[key] ? [...soil[key]] : new Array<number>(CHUNK_CELLS).fill(0);
+            copied.add(key);
+        }
+        soil[key][index] = Number.isInteger(code) && code >= 0 && code <= TERRAIN_MAX_SOIL ? code : 0;
+    }
+    for (const key of copied) {
+        if (soil[key].every((code) => code === 0)) delete soil[key];
+    }
+    const next: TerrainData = { ...(terrain ?? {}), chunks: terrain?.chunks ?? {} };
+    if (Object.keys(soil).length > 0) next.soil = soil;
+    else delete next.soil;
+    return next;
 }

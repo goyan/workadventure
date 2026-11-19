@@ -43,7 +43,8 @@ export class TerrainWater {
     public setTerrain(terrain: TerrainData | undefined): void {
         if (terrain === this.terrain) return;
         this.terrain = terrain;
-        this.dug = reliefCells(terrain).size > 0;
+        // A map with painted soils has something to draw too.
+        this.dug = reliefCells(terrain).size > 0 || Object.keys(terrain?.soil ?? {}).length > 0;
         this.changes++;
     }
 

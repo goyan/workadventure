@@ -661,6 +661,19 @@ const mapEditor: BaseTranslation = {
         raise: "Raise",
         flatten: "Flatten",
         smooth: "Smooth",
+        soil: "Soil",
+        soilHint:
+            'Paint a soil on the map. Rock and clay keep the water; sand and gravel drink it, in a hollow too; earth and meadow drink a flood like the ground of the map. "Ground of the map" wipes the paint.',
+        soilErase: "Ground of the map (wipe)",
+        hoverSoil: "Soil under the pointer: {soil}",
+        soils: {
+            earth: "Earth",
+            meadow: "Meadow",
+            clay: "Clay",
+            sand: "Sand",
+            rock: "Rock",
+            gravel: "Gravel",
+        },
         flattenHint:
             "Flatten brings the ground towards a level: the one of the ground where the stroke starts, or the altitude chosen below (negative under the ground, positive over it). The middle of the brush comes out flat, its rim as a slope.",
         smoothHint: "Smooth softens steps and bumps: each cell goes towards the mean of its neighbours.",

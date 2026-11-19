@@ -14,7 +14,7 @@ const emptyWam = (): WAMFileFormat => ({
 
 const dig = (id: string, cells: { x: number; y: number; height: number }[]): EditMapCommandMessage => ({
     id,
-    editMapMessage: { message: { $case: "modifyTerrainMessage", modifyTerrainMessage: { cells } } },
+    editMapMessage: { message: { $case: "modifyTerrainMessage", modifyTerrainMessage: { cells, soils: [] } } },
 });
 
 describe("WamManager relief", () => {

@@ -4,6 +4,9 @@
         MAX_DEPTH_TILES,
         MAX_WATER_CURRENT,
         MAX_WATER_SPEED,
+        SOILS,
+        soilCode,
+        soilName,
         TILE_PX,
     } from "@workadventure/map-editor";
     import { LL } from "../../../i18n/i18n-svelte";
@@ -14,7 +17,9 @@
         terrainBrushStore,
         terrainContoursStore,
         terrainHoverHeightStore,
+        terrainHoverSoilStore,
     } from "../../Stores/TerrainEditorStore";
+    import { SOIL_TINTS } from "../../Phaser/Game/Terrain/TerrainShading";
     import InputSwitch from "../Input/InputSwitch.svelte";
     import RangeSlider from "../Input/RangeSlider.svelte";
     import TerrainWaterDashboard from "./TerrainWaterDashboard.svelte";
@@ -23,7 +28,7 @@
     const MAX_DIAMETER_TILES = 12;
     const MAX_FORCE_PX = 64;
     // Filling up to the ground only is what flattening towards the level of the ground does: no button of its own.
-    const MODES = ["dig", "raise", "flatten", "smooth"] as const;
+    const MODES = ["dig", "raise", "flatten", "smooth", "soil"] as const;
 
     // What the map says now; each slider below writes its change back to the map, for every editor.
     const saved = readTerrainMapSettings();
@@ -112,6 +117,40 @@
         {/if}
     {:else if $terrainBrushStore.mode === "smooth"}
         <p class="retro-hint m-0">{$LL.mapEditor.terrain.smoothHint()}</p>
+    {:else if $terrainBrushStore.mode === "soil"}
+        <p class="retro-hint m-0">{$LL.mapEditor.terrain.soilHint()}</p>
+        <div class="grid grid-cols-2 gap-2" role="radiogroup" aria-label={$LL.mapEditor.terrain.soil()}>
+            {#each SOILS as name (name)}
+                <button
+                    type="button"
+                    role="radio"
+                    class="btn btn-sm justify-start gap-2 {($terrainBrushStore.soil ?? 0) === soilCode(name)
+                        ? 'btn-secondary'
+                        : 'btn-light btn-ghost'}"
+                    aria-checked={($terrainBrushStore.soil ?? 0) === soilCode(name)}
+                    data-testid="terrain-soil-{name}"
+                    onclick={() => terrainBrushStore.update((brush) => ({ ...brush, soil: soilCode(name) }))}
+                >
+                    <span
+                        class="inline-block h-3 w-3 shrink-0 rounded-sm border border-white/40"
+                        style="background:#{SOIL_TINTS[name].color.toString(16).padStart(6, '0')}"
+                    ></span>
+                    {$LL.mapEditor.terrain.soils[name]()}
+                </button>
+            {/each}
+            <button
+                type="button"
+                role="radio"
+                class="btn btn-sm col-span-2 {($terrainBrushStore.soil ?? 0) === 0
+                    ? 'btn-secondary'
+                    : 'btn-light btn-ghost'}"
+                aria-checked={($terrainBrushStore.soil ?? 0) === 0}
+                data-testid="terrain-soil-none"
+                onclick={() => terrainBrushStore.update((brush) => ({ ...brush, soil: 0 }))}
+            >
+                {$LL.mapEditor.terrain.soilErase()}
+            </button>
+        </div>
     {/if}
     {#if $terrainHoverHeightStore !== undefined}
         <p class="m-0 text-sm text-white" role="status" data-testid="terrain-hover-height">
@@ -123,6 +162,14 @@
                 {$LL.mapEditor.terrain.hoverLevel()}
             {/if}
         </p>
+    {/if}
+    {#if $terrainHoverSoilStore}
+        {@const hovered = soilName($terrainHoverSoilStore)}
+        {#if hovered}
+            <p class="m-0 text-sm text-white" role="status" data-testid="terrain-hover-soil">
+                {$LL.mapEditor.terrain.hoverSoil({ soil: $LL.mapEditor.terrain.soils[hovered]() })}
+            </p>
+        {/if}
     {/if}
     <div data-testid="terrain-contours">
         <InputSwitch

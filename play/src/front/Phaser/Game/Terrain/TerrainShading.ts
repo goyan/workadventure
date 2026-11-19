@@ -1,5 +1,5 @@
 import { heightAt } from "@workadventure/map-editor";
-import type { TerrainData } from "@workadventure/map-editor";
+import type { SoilName, TerrainData } from "@workadventure/map-editor";
 
 /**
  * How a cell of the relief faces the light, which comes from the north-west like the light on the clouds: from -1 (a
@@ -46,3 +46,16 @@ export const DEEP_WATER_COLOR = 0x2f5f8f;
 export function deepWaterAlpha(depthPx: number): number {
     return depthPx <= 0 ? 0 : 0.8 * Math.min(1, depthPx / DEEP_WATER_PX);
 }
+
+/**
+ * How a painted soil is drawn: a veil of its colour over the ground of the map, under the shades of the relief and
+ * under the water. Rock and gravel cover the ground most, earth and meadow let it show.
+ */
+export const SOIL_TINTS: Record<SoilName, { color: number; alpha: number }> = {
+    earth: { color: 0x7a5a3a, alpha: 0.45 },
+    meadow: { color: 0x5fae4a, alpha: 0.45 },
+    clay: { color: 0xc58a55, alpha: 0.55 },
+    sand: { color: 0xe6d29a, alpha: 0.6 },
+    rock: { color: 0x7d8189, alpha: 0.7 },
+    gravel: { color: 0xb9bcc2, alpha: 0.6 },
+};

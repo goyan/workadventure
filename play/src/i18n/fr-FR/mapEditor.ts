@@ -672,6 +672,19 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         raise: "Élever",
         flatten: "Aplanir",
         smooth: "Lisser",
+        soil: "Sol",
+        soilHint:
+            "Peignez un sol sur la carte. Rocher et argile gardent l'eau ; sable et gravier la boivent, même dans un creux ; terre et prairie boivent une crue comme le sol d'origine. « Sol d'origine » efface la peinture.",
+        soilErase: "Sol d'origine (effacer)",
+        hoverSoil: "Sol sous le curseur : {soil}",
+        soils: {
+            earth: "Terre",
+            meadow: "Prairie",
+            clay: "Argile",
+            sand: "Sable",
+            rock: "Rocher",
+            gravel: "Gravier",
+        },
         flattenHint:
             "Aplanir ramène le sol vers un niveau : celui du sol là où le geste commence, ou l'altitude choisie ci-dessous (négative sous le sol, positive au-dessus). Le milieu du pinceau sort plat, son bord en pente.",
         smoothHint: "Lisser adoucit les marches et les bosses : chaque case va vers la moyenne de ses voisines.",
