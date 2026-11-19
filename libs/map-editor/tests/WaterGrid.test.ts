@@ -872,3 +872,43 @@ describe("a source or a sink that holds a level", () => {
         }
     });
 });
+
+describe("the highest water of a map", () => {
+    const flat = { x: 0, y: 0, width: 40, height: 40 };
+
+    it("is 18 px over the ground unless the map says otherwise", () => {
+        const grid = new WaterGrid(undefined, flat);
+        grid.layRing(20, 20, -1, 4, 1e6);
+        expect(grid.depthAt(20, 20)).toBeCloseTo(MAX_WATER_SURFACE_PX, 3);
+    });
+
+    it("can be raised by the map: a flood then stands higher, and the running water keeps it", () => {
+        const grid = new WaterGrid(undefined, flat);
+        grid.setMaxSurface(120);
+        grid.layRing(20, 20, -1, 4, 1e6);
+        expect(grid.depthAt(20, 20)).toBeCloseTo(120, 3);
+        run(grid, 1);
+        // One step lets the pile run to its neighbours, but takes nothing away for standing over 18 px.
+        expect(grid.depthAt(20, 20)).toBeGreaterThan(MAX_WATER_SURFACE_PX);
+    });
+
+    it("lowered again, loses what stands over it", () => {
+        const grid = new WaterGrid(undefined, flat);
+        grid.setMaxSurface(120);
+        grid.layRing(20, 20, -1, 4, 1e6);
+        grid.setMaxSurface(MAX_WATER_SURFACE_PX);
+        const tally = grid.step(nothing);
+        expect(grid.depthAt(20, 20)).toBeLessThanOrEqual(MAX_WATER_SURFACE_PX + 1e-3);
+        expect(tally.lostPx).toBeGreaterThan(0);
+    });
+
+    it("never goes under the usual height nor over the highest a map may set", () => {
+        const grid = new WaterGrid(undefined, flat);
+        grid.setMaxSurface(1);
+        expect(grid.maxSurface()).toBe(MAX_WATER_SURFACE_PX);
+        grid.setMaxSurface(1e9);
+        expect(grid.maxSurface()).toBe(256);
+        grid.setMaxSurface(Number.NaN);
+        expect(grid.maxSurface()).toBe(MAX_WATER_SURFACE_PX);
+    });
+});

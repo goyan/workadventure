@@ -820,7 +820,7 @@
                         "level": {
                           "type": "number",
                           "minimum": -256,
-                          "maximum": 274
+                          "maximum": 512
                         },
                         "anchorX": {
                           "type": "number",
@@ -875,7 +875,7 @@
                         "level": {
                           "type": "number",
                           "minimum": -256,
-                          "maximum": 274
+                          "maximum": 512
                         },
                         "anchorX": {
                           "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/10/properties/anchorX"
@@ -1963,6 +1963,12 @@
                   "minimum": 0,
                   "maximum": 2,
                   "default": 1
+                },
+                "maxSurface": {
+                  "type": "number",
+                  "minimum": 18,
+                  "maximum": 256,
+                  "default": 18
                 }
               },
               "additionalProperties": false

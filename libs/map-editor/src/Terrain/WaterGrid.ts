@@ -1,4 +1,4 @@
-import { TERRAIN_CHUNK } from "../types";
+import { DEFAULT_WATER_SETTINGS, MAX_WATER_MAX_SURFACE, TERRAIN_CHUNK } from "../types";
 import type { TerrainData } from "../types";
 import { CELL_AREA_M2, LITRES_PER_M3, metresOf } from "./Scale";
 import { soilDrinks } from "./Soils";
@@ -17,7 +17,7 @@ const MAX_GRID_SIDE = 600;
  * building (52 px), so one keeps dry feet upstairs. What a source pours beyond it is lost, and so is what the rain
  * or the running water would pile over it.
  */
-export const MAX_WATER_SURFACE_PX = 18;
+export const MAX_WATER_SURFACE_PX = DEFAULT_WATER_SETTINGS.maxSurface;
 
 /**
  * For each cell, the level its water spills at: the lowest level a water standing there must reach to run away to
@@ -293,6 +293,8 @@ export class WaterGrid {
     private stretch = new Int32Array(0);
     private farTurn = false;
     private depth: Float32Array;
+    /** How high the water of this map may stand over the level it spills at (see setMaxSurface). */
+    private highest: number = MAX_WATER_SURFACE_PX;
     private next: Float32Array;
 
     constructor(
@@ -387,6 +389,21 @@ export class WaterGrid {
     }
 
     /**
+     * How high the water may stand over the level it spills at, in pixels: what the map sets, never under the usual
+     * height nor over the highest a map may set (the usual one for a height that is not a number). What stands over
+     * a height that was lowered is lost at the next step.
+     */
+    public setMaxSurface(px: number): void {
+        this.highest = Number.isFinite(px)
+            ? Math.min(MAX_WATER_MAX_SURFACE, Math.max(MAX_WATER_SURFACE_PX, px))
+            : MAX_WATER_SURFACE_PX;
+    }
+
+    public maxSurface(): number {
+        return this.highest;
+    }
+
+    /**
      * Empties the disc of `radius` cells around a cell (never behind a wall) and returns the water taken, with how
      * many cells the disc has. Undefined outside the grid or in a wall.
      */
@@ -428,7 +445,7 @@ export class WaterGrid {
             const x = index % width;
             const y = (index - x) / width;
             if (inner >= 0 && (x - column) ** 2 + (y - row) ** 2 <= inner * inner) continue;
-            let room = this.spill[index] + MAX_WATER_SURFACE_PX - (this.ground[index] + this.depth[index]);
+            let room = this.spill[index] + this.highest - (this.ground[index] + this.depth[index]);
             if (this.depth[index] >= deepPx) room = Math.min(room, crestPx);
             if (room <= 0) continue;
             cells.push(index);
@@ -652,7 +669,7 @@ export class WaterGrid {
             if (left <= 0) continue;
             const stays = Math.min(
                 left,
-                Math.max(0, this.spill[index] + MAX_WATER_SURFACE_PX - (ground[index] + depth[index])),
+                Math.max(0, this.spill[index] + this.highest - (ground[index] + depth[index])),
             );
             depth[index] += stays;
             kept += stays;
@@ -1027,7 +1044,7 @@ export class WaterGrid {
             // Water runs from a cell to the next one only so fast: where more comes than can run away (a hard rain
             // on a wide hollow), it would pile up into a dome, its surface sloping everywhere. What stands over the
             // highest level is lost instead, as when it is poured: the surface stays level and under that level.
-            const over = ground[index] + next[index] - (this.spill[index] + MAX_WATER_SURFACE_PX);
+            const over = ground[index] + next[index] - (this.spill[index] + this.highest);
             if (over > 0 && next[index] > 0) {
                 const taken = Math.min(over, next[index]);
                 next[index] -= taken;

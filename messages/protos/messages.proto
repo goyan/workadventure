@@ -451,6 +451,8 @@ message UpdateWaterSettingMessage {
   optional double absorption = 4;
   // How hard the current of the water carries the avatars (0: not at all). Absent from older clients: kept.
   optional double current = 5;
+  // How high the water may stand over the level it spills at, in pixels. Absent from older clients: kept.
+  optional double maxSurface = 6;
 }
 
 // Map-wide weather, validated against WeatherType before it is stored.

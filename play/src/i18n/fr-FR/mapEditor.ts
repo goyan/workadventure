@@ -746,12 +746,15 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             steady: "stable",
         },
         current: "Force du courant (0 : les avatars ne sont pas emportés)",
+        maxSurface: "Hauteur maximale de l'eau au-dessus du sol",
         real: {
             maxDepth: "En réel : une case fait environ 1,10 m. Mare : 1 case ; étang : 2 à 3 ; lac : 4 et plus.",
             runoff: "En réel : le terrain qui alimente une mare fait 5 à 20 fois sa surface ; 0 pour un bassin maçonné.",
             evaporation: "En réel : 0,05 mm/h en hiver, 0,1 à 0,3 mm/h en été (3 à 6 mm par jour).",
             absorption: "En réel : argile 1 à 5 mm/h, pelouse 5 à 15, sable 20 à 30 ; sol gorgé d'eau ou bitume : 0.",
             speed: "En réel : 1. À cette vitesse, une pluie de 10 mm/h met des heures à remplir un étang.",
+            maxSurface:
+                "18 px par défaut : juste de quoi nager, sous les étages. Plus haut, une crue ou la vague d'un météore noie le sol en profondeur (une case = 32 px), étages compris au-delà de 52 px ; sous une forte pluie accélérée, l'eau peut s'empiler.",
             current:
                 "À 1, le courant le plus fort emporte au quart de la vitesse de la marche : on lui résiste en marchant. Rien dans une eau au repos ni sous un quart de case d'eau.",
         },
