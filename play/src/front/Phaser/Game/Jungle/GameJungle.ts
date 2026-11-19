@@ -78,6 +78,7 @@ export class GameJungle {
                 tileSize: () => gameMapFrontWrapper.getTileDimensions().width,
                 // The clock of the wandering characters: the day changes at the same time as their walks.
                 now: () => new Date(),
+                simulated: () => scene.getGameMap().getWamFile()?.getWam().settings?.life?.landEnabled === true,
             },
             (animals, map) => wanderers.setFreeCharacters(animals, map),
             {
@@ -138,6 +139,14 @@ export class GameJungle {
             loop: true,
             callback: () => this.manager.refresh(),
         });
+    }
+
+    /** The sheet of a lion or of a tiger in the catalogues of the map, for the animals the server runs. */
+    public sheetOf(species: "antelope" | "lion" | "tiger"): string | undefined {
+        const names = species === "lion" ? [":lion:"] : species === "tiger" ? [":tigre:", ":tiger:"] : [];
+        return this.loadedPrefabs.find(
+            (prefab) => prefab.wander !== undefined && names.some((name) => prefab.id.includes(name)),
+        )?.wander?.sheetPath;
     }
 
     public tamedAnimalCount(): number {

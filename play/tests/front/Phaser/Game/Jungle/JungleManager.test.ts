@@ -95,6 +95,21 @@ describe("JungleManager", () => {
         expect(apply.mock.calls[1][0]).toEqual([]);
     });
 
+    it("draws no animal while the server runs the lions and the tigers of the map, and draws them again after", () => {
+        const { source, apply } = makeSource();
+        let simulated = true;
+        manager = new JungleManager({ ...source, simulated: () => simulated }, apply);
+        manager.refresh();
+        expect(apply).not.toHaveBeenCalled();
+        simulated = false;
+        manager.refresh();
+        expect(apply).toHaveBeenCalledOnce();
+        expect(apply.mock.calls[0][0].length).toBeGreaterThan(0);
+        simulated = true;
+        manager.refresh();
+        expect(apply.mock.calls[1][0]).toEqual([]);
+    });
+
     it("no species, no jungle", () => {
         const { source, apply } = makeSource({ species: [MARKER] });
         manager = new JungleManager(source, apply);

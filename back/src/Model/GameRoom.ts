@@ -14,6 +14,7 @@ import {
     KARAOKE_LEADERBOARD_MIN_COVERAGE,
     KARAOKE_LEADERBOARD_REQUEST_EVENT,
     KaraokeLeaderboardRequestSchema,
+    TERRAIN_CELL,
 } from "@workadventure/map-editor";
 import * as Sentry from "@sentry/node";
 import { Metadata } from "@grpc/grpc-js";
@@ -131,6 +132,9 @@ const MEETING_INVITATION_MAX_REQUESTS = 50;
 const MEETING_INVITATION_MAX_REQUESTS_PER_USER = 3;
 const MEETING_INVITATION_REQUEST_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 
+/** The life of the land reads at most this many cells of the relief on each side of a map. */
+const MAX_MAP_CELLS = 4096;
+
 export class GameRoom implements BrothersFinder {
     private readonly privateMessages = new PrivateMessages((uuid) => this.getUsersByUuid(uuid));
     public readonly id: string;
@@ -157,6 +161,8 @@ export class GameRoom implements BrothersFinder {
     private switchTriggers: SwitchTriggerEvaluator | undefined;
     private terrainWater: TerrainWaterManager | undefined;
     private aquaticLife: AquaticLifeManager | undefined;
+    /** The size of the map in cells of the relief; undefined until its Tiled map is read. */
+    private mapCells: { width: number; height: number } | undefined;
     private karaokeLeaderboard: KaraokeLeaderboardManager | undefined;
     private readonly wamManager?: WamManager;
     private versionNumber = 1;
@@ -343,10 +349,13 @@ export class GameRoom implements BrothersFinder {
             undefined,
             // The animals fear the avatars that are on the ground, where the water is.
             gameRoom.groundAvatarPositions.bind(gameRoom),
+            // The animals of the land live on the whole map: its size is in its Tiled map.
+            gameRoom.mapSizeInCells.bind(gameRoom),
         );
         gameRoom.aquaticLife = aquaticLife;
         await aquaticLife.restore();
         aquaticLife.start();
+        gameRoom.readMapSize(() => aquaticLife.mapChanged());
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => aquaticLife.stop());
 
@@ -1138,6 +1147,26 @@ export class GameRoom implements BrothersFinder {
     /** The water of the relief of the map (its whole state), sent to a user who joins the room. */
     public getTerrainWater(): TerrainWaterMessage | undefined {
         return this.terrainWater?.snapshot();
+    }
+
+    /** The size of the map in cells of the relief (16 px), for the life of its land; undefined until it is read. */
+    public mapSizeInCells(): { width: number; height: number } | undefined {
+        return this.mapCells;
+    }
+
+    /** Reads the size of the map in its Tiled map; a map that cannot be read has no life on its land. */
+    private readMapSize(onRead: () => void): void {
+        this.getMap()
+            .then((map) => {
+                const cells = (tiles: number | undefined, tilePx: number | undefined): number =>
+                    Math.min(MAX_MAP_CELLS, Math.max(0, Math.ceil(((tiles ?? 0) * (tilePx ?? 32)) / TERRAIN_CELL)));
+                this.mapCells = {
+                    width: cells(map.width, map.tilewidth),
+                    height: cells(map.height, map.tileheight),
+                };
+                onRead();
+            })
+            .catch((error) => console.warn("Could not read the size of the map for the life of its land", error));
     }
 
     /** Where the avatars standing on the ground are, in map pixels (not those on a raised floor). */

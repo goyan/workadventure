@@ -2005,6 +2005,34 @@
                   "minimum": 20,
                   "maximum": 3600,
                   "default": 120
+                },
+                "landEnabled": {
+                  "type": "boolean"
+                },
+                "antelopeReproductionDelay": {
+                  "type": "number",
+                  "minimum": 10,
+                  "maximum": 3600
+                },
+                "antelopeMaxLifespan": {
+                  "type": "number",
+                  "minimum": 30,
+                  "maximum": 86400
+                },
+                "landHuntInterval": {
+                  "type": "number",
+                  "minimum": 5,
+                  "maximum": 3600
+                },
+                "landPredatorReproductionDelay": {
+                  "type": "number",
+                  "minimum": 30,
+                  "maximum": 7200
+                },
+                "landPredatorMaxLifespan": {
+                  "type": "number",
+                  "minimum": 60,
+                  "maximum": 172800
                 }
               },
               "additionalProperties": false

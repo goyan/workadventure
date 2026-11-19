@@ -283,6 +283,7 @@ import {
     aquaticLifeStatsStore,
     terrainWaterStatsStore,
 } from "../../Stores/TerrainEditorStore";
+import { jungleEnabledStore } from "../../Stores/JungleStore";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -355,6 +356,8 @@ import { WeatherManager } from "./Weather/WeatherManager";
 import { TerrainWater } from "./Terrain/TerrainWater";
 import { AquaticLife } from "./Life/AquaticLife";
 import { AquaticLifeView } from "./Life/AquaticLifeView";
+import { LandLifeView } from "./Life/LandLifeView";
+import { isLandKind } from "./Life/LandSprites";
 import { LifeSpeciesStats, withoutSpeciesCounts } from "./Life/LifeSpeciesStats";
 import { LifeStats } from "./Life/LifeStats";
 import { TerrainView } from "./Terrain/TerrainView";
@@ -555,6 +558,9 @@ export class GameScene extends DirtyScene {
     /** The animals of the water of the relief, as the server tells them. */
     private readonly aquaticLife = new AquaticLife();
     private aquaticLifeView: AquaticLifeView | undefined;
+    /** The animals of the land the server runs (antelopes, lions, tigers). */
+    private readonly landLife = new AquaticLife(isLandKind);
+    private landLifeView: LandLifeView | undefined;
     private readonly aquaticLifeStats = new LifeStats();
     private readonly aquaticLifeSpecies = new LifeSpeciesStats();
     private aquaticLifeSubscription: Subscription | undefined;
@@ -1644,6 +1650,8 @@ export class GameScene extends DirtyScene {
         this.waterFlowView = undefined;
         this.aquaticLifeView?.destroy();
         this.aquaticLifeView = undefined;
+        this.landLifeView?.destroy();
+        this.landLifeView = undefined;
         this.skyShadowManager?.destroy();
         this.skyShadowManager = undefined;
         this.skyWindowLightManager?.destroy();
@@ -2136,6 +2144,7 @@ export class GameScene extends DirtyScene {
             this.terrainView?.update(time);
             this.waterFlowView?.update(time);
             this.aquaticLifeView?.update(time);
+            this.landLifeView?.update(time);
             this.skyShadowManager?.update(time);
             this.skyWindowLightManager?.update(time);
             this.skyMovingShadows?.update();
@@ -2716,6 +2725,7 @@ export class GameScene extends DirtyScene {
      */
     private receiveAquaticLife(message: AquaticLifeMessage): void {
         this.aquaticLife.receive(message.animals, this.time.now);
+        this.landLife.receive(message.animals, this.time.now);
         // The dashboard of the life tool: nothing to show on a map that never had any life.
         this.aquaticLifeStats.receive(
             message.animals,
@@ -3460,6 +3470,15 @@ export class GameScene extends DirtyScene {
                     this.aquaticLife,
                     () => get(aquaticLifeShownStore),
                     () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+                );
+                // The antelopes, the lions and the tigers of the land: hidden with the jungle.
+                this.landLifeView?.destroy();
+                this.landLifeView = new LandLifeView(
+                    this,
+                    this.landLife,
+                    () => get(jungleEnabledStore),
+                    () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+                    (species) => this.gameJungle?.sheetOf(species),
                 );
                 // The shadows of the sun and of the moon, outdoors. One set at a time.
                 this.skyShadowManager?.destroy();

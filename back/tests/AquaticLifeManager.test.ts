@@ -281,8 +281,15 @@ describe("AquaticLifeManager", () => {
         water.grid = gridOf(20, 15);
         manager.mapChanged();
         steps(2);
-        const kinds = sent[0].animals.map((animal) => animal.kind).sort();
-        expect(kinds).toEqual([0, 1, 2, 3]);
+        // The fish first: the dolphins wait for thirty of them.
+        expect(sent[0].animals.map((animal) => animal.kind).sort()).toEqual([0, 1]);
+        const dolphins = (): number[] =>
+            (sent.at(-1)?.animals ?? [])
+                .map((animal) => animal.kind)
+                .filter((kind) => kind >= 2)
+                .sort();
+        for (let second = 0; second < 1800 && dolphins().length === 0; second++) steps(2);
+        expect(dolphins()).toEqual([2, 3]);
     });
 
     it("makes the fish keep away from an avatar standing in the middle of their pond", () => {

@@ -1,13 +1,13 @@
 import type { WaterGrid } from "../Terrain/WaterGrid";
-import { TERRAIN_CELL } from "../types";
+import { DEFAULT_LAND_LIFE_SETTINGS, TERRAIN_CELL } from "../types";
 import type { LifeSettings } from "../types";
 import type { Animal } from "./Animal";
-import { MAX_ANIMALS, MAX_DOLPHINS } from "./LifeConstants";
-import { cellAt, minDepthOf, swim, WANDER_REACH_CELLS } from "./Swim";
+import { MAX_ANIMALS, MAX_ANTELOPES, MAX_DOLPHINS, MAX_LAND_ANIMALS } from "./LifeConstants";
+import { cellAt, levelOf, swim, WANDER_REACH_CELLS } from "./Swim";
 import { isPredator, SPECIES, SPECIES_IDS } from "./Species";
 import type { Species, SpeciesId } from "./Species";
 import { DOLPHIN_DEPTH_PX, FISH_DEPTH_PX } from "./WaterBodies";
-import type { WaterBodies } from "./WaterBodies";
+import type { Places, WaterBodies } from "./WaterBodies";
 
 export { DOLPHIN_SPEED_FACTOR, MAX_ANIMALS, MAX_DOLPHINS, MEALS_FOR_CALF, STARVE_HUNTS } from "./LifeConstants";
 
@@ -17,6 +17,8 @@ export const LIFE_STEP_MS = 500;
 export const MIN_BODY_CELLS = 40;
 /** A body gets a dolphin with this many cells deep enough for it. */
 export const MIN_DOLPHIN_DEEP_CELLS = 300;
+/** Dolphins come into a body once this many fish live in it: they would starve, or empty it, before. */
+export const FISH_PER_DOLPHIN_COUPLE = 30;
 /** A body holds a fish for this many cells (two fish at least). */
 export const CELLS_PER_FISH = 8;
 /** A body holds a dolphin for this many cells deep enough for it (so the smallest one that gets dolphins holds two). */
@@ -29,6 +31,10 @@ const FLEE_REACH_PX = 3 * TERRAIN_CELL;
 const FLEE_DRAWS = 6;
 /** A dolphin that caught nothing for this long stops hunting until its next interval. */
 export const HUNT_GIVE_UP_MS = 20_000;
+/** The two animals of a couple that comes to the land are at most this many cells apart on each axis. */
+const COUPLE_REACH_CELLS = 3;
+/** A hunter aims this far beyond a prey that runs from it, in map pixels. */
+const CHASE_LEAD_PX = 3 * TERRAIN_CELL;
 /** A mate or a prey is reached within this distance, in map pixels. */
 const REACH_PX = TERRAIN_CELL;
 /** After failing to go straight to a mate or a prey, an animal wanders this long before it tries again. */
@@ -45,6 +51,8 @@ export interface Population {
     seeded: boolean;
     /** The same for the dolphins. */
     dolphinsSeeded?: boolean;
+    /** The same for the antelopes of the land. */
+    landSeeded?: boolean;
 }
 
 /** What happened to the animals of one species during a step (or summed over many). */
@@ -109,7 +117,23 @@ export interface LifeCensus {
 const dolphinCapOf = (deepCells: number): number => Math.floor(deepCells / DEEP_CELLS_PER_DOLPHIN);
 const fishCapOf = (cells: number): number => Math.max(2, Math.floor(cells / CELLS_PER_FISH));
 
-type BodySize = WaterBodies["sizes"][number];
+type BodySize = Places["sizes"][number];
+
+/** The smallest piece of outdoor land that gets antelopes, in cells (200 tiles), and the cells it takes for one. */
+export const MIN_LAND_CELLS = 800;
+export const CELLS_PER_ANTELOPE = 160;
+/** A piece of land gets lions and tigers once this many antelopes live on it; it holds a predator for as many. */
+export const ANTELOPES_PER_PREDATOR = 5;
+const antelopeCapOf = (cells: number): number => Math.max(2, Math.floor(cells / CELLS_PER_ANTELOPE));
+/** Lions and tigers share the land: each species gets half of what the antelopes can feed. */
+const landPredatorCapOf = (cells: number): number =>
+    Math.max(2, Math.floor(Math.min(antelopeCapOf(cells), MAX_ANTELOPES) / ANTELOPES_PER_PREDATOR / 2));
+const landPredatorTimes = (settings: LifeSettings): SpeciesTimes => ({
+    breedDelayMs:
+        (settings.landPredatorReproductionDelay ?? DEFAULT_LAND_LIFE_SETTINGS.landPredatorReproductionDelay) * 1000,
+    maxLifespanMs: (settings.landPredatorMaxLifespan ?? DEFAULT_LAND_LIFE_SETTINGS.landPredatorMaxLifespan) * 1000,
+    huntIntervalMs: (settings.landHuntInterval ?? DEFAULT_LAND_LIFE_SETTINGS.landHuntInterval) * 1000,
+});
 
 /** What the settings of the map say of a species, in milliseconds. */
 interface SpeciesTimes {
@@ -125,9 +149,9 @@ interface SpeciesTimes {
 const PLACES: Record<
     SpeciesId,
     {
-        /** How many of them a body of water holds. */
+        /** How many of them a body of their places holds. */
         cap: (size: BodySize) => number;
-        /** Whether a body of water is big enough for them to come into it. */
+        /** Whether a body is big enough for them to come into it. */
         habitable: (size: BodySize) => boolean;
         times: (settings: LifeSettings) => SpeciesTimes;
     }
@@ -149,6 +173,26 @@ const PLACES: Record<
             maxLifespanMs: settings.dolphinMaxLifespan * 1000,
             huntIntervalMs: settings.huntInterval * 1000,
         }),
+    },
+    antelope: {
+        cap: (size) => antelopeCapOf(size.cells),
+        habitable: (size) => size.cells >= MIN_LAND_CELLS,
+        times: (settings) => ({
+            breedDelayMs:
+                (settings.antelopeReproductionDelay ?? DEFAULT_LAND_LIFE_SETTINGS.antelopeReproductionDelay) * 1000,
+            maxLifespanMs: (settings.antelopeMaxLifespan ?? DEFAULT_LAND_LIFE_SETTINGS.antelopeMaxLifespan) * 1000,
+            huntIntervalMs: 0,
+        }),
+    },
+    lion: {
+        cap: (size) => landPredatorCapOf(size.cells),
+        habitable: (size) => size.cells >= MIN_LAND_CELLS,
+        times: landPredatorTimes,
+    },
+    tiger: {
+        cap: (size) => landPredatorCapOf(size.cells),
+        habitable: (size) => size.cells >= MIN_LAND_CELLS,
+        times: landPredatorTimes,
     },
 };
 const placeCapOf = (species: SpeciesId, size: BodySize): number => PLACES[species].cap(size);
@@ -180,7 +224,7 @@ export interface SpeciesCensus {
 }
 
 /** The species that live in the room or have room to: in the order of the table. */
-export function speciesCensus(population: Population, bodies: WaterBodies): SpeciesCensus[] {
+export function speciesCensus(population: Population, bodies: WaterBodies, land?: Places): SpeciesCensus[] {
     const census: SpeciesCensus[] = [];
     for (const species of SPECIES_IDS) {
         let males = 0;
@@ -191,8 +235,9 @@ export function speciesCensus(population: Population, bodies: WaterBodies): Spec
             else males++;
         }
         let cap = 0;
-        for (let body = 1; body < bodies.sizes.length; body++) {
-            if (habitable(species, bodies.sizes[body])) cap += placeCapOf(species, bodies.sizes[body]);
+        const sizes = (SPECIES[species].habitat === "land" ? land : bodies)?.sizes ?? [];
+        for (let body = 1; body < sizes.length; body++) {
+            if (habitable(species, sizes[body])) cap += placeCapOf(species, sizes[body]);
         }
         cap = Math.min(cap, SPECIES[species].roomCap);
         if (males + females > 0 || cap > 0) census.push({ species, males, females, cap });
@@ -202,7 +247,7 @@ export function speciesCensus(population: Population, bodies: WaterBodies): Spec
 
 export const emptyPopulation = (): Population => ({ animals: [], nextId: 1, seeded: false });
 
-const bodyOf = (animal: Animal, bodies: WaterBodies): number => bodies.bodyAt(cellAt(animal.x), cellAt(animal.y));
+const bodyOf = (animal: Animal, bodies: Places): number => bodies.bodyAt(cellAt(animal.x), cellAt(animal.y));
 const distance = (a: Animal, b: Animal): number => Math.hypot(a.x - b.x, a.y - b.y);
 
 function nearest(from: Animal, candidates: readonly Animal[]): Animal | undefined {
@@ -223,6 +268,9 @@ function nearest(from: Animal, candidates: readonly Animal[]): Animal | undefine
  * at its fastest, and neither mates nor hunts meanwhile.
  *
  * It returns what happened in the room, and adds to `bySpecies` what happened to each species.
+ *
+ * `land` is the outdoor land of the map, for the species that walk: without it they stay as they are, untouched. A
+ * predator hunts in its own places: a lion takes a fish where it can wade, never where one swims.
  */
 export function stepPopulation(
     population: Population,
@@ -234,12 +282,20 @@ export function stepPopulation(
     random: () => number,
     threats: readonly { x: number; y: number }[] = [],
     bySpecies: SpeciesTallies = {},
+    land?: Places,
 ): LifeTally {
     const tally = emptyLifeTally();
     const of = (species: SpeciesId): SpeciesTally => (bySpecies[species] ??= emptySpeciesTally());
     const maxSpeed = settings.maxSpeed * TILE_PX;
+    const placesOf = (species: SpeciesId): Places | undefined => (SPECIES[species].habitat === "land" ? land : bodies);
+    /** The places of an animal that has some (see `animals`). */
+    const where = (animal: Animal): Places => placesOf(animal.kind) ?? bodies;
+    // The animals whose places are not given are left as they are.
+    const idle = population.animals.filter((animal) => placesOf(animal.kind) === undefined);
+    const animals =
+        idle.length === 0 ? population.animals : population.animals.filter((animal) => !idle.includes(animal));
     const dead = new Set<Animal>();
-    for (const animal of population.animals) {
+    for (const animal of animals) {
         const species = SPECIES[animal.kind];
         const times = timesOf(animal.kind, settings);
         // A predator kept from before predators had a sex.
@@ -259,7 +315,7 @@ export function stepPopulation(
     // Who is frightened, and by which avatar (the nearest one).
     const frightened = new Map<Animal, { x: number; y: number }>();
     if (threats.length > 0) {
-        for (const animal of population.animals) {
+        for (const animal of animals) {
             if (dead.has(animal)) continue;
             let nearestThreat: { x: number; y: number } | undefined;
             let least = FEAR_RADIUS_PX;
@@ -273,6 +329,24 @@ export function stepPopulation(
             if (nearestThreat) frightened.set(animal, nearestThreat);
         }
     }
+    // A prey also runs from the predators it knows, when one comes close: the nearest of all wins.
+    const hunters = animals.filter((animal) => isPredator(SPECIES[animal.kind]) && !dead.has(animal));
+    if (hunters.length > 0) {
+        for (const animal of animals) {
+            const species = SPECIES[animal.kind];
+            if (species.flees.length === 0 || dead.has(animal)) continue;
+            const avatar = frightened.get(animal);
+            let least = avatar ? Math.hypot(animal.x - avatar.x, animal.y - avatar.y) : species.fleeRadiusPx;
+            for (const hunter of hunters) {
+                if (!species.flees.includes(hunter.kind)) continue;
+                const far = distance(animal, hunter);
+                if (far < least) {
+                    least = far;
+                    frightened.set(animal, hunter);
+                }
+            }
+        }
+    }
 
     // Who lives in which body, species by species, to look for a mate or a prey among neighbours only.
     const living = new Map<SpeciesId, Map<number, Animal[]>>();
@@ -281,17 +355,16 @@ export function stepPopulation(
         living.set(species, new Map());
         count.set(species, 0);
     }
-    for (const animal of population.animals) {
+    for (const animal of animals) {
         if (dead.has(animal)) continue;
         count.set(animal.kind, (count.get(animal.kind) ?? 0) + 1);
         const byBody = living.get(animal.kind);
         if (!byBody) continue;
-        const body = bodyOf(animal, bodies);
+        const body = bodyOf(animal, where(animal));
         const list = byBody.get(body);
         if (list) list.push(animal);
         else byBody.set(body, [animal]);
     }
-    const neighbours = (species: SpeciesId, body: number): Animal[] => living.get(species)?.get(body) ?? [];
     const pursuing = new Set<Animal>();
     const pursue = (animal: Animal, target: Animal, speed: number): void => {
         animal.targetX = target.x;
@@ -305,7 +378,7 @@ export function stepPopulation(
 
     for (const species of predators) {
         const { huntIntervalMs } = timesOf(species.id, settings);
-        for (const hunter of population.animals) {
+        for (const hunter of animals) {
             if (hunter.kind !== species.id || dead.has(hunter) || now < hunter.readyAt) continue;
             if (frightened.has(hunter)) continue;
             hunter.huntSince ??= now;
@@ -315,20 +388,22 @@ export function stepPopulation(
                 continue;
             }
             if (detouring(hunter)) continue;
-            const body = bodyOf(hunter, bodies);
-            // Where the hunter cannot go is a refuge: a prey is one only where the hunter itself can be.
+            const places = where(hunter);
+            const level = levelOf(hunter);
+            const body = bodyOf(hunter, places);
+            // Where the hunter cannot go is a refuge: a prey is one only in the hunter's own body, where it can be.
             const prey =
                 body === 0
                     ? undefined
                     : nearest(
                           hunter,
-                          species.prey
-                              .flatMap((id) => neighbours(id, body))
-                              .filter(
-                                  (other) =>
-                                      !dead.has(other) &&
-                                      bodies.swimmable(cellAt(other.x), cellAt(other.y), species.minDepthPx),
-                              ),
+                          animals.filter(
+                              (other) =>
+                                  species.prey.includes(other.kind) &&
+                                  !dead.has(other) &&
+                                  bodyOf(other, places) === body &&
+                                  places.passable(cellAt(other.x), cellAt(other.y), level),
+                          ),
                       );
             if (!prey) continue;
             if (distance(hunter, prey) < REACH_PX) {
@@ -345,12 +420,22 @@ export function stepPopulation(
                 hunter.targetX = hunter.targetY = undefined;
             } else {
                 pursue(hunter, prey, maxSpeed * species.speedFactor);
+                // A prey that runs from its hunter is no longer where it was: the hunter runs on past that point.
+                if (SPECIES[prey.kind].flees.includes(species.id)) {
+                    const far = distance(hunter, prey);
+                    hunter.targetX = prey.x + ((prey.x - hunter.x) / far) * CHASE_LEAD_PX;
+                    hunter.targetY = prey.y + ((prey.y - hunter.y) / far) * CHASE_LEAD_PX;
+                }
             }
         }
     }
 
     const born: Animal[] = [];
-    const total = (): number => population.animals.length - dead.size + born.length;
+    // How many animals of each habitat live, the newborn included: the water and the land have each their room.
+    const inHabitat = { water: 0, land: 0, air: 0 };
+    for (const animal of animals) if (!dead.has(animal)) inHabitat[SPECIES[animal.kind].habitat]++;
+    const total = (habitat: Species["habitat"]): number => inHabitat[habitat];
+    const roomOf = (habitat: Species["habitat"]): number => (habitat === "land" ? MAX_LAND_ANIMALS : MAX_ANIMALS);
     const litterOf = (species: Species): number => {
         const [smallest, largest] = species.litter;
         return smallest === largest ? smallest : smallest + Math.floor(random() * (largest - smallest + 1));
@@ -362,16 +447,18 @@ export function stepPopulation(
         const canBreed = (animal: Animal): boolean =>
             !dead.has(animal) && now >= (animal.mateAt ?? 0) && (animal.meals ?? 0) >= species.mealsForYoung;
         let ofSpecies = count.get(species.id) ?? 0;
+        const sizes = placesOf(species.id)?.sizes ?? [];
+        const room = roomOf(species.habitat);
         for (const [body, list] of living.get(species.id) ?? []) {
             if (body === 0) continue;
-            const cap = placeCapOf(species.id, bodies.sizes[body]);
+            const cap = placeCapOf(species.id, sizes[body]);
             let inBody = list.filter((animal) => !dead.has(animal)).length;
             for (const male of list) {
                 // A predator on a hunt does not court.
                 if (male.sex !== "male" || !canBreed(male) || pursuing.has(male) || detouring(male)) continue;
                 if (frightened.has(male)) continue;
                 if (inBody >= cap || ofSpecies >= species.roomCap) break;
-                if (total() >= MAX_ANIMALS) break;
+                if (total(species.habitat) >= room) break;
                 const female = nearest(
                     male,
                     list.filter((other) => other.sex === "female" && canBreed(other) && !frightened.has(other)),
@@ -385,9 +472,10 @@ export function stepPopulation(
                     litterOf(species),
                     cap - inBody,
                     species.roomCap - ofSpecies,
-                    MAX_ANIMALS - total(),
+                    room - total(species.habitat),
                 );
                 for (let index = 0; index < litter; index++) {
+                    inHabitat[species.habitat]++;
                     born.push({
                         ...newAnimal(
                             population,
@@ -417,9 +505,11 @@ export function stepPopulation(
     for (const species of preys) {
         const { breedDelayMs } = timesOf(species.id, settings);
         let ofSpecies = count.get(species.id) ?? 0;
+        const sizes = placesOf(species.id)?.sizes ?? [];
+        const room = roomOf(species.habitat);
         for (const [body, list] of living.get(species.id) ?? []) {
             if (body === 0) continue;
-            const cap = placeCapOf(species.id, bodies.sizes[body]);
+            const cap = placeCapOf(species.id, sizes[body]);
             let inBody = list.filter((animal) => !dead.has(animal)).length;
             for (const male of list) {
                 if (male.sex !== "male" || dead.has(male) || now < male.readyAt || detouring(male)) continue;
@@ -441,9 +531,15 @@ export function stepPopulation(
                 }
                 const litter = Math.max(
                     0,
-                    Math.min(litterOf(species), cap - inBody, species.roomCap - ofSpecies, MAX_ANIMALS - total()),
+                    Math.min(
+                        litterOf(species),
+                        cap - inBody,
+                        species.roomCap - ofSpecies,
+                        room - total(species.habitat),
+                    ),
                 );
                 for (let index = 0; index < litter; index++) {
+                    inHabitat[species.habitat]++;
                     born.push(
                         newAnimal(
                             population,
@@ -470,11 +566,11 @@ export function stepPopulation(
     }
 
     for (const [animal, threat] of frightened) {
-        flee(animal, threat, bodies, maxSpeed, random);
+        flee(animal, threat, where(animal), maxSpeed, random);
     }
-    for (const animal of population.animals) {
+    for (const animal of animals) {
         if (dead.has(animal)) continue;
-        if (!swim(animal, bodies, grid, maxSpeed, dtMs, now, random)) {
+        if (!swim(animal, where(animal), grid, maxSpeed, dtMs, now, random)) {
             dead.add(animal);
             tally.diedDry++;
             of(animal.kind).diedDry++;
@@ -483,10 +579,11 @@ export function stepPopulation(
             animal.wanderUntil = now + DETOUR_MS;
         }
     }
-    population.animals = population.animals.filter((animal) => !dead.has(animal)).concat(born);
+    population.animals = idle.concat(animals.filter((animal) => !dead.has(animal))).concat(born);
 
     const before = population.animals.length;
-    spawn(population, bodies, settings, dtMs, now, random);
+    if (settings.enabled) spawn(population, bodies, settings, dtMs, now, random);
+    if (land && settings.landEnabled === true) spawnOnLand(population, land, settings, dtMs, now, random);
     tally.arrivals = population.animals.length - before;
     for (const arrived of population.animals.slice(before)) of(arrived.kind).arrivals++;
     return tally;
@@ -499,11 +596,11 @@ export function stepPopulation(
 function flee(
     animal: Animal,
     threat: { x: number; y: number },
-    bodies: WaterBodies,
+    bodies: Places,
     maxSpeed: number,
     random: () => number,
 ): void {
-    const minDepth = minDepthOf(animal);
+    const minDepth = levelOf(animal);
     const cellX = cellAt(animal.x);
     const cellY = cellAt(animal.y);
     const body = bodies.bodyAt(cellX, cellY);
@@ -522,11 +619,7 @@ function flee(
     }
     const x = animal.x + dx * FLEE_REACH_PX;
     const y = animal.y + dy * FLEE_REACH_PX;
-    if (
-        body !== 0 &&
-        bodies.bodyAt(cellAt(x), cellAt(y)) === body &&
-        bodies.swimmable(cellAt(x), cellAt(y), minDepth)
-    ) {
+    if (body !== 0 && bodies.bodyAt(cellAt(x), cellAt(y)) === body && bodies.passable(cellAt(x), cellAt(y), minDepth)) {
         animal.targetX = x;
         animal.targetY = y;
         return;
@@ -586,11 +679,17 @@ function spawn(
 ): void {
     const fishIn = new Set<number>();
     const dolphinIn = new Set<number>();
+    const fishCount = new Map<number, number>();
     let dolphins = 0;
+    let inWater = 0;
     for (const animal of population.animals) {
+        if (SPECIES[animal.kind].habitat !== "water") continue;
+        inWater++;
         const body = bodyOf(animal, bodies);
-        if (animal.kind === "fish") fishIn.add(body);
-        else {
+        if (animal.kind === "fish") {
+            fishIn.add(body);
+            fishCount.set(body, (fishCount.get(body) ?? 0) + 1);
+        } else {
             dolphinIn.add(body);
             dolphins++;
         }
@@ -606,7 +705,7 @@ function spawn(
         if (
             size.cells >= MIN_BODY_CELLS &&
             !fishIn.has(body) &&
-            population.animals.length + 2 <= MAX_ANIMALS &&
+            inWater + 2 <= MAX_ANIMALS &&
             (first || random() < chance)
         ) {
             for (const sex of ["male", "female"] as const) {
@@ -615,6 +714,7 @@ function spawn(
                 population.animals.push(
                     newAnimal(population, "fish", sex, middle(cell.cellX), middle(cell.cellY), now, settings, random),
                 );
+                inWater++;
                 population.seeded = true;
             }
         }
@@ -623,14 +723,16 @@ function spawn(
         if (
             size.deep >= MIN_DOLPHIN_DEEP_CELLS &&
             !dolphinIn.has(body) &&
+            (fishCount.get(body) ?? 0) >= FISH_PER_DOLPHIN_COUPLE &&
+            // Not the room of the water: its fish may fill it, and the dolphins make room.
             dolphins + 2 <= MAX_DOLPHINS &&
-            population.animals.length + 2 <= MAX_ANIMALS &&
             (firstDolphins || random() < dolphinChance)
         ) {
             for (const sex of ["male", "female"] as const) {
                 const cell = bodies.anyCell(body, DOLPHIN_DEPTH_PX, random);
                 if (!cell) continue;
                 dolphins++;
+                inWater++;
                 population.animals.push(
                     newAnimal(
                         population,
@@ -644,6 +746,79 @@ function spawn(
                     ),
                 );
                 population.dolphinsSeeded = true;
+            }
+        }
+    }
+}
+
+/**
+ * The first animals of the pieces of outdoor land big enough: a couple of antelopes on a land that has none (at once
+ * the first time, later after about a breeding delay), and a couple of lions and one of tigers once enough
+ * antelopes live there to feed them.
+ */
+function spawnOnLand(
+    population: Population,
+    land: Places,
+    settings: LifeSettings,
+    dtMs: number,
+    now: number,
+    random: () => number,
+): void {
+    const inBody = new Map<SpeciesId, Map<number, number>>();
+    const ofSpecies = new Map<SpeciesId, number>();
+    let onLand = 0;
+    for (const animal of population.animals) {
+        if (SPECIES[animal.kind].habitat !== "land") continue;
+        onLand++;
+        ofSpecies.set(animal.kind, (ofSpecies.get(animal.kind) ?? 0) + 1);
+        const body = bodyOf(animal, land);
+        const counts = inBody.get(animal.kind) ?? new Map<number, number>();
+        counts.set(body, (counts.get(body) ?? 0) + 1);
+        inBody.set(animal.kind, counts);
+    }
+    const living = (species: SpeciesId, body: number): number => inBody.get(species)?.get(body) ?? 0;
+    const middle = (cell: number): number => cell * TERRAIN_CELL + TERRAIN_CELL / 2;
+    const couple = (species: SpeciesId, body: number): boolean => {
+        let came = false;
+        const level = SPECIES[species].maxDepthPx ?? 0;
+        let near: { cellX: number; cellY: number } | undefined;
+        for (const sex of ["male", "female"] as const) {
+            // The second one comes beside the first: a couple.
+            const cell = near
+                ? (land.randomCell(body, near, COUPLE_REACH_CELLS, level, random) ?? near)
+                : land.anyCell(body, level, random);
+            if (!cell) continue;
+            near ??= cell;
+            population.animals.push(
+                newAnimal(population, species, sex, middle(cell.cellX), middle(cell.cellY), now, settings, random),
+            );
+            onLand++;
+            came = true;
+        }
+        return came;
+    };
+    const first = !population.landSeeded;
+    const chance = dtMs / PLACES.antelope.times(settings).breedDelayMs;
+    const predatorChance = dtMs / landPredatorTimes(settings).breedDelayMs;
+    for (let body = 1; body < land.sizes.length; body++) {
+        if (!habitable("antelope", land.sizes[body])) continue;
+        if (
+            living("antelope", body) === 0 &&
+            (ofSpecies.get("antelope") ?? 0) + 2 <= SPECIES.antelope.roomCap &&
+            onLand + 2 <= MAX_LAND_ANIMALS &&
+            (first || random() < chance)
+        ) {
+            if (couple("antelope", body)) population.landSeeded = true;
+        }
+        for (const species of ["lion", "tiger"] as const) {
+            if (
+                living("antelope", body) >= ANTELOPES_PER_PREDATOR &&
+                living(species, body) === 0 &&
+                (ofSpecies.get(species) ?? 0) + 2 <= SPECIES[species].roomCap &&
+                onLand + 2 <= MAX_LAND_ANIMALS &&
+                random() < predatorChance
+            ) {
+                couple(species, body);
             }
         }
     }

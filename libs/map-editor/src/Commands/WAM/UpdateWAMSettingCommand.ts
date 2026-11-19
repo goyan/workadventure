@@ -5,6 +5,8 @@ import {
     CategorySettings,
     DEFAULT_LIFE_SETTINGS,
     DEFAULT_WATER_SETTINGS,
+    LAND_LIFE_BOUNDS,
+    DEFAULT_LAND_LIFE_SETTINGS,
     LIFE_BOUNDS,
     MAX_WATER_CURRENT,
     MAX_WATER_SPEED,
@@ -16,6 +18,14 @@ import {
     WeatherType,
 } from "../../types";
 import { Command } from "../Command";
+
+const LAND_LIFE_KEYS = [
+    "antelopeReproductionDelay",
+    "antelopeMaxLifespan",
+    "landHuntInterval",
+    "landPredatorReproductionDelay",
+    "landPredatorMaxLifespan",
+] as const;
 
 export class UpdateWAMSettingCommand extends Command {
     protected readonly oldConfig: WAMSettings | undefined;
@@ -152,6 +162,21 @@ export class UpdateWAMSettingCommand extends Command {
                     dolphinMaxLifespan: within("dolphinMaxLifespan"),
                     drinkInterval: within("drinkInterval"),
                 };
+                // The life of the land: what an older client does not send is kept as the map has it.
+                const land = this.wam.settings.life;
+                const landEnabled = sent.landEnabled ?? kept?.landEnabled;
+                if (landEnabled !== undefined) land.landEnabled = landEnabled;
+                for (const key of LAND_LIFE_KEYS) {
+                    const [min, max] = LAND_LIFE_BOUNDS[key];
+                    const value = sent[key];
+                    if (value === undefined) {
+                        if (kept?.[key] !== undefined) land[key] = kept[key];
+                    } else {
+                        land[key] = Number.isFinite(value)
+                            ? Math.min(max, Math.max(min, value))
+                            : DEFAULT_LAND_LIFE_SETTINGS[key];
+                    }
+                }
                 break;
             }
             default: {

@@ -5,8 +5,8 @@ import { DOLPHIN_DEPTH_PX, FISH_DEPTH_PX } from "../src/Life/WaterBodies";
 
 describe("the species of the life", () => {
     it("describes the fish and the dolphin as the rules had them", () => {
-        expect(SPECIES_IDS).toEqual(["fish", "dolphin"]);
-        expect(SPECIES.fish).toEqual({
+        expect(SPECIES_IDS.slice(0, 2)).toEqual(["fish", "dolphin"]);
+        expect(SPECIES.fish).toMatchObject({
             id: "fish",
             habitat: "water",
             minDepthPx: FISH_DEPTH_PX,
@@ -17,7 +17,7 @@ describe("the species of the life", () => {
             starveHunts: undefined,
             roomCap: MAX_ANIMALS,
         });
-        expect(SPECIES.dolphin).toEqual({
+        expect(SPECIES.dolphin).toMatchObject({
             id: "dolphin",
             habitat: "water",
             minDepthPx: DOLPHIN_DEPTH_PX,
@@ -36,7 +36,7 @@ describe("the species of the life", () => {
     });
 
     it("keeps the kinds the browsers already know on the wire", () => {
-        expect(SPECIES_WIRE).toEqual({ fish: 0, dolphin: 1 });
+        expect(SPECIES_WIRE).toMatchObject({ fish: 0, dolphin: 1 });
         expect(wireKindOf("fish", "male")).toBe(0);
         expect(wireKindOf("fish", "female")).toBe(1);
         expect(wireKindOf("dolphin", "male")).toBe(2);

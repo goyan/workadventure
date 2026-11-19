@@ -58,26 +58,29 @@ function life(rows: string[], seed: number, steps: number): { fingerprint: strin
 }
 const fingerprint = (seed: number): string => life(lake(), seed, 2000).fingerprint;
 
+// The fingerprints were taken again once, on purpose, when the dolphins began to wait for thirty fish before they
+// come into a water (FISH_PER_DOLPHIN_COUPLE): with that threshold at 0 the rules gave the fingerprints of before
+// (9793f2b752505ad8, 97af95d70e65ec7b, e7e0093f05ffb5df, eb272ede6dd26206, 20aba621aa02b766).
 describe("the life of a lake, step after step", () => {
     it("is the one the rules gave before they read the table of the species", () => {
         expect([fingerprint(1), fingerprint(2), fingerprint(3)]).toEqual([
-            "9793f2b752505ad8",
-            "97af95d70e65ec7b",
-            "e7e0093f05ffb5df",
+            "b382492b827d9cc9",
+            "8b3d10ad49717928",
+            "df1edbffcd85105a",
         ]);
-    });
+    }, 60_000);
 
     it("covers births, calves, catches and deaths of age and of hunger", () => {
         const { totals } = life(lake(), 1, 2000);
         for (const key of ["births", "eaten", "diedOfAge", "predatorBirths", "predatorDeaths"]) {
             expect(totals[key]).toBeGreaterThan(0);
         }
-    });
+    }, 60_000);
 
     it("is the same on a map with two waters, a shallow rim and a full room", () => {
         expect([1, 2].map((seed) => life(lakeAndPond(), seed, 4000).fingerprint)).toEqual([
-            "eb272ede6dd26206",
-            "20aba621aa02b766",
+            "f8c96e726f9befc7",
+            "538b3a378dac9a93",
         ]);
-    });
+    }, 60_000);
 });
