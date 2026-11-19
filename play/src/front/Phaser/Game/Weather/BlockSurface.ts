@@ -77,6 +77,12 @@ function blend(
     pixels[index + 3] = total * 255;
 }
 
+/** What was painted on a block canvas at some point, to lay it back later instead of painting it again. */
+export interface BlockSnapshot {
+    pixels: Uint8ClampedArray;
+    painted: boolean;
+}
+
 /** Blocks of the weather drawn on the map (fog, clouds, their shadows), each layer over the one before. */
 export interface BlockSurface {
     /** Starts a new image over `view`, one pixel a cell of `resolution` map pixels: the cells of the canvas. */
@@ -92,6 +98,10 @@ export interface BlockSurface {
     ): void;
     /** Shows what was painted since `begin` (nothing painted: hidden). */
     end(): void;
+    /** What was painted since `begin`, to keep: layers that seldom change are painted once (see restore). */
+    snapshot?(): BlockSnapshot | undefined;
+    /** Lays back a snapshot taken on a canvas of the same size, in place of what is painted; false if it cannot. */
+    restore?(snapshot: BlockSnapshot): boolean;
     hide(): void;
     destroy(): void;
 }
@@ -160,6 +170,17 @@ export class CanvasBlockSurface implements BlockSurface {
         if (!this.pixels) return;
         paintField(this.pixels.data, this.area, this.resolution, field, levels, outdoor, shift, color, alphaOf);
         this.painted = true;
+    }
+
+    public snapshot(): BlockSnapshot | undefined {
+        return this.pixels ? { pixels: this.pixels.data.slice(), painted: this.painted } : undefined;
+    }
+
+    public restore(snapshot: BlockSnapshot): boolean {
+        if (!this.pixels || snapshot.pixels.length !== this.pixels.data.length) return false;
+        this.pixels.data.set(snapshot.pixels);
+        this.painted = snapshot.painted;
+        return true;
     }
 
     public end(): void {

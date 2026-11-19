@@ -51,21 +51,40 @@ export function getObjectInteraction(
     prefab: Pick<EntityPrefab, "tags" | "name" | "sittable" | "water">,
     mapCategories: MapCategories,
 ): { interaction: ObjectInteraction; trigger: InteractionTrigger } {
-    // Called on every frame for the objects around the player (seats, actionable objects, ice, water): the answer
-    // only changes with what it depends on, so it is computed once per object description and map categories.
-    const cache = interactionCaches.get(mapCategories ?? NO_CATEGORIES) ?? new Map<string, ObjectInteractionResult>();
-    interactionCaches.set(mapCategories ?? NO_CATEGORIES, cache);
-    const key = `${prefab.name}\u0000${prefab.tags.join("\u0001")}\u0000${String(prefab.sittable)}\u0000${prefab.water?.length ?? 0}`;
-    const cached = cache.get(key);
-    if (cached) return cached;
+    // Called on every frame for every object of the map (seats, actionable objects, ice, water): the answer only
+    // changes with what it depends on, so it is kept with the object description itself and checked by identity,
+    // without building a key (that alone used to cost a tenth of the time of a frame on a large map).
+    const categories = mapCategories ?? NO_CATEGORIES;
+    const kept = interactionCache.get(prefab);
+    if (
+        kept &&
+        kept.categories === categories &&
+        kept.name === prefab.name &&
+        kept.tags === prefab.tags &&
+        kept.sittable === prefab.sittable &&
+        kept.water === prefab.water
+    ) {
+        return kept.result;
+    }
     const result = computeObjectInteraction(prefab, mapCategories);
-    cache.set(key, result);
+    interactionCache.set(prefab, {
+        categories,
+        name: prefab.name,
+        tags: prefab.tags,
+        sittable: prefab.sittable,
+        water: prefab.water,
+        result,
+    });
     return result;
 }
 
 type ObjectInteractionResult = { interaction: ObjectInteraction; trigger: InteractionTrigger };
 const NO_CATEGORIES = {};
-const interactionCaches = new WeakMap<object, Map<string, ObjectInteractionResult>>();
+/** The answer for an object description, with what it was computed from: computed again when any of it changed. */
+const interactionCache = new WeakMap<
+    object,
+    Pick<EntityPrefab, "tags" | "name" | "sittable" | "water"> & { categories: object; result: ObjectInteractionResult }
+>();
 
 function computeObjectInteraction(
     prefab: Pick<EntityPrefab, "tags" | "name" | "sittable" | "water">,
