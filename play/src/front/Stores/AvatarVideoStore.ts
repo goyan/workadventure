@@ -10,6 +10,7 @@ import { highlightedEmbedScreen } from "./HighlightedEmbedScreenStore";
 import { highlightFullScreen } from "./ActionsCamStore";
 import { inExternalServiceStore } from "./MyMediaStore";
 import { userIdOfSpaceUser } from "./BubbleListeningStore";
+import { offscreenCallUsersStore } from "./CallStripStore";
 
 export const avatarVideosEnabledStore = writable(localUserStore.getAvatarVideosEnabled());
 
@@ -31,10 +32,13 @@ export const avatarVideoEntriesStore = derived(
         inExternalServiceStore,
         gameSceneIsLoadedStore,
         avatarVideosEnabledStore,
+        offscreenCallUsersStore,
     ],
-    ([scene, boxes, inPictureInPicture, highlight, fullScreen, externalService, loaded, enabled]) => {
+    ([scene, boxes, inPictureInPicture, highlight, fullScreen, externalService, loaded, enabled, offscreen]) => {
         if (!enabled || !scene || !loaded || inPictureInPicture || highlight || fullScreen || externalService)
             return [];
+        // Looking away from the call (the own avatar out of the view): every video goes back to a full tile.
+        if (offscreen.has("local")) return [];
         return Array.from(boxes.values()).flatMap((videoBox) => {
             let character: Character | undefined;
             if (videoBox.uniqueId === "-1") {

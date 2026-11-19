@@ -270,6 +270,10 @@
                         {/if}
                     </div>
 
+                    <!-- How many are in the discussion, me included: readable at a glance. -->
+                    <span class="participant-count" data-testid="participant-count"
+                        >{$participantView.uniqueParticipants.length + 1}</span
+                    >
                     <IconChevronDown
                         stroke="2"
                         class="h-4 w-4 aspect-square transition-all opacity-50 flex-shrink-0 {$openedMenuStore ===
@@ -284,7 +288,9 @@
             <!-- Who is in the discussion, on hover: the bubbles over the map do not tell it. -->
             {#if $openedMenuStore !== "participantMenu"}
                 <div class="participant-peek" role="tooltip" data-testid="participant-peek">
-                    <div class="participant-peek-title">{$LL.actionbar.inDiscussion()}</div>
+                    <div class="participant-peek-title">
+                        {$LL.actionbar.inDiscussion()} · {$participantView.uniqueParticipants.length + 1}
+                    </div>
                     <div class="participant-peek-row">
                         <div class="participant-avatar w-6 h-6 rounded-full overflow-hidden">
                             <WokaFromUserId userId={-1} placeholderSrc="" customWidth="24px" />

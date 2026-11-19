@@ -28,6 +28,8 @@
     import { onMount, setContext } from "svelte";
     import { myCameraPeerStore } from "../../Stores/StreamableCollectionStore";
     import { avatarVideoBoxIdsStore } from "../../Stores/AvatarVideoStore";
+    import { avatarVideosEnabledStore } from "../../Stores/AvatarVideoStore";
+    import { offscreenCallUsersStore } from "../../Stores/CallStripStore";
     import type { VideoBox as VideoBoxModel } from "../../Space/VideoBox";
     import VideoBox from "../Video/VideoBox.svelte";
     import type { CamerasContainerMode, VideoBoxLayout } from "../Video/VideoBoxLayout";
@@ -88,6 +90,18 @@
 
     function excludeLocalCamera(videoBoxes: VideoBoxModel[]): VideoBoxModel[] {
         return videoBoxes.filter((box) => box.uniqueId !== LOCAL_CAMERA_VIDEO_BOX_UNIQUE_ID);
+    }
+
+    /**
+     * A camera shown as a mini tile of the call strip instead of a large tile: with the videos over the avatars, while
+     * one looks at the call. Looking away, or without the videos over the avatars, large tiles as before.
+     * Screen shares always keep their large tile.
+     */
+    function isInCallStrip(videoBox: VideoBoxModel): boolean {
+        const camera =
+            videoBox.uniqueId === LOCAL_CAMERA_VIDEO_BOX_UNIQUE_ID ||
+            videoBox.uniqueId === videoBox.spaceUser.spaceUserId;
+        return mode !== "pipGrid" && camera && $avatarVideosEnabledStore && !$offscreenCallUsersStore.has("local");
     }
 
     let pipDockLocalCamera = $derived(
@@ -450,7 +464,9 @@
     bind:clientHeight={maxContainerHeight}
     class:h-full={mode !== "row"}
     class:hidden={$oneLineStreamableCollectionStore.length > 0 &&
-        $oneLineStreamableCollectionStore.every((box) => $avatarVideoBoxIdsStore.has(box.uniqueId))}
+        $oneLineStreamableCollectionStore.every(
+            (box) => $avatarVideoBoxIdsStore.has(box.uniqueId) || isInCallStrip(box),
+        )}
 >
     <div
         bind:clientWidth={containerWidth}
@@ -499,7 +515,7 @@
         -->
         {#each $oneLineStreamableCollectionStore as videoBox (videoBox.uniqueId)}
             {@const layout = videoBoxLayout(videoBox)}
-            {#if layout && !$avatarVideoBoxIdsStore.has(videoBox.uniqueId)}
+            {#if layout && !$avatarVideoBoxIdsStore.has(videoBox.uniqueId) && !isInCallStrip(videoBox)}
                 <VideoBox
                     {videoBox}
                     {layout}

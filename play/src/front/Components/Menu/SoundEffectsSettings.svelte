@@ -74,6 +74,7 @@
                 {
                     id: "weather-volume",
                     label: $LL.menu.settings.soundEffects.weather(),
+                    hint: $LL.menu.settings.soundEffects.weatherHint(),
                     icon: "weather",
                     store: weatherVolumeStore.setting,
                     value: $weatherSetting,
