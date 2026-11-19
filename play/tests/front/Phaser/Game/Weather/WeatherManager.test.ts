@@ -433,6 +433,31 @@ describe("weather rendering lifecycle", () => {
             }
         });
 
+        // Reading the outdoors of the view is the costly part of a drawing: not again while nothing changed.
+        it("reads the outdoors of the view once while the walls and the view stay the same", () => {
+            const { scene, wam } = fixture();
+            wam.settings = { weather: WeatherType.Fog };
+            const run = { x: 64, y: 32, width: 96, height: 32 };
+            const outdoorRunsInView = vi.fn(() => [run]);
+            const grid = { outdoorRunsInView, isOutdoorAt: () => true } as unknown as ReturnType<
+                typeof OutdoorGrid.fromWalls
+            >;
+            let walls = grid;
+            manager = new WeatherManager(scene, { outdoorGrid: () => walls });
+            manager.update(0, new Date(0));
+            manager.update(200, new Date(200));
+            manager.update(400, new Date(400));
+            expect(outdoorRunsInView).toHaveBeenCalledTimes(1);
+            // Read for a view widened to whole steps: a small scroll stays inside it.
+            const asked = outdoorRunsInView.mock.calls[0] as unknown as [{ x: number; width: number }];
+            expect(Math.abs(asked[0].x % 256)).toBe(0);
+            expect(asked[0].width % 256).toBe(0);
+            // A wall built or removed makes another grid: read again.
+            walls = { ...grid } as typeof grid;
+            manager.update(600, new Date(600));
+            expect(outdoorRunsInView).toHaveBeenCalledTimes(2);
+        });
+
         it("fog alone moves 5 times a second", () => {
             const { scene, graphics, wam } = fixture();
             wam.settings = { weather: WeatherType.Fog };

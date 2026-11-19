@@ -88,6 +88,8 @@ const FOG_BLOCK = 16;
 const NO_SHIFT = { columns: 0, rows: 0 };
 /** Weather drawn beyond each edge of the screen, in a share of its size: a quick scroll never shows a bare band. */
 const DRAW_MARGIN = 0.1;
+/** The outdoors of the view is read for a view widened to whole steps of this many map pixels (see veilOver). */
+const VEIL_STEP = 256;
 /**
  * The body of the clouds (their rim is fainter, cloudAlpha) and their shadows: shadows first, the clouds over them,
  * opaque enough to hide their own shadow and read as clouds, not mist.
@@ -155,6 +157,10 @@ export class WeatherManager {
     private lastFogKey: string | undefined;
     /** What the last drawing covered (the view and its margin), to draw again before a scroll reaches its edge. */
     private drawn: WeatherView | undefined;
+    /** The outdoors last read, and what it was read from (see veilOver). */
+    private veil:
+        | (WeatherView & { grid: OutdoorGrid; cover: RaisedCover | undefined; rects: WeatherView[] })
+        | undefined;
 
     constructor(
         private readonly scene: GameScene,
@@ -278,8 +284,7 @@ export class WeatherManager {
         const grid = this.options.outdoorGrid?.();
         // Veils cover the outdoor runs of the view only, so rooms stay as they are.
         const cover = grid ? this.options.raisedCover?.() : undefined;
-        const outdoorRuns = grid ? grid.outdoorRunsInView(view) : [view];
-        const veil = cover ? cover.uncovered(outdoorRuns) : outdoorRuns;
+        const veil = grid ? this.veilOver(view, grid, cover) : [view];
         if (veil.length === 0) {
             // Nothing outside on the screen: nothing to draw, and no reason to draw the map again.
             if (this.visible) {
@@ -385,6 +390,34 @@ export class WeatherManager {
         }
         this.blocks.end();
         this.scene.markDirty();
+    }
+
+    /**
+     * The outdoors of the view without what a raised floor covers. Reading it is the costly part of a drawing of the
+     * weather, and it only changes with the walls, the floors and the view: kept for a view widened to whole steps,
+     * so that a rain drawn 30 times a second, or a scroll, does not read the map again each time.
+     */
+    private veilOver(view: WeatherView, grid: OutdoorGrid, cover: RaisedCover | undefined): WeatherView[] {
+        const x = Math.floor(view.x / VEIL_STEP) * VEIL_STEP;
+        const y = Math.floor(view.y / VEIL_STEP) * VEIL_STEP;
+        const width = Math.ceil((view.x + view.width) / VEIL_STEP) * VEIL_STEP - x;
+        const height = Math.ceil((view.y + view.height) / VEIL_STEP) * VEIL_STEP - y;
+        const kept = this.veil;
+        if (
+            kept &&
+            kept.grid === grid &&
+            kept.cover === cover &&
+            kept.x === x &&
+            kept.y === y &&
+            kept.width === width &&
+            kept.height === height
+        ) {
+            return kept.rects;
+        }
+        const runs = grid.outdoorRunsInView({ x, y, width, height });
+        const rects = cover ? cover.uncovered(runs) : runs;
+        this.veil = { grid, cover, x, y, width, height, rects };
+        return rects;
     }
 
     /**
