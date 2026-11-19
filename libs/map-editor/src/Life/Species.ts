@@ -40,6 +40,8 @@ export interface Species {
     starveHunts: number | undefined;
     /** The most of them a room holds. */
     roomCap: number;
+    /** Whether a player may tame one (see Taming): it then lets an avatar come close while it is fed. */
+    tamable: boolean;
 }
 
 export const SPECIES: Record<SpeciesId, Species> = {
@@ -55,6 +57,7 @@ export const SPECIES: Record<SpeciesId, Species> = {
         mealsForYoung: 0,
         starveHunts: undefined,
         roomCap: MAX_ANIMALS,
+        tamable: false,
     },
     dolphin: {
         id: "dolphin",
@@ -68,6 +71,7 @@ export const SPECIES: Record<SpeciesId, Species> = {
         mealsForYoung: MEALS_FOR_CALF,
         starveHunts: STARVE_HUNTS,
         roomCap: MAX_DOLPHINS,
+        tamable: false,
     },
     antelope: {
         id: "antelope",
@@ -82,6 +86,7 @@ export const SPECIES: Record<SpeciesId, Species> = {
         mealsForYoung: 0,
         starveHunts: undefined,
         roomCap: MAX_ANTELOPES,
+        tamable: false,
     },
     lion: {
         id: "lion",
@@ -96,6 +101,7 @@ export const SPECIES: Record<SpeciesId, Species> = {
         mealsForYoung: 2,
         starveHunts: STARVE_HUNTS,
         roomCap: MAX_LAND_PREDATORS,
+        tamable: true,
     },
     tiger: {
         id: "tiger",
@@ -110,6 +116,7 @@ export const SPECIES: Record<SpeciesId, Species> = {
         mealsForYoung: 2,
         starveHunts: STARVE_HUNTS,
         roomCap: MAX_LAND_PREDATORS,
+        tamable: true,
     },
 };
 

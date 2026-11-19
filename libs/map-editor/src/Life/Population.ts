@@ -290,10 +290,24 @@ export function stepPopulation(
     const placesOf = (species: SpeciesId): Places | undefined => (SPECIES[species].habitat === "land" ? land : bodies);
     /** The places of an animal that has some (see `animals`). */
     const where = (animal: Animal): Places => placesOf(animal.kind) ?? bodies;
-    // The animals whose places are not given are left as they are.
-    const idle = population.animals.filter((animal) => placesOf(animal.kind) === undefined);
+    // The animals whose places are not given are left as they are; so are the tamed ones, out of the life while
+    // they follow their master.
+    const idle = population.animals.filter(
+        (animal) => placesOf(animal.kind) === undefined || animal.tamedBy !== undefined,
+    );
     const animals =
         idle.length === 0 ? population.animals : population.animals.filter((animal) => !idle.includes(animal));
+    // A tamed animal still takes its place (others would come in its stead), and its clocks wait for it.
+    const tamed = idle.filter((animal) => animal.tamedBy !== undefined && placesOf(animal.kind) !== undefined);
+    for (const animal of tamed) {
+        animal.bornAt += dtMs;
+        animal.readyAt += dtMs;
+        if (animal.ateAt !== undefined) animal.ateAt += dtMs;
+        if (animal.mateAt !== undefined) animal.mateAt += dtMs;
+        animal.huntSince = undefined;
+        animal.dryAt = undefined;
+        animal.targetX = animal.targetY = undefined;
+    }
     const dead = new Set<Animal>();
     for (const animal of animals) {
         const species = SPECIES[animal.kind];
@@ -319,6 +333,8 @@ export function stepPopulation(
             if (dead.has(animal)) continue;
             let nearestThreat: { x: number; y: number } | undefined;
             let least = FEAR_RADIUS_PX;
+            // An animal that can be tamed lets the avatars come while it is fed: it keeps away only on a hunt.
+            if (SPECIES[animal.kind].tamable && now < animal.readyAt) continue;
             for (const threat of threats) {
                 const far = Math.hypot(animal.x - threat.x, animal.y - threat.y);
                 if (far < least) {
@@ -365,6 +381,16 @@ export function stepPopulation(
         if (list) list.push(animal);
         else byBody.set(body, [animal]);
     }
+    // The tamed ones of each species, in the room and place by place: counted, never looked for.
+    const tamedIn = new Map<SpeciesId, Map<number, number>>();
+    for (const animal of tamed) {
+        count.set(animal.kind, (count.get(animal.kind) ?? 0) + 1);
+        const byBody = tamedIn.get(animal.kind) ?? new Map<number, number>();
+        const body = bodyOf(animal, where(animal));
+        byBody.set(body, (byBody.get(body) ?? 0) + 1);
+        tamedIn.set(animal.kind, byBody);
+    }
+    const tamedOf = (species: SpeciesId, body: number): number => tamedIn.get(species)?.get(body) ?? 0;
     const pursuing = new Set<Animal>();
     const pursue = (animal: Animal, target: Animal, speed: number): void => {
         animal.targetX = target.x;
@@ -434,6 +460,7 @@ export function stepPopulation(
     // How many animals of each habitat live, the newborn included: the water and the land have each their room.
     const inHabitat = { water: 0, land: 0, air: 0 };
     for (const animal of animals) if (!dead.has(animal)) inHabitat[SPECIES[animal.kind].habitat]++;
+    for (const animal of tamed) inHabitat[SPECIES[animal.kind].habitat]++;
     const total = (habitat: Species["habitat"]): number => inHabitat[habitat];
     const roomOf = (habitat: Species["habitat"]): number => (habitat === "land" ? MAX_LAND_ANIMALS : MAX_ANIMALS);
     const litterOf = (species: Species): number => {
@@ -452,7 +479,7 @@ export function stepPopulation(
         for (const [body, list] of living.get(species.id) ?? []) {
             if (body === 0) continue;
             const cap = placeCapOf(species.id, sizes[body]);
-            let inBody = list.filter((animal) => !dead.has(animal)).length;
+            let inBody = list.filter((animal) => !dead.has(animal)).length + tamedOf(species.id, body);
             for (const male of list) {
                 // A predator on a hunt does not court.
                 if (male.sex !== "male" || !canBreed(male) || pursuing.has(male) || detouring(male)) continue;
@@ -510,7 +537,7 @@ export function stepPopulation(
         for (const [body, list] of living.get(species.id) ?? []) {
             if (body === 0) continue;
             const cap = placeCapOf(species.id, sizes[body]);
-            let inBody = list.filter((animal) => !dead.has(animal)).length;
+            let inBody = list.filter((animal) => !dead.has(animal)).length + tamedOf(species.id, body);
             for (const male of list) {
                 if (male.sex !== "male" || dead.has(male) || now < male.readyAt || detouring(male)) continue;
                 if (frightened.has(male)) continue;

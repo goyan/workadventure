@@ -31,6 +31,7 @@ export * from "./Life/Species";
 export * from "./Life/Animal";
 export * from "./Life/Swim";
 export * from "./Life/Population";
+export * from "./Life/Taming";
 export * from "./Life/LifeHistory";
 export * from "./Weather/SeasonClock";
 export * from "./Weather/WeatherSchedule";
