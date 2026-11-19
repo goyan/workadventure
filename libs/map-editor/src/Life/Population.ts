@@ -39,6 +39,17 @@ const CHASE_LEAD_PX = 3 * TERRAIN_CELL;
 const REACH_PX = TERRAIN_CELL;
 /** After failing to go straight to a mate or a prey, an animal wanders this long before it tries again. */
 const DETOUR_MS = 3000;
+/** A lion or a tiger drinks this long at the shore; a prey, which is not safe there, takes a few sips. */
+export const DRINK_MS = 20_000;
+export const PREY_DRINK_MS = 6_000;
+/** While it drinks, a prey sees a predator only this close, in map pixels: two tiles. */
+export const DRINK_WATCH_PX = 64;
+/** An animal that found no water after this long waits for its next thirst. */
+export const THIRST_GIVE_UP_MS = 60_000;
+/** A lion or a tiger that is fed stays this close to its tree on each axis, in map pixels: five tiles. */
+export const HOME_REACH_PX = 160;
+/** It walks to the water, and around its tree, at this share of the speed of the map. */
+const STROLL_SHARE = 0.6;
 /** A tile is 32 map pixels: speeds are set in tiles a second. */
 const TILE_PX = 32;
 /** A fish lives between this share of the longest life and the longest life, so that a litter does not die at once. */
@@ -352,7 +363,9 @@ export function stepPopulation(
             const species = SPECIES[animal.kind];
             if (species.flees.length === 0 || dead.has(animal)) continue;
             const avatar = frightened.get(animal);
-            let least = avatar ? Math.hypot(animal.x - avatar.x, animal.y - avatar.y) : species.fleeRadiusPx;
+            // Head down at the water, it sees a predator later.
+            const watch = animal.drinkUntil !== undefined ? DRINK_WATCH_PX : species.fleeRadiusPx;
+            let least = avatar ? Math.min(watch, Math.hypot(animal.x - avatar.x, animal.y - avatar.y)) : watch;
             for (const hunter of hunters) {
                 if (!species.flees.includes(hunter.kind)) continue;
                 const far = distance(animal, hunter);
@@ -515,6 +528,9 @@ export function stepPopulation(
                             random,
                         ),
                         mateAt: now + breedDelayMs,
+                        // The young live around the tree of their mother.
+                        homeX: female.homeX,
+                        homeY: female.homeY,
                     });
                 }
                 inBody += litter;
@@ -592,11 +608,87 @@ export function stepPopulation(
         }
     }
 
+    // On land: thirst, and the tree a lion or a tiger lives around.
+    const still = new Set<Animal>();
+    if (land) {
+        const drinkIntervalMs = settings.drinkInterval * 1000;
+        const middle = (cell: number): number => cell * TERRAIN_CELL + TERRAIN_CELL / 2;
+        for (const animal of animals) {
+            if (dead.has(animal) || SPECIES[animal.kind].habitat !== "land") continue;
+            // Without a draw: the same numbers as before for everything else. Spread over an interval by its id.
+            animal.drinkAt ??= now + (((animal.id * 7919) % 1000) / 1000) * drinkIntervalMs;
+            if (frightened.has(animal) || pursuing.has(animal)) {
+                // It will come back to the water soon, not after a whole interval.
+                if (animal.drinkUntil !== undefined) animal.drinkAt = now + drinkIntervalMs / 4;
+                animal.drinkUntil = animal.thirstySince = undefined;
+                continue;
+            }
+            if (animal.drinkUntil !== undefined) {
+                if (now < animal.drinkUntil) {
+                    still.add(animal);
+                    continue;
+                }
+                animal.drinkUntil = undefined;
+                animal.drinkAt = now + drinkIntervalMs;
+            }
+            if (detouring(animal)) continue;
+            const cellX = cellAt(animal.x);
+            const cellY = cellAt(animal.y);
+            const body = land.bodyAt(cellX, cellY);
+            const level = levelOf(animal);
+            if (now >= animal.drinkAt) {
+                const setsOut = animal.thirstySince === undefined;
+                animal.thirstySince ??= now;
+                if (land.atShore?.(cellX, cellY) === true) {
+                    animal.thirstySince = undefined;
+                    animal.drinkUntil = now + (isPredator(SPECIES[animal.kind]) ? DRINK_MS : PREY_DRINK_MS);
+                    animal.targetX = animal.targetY = undefined;
+                    still.add(animal);
+                    continue;
+                }
+                // The shore is looked for when it sets out, and again when it was stopped on its way.
+                const onItsWay = !setsOut && animal.targetX !== undefined && animal.targetY !== undefined;
+                const shore =
+                    onItsWay || now - animal.thirstySince >= THIRST_GIVE_UP_MS
+                        ? undefined
+                        : land.shoreNear?.(body, cellX, cellY, level);
+                if (onItsWay) continue;
+                if (shore) {
+                    animal.targetX = middle(shore.cellX);
+                    animal.targetY = middle(shore.cellY);
+                    animal.speed = maxSpeed * STROLL_SHARE;
+                    continue;
+                }
+                animal.thirstySince = undefined;
+                animal.drinkAt = now + drinkIntervalMs;
+            }
+            if (animal.homeX === undefined || animal.homeY === undefined) continue;
+            const homeCell = { cellX: cellAt(animal.homeX), cellY: cellAt(animal.homeY) };
+            if (land.bodyAt(homeCell.cellX, homeCell.cellY) !== body) {
+                // Its tree is gone from its land (cut, or the water rose between them).
+                animal.homeX = animal.homeY = undefined;
+                continue;
+            }
+            const arrived =
+                animal.targetX !== undefined &&
+                animal.targetY !== undefined &&
+                Math.hypot(animal.targetX - animal.x, animal.targetY - animal.y) < 1;
+            if (animal.targetX !== undefined && animal.targetY !== undefined && !arrived) continue;
+            const cell = land.randomCell(body, homeCell, HOME_REACH_PX / TERRAIN_CELL, level, random);
+            if (!cell) continue;
+            animal.targetX = (cell.cellX + 0.2 + 0.6 * random()) * TERRAIN_CELL;
+            animal.targetY = (cell.cellY + 0.2 + 0.6 * random()) * TERRAIN_CELL;
+            animal.speed = maxSpeed * STROLL_SHARE;
+        }
+    }
+
     for (const [animal, threat] of frightened) {
         flee(animal, threat, where(animal), maxSpeed, random);
     }
     for (const animal of animals) {
         if (dead.has(animal)) continue;
+        // Head down at the water, as long as the water stays where it is.
+        if (still.has(animal) && where(animal).passable(cellAt(animal.x), cellAt(animal.y), levelOf(animal))) continue;
         if (!swim(animal, where(animal), grid, maxSpeed, dtMs, now, random)) {
             dead.add(animal);
             tally.diedDry++;
@@ -809,6 +901,11 @@ function spawnOnLand(
         let came = false;
         const level = SPECIES[species].maxDepthPx ?? 0;
         let near: { cellX: number; cellY: number } | undefined;
+        // A lion or a tiger comes beside a tree of that land, when it has one: their home.
+        const trees = isPredator(SPECIES[species]) ? (land.homes ?? []).filter((home) => home.body === body) : [];
+        const home =
+            trees.length > 0 ? trees[Math.min(trees.length - 1, Math.floor(random() * trees.length))] : undefined;
+        if (home) near = { cellX: cellAt(home.x), cellY: cellAt(home.y) };
         for (const sex of ["male", "female"] as const) {
             // The second one comes beside the first: a couple.
             const cell = near
@@ -816,9 +913,11 @@ function spawnOnLand(
                 : land.anyCell(body, level, random);
             if (!cell) continue;
             near ??= cell;
-            population.animals.push(
-                newAnimal(population, species, sex, middle(cell.cellX), middle(cell.cellY), now, settings, random),
-            );
+            population.animals.push({
+                ...newAnimal(population, species, sex, middle(cell.cellX), middle(cell.cellY), now, settings, random),
+                homeX: home?.x,
+                homeY: home?.y,
+            });
             onLand++;
             came = true;
         }
