@@ -55,6 +55,40 @@ describe("waterObjectsOf", () => {
         expect(stepInputOf(water, 0, sized, 1).flows.map((flow) => flow.radius)).toEqual([4, 9]);
         expect(waterObjectsOf(undefined)).toEqual([]);
     });
+
+    it("reads the level a source or a sink holds, and gives it to the step", () => {
+        const objects = waterObjectsOf(
+            wam({
+                lake: {
+                    x: 0,
+                    y: 0,
+                    prefabRef,
+                    properties: [{ id: "s", type: "waterSourcePropertyData", flow: 60, level: -4 }],
+                },
+                overflow: {
+                    x: 64,
+                    y: 0,
+                    prefabRef,
+                    properties: [{ id: "k", type: "waterSinkPropertyData", flow: 60, level: 0 }],
+                },
+                tooHigh: {
+                    x: 0,
+                    y: 0,
+                    prefabRef,
+                    properties: [{ id: "t", type: "waterSourcePropertyData", flow: 60, level: 9000 }],
+                },
+            }),
+        );
+        expect(objects).toEqual([
+            { cellX: 0, cellY: 0, litresPerMinute: 60, radiusCells: 0, levelPx: -4 },
+            { cellX: 4, cellY: 0, litresPerMinute: -60, radiusCells: 3, levelPx: 0 },
+        ]);
+        const input = stepInputOf(undefined, 0, objects, 1);
+        expect(input.flows.map((flow) => flow.level)).toEqual([-4, 0]);
+        expect(
+            stepInputOf(undefined, 0, [{ cellX: 0, cellY: 0, litresPerMinute: 60, radiusCells: 0 }], 1).flows[0],
+        ).not.toHaveProperty("level");
+    });
 });
 
 describe("stepInputOf", () => {

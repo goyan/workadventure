@@ -1,6 +1,13 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { DEFAULT_SINK_RADIUS_TILES, MAX_WATER_RADIUS_TILES } from "@workadventure/map-editor";
+    import {
+        DEFAULT_SINK_RADIUS_TILES,
+        heightOfMetres,
+        MAX_WATER_LEVEL,
+        MAX_WATER_RADIUS_TILES,
+        metresOf,
+        MIN_WATER_LEVEL,
+    } from "@workadventure/map-editor";
     import type { EntityPrefab, WaterSinkPropertyData, WaterSourcePropertyData } from "@workadventure/map-editor";
     import { waterAnchorOf } from "../../../Phaser/Game/Terrain/WaterAnchor";
     import {
@@ -15,6 +22,7 @@
     } from "../../../Phaser/Game/Terrain/WaterFlowUnits";
     import type { WaterFlowUnitId } from "../../../Phaser/Game/Terrain/WaterFlowUnits";
     import { LL } from "../../../../i18n/i18n-svelte";
+    import InputSwitch from "../../Input/InputSwitch.svelte";
     import RangeSlider from "../../Input/RangeSlider.svelte";
     import PropertyEditorBase from "./PropertyEditorBase.svelte";
     import { IconDroplet } from "@wa-icons";
@@ -86,6 +94,21 @@
 
     function setRadius(value: number): void {
         property.radius = value;
+        onchange?.();
+    }
+
+    // The level the source or the sink holds: stored in pixels of altitude, set in metres like the altitude shown
+    // under the clock. Unset, the object always runs.
+    let holdsLevel = $state(property.level !== undefined);
+    let levelMetres = $state(Math.round(metresOf(property.level ?? 0) * 10) / 10);
+
+    function setLevel(): void {
+        if (holdsLevel) {
+            const px = Math.round(heightOfMetres(Number.isFinite(levelMetres) ? levelMetres : 0));
+            property.level = Math.min(MAX_WATER_LEVEL, Math.max(MIN_WATER_LEVEL, px));
+        } else {
+            property.level = undefined;
+        }
         onchange?.();
     }
 
@@ -178,6 +201,29 @@
                     wrapperMargins={false}
                 />
                 <p class="m-0 mt-1 text-xs text-white/60">{texts.radiusHint()}</p>
+            </div>
+            <div class="mt-3" data-testid="water-flow-level">
+                <InputSwitch
+                    id="water-flow-level-{property.id}"
+                    label={texts.level()}
+                    bind:value={holdsLevel}
+                    onchange={setLevel}
+                />
+                {#if holdsLevel}
+                    <div class="flex items-center gap-2 mt-1">
+                        <input
+                            type="number"
+                            class="input-text w-28 min-w-0"
+                            data-testid="water-flow-level-value"
+                            aria-label={texts.levelValue()}
+                            step="0.1"
+                            bind:value={levelMetres}
+                            onchange={setLevel}
+                        />
+                        <span class="text-sm">m</span>
+                    </div>
+                {/if}
+                <p class="m-0 mt-1 text-xs text-white/60">{texts.levelHint()}</p>
             </div>
             <p class="m-0 mt-2 text-xs text-white/60">{texts.real()}</p>
         </span>
