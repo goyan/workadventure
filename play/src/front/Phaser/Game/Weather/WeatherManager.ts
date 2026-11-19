@@ -224,7 +224,8 @@ export class WeatherManager {
         );
         const showWeather = enabled && weather !== WeatherType.Clear;
         // Autumn leaves fall on top of the map weather, even on a clear day, but not while it snows.
-        const showLeaves = enabled && theme === SeasonalTheme.Autumn && weather !== WeatherType.Snow;
+        const showLeaves =
+            enabled && theme === SeasonalTheme.Autumn && weather !== WeatherType.Snow && !seenFromFar(this.scene);
         // Clouds of a clear sky, still fading out over the first minutes of a bad weather; none at night, nor in the
         // Christmas snow.
         const cloudiness = theme === SeasonalTheme.Christmas ? 0 : (settings?.cloudiness ?? 0);

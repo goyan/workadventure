@@ -119,7 +119,7 @@ export class TreeSeasonEffects {
                     this.ground.fillRect(leaf.x, leaf.y, leaf.vertical ? 3 : 4, leaf.vertical ? 4 : 3);
                     drawn = true;
                 }
-                for (const leaf of treeLeaves(seconds, wind, windFrom, phaseOf(id), box)) {
+                for (const leaf of far ? [] : treeLeaves(seconds, wind, windFrom, phaseOf(id), box)) {
                     this.graphics.fillStyle(leaf.color, 0.95 * leaf.alpha);
                     this.graphics.fillRect(
                         Math.round(leaf.x),
