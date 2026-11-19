@@ -102,6 +102,10 @@ describe("LifeSettings", () => {
                 landHuntInterval: 60,
                 landPredatorReproductionDelay: 300,
                 landPredatorMaxLifespan: 3600,
+                gullsEnabled: false,
+                gullHuntInterval: 45,
+                gullReproductionDelay: 300,
+                gullMaxLifespan: 1800,
             },
         });
         for (const slider of sliders) expect(find(slider)).not.toBeNull();
@@ -154,5 +158,25 @@ describe("LifeSettings", () => {
         });
         expect(find("life-land-landHuntInterval")?.textContent).toContain("1 min");
         expect(find("life-land-antelopeMaxLifespan")).not.toBeNull();
+    });
+
+    it("turns the gulls on by their own switch, and shows their settings then", () => {
+        render(true);
+        expect(find("life-air-gullHuntInterval")).toBeNull();
+        const input = find("life-air-enabled")?.querySelector("input");
+        if (!input) throw new Error("No switch");
+        flushSync(() => input.click());
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateLifeSettingMessage",
+            updateLifeSettingMessage: expect.objectContaining({
+                enabled: true,
+                gullsEnabled: true,
+                gullHuntInterval: 45,
+                gullReproductionDelay: 300,
+                gullMaxLifespan: 1800,
+            }) as unknown,
+        });
+        expect(find("life-air-gullHuntInterval")?.textContent).toContain("45 s");
+        expect(find("life-air-gullMaxLifespan")).not.toBeNull();
     });
 });

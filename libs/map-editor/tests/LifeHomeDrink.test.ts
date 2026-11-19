@@ -4,6 +4,7 @@ import { landPlacesOf } from "../src/Life/LandPlaces";
 import {
     DRINK_MS,
     PREY_DRINK_MS,
+    SCARCE_PREY_SHARE,
     DRINK_WATCH_PX,
     HOME_REACH_PX,
     LIFE_STEP_MS,
@@ -131,7 +132,8 @@ describe("a lion and its tree", () => {
         const population = seeded(antelopes);
         const tree = { x: middle(50), y: middle(8) };
         const { step } = world(plain(), population, [tree]);
-        step(2400);
+        // Until they come: twenty minutes at most.
+        for (let index = 0; index < 2400 && !population.animals.some((one) => one.kind === "lion"); index++) step();
         const lions = population.animals.filter((one) => one.kind === "lion");
         expect(lions.length).toBeGreaterThanOrEqual(2);
         for (const lion of lions) expect(lion).toMatchObject({ homeX: tree.x, homeY: tree.y });
@@ -279,5 +281,35 @@ describe("drinking", () => {
         const { step } = world(shore(), population);
         step(20);
         expect(byId(population, 1)).toMatchObject({ x: middle(30), y: middle(20) });
+    });
+});
+
+describe("the antelopes that became scarce", () => {
+    /** 200 × 100 cells hold 125 antelopes: fewer than 12 are scarce there. */
+    const wide = (): string[] => rows(".".repeat(200), 100);
+    const herd = (count: number): Animal[] =>
+        Array.from({ length: count }, (_, index) => animal(10 + index, "antelope", "male", 20 + index, 50));
+    const lion = (): Animal => animal(1, "lion", "male", 20, 50, { readyAt: 0, ateAt: 1e12 });
+
+    it("are left alone by the lions on a land that holds many", () => {
+        const scarceUnder = Math.floor(125 * SCARCE_PREY_SHARE);
+        const population = seeded([lion(), ...herd(scarceUnder - 1)]);
+        world(wide(), population).step(60);
+        expect(population.animals.filter((one) => one.kind === "antelope")).toHaveLength(scarceUnder - 1);
+    });
+
+    it("are hunted again once enough of them live there", () => {
+        const scarceUnder = Math.floor(125 * SCARCE_PREY_SHARE);
+        const population = seeded([lion(), ...herd(scarceUnder)]);
+        world(wide(), population).step(60);
+        expect(population.animals.filter((one) => one.kind === "antelope").length).toBeLessThan(scarceUnder);
+    });
+
+    it("a small land has no such refuge: its only antelope is a prey", () => {
+        const population = seeded([lion(), animal(10, "antelope", "male", 21, 20)]);
+        population.animals[0].x = middle(20);
+        population.animals[0].y = middle(20);
+        world(plain(), population).step(8);
+        expect(population.animals.some((one) => one.id === 10)).toBe(false);
     });
 });

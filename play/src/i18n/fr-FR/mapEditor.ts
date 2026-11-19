@@ -587,6 +587,14 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             landPredatorReproductionDelay: "Délai de reproduction des lions et des tigres",
             landPredatorMaxLifespan: "Durée de vie maximale des lions et des tigres",
         },
+        air: {
+            title: "Vie de l'air",
+            enabled: "Mouettes sur la carte",
+            hint: "Un couple de mouettes arrive au-dessus de tout plan d'eau qui compte au moins quinze poissons. Affamée, une mouette plonge sur un poisson de son eau ; rassasiée, elle se pose sur la rive, où un lion peut la surprendre. Un couple rassasié posé ensemble a un ou deux petits. Il faut que la vie de l'eau soit activée.",
+            gullHuntInterval: "Intervalle de pêche des mouettes",
+            gullReproductionDelay: "Délai de reproduction des mouettes",
+            gullMaxLifespan: "Durée de vie maximale des mouettes",
+        },
         species: {
             title: "Par espèce",
             name: {

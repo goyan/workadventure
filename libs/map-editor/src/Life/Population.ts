@@ -1,8 +1,10 @@
 import type { WaterGrid } from "../Terrain/WaterGrid";
-import { DEFAULT_LAND_LIFE_SETTINGS, TERRAIN_CELL } from "../types";
+import { DEFAULT_AIR_LIFE_SETTINGS, DEFAULT_LAND_LIFE_SETTINGS, TERRAIN_CELL } from "../types";
 import type { LifeSettings } from "../types";
 import type { Animal } from "./Animal";
 import { MAX_ANIMALS, MAX_ANTELOPES, MAX_DOLPHINS, MAX_LAND_ANIMALS } from "./LifeConstants";
+import { spawnGulls, stepGulls } from "./Gulls";
+import type { GullContext } from "./Gulls";
 import { cellAt, levelOf, swim, WANDER_REACH_CELLS } from "./Swim";
 import { isPredator, SPECIES, SPECIES_IDS } from "./Species";
 import type { Species, SpeciesId } from "./Species";
@@ -50,6 +52,12 @@ export const THIRST_GIVE_UP_MS = 60_000;
 export const HOME_REACH_PX = 160;
 /** It walks to the water, and around its tree, at this share of the speed of the map. */
 const STROLL_SHARE = 0.6;
+/**
+ * On a land, the lions and the tigers leave the antelopes alone once fewer live there than this share of what the
+ * land holds: they fall back on the fish, and the herd comes back. Without it, predators that never lack fish keep
+ * the antelopes at nothing (seen over simulated hours).
+ */
+export const SCARCE_PREY_SHARE = 0.1;
 /** A tile is 32 map pixels: speeds are set in tiles a second. */
 const TILE_PX = 32;
 /** A fish lives between this share of the longest life and the longest life, so that a litter does not die at once. */
@@ -64,6 +72,8 @@ export interface Population {
     dolphinsSeeded?: boolean;
     /** The same for the antelopes of the land. */
     landSeeded?: boolean;
+    /** The same for the gulls. */
+    gullsSeeded?: boolean;
 }
 
 /** What happened to the animals of one species during a step (or summed over many). */
@@ -139,6 +149,9 @@ const antelopeCapOf = (cells: number): number => Math.max(2, Math.floor(cells / 
 /** Lions and tigers share the land: each species gets half of what the antelopes can feed. */
 const landPredatorCapOf = (cells: number): number =>
     Math.max(2, Math.floor(Math.min(antelopeCapOf(cells), MAX_ANTELOPES) / ANTELOPES_PER_PREDATOR / 2));
+/** Gulls come over a body of water that can hold this many fish; it holds a gull for so many of them. */
+export const MIN_GULL_FISH = 20;
+export const FISH_PER_GULL = 25;
 const landPredatorTimes = (settings: LifeSettings): SpeciesTimes => ({
     breedDelayMs:
         (settings.landPredatorReproductionDelay ?? DEFAULT_LAND_LIFE_SETTINGS.landPredatorReproductionDelay) * 1000,
@@ -205,6 +218,16 @@ const PLACES: Record<
         habitable: (size) => size.cells >= MIN_LAND_CELLS,
         times: landPredatorTimes,
     },
+    // Over a body of water: a gull for so many fish it can hold.
+    gull: {
+        cap: (size) => Math.floor(fishCapOf(size.cells) / FISH_PER_GULL),
+        habitable: (size) => size.cells >= MIN_BODY_CELLS && fishCapOf(size.cells) >= MIN_GULL_FISH,
+        times: (settings) => ({
+            breedDelayMs: (settings.gullReproductionDelay ?? DEFAULT_AIR_LIFE_SETTINGS.gullReproductionDelay) * 1000,
+            maxLifespanMs: (settings.gullMaxLifespan ?? DEFAULT_AIR_LIFE_SETTINGS.gullMaxLifespan) * 1000,
+            huntIntervalMs: (settings.gullHuntInterval ?? DEFAULT_AIR_LIFE_SETTINGS.gullHuntInterval) * 1000,
+        }),
+    },
 };
 const placeCapOf = (species: SpeciesId, size: BodySize): number => PLACES[species].cap(size);
 const habitable = (species: SpeciesId, size: BodySize): boolean => PLACES[species].habitable(size);
@@ -234,8 +257,16 @@ export interface SpeciesCensus {
     cap: number;
 }
 
-/** The species that live in the room or have room to: in the order of the table. */
-export function speciesCensus(population: Population, bodies: WaterBodies, land?: Places): SpeciesCensus[] {
+/**
+ * The species that live in the room or have room to: in the order of the table. The gulls have room over the water
+ * only on a map where they are switched on (`gulls`).
+ */
+export function speciesCensus(
+    population: Population,
+    bodies: WaterBodies,
+    land?: Places,
+    gulls = false,
+): SpeciesCensus[] {
     const census: SpeciesCensus[] = [];
     for (const species of SPECIES_IDS) {
         let males = 0;
@@ -246,7 +277,8 @@ export function speciesCensus(population: Population, bodies: WaterBodies, land?
             else males++;
         }
         let cap = 0;
-        const sizes = (SPECIES[species].habitat === "land" ? land : bodies)?.sizes ?? [];
+        const places = SPECIES[species].habitat === "land" ? land : species === "gull" && !gulls ? undefined : bodies;
+        const sizes = places?.sizes ?? [];
         for (let body = 1; body < sizes.length; body++) {
             if (habitable(species, sizes[body])) cap += placeCapOf(species, sizes[body]);
         }
@@ -298,7 +330,33 @@ export function stepPopulation(
     const tally = emptyLifeTally();
     const of = (species: SpeciesId): SpeciesTally => (bySpecies[species] ??= emptySpeciesTally());
     const maxSpeed = settings.maxSpeed * TILE_PX;
-    const placesOf = (species: SpeciesId): Places | undefined => (SPECIES[species].habitat === "land" ? land : bodies);
+    // The gulls, in the air, have their own step (see Gulls): the rest of this one leaves them as they are.
+    const placesOf = (species: SpeciesId): Places | undefined =>
+        SPECIES[species].habitat === "land" ? land : SPECIES[species].habitat === "air" ? undefined : bodies;
+    const gullContext: GullContext | undefined =
+        settings.enabled && settings.gullsEnabled === true
+            ? {
+                  population,
+                  bodies,
+                  land,
+                  now,
+                  dtMs,
+                  random,
+                  threats,
+                  maxSpeed,
+                  times: timesOf("gull", settings),
+                  lionHuntIntervalMs: timesOf("lion", settings).huntIntervalMs,
+                  capOf: (body) => {
+                      const size = bodies.sizes[body];
+                      return size && habitable("gull", size) ? placeCapOf("gull", size) : 0;
+                  },
+                  make: (sex, x, y) => newAnimal(population, "gull", sex, x, y, now, settings, random),
+                  of,
+                  tally,
+              }
+            : undefined;
+    // First: a lion that catches a landed gull has eaten when its own turn comes.
+    if (gullContext) stepGulls(gullContext);
     /** The places of an animal that has some (see `animals`). */
     const where = (animal: Animal): Places => placesOf(animal.kind) ?? bodies;
     // The animals whose places are not given are left as they are; so are the tamed ones, out of the life while
@@ -415,6 +473,17 @@ export function stepPopulation(
     const predators = SPECIES_IDS.map((id) => SPECIES[id]).filter(isPredator);
     const preys = SPECIES_IDS.map((id) => SPECIES[id]).filter((species) => !isPredator(species));
 
+    // The prey of the land that became scarce where they live: not hunted (see SCARCE_PREY_SHARE).
+    const scarce = (prey: Animal): boolean => {
+        if (SPECIES[prey.kind].habitat !== "land" || !land) return false;
+        const body = bodyOf(prey, land);
+        const size = land.sizes[body];
+        if (body === 0 || !size) return false;
+        return (
+            (living.get(prey.kind)?.get(body)?.length ?? 0) <
+            Math.floor(placeCapOf(prey.kind, size) * SCARCE_PREY_SHARE)
+        );
+    };
     for (const species of predators) {
         const { huntIntervalMs } = timesOf(species.id, settings);
         for (const hunter of animals) {
@@ -440,6 +509,7 @@ export function stepPopulation(
                               (other) =>
                                   species.prey.includes(other.kind) &&
                                   !dead.has(other) &&
+                                  !scarce(other) &&
                                   bodyOf(other, places) === body &&
                                   places.passable(cellAt(other.x), cellAt(other.y), level),
                           ),
@@ -703,6 +773,7 @@ export function stepPopulation(
     const before = population.animals.length;
     if (settings.enabled) spawn(population, bodies, settings, dtMs, now, random);
     if (land && settings.landEnabled === true) spawnOnLand(population, land, settings, dtMs, now, random);
+    if (gullContext) spawnGulls(gullContext);
     tally.arrivals = population.animals.length - before;
     for (const arrived of population.animals.slice(before)) of(arrived.kind).arrivals++;
     return tally;

@@ -576,6 +576,14 @@ const mapEditor: BaseTranslation = {
             landPredatorReproductionDelay: "Breeding delay of the lions and tigers",
             landPredatorMaxLifespan: "Longest life of the lions and tigers",
         },
+        air: {
+            title: "Life of the air",
+            enabled: "Gulls on the map",
+            hint: "A couple of gulls comes over any body of water where at least fifteen fish live. Hungry, a gull dives on a fish of its water; fed, it lands on the shore, where a lion may catch it by surprise. A fed couple landed together has one or two young. The life of the water must be on.",
+            gullHuntInterval: "Fishing interval of the gulls",
+            gullReproductionDelay: "Breeding delay of the gulls",
+            gullMaxLifespan: "Longest life of the gulls",
+        },
         species: {
             title: "By species",
             name: {

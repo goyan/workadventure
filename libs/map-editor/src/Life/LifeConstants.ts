@@ -11,3 +11,5 @@ export const DOLPHIN_SPEED_FACTOR = 1.5;
 export const MAX_LAND_ANIMALS = 100;
 export const MAX_ANTELOPES = 60;
 export const MAX_LAND_PREDATORS = 12;
+/** The most gulls a room holds. */
+export const MAX_GULLS = 16;

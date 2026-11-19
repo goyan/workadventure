@@ -65,6 +65,12 @@ const SavedSpeciesTally = z.object({
     meals: z.record(z.enum(SPECIES_IDS), count),
 });
 
+/** How an animal is told to the room: 1 a gull in flight, 2 a gull landed, 3 a land animal that drinks. */
+function wireStateOf(animal: Animal): number | undefined {
+    if (animal.kind === "gull") return animal.perchedAt !== undefined ? 2 : 1;
+    return animal.drinkUntil !== undefined && animal.tamedBy === undefined ? 3 : undefined;
+}
+
 /** A player is answered this many times a second when they ask to tame an animal. */
 const TAME_ASKS_A_SECOND = 5;
 
@@ -306,13 +312,17 @@ export class AquaticLifeManager {
         }
         // The animals of a habitat that was turned off go; the others stay.
         const before = this.population.animals.length;
-        this.population.animals = this.population.animals.filter((animal) =>
-            SPECIES[animal.kind].habitat === "land" ? land : water,
-        );
+        // The gulls live off the water: they go with it, and when they are switched off.
+        const gulls = water && settings?.gullsEnabled === true;
+        this.population.animals = this.population.animals.filter((animal) => {
+            const { habitat } = SPECIES[animal.kind];
+            return habitat === "land" ? land : habitat === "air" ? gulls : water;
+        });
         if (!land) {
-            this.land = undefined;
+            if (!gulls) this.land = undefined;
             this.population.landSeeded = false;
         }
+        if (!gulls) this.population.gullsSeeded = false;
         if (!water) {
             this.population.seeded = false;
             this.population.dolphinsSeeded = false;
@@ -399,7 +409,9 @@ export class AquaticLifeManager {
                 this.bodiesStep = this.steps;
             }
         }
-        if (onLand) this.readLand(grid);
+        // The gulls land on the shores of the land: it is read for them too.
+        const gulls = water && settings?.gullsEnabled === true;
+        if (onLand || gulls) this.readLand(grid);
         else this.land = undefined;
         const now = this.now();
         this.since ??= now;
@@ -447,7 +459,7 @@ export class AquaticLifeManager {
         // Once a second, with the message: the waters as the life sees them.
         if (this.steps % STEPS_PER_MESSAGE === 0) {
             this.census = lifeCensus(this.population, this.bodies);
-            this.speciesNow = speciesCensus(this.population, this.bodies, this.land);
+            this.speciesNow = speciesCensus(this.population, this.bodies, onLand ? this.land : undefined, gulls);
             this.tell();
         }
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
@@ -514,7 +526,7 @@ export class AquaticLifeManager {
                 y: Math.round(animal.y),
                 owner: animal.tamedBy,
                 // 3: head down at the water.
-                state: animal.drinkUntil !== undefined && animal.tamedBy === undefined ? 3 : undefined,
+                state: wireStateOf(animal),
             })),
             species: this.speciesStats(),
             stats: {

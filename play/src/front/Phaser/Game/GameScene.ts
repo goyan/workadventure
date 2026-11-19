@@ -364,6 +364,7 @@ import { TerrainWater } from "./Terrain/TerrainWater";
 import { AquaticLife } from "./Life/AquaticLife";
 import { AquaticLifeView } from "./Life/AquaticLifeView";
 import { LandLifeView } from "./Life/LandLifeView";
+import { GullLifeView, isGullKind } from "./Life/GullLifeView";
 import { LandCompanions } from "./Life/LandCompanions";
 import { LandCries } from "./Life/LandCries";
 import type { HeardAnimal } from "./Life/LandCries";
@@ -573,6 +574,8 @@ export class GameScene extends DirtyScene {
     /** The animals of the water of the relief, as the server tells them. */
     private readonly aquaticLife = new AquaticLife();
     private aquaticLifeView: AquaticLifeView | undefined;
+    private readonly gullLife = new AquaticLife(isGullKind);
+    private gullLifeView: GullLifeView | undefined;
     /** The animals of the land the server runs (antelopes, lions, tigers). */
     private readonly landLife = new AquaticLife(isLandKind);
     private landLifeView: LandLifeView | undefined;
@@ -1670,6 +1673,8 @@ export class GameScene extends DirtyScene {
         this.waterFlowView = undefined;
         this.aquaticLifeView?.destroy();
         this.aquaticLifeView = undefined;
+        this.gullLifeView?.destroy();
+        this.gullLifeView = undefined;
         this.landLifeView?.destroy();
         this.landLifeView = undefined;
         this.landCompanions?.destroy();
@@ -2201,6 +2206,7 @@ export class GameScene extends DirtyScene {
             this.terrainView?.update(time);
             this.waterFlowView?.update(time);
             this.aquaticLifeView?.update(time);
+            this.gullLifeView?.update(time);
             this.landCompanions?.update(time);
             this.landLifeView?.update(time);
             this.updateLandCries();
@@ -2785,6 +2791,7 @@ export class GameScene extends DirtyScene {
      */
     private receiveAquaticLife(message: AquaticLifeMessage): void {
         this.aquaticLife.receive(message.animals, this.time.now);
+        this.gullLife.receive(message.animals, this.time.now);
         this.landLife.receive(message.animals, this.time.now);
         // The dashboard of the life tool: nothing to show on a map that never had any life.
         this.aquaticLifeStats.receive(
@@ -3538,6 +3545,14 @@ export class GameScene extends DirtyScene {
                 this.aquaticLifeView = new AquaticLifeView(
                     this,
                     this.aquaticLife,
+                    () => get(aquaticLifeShownStore),
+                    () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+                );
+                // The gulls over that water: shown and hidden with the fish.
+                this.gullLifeView?.destroy();
+                this.gullLifeView = new GullLifeView(
+                    this,
+                    this.gullLife,
                     () => get(aquaticLifeShownStore),
                     () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
                 );

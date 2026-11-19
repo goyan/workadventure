@@ -38,6 +38,8 @@ export const Animal = z.object({
     drinkAt: z.number().finite().optional(),
     drinkUntil: z.number().finite().optional(),
     thirstySince: z.number().finite().optional(),
+    /** Gull: since when it stands on a shore; undefined while it flies. */
+    perchedAt: z.number().finite().optional(),
     /**
      * The player it follows (their user id, which lasts as long as their connection): it is then out of the life
      * (see Taming). Never kept over a restart of the server.

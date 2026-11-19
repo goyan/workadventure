@@ -122,12 +122,13 @@ export function landPlacesOf(input: LandInput): Places {
         homes,
         atShore,
         shoreNear: (body, cellX, cellY, level) => {
+            // Any piece of land for a body of -1 (a gull lands anywhere).
             if (body === 0) return undefined;
             shores ??= readShores();
             let best: WaterCell | undefined;
             let least = Number.POSITIVE_INFINITY;
             for (const index of shores) {
-                if (labels[index] !== body) continue;
+                if (body !== -1 && labels[index] !== body) continue;
                 const x = index % width;
                 const y = Math.floor(index / width);
                 const far = (x - cellX) ** 2 + (y - cellY) ** 2;
