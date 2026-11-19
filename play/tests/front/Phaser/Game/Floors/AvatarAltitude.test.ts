@@ -1,6 +1,10 @@
 import { cellKey, withHeights } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
-import { altitudeLabel, avatarAltitude } from "../../../../../src/front/Phaser/Game/Floors/AvatarAltitude";
+import {
+    altitudeLabel,
+    avatarAltitude,
+    pointerAltitude,
+} from "../../../../../src/front/Phaser/Game/Floors/AvatarAltitude";
 
 const relief = withHeights(
     undefined,
@@ -34,5 +38,19 @@ describe("altitudeLabel", () => {
         expect(altitudeLabel(32, "en-US")).toBe("+1.1 m");
         expect(altitudeLabel(-64, "en-US")).toBe("-2.2 m");
         expect(altitudeLabel(48, "fr-FR")).toBe("+1,6 m");
+    });
+});
+
+describe("pointerAltitude", () => {
+    it("is the height of the relief under the pointer", () => {
+        expect(pointerAltitude(relief, { x: 168, y: 88 })).toBe(48);
+        expect(pointerAltitude(relief, { x: 328, y: 88 })).toBe(-24);
+        expect(pointerAltitude(relief, { x: 600, y: 600 })).toBe(0);
+    });
+
+    it("is not told on a map without relief, nor while the pointer is off the game", () => {
+        expect(pointerAltitude(undefined, { x: 168, y: 88 })).toBeUndefined();
+        expect(pointerAltitude({ chunks: {} }, { x: 168, y: 88 })).toBeUndefined();
+        expect(pointerAltitude(relief, undefined)).toBeUndefined();
     });
 });

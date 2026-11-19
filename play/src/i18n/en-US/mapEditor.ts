@@ -810,6 +810,7 @@ const mapEditor: BaseTranslation = {
             cursor: "Level {height}",
             title: "Level",
             altitude: "Altitude of the avatar",
+            pointerAltitude: "Altitude of the ground under the pointer",
             ground: "Ground",
             level: "Level {height}",
             built: "floor {rank}",

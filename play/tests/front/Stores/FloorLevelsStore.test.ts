@@ -40,6 +40,16 @@ describe("the stack of the floors", () => {
         expect(floorLevelStack([52], 52, false, name, undefined, 0)?.altitude).toBe(0);
     });
 
+    it("tells the altitude under the pointer with the one of the avatar", () => {
+        expect(floorLevelStack([], 0, false, name, undefined, 48, -24)).toMatchObject({
+            altitude: 48,
+            pointerAltitude: -24,
+        });
+        expect(floorLevelStack([], 0, false, name, undefined, 48)).not.toHaveProperty("pointerAltitude");
+        // No relief, no altitude: nothing under the pointer either.
+        expect(floorLevelStack([52], 0, false, name, undefined, undefined, 16)).not.toHaveProperty("pointerAltitude");
+    });
+
     it("follows the floor of the avatar", () => {
         floorLevelsBuiltStore.set([52]);
         floorLevelsHiddenStore.set(false);
