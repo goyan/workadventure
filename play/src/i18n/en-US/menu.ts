@@ -4,6 +4,8 @@ const menu: BaseTranslation = {
     title: "Menu",
     narrow: "Halve the panel, on the right, to see the game",
     widen: "Bring the panel back to its width",
+    foldNav: "Fold the list of the menus",
+    unfoldNav: "Unfold the list of the menus",
     icon: {
         open: {
             menu: "Open menu",
