@@ -43,10 +43,10 @@ describe("a patch of fire", () => {
         expect(meadow.burning()).toBe(13);
     });
 
-    it("does not take on bare ground, on sand, on a sodden soil nor under water", () => {
+    it("does not take on bare green ground, on sand, on a sodden soil nor under water", () => {
         const terrain = withSoils(undefined, new Map(tile(4, 4, soilCode("sand"))));
         const meadow = prairie(1, terrain);
-        meadow.set(6, 6, 0.1, 0, 1);
+        meadow.set(6, 6, 0.1, 0, 0.2);
         meadow.set(8, 8, 1, 1, 1);
         for (const [x, y] of [
             [4, 4],
@@ -62,6 +62,21 @@ describe("a patch of fire", () => {
         expect(meadow.ignite(3, 2, 0)).toBe(1);
         expect(meadow.ignite(-5, 400, 3)).toBe(0);
         expect(meadow.ignite(Number.NaN, 2, 1)).toBe(0);
+    });
+
+    it("takes on dry ground even where the grass is thin or gone: a dry land burns", () => {
+        const meadow = prairie(1);
+        meadow.set(6, 6, 0.05, 0.03, 1);
+        meadow.set(8, 8, 0.05, 0, 1);
+        expect(meadow.ignite(6, 6, 0)).toBe(1);
+        expect(meadow.ignite(8, 8, 0)).toBe(1);
+        // It burns eight seconds, long enough to set its neighbours on fire, then is ash.
+        run(meadow, 6);
+        expect(meadow.fireAt(8, 8)).toBe(1);
+        run(meadow, 2);
+        expect(meadow.fireAt(8, 8)).toBe(0);
+        expect(meadow.ashAt(8, 8)).toBe(1);
+        expect(meadow.grassAt(6, 6)).toBe(0);
     });
 
     it("keeps its size within what a patch may be", () => {

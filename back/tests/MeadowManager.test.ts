@@ -152,7 +152,7 @@ describe("MeadowManager", () => {
         if (!wam.settings) throw new Error("no settings");
         wam.settings.weather = WeatherType.Clear;
         // The soil dries out before anything burns on it.
-        steps(600);
+        steps(150);
         const before = sent.length;
         expect(manager.ignite(2 * 32 + 5, 1 * 32 + 5, 0)).toBe(1);
         steps(1);
@@ -164,24 +164,27 @@ describe("MeadowManager", () => {
         steps(20);
         const last = sent[sent.length - 1];
         expect(fireOf(last).every((fire) => fire === 0)).toBe(true);
-        expect(ashOf(last)[1 * 8 + 2]).toBe(255);
+        // Burnt through; a blade of grass may already be growing back over the ash.
+        expect(ashOf(last)[1 * 8 + 2]).toBeGreaterThan(200);
         expect(fireOf(manager.snapshot() ?? last)).toEqual(fireOf(last));
         const settled = sent.length;
         steps(4);
-        expect(sent.length).toBe(settled);
+        expect(sent.length - settled).toBeLessThanOrEqual(1);
         manager.stop();
     });
 
     it("gives the fire the wind and the luck of the room: it spreads downwind", () => {
         const { manager, sent, steps, wam } = createHarness({
+            // The air dries the ground; this luck spreads the fire downwind only, and starts none by itself.
+            danger: () => 1,
             wind: { windFrom: 270, windSpeed: 60 },
-            random: () => 0.2,
+            random: () => 0.05,
         });
         manager.mapChanged();
         steps(400);
         if (!wam.settings) throw new Error("no settings");
         wam.settings.weather = WeatherType.Clear;
-        steps(600);
+        steps(150);
         manager.ignite(2 * 32 + 5, 1 * 32 + 5, 0);
         steps(6);
         const fire = fireOf(sent[sent.length - 1]);
@@ -198,7 +201,7 @@ describe("MeadowManager", () => {
         first.steps(400);
         if (!first.wam.settings) throw new Error("no settings");
         first.wam.settings.weather = WeatherType.Clear;
-        first.steps(600);
+        first.steps(150);
         first.manager.ignite(2 * 32 + 5, 1 * 32 + 5, 0);
         first.steps(30);
         first.manager.ignite(5 * 32 + 5, 2 * 32 + 5, 0);

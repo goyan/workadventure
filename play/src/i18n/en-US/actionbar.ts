@@ -91,6 +91,7 @@ const actionbar = {
             wind: "Wind",
             windValue: "{value} km/h",
             windFrom: "Wind from",
+            clouds: "Show the clouds and their shadows (for me)",
             thresholds: "Fire takes beyond",
             thresholdTemperature: "Hotter than",
             thresholdHumidity: "Drier than",

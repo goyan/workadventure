@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync, mount, unmount } from "svelte";
-import { readable } from "svelte/store";
+import { get, readable } from "svelte/store";
 
 const { send } = vi.hoisted(() => ({ send: vi.fn() }));
 vi.mock("../../../../src/front/Components/Catastrophe/fireConditionsActions", () => ({ sendFireConditions: send }));
@@ -19,6 +19,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
 
 import WeatherTab from "../../../../src/front/Components/Catastrophe/WeatherTab.svelte";
 import { fireConditionsStore } from "../../../../src/front/Stores/FireConditionsStore";
+import { cloudsShownStore } from "../../../../src/front/Stores/WeatherStore";
 
 const thresholds = { thresholdTemperature: 30, thresholdHumidity: 30, thresholdWindSpeed: 30 };
 const real = { manual: false, temperature: 22, humidity: 64, windSpeed: 4, windFrom: 90, ...thresholds };
@@ -140,6 +141,19 @@ describe("WeatherTab", () => {
         fireConditionsStore.set({ ...real, manual: true, temperature: 35, humidity: 10, windSpeed: 40 });
         flushSync();
         expect(target.querySelector('[data-testid="fire-held-back"]')).toBeNull();
+    });
+
+    it("hides one's own clouds and their shadows, to see the ground, without asking the server anything", () => {
+        cloudsShownStore.set(true);
+        render();
+        const clouds = target.querySelector<HTMLInputElement>('[data-testid="fire-clouds"]');
+        if (!clouds) throw new Error("no clouds switch");
+        expect(clouds.checked).toBe(true);
+        clouds.click();
+        flushSync();
+        expect(get(cloudsShownStore)).toBe(false);
+        expect(send).not.toHaveBeenCalled();
+        cloudsShownStore.set(true);
     });
 
     it("sets where the wind comes from by the points of the compass", () => {

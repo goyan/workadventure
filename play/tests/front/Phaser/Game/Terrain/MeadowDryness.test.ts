@@ -29,11 +29,30 @@ describe("the dryness of the meadow", () => {
     });
 });
 
+describe("a dry map without grass", () => {
+    it("still has its dry ground to draw", () => {
+        const meadow = new MeadowState();
+        const bare = { width: 2, height: 1, grass: new Uint8Array([0, 0]), moisture: new Uint8Array([0, 0]) };
+        meadow.receive(bare);
+        expect(meadow.hasGrass()).toBe(false);
+        meadow.receive({ ...bare, dryness: new Uint8Array([0, 200]) });
+        expect(meadow.hasGrass()).toBe(true);
+    });
+});
+
 describe("strawLevel", () => {
-    it("is how much straw is drawn over the grass of a cell: as much as it is dry, no more than there is grass", () => {
+    it("turns the ground to straw as much as its grass is dry, even where the grass is thin", () => {
+        // Full straw on a full, dry meadow; none on green grass.
         expect(strawLevel(255, 255)).toBe(255);
         expect(strawLevel(255, 0)).toBe(0);
-        expect(strawLevel(0, 255)).toBe(0);
-        expect(strawLevel(200, 128)).toBe(Math.round((200 * 128) / 255));
+        // Bare fertile ground gone dry yellows too, a little less than grass: 200 of 255.
+        expect(strawLevel(0, 255)).toBe(200);
+        expect(strawLevel(0, 0)).toBe(0);
+        // Thin grass gone dry still yellows the ground it grows on: 230 of 255 at least.
+        expect(strawLevel(1, 255)).toBe(230);
+        expect(strawLevel(1, 128)).toBe(Math.round((230 * 128) / 255));
+        // And denser grass a little more.
+        expect(strawLevel(128, 255)).toBeGreaterThan(strawLevel(1, 255));
+        expect(strawLevel(128, 255)).toBeLessThan(255);
     });
 });
