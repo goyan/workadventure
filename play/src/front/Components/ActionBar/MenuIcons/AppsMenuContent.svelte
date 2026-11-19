@@ -25,6 +25,8 @@
     import { userIsAdminStore } from "../../../Stores/GameStore";
     import { showRecordingList } from "../../../Stores/RecordingStore";
     import { weatherBannerStore } from "../../../Stores/WeatherBannerStore";
+    import { catastrophePanelStore } from "../../../Stores/CatastropheStore";
+    import PixelIcon from "../../ActionsMenu/PixelIcon.svelte";
     import RecordingIcon from "../../Icons/RecordingIcon.svelte";
     import AdditionalMenuItems from "./AdditionalMenuItems.svelte";
     import { IconCalendar, IconCheckList, IconCloud, IconWorldSearch } from "@wa-icons";
@@ -80,6 +82,12 @@
     // The weather banner (now, in one hour, in four hours) next to the clock, kept in the browser.
     function toggleWeatherBanner() {
         weatherBannerStore.update((shown) => !shown);
+        openedMenuStore.closeAll();
+    }
+
+    // The disaster panel, for this session only.
+    function toggleCatastrophePanel() {
+        catastrophePanelStore.update((shown) => !shown);
         openedMenuStore.closeAll();
     }
 </script>
@@ -140,6 +148,15 @@
     dataTestId="weatherBannerButton"
 >
     <IconCloud width="20" height="20" />
+</ActionBarButton>
+
+<ActionBarButton
+    onclick={toggleCatastrophePanel}
+    label={$LL.actionbar.catastrophe.label()}
+    state={$catastrophePanelStore ? "active" : "normal"}
+    dataTestId="catastrophePanelButton"
+>
+    <PixelIcon name="meteor" size={20} />
 </ActionBarButton>
 
 <!-- External module action bar -->

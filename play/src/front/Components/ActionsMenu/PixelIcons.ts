@@ -324,6 +324,24 @@ export const PIXEL_ICONS = {
         "................",
         "................",
     ],
+    meteor: [
+        "................",
+        ".....k..........",
+        "..k..kok.....kk.",
+        "...kkooookk.kyk.",
+        "....kyoooookkok.",
+        "...kyyyoooookk..",
+        "..kyyyooooook...",
+        "...kyyoooooook..",
+        "....kyooooook...",
+        "...kkkyoookk....",
+        "..kyk.kkkk......",
+        "..kk............",
+        ".k..............",
+        "................",
+        "................",
+        "................",
+    ],
 } as const;
 
 export type PixelIconName = keyof typeof PIXEL_ICONS;
