@@ -81,6 +81,10 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         sizeLabel: "Taille du météore : rayon du cratère, en cases",
         armedHelp: "Cliquez sur la carte · Échap pour annuler",
         idleHelp: "Choisissez une catastrophe",
+        downpour: "Averse",
+        wholeMap: "Toute la carte",
+        downpourSizeLabel: "Taille de l'averse : rayon du disque arrosé, en cases",
+        downpourArmedHelp: "Maintenez le clic sur la carte · Échap pour annuler",
     },
     weatherBanner: {
         label: "Météo de la carte : maintenant, dans 1 h et dans 4 h",

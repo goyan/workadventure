@@ -342,6 +342,24 @@ export const PIXEL_ICONS = {
         "................",
         "................",
     ],
+    downpour: [
+        "................",
+        "....kkkk........",
+        "...kggggkkkk....",
+        "..kgggggggggk...",
+        ".kgggggggggggk..",
+        ".kgggggggggggk..",
+        "..kkkkkkkkkkk...",
+        "................",
+        "...u...u...u....",
+        "..u...u...u.....",
+        "................",
+        ".....u...u...u..",
+        "....u...u...u...",
+        "................",
+        "...u...u...u....",
+        "................",
+    ],
 } as const;
 
 export type PixelIconName = keyof typeof PIXEL_ICONS;

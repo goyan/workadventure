@@ -469,6 +469,35 @@ export class WaterGrid {
         return px - left;
     }
 
+    /**
+     * Rain falls on the cells within `radius` cells of a cell (on every cell of the grid when `radius` is
+     * undefined): `px` on each, never over its highest level, nothing in a wall. It falls from the sky, so no wall
+     * stops it, and its centre may be outside the grid. Returns what was laid.
+     */
+    public rainOn(cellX: number, cellY: number, radius: number | undefined, px: number): number {
+        if (!Number.isFinite(px) || px <= 0) return 0;
+        const { x, y, width, height } = this.bounds;
+        const reach = radius === undefined ? undefined : Math.max(0, radius);
+        const fromRow = reach === undefined ? 0 : Math.max(0, Math.floor(cellY - reach) - y);
+        const toRow = reach === undefined ? height - 1 : Math.min(height - 1, Math.ceil(cellY + reach) - y);
+        const fromColumn = reach === undefined ? 0 : Math.max(0, Math.floor(cellX - reach) - x);
+        const toColumn = reach === undefined ? width - 1 : Math.min(width - 1, Math.ceil(cellX + reach) - x);
+        let laid = 0;
+        for (let row = fromRow; row <= toRow; row++) {
+            for (let column = fromColumn; column <= toColumn; column++) {
+                if (reach !== undefined && (column + x - cellX) ** 2 + (row + y - cellY) ** 2 > reach * reach) continue;
+                const index = row * width + column;
+                if (this.blocked[index]) continue;
+                const room = this.spill[index] + this.highest - (this.ground[index] + this.depth[index]);
+                if (room <= 0) continue;
+                const stays = Math.min(px, room);
+                this.depth[index] += stays;
+                laid += stays;
+            }
+        }
+        return laid;
+    }
+
     /** One step: what comes in and goes out, then the water moves towards the lower neighbours. */
     public step(input: WaterStepInput): WaterTally {
         const tally: WaterTally = {

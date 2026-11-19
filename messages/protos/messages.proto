@@ -822,6 +822,8 @@ message ReportSwitchPresenceMessage {
 
 enum CatastropheKind {
   CATASTROPHE_METEOR = 0;
+  // A downpour: it rains hard under the pointer of a player (or on the whole map) for as long as they keep telling.
+  CATASTROPHE_DOWNPOUR = 1;
 }
 
 // Browser to server: a player launches a catastrophe at a point of the map, in map pixels. The server decides.
@@ -829,8 +831,11 @@ message LaunchCatastropheMessage {
   CatastropheKind kind = 1;
   int32 x = 2;
   int32 y = 3;
-  // A meteor: the radius of its crater, in tiles. The server keeps it within what a meteor may be.
+  // A meteor: the radius of its crater, in tiles. A downpour: the radius of its disc. The server keeps it within
+  // what each may be.
   int32 radiusTiles = 4;
+  // A downpour: it falls on the whole map instead of a disc.
+  bool wholeMap = 5;
 }
 
 // Server to room: a catastrophe is on its way.
@@ -840,8 +845,11 @@ message CatastropheMessage {
   int32 x = 3;
   int32 y = 4;
   int32 impactInMs = 5;
-  // A meteor: the radius of its crater, in tiles, as the server kept it.
+  // A meteor: the radius of its crater, in tiles, as the server kept it. A downpour: the radius of its disc.
   int32 radiusTiles = 6;
+  // A downpour: it falls on the whole map. Its `id` stays the same from a message to the next while it goes on, and
+  // `impactInMs` is how long it still rains when no other message comes.
+  bool wholeMap = 7;
 }
 
 // A player casts their fishing line: where the float lands, in map pixels. The server decides whether it does

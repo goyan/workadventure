@@ -361,7 +361,10 @@ export class GameRoom implements BrothersFinder {
             gameRoom,
             gameRoom.mapSizeInPixels.bind(gameRoom),
             terrainWater.strike.bind(terrainWater),
+            // The meadow is made further down: read when a downpour falls.
+            (downpour) => gameRoom.meadow?.soak(downpour),
         );
+        terrainWater.setDownpours(() => catastrophes.downpours());
         gameRoom.catastrophes = catastrophes;
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => catastrophes.stop());
@@ -1287,9 +1290,16 @@ export class GameRoom implements BrothersFinder {
         return anglersOf(this.users.values());
     }
 
-    /** A player launches a catastrophe (a meteor) at a point of the map. */
-    public launchCatastrophe(kind: CatastropheKind, x: number, y: number, radiusTiles: number): void {
-        this.catastrophes?.launch(kind, x, y, radiusTiles);
+    /** A player launches a catastrophe at a point of the map: a meteor, or the downpour that follows their pointer. */
+    public launchCatastrophe(
+        user: User,
+        kind: CatastropheKind,
+        x: number,
+        y: number,
+        radiusTiles: number,
+        wholeMap: boolean,
+    ): void {
+        this.catastrophes?.request(user.id, kind, x, y, radiusTiles, wholeMap);
     }
 
     /** A player casts their fishing line at a point of the map. */

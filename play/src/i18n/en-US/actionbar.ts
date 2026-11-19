@@ -76,6 +76,10 @@ const actionbar = {
         sizeLabel: "Size of the meteor: radius of its crater, in tiles",
         armedHelp: "Click on the map · Esc to cancel",
         idleHelp: "Pick a disaster",
+        downpour: "Downpour",
+        wholeMap: "Whole map",
+        downpourSizeLabel: "Size of the downpour: radius of the disc it rains on, in tiles",
+        downpourArmedHelp: "Hold the click on the map · Esc to cancel",
     },
     weatherBanner: {
         label: "Map weather: now, in 1 h and in 4 h",

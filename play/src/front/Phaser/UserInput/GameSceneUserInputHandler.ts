@@ -2,6 +2,7 @@ import * as Phaser from "phaser";
 import { get } from "svelte/store";
 import * as Sentry from "@sentry/svelte";
 import { CatastropheKind } from "@workadventure/messages";
+import { DOWNPOUR_REPORT_MS } from "@workadventure/map-editor";
 import { getTileCenter } from "@wa/front/Phaser/Player/TileSnap";
 import { Player } from "@wa/front/Phaser/Player/Player";
 import { findSeatAtPoint, isSeatTaken } from "@wa/front/Phaser/Player/Seat";
@@ -31,7 +32,12 @@ import { isHumanAvatar } from "@wa/front/Phaser/Entity/MusicHeadphonesEffect";
 import { AvatarAction } from "@wa/front/Phaser/Entity/AvatarAction";
 import { Swimwear } from "@wa/front/Phaser/Entity/Swimwear";
 import { ENABLE_TILE_SNAP, WOKA_SPEED } from "@wa/front/Enum/EnvironmentVariable";
-import { armedCatastropheStore, meteorRadiusTilesStore } from "@wa/front/Stores/CatastropheStore";
+import {
+    armedCatastropheStore,
+    downpourRadiusTilesStore,
+    downpourWholeMapStore,
+    meteorRadiusTilesStore,
+} from "@wa/front/Stores/CatastropheStore";
 import { cameraDetachedStore } from "@wa/front/Stores/CameraStore";
 import { isKeyFromInteractiveElement } from "@wa/front/Utils/isKeyFromInteractiveElement";
 import { findShortcutAction } from "@wa/front/Stores/ShortcutsStore";
@@ -67,6 +73,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     private controlKeyisPressed: boolean = false;
     private readonly mapDrag = new MapDragGesture();
     private draggingMap = false;
+    /** While the click of an armed downpour is held: tells the server where the pointer is, a few times a second. */
+    private downpourReports: Phaser.Time.TimerEvent | undefined;
     // The current touch gesture involved two fingers or more (a pinch): lifting a finger must not count as a tap.
     private multiTouch = false;
     private pinchFreedView = false;
@@ -103,12 +111,15 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         // The canvas shows a crosshair while a catastrophe is armed, through the same default cursor as the map drag.
         let wasArmed = false;
         const unsubscribeArmed = armedCatastropheStore.subscribe((armed) => {
+            // A downpour only rains while it is the armed one.
+            if (armed !== "downpour") this.stopDownpour();
             if (wasArmed === (armed !== undefined)) return;
             wasArmed = armed !== undefined;
             this.gameScene.input.setDefaultCursor(wasArmed ? "crosshair" : this.idleCursor());
         });
         gameScene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
             unsubscribeArmed();
+            this.stopDownpour();
             this.pointerCapture.destroy();
             this.panShortcut.destroy();
             for (const listener of this.spaceListeners.values()) {
@@ -162,7 +173,9 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         // An armed catastrophe takes the click that is not a drag (the drag test above): it walks, activates and
         // picks nothing. The press itself is left to the map drag, which stays free.
         if (get(armedCatastropheStore) !== undefined && (pointer.wasTouch || pointer.leftButtonReleased())) {
-            this.launchArmedCatastrophe(pointer);
+            // The downpour rained while the click was held: releasing it only ends it.
+            if (get(armedCatastropheStore) === "downpour") this.stopDownpour();
+            else this.launchArmedCatastrophe(pointer);
             return;
         }
         if (pointer.wasTouch || pointer.leftButtonReleased()) {
@@ -291,6 +304,40 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             worldPoint.y,
             get(meteorRadiusTilesStore),
         );
+    }
+
+    /** The click of an armed downpour is pressed: it rains under the pointer at once, and for as long as it is held. */
+    private startDownpour(pointer: Pointer): void {
+        this.stopDownpour();
+        if (!this.gameScene.userInputManager.isControlsEnabled) return;
+        const report = (): void => {
+            if (get(armedCatastropheStore) !== "downpour" || !pointer.isDown) {
+                this.stopDownpour();
+                return;
+            }
+            const worldPoint = this.gameScene.getCameraManager().getCamera().getWorldPoint(pointer.x, pointer.y);
+            // A pointer past the edge rains on the edge: the cloud never leaves the map.
+            const x = Math.min(this.gameScene.Map.widthInPixels - 1, Math.max(0, worldPoint.x));
+            const y = Math.min(this.gameScene.Map.heightInPixels - 1, Math.max(0, worldPoint.y));
+            this.gameScene.connection?.emitLaunchCatastrophe(
+                CatastropheKind.CATASTROPHE_DOWNPOUR,
+                x,
+                y,
+                get(downpourRadiusTilesStore),
+                get(downpourWholeMapStore),
+            );
+        };
+        report();
+        this.downpourReports = this.gameScene.time.addEvent({
+            delay: DOWNPOUR_REPORT_MS,
+            loop: true,
+            callback: report,
+        });
+    }
+
+    private stopDownpour(): void {
+        this.downpourReports?.remove();
+        this.downpourReports = undefined;
     }
 
     private idleCursor(): string {
@@ -513,6 +560,11 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 return;
             }
         }
+        // An armed downpour takes the press: it rains while it is held, and the drag moves the cloud, not the map.
+        if (get(armedCatastropheStore) === "downpour" && !get(mapEditorModeStore)) {
+            if (pointer.wasTouch || pointer.leftButtonDown()) this.startDownpour(pointer);
+            return;
+        }
         if (!pointer.leftButtonDown() || !this.canDragMap()) {
             return;
         }
@@ -526,6 +578,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         if (pointer.wasTouch && this.multiTouch) {
             return;
         }
+        // A held downpour follows the pointer by itself (see startDownpour): the move is no drag of the map.
+        if (this.downpourReports) return;
         if (!pointer.leftButtonDown()) {
             if (this.draggingMap) this.handlePointerCancelEvent();
             return;
@@ -552,6 +606,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     }
 
     public handlePointerCancelEvent(): void {
+        this.stopDownpour();
         this.pointerCapture.release();
         this.gameScene.getCameraManager().stopManualPanInertia();
         this.mapDrag.cancel();
@@ -570,6 +625,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
 
     private canDragMap(): boolean {
         // The other editor tools use the left drag themselves; they pan with MapPanShortcut instead.
+        if (get(armedCatastropheStore) === "downpour") return false;
         return this.canMoveView() && (!get(mapEditorModeStore) || get(mapExplorationModeStore));
     }
 

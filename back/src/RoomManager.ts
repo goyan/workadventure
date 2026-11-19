@@ -258,8 +258,8 @@ const roomManager = {
                             break;
                         }
                         case "launchCatastropheMessage": {
-                            const { kind, x, y, radiusTiles } = message.message.launchCatastropheMessage;
-                            room.launchCatastrophe(kind, x, y, radiusTiles);
+                            const { kind, x, y, radiusTiles, wholeMap } = message.message.launchCatastropheMessage;
+                            room.launchCatastrophe(user, kind, x, y, radiusTiles, wholeMap);
                             break;
                         }
                         default: {

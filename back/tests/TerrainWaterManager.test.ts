@@ -187,6 +187,33 @@ describe("TerrainWaterManager", () => {
         expect(manager.getGrid()?.maxSurface()).toBe(120);
     });
 
+    it("a downpour fills the cells under it step after step, counted with the rain, and the room sees it often", () => {
+        const { manager, sent, steps } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        manager.setDownpours(() => [{ id: 1, x: 240, y: 240, radiusTiles: 2, wholeMap: false }]);
+        steps(10);
+        const grid = manager.getGrid();
+        // Ten steps of a tenth of a second at 4 px a second, less what ran to the dry cells around.
+        expect(grid?.depthAt(15, 15)).toBeGreaterThan(1);
+        expect(grid?.depthAt(15, 15)).toBeLessThanOrEqual(4);
+        expect(grid?.depthAt(29, 29)).toBeLessThan(0.5);
+        expect(sent.length).toBeGreaterThanOrEqual(5);
+        expect(sent.at(-1)?.stats?.rain).toBeGreaterThan(0);
+    });
+
+    it("a downpour on the whole map rains on every cell, and nothing falls once it ended", () => {
+        const { manager, steps } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        let falling = true;
+        manager.setDownpours(() => (falling ? [{ id: 1, x: 0, y: 0, radiusTiles: 1, wholeMap: true }] : []));
+        steps(10);
+        const after = manager.getGrid()?.totalPx() ?? 0;
+        expect(manager.getGrid()?.depthAt(29, 29)).toBeGreaterThan(1);
+        falling = false;
+        steps(10);
+        expect(manager.getGrid()?.totalPx() ?? 0).toBeLessThanOrEqual(after);
+    });
+
     it("a strike on a map without water does nothing", () => {
         const { manager, sent } = createHarness({ wam: wamWith(undefined) });
         manager.mapChanged();

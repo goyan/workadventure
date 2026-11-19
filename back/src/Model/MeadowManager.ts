@@ -12,7 +12,7 @@ import {
     TILE_PX,
     WeatherType,
 } from "@workadventure/map-editor";
-import type { TerrainData, WaterGrid } from "@workadventure/map-editor";
+import type { Downpour, TerrainData, WaterGrid } from "@workadventure/map-editor";
 import type { MeadowMessage } from "@workadventure/messages";
 import type { VariablesRepositoryInterface } from "../Services/Repository/VariablesRepositoryInterface";
 import type { GameRoom } from "./GameRoom";
@@ -185,6 +185,17 @@ export class MeadowManager {
         });
         if (this.steps % STEPS_PER_MESSAGE === 0) this.tell(meadow);
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
+    }
+
+    /** A downpour soaks the soil under it at once; the room sees it at the next message of the meadow. */
+    public soak(downpour: Pick<Downpour, "x" | "y" | "radiusTiles" | "wholeMap">): void {
+        const settings = this.room.getWam()?.settings;
+        if (!this.meadow || !{ ...DEFAULT_MEADOW_SETTINGS, ...settings?.meadow }.enabled) return;
+        this.meadow.soak(
+            Math.floor(downpour.x / TILE_PX),
+            Math.floor(downpour.y / TILE_PX),
+            downpour.wholeMap ? undefined : downpour.radiusTiles,
+        );
     }
 
     /** The whole state the room was last told, for a player who joins it. Undefined where nothing ever grew. */

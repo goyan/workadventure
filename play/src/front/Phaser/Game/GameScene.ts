@@ -13,6 +13,7 @@ import {
     AvailabilityStatus,
     availabilityStatusToJSON,
     type BanUserMessage,
+    CatastropheKind,
     ErrorScreenMessage,
     FilterType,
     type GroupUsersUpdateMessage,
@@ -409,6 +410,7 @@ import { TorchManager } from "./Torch/TorchManager";
 import { TORCH_EQUIPPED_VARIABLE, TORCH_INTENSITY_VARIABLE } from "./Torch/TorchProtocol";
 import { FishingManager } from "./Fishing/FishingManager";
 import { MeteorView } from "./Catastrophe/MeteorView";
+import { DownpourView } from "./Catastrophe/DownpourView";
 import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
 import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
 import { CoffeeManager } from "./Coffee/CoffeeManager";
@@ -591,6 +593,7 @@ export class GameScene extends DirtyScene {
     private meadowQueue: Promise<void> = Promise.resolve();
     private terrainWaterSubscription: Subscription | undefined;
     private meteorView: MeteorView | undefined;
+    private downpourView: DownpourView | undefined;
     private catastropheSubscription: Subscription | undefined;
     /** The animals of the water of the relief, as the server tells them. */
     private readonly aquaticLife = new AquaticLife();
@@ -1743,6 +1746,8 @@ export class GameScene extends DirtyScene {
         this.catastropheSubscription = undefined;
         this.meteorView?.destroy();
         this.meteorView = undefined;
+        this.downpourView?.destroy();
+        this.downpourView = undefined;
         rodEquippedStore.set(false);
         this._coffeeManager?.destroy();
         this._coffeeManager = undefined;
@@ -2268,6 +2273,7 @@ export class GameScene extends DirtyScene {
             this._torchManager?.update(time);
             this._fishingManager?.update(time);
             this.meteorView?.update(time);
+            this.downpourView?.update(time);
             this.nightManager?.update(time);
             this.lampManager?.update(time);
             this.gameSwitches?.update(time);
@@ -4089,8 +4095,15 @@ export class GameScene extends DirtyScene {
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
         );
         this.meteorView = meteorView;
+        this.downpourView?.destroy();
+        const downpourView = new DownpourView(
+            this,
+            () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+        );
+        this.downpourView = downpourView;
         this.catastropheSubscription = this.connection?.catastropheMessageStream.subscribe((message) => {
-            meteorView.add(message, this.time.now);
+            if (message.kind === CatastropheKind.CATASTROPHE_DOWNPOUR) downpourView.report(message, this.time.now);
+            else meteorView.add(message, this.time.now);
         });
         this.karaokeSpotlight?.destroy();
         this.karaokeSpotlight = new KaraokeSpotlight(this);
