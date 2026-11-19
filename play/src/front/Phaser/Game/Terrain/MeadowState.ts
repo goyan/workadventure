@@ -24,16 +24,23 @@ export function mottledCover(cover: number, cellX: number, cellY: number): numbe
 /** The colour of the grass gone dry: straw, drawn over the ground as much as its grass is dry. */
 export const STRAW_COLOR = 0xd9c257;
 export const STRAW_ALPHA = 0.9;
-/** Thin grass gone dry yellows its ground this much already (of 255): a dry land is seen dry, not only its meadows. */
+/**
+ * A dry ground is seen dry, not only its meadows: bare ground where grass can grow yellows this much (of 255), and
+ * thin grass this much already.
+ */
+const BARE_GROUND_STRAW = 120;
 const THIN_GRASS_STRAW = 180;
 
 /**
- * How much straw is drawn over a cell, from the cover of its grass and its dryness (0 to 255 each): none without
- * grass, and from thin grass on, most of what a full meadow gives.
+ * How much straw is drawn over a cell, from the cover of its grass and the dryness of its ground (0 to 255 each):
+ * some on bare ground, most of what a full meadow gives from thin grass on.
  */
 export function strawLevel(cover: number, dryness: number): number {
-    if (cover <= 0 || dryness <= 0) return 0;
-    const ground = THIN_GRASS_STRAW + ((255 - THIN_GRASS_STRAW) * (Math.min(255, cover) - 1)) / 254;
+    if (dryness <= 0) return 0;
+    const ground =
+        cover <= 0
+            ? BARE_GROUND_STRAW
+            : THIN_GRASS_STRAW + ((255 - THIN_GRASS_STRAW) * (Math.min(255, cover) - 1)) / 254;
     return Math.round((ground * Math.min(255, dryness)) / 255);
 }
 
@@ -53,6 +60,7 @@ export class MeadowState {
     private moisture: Uint8Array = new Uint8Array(0);
     private dryness: Uint8Array = new Uint8Array(0);
     private any = false;
+    private anyDry = false;
     private changes = 0;
 
     /** A state of the meadow, its bytes already unzipped. One that does not fit its size is left out. */
@@ -74,6 +82,7 @@ export class MeadowState {
         this.moisture = state.moisture;
         this.dryness = state.dryness?.length === tiles ? state.dryness : new Uint8Array(tiles);
         this.any = state.grass.some((cover) => cover > 0);
+        this.anyDry = this.dryness.some((dryness) => dryness > 0);
         this.changes++;
     }
 
@@ -102,9 +111,9 @@ export class MeadowState {
         return this.grassAt(Math.floor(x / TILE_PX), Math.floor(y / TILE_PX)) / 255;
     }
 
-    /** Whether any grass grows on the map: nothing to draw otherwise. */
+    /** Whether any grass grows on the map, or any of its ground is dry: nothing to draw otherwise. */
     public hasGrass(): boolean {
-        return this.any;
+        return this.any || this.anyDry;
     }
 
     /** Changes whenever a state is received. */

@@ -303,19 +303,21 @@ export class TerrainView {
                 for (let column = 0; column < canvas.columns; column++) {
                     const cellX = left + column;
                     const cellY = top + row;
-                    const cover = this.meadow.grassAt(Math.floor(cellX / cellsATile), Math.floor(cellY / cellsATile));
-                    if (cover === 0) continue;
+                    const tileX = Math.floor(cellX / cellsATile);
+                    const tileY = Math.floor(cellY / cellsATile);
+                    const cover = this.meadow.grassAt(tileX, tileY);
+                    const dryness = this.meadow.drynessAt(tileX, tileY);
+                    if (cover === 0 && dryness === 0) continue;
                     if (outdoor && !outdoor.isOutdoorAt((cellX + 0.5) * TERRAIN_CELL, (cellY + 0.5) * TERRAIN_CELL)) {
                         continue;
                     }
-                    const drawn = mottledCover(cover, cellX, cellY);
-                    grass[row * canvas.columns + column] = drawn;
-                    any = true;
-                    const dryness = this.meadow.drynessAt(
-                        Math.floor(cellX / cellsATile),
-                        Math.floor(cellY / cellsATile),
-                    );
+                    const drawn = cover === 0 ? 0 : mottledCover(cover, cellX, cellY);
+                    if (drawn > 0) {
+                        grass[row * canvas.columns + column] = drawn;
+                        any = true;
+                    }
                     if (dryness === 0) continue;
+                    // A dry ground yellows with or without grass on it.
                     straw[row * canvas.columns + column] = strawLevel(drawn, dryness);
                     dry = true;
                 }

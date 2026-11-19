@@ -365,11 +365,16 @@ describe("the dryness of the grass", () => {
         expect(meadow.drynessAt(3, 2)).toBeGreaterThan(0.3);
     });
 
-    it("is nothing where there is no grass", () => {
-        const meadow = new Meadow(size, undefined, undefined);
-        meadow.set(3, 2, 0, 0, 1);
-        run(meadow, 2, burning);
-        expect(meadow.drynessAt(3, 2)).toBe(0);
+    it("dries the bare ground too where grass can grow, and nothing where it cannot", () => {
+        const terrain = withSoils(undefined, new Map(tile(5, 2, soilCode("sand"))));
+        const meadow = new Meadow(size, terrain, undefined);
+        // Bare earth, no grass on it: a fertile soil gone dry.
+        meadow.set(3, 2, 0, 0);
+        meadow.set(5, 2, 0, 0, 1);
+        run(meadow, 180, burning);
+        expect(meadow.drynessAt(3, 2)).toBeGreaterThan(0.8);
+        // Sand grows nothing: nothing to dry.
+        expect(meadow.drynessAt(5, 2)).toBe(0);
         expect(meadow.drynessAt(-1, 0)).toBe(0);
     });
 

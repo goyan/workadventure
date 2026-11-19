@@ -99,7 +99,7 @@ export class Meadow {
     private readonly moisture: Float32Array;
     private readonly next: Float32Array;
     private readonly grass: Float32Array;
-    /** How dry the grass of each tile is, from 0 (green) to 1 (straw, ready to burn). */
+    /** How dry the ground of each tile and its grass are, from 0 (green) to 1 (straw, ready to burn). */
     private readonly dryness: Float32Array;
     /** For each tile: how long its soil holds its moisture (0: it holds none), how fertile it is, and its height. */
     private readonly hold: Float32Array;
@@ -281,7 +281,8 @@ export class Meadow {
         // and windy, green again on a wet soil or when the conditions ease.
         const share = 1 - Math.exp(-seconds / DRYING_SECONDS);
         for (let index = 0; index < dryness.length; index++) {
-            if (grass[index] <= 0) {
+            // Every ground where grass can grow dries, bare or not; sand, rock and indoors have nothing to dry.
+            if (fertility[index] <= 0 || !outdoor[index]) {
                 dryness[index] = 0;
                 continue;
             }
