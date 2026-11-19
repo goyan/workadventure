@@ -433,6 +433,21 @@ describe("weather rendering lifecycle", () => {
             }
         });
 
+        // Seen from far the outdoors is hundreds of runs: as rectangles, the engine drew them again at every image.
+        it("paints the veil in the canvas of the clouds when its rectangles are too many", () => {
+            const { scene, graphics, wam } = fixture();
+            wam.settings = { weather: WeatherType.Fog };
+            const runs = Array.from({ length: 200 }, (_, row) => ({ x: 0, y: row * 4, width: 1000, height: 4 }));
+            const grid = { outdoorRunsInView: () => runs, isOutdoorAt: () => true } as unknown as ReturnType<
+                typeof OutdoorGrid.fromWalls
+            >;
+            manager = new WeatherManager(scene, { outdoorGrid: () => grid });
+            manager.update(0, new Date(0));
+            // Still a veil of the colour of the fog, but none of the 200 runs drawn as a rectangle.
+            expect(fogFill(graphics).length).toBeGreaterThan(0);
+            expect(graphics.fillRect.mock.calls.some(([, , width]) => width === 1000)).toBe(false);
+        });
+
         // Reading the outdoors of the view is the costly part of a drawing: not again while nothing changed.
         it("reads the outdoors of the view once while the walls and the view stay the same", () => {
             const { scene, wam } = fixture();

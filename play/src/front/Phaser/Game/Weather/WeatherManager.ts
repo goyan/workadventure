@@ -90,6 +90,8 @@ const NO_SHIFT = { columns: 0, rows: 0 };
 const DRAW_MARGIN = 0.1;
 /** The outdoors of the view is read for a view widened to whole steps of this many map pixels (see veilOver). */
 const VEIL_STEP = 256;
+/** A veil of more rectangles than this is painted in the canvas of the clouds instead (see fillVeil). */
+const VEIL_MAX_RECTS = 96;
 /** Puddles are drawn from this many screen pixels a map pixel: under it, the map is seen from too far. */
 const PUDDLE_MIN_SCALE = 0.5;
 /**
@@ -159,6 +161,8 @@ export class WeatherManager {
     private lastFogKey: string | undefined;
     /** What the last drawing covered (the view and its margin), to draw again before a scroll reaches its edge. */
     private drawn: WeatherView | undefined;
+    /** A field that covers every cell of the canvas of the clouds: a veil painted in it (see fillVeil). */
+    private everyCell = new Uint8Array(0);
     /** The outdoors last read, and what it was read from (see veilOver). */
     private veil:
         | (WeatherView & { grid: OutdoorGrid; cover: RaisedCover | undefined; rects: WeatherView[] })
@@ -316,8 +320,7 @@ export class WeatherManager {
         this.roofs = overRoofs > 0 ? { cells: outdoor.map((cell) => (cell ? 0 : 1)), share: overRoofs } : undefined;
         if (showWeather && weather === WeatherType.Fog) {
             const density = fogStrengthNow * (night ? FOG_NIGHT_FACTOR : 1);
-            this.graphics.fillStyle(FOG_COLOR, FOG_VEIL_ALPHA * density);
-            for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
+            this.fillVeil(canvas, outdoor, veil, FOG_COLOR, FOG_VEIL_ALPHA * density);
             // The patches stop at the walls: only outdoor cells are painted.
             const levels = fieldLevels(canvas, size, fogPatches(epoch, view, this.reducedMotion));
             this.blocks.paintField(canvas, levels, outdoor, NO_SHIFT, FOG_COLOR, (level) => {
@@ -325,8 +328,7 @@ export class WeatherManager {
             });
         } else if (showWeather) {
             if (weather !== WeatherType.Snow) {
-                this.graphics.fillStyle(0x27344b, storm ? 0.2 : rainVeilAlpha(rain));
-                for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
+                this.fillVeil(canvas, outdoor, veil, 0x27344b, storm ? 0.2 : rainVeilAlpha(rain));
             }
             // The rain falls from grey clouds, the storm from dark ones (not at night, with the personal switch).
             const covering =
@@ -395,6 +397,27 @@ export class WeatherManager {
     }
 
     /**
+     * A veil of one colour over the outdoors of the view. Its rectangles when they are few (seen from close: exact
+     * along the walls); seen from far they are hundreds, drawn again by the engine at every image: the veil is then
+     * painted in the canvas of the clouds, a cell at a time, under them.
+     */
+    private fillVeil(
+        canvas: BlockCanvasArea,
+        outdoor: Uint8Array,
+        veil: readonly WeatherView[],
+        color: number,
+        alpha: number,
+    ): void {
+        if (veil.length <= VEIL_MAX_RECTS) {
+            this.graphics.fillStyle(color, alpha);
+            for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
+            return;
+        }
+        if (this.everyCell.length !== outdoor.length) this.everyCell = new Uint8Array(outdoor.length).fill(1);
+        this.blocks.paintField(canvas, this.everyCell, outdoor, NO_SHIFT, color, () => alpha);
+    }
+
+    /**
      * The outdoors of the view without what a raised floor covers. Reading it is the costly part of a drawing of the
      * weather, and it only changes with the walls, the floors and the view: kept for a view widened to whole steps,
      * so that a rain drawn 30 times a second, or a scroll, does not read the map again each time.
@@ -442,10 +465,7 @@ export class WeatherManager {
         veilAlpha: number,
         zoom: number,
     ): void {
-        if (veilAlpha > 0) {
-            this.graphics.fillStyle(OVERCAST_COLOR, veilAlpha);
-            for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
-        }
+        if (veilAlpha > 0) this.fillVeil(canvas, outdoor, veil, OVERCAST_COLOR, veilAlpha);
         // One field of clouds for the clouds and their shadows (the same clouds, moved by whole cells), wide enough for
         // the shadows of clouds just out of the canvas.
         const shift = shadowOffset
