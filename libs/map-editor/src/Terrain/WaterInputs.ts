@@ -24,6 +24,11 @@ export interface WaterObject {
     litresPerMinute: number;
     /** The radius of the disc a source pours over or a sink takes from, in cells of the relief (0: its cell only). */
     radiusCells: number;
+    /**
+     * The level it holds, in pixels of altitude: a source pours only under it, a sink takes only over it. Absent:
+     * it always runs.
+     */
+    levelPx?: number;
 }
 
 /**
@@ -46,6 +51,7 @@ export function waterObjectsOf(wam: Pick<WAMFileFormat, "entities"> | undefined)
                 radiusCells: Math.round(
                     ((found.radius ?? (source.success ? 0 : DEFAULT_SINK_RADIUS_TILES)) * TILE_PX) / TERRAIN_CELL,
                 ),
+                ...(found.level === undefined ? {} : { levelPx: found.level }),
             });
         }
     }
@@ -87,6 +93,7 @@ export function stepInputOf(
                 cellY: object.cellY,
                 px: (object.litresPerMinute * 60 * hours) / CELL_LITRES_PER_PX,
                 radius: object.radiusCells,
+                ...(object.levelPx === undefined ? {} : { level: object.levelPx }),
             })),
     };
 }

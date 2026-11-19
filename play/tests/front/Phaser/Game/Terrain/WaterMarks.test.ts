@@ -68,6 +68,9 @@ describe("the sources and the sinks shown while the relief is edited", () => {
         expect(waterMarkLabel(fountain)).toBe("+60 m³/h");
         expect(waterMarkLabel(hole)).toBe("−3 m³/h");
         expect(waterMarkLabel(off)).toBe("0 m³/h");
+        // One that holds a level says which, in metres (a tile of altitude is about 1.10 m).
+        expect(waterMarkLabel({ ...fountain, levelPx: -16 })).toBe("+60 m³/h → −0.5 m");
+        expect(waterMarkLabel({ ...hole, levelPx: 0 })).toBe("−3 m³/h → 0.0 m");
     });
 
     it("keeps its size on the screen when the map is zoomed out, and never shrinks under its size on the map", () => {

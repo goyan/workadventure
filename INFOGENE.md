@@ -2155,6 +2155,13 @@ n'importe quel objet depuis son panneau : une source verse à son pied, un puits
 pied (milieu du bas de l'image) est écrit dans la propriété par l'éditeur (`anchorX`, `anchorY`,
 `Terrain/WaterAnchor.ts`), car `back` ne connaît pas la taille des objets.
 
+**Niveau tenu** (champ facultatif `level` des deux propriétés, en pixels d'altitude, réglé en mètres dans le panneau,
+interrupteur « Tenir un niveau ») : une source ne verse que tant que l'eau à son pied est sous ce niveau, un puits ne
+prend que l'eau au-dessus (trop-plein). À chaque pas, l'un et l'autre sont limités à ce qui amène l'eau de leur disque
+au niveau (`heldFlow` de `WaterGrid.ts`) ; un puits à niveau ne prend que dans son disque, il n'aspire pas le plan
+d'eau. Un lac reste ainsi plein quelle que soit la météo, sans déborder. Sans `level`, rien ne change. Le repère de
+l'outil Relief écrit le niveau après le débit (« +60 m³/h → −0.5 m »).
+
 **Modèle** (`libs/map-editor/src/Terrain/`, lu à l'identique par `back` et par le front). Le relief est un champ
 facultatif du WAM (`terrain` : hauteurs par cellule de 16 px, 0 au sol, négatif creusé, par blocs de 16 × 16 ; absent =
 carte plate, aucune migration). Échelle des lampes : une case = 1,2 m² de sol (`TILE_AREA_M2`), donc 1 mm de pluie =

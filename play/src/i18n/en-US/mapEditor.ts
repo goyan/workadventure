@@ -393,6 +393,10 @@ const mapEditor: BaseTranslation = {
             unit: "Unit of the flow",
             radius: "Radius (tiles)",
             radiusHint: "The water is poured over this whole disc. At 0 it comes out at the foot of the object.",
+            level: "Hold a level",
+            levelValue: "Altitude of the water to hold, in metres",
+            levelHint:
+                "The source pours only while the water at its foot is under this altitude: a lake stays full, without overflowing. 0 m: the ground of the map; negative in a hollow, positive on a mount. The altitude of the ground under the cursor is shown under the clock.",
         },
         waterSink: {
             label: "Sink (drain)",
@@ -406,6 +410,10 @@ const mapEditor: BaseTranslation = {
             radius: "Radius (tiles)",
             radiusHint:
                 "The sink empties this disc first. When it asks for more, it draws the body of water joined to it, harder near itself: the water runs to the sink.",
+            level: "Hold a level (overflow)",
+            levelValue: "Altitude of the water to hold, in metres",
+            levelHint:
+                "The sink takes only the water over this altitude, in its disc: an overflow, which does not empty the lake. 0 m: the ground of the map; negative in a hollow, positive on a mount.",
         },
         lamp: {
             label: "Light zone",

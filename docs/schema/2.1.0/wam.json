@@ -817,6 +817,11 @@
                           "minimum": 0,
                           "maximum": 10
                         },
+                        "level": {
+                          "type": "number",
+                          "minimum": -256,
+                          "maximum": 274
+                        },
                         "anchorX": {
                           "type": "number",
                           "minimum": -4096,
@@ -866,6 +871,11 @@
                           "type": "number",
                           "minimum": 0,
                           "maximum": 10
+                        },
+                        "level": {
+                          "type": "number",
+                          "minimum": -256,
+                          "maximum": 274
                         },
                         "anchorX": {
                           "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/10/properties/anchorX"

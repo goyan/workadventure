@@ -3,6 +3,7 @@ import { cellKey, withHeights } from "../src/Terrain/TerrainGrid";
 import {
     CELL_LITRES_PER_PX,
     gridBoundsOf,
+    heldFlow,
     MAX_WATER_SURFACE_PX,
     WATER_GRID_MARGIN,
     WaterGrid,
@@ -799,5 +800,75 @@ describe("a lake on a mount", () => {
         const tally = grid.step({ ...nothing, absorptionPx: 1 });
         expect(tally.absorptionPx).toBe(0);
         expect(grid.depthAt(0, 0)).toBeCloseTo(10);
+    });
+});
+
+describe("a source or a sink that holds a level", () => {
+    // A hollow of 5 by 5 cells, 10 px deep, far from the edges of its grid.
+    const hollow = (): WaterGrid => {
+        const cells: [number, number, number][] = [];
+        for (let x = 0; x < 5; x++) for (let y = 0; y < 5; y++) cells.push([x, y, -10]);
+        const terrain = terrainOf(cells);
+        return new WaterGrid(terrain, gridBoundsOf(terrain, []));
+    };
+
+    it("gives its flow without a level, and no more than what brings its disc to its level", () => {
+        expect(heldFlow(5, undefined, -3, 2)).toBe(5);
+        expect(heldFlow(-5, undefined, -3, 2)).toBe(-5);
+        // A source under its level by 1 px, at its foot only: 1 px at most.
+        expect(heldFlow(5, -2, -3, 0)).toBe(1);
+        expect(heldFlow(0.5, -2, -3, 0)).toBe(0.5);
+        // At its level or over it, nothing.
+        expect(heldFlow(5, -3, -3, 0)).toBe(0);
+        expect(heldFlow(5, -4, -3, 0)).toBe(0);
+        // A sink takes only what is over its level.
+        expect(heldFlow(-5, -4, -3, 0)).toBe(-1);
+        expect(heldFlow(-5, -3, -3, 0)).toBe(0);
+        expect(heldFlow(-5, -2, -3, 0)).toBe(0);
+        // Over a disc, as many times more as the disc has cells.
+        expect(heldFlow(100, -2, -3, 2)).toBeCloseTo(Math.PI * 4);
+    });
+
+    it("fills a lake to its level and stops there, where a plain source floods the ground around", () => {
+        const held = hollow();
+        run(held, 3000, { ...nothing, flows: [{ cellX: 2, cellY: 2, px: 4, level: -4 }] });
+        for (const [x, y] of [
+            [0, 0],
+            [2, 2],
+            [4, 4],
+        ]) {
+            expect(held.depthAt(x, y)).toBeGreaterThan(5.5);
+            expect(held.depthAt(x, y)).toBeLessThan(6.5);
+        }
+        expect(held.depthAt(-1, 2)).toBe(0);
+        // At its level it pours nothing more, and no longer keeps the grid awake.
+        const tally = held.step({ ...nothing, flows: [{ cellX: 2, cellY: 2, px: 4, level: -4 }] });
+        expect(tally.sourcesPx).toBeLessThan(0.05);
+        const plain = hollow();
+        run(plain, 3000, { ...nothing, flows: [{ cellX: 2, cellY: 2, px: 4 }] });
+        expect(plain.depthAt(-1, 2)).toBeGreaterThan(0);
+    });
+
+    it("fills the lake again when its water goes", () => {
+        const grid = hollow();
+        const input = { ...nothing, evaporationPx: 0.01, flows: [{ cellX: 2, cellY: 2, px: 4, level: -4 }] };
+        run(grid, 3000, input);
+        expect(grid.depthAt(0, 0)).toBeGreaterThan(5);
+        expect(grid.depthAt(0, 0)).toBeLessThan(6.5);
+    });
+
+    it("lets a sink take only the water over its level", () => {
+        const grid = hollow();
+        run(grid, 2000, { ...nothing, flows: [{ cellX: 2, cellY: 2, px: 4, level: -1 }] });
+        expect(grid.depthAt(0, 0)).toBeGreaterThan(8.5);
+        run(grid, 3000, { ...nothing, flows: [{ cellX: 2, cellY: 2, px: -50, radius: 1, level: -6 }] });
+        for (const [x, y] of [
+            [0, 0],
+            [2, 2],
+            [4, 4],
+        ]) {
+            expect(grid.depthAt(x, y)).toBeGreaterThan(3.5);
+            expect(grid.depthAt(x, y)).toBeLessThan(4.5);
+        }
     });
 });

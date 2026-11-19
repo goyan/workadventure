@@ -344,6 +344,12 @@ export const MAX_WATER_FLOW = 60_000_000;
 /** The largest radius a source pours over or a sink takes from, in tiles, and the radius of a sink that sets none. */
 export const MAX_WATER_RADIUS_TILES = 10;
 export const DEFAULT_SINK_RADIUS_TILES = 1.5;
+/**
+ * The levels a source or a sink can hold, in pixels of altitude (0: the ground of the map): from the deepest hollow
+ * to the highest water over the highest mount.
+ */
+export const MIN_WATER_LEVEL = -256;
+export const MAX_WATER_LEVEL = 274;
 
 /**
  * Where the water comes out of (or goes into) the object, from the corner of its image, in pixels: its foot, written
@@ -363,6 +369,11 @@ export const WaterSourcePropertyData = PropertyBase.extend({
     flow: z.number().min(0).max(MAX_WATER_FLOW),
     /** The radius of the disc the water is poured over, in tiles: at the foot of the object when absent. */
     radius: z.number().min(0).max(MAX_WATER_RADIUS_TILES).optional(),
+    /**
+     * The level the source holds, in pixels of altitude: it pours only while the water at its foot is under it (a
+     * lake kept full whatever the weather). Absent: it always pours.
+     */
+    level: z.number().min(MIN_WATER_LEVEL).max(MAX_WATER_LEVEL).optional(),
     ...WaterAnchor,
 });
 
@@ -372,6 +383,11 @@ export const WaterSinkPropertyData = PropertyBase.extend({
     flow: z.number().min(0).max(MAX_WATER_FLOW),
     /** The radius of the disc the water is taken from, in tiles: DEFAULT_SINK_RADIUS_TILES when absent. */
     radius: z.number().min(0).max(MAX_WATER_RADIUS_TILES).optional(),
+    /**
+     * The level the sink holds, in pixels of altitude: it takes only while the water at its foot is over it (an
+     * overflow). Absent: it takes all the water it finds.
+     */
+    level: z.number().min(MIN_WATER_LEVEL).max(MAX_WATER_LEVEL).optional(),
     ...WaterAnchor,
 });
 
