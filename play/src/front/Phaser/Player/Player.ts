@@ -50,6 +50,7 @@ import {
 } from "@wa/front/Phaser/Entity/Swimwear";
 import { getSolidRectangles } from "@wa/front/Utils/EntityHitbox";
 import { NERF_KNOCKBACK_MS, NERF_KNOCKBACK_PX } from "../Game/Nerf/NerfBlink";
+import { groundPace } from "../Game/Terrain/GroundPace";
 import { RUN_ANIMATION_SPEED } from "./Animation";
 import { computeTileSnapTarget, getFeetTile } from "./TileSnap";
 import type { Seat } from "./Seat";
@@ -582,14 +583,22 @@ export class Player extends Character {
     private deduceSpeed(speedUp: boolean, followMode: boolean): number {
         if (this.vehicleMode !== VehicleMode.Off && !followMode && !this.swimming) {
             if (localUserStore.getVehicle() === Vehicle.Canoe) return this.canoeSpeed(speedUp);
-            return WOKA_SPEED * vehicleSpeedFactor(localUserStore.getVehicle());
+            return WOKA_SPEED * vehicleSpeedFactor(localUserStore.getVehicle()) * this.soilPace();
         }
         const speed = this.pathWalkingSpeed
             ? this.pathWalkingSpeed
             : speedUp && !followMode
               ? 2.5 * WOKA_SPEED
               : WOKA_SPEED;
-        return this.swimming ? speed * SWIM_SPEED_FACTOR : speed;
+        return this.swimming ? speed * SWIM_SPEED_FACTOR : speed * this.soilPace();
+    }
+
+    /** The soil under the feet slows the avatar down (sand, the mud of a wet clay): on the ground only. */
+    private soilPace(): number {
+        const water = this.getFloorZ() < 2 ? this.scene?.getTerrainWater?.() : undefined;
+        if (!water) return 1;
+        const feet = this.getFeet();
+        return groundPace(water, feet.x, feet.y, this.scene.time.now);
     }
 
     /** The local player knows it swims: near an edge its body center may be out of the water while it still swims. */
