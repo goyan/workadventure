@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     altitudeGrowth,
     GRASS_LINE_PX,
+    GRAZE_SECONDS,
     Meadow,
     MEADOW_STEP_SECONDS,
     pavedTilesOf,
@@ -243,5 +244,27 @@ describe("the grass", () => {
         expect(holding.moistureAt(0, 0)).toBeGreaterThan(leaking.moistureAt(0, 0) * 1.8);
         holding.clear();
         expect(holding.moistureAt(0, 0)).toBe(0);
+    });
+});
+
+describe("an animal that grazes", () => {
+    it("eats the grass of the tile under it, a full tile in its time, and nothing where there is none", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        meadow.set(2, 1, 0.5, 1);
+        // The tile (2, 1) covers the pixels 64 to 95 by 32 to 63.
+        expect(meadow.graze(70, 40, GRAZE_SECONDS / 4)).toBeCloseTo(0.25);
+        expect(meadow.grassAt(2, 1)).toBeCloseTo(0.75);
+        expect(meadow.grassAt(3, 1)).toBe(0);
+        // It never eats more than there is.
+        expect(meadow.graze(70, 40, GRAZE_SECONDS * 3)).toBeCloseTo(0.75);
+        expect(meadow.grassAt(2, 1)).toBe(0);
+        expect(meadow.graze(70, 40, 10)).toBe(0);
+        // Out of the map, or for no time: nothing.
+        expect(meadow.graze(-5, 40, 10)).toBe(0);
+        expect(meadow.graze(9999, 40, 10)).toBe(0);
+        meadow.set(2, 1, 0.5, 1);
+        expect(meadow.graze(70, 40, 0)).toBe(0);
+        expect(meadow.graze(70, 40, Number.NaN)).toBe(0);
+        expect(meadow.grassAt(2, 1)).toBe(1);
     });
 });

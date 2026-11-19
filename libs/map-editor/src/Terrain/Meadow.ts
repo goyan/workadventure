@@ -21,6 +21,10 @@ export const DRY_MOISTURE = 0.08;
 export const GROW_SECONDS = 600;
 export const THIRST_SECONDS = 1200;
 export const DROWN_SECONDS = 60;
+/** An animal that grazes eats a full tile of grass in this many seconds. */
+export const GRAZE_SECONDS = 120;
+/** From this much grass under it, an animal that stands still is seen grazing. */
+export const GRAZING_COVER = 0.15;
 /** Moisture a soil gains a second under a rain of 1 mm an hour. */
 export const RAIN_GAIN = 0.0005;
 /** Share of the difference of moisture with its four neighbours a tile takes a step, and of its moisture that runs to a lower one. */
@@ -221,6 +225,18 @@ export class Meadow {
             }
             grass[index] = Math.min(1, Math.max(0, cover));
         }
+    }
+
+    /**
+     * An animal grazes for `seconds` at a point of the map (map pixels): it eats the grass of the tile under it.
+     * What it ate, as a share of a full tile; nothing where there is no grass.
+     */
+    public graze(x: number, y: number, seconds: number): number {
+        const index = this.indexOf(Math.floor(x / TILE_PX), Math.floor(y / TILE_PX));
+        if (index === undefined || !(seconds > 0) || !Number.isFinite(seconds)) return 0;
+        const eaten = Math.min(this.grass[index], seconds / GRAZE_SECONDS);
+        this.grass[index] -= eaten;
+        return eaten;
     }
 
     /** A map that turns its meadow off: bare and dry at once. */

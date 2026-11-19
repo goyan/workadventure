@@ -474,6 +474,17 @@ export class AquaticLifeManager {
         return positions;
     }
 
+    /** Where the animals that graze are, in map pixels: the free antelopes eat the grass of the meadow under them. */
+    public grazers(): { x: number; y: number }[] {
+        const positions: { x: number; y: number }[] = [];
+        for (const animal of this.population.animals) {
+            if (animal.kind === "antelope" && animal.tamedBy === undefined) {
+                positions.push({ x: animal.x, y: animal.y });
+            }
+        }
+        return positions;
+    }
+
     /** All the animals of the room, for a player who joins it. Undefined when there is none. */
     public snapshot(): AquaticLifeMessage | undefined {
         return this.population.animals.length > 0 ? this.message(true) : undefined;

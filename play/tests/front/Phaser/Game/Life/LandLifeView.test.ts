@@ -106,11 +106,13 @@ function createView({
     sheetOf = () => undefined as string | undefined,
     shown = { value: true },
     lead,
+    grassAt,
 }: {
     sheets?: Record<string, number>;
     sheetOf?: (species: string) => string | undefined;
     shown?: { value: boolean };
     lead?: ConstructorParameters<typeof LandLifeView>[5];
+    grassAt?: ConstructorParameters<typeof LandLifeView>[6];
 } = {}) {
     const { scene, sprites, loaded, markDirty } = createScene(sheets);
     const life = new AquaticLife(isLandKind);
@@ -121,6 +123,7 @@ function createView({
         () => false,
         sheetOf,
         lead,
+        grassAt,
     );
     return { view, life, sprites, loaded, markDirty, shown };
 }
@@ -329,6 +332,42 @@ describe("LandLifeView, a drinking animal", () => {
         });
         life.receive([{ id: 1, kind: 6, x: 100, y: 100, owner: 7, state: 3 }], 0);
         view.update(0);
+        expect(sprites[0].angle).toBe(0);
+    });
+});
+
+describe("LandLifeView, an antelope on grass", () => {
+    it("grazes head down while it stands still on grass, and not while it walks nor on bare ground", () => {
+        // Grass on the left of the map only.
+        const { view, life, sprites } = createView({ grassAt: (x) => x < 200 });
+        life.receive(
+            [
+                { id: 1, kind: 4, x: 100, y: 100 },
+                { id: 2, kind: 4, x: 300, y: 100 },
+            ],
+            0,
+        );
+        view.update(0);
+        view.update(16);
+        expect(sprites[0].angle).not.toBe(0);
+        expect(sprites[1].angle).toBe(0);
+        // It walks away: head up.
+        life.receive(
+            [
+                { id: 1, kind: 4, x: 160, y: 100 },
+                { id: 2, kind: 4, x: 300, y: 100 },
+            ],
+            1000,
+        );
+        view.update(1500);
+        expect(sprites[0].angle).toBe(0);
+    });
+
+    it("a lion does not graze", () => {
+        const { view, life, sprites } = createView({ grassAt: () => true });
+        life.receive([{ id: 1, kind: 6, x: 100, y: 100 }], 0);
+        view.update(0);
+        view.update(16);
         expect(sprites[0].angle).toBe(0);
     });
 });

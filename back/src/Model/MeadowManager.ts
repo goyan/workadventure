@@ -62,6 +62,8 @@ export class MeadowManager {
         private readonly now: () => number = Date.now,
         /** The size of the map in cells of the relief, once read. */
         private readonly mapSize: () => { width: number; height: number } | undefined = () => undefined,
+        /** Where the animals that graze are, in map pixels (the antelopes of the life of the land): they eat the grass under them. */
+        private readonly grazers: () => readonly { x: number; y: number }[] = () => [],
     ) {}
 
     /** Brings back the meadow saved before a restart. A store that does not answer must not keep the room closed. */
@@ -183,6 +185,7 @@ export class MeadowManager {
                   }
                 : () => 0,
         });
+        for (const grazer of this.grazers()) meadow.graze(grazer.x, grazer.y, MEADOW_STEP_SECONDS);
         if (this.steps % STEPS_PER_MESSAGE === 0) this.tell(meadow);
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
     }

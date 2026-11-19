@@ -78,6 +78,8 @@ export class LandLifeView {
             now: number,
         ) => { x: number; y: number; direction: WanderDirection; moving: boolean } | "hidden" | undefined = () =>
             undefined,
+        /** Whether there is grass to graze at a point of the map (map pixels): an antelope standing there eats. */
+        private readonly grassAt: (x: number, y: number) => boolean = () => false,
     ) {}
 
     public update(now: number): void {
@@ -149,7 +151,9 @@ export class LandLifeView {
             sprite.setAlpha(animal.alpha);
             // Head down at the water (the stance of the wandering animals, without its sway of a pixel: the place
             // of the sprite tells whether the animal moved).
-            const drinking = animal.state === DRINKING && led === undefined;
+            // An antelope that stands still on grass grazes, in the same stance: the server eats the grass under it.
+            const grazing = species === "antelope" && !moving && this.grassAt(animal.x, animal.y);
+            const drinking = (animal.state === DRINKING || grazing) && led === undefined;
             entry.drinkingSince = drinking ? (entry.drinkingSince ?? now) : undefined;
             const stance =
                 entry.drinkingSince === undefined
