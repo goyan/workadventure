@@ -233,6 +233,19 @@ export class PusherRoom {
                             }
                             break;
                         }
+                        case "meadowMessage": {
+                            // The meadow of the map is the same for every player of the room
+                            const meadowMessage = message.message.meadowMessage;
+                            for (const listener of this.listeners) {
+                                listener.emitInBatch({
+                                    message: {
+                                        $case: "meadowMessage",
+                                        meadowMessage: meadowMessage,
+                                    },
+                                });
+                            }
+                            break;
+                        }
                         case "aquaticLifeMessage": {
                             // The animals of the water of the relief are the same for every player of the room
                             const aquaticLifeMessage = message.message.aquaticLifeMessage;

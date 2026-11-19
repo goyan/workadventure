@@ -960,6 +960,27 @@ export const WaterSettings = z.object({
 export type WaterSettings = z.infer<typeof WaterSettings>;
 
 /**
+ * The meadow of a map: the grass that grows by itself on its fertile soils (see Terrain/Meadow.ts), kept by the
+ * server. Absent from a map saved before it existed: on, with these values.
+ */
+export const DEFAULT_MEADOW_SETTINGS = { enabled: true, growMinutes: 10, thirstMinutes: 20, moistureHold: 1 } as const;
+export const MEADOW_BOUNDS = {
+    growMinutes: [1, 120],
+    thirstMinutes: [1, 240],
+    moistureHold: [0.25, 8],
+} as const;
+export const MeadowSettings = z.object({
+    enabled: z.boolean().default(DEFAULT_MEADOW_SETTINGS.enabled),
+    /** Minutes of good conditions for bare ground to become a full meadow (in spring and summer, on earth). */
+    growMinutes: z.number().min(1).max(120).default(DEFAULT_MEADOW_SETTINGS.growMinutes),
+    /** Minutes a full meadow takes to die of thirst once its soil is dry. */
+    thirstMinutes: z.number().min(1).max(240).default(DEFAULT_MEADOW_SETTINGS.thirstMinutes),
+    /** How many times longer than usual the soils hold their moisture (after the rain, away from the water). */
+    moistureHold: z.number().min(0.25).max(8).default(DEFAULT_MEADOW_SETTINGS.moistureHold),
+});
+export type MeadowSettings = z.infer<typeof MeadowSettings>;
+
+/**
  * The life in the water of the relief of a map (fish that breed, dolphins that hunt them), kept by the server, and
  * how often the land animals come to drink it (computed by each browser). All durations are in real seconds: the
  * speed of the water does not hasten them.
@@ -1110,6 +1131,7 @@ export const WAMSettings = z.object({
     categories: z.record(z.string(), CategorySettings).optional().catch(undefined),
     water: WaterSettings.optional().catch(undefined),
     life: LifeSettings.optional().catch(undefined),
+    meadow: MeadowSettings.optional().catch(undefined),
 });
 
 export const WAMFileFormat = z.object({

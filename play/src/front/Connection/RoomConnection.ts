@@ -51,6 +51,7 @@ import type {
     UpdateWAMSettingsMessage,
     ModifyTerrainMessage,
     TerrainWaterMessage,
+    MeadowMessage,
     AquaticLifeMessage,
     CatastropheKind,
     CatastropheMessage,
@@ -246,6 +247,8 @@ export class RoomConnection implements RoomConnection {
     /** The water of the relief: what changed since the state before, once a second while it moves. */
     private readonly _terrainWaterMessageStream = new Subject<TerrainWaterMessage>();
     public readonly terrainWaterMessageStream = this._terrainWaterMessageStream.asObservable();
+    private readonly _meadowMessageStream = new Subject<MeadowMessage>();
+    public readonly meadowMessageStream = this._meadowMessageStream.asObservable();
     private readonly _aquaticLifeMessageStream = new Subject<AquaticLifeMessage>();
     public readonly aquaticLifeMessageStream = this._aquaticLifeMessageStream.asObservable();
     /** The catastrophes the room throws, each announced once with the time left before its impact. */
@@ -482,6 +485,10 @@ export class RoomConnection implements RoomConnection {
                                     this._terrainWaterMessageStream.next(subMessage.terrainWaterMessage);
                                     break;
                                 }
+                                case "meadowMessage": {
+                                    this._meadowMessageStream.next(subMessage.meadowMessage);
+                                    break;
+                                }
                                 case "aquaticLifeMessage": {
                                     this._aquaticLifeMessageStream.next(subMessage.aquaticLifeMessage);
                                     break;
@@ -700,6 +707,7 @@ export class RoomConnection implements RoomConnection {
                         entityStates: roomJoinedMessage.entityState ?? [],
                         terrainWater: roomJoinedMessage.terrainWater,
                         aquaticLife: roomJoinedMessage.aquaticLife,
+                        meadow: roomJoinedMessage.meadow,
                         fishing: roomJoinedMessage.fishing,
                         applications: applications,
                     } as RoomJoinedMessageInterface);
@@ -2461,6 +2469,7 @@ export class RoomConnection implements RoomConnection {
         this._areaPropertyVariableMessageStream.complete();
         this._entityStateMessageStream.complete();
         this._terrainWaterMessageStream.complete();
+        this._meadowMessageStream.complete();
         this._aquaticLifeMessageStream.complete();
         this._fishingMessageStream.complete();
         this._catastropheMessageStream.complete();

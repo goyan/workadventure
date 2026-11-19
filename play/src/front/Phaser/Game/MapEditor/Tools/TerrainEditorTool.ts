@@ -9,6 +9,7 @@ import {
     terrainBrushStore,
     terrainContoursStore,
     terrainHoverHeightStore,
+    terrainHoverMeadowStore,
     terrainHoverSoilStore,
 } from "../../../../Stores/TerrainEditorStore";
 import { MapDragPointerCapture } from "../../../UserInput/MapDragPointerCapture";
@@ -67,6 +68,15 @@ export class TerrainEditorTool extends MapEditorTool {
         terrainBlockedStore.set(!this.allowed(cellX, cellY));
         terrainHoverHeightStore.set(this.onMap(cellX, cellY) ? heightAt(this.terrain(), cellX, cellY) : undefined);
         terrainHoverSoilStore.set(this.onMap(cellX, cellY) ? soilAt(this.terrain(), cellX, cellY) : undefined);
+        const meadow = this.scene.getMeadow();
+        terrainHoverMeadowStore.set(
+            this.onMap(cellX, cellY)
+                ? {
+                      moisture: meadow.moistureAt(this.hover.x, this.hover.y),
+                      grass: meadow.coverAt(this.hover.x, this.hover.y),
+                  }
+                : undefined,
+        );
         this.redraw();
     };
     private readonly pointerUpEventHandler = (pointer: Phaser.Input.Pointer): void => {
@@ -102,6 +112,7 @@ export class TerrainEditorTool extends MapEditorTool {
         this.hover = undefined;
         terrainHoverHeightStore.set(undefined);
         terrainHoverSoilStore.set(undefined);
+        terrainHoverMeadowStore.set(undefined);
         this.cancelStroke();
     };
     /**

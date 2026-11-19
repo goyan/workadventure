@@ -2205,8 +2205,26 @@ chaque sol boit une part de l'« absorption du sol » de la carte (`soilDrinks`)
 terre et prairie comme le sol d'origine, sable et gravier cinq fois plus et **même dans un creux** : un lac tient
 sur du rocher ou de l'argile, une mare creusée dans le sable se vide. Une case non peinte se comporte exactement
 comme avant (le sol plat boit, un creux garde son eau). Le sol ne compte que là où le serveur simule l'eau (le
-relief, les sources, et leur marge). Lots suivants, pas faits : marche (boue, sable), humidité du sol et herbe qui
-pousse seule. `play`, `back` et `map-storage` à déployer ensemble.
+relief, les sources, et leur marge). **Marche** : le sable ralentit (80 % de la vitesse) et une argile sur laquelle de l'eau repose est de la boue
+(55 %), pour l'avatar au sol, à pied ou en véhicule, pas à la nage (`soilPace`, `Terrain/GroundPace.ts`) ; chaque
+navigateur le calcule pour son avatar, rien sur le fil. **Humidité et herbe** : le serveur tient un **pré** par carte
+(`Terrain/Meadow.ts`, `MeadowManager`, case de 32 px, toute la carte, un pas toutes les 2 s, Redis `meadow:<salle>`) :
+l'**humidité du sol** de chaque case monte sous la pluie de la carte et sous l'eau qui repose dessus, se répand aux
+quatre voisines, **descend les pentes**, et se perd à l'allure de chaque sol (argile 30 min, prairie 15, terre 10,
+sable 2, gravier 1, rocher rien) ; l'**herbe** pousse seule sur un sol fertile (terre et sol d'origine, prairie plus
+vite, argile moitié moins ; jamais sur sable, rocher, gravier) quand il est humide sans être détrempé (25 à 90 %),
+sans eau dessus, de jour (7 h à 19 h au lieu de la carte), en saison (pleine au printemps et en été, 40 % en automne,
+rien en hiver), et **moins vite en altitude** (rien au-delà de 192 px, 6 cases) ; un pré plein en 10 minutes de
+bonnes conditions ; elle meurt de soif en 20 minutes sur un sol sec, noyée en 1 minute sous l'eau. Dehors seulement
+(ce que les murs de l'outil Carte ferment n'a pas de pré), jamais sur un sol posé par l'outil Carte. Résultat : un
+anneau d'herbe autour des lacs, un pré après la pluie. Automatique sur toutes les cartes ; chaque carte règle la sienne dans l'outil Relief, bloc « Herbe de la
+carte » (`settings.meadow`, `UpdateMeadowSettingMessage`) : interrupteur (coupée, la carte est nue aussitôt), durée
+pour un pré plein (1 à 120 min, 10 par défaut), durée de la mort de soif (1 à 240 min, 20), tenue de l'humidité du
+sol (× 0,25 à × 8). La salle
+reçoit l'état entier toutes les 10 s quand il a changé (`MeadowMessage`, un octet par case pour l'herbe, un pour
+l'humidité, gzip) et à l'entrée ; le navigateur dessine l'herbe en voile vert moucheté sur le sol, sous l'eau
+(`Terrain/MeadowState.ts`, dans `TerrainView`), là où c'est dehors pour lui. Une argile détrempée (60 % d'humidité)
+est de la boue même sans eau dessus. L'outil Relief dit l'humidité et l'herbe sous le curseur. `play`, `back` et `map-storage` à déployer ensemble.
 
 **Altitude de l'avatar.** Sur une carte qui a un relief, la pile des étages sous l'horloge dit l'altitude de
 l'avatar, en mètres (une case d'altitude ≈ 1,10 m, `metresOf`) : la hauteur du relief sous ses pieds quand il est au
@@ -3198,8 +3216,8 @@ envoyée qu'une fois, pas à l'entrée.
 (compteurs, annonce aussitôt de l'eau) ; `back/src/Model/CatastropheManager.ts` (tenu par `GameRoom`,
 `launchCatastrophe`, `mapSizeInPixels`) ; `RoomManager.ts` (`launchCatastropheMessage`) ; pusher : `IoSocketController`
 transmet, `PusherRoom` relaie `catastropheMessage` à tous les auditeurs. Protocole : `CatastropheKind`,
-`LaunchCatastropheMessage` (65 du navigateur au pusher, 49 du pusher à `back`), `CatastropheMessage` (41 des
-sous-messages, 21 du back au pusher). Navigateur : `Phaser/Game/Catastrophe/{MeteorFall,MeteorView}.ts`,
+`LaunchCatastropheMessage` (65 du navigateur au pusher, 49 du pusher à `back`), `CatastropheMessage` (42 des
+sous-messages, 22 du back au pusher). Navigateur : `Phaser/Game/Catastrophe/{MeteorFall,MeteorView}.ts`,
 `Stores/CatastropheStore.ts`, `Components/Catastrophe/CatastrophePanel.svelte` (monté dans `MainLayout.svelte`),
 bouton dans `AppsMenuContent.svelte`, icône `meteor` de `PixelIcons.ts`, tir dans `GameSceneUserInputHandler.ts`
 (`launchArmedCatastrophe`), libellés `actionbar.catastrophe` en `fr-FR` et `en-US` seulement. `play` et `back` se

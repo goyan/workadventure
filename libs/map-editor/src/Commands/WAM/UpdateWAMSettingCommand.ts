@@ -4,7 +4,9 @@ import {
     AutoWeather,
     CategorySettings,
     DEFAULT_LIFE_SETTINGS,
+    DEFAULT_MEADOW_SETTINGS,
     DEFAULT_WATER_SETTINGS,
+    MEADOW_BOUNDS,
     LAND_LIFE_BOUNDS,
     AIR_LIFE_BOUNDS,
     DEFAULT_AIR_LIFE_SETTINGS,
@@ -141,6 +143,22 @@ export class UpdateWAMSettingCommand extends Command {
                     speed: speed === undefined ? keptSpeed : within(speed, 1, MAX_WATER_SPEED, keptSpeed),
                     absorption: absorption === undefined ? keptAbsorption : within(absorption, 0, 100, keptAbsorption),
                     current: current === undefined ? keptCurrent : within(current, 0, MAX_WATER_CURRENT, keptCurrent),
+                };
+                break;
+            }
+            case "updateMeadowSettingMessage": {
+                const sent = message.updateMeadowSettingMessage;
+                const kept = { ...DEFAULT_MEADOW_SETTINGS, ...this.wam.settings.meadow };
+                const within = (key: keyof typeof MEADOW_BOUNDS): number => {
+                    const [min, max] = MEADOW_BOUNDS[key];
+                    const value = sent[key];
+                    return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : kept[key];
+                };
+                this.wam.settings.meadow = {
+                    enabled: sent.enabled,
+                    growMinutes: within("growMinutes"),
+                    thirstMinutes: within("thirstMinutes"),
+                    moistureHold: within("moistureHold"),
                 };
                 break;
             }
