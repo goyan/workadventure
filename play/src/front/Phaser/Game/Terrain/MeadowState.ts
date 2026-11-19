@@ -21,13 +21,20 @@ export function mottledCover(cover: number, cellX: number, cellY: number): numbe
     return Math.max(1, Math.round(cover * share));
 }
 
-/** The colour of the grass gone dry: straw, drawn over the green as much as the grass is dry. */
+/** The colour of the grass gone dry: straw, drawn over the ground as much as its grass is dry. */
 export const STRAW_COLOR = 0xd9c257;
-export const STRAW_ALPHA = 0.85;
+export const STRAW_ALPHA = 0.9;
+/** Thin grass gone dry yellows its ground this much already (of 255): a dry land is seen dry, not only its meadows. */
+const THIN_GRASS_STRAW = 180;
 
-/** How much straw is drawn over the grass of a cell, from its cover and its dryness (0 to 255 each). */
+/**
+ * How much straw is drawn over a cell, from the cover of its grass and its dryness (0 to 255 each): none without
+ * grass, and from thin grass on, most of what a full meadow gives.
+ */
 export function strawLevel(cover: number, dryness: number): number {
-    return Math.round((Math.max(0, cover) * Math.max(0, dryness)) / 255);
+    if (cover <= 0 || dryness <= 0) return 0;
+    const ground = THIN_GRASS_STRAW + ((255 - THIN_GRASS_STRAW) * (Math.min(255, cover) - 1)) / 254;
+    return Math.round((ground * Math.min(255, dryness)) / 255);
 }
 
 /** How strongly the straw of a cell is drawn, from its level (0 to 255). */

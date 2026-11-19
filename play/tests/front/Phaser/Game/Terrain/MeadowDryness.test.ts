@@ -30,10 +30,16 @@ describe("the dryness of the meadow", () => {
 });
 
 describe("strawLevel", () => {
-    it("is how much straw is drawn over the grass of a cell: as much as it is dry, no more than there is grass", () => {
+    it("turns the ground to straw as much as its grass is dry, even where the grass is thin", () => {
+        // Full straw on a full, dry meadow; none on green grass nor on bare ground.
         expect(strawLevel(255, 255)).toBe(255);
         expect(strawLevel(255, 0)).toBe(0);
         expect(strawLevel(0, 255)).toBe(0);
-        expect(strawLevel(200, 128)).toBe(Math.round((200 * 128) / 255));
+        // Thin grass gone dry still yellows the ground it grows on: 180 of 255 at least.
+        expect(strawLevel(1, 255)).toBe(180);
+        expect(strawLevel(1, 128)).toBe(Math.round((180 * 128) / 255));
+        // And denser grass a little more.
+        expect(strawLevel(128, 255)).toBeGreaterThan(strawLevel(1, 255));
+        expect(strawLevel(128, 255)).toBeLessThan(255);
     });
 });
