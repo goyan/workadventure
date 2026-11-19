@@ -1,4 +1,4 @@
-import { METEOR_COOLDOWN_MS, METEOR_FALL_MS, meteorShape, METEORS_PER_ROOM } from "@workadventure/map-editor";
+import { METEOR_FALL_MS, meteorShape, METEORS_PER_ROOM } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
 import type { GameRoom } from "./GameRoom";
 
@@ -10,8 +10,6 @@ import type { GameRoom } from "./GameRoom";
 export class CatastropheManager {
     private nextId = 1;
     private stopped = false;
-    /** When each player's last accepted launch was, by user id. */
-    private readonly lastLaunch = new Map<number, number>();
     private readonly inFlight = new Set<ReturnType<typeof setTimeout>>();
 
     constructor(
@@ -19,23 +17,20 @@ export class CatastropheManager {
         /** The size of the map in pixels; undefined until it is read. */
         private readonly mapSize: () => { width: number; height: number } | undefined,
         private readonly strike: (x: number, y: number, radiusTiles: number) => void,
-        private readonly now: () => number = Date.now,
     ) {}
 
     /**
      * A player launches a catastrophe at a point of the map (pixels): a meteor whose crater is `radiusTiles` wide,
      * kept within what a meteor may be. False when it is refused.
      */
-    public launch(userId: number, kind: CatastropheKind, x: number, y: number, radiusTiles: number): boolean {
+    public launch(kind: CatastropheKind, x: number, y: number, radiusTiles: number): boolean {
         if (this.stopped || kind !== CatastropheKind.CATASTROPHE_METEOR) return false;
         const size = this.mapSize();
         if (!size || !Number.isFinite(x) || !Number.isFinite(y)) return false;
         if (x < 0 || y < 0 || x >= size.width || y >= size.height) return false;
-        const now = this.now();
-        const last = this.lastLaunch.get(userId);
-        if (last !== undefined && now - last < METEOR_COOLDOWN_MS) return false;
+        // No pace for a player: only how many the room has falling at once, so that the server never runs too many
+        // waves together.
         if (this.inFlight.size >= METEORS_PER_ROOM) return false;
-        this.lastLaunch.set(userId, now);
         const tiles = meteorShape(radiusTiles).radiusTiles;
         this.room.sendSubMessageToRoom({
             message: {

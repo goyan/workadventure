@@ -3213,11 +3213,11 @@ long du cercle, `wetStretches`) : sur la terre le cercle s'interrompt.
 
 **Qui décide.** Le serveur (`back`, `CatastropheManager`) : le navigateur n'envoie que « météore ici »
 (`LaunchCatastropheMessage`, pixels de la carte). Refusés **sans rien dire** : un point hors de la carte ou non
-numérique, un joueur qui a lancé il y a moins de **3 s**, plus de **5 météores en vol** dans la salle, une taille de
+numérique, plus de **20 météores en vol** dans la salle (aucune cadence par joueur : on tire aussi vite qu'on clique), une taille de
 carte pas encore lue. Accepté, le serveur annonce à toute la salle `CatastropheMessage {id, kind, x, y, impactInMs}`
 (une fois), et frappe l'eau 1,2 s plus tard ; chaque navigateur dessine la chute à partir de ce temps restant. Valeurs
 uniques dans `libs/map-editor/src/Catastrophe/Meteor.ts` (`METEOR_FALL_MS` 1200, `METEOR_MIN_TILES` 2, `METEOR_MAX_TILES` 24,
-`METEOR_DEFAULT_TILES` 4, `METEOR_CREST_PX` 0,5, `METEOR_DEEP_PX` 8, `METEOR_ADDED_PX` 8, `METEOR_COOLDOWN_MS` 3000, `METEORS_PER_ROOM` 5). Une erreur à
+`METEOR_DEFAULT_TILES` 4, `METEOR_CREST_PX` 0,5, `METEOR_DEEP_PX` 8, `METEOR_ADDED_PX` 8, `METEORS_PER_ROOM` 20). Une erreur à
 l'impact est journalisée et n'arrête ni `back` ni l'eau de la salle.
 
 **Ce que ça ne fait pas.** Ni le relief, ni les avatars, ni les animaux, ni les objets ne sont touchés (le météore
@@ -3241,7 +3241,7 @@ déploient ensemble ; `map-storage` n'est pas concerné.
 **Limites connues.** La gerbe bleue ou brune et les cercles sont décidés avec l'eau que le navigateur connaît à
 l'annonce du météore. La vague ne monte pas plus haut que le plafond de l'eau (18 px au-dessus du niveau de
 débordement). Les cercles sont dessinés sur toute eau à leur portée, même derrière un mur que l'onde ne traverse pas. Un poisson dans le cratère vidé peut
-mourir à sec après 5 s. N'importe quel joueur peut inonder une carte à la longue (une rafale de 5 météores tous les
-3 s par joueur, avec 8 px apportés par cellule du cratère). Pas de son. Rien n'a été vu à l'écran à l'écriture de
+mourir à sec après 5 s. N'importe quel joueur peut inonder une carte à la longue (jusqu'à 20 météores en vol à la fois,
+avec 8 px apportés par cellule du cratère). Pas de son. Rien n'a été vu à l'écran à l'écriture de
 cette section : widget, viseur, chute, éclair et gerbe ne sont validés que par les tests ; l'effet sur l'eau en jeu
 n'est pas vu.
