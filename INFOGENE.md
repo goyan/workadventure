@@ -2990,3 +2990,30 @@ de joueur `_rodEquipped`. `play`, `back` et `map-storage` se déploient ensemble
 **Limites.** Pas de son. Pas d'animation du lancer (la ligne apparaît posée). Le poisson ramené reste dessiné au
 bouchon jusqu'à la prise. Eau du relief au sol seulement (ni piscine de la carte, ni palier). La canne est un trait,
 dessinée par-dessus tous les avatars.
+
+### Concours de pêche
+
+**Lancer.** Canne en main, la roue de l'avatar propose « Concours de pêche » ; un petit panneau sous l'horloge demande
+la durée : 3, 5 ou 10 minutes. Un seul concours à la fois par carte ; n'importe quel joueur peut en lancer un.
+
+**Pendant.** Tous les présents voient le panneau : temps restant, qui l'a lancé, classement (cinq premiers, et sa
+propre ligne si elle est plus bas) avec le poids total et, entre parenthèses, la plus grosse prise. Qui n'a pas la
+canne en main a un bouton « Participer » qui l'équipe. Toute prise faite pendant le concours compte pour qui la fait.
+Un même poisson ne compte qu'une fois par joueur (il est remis à l'eau et peut être repris). Égalité : la plus grosse
+prise, puis le premier arrivé à son score.
+
+**Fin.** À l'heure, même si celui qui l'a lancé est parti : podium (trois premiers, plus gros poisson cité) affiché
+vingt secondes ou jusqu'à « Fermer ». Rien n'est gardé du concours. Vie de la carte coupée : le concours finit aussitôt.
+
+**Record de la carte.** Le plus gros poisson jamais pêché sur la carte (en concours ou non), par qui et quand, est
+gardé (Redis `fishing:<salle>`, avec le total des prises) et affiché dans l'outil Vie, ligne « Record de pêche ».
+
+**Technique.** Le serveur tient le concours (`FishingManager` de `back`), règles pures dans
+`libs/map-editor/src/Life/FishingContest.ts`. Un joueur y est reconnu par son `uuid` : son score survit à une
+reconnexion. Protocole : `StartFishingContestMessage {minutes}` (navigateur → serveur) ; `FishingMessage` gagne
+`contest` (classement, millisecondes restantes à l'envoi, `finished` une seule fois à la fin) et `record`. Un refus
+(concours en cours, durée non permise, pas de vie dans l'eau) n'est dit qu'à qui a demandé. Navigateur :
+`Phaser/Game/Fishing/FishingContestView.ts`, `Components/Fishing/FishingContestPanel.svelte`.
+
+**Limites.** Un concours ne survit pas à un redémarrage du serveur. Après une reconnexion, sa propre ligne n'est plus
+mise en gras avant sa prise suivante. Pas d'annonce sonore ni de carte d'annonce à part : le panneau apparaît.

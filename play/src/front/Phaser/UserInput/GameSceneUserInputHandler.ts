@@ -23,7 +23,7 @@ import { localUserStore } from "@wa/front/Connection/LocalUserStore";
 import { wokaMenuStore } from "@wa/front/Stores/WokaMenuStore";
 import { nerfEquippedStore } from "@wa/front/Stores/NerfStore";
 import { torchEquippedStore } from "@wa/front/Stores/TorchStore";
-import { rodEquippedStore } from "@wa/front/Stores/FishingStore";
+import { fishingContestSetupStore, fishingContestStore, rodEquippedStore } from "@wa/front/Stores/FishingStore";
 import { characterPickerStore, type CharacterPickerCandidate } from "@wa/front/Stores/CharacterPickerStore";
 import { Vehicle, VehicleMode } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { isHumanAvatar } from "@wa/front/Phaser/Entity/MusicHeadphonesEffect";
@@ -344,6 +344,18 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 wokaMenuStore.clear();
             },
         });
+        // Rod in hand and no contest running: the player may start one (its length is asked next).
+        if (get(rodEquippedStore) && get(fishingContestStore)?.finished !== false) {
+            wokaMenuStore.addAction({
+                actionName: get(LL).actionbar.rod.contest.start(),
+                icon: "rod",
+                testId: "avatar-fishing-contest",
+                callback: () => {
+                    fishingContestSetupStore.set(true);
+                    wokaMenuStore.clear();
+                },
+            });
+        }
         // The interaction key lets a companion go only next to it: here, all of them, from anywhere.
         const tamed = this.gameScene.tamedAnimalCount() ?? 0;
         if (tamed > 0) {

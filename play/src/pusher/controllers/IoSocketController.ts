@@ -1072,6 +1072,7 @@ export class IoSocketController {
                             case "releaseAnimalsMessage":
                             case "castFishingLineMessage":
                             case "reelFishingLineMessage":
+                            case "startFishingContestMessage":
                             case "entityMessage":
                             case "emotePromptMessage":
                             case "duckRushPromptMessage":

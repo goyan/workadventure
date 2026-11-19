@@ -81,6 +81,7 @@
     import JamLinkRequestCard from "./ListeningZone/JamLinkRequestCard.svelte";
     import NerfHearts from "./Nerf/NerfHearts.svelte";
     import FishingCards from "./Fishing/FishingCards.svelte";
+    import FishingContestPanel from "./Fishing/FishingContestPanel.svelte";
     import WeatherForecastBanner from "./Weather/WeatherForecastBanner.svelte";
     import CoffeeCards from "./Coffee/CoffeeCards.svelte";
     import HelpPopUpBlocked from "./HelpSettings/HelpPopUpBlocked.svelte";
@@ -520,6 +521,11 @@
                 <div class="pointer-events-auto"><WorldClock /></div>
                 <!-- The floors of the map, the one of the avatar marked (maps with raised floors only). -->
                 <FloorLevelStack stack={$floorLevelsStore} />
+                <!-- The fishing contest of the room: its ranking while it runs, then its podium. -->
+                <FishingContestPanel
+                    start={(minutes) => gameManager.getCurrentGameScene().fishingManager?.startContest(minutes)}
+                    join={() => gameManager.getCurrentGameScene().fishingManager?.toggleEquipment()}
+                />
                 <!-- The weather now, in one hour and in four hours, under the clock (apps menu, "Weather"). -->
                 <WeatherForecastBanner />
                 <JamDrawer listening={$listeningSpaceName !== undefined || $joinedJamStore !== undefined} />

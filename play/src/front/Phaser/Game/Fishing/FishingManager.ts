@@ -1,12 +1,20 @@
 import type { FishingMessage } from "@workadventure/messages";
 import { get, type Unsubscriber } from "svelte/store";
 import type { Subscription } from "rxjs";
-import { fishingCaughtStore, rodEquippedStore, showFishingCard } from "../../../Stores/FishingStore";
+import {
+    fishingCaughtStore,
+    fishingContestSetupStore,
+    fishingContestStore,
+    fishingRecordStore,
+    rodEquippedStore,
+    showFishingCard,
+} from "../../../Stores/FishingStore";
 import { toggleHandTool } from "../../../Stores/HandToolStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import type { Character } from "../../Entity/Character";
 import type { GameScene } from "../GameScene";
 import { joinedUserId } from "../Jungle/JungleCompanions";
+import { contestShown, FISHING_PODIUM_MS, recordShown } from "./FishingContestView";
 import { FishingLines } from "./FishingLines";
 import { FISHING_EVENT, fishingDirection, ROD_EQUIPPED_VARIABLE } from "./FishingProtocol";
 import { FishingRod } from "./FishingRod";
@@ -33,6 +41,7 @@ export class FishingManager {
     /** Where the avatar stood when the cast started charging. */
     private chargedFrom: { x: number; y: number } | undefined;
     private countedAt = -Infinity;
+    private podiumTimer: ReturnType<typeof setTimeout> | undefined;
 
     constructor(
         private readonly scene: GameScene,
@@ -65,6 +74,12 @@ export class FishingManager {
     /** Equips or puts away the rod; equipping it puts the torch and the Nerf away, and is refused in the editor. */
     public toggleEquipment(): void {
         toggleHandTool("rod", { refuseEquip: get(mapEditorModeStore) });
+    }
+
+    /** Starts a contest of that many minutes in the room; the server refuses it while one runs. */
+    public startContest(minutes: number): void {
+        fishingContestSetupStore.set(false);
+        this.scene.connection?.emitStartFishingContest(minutes);
     }
 
     /** The key of the rod goes down: with a line in the water it reels, else a cast starts charging. */
@@ -129,7 +144,11 @@ export class FishingManager {
         this.equipmentUnsubscribe();
         this.messageSubscription?.unsubscribe();
         this.view.destroy();
+        clearTimeout(this.podiumTimer);
         fishingCaughtStore.set(undefined);
+        fishingContestStore.set(undefined);
+        fishingContestSetupStore.set(false);
+        fishingRecordStore.set(undefined);
     }
 
     private receive(message: FishingMessage): void {
@@ -148,10 +167,32 @@ export class FishingManager {
                 showFishingCard({ kind: "lost", own });
             } else if (own && event.type === FISHING_EVENT.refused) {
                 showFishingCard({ kind: "refused", own });
+            } else if (own && event.type === FISHING_EVENT.contestRefused) {
+                showFishingCard({ kind: "contestRefused", own });
             }
         }
+        this.receiveContest(message, ownId);
+        fishingRecordStore.set(message.record ? recordShown(message.record) : undefined);
         this.publishCount();
         this.scene.markDirty();
+    }
+
+    /** The contest of the room: its ranking while it runs, its podium for a while once it ended. */
+    private receiveContest(message: FishingMessage, ownId: number | undefined): void {
+        if (!message.contest) {
+            // No contest: a podium still shown stays its time, anything else is out of date.
+            if (get(fishingContestStore)?.finished !== true) fishingContestStore.set(undefined);
+            return;
+        }
+        const shown = contestShown(message.contest, ownId, Date.now());
+        fishingContestStore.set(shown);
+        fishingContestSetupStore.set(false);
+        clearTimeout(this.podiumTimer);
+        if (shown.finished) {
+            this.podiumTimer = setTimeout(() => {
+                if (get(fishingContestStore) === shown) fishingContestStore.set(undefined);
+            }, FISHING_PODIUM_MS);
+        }
     }
 
     private publishCount(): void {

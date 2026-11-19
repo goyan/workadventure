@@ -1,4 +1,5 @@
 import { writable } from "svelte/store";
+import type { FishingContestShown, FishingRecordShown } from "../Phaser/Game/Fishing/FishingContestView";
 
 /** Session equipment, kept through a reconnect but reset when leaving the scene (like the torch and the Nerf). */
 export const rodEquippedStore = writable(false);
@@ -6,7 +7,7 @@ export const rodEquippedStore = writable(false);
 /** What just happened at the end of a line, shown a few seconds. */
 export interface FishingCard {
     id: number;
-    kind: "caught" | "missed" | "lost" | "refused";
+    kind: "caught" | "missed" | "lost" | "refused" | "contestRefused";
     /** The local player's own line. */
     own: boolean;
     /** The name of the angler, for another player's catch. */
@@ -37,3 +38,12 @@ export function showFishingCard(card: Omit<FishingCard, "id">): void {
  * the last minute, as this browser saw them. Undefined while nobody ever fished there.
  */
 export const fishingCaughtStore = writable<{ total: number; lastMinute: number } | undefined>(undefined);
+
+/** The fishing contest of the room: running, or just ended (its podium); undefined when there is none. */
+export const fishingContestStore = writable<FishingContestShown | undefined>(undefined);
+
+/** The local player is choosing how long the contest they start will last. */
+export const fishingContestSetupStore = writable(false);
+
+/** The heaviest fish ever caught on the map; undefined while nobody caught one. */
+export const fishingRecordStore = writable<FishingRecordShown | undefined>(undefined);

@@ -26,7 +26,11 @@ import { nerfEquippedStore } from "../../../../src/front/Stores/NerfStore";
 import type { NerfManager } from "../../../../src/front/Phaser/Game/Nerf/NerfManager";
 import type { FishingManager } from "../../../../src/front/Phaser/Game/Fishing/FishingManager";
 import type { ActivatableInterface } from "../../../../src/front/Phaser/Game/ActivatableInterface";
-import { rodEquippedStore } from "../../../../src/front/Stores/FishingStore";
+import {
+    fishingContestSetupStore,
+    fishingContestStore,
+    rodEquippedStore,
+} from "../../../../src/front/Stores/FishingStore";
 import { torchEquippedStore } from "../../../../src/front/Stores/TorchStore";
 import type { TorchManager } from "../../../../src/front/Phaser/Game/Torch/TorchManager";
 import { findSeatAtPoint } from "../../../../src/front/Phaser/Player/Seat";
@@ -394,6 +398,35 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             action?.callback();
             expect(fishingManager.toggleEquipment.mock.calls).toHaveLength(1);
             expect(get(wokaMenuStore)).toBeUndefined();
+            rodEquippedStore.set(false);
+        });
+
+        it("offers a fishing contest from the own-avatar wheel, rod in hand and no contest running", () => {
+            const self = Object.assign(Object.create(Player.prototype) as Player, {
+                playerName: "Me",
+                sprites: new Map([["body1", mock<Phaser.GameObjects.Sprite>()]]),
+            });
+            const offered = (): boolean => {
+                wokaMenuStore.clear();
+                handler.handlePointerUpEvent(pointer(0, 1), [self]);
+                return get(wokaMenuStore)?.actions.some(({ testId }) => testId === "avatar-fishing-contest") ?? false;
+            };
+            const contest = { hostName: "Hugo", minutes: 3, endsAt: 0, rows: [] };
+            expect(offered()).toBe(false);
+            rodEquippedStore.set(true);
+            fishingContestStore.set({ ...contest, finished: false });
+            expect(offered()).toBe(false);
+            // A podium still shown does not keep the next contest from starting.
+            fishingContestStore.set({ ...contest, finished: true });
+            expect(offered()).toBe(true);
+            fishingContestStore.set(undefined);
+            expect(offered()).toBe(true);
+            get(wokaMenuStore)
+                ?.actions.find(({ testId }) => testId === "avatar-fishing-contest")
+                ?.callback();
+            expect(get(fishingContestSetupStore)).toBe(true);
+            expect(get(wokaMenuStore)).toBeUndefined();
+            fishingContestSetupStore.set(false);
             rodEquippedStore.set(false);
         });
 
