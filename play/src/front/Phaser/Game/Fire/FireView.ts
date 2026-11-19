@@ -1,6 +1,7 @@
 import * as Phaser from "phaser";
 import { TILE_PX } from "@workadventure/map-editor";
 import { DEPTH_LAMP_LIGHT_INDEX, DEPTH_NIGHT_INDEX } from "../DepthIndexes";
+import { placeAtDepth } from "../DepthSort";
 import type { MeadowState } from "../Terrain/MeadowState";
 import {
     drawnEmbers,
@@ -107,13 +108,13 @@ export class FireView {
             const footY = (tile.y + FOOT_IN_TILE) * TILE_PX;
             const pose = flamePose(input);
             // At the depth of its foot: what stands lower on the map is drawn over it.
-            this.flameAt(index)
+            const flame = this.flameAt(index)
                 .setFrame(pose.frame)
                 .setPosition(footX, footY)
                 .setScale(pose.scaleX * scale, pose.scaleY * scale)
                 .setRotation(pose.rotation)
-                .setDepth(footY)
                 .setVisible(true);
+            placeAtDepth(flame, footY);
             const glow = GLOW_RADIUS_PX * (0.5 + 0.5 * input.intensity) * scale;
             this.glowAt(index)
                 .setPosition(footX, footY - FLAME_MAX_HEIGHT_PX * pose.scaleY * scale * 0.4)
