@@ -226,6 +226,22 @@ describe("JungleCompanions", () => {
         expect(leads.size).toBe(5);
     });
 
+    it("counts the animals of the life the player tamed: five in all", () => {
+        const { world, sent, prompt } = makeWorld();
+        // Four lions of the life already follow the player: room for one more.
+        world.otherCompanions = () => 4;
+        const companions = new JungleCompanions(world);
+        companions.update(0);
+        expect(prompt.kind).toBe("tame");
+        const stale = prompt.action;
+        // A fifth one meanwhile.
+        world.otherCompanions = () => 5;
+        companions.update(16);
+        expect(prompt.kind).toBeUndefined();
+        stale?.();
+        expect(sent.at(-1)?.companions).toHaveLength(0);
+    });
+
     it("the same key releases the nearest companion within reach, and only that one", () => {
         const { world, feet, sent, leads, prompt, poses } = makeWorld();
         const companions = new JungleCompanions(world);

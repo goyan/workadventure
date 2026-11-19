@@ -16,6 +16,8 @@ export interface ShownAnimal {
     y: number;
     alpha: number;
     facingLeft: boolean;
+    /** The user id of the player it follows, for a tamed animal. */
+    owner?: number;
 }
 
 interface Entry {
@@ -32,6 +34,7 @@ interface Entry {
     /** When the server stopped telling it. */
     goneAt: number | undefined;
     facingLeft: boolean;
+    owner: number | undefined;
 }
 
 const share = (elapsed: number, duration: number): number => Math.min(1, Math.max(0, elapsed / duration));
@@ -48,7 +51,10 @@ export class AquaticLife {
     /** `accepts` tells the kinds this one shows: those of the water unless told otherwise (the land has its own). */
     constructor(private readonly accepts: (kind: number) => boolean = isAquaticKind) {}
 
-    public receive(animals: readonly { id: number; kind: number; x: number; y: number }[], now: number): void {
+    public receive(
+        animals: readonly { id: number; kind: number; x: number; y: number; owner?: number }[],
+        now: number,
+    ): void {
         const told = new Set<number>();
         for (const animal of animals) {
             if (!this.accepts(animal.kind)) continue;
@@ -67,6 +73,7 @@ export class AquaticLife {
                     appearedAt: this.started ? now : undefined,
                     goneAt: undefined,
                     facingLeft: false,
+                    owner: animal.owner,
                 });
                 continue;
             }
@@ -76,6 +83,7 @@ export class AquaticLife {
             entry.toX = animal.x;
             entry.toY = animal.y;
             entry.since = now;
+            entry.owner = animal.owner;
             // It keeps its side while it does not move sideways.
             if (Math.abs(animal.x - at.x) >= 1) entry.facingLeft = animal.x < at.x;
         }
@@ -102,7 +110,15 @@ export class AquaticLife {
                 if (entry.appearedAt !== undefined) alpha = share(now - entry.appearedAt, FADE_MS);
                 if (entry.goneAt !== undefined) alpha *= 1 - share(now - entry.goneAt, FADE_MS);
             }
-            shown.push({ id: entry.id, kind: entry.kind, ...place, alpha, facingLeft: entry.facingLeft });
+            shown.push({
+                id: entry.id,
+                kind: entry.kind,
+                ...place,
+                alpha,
+                facingLeft: entry.facingLeft,
+                // A dead animal follows nobody.
+                owner: entry.goneAt === undefined ? entry.owner : undefined,
+            });
         }
         return shown;
     }

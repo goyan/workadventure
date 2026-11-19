@@ -21,7 +21,7 @@ import type { JunglePrefab } from "./JunglePlan";
 const REFRESH_INTERVAL_MS = 500;
 
 /** The feet of a character, like Player.getFeet: what the companions follow. */
-function feetOf(character: Character): Point {
+export function feetOf(character: Character): Point {
     return { x: character.x, y: character.y + CHARACTER_BODY_HEIGHT / 2 + CHARACTER_BODY_OFFSET_Y };
 }
 
@@ -111,6 +111,8 @@ export class GameJungle {
             animalPose: (id) => wanderers.characterPose(id),
             editorOpen: () => get(mapEditorModeStore),
             playerOnGround: () => scene.CurrentPlayer.isNearGround(),
+            // The lions and tigers of the life of the map the player tamed: one group, one limit.
+            otherCompanions: () => scene.landTamedCount(),
             serverNow: () => scene.getServerDate()?.getTime() ?? Date.now(),
             send: (message) => {
                 const { name, data } = encodeJungleCompanion(message);

@@ -2367,8 +2367,8 @@ coupé par défaut, indépendant de l'eau). Activé :
   ils ont pied (moins de 16 px) ; un petit pour un couple qui a mangé deux fois ; ils meurent de vieillesse ou de faim
   (huit intervalles de chasse sans prise) ; 6 lions et 6 tigres au plus pour 60 antilopes ;
 - les poissons fuient un lion ou un tigre qui s'approche, comme un avatar ;
-- **le tirage quotidien de la jungle s'arrête** sur cette carte : les lions et les tigres sont ceux du serveur. Tant
-  que la suite n'est pas livrée, ils ne s'apprivoisent pas et ne crient pas ;
+- **le tirage quotidien de la jungle s'arrête** sur cette carte : les lions et les tigres sont ceux du serveur. Ils
+  s'apprivoisent (voir ci-dessous) ; tant que la suite n'est pas livrée, ils ne crient pas ;
 - le réglage personnel « jungle » les masque.
 
 **Les dauphins attendent trente poissons.** Un couple de dauphins ne vient plus dans un lac qui compte moins de 30
@@ -2393,6 +2393,29 @@ de `LifeGolden.test.ts` ont été reprises pour cela, une fois (à seuil 0 ce so
   (toujours pour l'antilope).
 - **Valeurs par défaut** : choisies par un essai de 24 h simulées sur trois graines, gardées par
   `LifeBalance.test.ts` (2 h simulées).
+
+**Apprivoiser un lion ou un tigre du serveur.** Même geste que pour les animaux promeneurs : à 1,5 case d'un lion ou
+d'un tigre libre, « [ESPACE] pour apprivoiser cet animal 🐾 » ; près d'un des siens, « [ESPACE] pour relâcher votre
+compagnon 🐾 » ; « Relâcher mes animaux (n) » dans la roue de l'avatar les compte tous. Cinq compagnons par joueur,
+animaux promeneurs compris. Les antilopes ne s'apprivoisent pas.
+
+- **Le serveur seul dit à qui est l'animal** (`Animal.tamedBy`, `AquaticAnimalMessage.owner`) : pas de revendication
+  par événement de salle comme pour les promeneurs. Le navigateur demande (`TameAnimalMessage`,
+  `ReleaseAnimalsMessage`), `AquaticLifeManager.tame` vérifie (lion ou tigre, libre, à 5 cases au plus des pieds du
+  joueur pour couvrir la seconde de retard de l'affichage, joueur au sol, cinq au plus, cinq demandes par seconde) et
+  l'annonce aussitôt à la salle. Un refus ne dit rien : l'invite revient si l'animal est encore là.
+- **Hors de la vie, mais compté** (`Life/Taming.ts`, `stepPopulation`) : apprivoisé, il ne vieillit pas, n'a pas faim,
+  ne chasse pas, n'est pas fui, n'a pas de petit ; ses horloges attendent. Il compte toujours dans les plafonds de son
+  lieu et de la salle, sinon cinq lions pris en feraient venir cinq autres.
+- **Où il est** : pour le serveur, là où se tient son maître tant que celui-ci est au sol sur la terre de dehors ;
+  dans une pièce, dans l'eau profonde ou sur un palier, il reste à sa dernière bonne place. À l'écran, il marche
+  derrière son maître (`Life/LandCompanions.ts`, le suiveur des promeneurs), après ses chiens et ses chats.
+- **Relâché tout seul** : le maître quitte la carte ou recharge la page, `back` redémarre (l'identifiant d'un joueur
+  ne vaut que pour une connexion), la terre est coupée, l'éditeur de carte s'ouvre.
+- **Pour qu'on puisse l'approcher**, un lion ou un tigre rassasié ne fuit plus les avatars ; celui qui chasse garde
+  ses distances (3 cases) comme avant.
+- Limites : relâché alors que son maître est dans une pièce, l'animal réapparaît à sa dernière place de dehors ; au
+  relâcher il fait un petit saut de l'endroit où on le voyait à celui où le serveur le tient.
 
 **Limites.** Les animaux de terre traversent les objets et les murs dessinés dans Tiled (le serveur ne connaît que
 les murs de l'outil Carte) ; pas de recherche de chemin : un couple séparé par un obstacle met du temps à se

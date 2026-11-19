@@ -31,5 +31,10 @@ export const Animal = z.object({
     meals: z.number().int().min(0).optional(),
     /** Until when it wanders instead of going to a mate or a prey it could not reach in a straight line. */
     wanderUntil: z.number().finite().optional(),
+    /**
+     * The player it follows (their user id, which lasts as long as their connection): it is then out of the life
+     * (see Taming). Never kept over a restart of the server.
+     */
+    tamedBy: z.number().int().optional(),
 });
 export type Animal = z.infer<typeof Animal>;

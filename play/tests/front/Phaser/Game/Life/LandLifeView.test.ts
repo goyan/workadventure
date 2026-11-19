@@ -92,10 +92,12 @@ function createView({
     sheets = {},
     sheetOf = () => undefined as string | undefined,
     shown = { value: true },
+    lead,
 }: {
     sheets?: Record<string, number>;
     sheetOf?: (species: string) => string | undefined;
     shown?: { value: boolean };
+    lead?: ConstructorParameters<typeof LandLifeView>[5];
 } = {}) {
     const { scene, sprites, loaded, markDirty } = createScene(sheets);
     const life = new AquaticLife(isLandKind);
@@ -105,6 +107,7 @@ function createView({
         () => shown.value,
         () => false,
         sheetOf,
+        lead,
     );
     return { view, life, sprites, loaded, markDirty, shown };
 }
@@ -201,5 +204,42 @@ describe("LandLifeView", () => {
         shown.value = false;
         view.update(2100);
         expect(sprites.every((sprite) => sprite.destroyed)).toBe(true);
+    });
+});
+
+describe("LandLifeView, a tamed animal", () => {
+    it("is drawn where its master leads it, turned and walking as told", () => {
+        const { view, life, sprites } = createView({
+            sheets: { "lion.png": 3 },
+            sheetOf: (species) => (species === "lion" ? "lion.png" : undefined),
+            lead: (animal) => (animal.owner === 7 ? { x: 300, y: 200, direction: "up", moving: false } : undefined),
+        });
+        life.receive(
+            [
+                { id: 1, kind: 6, x: 100, y: 100, owner: 7 },
+                { id: 2, kind: 6, x: 50, y: 60 },
+            ],
+            0,
+        );
+        view.update(0);
+        expect(sprites[0]).toMatchObject({ x: 300, y: 200, depth: 200 });
+        expect(sprites[0].frame.name).toBe(landFrame("up", false, 0, 3));
+        expect(sprites[1]).toMatchObject({ x: 50, y: 60 });
+    });
+
+    it("is not drawn while its master is out of view, and comes back with them", () => {
+        const away = { value: true };
+        const { view, life, sprites } = createView({
+            lead: () => (away.value ? "hidden" : { x: 300, y: 200, direction: "left", moving: true }),
+        });
+        life.receive([{ id: 1, kind: 6, x: 100, y: 100, owner: 7 }], 0);
+        view.update(0);
+        expect(sprites).toHaveLength(0);
+        away.value = false;
+        view.update(16);
+        expect(sprites).toHaveLength(1);
+        away.value = true;
+        view.update(32);
+        expect(sprites[0].destroyed).toBe(true);
     });
 });

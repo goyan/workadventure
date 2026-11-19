@@ -351,6 +351,8 @@ export class GameRoom implements BrothersFinder {
             gameRoom.groundAvatarPositions.bind(gameRoom),
             // The animals of the land live on the whole map: its size is in its Tiled map.
             gameRoom.mapSizeInCells.bind(gameRoom),
+            // The animals a player tamed follow them.
+            gameRoom.masterPosition.bind(gameRoom),
         );
         gameRoom.aquaticLife = aquaticLife;
         await aquaticLife.restore();
@@ -554,6 +556,8 @@ export class GameRoom implements BrothersFinder {
             return;
         }
         user.disconnected = true;
+        // The animals they tamed are free again, now rather than at the next step of the life.
+        this.aquaticLife?.release(user.id);
 
         if (!this.users.has(user.id)) {
             console.warn("User ", user.id, "does not belong to this game room! It should!");
@@ -1178,6 +1182,24 @@ export class GameRoom implements BrothersFinder {
             positions.push({ x, y });
         }
         return positions;
+    }
+
+    /** Where a player of the room stands, for the animals they tamed; undefined once they left. */
+    public masterPosition(userId: number): { x: number; y: number; ground: boolean } | undefined {
+        const user = this.users.get(userId);
+        if (!user || user.disconnected === true) return undefined;
+        const { x, y } = user.getPosition();
+        return { x, y, ground: sameFloor(user.getFloorZ(), 0) };
+    }
+
+    /** A player asks to tame an animal of the life of the map that is near them. */
+    public tameAnimal(user: Pick<User, "id">, animalId: number): void {
+        this.aquaticLife?.tame(user.id, animalId);
+    }
+
+    /** A player lets go one of the animals they tamed, or all of them. */
+    public releaseAnimals(user: Pick<User, "id">, animalId?: number): void {
+        this.aquaticLife?.release(user.id, animalId);
     }
 
     /** The animals of the water of the relief, sent to a user who joins the room. */

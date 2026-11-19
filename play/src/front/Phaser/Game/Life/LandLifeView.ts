@@ -1,7 +1,7 @@
 import type * as Phaser from "phaser";
 import type { WanderDirection } from "../Wander/WanderSchedule";
 import { WANDER_FRAME_SIZE, WANDER_WALK_COLUMNS, wanderIdleFrame, wanderWalkFrames } from "../Wander/WanderSheet";
-import type { AquaticLife } from "./AquaticLife";
+import type { AquaticLife, ShownAnimal } from "./AquaticLife";
 import { ensureLandTexture, landSpeciesOf } from "./LandSprites";
 import type { LandSpecies } from "./LandSprites";
 
@@ -54,6 +54,15 @@ export class LandLifeView {
         private readonly reducedMotion: () => boolean,
         /** The sheet of a species in the catalogues of the map, when it has one. */
         private readonly sheetOf: (species: LandSpecies) => string | undefined,
+        /**
+         * Where a tamed animal is shown instead of where the server says: behind its master (see LandCompanions),
+         * "hidden" while they are out of view; undefined for a free animal.
+         */
+        private readonly lead: (
+            animal: ShownAnimal,
+            now: number,
+        ) => { x: number; y: number; direction: WanderDirection; moving: boolean } | "hidden" | undefined = () =>
+            undefined,
     ) {}
 
     public update(now: number): void {
@@ -78,9 +87,12 @@ export class LandLifeView {
         for (const animal of this.life.shown(now, reduced)) {
             const species = landSpeciesOf(animal.kind);
             if (!species) continue;
+            const led = this.lead(animal, now);
+            // With its master, wherever they are.
+            if (led === "hidden") continue;
             seen.add(animal.id);
-            const x = Math.round(animal.x);
-            const y = Math.round(animal.y);
+            const x = Math.round(led?.x ?? animal.x);
+            const y = Math.round(led?.y ?? animal.y);
             const columns = this.columnsOf(species);
             const key = columns === undefined ? ensureLandTexture(this.scene, species) : this.sheetOf(species);
             if (key === undefined) continue;
@@ -97,9 +109,12 @@ export class LandLifeView {
                 entry.columns = columns;
                 changed ||= onScreen(x, y);
             }
-            const moving = Math.abs(x - sprite.x) >= 1 || Math.abs(y - sprite.y) >= 1;
-            entry.direction = directionOf(animal.x - sprite.x, animal.y - sprite.y, entry.direction);
-            if (moving || sprite.alpha !== animal.alpha) changed ||= onScreen(x, y) || onScreen(sprite.x, sprite.y);
+            const moved = Math.abs(x - sprite.x) >= 1 || Math.abs(y - sprite.y) >= 1;
+            const moving = led ? led.moving : moved;
+            entry.direction = led
+                ? led.direction
+                : directionOf(animal.x - sprite.x, animal.y - sprite.y, entry.direction);
+            if (moved || sprite.alpha !== animal.alpha) changed ||= onScreen(x, y) || onScreen(sprite.x, sprite.y);
             sprite.setPosition(x, y);
             sprite.setDepth(y);
             sprite.setAlpha(animal.alpha);
