@@ -2,6 +2,8 @@ import type { BaseTranslation } from "../i18n-types";
 
 const menu: BaseTranslation = {
     title: "Menu",
+    narrow: "Halve the panel, on the right, to see the game",
+    widen: "Bring the panel back to its width",
     icon: {
         open: {
             menu: "Open menu",
