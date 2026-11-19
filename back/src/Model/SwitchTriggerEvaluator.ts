@@ -59,6 +59,11 @@ export class SwitchTriggerEvaluator {
             setAutomatic(entityId: string, key: EntityStateKey, value: EntityStateValue): "set" | "same" | "refused";
         },
         private readonly now: () => number = Date.now,
+        /**
+         * Where the animals of the land the server runs are (antelopes, lions, tigers), in map pixels, on the
+         * ground: they are sensed like an avatar, without any report of a browser.
+         */
+        private readonly animals: () => readonly { x: number; y: number }[] = () => [],
     ) {}
 
     public start(): void {
@@ -87,7 +92,8 @@ export class SwitchTriggerEvaluator {
             return [];
         }
         const time = this.now();
-        const users = [...this.room.getUsers().values()];
+        const users: TriggerUser[] = [...this.room.getUsers().values()];
+        for (const animal of this.animals()) users.push({ getPosition: () => animal, getFloorZ: () => 0 });
         const wanted = new Map<string, { key: EntityStateKey; on: boolean }>();
         for (const automatic of switches) {
             const on = this.holds(automatic, users, time);

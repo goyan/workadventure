@@ -188,3 +188,10 @@ describe("AquaticLifeManager, taming", () => {
         expect(told(1)).toBeDefined();
     });
 });
+
+describe("AquaticLifeManager, the animals of the land for the sensors", () => {
+    it("tells where the animals of the land are", async () => {
+        const { manager } = await harness([lion(1, 200, 300)]);
+        expect(manager.landAnimals()).toEqual([{ x: 200, y: 300 }]);
+    });
+});

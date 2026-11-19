@@ -324,7 +324,13 @@ export class GameRoom implements BrothersFinder {
         });
         await gameRoom.entityStateManager.restore();
         // Uses the switches that have a trigger (presence sensors, timers) once a second.
-        const switchTriggers = new SwitchTriggerEvaluator(gameRoom, gameRoom.entityStateManager);
+        const switchTriggers = new SwitchTriggerEvaluator(
+            gameRoom,
+            gameRoom.entityStateManager,
+            undefined,
+            // The antelopes, lions and tigers the server runs are sensed like the avatars.
+            gameRoom.landAnimalPositions.bind(gameRoom),
+        );
         gameRoom.switchTriggers = switchTriggers;
         switchTriggers.start();
         // No need to unsubscribe since GameRoom.destroy completes this stream.
@@ -1182,6 +1188,11 @@ export class GameRoom implements BrothersFinder {
             positions.push({ x, y });
         }
         return positions;
+    }
+
+    /** Where the animals of the land the server runs are, in map pixels: for the presence sensors. */
+    public landAnimalPositions(): { x: number; y: number }[] {
+        return this.aquaticLife?.landAnimals() ?? [];
     }
 
     /** Where a player of the room stands, for the animals they tamed; undefined once they left. */

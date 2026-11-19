@@ -2368,7 +2368,7 @@ coupé par défaut, indépendant de l'eau). Activé :
   (huit intervalles de chasse sans prise) ; 6 lions et 6 tigres au plus pour 60 antilopes ;
 - les poissons fuient un lion ou un tigre qui s'approche, comme un avatar ;
 - **le tirage quotidien de la jungle s'arrête** sur cette carte : les lions et les tigres sont ceux du serveur. Ils
-  s'apprivoisent (voir ci-dessous) ; tant que la suite n'est pas livrée, ils ne crient pas ;
+  s'apprivoisent (voir ci-dessous), crient comme ceux de la jungle, ont une ombre et allument les capteurs ;
 - le réglage personnel « jungle » les masque.
 
 **Les dauphins attendent trente poissons.** Un couple de dauphins ne vient plus dans un lac qui compte moins de 30
@@ -2416,6 +2416,18 @@ animaux promeneurs compris. Les antilopes ne s'apprivoisent pas.
   ses distances (3 cases) comme avant.
 - Limites : relâché alors que son maître est dans une pièce, l'animal réapparaît à sa dernière place de dehors ; au
   relâcher il fait un petit saut de l'endroit où on le voyait à celui où le serveur le tient.
+
+**Ce que les animaux du serveur gardent de la jungle.**
+
+- **Cris** (`Life/LandCries.ts`) : un lion ou un tigre immobile crie de temps en temps (une étape de 20 s sur 12,
+  portée 12 cases, un cri toutes les 20 s au plus par joueur, rien onglet caché), avec les sons et le volume de la
+  jungle. Chaque navigateur les joue pour lui-même, tirés de l'identifiant de l'animal et de l'heure. Un animal
+  apprivoisé ne crie pas ; une antilope non plus.
+- **Ombres** : ovale sous chaque animal de la terre, dehors, comme sous les promeneurs (`GameScene.shadowAnimals`,
+  réglage « animaux » des ombres).
+- **Capteurs de présence** : le serveur compte lui-même les antilopes, lions et tigres qu'il simule
+  (`AquaticLifeManager.landAnimals`, quatrième paramètre de `SwitchTriggerEvaluator`), au sol, comme un avatar ; pas
+  de rapport du navigateur pour eux.
 
 **Limites.** Les animaux de terre traversent les objets et les murs dessinés dans Tiled (le serveur ne connaît que
 les murs de l'outil Carte) ; pas de recherche de chemin : un couple séparé par un obstacle met du temps à se

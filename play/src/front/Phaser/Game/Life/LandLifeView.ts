@@ -33,6 +33,16 @@ interface Shown {
     direction: WanderDirection;
     /** How many columns the sheet it is drawn with has; undefined while it is drawn with the texture made here. */
     columns: number | undefined;
+    species: LandSpecies;
+    moving: boolean;
+    /** Tamed: drawn behind its master. */
+    led: boolean;
+    /**
+     * Where the life had it at the last frame, not rounded: the sprite sits on whole pixels, and what the rounding
+     * leaves is larger than a slow step, so a heading read against the sprite turns at every frame.
+     */
+    atX: number;
+    atY: number;
 }
 
 type SceneOfView = Pick<Phaser.Scene, "add" | "cameras" | "textures" | "load"> & { markDirty(): void };
@@ -99,7 +109,16 @@ export class LandLifeView {
             let entry = this.shown.get(animal.id);
             if (!entry) {
                 const sprite = this.scene.add.sprite(x, y, key).setOrigin(0.5, 0.9);
-                entry = { sprite, direction: animal.facingLeft ? "left" : "right", columns };
+                entry = {
+                    sprite,
+                    direction: animal.facingLeft ? "left" : "right",
+                    columns,
+                    species,
+                    moving: false,
+                    led: false,
+                    atX: animal.x,
+                    atY: animal.y,
+                };
                 this.shown.set(animal.id, entry);
                 changed ||= onScreen(x, y);
             }
@@ -113,8 +132,12 @@ export class LandLifeView {
             const moving = led ? led.moving : moved;
             entry.direction = led
                 ? led.direction
-                : directionOf(animal.x - sprite.x, animal.y - sprite.y, entry.direction);
+                : directionOf(animal.x - entry.atX, animal.y - entry.atY, entry.direction);
+            entry.atX = animal.x;
+            entry.atY = animal.y;
             if (moved || sprite.alpha !== animal.alpha) changed ||= onScreen(x, y) || onScreen(sprite.x, sprite.y);
+            entry.moving = moving;
+            entry.led = led !== undefined;
             sprite.setPosition(x, y);
             sprite.setDepth(y);
             sprite.setAlpha(animal.alpha);
@@ -137,6 +160,17 @@ export class LandLifeView {
             this.shown.delete(id);
         }
         if (changed) this.scene.markDirty();
+    }
+
+    /** The animals drawn now: for their shadows and their calls. */
+    public forEachShown(
+        callback: (
+            id: number,
+            sprite: Phaser.GameObjects.Sprite,
+            animal: { species: LandSpecies; moving: boolean; led: boolean },
+        ) => void,
+    ): void {
+        for (const [id, { sprite, species, moving, led }] of this.shown) callback(id, sprite, { species, moving, led });
     }
 
     public destroy(): void {
