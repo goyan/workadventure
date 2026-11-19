@@ -4,6 +4,7 @@ import {
     DEEP_WATER_PX,
     deepWaterAlpha,
     groundAlpha,
+    raisedAlpha,
     SHORE_PX,
     slopeAlpha,
     slopeShade,
@@ -25,6 +26,15 @@ describe("terrain shading", () => {
         const cliff = withHeights(undefined, new Map([[cellKey(5, 5), -256]]));
         expect(slopeShade(cliff, 4, 5)).toBe(-1);
         expect(slopeShade(cliff, 6, 5)).toBe(1);
+    });
+
+    it("lightens the ground with its height over the map, never where it is dug", () => {
+        expect(raisedAlpha(0)).toBe(0);
+        expect(raisedAlpha(-32)).toBe(0);
+        expect(raisedAlpha(1)).toBeLessThan(0.02);
+        expect(raisedAlpha(32)).toBeLessThan(raisedAlpha(64));
+        expect(raisedAlpha(96)).toBeCloseTo(0.3);
+        expect(raisedAlpha(256)).toBeCloseTo(0.3);
     });
 
     it("darkens the ground with its depth, and a slope with its steepness", () => {

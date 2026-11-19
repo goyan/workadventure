@@ -371,7 +371,8 @@ message ModifyTerrainMessage {
   optional int32 maxDepthTiles = 2;
 }
 
-// A cell of the relief (16 map pixels wide) and its height in pixels of altitude: 0 on the ground, negative when dug.
+// A cell of the relief (16 map pixels wide) and its height in pixels of altitude: 0 on the ground, negative when dug,
+// positive when raised.
 message TerrainCellMessage {
   sint32 x = 1;
   sint32 y = 2;

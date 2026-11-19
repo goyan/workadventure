@@ -108,11 +108,11 @@ describe("TerrainEditor real values", () => {
 });
 
 describe("TerrainEditor", () => {
-    it("switches between digging and filling", () => {
+    it("switches between digging and raising", () => {
         render();
         expect(get(terrainBrushStore).mode).toBe("dig");
-        byTestId("terrain-mode-fill").click();
-        expect(get(terrainBrushStore).mode).toBe("fill");
+        byTestId("terrain-mode-raise").click();
+        expect(get(terrainBrushStore).mode).toBe("raise");
         byTestId("terrain-mode-dig").click();
         expect(get(terrainBrushStore).mode).toBe("dig");
     });

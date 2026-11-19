@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { cellInMap, cellKey, cellOf, dugCells, heightAt, withHeights } from "../src/Terrain/TerrainGrid";
-import { WAMFileFormat } from "../src/types";
+import { cellInMap, cellKey, cellOf, dugCells, heightAt, reliefCells, withHeights } from "../src/Terrain/TerrainGrid";
+import { TERRAIN_MAX_HEIGHT, TerrainData, WAMFileFormat } from "../src/types";
 
 describe("cellInMap", () => {
     it("holds the cells of the map and none past its edges", () => {
@@ -40,11 +40,11 @@ describe("terrain grid", () => {
             before,
             new Map([
                 [cellKey(0, 0), -999],
-                [cellKey(1, 0), 5],
+                [cellKey(1, 0), 999],
             ]),
         );
         expect(heightAt(after, 0, 0)).toBe(-256);
-        expect(heightAt(after, 1, 0)).toBe(0);
+        expect(heightAt(after, 1, 0)).toBe(256);
         expect(heightAt(before, 0, 0)).toBe(-8);
     });
 
@@ -93,5 +93,37 @@ describe("terrain grid", () => {
         // A map saved before the speed of the water has the default one.
         expect(parsed.settings?.water).toEqual({ runoff: 10, evaporation: 0.2, speed: 60, absorption: 5, current: 1 });
         expect(WAMFileFormat.parse({ ...wam, settings: { water: { runoff: -4 } } }).settings?.water).toBeUndefined();
+    });
+});
+
+describe("relief over the ground", () => {
+    it("keeps the height of a raised cell, within the stored range", () => {
+        const terrain = withHeights(
+            undefined,
+            new Map([
+                [cellKey(2, 3), 40],
+                [cellKey(3, 3), 9999],
+            ]),
+        );
+        expect(heightAt(terrain, 2, 3)).toBe(40);
+        expect(heightAt(terrain, 3, 3)).toBe(TERRAIN_MAX_HEIGHT);
+        expect(TerrainData.safeParse(terrain).success).toBe(true);
+    });
+
+    it("tells the raised cells from the dug ones", () => {
+        const terrain = withHeights(
+            undefined,
+            new Map([
+                [cellKey(2, 3), 40],
+                [cellKey(5, 3), -8],
+            ]),
+        );
+        expect([...dugCells(terrain).keys()]).toEqual([cellKey(5, 3)]);
+        expect(new Map(reliefCells(terrain))).toEqual(
+            new Map([
+                [cellKey(2, 3), 40],
+                [cellKey(5, 3), -8],
+            ]),
+        );
     });
 });

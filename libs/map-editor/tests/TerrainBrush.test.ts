@@ -174,3 +174,45 @@ describe("terrain brush, smoothing", () => {
         expect(changes.get(cellKey(12, 12))).toBe(-15);
     });
 });
+
+// The same sphere, adding matter: up to 2 tiles over the ground of a map set to 2 tiles.
+const raise = { diameterTiles: 4, forcePx: 16, maxDepthTiles: 2, mode: "raise" as const };
+
+describe("terrain brush, raising", () => {
+    it("raises a mount over the ground: highest at the centre, nothing beyond the rim", () => {
+        const changes = strokeChanges(undefined, centre, raise, everywhere);
+        expect(changes.get(cellKey(12, 12))).toBe(16);
+        expect(changes.has(cellKey(17, 12))).toBe(false);
+        const near = changes.get(cellKey(15, 12)) ?? 0;
+        expect(near).toBeGreaterThan(0);
+        expect(near).toBeLessThan(16);
+    });
+
+    it("raises further on a new stroke, up to the maximum height of the map", () => {
+        let terrain: TerrainData | undefined;
+        for (let stroke = 0; stroke < 6; stroke++) {
+            terrain = withHeights(terrain, strokeChanges(terrain, centre, raise, everywhere));
+        }
+        expect(heightAt(terrain, 12, 12)).toBe(64);
+    });
+
+    it("fills a hollow then goes on over the ground", () => {
+        const terrain = withHeights(undefined, new Map([[cellKey(12, 12), -10]]));
+        expect(strokeChanges(terrain, centre, raise, everywhere).get(cellKey(12, 12))).toBe(6);
+    });
+
+    it("digs a mount back down, and flattens the ground towards a level over it", () => {
+        const mount = withHeights(undefined, new Map([[cellKey(12, 12), 40]]));
+        expect(strokeChanges(mount, centre, dig, everywhere).get(cellKey(12, 12))).toBe(24);
+        const plateau = { ...flatten, targetPx: 30 };
+        expect(strokeChanges(mount, centre, plateau, everywhere).get(cellKey(12, 12))).toBe(30);
+        expect(strokeChanges(undefined, centre, plateau, everywhere).get(cellKey(12, 12))).toBe(16);
+        // Never over the maximum height of the map.
+        const high = withHeights(undefined, new Map([[cellKey(12, 12), 60]]));
+        expect(strokeChanges(high, centre, { ...flatten, targetPx: 200 }, everywhere).get(cellKey(12, 12))).toBe(64);
+    });
+
+    it("leaves the cells that may not be raised", () => {
+        expect(strokeChanges(undefined, centre, raise, () => false).size).toBe(0);
+    });
+});

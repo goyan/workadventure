@@ -38,4 +38,23 @@ describe("contourSegments", () => {
         expect(segments).toHaveLength(4);
         expect(segments.every((segment) => segment.major)).toBe(true);
     });
+
+    it("draws a mount like a hollow of the same size", () => {
+        expect(contourSegments(terrainOf([[3, 2, 7]]), 8, 32)).toEqual([]);
+        const segments = contourSegments(terrainOf([[3, 2, 8]]), 8, 32);
+        expect(segments).toHaveLength(4);
+        expect(segments).toContainEqual({ x1: 48, y1: 32, x2: 64, y2: 32, major: false });
+        expect(contourSegments(terrainOf([[3, 2, 32]]), 8, 32).every((segment) => segment.major)).toBe(true);
+        // A cliff between a hollow and a mount is one line, drawn once.
+        expect(
+            contourSegments(
+                terrainOf([
+                    [3, 2, -8],
+                    [4, 2, 8],
+                ]),
+                8,
+                32,
+            ),
+        ).toHaveLength(7);
+    });
 });

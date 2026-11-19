@@ -2196,6 +2196,24 @@ marquée par case (`Terrain/TerrainContours.ts`), le long des bords des cases, p
 interrupteur les masque ; au-delà de 30 000 morceaux, seules les lignes marquées sont dessinées). Rien ne change
 dans la carte enregistrée ni sur le fil : un geste envoie toujours des hauteurs par case.
 
+**Monts : le relief monte au-dessus du sol.** Une case du relief va de −256 à +256 px (`TERRAIN_MAX_HEIGHT`) :
+négative creusée, positive élevée. Le mode « Élever » de l'outil Relief ajoute de la matière au pinceau, comme
+« Creuser » en enlève, jusqu'à la « profondeur et hauteur maximales » de la carte (le même réglage vaut pour les
+deux sens) ; « Aplanir » vise une altitude, négative ou positive (un plateau). « Remblayer » n'a plus de bouton :
+aplanir vers le niveau de la carte fait la même chose. Un mont est éclairci par sa hauteur (`raisedAlpha`) et ses
+pentes sont éclairées ou ombrées comme celles d'un creux ; les courbes de niveau de l'éditeur le dessinent comme un
+creux de même taille. **L'eau** : un mont est un obstacle et une pente, la crue du sol s'arrête à son pied, l'eau
+versée dessus (une source) en redescend. Chaque case a un **niveau de débordement** (`spillLevels`, calculé une fois
+par grille, 43 ms pour la plus grande) : le niveau que l'eau doit atteindre pour s'échapper vers le bord, donc le
+bord de la cuvette où elle se trouve. Une case sous ce niveau est dans une cuvette, qu'elle soit creusée sous le sol
+ou dans le cratère d'un mont : il y pleut, le sol n'y boit rien, et l'eau y monte jusqu'à 18 px au-dessus du bord
+(au-delà elle est perdue, comme avant). On fait donc un **lac en altitude** en creusant un cratère au sommet d'un
+mont et en y posant une source, ou en attendant la pluie. Hors d'une cuvette (plaine, pente, sommet plat) rien ne
+change : pas de pluie, le sol boit la nappe. **Ce que les monts ne font pas** : les avatars, les objets
+et les murs restent dessinés à plat, on marche sur un mont sans monter à l'écran et sans ralentir. Une carte avec un
+mont n'est lisible que par des `play`, `back` et `map-storage` qui connaissent les hauteurs positives : à déployer
+ensemble.
+
 **Le relief et l'eau s'arrêtent aux bords de la carte.** Le sol affiché au-delà des bords d'une carte
 (`exteriorTexture`) n'est qu'une image : aucun avatar n'y marche. L'outil Relief y refuse donc le pinceau (rouge,
 comme sous un mur), et le serveur n'y simule plus d'eau : la grille d'eau est coupée aux bords de la carte, taille

@@ -899,18 +899,23 @@ export const TERRAIN_CELL = 16;
 export const TERRAIN_CHUNK = 16;
 /** The lowest height a cell can have, in pixels of altitude: 8 tiles under the ground. */
 export const TERRAIN_MIN_HEIGHT = -256;
-/** How deep the relief of a map may be dug, in tiles: set for each map, within these bounds. */
+/** The highest height a cell can have, in pixels of altitude: 8 tiles over the ground. */
+export const TERRAIN_MAX_HEIGHT = 256;
+/**
+ * How deep the relief of a map may be dug, and how high it may be raised over the ground, in tiles: set for each
+ * map, within these bounds.
+ */
 export const DEFAULT_MAX_DEPTH_TILES = 2;
 export const MAX_DEPTH_TILES = 8;
 
 /**
- * The relief of the ground of a map: a height for each cell (TERRAIN_CELL map pixels wide), 0 on the ground and
- * negative where it was dug, by chunks of TERRAIN_CHUNK × TERRAIN_CHUNK cells keyed "chunkX,chunkY" (row by row).
+ * The relief of the ground of a map: a height for each cell (TERRAIN_CELL map pixels wide), 0 on the ground,
+ * negative where it was dug and positive where it was raised, by chunks of TERRAIN_CHUNK × TERRAIN_CHUNK cells keyed "chunkX,chunkY" (row by row).
  */
 export const TerrainData = z.object({
     chunks: z.record(
         z.string().regex(/^-?\d{1,6},-?\d{1,6}$/),
-        z.array(z.number().int().min(TERRAIN_MIN_HEIGHT).max(0)).length(TERRAIN_CHUNK * TERRAIN_CHUNK),
+        z.array(z.number().int().min(TERRAIN_MIN_HEIGHT).max(TERRAIN_MAX_HEIGHT)).length(TERRAIN_CHUNK * TERRAIN_CHUNK),
     ),
     maxDepthTiles: z.number().int().min(1).max(MAX_DEPTH_TILES).optional(),
 });

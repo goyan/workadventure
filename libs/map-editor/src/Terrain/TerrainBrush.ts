@@ -8,14 +8,15 @@ export interface BrushSettings {
     diameterTiles: number;
     /** Thickness taken off (or put back) under the centre of the sphere by one stroke, in pixels of altitude. */
     forcePx: number;
-    /** How deep the map may be dug, in tiles. */
+    /** How deep the map may be dug, and how high it may be raised, in tiles. */
     maxDepthTiles: number;
     /**
-     * dig and fill take off or put back a cap; flatten brings the ground towards `targetPx`; smooth brings each cell
+     * dig and fill take off or put back a cap, fill up to the ground only; raise adds a cap, over the ground too (a
+     * mount); flatten brings the ground towards `targetPx`; smooth brings each cell
      * towards the mean of its neighbours.
      */
-    mode: "dig" | "fill" | "flatten" | "smooth";
-    /** The height the flatten mode brings the ground to, in pixels of altitude (0 the ground, negative under it). */
+    mode: "dig" | "fill" | "raise" | "flatten" | "smooth";
+    /** The height the flatten mode brings the ground to, in pixels of altitude (0 the ground, negative under it, positive over it). */
     targetPx?: number;
 }
 
@@ -126,6 +127,7 @@ export function strokeChanges(
         }
     }
     const floor = -settings.maxDepthTiles * TILE_PX;
+    const ceiling = settings.maxDepthTiles * TILE_PX;
     for (const [key, thickness] of thickest) {
         const { x, y } = cellOf(key);
         if (!allowed(x, y)) continue;
@@ -135,9 +137,13 @@ export function strokeChanges(
             // What is already deeper than the maximum stays as it is.
             next = Math.min(current, Math.max(floor, Math.round(current - thickness)));
         } else if (settings.mode === "fill") {
-            next = Math.min(0, Math.round(current + thickness));
+            // What is already over the ground stays as it is.
+            next = Math.max(current, Math.min(0, Math.round(current + thickness)));
+        } else if (settings.mode === "raise") {
+            // What is already higher than the maximum stays as it is.
+            next = Math.max(current, Math.min(ceiling, Math.round(current + thickness)));
         } else if (settings.mode === "flatten") {
-            const target = Math.min(0, Math.max(floor, settings.targetPx ?? 0));
+            const target = Math.min(ceiling, Math.max(floor, settings.targetPx ?? 0));
             next =
                 current > target
                     ? Math.max(target, Math.round(current - thickness))
@@ -148,6 +154,7 @@ export function strokeChanges(
             next = Math.round(current + (meanAround(terrain, x, y) - current) * blend);
             // Smoothing digs no deeper than the map allows: the rim of a hollow at its maximum is left as it is.
             if (next < current) next = Math.min(current, Math.max(floor, next));
+            else next = Math.max(current, Math.min(ceiling, next));
         }
         if (next !== current) changes.set(key, next === 0 ? 0 : next);
     }

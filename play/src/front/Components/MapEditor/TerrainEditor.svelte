@@ -22,7 +22,8 @@
     /** The widest brush, in tiles, and the strongest stroke, in pixels of altitude. */
     const MAX_DIAMETER_TILES = 12;
     const MAX_FORCE_PX = 64;
-    const MODES = ["dig", "fill", "flatten", "smooth"] as const;
+    // Filling up to the ground only is what flattening towards the level of the ground does: no button of its own.
+    const MODES = ["dig", "raise", "flatten", "smooth"] as const;
 
     // What the map says now; each slider below writes its change back to the map, for every editor.
     const saved = readTerrainMapSettings();
@@ -41,14 +42,14 @@
 
     // The flatten mode goes to the level of the ground where the stroke starts, until a depth is chosen here.
     let flattenFromStart = $state($terrainBrushStore.targetPx === undefined);
-    let flattenDepthPx = $state(-($terrainBrushStore.targetPx ?? 0));
+    let flattenLevelPx = $state($terrainBrushStore.targetPx ?? 0);
 
     function setBrush(): void {
         terrainBrushStore.update((brush) => ({
             ...brush,
             diameterTiles,
             forcePx: forceAuto ? undefined : forcePx,
-            targetPx: flattenFromStart ? undefined : -flattenDepthPx,
+            targetPx: flattenFromStart ? undefined : flattenLevelPx,
         }));
     }
 
@@ -100,10 +101,10 @@
                     id="terrain-flatten-depth"
                     label={$LL.mapEditor.terrain.flattenDepth()}
                     unit="px"
-                    min={0}
+                    min={-maxDepthTiles * TILE_PX}
                     max={maxDepthTiles * TILE_PX}
                     step={1}
-                    bind:value={flattenDepthPx}
+                    bind:value={flattenLevelPx}
                     onchange={setBrush}
                     buttonShape="square"
                 />
@@ -114,9 +115,13 @@
     {/if}
     {#if $terrainHoverHeightStore !== undefined}
         <p class="m-0 text-sm text-white" role="status" data-testid="terrain-hover-height">
-            {$terrainHoverHeightStore < 0
-                ? $LL.mapEditor.terrain.hoverHeight({ depth: -$terrainHoverHeightStore })
-                : $LL.mapEditor.terrain.hoverLevel()}
+            {#if $terrainHoverHeightStore < 0}
+                {$LL.mapEditor.terrain.hoverHeight({ depth: -$terrainHoverHeightStore })}
+            {:else if $terrainHoverHeightStore > 0}
+                {$LL.mapEditor.terrain.hoverAbove({ height: $terrainHoverHeightStore })}
+            {:else}
+                {$LL.mapEditor.terrain.hoverLevel()}
+            {/if}
         </p>
     {/if}
     <div data-testid="terrain-contours">

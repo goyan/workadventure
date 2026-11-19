@@ -1,4 +1,4 @@
-import { dugCells, TERRAIN_CELL, WATER_MESSAGE_MS } from "@workadventure/map-editor";
+import { reliefCells, TERRAIN_CELL, WATER_MESSAGE_MS } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 
 /** A state of the water as the server sends it, its bytes already unzipped (TerrainWaterMessage). */
@@ -43,7 +43,7 @@ export class TerrainWater {
     public setTerrain(terrain: TerrainData | undefined): void {
         if (terrain === this.terrain) return;
         this.terrain = terrain;
-        this.dug = dugCells(terrain).size > 0;
+        this.dug = reliefCells(terrain).size > 0;
         this.changes++;
     }
 
