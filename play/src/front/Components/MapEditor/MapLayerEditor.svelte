@@ -45,7 +45,6 @@
         stairTargets as stairTargetsFrom,
     } from "../../Phaser/Game/MapEditor/MapLayer/FloorOperations";
     import type { MapLayerMode } from "../../Stores/MapLayerStore";
-    import FloorLevelPicker from "./FloorLevelPicker.svelte";
     import {
         IconArrowAutofitHeight,
         IconBrush,
@@ -58,31 +57,50 @@
         IconRectangle,
         IconWall,
         IconWindow,
+        IconLayersSubtract,
     } from "@wa-icons";
 
-    // "Freehand" modes act while the pointer moves, "area" modes act on the shape dragged between two points.
-    const freehandModes: { mode: MapLayerMode; icon: typeof IconWall }[] = [
-        { mode: "wall", icon: IconWall },
-        { mode: "floorBrush", icon: IconBrush },
-        { mode: "erase", icon: IconEraser },
-    ];
-    const areaModes: { mode: MapLayerMode; icon: typeof IconWall }[] = [
-        { mode: "room", icon: IconHome },
-        { mode: "floorRectangle", icon: IconRectangle },
-        { mode: "floorFill", icon: IconBucket },
-    ];
-
-    const placedModes: { mode: MapLayerMode; icon: typeof IconWall }[] = [
-        { mode: "door", icon: IconDoor },
-        { mode: "window", icon: IconWindow },
-        { mode: "height", icon: IconArrowAutofitHeight },
-    ];
-
-    // The raised floors: slabs laid on the top of the walls, their eraser, and the stairs.
-    const floorModes: { mode: MapLayerMode; icon: typeof IconWall }[] = [
-        { mode: "slab", icon: IconStack2 },
-        { mode: "stair", icon: IconStairs },
-        { mode: "slabErase", icon: IconEraser },
+    const toolGroups: {
+        key: "freehand" | "area" | "placed" | "floors";
+        icon: typeof IconWall;
+        modes: { mode: MapLayerMode; icon: typeof IconWall }[];
+    }[] = [
+        {
+            key: "freehand",
+            icon: IconHome,
+            modes: [
+                { mode: "room", icon: IconHome },
+                { mode: "wall", icon: IconWall },
+            ],
+        },
+        {
+            key: "floors",
+            icon: IconStack2,
+            modes: [
+                { mode: "slab", icon: IconStack2 },
+                { mode: "stair", icon: IconStairs },
+                { mode: "floorBrush", icon: IconBrush },
+                { mode: "floorRectangle", icon: IconRectangle },
+                { mode: "floorFill", icon: IconBucket },
+            ],
+        },
+        {
+            key: "placed",
+            icon: IconDoor,
+            modes: [
+                { mode: "door", icon: IconDoor },
+                { mode: "window", icon: IconWindow },
+            ],
+        },
+        {
+            key: "area",
+            icon: IconEraser,
+            modes: [
+                { mode: "height", icon: IconArrowAutofitHeight },
+                { mode: "erase", icon: IconEraser },
+                { mode: "slabErase", icon: IconLayersSubtract },
+            ],
+        },
     ];
 
     /**
@@ -172,15 +190,13 @@
         disabled={(mode === "door" && !$mapLayerDoorsAvailableStore) ||
             (mode === "window" && !$mapLayerWindowsAvailableStore) ||
             (isFloorMode(mode) && !$mapLayerFloorsAvailableStore)}
-        class="flex flex-col items-center gap-1 p-2 rounded text-xs disabled:opacity-40 {$mapLayerModeStore === mode
-            ? 'bg-secondary'
-            : 'bg-white/10 hover:bg-white/20'}"
+        class="build-slot"
         data-testid="mapLayerMode-{mode}"
+        aria-label={$LL.mapEditor.mapLayer.modes[mode]()}
         aria-pressed={$mapLayerModeStore === mode}
         onclick={() => mapLayerModeStore.set(mode)}
     >
         <Icon font-size="22" />
-        <span class="text-center leading-tight">{$LL.mapEditor.mapLayer.modes[mode]()}</span>
     </button>
 {/snippet}
 
@@ -204,56 +220,39 @@
 {/snippet}
 
 <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pe-1 text-white" data-testid="mapLayerEditor">
-    <h2 class="text-lg font-bold m-0">{$LL.mapEditor.mapLayer.title()}</h2>
-    {#if $mapLayerCatalogAvailableStore && $mapLayerFloorsAvailableStore}
-        <!-- The level edited, the same as in the objects panel. -->
-        <FloorLevelPicker />
-    {/if}
-
     {#if $mapLayerCatalogAvailableStore === undefined}
         <p class="m-0 text-sm opacity-80">{$LL.mapEditor.mapLayer.catalogLoading()}</p>
     {:else if $mapLayerCatalogAvailableStore === false}
         <p class="m-0 text-sm text-warning">{$LL.mapEditor.mapLayer.catalogMissing()}</p>
     {:else}
-        <section class="flex flex-col gap-2">
-            <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.groups.freehand()}</h3>
-            <div class="grid grid-cols-3 gap-2">
-                {#each freehandModes as { mode, icon } (mode)}
-                    {@render modeButton(mode, icon)}
-                {/each}
-            </div>
-        </section>
-        <section class="flex flex-col gap-2">
-            <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.groups.area()}</h3>
-            <div class="grid grid-cols-3 gap-2">
-                {#each areaModes as { mode, icon } (mode)}
-                    {@render modeButton(mode, icon)}
-                {/each}
-            </div>
-        </section>
-        <section class="flex flex-col gap-2">
-            <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.groups.placed()}</h3>
-            <div class="grid grid-cols-3 gap-2">
-                {#each placedModes as { mode, icon } (mode)}
-                    {@render modeButton(mode, icon)}
-                {/each}
-            </div>
-        </section>
-        <section class="flex flex-col gap-2">
-            <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.groups.floors()}</h3>
-            <div class="grid grid-cols-3 gap-2">
-                {#each floorModes as { mode, icon } (mode)}
-                    {@render modeButton(mode, icon)}
-                {/each}
-            </div>
+        <!-- Every tool at hand, like the hotbar of a building game: one tray per family, the name on hover. -->
+        <div class="flex flex-col gap-2" aria-label={$LL.mapEditor.mapLayer.title()}>
+            {#each toolGroups as group (group.key)}
+                <div
+                    class="build-tray"
+                    role="group"
+                    aria-label={$LL.mapEditor.mapLayer.groups[group.key]()}
+                    data-testid="constructionGroup-{group.key}"
+                >
+                    {#each group.modes as { mode, icon } (mode)}
+                        {@render modeButton(mode, icon)}
+                    {/each}
+                </div>
+            {/each}
+        </div>
+        <p class="build-caption" data-testid="mapLayerModeCaption">
+            <b>{$LL.mapEditor.mapLayer.modes[$mapLayerModeStore]()}</b>
+            <span>{$LL.mapEditor.mapLayer.hints[$mapLayerModeStore]()}</span>
+        </p>
+        {#if isFloorMode($mapLayerModeStore)}
             {#if !$mapLayerFloorsAvailableStore}
                 <p class="m-0 text-xs opacity-70">{$LL.mapEditor.mapLayer.floorLevel.unavailable()}</p>
             {:else}
                 <details class="text-xs" data-testid="mapLayerFloorGuide">
-                    <summary class="cursor-pointer opacity-80 hover:opacity-100">
-                        {$LL.mapEditor.mapLayer.floorGuide.title()}
-                    </summary>
-                    <ol class="m-0 mt-1 flex list-decimal flex-col gap-1 ps-5 opacity-80">
+                    <summary class="cursor-pointer opacity-80 hover:opacity-100"
+                        >{$LL.mapEditor.mapLayer.floorGuide.title()}</summary
+                    >
+                    <ol class="m-0 mt-2 flex list-decimal flex-col gap-2 ps-5 opacity-80">
                         <li>{$LL.mapEditor.mapLayer.floorGuide.step1()}</li>
                         <li>{$LL.mapEditor.mapLayer.floorGuide.step2()}</li>
                         <li>{$LL.mapEditor.mapLayer.floorGuide.step3()}</li>
@@ -261,8 +260,7 @@
                     </ol>
                 </details>
             {/if}
-        </section>
-        <p class="m-0 text-sm opacity-80">{$LL.mapEditor.mapLayer.hints[$mapLayerModeStore]()}</p>
+        {/if}
 
         {#if $mapLayerModeStore === "stair"}
             <section class="flex flex-col gap-2" data-testid="mapLayerStair">
@@ -325,18 +323,23 @@
                     bind:value={$mapLayerStairOpenStore}
                     margin="mt-0"
                 />
-                <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.stairLegend.title()}</h3>
-                <ul class="m-0 flex list-none flex-col gap-1 p-0 text-xs opacity-90" data-testid="mapLayerStairLegend">
-                    {#each stairLegend as { key, color } (key)}
-                        <li class="flex items-center gap-2">
-                            <span
-                                class="inline-block h-3 w-3 shrink-0 rounded-sm border border-white/40"
-                                style="background-color: {color}"
-                            ></span>
-                            {$LL.mapEditor.mapLayer.stairLegend[key]()}
-                        </li>
-                    {/each}
-                </ul>
+                <details class="text-xs">
+                    <summary class="cursor-pointer opacity-70">{$LL.mapEditor.mapLayer.stairLegend.title()}</summary>
+                    <ul
+                        class="m-0 flex list-none flex-col gap-1 p-0 text-xs opacity-90"
+                        data-testid="mapLayerStairLegend"
+                    >
+                        {#each stairLegend as { key, color } (key)}
+                            <li class="flex items-center gap-2">
+                                <span
+                                    class="inline-block h-3 w-3 shrink-0 rounded-sm border border-white/40"
+                                    style="background-color: {color}"
+                                ></span>
+                                {$LL.mapEditor.mapLayer.stairLegend[key]()}
+                            </li>
+                        {/each}
+                    </ul>
+                </details>
             </section>
         {/if}
 
@@ -349,7 +352,6 @@
                     disabled={!$mapLayerGlazedDoorsAvailableStore}
                     margin="mt-0"
                 />
-                <p class="m-0 text-xs opacity-70">{$LL.mapEditor.mapLayer.glazedDoorHint()}</p>
             </section>
         {/if}
 
@@ -424,7 +426,6 @@
                     disabled={!$mapLayerGlassSlabsAvailableStore}
                     margin="mt-0"
                 />
-                <p class="m-0 text-xs opacity-70">{$LL.mapEditor.mapLayer.glassSlabHint()}</p>
             </section>
         {/if}
 

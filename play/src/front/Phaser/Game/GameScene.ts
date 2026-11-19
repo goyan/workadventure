@@ -251,6 +251,7 @@ import {
     raisedHandSectionsStore,
     screenShareStreamStore,
     videoStreamStore,
+    videoStreamElementsStore,
 } from "@wa/front/Stores/PeerStore";
 import type { ChatConnectionInterface, ChatUser } from "@wa/front/Chat/Connection/ChatConnection";
 import { selectedRoomStore } from "@wa/front/Chat/Stores/SelectRoomStore";
@@ -428,6 +429,8 @@ const MOUSE_WHEEL_ZOOM_RATE = 0.5;
 const CONVERSATION_BUBBLE_SPATIAL_GRID_SIZE = 64;
 /** How often the volumes of an overheard bubble follow the players: often enough for a walk, not every frame. */
 const OVERHEARD_LOUDNESS_PERIOD_MS = 200;
+/** How often the names of the players in the discussion of the local player are marked again. */
+const DISCUSSION_MARKS_PERIOD_MS = 500;
 
 export interface GameSceneInitInterface {
     reconnecting: boolean;
@@ -627,6 +630,9 @@ export class GameScene extends DirtyScene {
     private proximitySpaceManager: ProximitySpaceManager | undefined;
     private bubbleListeningManager: BubbleListeningManager | undefined;
     private overheardLoudnessUpdatedAt = -Infinity;
+    private discussionMarksUpdatedAt = -Infinity;
+    /** The players whose name is marked as in the discussion of the local player (see updateDiscussionMarks). */
+    private discussionMarked = new Set<number>();
     private scriptingVideoManager: ScriptingVideoManager | undefined;
     private gameMapPropertiesListener: GameMapPropertiesListener | undefined;
     private objectsByType = new Map<string, ITiledMapObject[]>();
@@ -1767,6 +1773,27 @@ export class GameScene extends DirtyScene {
         if (changed) overheardLoudnessStore.set(loudness);
     }
 
+    /**
+     * The players in the discussion of the local player (a bubble or a meeting room) get their name marked on the map:
+     * one sees who is in the call, even with the cameras off. Read twice a second; only the changes are applied.
+     */
+    private updateDiscussionMarks(): void {
+        const now = performance.now();
+        if (now - this.discussionMarksUpdatedAt < DISCUSSION_MARKS_PERIOD_MS) return;
+        this.discussionMarksUpdatedAt = now;
+        const inDiscussion = new Set(
+            get(videoStreamElementsStore).map(({ spaceUser }) => userIdOfSpaceUser(spaceUser.spaceUserId)),
+        );
+        for (const userId of this.discussionMarked) {
+            if (!inDiscussion.has(userId)) this.MapPlayersByKey.get(userId)?.setInDiscussion(false);
+        }
+        for (const userId of inDiscussion) {
+            // Every time: a player who just came into view is marked too.
+            this.MapPlayersByKey.get(userId)?.setInDiscussion(true);
+        }
+        this.discussionMarked = inDiscussion;
+    }
+
     /** Only the local player hears their footsteps and rolling skateboard. */
     /** The personal seasonal theme shown right now, if any. */
     public getSeasonalTheme(): SeasonalTheme | undefined {
@@ -1950,6 +1977,18 @@ export class GameScene extends DirtyScene {
         }
         this.weatherCover = { at: now, cover };
         return cover;
+    }
+
+    /** Feet of the avatars on the ground (not on a raised floor): the wild animals run from them (WanderFear). */
+    public avatarFeetOnGround(): { x: number; y: number }[] {
+        const feet: { x: number; y: number }[] = [];
+        if (this.CurrentPlayer && this.CurrentPlayer.getFloorZ() === 0) {
+            feet.push({ x: this.CurrentPlayer.x, y: this.CurrentPlayer.y + CHARACTER_BODY_OFFSET_Y });
+        }
+        for (const player of this.MapPlayersByKey.values()) {
+            if (player.getFloorZ() === 0) feet.push({ x: player.x, y: player.y + CHARACTER_BODY_OFFSET_Y });
+        }
+        return feet;
     }
 
     /** Feet of the players who leave footprints: everyone but the riders and the skaters. */
@@ -2218,6 +2257,7 @@ export class GameScene extends DirtyScene {
             this.treeSeasonEffects?.update(time, serverDate?.getTime() ?? time);
             this.updateFootsteps();
             this.updateOverheardLoudness();
+            this.updateDiscussionMarks();
         }
 
         for (const addedPlayer of this.remotePlayersRepository.getAddedPlayers()) {
@@ -3668,11 +3708,11 @@ export class GameScene extends DirtyScene {
                             // in "auto"); in the other tools the one chosen in the panel, every floor in "auto".
                             const choice = get(mapEditorPlacementLevelStore);
                             const level =
-                                get(mapEditorSelectedToolStore) === EditorToolName.MapLayerEditor
-                                    ? get(mapLayerLevelStore)
-                                    : choice === "auto"
-                                      ? Number.POSITIVE_INFINITY
-                                      : choice;
+                                choice !== "auto"
+                                    ? choice
+                                    : get(mapEditorSelectedToolStore) === EditorToolName.MapLayerEditor
+                                      ? get(mapLayerLevelStore)
+                                      : Number.POSITIVE_INFINITY;
                             return { open: get(mapEditorModeStore), level };
                         },
                         (z) => {

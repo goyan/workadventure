@@ -12,10 +12,12 @@ import type { GameScene } from "../GameScene";
 import {
     mapEditorAskToClaimPersonalAreaStore,
     mapEditorModeStore,
+    mapEditorPlacementLevelStore,
     mapEditorSnapEnabledStore,
     mapEditorSelectedToolStore,
     mapEditorWamSettingsEditorToolCurrentMenuItemStore,
 } from "../../../Stores/MapEditorStore";
+import { floorLevelCurrentStore, floorLevelViewedStore } from "../../../Stores/FloorLevelsStore";
 import { mapEditorActivated, mapEditorActivatedForThematics } from "../../../Stores/MenuStore";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import LL from "../../../../i18n/i18n-svelte";
@@ -825,6 +827,9 @@ export class MapEditorModeManager {
         this.mapEditorModeUnsubscriber = mapEditorModeStore.subscribe((active) => {
             const wasActive = this.active;
             this.active = active;
+            if (active && !wasActive) {
+                mapEditorPlacementLevelStore.set(get(floorLevelViewedStore) ?? get(floorLevelCurrentStore));
+            }
             if (!active && wasActive) {
                 mapEditorSnapEnabledStore.set(true);
             }
@@ -836,9 +841,11 @@ export class MapEditorModeManager {
             this.equipTool(
                 this.lastlyUsedTool && this.lastlyUsedTool != EditorToolName.CloseMapEditor
                     ? this.lastlyUsedTool
-                    : get(mapEditorActivated) || get(mapEditorActivatedForThematics)
-                      ? EditorToolName.EntityEditor
-                      : EditorToolName.ExploreTheRoom,
+                    : get(mapEditorActivated)
+                      ? EditorToolName.MapLayerEditor
+                      : get(mapEditorActivatedForThematics)
+                        ? EditorToolName.EntityEditor
+                        : EditorToolName.ExploreTheRoom,
             );
         });
     }

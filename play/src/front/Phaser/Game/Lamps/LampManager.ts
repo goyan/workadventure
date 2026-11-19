@@ -19,6 +19,7 @@ import { lampDemoEnabledStore } from "../../../Stores/LampDemoStore";
 import { lampEffectsEnabledStore, partyRoomsStore } from "../../../Stores/LampEffectsStore";
 import { LampMusicSource, lampMusicSourceStore } from "../../../Stores/LampMusicSourceStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
+import { nightInEditorStore } from "../../../Stores/NightStore";
 import type { Entity } from "../../ECS/Entity";
 import { DEPTH_LAMP_LIGHT_INDEX } from "../DepthIndexes";
 import { FLOOR_OBJECT_DEPTH } from "../../ECS/EntityLayerDepth";
@@ -160,6 +161,8 @@ export class LampManager {
     private readonly unsubscribers: Unsubscriber[] = [];
     private entityStates: EntityStatesManager | undefined;
     private editorOpen = false;
+    /** The editor shows the lighting of the game (its sun and moon button): the lamps shine there, so they can be set. */
+    private lightsInEditor = false;
     private effectsEnabled = true;
     private musicSource = LampMusicSource.Rooms;
     private lastReconcileAt: number | undefined;
@@ -225,6 +228,10 @@ export class LampManager {
             }),
             mapEditorModeStore.subscribe((open) => {
                 this.editorOpen = open;
+            }),
+            nightInEditorStore.subscribe((shown) => {
+                this.lightsInEditor = shown;
+                this.scene.markDirty();
             }),
             // The demo follows the address (`?lampDemo`) and the setting of the menu, which can change while playing.
             lampDemoEnabledStore.subscribe((enabled) => this.setDemo(resolveLampDemo(options.demo, enabled))),
@@ -619,7 +626,7 @@ export class LampManager {
         this.frames.clear();
         // Before anything that returns early: an RGB lamp shines without music, and with the light effects turned off
         // (it is a steady light, not an effect); a turning one then stands still at its direction.
-        this.rgbLamps.update(this.editorOpen, this.effectsEnabled);
+        this.rgbLamps.update(this.editorOpen, this.effectsEnabled, this.lightsInEditor);
         const demoFrame = this.demoSignal?.read(now);
         // Read once per image so every lamp sees the same beat.
         const personalFrame =
@@ -662,11 +669,12 @@ export class LampManager {
                 }
             }
             const space = placed.jam && this.spaceNameOf(placed.jam);
-            // In the editor a lamp is always lit, steady, so that it can be placed; with a demo, lit by the demo.
-            const lit =
-                this.editorOpen ||
-                demoFrame !== undefined ||
-                (personalFrame !== undefined ? !isSilentFrame(personalFrame) : space !== undefined);
+            // In the editor a lamp is out, so that the map stays readable, unless the editor shows the lighting of the game:
+            // it is then lit, steady, so that it can be set. With a demo, lit by the demo.
+            const lit = this.editorOpen
+                ? this.lightsInEditor
+                : demoFrame !== undefined ||
+                  (personalFrame !== undefined ? !isSilentFrame(personalFrame) : space !== undefined);
             const elapsed = placed.lastUpdateAt === undefined ? 0 : now - placed.lastUpdateAt;
             placed.lastUpdateAt = now;
             placed.brightness = nextBrightness(placed.brightness, lit, elapsed);

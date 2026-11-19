@@ -31,6 +31,7 @@ import {
     ABOVE_ALPHA,
     ABOVE_TINT,
     aboveLevelShows,
+    editorLevelAlpha,
     STAIR_OVER_AVATAR_ALPHA,
     stairCoversAvatar,
     stairDepth,
@@ -143,8 +144,6 @@ interface StairDrawing {
     groundBottom: number;
 }
 
-/** Opacity of the floors above the one being edited, in the map editor. */
-const EDITOR_ABOVE_ALPHA = 0.3;
 /** The floors of the map are read again this often: the map editor changes them. */
 const MAP_REFRESH_MS = 400;
 
@@ -432,7 +431,9 @@ export class FloorSpike {
         const tile = avatarGroundTile(p, this.state.elevation);
         const labels = editorOpen
             ? []
-            : stairLabels(stairs, tile, this.state, (elevation) => floorLevelName(get(LL), elevation));
+            : stairLabels(stairs, tile, this.state, (elevation) =>
+                  floorLevelName(get(LL), elevation, get(floorLevelsBuiltStore)),
+              );
         this.hints.update(stairs, labels);
         // The stack of the floors under the clock: the floor stood on, the last one while on a stair.
         floorLevelsHiddenStore.set(editorOpen);
@@ -507,12 +508,16 @@ export class FloorSpike {
         // The floors that hide the avatar outdoors: they let it show through a window around it.
         const windowed = new Set<LevelDrawing>();
         // The floors the avatar is on: its own, or both floors of the stair it climbs.
-        const current = viewed === undefined ? currentLevels(this.state, model.getStairs()) : new Set([viewed]);
+        const current =
+            editor.open && Number.isFinite(editor.level)
+                ? new Set([editor.level])
+                : viewed === undefined
+                  ? currentLevels(this.state, model.getStairs())
+                  : new Set([viewed]);
         for (const level of this.levels) {
             let target = 1;
             if (editor.open) {
-                // In the editor, the floors above the one being edited let it show through.
-                if (level.elevation > editor.level) target = EDITOR_ABOVE_ALPHA;
+                target = editorLevelAlpha(level.elevation, editor.level);
             } else if (viewed !== undefined) {
                 target = level.elevation > viewed ? 0 : 1;
             } else if (levelLook(level.elevation, current) === "above") {
@@ -529,7 +534,7 @@ export class FloorSpike {
             }
             // The slabs over a stair only let it show through from under their floor: standing on that floor, or
             // above it, one sees a plain floor.
-            const seeThrough = editor.open || levelLook(level.elevation, current) === "above";
+            const seeThrough = levelLook(level.elevation, current) === "above";
             if (seeThrough !== level.seeThrough) {
                 level.seeThrough = seeThrough;
                 level.show(level.alpha);
@@ -555,7 +560,7 @@ export class FloorSpike {
         this.fadeWindow(windowed, p, delta);
         // The stairs of the floor of the avatar show: they tell how to go up and down (LevelFocus). A stair standing on
         // a floor above the avatar shows with that floor; one coming from under the avatar is lifted over the veil.
-        const veil = editor.open ? undefined : veilDepth(current);
+        const veil = editor.open && !Number.isFinite(editor.level) ? undefined : veilDepth(current);
         for (const stair of this.stairDrawings) {
             const { entity } = stair;
             // A stair drawn over the avatar lets it show through, without fading away (it tells the way up).
@@ -578,10 +583,10 @@ export class FloorSpike {
             if (stair.alpha !== target) {
                 stair.alpha = fadeToward(stair.alpha, target, delta, 1 - STAIR_OVER_AVATAR_ALPHA, this.reducedMotion);
             }
-            const above = levelLook(stair.base, current) === "above";
-            // Out of the editor, only the stairs leaving or reaching the floor of the avatar show.
+            const above = levelLook(stair.base, current) === "above" && !editor.open;
+            // Only the stairs connecting the focused floor show, including in construction mode.
             const shown =
-                !editor.open && !stairShows(stair, current)
+                (!editor.open || Number.isFinite(editor.level)) && !stairShows(stair, current)
                     ? 0
                     : above
                       ? Math.min(stair.alpha, stair.floor?.alpha ?? 1)

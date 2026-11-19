@@ -19,11 +19,16 @@ export const floorLevelCurrentStore = writable<number>(0);
 export const floorLevelsHiddenStore = writable<boolean>(false);
 export const floorLevelViewedStore = writable<number | undefined>(undefined);
 
-/** A floor named as in the map editor: "Sol", "Niveau 2", "Niveau 2+3". */
-export function floorLevelName(ll: TranslationFunctions, elevation: number): string {
-    return elevation > 0
-        ? ll.mapEditor.mapLayer.floorLevel.level({ height: floorLevelTiles(elevation) })
-        : ll.mapEditor.mapLayer.floorLevel.ground();
+/**
+ * A floor named as in the map editor, counted from the ground: "Sol", "Étage 1", "Étage 2"… among the floors that have
+ * slabs (`built`). A height with no slab yet keeps the height of its walls: "Niveau 2+3".
+ */
+export function floorLevelName(ll: TranslationFunctions, elevation: number, built: readonly number[] = []): string {
+    if (elevation <= 0) return ll.mapEditor.mapLayer.floorLevel.ground();
+    const rank = [...built].sort((a, b) => a - b).indexOf(elevation) + 1;
+    return rank > 0
+        ? ll.mapEditor.mapLayer.floorLevel.storey({ rank })
+        : ll.mapEditor.mapLayer.floorLevel.level({ height: floorLevelTiles(elevation) });
 }
 
 /** The stack shown under the clock: none on a map without raised floors, nor while the map editor is open. */
@@ -47,5 +52,5 @@ export function levelChangePulses(previous: number | undefined, next: number, re
 export const floorLevelsStore: Readable<FloorLevelStack | undefined> = derived(
     [floorLevelsBuiltStore, floorLevelCurrentStore, floorLevelsHiddenStore, LL, floorLevelViewedStore],
     ([built, current, hidden, ll, viewed]) =>
-        floorLevelStack(built, current, hidden, (elevation) => floorLevelName(ll, elevation), viewed),
+        floorLevelStack(built, current, hidden, (elevation) => floorLevelName(ll, elevation, built), viewed),
 );

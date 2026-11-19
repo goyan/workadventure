@@ -3,6 +3,7 @@ import {
     LEVEL_FADE_MS,
     VEIL_ALPHA,
     aboveLevelShows,
+    editorLevelAlpha,
     currentLevels,
     stairCoversAvatar,
     stairDepth,
@@ -134,5 +135,16 @@ describe("a stair seen from a floor", () => {
     it("is hidden on a floor under or above the avatar, which it would seem to lead to", () => {
         expect(stairShows({ base: 0, top: 52 }, new Set([208]))).toBe(false);
         expect(stairShows({ base: 104, top: 156 }, new Set([0]))).toBe(false);
+    });
+});
+
+describe("construction level visibility", () => {
+    it("shows the selected platform and hides every other platform", () => {
+        expect([52, 104, 156].map((level) => editorLevelAlpha(level, 104))).toEqual([0, 1, 0]);
+        expect(editorLevelAlpha(52, 0)).toBe(0);
+        expect(editorLevelAlpha(52, 84)).toBe(0);
+    });
+    it("keeps the whole building available in automatic mode", () => {
+        expect(editorLevelAlpha(52, Number.POSITIVE_INFINITY)).toBe(1);
     });
 });

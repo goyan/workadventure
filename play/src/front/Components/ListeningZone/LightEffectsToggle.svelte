@@ -20,9 +20,8 @@
 <TooltipAbove {label}>
     <button
         type="button"
-        class="relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-0 transition {on
-            ? 'disco-on bg-fuchsia-500/25 text-white'
-            : 'bg-white/10 text-white/50'} hover:brightness-125 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:cursor-default disabled:opacity-40"
+        class="light-toggle relative flex cursor-pointer items-center justify-center rounded-full transition hover:brightness-110 disabled:cursor-default disabled:opacity-40"
+        class:disco-on={on}
         aria-pressed={on}
         {disabled}
         aria-label={label}
@@ -61,7 +60,7 @@
             {#if !on}<path d="M3 3l18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />{/if}
         </svg>
         <span
-            class="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full border border-white/60 bg-slate-900 text-white"
+            class="light-toggle-badge absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full"
             aria-hidden="true"
         >
             <IconUser class="h-3 w-3" />
@@ -70,6 +69,24 @@
 </TooltipAbove>
 
 <style>
+    /* Like the other buttons of the look of the lounge (JamThemePicker): the colours of its theme, light or dark. */
+    .light-toggle {
+        width: 34px;
+        height: 34px;
+        border: 1px solid var(--jam-line, rgb(255 255 255 / 0.15));
+        color: color-mix(in srgb, var(--ui-foreground, #fff) 60%, transparent);
+        background: color-mix(in srgb, var(--ui-foreground, #fff) 6%, transparent);
+    }
+    .light-toggle.disco-on {
+        color: var(--ui-foreground, #fff);
+        border-color: rgb(217 70 239 / 0.6);
+        background: rgb(217 70 239 / 0.18);
+    }
+    .light-toggle-badge {
+        color: var(--ui-foreground, #fff);
+        background: var(--jam-background, #0f172a);
+        border: 1px solid var(--jam-line, rgb(255 255 255 / 0.6));
+    }
     .disco-on {
         box-shadow:
             0 0 10px rgb(217 70 239 / 0.7),

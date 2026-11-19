@@ -136,9 +136,9 @@ function start(entities: Entity[], grid?: number[][]) {
     const context = setup(grid);
     current = context.lamps;
     const map = new Map(entities.map((object) => [object.entityId, object]));
-    const tick = (editorOpen = false): void => {
+    const tick = (editorOpen = false, lightsInEditor = false): void => {
         context.lamps.reconcile(map);
-        context.lamps.update(editorOpen);
+        context.lamps.update(editorOpen, true, lightsInEditor);
     };
     tick();
     return { ...context, map, tick };
@@ -463,10 +463,19 @@ describe("RgbLamps a switch puts out", () => {
         expect(scene.markDirty.mock.calls.length).toBe(0);
     });
 
-    it("shines in the map editor even when out, so that it can be set", () => {
+    it("is out in the map editor, even when on, so that its glow does not hide the map", () => {
+        const { tick } = start([lamp("a", 624, 624).entity]);
+        tick();
+        expect(visuals[0].visible).toBe(true);
+        tick(true);
+        expect(visuals[0].visible).toBe(false);
+        expect(get(rgbLampLightsStore)).toHaveLength(0);
+    });
+
+    it("shines in the map editor, even when out, once the editor shows the lighting of the game", () => {
         switchedOff.add("a");
         const { tick } = start([lamp("a", 624, 624).entity]);
-        tick(true);
+        tick(true, true);
         expect(visuals[0].visible).toBe(true);
         expect(visuals[0].draws.at(-1)?.intensity).toBe(1);
         expect(get(rgbLampLightsStore)).toHaveLength(1);

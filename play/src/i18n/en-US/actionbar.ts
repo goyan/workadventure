@@ -59,6 +59,7 @@ const actionbar = {
         percent: "{percent}%",
     },
     participantListPlaceholder: "Participants list",
+    inDiscussion: "In the discussion",
     participantSendMessage: "Send a message",
     participantInviteUser: "Invite a user",
     participantExitFullscreen: "Exit fullscreen",

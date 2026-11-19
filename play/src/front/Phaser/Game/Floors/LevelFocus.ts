@@ -105,3 +105,8 @@ export function stairCoversAvatar(
 export function stairShows(stair: { base: number; top: number }, current: ReadonlySet<number>): boolean {
     return current.has(stair.base) || current.has(stair.top);
 }
+
+/** In construction mode only the selected platform is visible; auto keeps the whole building. */
+export function editorLevelAlpha(elevation: number, selected: number): number {
+    return !Number.isFinite(selected) || elevation === selected ? 1 : 0;
+}
