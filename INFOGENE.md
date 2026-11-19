@@ -3238,6 +3238,23 @@ sauvegardée avec lui ; un pré sauvegardé avant ce lot se recharge, vert.
 au redémarrage de `back`. Rien n'a été vu à l'écran à l'écriture de cette section : onglet, teinte de l'herbe,
 bandeau et vent manuel ne sont validés que par les tests.
 
+## Feu de végétation : les flammes (lot 3)
+
+Le lot 2 fait brûler le sol sec (patch de feu au clic maintenu, propagation au vent, cendres, extinction par l'eau) ;
+ce lot dessine le feu. Rien ne change côté serveur ni sur le fil.
+
+- `Fire/FlameShape.ts` (pur, testé) : pour une case en feu, la flamme (hauteur, penchée sous le vent, contour à
+  pointes), ses braises et ses bouffées de fumée, selon l'intensité de la case, le temps et une graine propre à la case.
+- `Fire/FireView.ts` : une couche de dessin par rangée de cases, à la profondeur du pied (une flamme passe devant ce
+  qui est plus au nord et derrière ce qui est plus au sud) ; quatre langues emboîtées, du rouge au blanc chaud ;
+  fumée sous le voile de nuit ; lueur en fusion additive au-dessus des lumières des lampes.
+- 400 flammes au plus à l'écran, les plus proches du centre de la vue (`nearestTiles`).
+- Mouvement réduit : flammes fixes, sans braises. Le scintillement reste doux (pas de flash).
+- Chaque navigateur dessine ses flammes : deux joueurs voient le même feu, pas les mêmes langues.
+
+Limites : flammes au sol seulement (les arbres ne brûlent pas encore), pas de son, la lueur n'éclaire pas la nuit
+comme une lampe (elle ne perce pas le voile).
+
 ## Catastrophes : le météore
 
 Conception et plan dans le dépôt d'infra, `docs/superpowers/{specs,plans}/2026-11-19-catastrophes-meteore*`. Lot 1 :
