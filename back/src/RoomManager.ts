@@ -232,6 +232,14 @@ const roomManager = {
                             room.reportSwitchAnimals(user, message.message.reportSwitchPresenceMessage.switchIds);
                             break;
                         }
+                        case "tameAnimalMessage": {
+                            room.tameAnimal(user, message.message.tameAnimalMessage.animalId);
+                            break;
+                        }
+                        case "releaseAnimalsMessage": {
+                            room.releaseAnimals(user, message.message.releaseAnimalsMessage.animalId);
+                            break;
+                        }
                         case "setEntityStateMessage": {
                             socketManager.handleSetEntityStateEvent(room, user, message.message.setEntityStateMessage);
                             break;

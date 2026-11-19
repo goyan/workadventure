@@ -15,7 +15,10 @@ import {
     SPECIES_IDS,
     SPECIES_WIRE,
     speciesCensus,
+    leadTamed,
+    releaseAnimals,
     stepPopulation,
+    tameAnimal,
     waterBodiesOf,
     WaterGrid as LifeWaterGrid,
     wireKindOf,
@@ -60,6 +63,9 @@ const SavedSpeciesTally = z.object({
     diedDry: count,
     meals: z.record(z.enum(SPECIES_IDS), count),
 });
+
+/** A player is answered this many times a second when they ask to tame an animal. */
+const TAME_ASKS_A_SECOND = 5;
 
 const SavedLife = z.object({
     animals: z.array(Animal).max(1000),
@@ -160,7 +166,41 @@ export class AquaticLifeManager {
         private readonly avatars: () => readonly { x: number; y: number }[] = () => [],
         /** The size of the map in cells of the relief (16 px), once its Tiled map is read. */
         private readonly mapSize: () => { width: number; height: number } | undefined = () => undefined,
+        /**
+         * Where a player of the room stands, in map pixels, and whether on the ground; undefined once they left:
+         * the animals they tamed follow them, and are let go when they go.
+         */
+        private readonly masterAt: (
+            userId: number,
+        ) => { x: number; y: number; ground: boolean } | undefined = () => undefined,
     ) {}
+
+    /** When each player last asked to tame an animal, to answer them TAME_ASKS_A_SECOND times a second at most. */
+    private readonly tameAsks = new Map<number, number[]>();
+
+    /**
+     * A player asks for an animal near them (see tameAnimal for what is refused). The room is told at once when it
+     * is theirs: the animal stops where it is on every screen, and follows them.
+     */
+    public tame(userId: number, animalId: number): boolean {
+        const now = this.now();
+        const asks = (this.tameAsks.get(userId) ?? []).filter((at) => now - at < 1000);
+        if (asks.length >= TAME_ASKS_A_SECOND) return false;
+        asks.push(now);
+        this.tameAsks.set(userId, asks);
+        if (this.room.getWam()?.settings?.life?.landEnabled !== true) return false;
+        const master = this.masterAt(userId);
+        if (!master || !master.ground) return false;
+        if (tameAnimal(this.population, animalId, { id: userId, x: master.x, y: master.y }) !== undefined) return false;
+        this.tell();
+        return true;
+    }
+
+    /** A player lets go one of their animals, or all of them (also when they leave the room). */
+    public release(userId: number, animalId?: number): void {
+        this.tameAsks.delete(userId);
+        if (releaseAnimals(this.population, userId, animalId) > 0) this.tell();
+    }
 
     /**
      * Brings back the animals saved before a restart; their ages went on meanwhile. A store that does not answer,
@@ -172,6 +212,8 @@ export class AquaticLifeManager {
             const fields = await this.store.repository.loadVariables(this.hashKey());
             if (!fields.state) return;
             const saved = SavedLife.parse(JSON.parse(fields.state));
+            // A user id lasts as long as a connection: nobody is the master of an animal saved before a restart.
+            for (const animal of saved.animals) animal.tamedBy = undefined;
             this.population = {
                 animals: saved.animals,
                 nextId: saved.nextId,
@@ -336,6 +378,8 @@ export class AquaticLifeManager {
         else this.land = undefined;
         const now = this.now();
         this.since ??= now;
+        // The tamed animals go with their masters; those whose master left are free again.
+        leadTamed(this.population, this.masterAt, this.land);
         const tally = stepPopulation(
             this.population,
             grid ?? NO_WATER,
@@ -423,6 +467,7 @@ export class AquaticLifeManager {
                 kind: wireKindOf(animal.kind, animal.sex ?? "male"),
                 x: Math.round(animal.x),
                 y: Math.round(animal.y),
+                owner: animal.tamedBy,
             })),
             species: this.speciesStats(),
             stats: {
