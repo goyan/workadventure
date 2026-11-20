@@ -201,6 +201,7 @@ export { default as IconBulb } from "~icons/tabler/bulb";
 export { default as IconPlant } from "~icons/tabler/plant";
 export { default as IconBox } from "~icons/tabler/box";
 export { default as IconDeviceDesktop } from "~icons/tabler/device-desktop";
+export { default as IconWorld } from "~icons/tabler/world";
 export { default as IconCategory } from "~icons/tabler/category-2";
 export { default as IconLayersSubtract } from "~icons/tabler/layers-subtract";
 export { default as IconRipple } from "~icons/tabler/ripple";

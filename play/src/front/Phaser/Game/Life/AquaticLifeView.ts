@@ -10,6 +10,9 @@ const AQUATIC_DEPTH = 0.66;
 const MARGIN_PX = 32;
 /** Seen through the water. */
 const AQUATIC_ALPHA = 0.7;
+/** Caught in the ice: paler, blue, still. */
+const FROZEN_ALPHA = 0.45;
+const FROZEN_TINT = 0xbfe0f0;
 
 /**
  * Draws the animals of the water of the relief: an image each, where AquaticLife says, turned towards where it
@@ -27,6 +30,8 @@ export class AquaticLifeView {
         private readonly life: AquaticLife,
         private readonly isShown: () => boolean,
         private readonly reducedMotion: () => boolean,
+        /** Whether the water is frozen there for this player (Frost.ts): the animal stops under the ice. */
+        private readonly isFrozenAt: (x: number, y: number) => boolean = () => false,
     ) {}
 
     public update(now: number): void {
@@ -52,10 +57,12 @@ export class AquaticLifeView {
             // A bright fish on dark water is told apart down to a single pixel: not drawn under it only.
             if (!distinguishable(this.scene, animal.kind >> 1 === 1 ? DOLPHIN_PX : FISH_PX, 1)) continue;
             seen.add(animal.id);
-            const x = Math.round(animal.x);
-            const y = Math.round(animal.y);
-            const alpha = animal.alpha * AQUATIC_ALPHA;
             let image = this.images.get(animal.id);
+            // Under the ice everything at sea stops where it was: it moves on again once the water thaws.
+            const frozen = this.isFrozenAt(image?.x ?? animal.x, image?.y ?? animal.y);
+            const x = frozen && image ? image.x : Math.round(animal.x);
+            const y = frozen && image ? image.y : Math.round(animal.y);
+            const alpha = animal.alpha * (frozen ? FROZEN_ALPHA : AQUATIC_ALPHA);
             if (!image) {
                 image = this.scene.add.image(x, y, ensureAquaticTexture(this.scene, animal.kind));
                 image.setDepth(AQUATIC_DEPTH);
@@ -66,7 +73,9 @@ export class AquaticLifeView {
             }
             image.setPosition(x, y);
             image.setAlpha(alpha);
-            image.setFlipX(animal.facingLeft);
+            if (frozen) image.setTint(FROZEN_TINT);
+            else image.clearTint();
+            if (!frozen) image.setFlipX(animal.facingLeft);
         }
         for (const [id, image] of this.images) {
             if (seen.has(id)) continue;

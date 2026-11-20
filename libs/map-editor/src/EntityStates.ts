@@ -8,6 +8,11 @@ export type EntityStateValue = "true" | "false";
 /** An object the server knows nothing about is on: the maps made before the switches keep their lights. */
 export const ENTITY_STATE_DEFAULT: EntityStateValue = "true";
 
+/** The state of an object the server knows nothing about, for a key: lit, and its water cold (not heated). */
+export function entityStateDefault(key: EntityStateKey): EntityStateValue {
+    return key === "hot" ? "false" : ENTITY_STATE_DEFAULT;
+}
+
 /**
  * How far a switch reaches in "zone" mode, as the server checks it: 60 tiles, the largest light a lamp may have. The
  * front finds the room exactly; the server, which knows neither the size of the objects nor the raised floors, only

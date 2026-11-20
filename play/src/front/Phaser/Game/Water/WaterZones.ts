@@ -3,6 +3,7 @@ import type { InteractionTrigger } from "@workadventure/map-editor";
 import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRectangles";
 import { getObjectInteraction } from "../../../Utils/ObjectCategories";
 import type { GameScene } from "../GameScene";
+import { isPoolFrozen } from "../Ice/FrozenWater";
 
 /** A rectangle of water in world pixels. */
 export interface WaterRectangle {
@@ -12,6 +13,9 @@ export interface WaterRectangle {
     height: number;
     /** `auto`: players dive on touching it; `key` (default): with the interaction key at its edge. */
     trigger?: InteractionTrigger;
+    /** The object (a pool) the water belongs to, and its depth on the screen: its ice is drawn just over it. */
+    entityId?: string;
+    depth?: number;
 }
 
 interface Point {
@@ -34,6 +38,8 @@ interface CachedWater {
     scene: Phaser.Scene;
     frame: number;
     ground: WaterRectangle[];
+    /** The pools of the ground frozen for this player (FrozenWater.ts): skated on, not swum in. */
+    frozen: WaterRectangle[];
     raised: (WaterRectangle & { elevation: number })[];
 }
 let cache: CachedWater | undefined;
@@ -48,6 +54,7 @@ let cache: CachedWater | undefined;
  */
 export function getWaterRectangles(scene: Phaser.Scene, elevation = 0): WaterRectangle[] {
     const all = allWaterRectangles(scene);
+    // A frozen pool is no water: one skates on it (getFrozenPoolRectangles).
     if (elevation < 2) return all.ground;
     return all.raised.filter((rectangle) => Math.abs(rectangle.elevation - elevation) < 2);
 }
@@ -70,12 +77,24 @@ function allWaterRectangles(scene: Phaser.Scene): CachedWater {
             const elevation = entity.getElevation?.() ?? 0;
             for (const rectangle of getPrefabCollisionRectangles({ x: entity.x, y: entity.y }, prefab.water)) {
                 if (elevation > 0) raised.push({ ...rectangle, trigger, elevation });
-                else ground.push({ ...rectangle, trigger });
+                else ground.push({ ...rectangle, trigger, entityId: entity.entityId, depth: entity.depth });
             }
         }
     }
-    cache = { scene, frame, ground, raised };
+    const frozen = ground.filter((rectangle) => isPoolFrozen(gameScene, rectangle));
+    cache = {
+        scene,
+        frame,
+        ground: frozen.length > 0 ? ground.filter((rectangle) => !frozen.includes(rectangle)) : ground,
+        frozen,
+        raised,
+    };
     return cache;
+}
+
+/** The pools of the ground frozen for this player: their ice is skated on, as a rink. */
+export function getFrozenPoolRectangles(scene: Phaser.Scene): WaterRectangle[] {
+    return allWaterRectangles(scene).frozen;
 }
 
 /** One swims in the water of the relief from this depth on, in pixels (half a tile); under it one walks. */

@@ -1,7 +1,13 @@
 import { derived, get, writable, type Readable, type Writable } from "svelte/store";
+import type { WeatherLocation } from "@workadventure/map-editor";
 import { localUserStore } from "../Connection/LocalUserStore";
 import { NIGHT_DARKNESS_MAX, NIGHT_DARKNESS_MIN, NIGHT_MAX_OPACITY } from "../Phaser/Game/Night/NightClock";
-import { createPersistedNumberStore, createPersistedSwitchStore } from "./PersistedSwitchStore";
+import { WorldMoment, type WorldPoint } from "../Phaser/Game/Night/WorldDaylight";
+import {
+    createPersistedChoiceStore,
+    createPersistedNumberStore,
+    createPersistedSwitchStore,
+} from "./PersistedSwitchStore";
 
 export enum NightMode {
     Server = "server",
@@ -9,7 +15,59 @@ export enum NightMode {
     Disabled = "disabled",
     /** Night all day long: the sky of a Paris night, whatever the time. */
     Always = "always",
+    /** The sky of a city of the world where it is now the moment chosen (worldMomentStore), at the server time. */
+    World = "world",
 }
+
+/** The moment of the day of the sky of the world (NightMode.World), for this player. */
+export const worldMomentStore = createPersistedChoiceStore(
+    "nightWorldMoment",
+    Object.values(WorldMoment),
+    WorldMoment.Noon,
+);
+/** The hour chosen for the sky of the world (WorldMoment.Custom), in minutes since midnight. */
+export const worldCustomMinutesStore = createPersistedNumberStore("nightWorldMinutes", 10 * 60, 0, 1439);
+/**
+ * A point chosen on the map of the world (NightMode.World): its sky at its own time. None: the city where it is the
+ * moment chosen (worldMomentStore). Kept in the browser.
+ */
+export const worldPointStore = createWorldPointStore();
+
+function createWorldPointStore(): Writable<WorldPoint | undefined> {
+    const key = "nightWorldPoint";
+    let initial: WorldPoint | undefined;
+    try {
+        const value: unknown = JSON.parse(localStorage.getItem(key) ?? "null");
+        if (
+            typeof value === "object" &&
+            value !== null &&
+            "latitude" in value &&
+            "longitude" in value &&
+            typeof value.latitude === "number" &&
+            typeof value.longitude === "number" &&
+            Math.abs(value.latitude) <= 90 &&
+            Math.abs(value.longitude) <= 180
+        ) {
+            initial = { latitude: value.latitude, longitude: value.longitude };
+        }
+    } catch {
+        // Storage refused or broken: no point.
+    }
+    const store = writable<WorldPoint | undefined>(initial);
+    const set = (point: WorldPoint | undefined): void => {
+        try {
+            if (point) localStorage.setItem(key, JSON.stringify(point));
+            else localStorage.removeItem(key);
+        } catch {
+            // Storage refused: the point lasts until the page is closed.
+        }
+        store.set(point);
+    };
+    return { subscribe: store.subscribe, set, update: (updater) => set(updater(get(store))) };
+}
+
+/** The city whose sky is shown (NightMode.World); undefined otherwise. */
+export const worldCityStore = writable<WeatherLocation | undefined>(undefined);
 
 const NIGHT_MODE_KEY = "nightMode";
 

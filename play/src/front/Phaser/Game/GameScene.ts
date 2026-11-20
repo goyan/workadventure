@@ -51,6 +51,7 @@ import { AirplaneSounds, AIRPLANE_SOUND } from "@wa/front/Phaser/Vehicle/Airplan
 import { SkateboardSounds, SKATEBOARD_SOUNDS } from "@wa/front/Phaser/Vehicle/SkateboardSounds";
 import { Vehicle } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { AIRPLANE_IMAGE_URL, AIRPLANE_SOURCE_TEXTURE } from "@wa/front/Phaser/Vehicle/AirplaneArtwork";
+import { GROUND_TEXTURE_URLS } from "@wa/front/Phaser/Game/Terrain/TexturedGround";
 import { textMessageStore } from "@wa/front/Stores/TypeMessageStore/TextMessageStore";
 import { connectionManager } from "@wa/front/Connection/ConnectionManager";
 import { urlManager } from "@wa/front/Url/UrlManager";
@@ -381,6 +382,8 @@ import { WeatherManager } from "./Weather/WeatherManager";
 import { TerrainWater } from "./Terrain/TerrainWater";
 import { AquaticLife } from "./Life/AquaticLife";
 import { AquaticLifeView } from "./Life/AquaticLifeView";
+import { isOnFrozenWater } from "./Ice/FrozenWater";
+import { FrozenPoolsView } from "./Ice/FrozenPoolsView";
 import { LandLifeView } from "./Life/LandLifeView";
 import { GullLifeView, isGullKind } from "./Life/GullLifeView";
 import { LandCompanions } from "./Life/LandCompanions";
@@ -621,6 +624,8 @@ export class GameScene extends DirtyScene {
     private catastropheSubscription: Subscription | undefined;
     /** The animals of the water of the relief, as the server tells them. */
     private readonly aquaticLife = new AquaticLife();
+    /** The ice of the frozen pools and the steam of the heated ones, in the cold. */
+    private frozenPoolsView: FrozenPoolsView | undefined;
     private aquaticLifeView: AquaticLifeView | undefined;
     private readonly gullLife = new AquaticLife(isGullKind);
     private gullLifeView: GullLifeView | undefined;
@@ -788,6 +793,8 @@ export class GameScene extends DirtyScene {
     //hook preload scene
     preload(): void {
         this.load.image(AIRPLANE_SOURCE_TEXTURE, AIRPLANE_IMAGE_URL);
+        // The ground textures of the relief (soils, grass, snow): ready before its first drawing.
+        for (const url of GROUND_TEXTURE_URLS) this.load.image(url, url);
         //initialize frame event of scripting API
         this.listenToIframeEvents();
 
@@ -1732,6 +1739,8 @@ export class GameScene extends DirtyScene {
         this.terrainView = undefined;
         this.waterFlowView?.destroy();
         this.waterFlowView = undefined;
+        this.frozenPoolsView?.destroy();
+        this.frozenPoolsView = undefined;
         this.aquaticLifeView?.destroy();
         this.aquaticLifeView = undefined;
         this.gullLifeView?.destroy();
@@ -2368,6 +2377,7 @@ export class GameScene extends DirtyScene {
             this.terrainView?.update(time);
             this.waterFlowView?.update(time);
             this.aquaticLifeView?.update(time);
+            this.frozenPoolsView?.update(time);
             this.gullLifeView?.update(time);
             this.landCompanions?.update(time);
             this.landLifeView?.update(time);
@@ -3799,7 +3809,10 @@ export class GameScene extends DirtyScene {
                     water: this.terrainWater,
                     wam: () => this.getGameMap().getWamFile()?.getWam(),
                     view: () => this.cameras.main.worldView,
+                    isFrozenAt: (x, y) => isOnFrozenWater(this, { x, y }),
                 });
+                this.frozenPoolsView?.destroy();
+                this.frozenPoolsView = new FrozenPoolsView(this);
                 // The fish and the dolphins of that water.
                 this.aquaticLifeView?.destroy();
                 this.aquaticLifeView = new AquaticLifeView(
@@ -3807,6 +3820,7 @@ export class GameScene extends DirtyScene {
                     this.aquaticLife,
                     () => get(aquaticLifeShownStore) && !isBasicActive(),
                     () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+                    (x, y) => isOnFrozenWater(this, { x, y }),
                 );
                 // The gulls over that water: shown and hidden with the fish.
                 this.gullLifeView?.destroy();

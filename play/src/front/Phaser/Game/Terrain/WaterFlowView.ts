@@ -24,6 +24,8 @@ export interface WaterFlowViewOptions {
     /** What the camera shows, in map pixels. */
     view: () => FoamView;
     reducedMotion?: boolean;
+    /** Whether the water is frozen there for this player (Frost.ts): no foam runs on it, no whirl turns in it. */
+    isFrozenAt?: (x: number, y: number) => boolean;
 }
 
 /** Over the water of the relief (0.65), under the puddles (0.7), the objects and the avatars. */
@@ -75,7 +77,9 @@ export class WaterFlowView {
         this.reducedMotion = options.reducedMotion ?? REDUCED_MOTION;
         this.foamGraphics = scene.add.graphics().setDepth(FOAM_DEPTH);
         this.marksGraphics = scene.add.graphics().setDepth(MARKS_DEPTH);
-        this.foam = new WaterFoam((x, y, now) => waterCurrentAt(options.water, x, y, now, FOAM_MIN_DEPTH_PX));
+        this.foam = new WaterFoam((x, y, now) =>
+            options.isFrozenAt?.(x, y) ? { x: 0, y: 0 } : waterCurrentAt(options.water, x, y, now, FOAM_MIN_DEPTH_PX),
+        );
     }
 
     /** `now` in ms of the game. */
@@ -120,6 +124,8 @@ export class WaterFlowView {
                 y > view.y + view.height + VIEW_MARGIN
             )
                 continue;
+            // Under the ice a source or a sink still runs, unseen.
+            if (this.options.isFrozenAt?.(x, y)) continue;
             const disc = object.radiusCells * TERRAIN_CELL;
             if (object.litresPerMinute < 0) {
                 // A sink keeps its own disc dry: the water it takes shows just beyond it.

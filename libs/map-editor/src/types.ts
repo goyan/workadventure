@@ -294,7 +294,8 @@ export const RgbLampPropertyData = PropertyBase.extend({
  * The states an object of the map may have, kept by the server (never in the WAM): a lamp is `on` or not. A closed
  * list: a new kind of object that can be switched (a shutter that is `open`) adds its key here.
  */
-export const ENTITY_STATE_KEYS = ["on"] as const;
+/** The states an object may be switched in: lit ("on"), and the hot water of a pool ("hot", that never freezes). */
+export const ENTITY_STATE_KEYS = ["on", "hot"] as const;
 /** A switch commands at most this many objects. */
 export const SWITCH_MAX_TARGETS = 200;
 

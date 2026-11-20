@@ -23,12 +23,14 @@ import { UsernameDisplay } from "@wa/front/Phaser/Components/UsernameDisplay";
 import { findSeatUnderFeet } from "@wa/front/Phaser/Player/Seat";
 import {
     BODY_CENTER_OFFSET_Y,
+    getFrozenPoolRectangles,
     getWaterRectangles,
     isDeepTerrainWater,
     isPointInWater,
     isWithinOneTileOfWater,
 } from "@wa/front/Phaser/Game/Water/WaterZones";
 import { getIceRectangles, isOnIce } from "@wa/front/Phaser/Game/Ice/IceZones";
+import { isOnFrozenWater } from "@wa/front/Phaser/Game/Ice/FrozenWater";
 import { currentPush } from "@wa/front/Phaser/Game/Terrain/WaterCurrent";
 import type { CurrentVector } from "@wa/front/Phaser/Game/Terrain/WaterCurrent";
 import { moveAnimationType, skateLean, stepLean } from "@wa/front/Phaser/Game/Ice/SkatePose";
@@ -452,6 +454,8 @@ export abstract class Character extends Container implements OutlineableInterfac
         // Basique hides the water of the relief: here nobody swims nor floats in it (the pools of the map remain).
         if (this.floorZ >= 2 || isBasicActive()) return false;
         const body = { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y };
+        // Frozen, it is skated on, not swum in.
+        if (isOnFrozenWater(this.scene, body)) return false;
         return isDeepTerrainWater(this.scene.getTerrainWater?.(), body, this.scene.time.now);
     }
 
@@ -466,6 +470,8 @@ export abstract class Character extends Container implements OutlineableInterfac
         if (!water || water.isBridgeAt(this.x, this.y + BODY_CENTER_OFFSET_Y)) return { x: 0, y: 0 };
         // A drain of the catastrophes pulls the water, never who is in it.
         if (this.scene.isDrainCalm?.(this.x, this.y + BODY_CENTER_OFFSET_Y)) return { x: 0, y: 0 };
+        // Under the ice, the current carries nobody.
+        if (isOnFrozenWater(this.scene, { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y })) return { x: 0, y: 0 };
         const strength =
             this.scene.getGameMap().getWamFile()?.getWam().settings?.water?.current ?? DEFAULT_WATER_SETTINGS.current;
         return currentPush(water, this.x, this.y + BODY_CENTER_OFFSET_Y, this.scene.time.now, strength, walkSpeed);
@@ -478,8 +484,12 @@ export abstract class Character extends Container implements OutlineableInterfac
     protected isOnIceHere(): boolean {
         // The ice is on the ground too.
         if (!this.scene || this.floorZ > 0) return false;
+        const body = { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y };
+        // A rink of the map, or the water of the relief frozen by the cold.
         return (
-            isOnIce(getIceRectangles(this.scene), { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y }) &&
+            (isOnIce(getIceRectangles(this.scene), body) ||
+                isPointInWater(getFrozenPoolRectangles(this.scene), body) ||
+                isOnFrozenWater(this.scene, body)) &&
             !this.isSwimmingHere()
         );
     }
