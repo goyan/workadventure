@@ -166,6 +166,14 @@ describe("CatastropheManager, downpours", () => {
         expect(manager.downpours()).toHaveLength(0);
     });
 
+    it("is as wide as its player says, from 1 to 16 tiles, and tells the room", () => {
+        const { manager, sent } = harness();
+        expect(manager.request(7, CatastropheKind.CATASTROPHE_DRAIN, 100, 80, 9, false)).toBe(true);
+        expect(manager.request(8, CatastropheKind.CATASTROPHE_DRAIN, 100, 80, 99, false)).toBe(true);
+        expect(sent.map((message) => message.radiusTiles)).toEqual([9, 16]);
+        expect(manager.drains().map((drain) => drain.radiusTiles)).toEqual([9, 16]);
+    });
+
     it("follows its player under the same id, and ignores messages that come too fast", () => {
         const { manager, sent } = rainHarness();
         manager.rain(7, 100, 80, 3, false);
@@ -215,13 +223,22 @@ describe("CatastropheManager, drains", () => {
     it("a drain opens, is told to the room and closes a second after the last message", () => {
         const { manager, sent } = harness();
         expect(manager.request(7, DRAIN, 100, 80, 0, false)).toBe(true);
-        expect(sent[0]).toMatchObject({ kind: DRAIN, x: 100, y: 80, wholeMap: false });
+        // A browser of before sends no size: the usual one.
+        expect(sent[0]).toMatchObject({ kind: DRAIN, x: 100, y: 80, wholeMap: false, radiusTiles: 3 });
         expect(sent[0].impactInMs).toBe(DRAIN_LASTS_MS);
         expect(manager.drains()).toEqual([expect.objectContaining({ id: sent[0].id, x: 100, y: 80 })]);
         vi.advanceTimersByTime(DRAIN_LASTS_MS - 1);
         expect(manager.drains()).toHaveLength(1);
         vi.advanceTimersByTime(1);
         expect(manager.drains()).toHaveLength(0);
+    });
+
+    it("is as wide as its player says, from 1 to 16 tiles, and tells the room", () => {
+        const { manager, sent } = harness();
+        expect(manager.request(7, CatastropheKind.CATASTROPHE_DRAIN, 100, 80, 9, false)).toBe(true);
+        expect(manager.request(8, CatastropheKind.CATASTROPHE_DRAIN, 100, 80, 99, false)).toBe(true);
+        expect(sent.map((message) => message.radiusTiles)).toEqual([9, 16]);
+        expect(manager.drains().map((drain) => drain.radiusTiles)).toEqual([9, 16]);
     });
 
     it("follows its player under the same id, and ignores messages that come too fast", () => {

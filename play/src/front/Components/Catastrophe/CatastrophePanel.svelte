@@ -2,6 +2,8 @@
     import {
         DOWNPOUR_MAX_TILES,
         DOWNPOUR_MIN_TILES,
+        DRAIN_MAX_TILES,
+        DRAIN_MIN_TILES,
         FIRE_MAX_TILES,
         FIRE_MIN_TILES,
         METEOR_MAX_TILES,
@@ -14,6 +16,7 @@
         catastrophePanelStore,
         disarmCatastrophe,
         downpourRadiusTilesStore,
+        drainRadiusTilesStore,
         downpourWholeMapStore,
         fireRadiusTilesStore,
         meteorRadiusTilesStore,
@@ -169,9 +172,21 @@
                         </label>
                     {/if}
                 {:else if sized === "drain"}
-                    <span class="whitespace-nowrap" data-testid="catastrophe-drain-size"
-                        >{$LL.actionbar.catastrophe.drainSize()}</span
-                    >
+                    <label class="flex items-center gap-2">
+                        <input
+                            type="range"
+                            class="w-24"
+                            min={DRAIN_MIN_TILES}
+                            max={DRAIN_MAX_TILES}
+                            step="1"
+                            aria-label={$LL.actionbar.catastrophe.drainSizeLabel()}
+                            data-testid="catastrophe-drain-size"
+                            bind:value={$drainRadiusTilesStore}
+                        />
+                        <span class="whitespace-nowrap"
+                            >{$LL.actionbar.catastrophe.size({ tiles: $drainRadiusTilesStore })}</span
+                        >
+                    </label>
                 {:else if sized === "fire"}
                     <label class="flex items-center gap-2">
                         <input

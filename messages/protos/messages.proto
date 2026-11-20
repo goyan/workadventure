@@ -829,7 +829,7 @@ enum CatastropheKind {
   CATASTROPHE_DOWNPOUR = 1;
   // A patch of fire set on the grass under the pointer of a player: what follows is the fire of the meadow.
   CATASTROPHE_FIRE = 2;
-  // A drain: the water is taken hard from a square under the pointer of a player, for as long as they keep telling.
+  // A drain: the water is taken hard from a disc under the pointer of a player, for as long as they keep telling.
   CATASTROPHE_DRAIN = 3;
   // A burning meteor: it sets its crater on fire, throws embers around and boils away the water it falls into.
   CATASTROPHE_FIREBALL = 4;
@@ -867,8 +867,8 @@ message LaunchCatastropheMessage {
   CatastropheKind kind = 1;
   int32 x = 2;
   int32 y = 3;
-  // A meteor: the radius of its crater, in tiles. A downpour: the radius of its disc. The server keeps it within
-  // what each may be.
+  // A meteor: the radius of its crater, in tiles. A downpour, a drain: the radius of its disc. The server keeps it
+  // within what each may be.
   int32 radiusTiles = 4;
   // A downpour: it falls on the whole map instead of a disc.
   bool wholeMap = 5;

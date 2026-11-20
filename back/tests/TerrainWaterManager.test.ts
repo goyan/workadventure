@@ -187,17 +187,19 @@ describe("TerrainWaterManager", () => {
         expect(manager.getGrid()?.maxSurface()).toBe(120);
     });
 
-    it("a drain empties the square under it step after step, counted with the sinks, and the room sees it often", () => {
+    it("a drain empties the disc under it step after step, faster in its middle, counted with the sinks", () => {
         const { manager, sent, steps } = createHarness({ wam: wamWith(wideLake) });
         manager.mapChanged();
         fillWithWater(manager);
-        // The tile of the point is (7, 7): the square is the tiles 5 to 9, the cells 10 to 19.
-        manager.setDrains(() => [{ id: 1, x: 240, y: 240 }]);
+        // The point is the cell (15, 15); a radius of 3 tiles is 6 cells.
+        manager.setDrains(() => [{ id: 1, x: 240, y: 240, radiusTiles: 3 }]);
         sent.length = 0;
         steps(1);
-        // A step of a tenth of a second at 256 px a second: up to 25.6 px gone from each cell of the square.
+        // A step of a tenth of a second: 25.6 px gone in the middle, 12.8 at the rim, more than the 8 px there are.
         expect(manager.getGrid()?.depthAt(15, 15)).toBeLessThan(2);
         expect(manager.getGrid()?.depthAt(28, 28)).toBeGreaterThan(7.5);
+        // The corner of the square around the disc is not in it.
+        expect(manager.getGrid()?.depthAt(21, 21)).toBeGreaterThan(7.5);
         steps(9);
         expect(manager.getGrid()?.depthAt(15, 15)).toBeLessThan(1);
         expect(sent.length).toBeGreaterThanOrEqual(5);
@@ -207,7 +209,7 @@ describe("TerrainWaterManager", () => {
     it("a drain on a map without water does nothing", () => {
         const { manager, steps } = createHarness({ wam: wamWith(undefined) });
         manager.mapChanged();
-        manager.setDrains(() => [{ id: 1, x: 240, y: 240 }]);
+        manager.setDrains(() => [{ id: 1, x: 240, y: 240, radiusTiles: 3 }]);
         expect(() => steps(3)).not.toThrow();
     });
 
