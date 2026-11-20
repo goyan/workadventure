@@ -587,6 +587,7 @@ export class GroundSplat {
             if (data[meadow] || data[meadow + 1]) any = true;
         }
         this.anyPool = pools.some((value) => value > 0) || (weights.imagePools?.some((value) => value > 0) ?? false);
+        if (this.anyPool) spreadPoolColours(data, columns, rows);
         if (any) smoothWeights(data, columns, rows);
         this.autumn = weights.autumn;
         this.anyGround = any;
@@ -721,7 +722,48 @@ function smoothWeights(data: Uint8ClampedArray, columns: number, rows: number): 
 }
 
 /** Where a cell of a pack is in the pixels of the weights (its red byte): the packs in a grid PACKS_ACROSS wide. */
-function texel(pack: number, cell: number, columns: number, rows: number): number {
+/**
+ * The colours of the pools also in the cells around them (their style, water and coping, not whether they are a pool):
+ * the smoothed shape of a pool reaches into a cell beside it at an inner corner, drawn there in its colours, not black.
+ */
+export function spreadPoolColours(data: Uint8ClampedArray, columns: number, rows: number): void {
+    const source = data.slice();
+    const isPool = (column: number, row: number): boolean =>
+        (source[texel(5, row * columns + column, columns, rows)] ?? 0) > 0;
+    for (let row = 0; row < rows; row++) {
+        for (let column = 0; column < columns; column++) {
+            if (isPool(column, row)) continue;
+            const from = poolNeighbour(column, row, columns, rows, isPool);
+            if (from === undefined) continue;
+            const cell = row * columns + column;
+            for (const pack of [5, 6, 7]) {
+                const to = texel(pack, cell, columns, rows);
+                const at = texel(pack, from, columns, rows);
+                for (let channel = pack === 5 ? 1 : 0; channel < 3; channel++)
+                    data[to + channel] = source[at + channel] ?? 0;
+            }
+        }
+    }
+}
+
+function poolNeighbour(
+    column: number,
+    row: number,
+    columns: number,
+    rows: number,
+    isPool: (column: number, row: number) => boolean,
+): number | undefined {
+    for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+            const x = column + dx;
+            const y = row + dy;
+            if (x >= 0 && y >= 0 && x < columns && y < rows && isPool(x, y)) return y * columns + x;
+        }
+    }
+    return undefined;
+}
+
+export function texel(pack: number, cell: number, columns: number, rows: number): number {
     const across = pack % PACKS_ACROSS;
     const down = Math.floor(pack / PACKS_ACROSS);
     const row = Math.floor(cell / columns) + down * rows;
