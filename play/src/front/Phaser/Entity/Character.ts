@@ -435,6 +435,8 @@ export abstract class Character extends Container implements OutlineableInterfac
         const water = this.floorZ < 2 && !isBasicActive() ? this.scene?.getTerrainWater?.() : undefined;
         // The current runs under the deck of a bridge, not over it.
         if (!water || water.isBridgeAt(this.x, this.y + BODY_CENTER_OFFSET_Y)) return { x: 0, y: 0 };
+        // A drain of the catastrophes pulls the water, never who is in it.
+        if (this.scene.isDrainCalm?.(this.x, this.y + BODY_CENTER_OFFSET_Y)) return { x: 0, y: 0 };
         const strength =
             this.scene.getGameMap().getWamFile()?.getWam().settings?.water?.current ?? DEFAULT_WATER_SETTINGS.current;
         return currentPush(water, this.x, this.y + BODY_CENTER_OFFSET_Y, this.scene.time.now, strength, walkSpeed);

@@ -22,7 +22,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 downpourSizeLabel: label("Size of the downpour"),
                 downpourArmedHelp: label("Hold the click on the map · Esc to cancel"),
                 drain: label("Drain"),
-                drainSize: label("5 × 5 tiles"),
+                drainSizeLabel: label("Size of the drain"),
             },
         },
     });
@@ -38,6 +38,7 @@ import {
     armedCatastropheStore,
     fireRadiusTilesStore,
     downpourWholeMapStore,
+    drainRadiusTilesStore,
     meteorRadiusTilesStore,
     catastrophePanelStore,
     disarmCatastrophe,
@@ -151,15 +152,24 @@ describe("CatastrophePanel", () => {
         expect(tile()).not.toBeNull();
     });
 
-    it("arms the drain, whose square has one size: no slider, and the help of a held click", () => {
+    it("arms the drain, and chooses the size of its disc from 1 to 16 tiles, with the help of a held click", () => {
         render();
         const drain = target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-drain"]');
         drain?.click();
         flushSync();
         expect(drain?.getAttribute("aria-pressed")).toBe("true");
         expect(get(armedCatastropheStore)).toBe("drain");
-        expect(target.querySelector('input[type="range"]')).toBeNull();
-        expect(target.querySelector('[data-testid="catastrophe-drain-size"]')?.textContent).toBe("5 × 5 tiles");
+        const slider = target.querySelector<HTMLInputElement>('[data-testid="catastrophe-drain-size"]');
+        expect(slider?.min).toBe("1");
+        expect(slider?.max).toBe("16");
+        expect(target.textContent).toContain("3 tiles");
+        if (!slider) throw new Error("no slider");
+        slider.value = "10";
+        slider.dispatchEvent(new Event("input", { bubbles: true }));
+        flushSync();
+        expect(get(drainRadiusTilesStore)).toBe(10);
+        expect(target.textContent).toContain("10 tiles");
+        drainRadiusTilesStore.set(3);
         expect(target.textContent).toContain("Hold the click on the map");
     });
 

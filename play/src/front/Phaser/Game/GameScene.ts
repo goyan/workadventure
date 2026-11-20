@@ -3069,6 +3069,11 @@ export class GameScene extends DirtyScene {
         return this.terrainView;
     }
 
+    /** Whether a point of the map (pixels) is in or near an open drain: the current carries no avatar there. */
+    public isDrainCalm(x: number, y: number): boolean {
+        return this.drainView?.calms(x, y) ?? false;
+    }
+
     /** The water of the hollows of the relief of the map (lakes), the same for everyone. */
     public getTerrainWater(): TerrainWater {
         return this.terrainWater;

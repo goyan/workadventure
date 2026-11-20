@@ -97,7 +97,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         downpourSizeLabel: "Taille de l'averse : rayon du disque arrosé, en cases",
         downpourArmedHelp: "Maintenez le clic sur la carte · Échap pour annuler",
         drain: "Drain",
-        drainSize: "5 × 5 cases",
+        drainSizeLabel: "Taille du drain : rayon du disque vidé, en cases",
         tabs: { catastrophes: "Catastrophes", weather: "Météo" },
         weather: {
             manual: "Manuel",

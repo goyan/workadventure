@@ -37,6 +37,7 @@ import {
     downpourRadiusTilesStore,
     downpourWholeMapStore,
     fireRadiusTilesStore,
+    drainRadiusTilesStore,
     meteorRadiusTilesStore,
 } from "@wa/front/Stores/CatastropheStore";
 import { cameraDetachedStore } from "@wa/front/Stores/CameraStore";
@@ -347,8 +348,12 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 return;
             }
             if (kind === "drain") {
-                // The square of a drain has one size: only where it is goes to the server.
-                this.gameScene.connection?.emitLaunchCatastrophe(CatastropheKind.CATASTROPHE_DRAIN, x, y, 0);
+                this.gameScene.connection?.emitLaunchCatastrophe(
+                    CatastropheKind.CATASTROPHE_DRAIN,
+                    x,
+                    y,
+                    get(drainRadiusTilesStore),
+                );
                 return;
             }
             this.gameScene.connection?.emitLaunchCatastrophe(
