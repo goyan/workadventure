@@ -420,3 +420,96 @@ describe("WanderSchedule, drinking", () => {
         }
     });
 });
+
+describe("WanderSchedule on raised floors", () => {
+    const NEST = centreOf({ x: 15, y: 15 });
+
+    /**
+     * The ground is walkable on the odd columns only; a raised floor at 52 px covers the even ones. Any two places
+     * are joined by a straight walk (a stair in between).
+     */
+    function makeFloorsMap(): WanderMap {
+        const inGrid = (t: Point) => t.x >= 0 && t.y >= 0 && t.x < GRID && t.y < GRID;
+        return {
+            isWalkable: (t) => inGrid(t) && t.x % 2 === 1,
+            levelsAt: (t) => (inGrid(t) && t.x % 2 === 0 ? [52] : []),
+            findPath: (from, to) => Promise.resolve([from, to]),
+        };
+    }
+
+    /** Where the character rests at the end of a leg. */
+    async function restOf(schedule: WanderSchedule, entityId: string, leg: number) {
+        const end = (leg + 1) * LEG_MS - wanderLegOffset(entityId) - 1;
+        return { pose: await poseResolved(schedule, end), end };
+    }
+
+    it("chooses destinations on the raised floors too, and rests there at their altitude", async () => {
+        const schedule = new WanderSchedule("duck-floors", NEST, makeFloorsMap());
+        let raised = 0;
+        let ground = 0;
+        for (let leg = 1; leg <= 30; leg++) {
+            const { pose } = await restOf(schedule, "duck-floors", leg);
+            expect(pose).toBeDefined();
+            if (!pose) continue;
+            const column = Math.floor(pose.x / TILE_SIZE);
+            if (column % 2 === 0) {
+                expect(pose.z).toBe(52);
+                raised++;
+            } else {
+                expect(pose.z).toBeUndefined();
+                ground++;
+            }
+        }
+        expect(raised).toBeGreaterThan(0);
+        expect(ground).toBeGreaterThan(0);
+    });
+
+    it("climbs as it walks: its altitude goes from the one it leaves to the one it reaches", async () => {
+        const id = "duck-climb";
+        const schedule = new WanderSchedule(id, NEST, makeFloorsMap());
+        let checked = 0;
+        for (let leg = 2; leg <= 40 && checked === 0; leg++) {
+            const before = (await restOf(schedule, id, leg - 1)).pose;
+            const after = (await restOf(schedule, id, leg)).pose;
+            if (!before || !after || (before.z ?? 0) === (after.z ?? 0)) continue;
+            // A moment after the start of the leg: on its way.
+            const start = leg * LEG_MS - wanderLegOffset(id);
+            const onTheWay = await poseResolved(schedule, start + 500);
+            expect(onTheWay?.moving).toBe(true);
+            const z = onTheWay?.z ?? 0;
+            expect(z).toBeGreaterThan(0);
+            expect(z).toBeLessThan(52);
+            checked++;
+        }
+        expect(checked).toBe(1);
+    });
+
+    it("gives every client the same walk through the floors", async () => {
+        const a = new WanderSchedule("duck-same", NEST, makeFloorsMap());
+        const b = new WanderSchedule("duck-same", NEST, makeFloorsMap());
+        for (let now = 3 * LEG_MS; now < 12 * LEG_MS; now += 3_700) {
+            expect(await poseResolved(a, now)).toEqual(await poseResolved(b, now));
+        }
+    });
+
+    it("walks exactly as before on a map whose floors hold nobody", async () => {
+        const plain = makeMap();
+        const withEmptyFloors: WanderMap = { ...plain, levelsAt: () => [] };
+        const a = new WanderSchedule("duck-plain", NEST, plain);
+        const b = new WanderSchedule("duck-plain", NEST, withEmptyFloors);
+        for (let now = 3 * LEG_MS; now < 25 * LEG_MS; now += 4_300) {
+            const pose = await poseResolved(a, now);
+            expect(pose).toBeDefined();
+            expect(await poseResolved(b, now)).toEqual(pose);
+            expect(pose?.z).toBeUndefined();
+        }
+    });
+
+    it("keeps a nest on a raised floor: a character with nowhere to go stands there, at its altitude", async () => {
+        const nest = { ...NEST, z: 52 };
+        const nowhere: WanderMap = { isWalkable: () => false, levelsAt: () => [], findPath: () => Promise.resolve([]) };
+        const schedule = new WanderSchedule("duck-nest", nest, nowhere);
+        const pose = await poseResolved(schedule, 5 * LEG_MS);
+        expect(pose).toMatchObject({ x: nest.x, y: nest.y, z: 52, moving: false });
+    });
+});

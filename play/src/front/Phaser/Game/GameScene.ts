@@ -326,6 +326,7 @@ import { TreePoseTextures } from "./Nature/TreePoses";
 import { TreeSeasonEffects } from "./Nature/TreeSeasonEffects";
 import { avatarAltitude, pointerAltitude } from "./Floors/AvatarAltitude";
 import { FloorSpike } from "./Floors/FloorSpike";
+import type { FloorOccupant } from "./Floors/FloorSpike";
 import { FLOOR_Z_VARIABLE, decodeFloorZ } from "./Floors/FloorProtocol";
 import { UpperDoors } from "./Floors/UpperDoors";
 import type { RaisedCharacter } from "./Floors/UpperDoors";
@@ -1935,6 +1936,12 @@ export class GameScene extends DirtyScene {
         this.terrainWater.setBridges(this.bridges.tiles);
     }
 
+    /** Who shows and fades with the raised floor they stand on: the other players, and the animals that walk around. */
+    private *floorOccupants(): Generator<FloorOccupant> {
+        yield* this.MapPlayersByKey.values();
+        if (this.wanderingCharactersManager) yield* this.wanderingCharactersManager.floorOccupants();
+    }
+
     /** How high over the ground an animal walks above a point of the ground (map pixels): 0 off the bridges. */
     public getBridgeElevationAt(x: number, y: number): number {
         return this.bridges?.elevationAt(x, y) ?? 0;
@@ -2285,6 +2292,10 @@ export class GameScene extends DirtyScene {
         this.duckRushManager?.forEachDoorOpener((position) => characters.push({ ...position, silent: true }));
         this.wanderingCharactersManager?.forEachDoorOpener((position) =>
             characters.push({ ...position, silent: true }),
+        );
+        // The ones on a raised floor open the doors of that floor.
+        this.wanderingCharactersManager?.forEachRaisedDoorOpener((position, elevation) =>
+            raised.push({ character: { ...position, silent: true }, elevation }),
         );
         const locks = this._knockManager?.getDoorLocks();
         this.doorAnimator.update(time, characters, listener, locks);
@@ -3999,7 +4010,7 @@ export class GameScene extends DirtyScene {
                             mapLayerBuiltLevelsStore.set(levels);
                             floorLevelsBuiltStore.set(levels);
                         },
-                        () => this.MapPlayersByKey.values(),
+                        () => this.floorOccupants(),
                         (x, y) => this.getOutdoorGrid()?.roomAt(x, y),
                     );
                     if (this.floorToRestore !== undefined) this.floorSpike.restore(this.floorToRestore);
