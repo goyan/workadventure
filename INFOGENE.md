@@ -1791,7 +1791,25 @@ commandes de l'autre ; cette version ne comporte pas de verrou côté serveur.
 
 L'outil « Corbeille » (raccourci `5`) est supprimé : chaque outil a sa propre suppression.
 
-- **Carte** : sa gomme n'efface que les sols et murs de la couche carte (un geste = une entrée d'annulation). Ce que le geste touche au départ décide : parti d'un mur (ou d'une porte, d'une fenêtre), il efface les segments de la ligne de ce mur (rangée d'un mur horizontal, colonne d'un vertical), de la case de départ à celle d'arrivée, avec leurs portes et fenêtres, sans toucher aux sols ; parti d'un sol, il n'efface que les sols survolés, jamais un mur traversé. Un clic efface ce qui est sous le curseur (porte ou fenêtre d'abord, puis le mur). Un mur vertical se vise à 10 px de part et d'autre de son axe (`ERASER_VERTICAL_HIT_WIDTH`). Pendant le glisser, ce qui partira est en rouge.
+- **Carte** : une seule gomme (« Gomme ») pour toute la couche carte, au niveau choisi : sols, murs, portes, fenêtres,
+  dalles de palier, escaliers et rampes (un geste = une entrée d'annulation ; l'ancienne « Gomme de palier » est
+  retirée). **Ce qui est entouré en rouge au survol est exactement ce que le clic efface**, à sa vraie place et avec sa
+  vraie forme : l'escalier ou la rampe entier, la porte, la fenêtre ou le mur avec toute sa hauteur (un mur haut se
+  prend aussi par son haut), la dalle à son altitude, la case de sol. Règle commune à l'aperçu et à l'action :
+  `MapLayer/MapLayerTarget.ts` (`eraseTargetUnder`, `erasePlan`, `applyErase`) ; la cible est désignée par ce qui ne
+  change pas d'une lecture de la carte à l'autre (niveau et première marche d'un escalier, segment d'un mur, case d'une
+  dalle) et retrouvée sur la carte relue juste avant l'enregistrement. Priorité sous le pointeur : escalier ou rampe,
+  puis porte, fenêtre, mur, puis dalle, puis sol (`ERASE_PRIORITY`). Ce que le geste touche au départ décide : parti
+  d'un escalier, il l'efface (sa trémie est rebouchée) ; parti d'un mur (ou d'une porte, d'une fenêtre), il efface les
+  segments de la ligne de ce mur (rangée d'un mur horizontal, colonne d'un vertical), de la case de départ à celle
+  d'arrivée, avec leurs portes et fenêtres, sans toucher aux sols ; ailleurs, sur un palier il retire les dalles du
+  rectangle, au sol il n'efface que les sols survolés, jamais un mur traversé. Un mur vertical se vise à 10 px de part
+  et d'autre de son axe (`ERASER_VERTICAL_HIT_WIDTH`). Pendant le glisser, ce qui partira est en rouge. La gomme suit
+  le niveau choisi dès que la salle a les paliers, même sans les murs d'étage ; en « Auto », un escalier sous le
+  pointeur donne son niveau de départ, même là où son image passe sur un palier plus haut.
+  Couleurs de l'outil Carte : rouge = sera effacé (ou refusé), blanc = sera pris et déplacé (fenêtre, escalier, rampe),
+  bleu = sélection du mode Hauteur, vert = sera posé ou modifié. Une fenêtre haute se prend aussi par son haut ; une
+  porte haute déjà posée est entourée sur toute sa hauteur en mode Porte.
 - **Objets** : un bouton « Gomme » (à bascule) supprime l'objet cliqué ou survolé le bouton enfoncé ; un bouton « Supprimer »
   dans le panneau de l'objet sélectionné le supprime (la touche Suppr reste). Les sols et murs de la couche carte
   n'en font jamais partie : ils se gomment avec l'outil Carte, qui garde leurs raccords cohérents.
@@ -3214,7 +3232,11 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
     posé), direction, largeur, flanc vide. La trémie est découpée dans le palier d'arrivée et rebouchée au retrait.
     Aperçu : rond = première marche, flèche = arrivée, bleu = dalles d'arrivée, orange = pas de dalle à l'arrivée,
     rouge = dalles retirées pour la trémie. Un escalier posé sans arrivée garde ses cases d'arrivée barrées d'orange.
-  - « Gomme de palier » : rectangle pour les dalles, clic sur un escalier qui part du niveau courant.
+  - Un escalier ou une rampe déjà posé est entouré en blanc au survol, en mode Escalier : le glisser le déplace (même
+    forme, même niveau ; trémie quittée rebouchée, nouvelle trémie découpée, une seule annulation). Un clic dessus ne
+    fait rien.
+  - Plus de « Gomme de palier » : la Gomme de l'outil Carte efface aussi dalles et escaliers (voir « Gommes et
+    suppression dans l'éditeur »).
   - Les pièces de palier sont réservées à l'outil Carte (`isMapLayerPrefab`) : les autres outils ne les prennent pas.
 - **Altitude partagée** (`Floors/FloorProtocol.ts`) : variable de joueur `_floorZ`, publique et non sauvegardée
   (patron de la torche) ; exacte sur un palier, par pas de 4 px et au plus toutes les 150 ms sur un escalier ; un
