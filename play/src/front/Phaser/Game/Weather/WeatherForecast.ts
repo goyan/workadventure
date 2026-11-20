@@ -47,9 +47,9 @@ function withWind(cell: ForecastCell, windSpeed: number | undefined, windFrom: n
 /**
  * The weather the map will show at each of `hours` from `epoch`, as the game draws it: the real timeline (blank past
  * its end, nothing before the first answer), the seasonal schedule in Automatic or while the real weather is unavailable
- * (the same fallback as the sky), the fixed weather otherwise. A real rain forecast in air cold enough is named a snow
- * (namedPrecipitation: from the temperature and the humidity of its quarter hour); a Cloudy map is a clear sky with
- * clouds. The temperature and the wind (speed and direction) are the real ones of the
+ * (the same fallback as the sky), the fixed weather otherwise. A rain forecast in air cold enough is named a snow
+ * (namedPrecipitation: from the real temperature and humidity of the place at that quarter hour, whatever weather the
+ * map shows); a Cloudy map is a clear sky with clouds. The temperature and the wind (speed and direction) are the real ones of the
  * place whenever its timeline is known, even under a weather of the schedule or a fixed one.
  */
 export function weatherForecast(
@@ -60,6 +60,11 @@ export function weatherForecast(
 ): ForecastCell[] {
     const weather = settings?.weather ?? WeatherType.Clear;
     const realNow = real.status === "known" ? realWeatherAt(real.slots, epoch) : undefined;
+    // The air forecast at the place says how a rain will fall, whatever weather the map shows.
+    const snowAt = (at: number): number => {
+        const then = real.status === "known" ? realWeatherAt(real.slots, at) : undefined;
+        return snowShare(then?.temperature ?? Number.NaN, then?.humidity ?? Number.NaN);
+    };
     const cellAt = (at: number): ForecastCell => {
         const temperature =
             real.status === "known" ? (realWeatherAt(real.slots, at)?.temperature ?? undefined) : undefined;
@@ -70,22 +75,18 @@ export function weatherForecast(
             const then = realWeatherAt(real.slots, at);
             const cell = {
                 at,
-                weather: then
-                    ? namedPrecipitation(
-                          weatherAtTime(then.weather, new Date(at)),
-                          snowShare(then.temperature ?? Number.NaN, then.humidity ?? Number.NaN),
-                      )
-                    : undefined,
+                weather: then ? namedPrecipitation(weatherAtTime(then.weather, new Date(at)), snowAt(at)) : undefined,
                 temperature: then?.temperature ?? undefined,
             };
             return withClouds(cell, then?.cloudiness ?? 0);
         }
         if (weather === WeatherType.Real || weather === WeatherType.Automatic) {
             const date = new Date(at);
-            const cell = { at, weather: autoWeatherAt(date, settings?.weatherAuto), temperature };
+            const drawn = namedPrecipitation(autoWeatherAt(date, settings?.weatherAuto), snowAt(at));
+            const cell = { at, weather: drawn, temperature };
             return withClouds(cell, cloudinessAt(date, settings?.weatherAuto));
         }
-        const cell = { at, weather: weatherAtTime(weather, new Date(at)), temperature };
+        const cell = { at, weather: namedPrecipitation(weatherAtTime(weather, new Date(at)), snowAt(at)), temperature };
         return withClouds(cell, weather === WeatherType.Cloudy ? AUTO_CLOUDINESS : 0);
     };
     return hours.map((hour): ForecastCell => {

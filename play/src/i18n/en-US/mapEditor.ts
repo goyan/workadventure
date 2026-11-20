@@ -1206,7 +1206,7 @@ const mapEditor: BaseTranslation = {
             },
             fixed: {
                 rainHint:
-                    "In cold air it falls as snow: by the temperature and the humidity of the map (real weather, or set in Catastrophe → Weather).",
+                    "In cold air it falls as snow: by the real temperature and humidity at the place of the map, or the ones set in Catastrophe → Weather.",
                 fogHint: "All day long.",
             },
             previewHint: "Preview for you only. Save to show it to everyone.",

@@ -101,9 +101,18 @@ describe("weatherForecast", () => {
         // Without the humidity the form is not known: a rain. A storm stays a storm.
         expect(weatherForecast(real, july, falling(-1))[0].weather).toBe(WeatherType.Rain);
         expect(weatherForecast(real, july, falling(-1, 85, WeatherType.Storm))[0].weather).toBe(WeatherType.Storm);
-        // A map saved with a fixed snow is a rain; an older pusher answering a snow too.
-        expect(weatherForecast({ weather: WeatherType.Snow }, july, paris)[0].weather).toBe(WeatherType.Rain);
+        // A fixed rain too is named by the real air of the place: a snow in the cold, a rain when it is not known.
+        expect(weatherForecast({ weather: WeatherType.Rain }, july, falling(-1, 85))[0].weather).toBe(WeatherType.Snow);
+        expect(weatherForecast({ weather: WeatherType.Rain }, july, falling(12, 80))[0].weather).toBe(WeatherType.Rain);
+        expect(weatherForecast({ weather: WeatherType.Rain }, july, { status: "unavailable" })[0].weather).toBe(
+            WeatherType.Rain,
+        );
+        expect(weatherForecast({ weather: WeatherType.Storm }, july, falling(-1, 85))[0].weather).toBe(
+            WeatherType.Storm,
+        );
+        // A map saved with a fixed snow is a rain like another (8 °C in Paris that day); an older pusher's snow too.
         expect(weatherForecast({ weather: WeatherType.Snow }, NOW, paris)[0].weather).toBe(WeatherType.Rain);
+        expect(weatherForecast({ weather: WeatherType.Snow }, july, falling(-1, 85))[0].weather).toBe(WeatherType.Snow);
         const older = {
             status: "known" as const,
             slots: [{ at: july, weather: WeatherType.Snow as const, temperature: 9 }],
@@ -111,18 +120,19 @@ describe("weatherForecast", () => {
         expect(weatherForecast(real, july, older)[0].weather).toBe(WeatherType.Rain);
     });
 
-    it("names the rain of now by the conditions of the room: what the sky draws", () => {
+    it("names the rain of now by the conditions set by hand in the room: what the sky then draws", () => {
         const cell = { at: NOW, weather: WeatherType.Rain, temperature: 8 };
         const thresholds = { thresholdTemperature: 30, thresholdHumidity: 30, thresholdWindSpeed: 30 };
         const cold = { manual: true, temperature: -3, humidity: 70, windSpeed: 0, windFrom: 0, ...thresholds };
         const mild = { manual: false, temperature: 20, humidity: 60, windSpeed: 10, windFrom: 315, ...thresholds };
         expect(nowCellWithConditions(cell, cold).cell.weather).toBe(WeatherType.Snow);
-        expect(nowCellWithConditions(cell, { ...cold, manual: false }).cell.weather).toBe(WeatherType.Snow);
-        expect(nowCellWithConditions(cell, mild).cell.weather).toBe(WeatherType.Rain);
-        // A forecast that named it a snow gives way to the room: mild conditions, or none told yet, are a rain.
+        // A forecast that named it a snow gives way to conditions set by hand.
         const forecastSnow = { ...cell, weather: WeatherType.Snow };
-        expect(nowCellWithConditions(forecastSnow, mild).cell.weather).toBe(WeatherType.Rain);
-        expect(nowCellWithConditions(forecastSnow, undefined).cell.weather).toBe(WeatherType.Rain);
+        expect(nowCellWithConditions(forecastSnow, { ...mild, manual: true }).cell.weather).toBe(WeatherType.Rain);
+        // Conditions that are not set by hand name nothing: the forecast already goes by the real air of the place.
+        expect(nowCellWithConditions(cell, { ...cold, manual: false }).cell.weather).toBe(WeatherType.Rain);
+        expect(nowCellWithConditions(forecastSnow, mild).cell.weather).toBe(WeatherType.Snow);
+        expect(nowCellWithConditions(forecastSnow, undefined).cell.weather).toBe(WeatherType.Snow);
         expect(nowCellWithConditions({ ...cell, weather: WeatherType.Storm }, cold).cell.weather).toBe(
             WeatherType.Storm,
         );

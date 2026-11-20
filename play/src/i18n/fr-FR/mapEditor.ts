@@ -1221,7 +1221,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             },
             fixed: {
                 rainHint:
-                    "Par temps froid elle tombe en neige : selon la température et l'humidité de la carte (météo réelle, ou réglées dans Catastrophe → Météo).",
+                    "Par temps froid elle tombe en neige : selon la température et l'humidité réelles au lieu de la carte, ou réglées dans Catastrophe → Météo.",
                 fogHint: "Toute la journée.",
             },
             previewHint: "Aperçu pour vous seul. Sauvegarder l'applique à tout le monde.",

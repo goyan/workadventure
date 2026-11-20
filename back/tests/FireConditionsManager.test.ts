@@ -50,6 +50,28 @@ describe("FireConditionsManager", () => {
         expect(manager.snapshot()).toEqual({ manual: false, ...neutral, ...thresholds });
     });
 
+    it("gives the air a precipitation falls through: set by hand, else the real one of the place, in any weather", () => {
+        const cold = slot(NOW, { temperature: -2, humidity: 85 });
+        // A fixed weather: the fire keeps its mild conditions, the rain falls through the real air of the place.
+        const fixed = createHarness({ weather: WeatherType.Rain, slots: [cold] });
+        expect(fixed.manager.conditions()).toEqual(neutral);
+        expect(fixed.manager.air()).toEqual({ temperature: -2, humidity: 85 });
+        expect(createHarness({ weather: WeatherType.Real, slots: [cold] }).manager.air()).toEqual({
+            temperature: -2,
+            humidity: 85,
+        });
+        // Set by hand, for the whole room, over the real one.
+        expect(fixed.manager.set(1, hot)).toBe(true);
+        expect(fixed.manager.air()).toMatchObject({ temperature: 38, humidity: 12 });
+        // Not known: no timeline, a stale one, or a quarter hour without its temperature or its humidity.
+        expect(createHarness({ weather: WeatherType.Rain }).manager.air()).toBeUndefined();
+        expect(createHarness({ slots: [slot(NOW - 2 * QUARTER, { humidity: 85 })] }).manager.air()).toBeUndefined();
+        expect(createHarness({ slots: [slot(NOW)] }).manager.air()).toBeUndefined();
+        expect(
+            createHarness({ slots: [slot(NOW, { temperature: null, humidity: 85 })] }).manager.air(),
+        ).toBeUndefined();
+    });
+
     it("reads the quarter hour under way of a map in real weather", () => {
         const { manager } = createHarness({
             weather: WeatherType.Real,

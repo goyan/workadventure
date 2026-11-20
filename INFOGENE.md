@@ -2867,27 +2867,35 @@ couverture de neige au sol et les arbres qui blanchissent décrit l'état d'avan
   plus rien à 6 °C (choix : l'ajustement n'est plus fiable en air très sec). Exemples : 2 °C et 40 % → thermomètre
   mouillé −2,3 °C, neige ; 2 °C et 95 % → 1,45 °C, pluie (5 % de flocons) ; 1 °C et 99 % → 71 % de neige ; 0 °C →
   neige ; 3 °C et 70 % → neige ; 5 °C et 90 % → pluie.
-- **D'où viennent la température et l'humidité** : des conditions de la salle (`FireConditionsMessage`, les mêmes pour
-  tous les joueurs) : réelles au lieu d'une carte en météo Réelle, réglées à la main dans Catastrophe → Météo (elles
-  l'emportent, dans tous les modes), sinon douces (20 °C, 60 %). Donc en météo fixe ou Automatique il ne neige que si
-  quelqu'un règle le froid à la main ; sans conditions connues, il pleut, toujours. Rien ne dépend du calendrier.
+- **D'où viennent la température et l'humidité** (`Weather/PrecipitationAir.ts` `precipitationAirNow`, mêmes sources
+  et même ordre que le givre du sol de `Weather/Frost.ts`) : la ville que le joueur suit pour lui seul s'il en a
+  choisi une (météo personnelle), sinon la température et l'humidité réglées à la main dans Catastrophe → Météo
+  (pour toute la salle), sinon l'air réel du lieu de la carte (Paris sans lieu), **quelle que soit la météo de la
+  carte** : une carte en Pluie fixe ou en Automatique neige quand il fait réellement assez froid à son lieu. Les deux
+  dernières sources sont les mêmes pour tous les joueurs de la carte. Tant que rien n'est connu (frise pas encore
+  reçue, humidité absente), il pleut, toujours. Rien ne dépend du calendrier. Les conditions de feu de la salle,
+  elles, restent douces hors météo Réelle : elles ne servent plus à la forme de la pluie.
 - **Rendu.** Quand il pleut, la part de neige devient des flocons (`snowflakes`, les mêmes que l'ancienne neige,
   d'autant plus nombreux que la précipitation est forte : `snowfall`), le reste des gouttes : pluie et flocons mêlés
   dans le mélange. Les flocons sont emportés par le vent de la carte. Le voile sombre et les nuages gris de la pluie
   restent. Son : une chute à moitié neigeuse ou plus a l'ambiance feutrée de la neige, sinon la pluie, moins forte à
-  proportion. Bandeau : une pluie dont au moins la moitié tombe en neige est nommée « Neige » (maintenant : conditions
-  de la salle ; +1 h et +4 h en Réel : température et humidité prévues du quart d'heure).
+  proportion. Bandeau : une pluie dont au moins la moitié tombe en neige est nommée « Neige », d'après la température
+  et l'humidité réelles prévues au lieu pour chaque quart d'heure (maintenant, +1 h, +4 h), ou d'après les conditions
+  réglées à la main pour « maintenant ».
 - **Sol et arbres.** Plus rien ne blanchit : le décor de neige (`Christmas/` : sol uni, calottes, empreintes) n'est
-  plus affiché, les arbres gardent l'image de leur saison (`mapSnowCoverage` rend 0). Ce code reste, débranché : la
-  PR #392 le modifie (sol de neige texturé) et il servira à la neige qui tient vraiment (étape suivante : neige
-  accumulée par le serveur d'après ce qui tombe et le froid). La neige des hauteurs du relief (`Terrain/SnowLine.ts`)
+  plus affiché, les arbres gardent l'image de leur saison, et la couche de neige du sol en shader (#392) reste vide
+  (`mapSnowCoverage` et `GameScene.getMapSnowCoverage` rendent 0). Ce code reste, débranché : il servira à la neige
+  qui tient vraiment (étape suivante : neige accumulée par le serveur d'après ce qui tombe et le froid). Le givre et
+  le gel de #392 sont inchangés. La neige des hauteurs du relief (`Terrain/SnowLine.ts`)
   est inchangée ; elle suit l'altitude et la saison, pas la température.
 - **Serveur.** L'eau du relief et l'humidité du pré ne reçoivent que la part liquide (`liquidRainRate`,
-  `fallThrough`) : ce qui tombe en neige n'apporte pas d'eau, comme l'ancienne météo Neige, qui comptait pour zéro. La
+  `fallThrough`, air lu par `FireConditionsManager.air` : réglé à la main, sinon réel au lieu de la carte dans tous
+  les modes ; le serveur a sa propre frise Open-Meteo, un léger écart avec celle des navigateurs est possible) : ce qui tombe en neige n'apporte pas d'eau, comme l'ancienne météo Neige, qui comptait pour zéro. La
   fonte n'existe pas encore : cette eau est perdue.
 - **Limites.** Rien n'est lissé dans le temps (la forme suit les conditions du quart d'heure) ; le thermomètre mouillé
   au sol ignore une couche chaude en altitude (une pluie verglaçante réelle est dessinée en neige) ; les flaques se
-  remplissent encore sous la neige ; l'aperçu d'une météo avant enregistrement garde les conditions de la salle.
+  remplissent encore sous la neige ; un joueur qui suit sa propre ville voit la forme de la pluie de cette ville, le
+  serveur celle du lieu de la carte.
   `play`, `back` et `map-storage` se déploient ensemble.
 
 ### Arbres : feuilles d'automne et neige

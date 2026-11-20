@@ -337,6 +337,7 @@ import { readMapLayerEntityStates } from "./MapEditor/MapLayer/MapLayerSync";
 import { autumnProgress } from "./Nature/TreeLeafFall";
 import { isGroundUnderWater } from "./Water/WaterZones";
 import { mapSnowCoverage } from "./Weather/SnowCover";
+import { precipitationAirNow } from "./Weather/PrecipitationAir";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
 import { gameManager } from "./GameManager";
 import { EmoteManager } from "./EmoteManager";
@@ -3170,12 +3171,18 @@ export class GameScene extends DirtyScene {
     }
 
     /**
-     * The share of the precipitation of the map that falls as snow, 0 to 1: from the temperature and the humidity the
-     * room goes by (the real ones of a map in real weather, or set by hand for everyone), as the server last told
-     * them. Rain until then, and on a map whose conditions are the mild ones of a weather that is not the real one.
+     * The share of the precipitation shown that falls as snow, 0 to 1, from the temperature and the humidity of the
+     * air it falls through (precipitationAirNow). Rain while they are not known.
      */
     public getSnowShare(): number {
-        return snowShareOf(get(fireConditionsStore));
+        return snowShareOf(
+            precipitationAirNow(this.getGameMap().getWamFile()?.getWam().settings, this.nightManager?.serverDate()),
+        );
+    }
+
+    /** How much snow lies on the map, 0 to 1 (none for now, see mapSnowCoverage): the ground and the trees whiten with it. */
+    public getMapSnowCoverage(): number {
+        return mapSnowCoverage();
     }
 
     public getGameMap(): GameMap {
@@ -4055,7 +4062,7 @@ export class GameScene extends DirtyScene {
                     autumnProgress: () => autumnProgress(this.nightManager?.serverDate() ?? new Date(Number.NaN)),
                     windSpeed: () => this.shownWeather()?.windSpeed,
                     windFrom: () => this.shownWeather()?.windFrom,
-                    snowCoverage: () => mapSnowCoverage(),
+                    snowCoverage: () => this.getMapSnowCoverage(),
                     enabled: () => !get(mapEditorModeStore) && get(weatherEffectsEnabledStore) && !isBasicActive(),
                     isOutdoor: (x, y) => this.getOutdoorGrid()?.isOutdoorAt(x, y) ?? true,
                     isWet: (x, y) => isGroundUnderWater(this, this.terrainWater, x, y),

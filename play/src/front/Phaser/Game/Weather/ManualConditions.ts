@@ -17,16 +17,17 @@ export function withManualWind<T extends { windFrom?: number; windSpeed?: number
 
 /**
  * The weather of now as the banner shows it: with the heat and the wind set by hand in the room when they are, and
- * the humidity of the air the room goes by (undefined until the server told it). A rain is named a snow when the
- * conditions of the room make it fall as snow: what the sky draws (WeatherManager), whatever the forecast said.
+ * the humidity of the air the room goes by (undefined until the server told it). With conditions set by hand, a rain
+ * is named a snow when they make it fall as snow, whatever the forecast said: what the sky then draws
+ * (precipitationAirNow).
  */
 export function nowCellWithConditions(
     cell: ForecastCell,
     conditions: FireConditionsMessage | undefined,
 ): { cell: ForecastCell; humidity: number | undefined; manual: boolean } {
-    if (!conditions) return { cell: { ...cell, weather: unnamed(cell.weather) }, humidity: undefined, manual: false };
+    if (!conditions) return { cell, humidity: undefined, manual: false };
+    if (!conditions.manual) return { cell, humidity: conditions.humidity, manual: false };
     const weather = namedPrecipitation(unnamed(cell.weather), snowShareOf(conditions));
-    if (!conditions.manual) return { cell: { ...cell, weather }, humidity: conditions.humidity, manual: false };
     const speed = Math.round(conditions.windSpeed);
     const shown: ForecastCell = { ...cell, weather, temperature: conditions.temperature, windSpeed: speed };
     // A direction only with a wind, as for the real one.
