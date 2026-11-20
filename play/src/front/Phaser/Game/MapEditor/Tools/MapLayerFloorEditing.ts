@@ -36,12 +36,15 @@ import {
     availableLevels,
     canPlaceStair,
     computeFloorPlacements,
+    canMoveStair,
     diffFloorPlacements,
     eraseSlabs,
     floorCellAt,
     floorPlacementKey,
     levelUnderPoint,
+    moveStair,
     placeStair,
+    stairUnderPoint,
     stairTargets,
     removeStairAt,
     stairArrivalCells,
@@ -183,6 +186,12 @@ export class MapLayerFloorEditing {
         mapEditorPlacementLevelStore.set(levelUnderPoint(this.readModel(), world.x, world.y));
     }
 
+    /** Whether a stair that starts from the level being edited is under this point: it can be grabbed and moved. */
+    public hasStairAt(world: Point): boolean {
+        const level = get(mapLayerLevelStore);
+        return stairUnderPoint(this.previewModel(), level, world.x, world.y) !== undefined;
+    }
+
     /** The floor drawn under a point of the screen (the ground where there is none), from the floors last read. */
     public levelAt(world: Point): number {
         return levelUnderPoint(this.previewModel(), world.x, world.y);
@@ -224,12 +233,32 @@ export class MapLayerFloorEditing {
         if (mode === "slabErase") {
             return (model) => {
                 // A click on a stair that starts from this level removes it; slabs are removed by rectangles.
-                if (from.x === to.x && from.y === to.y && removeStairAt(model, level, to)) return true;
+                if (from.x === to.x && from.y === to.y) {
+                    const stair = stairUnderPoint(model, level, end.x, end.y);
+                    if (stair && removeStairAt(model, level, stair.foot)) return true;
+                }
                 eraseSlabs(model, level, from, to);
                 return true;
             };
         }
         if (mode === "stair") {
+            // A press on a stair already placed moves it, with its own shape: the panel sets the next one only.
+            if (stairUnderPoint(this.readModel(), level, start.x, start.y)) {
+                // A click on a stair, not a drag: nothing to move, nothing to explain.
+                if (from.x === to.x && from.y === to.y) return undefined;
+                return (model, bounds) => {
+                    const picked = stairUnderPoint(model, level, start.x, start.y);
+                    return (
+                        picked !== undefined &&
+                        moveStair(
+                            model,
+                            picked,
+                            { x: picked.foot.x + to.x - from.x, y: picked.foot.y + to.y - from.y },
+                            bounds,
+                        )
+                    );
+                };
+            }
             const shape = this.stairShape();
             return (model, bounds) => shape !== undefined && placeStair(model, shape, to, level, bounds);
         }
@@ -276,16 +305,22 @@ export class MapLayerFloorEditing {
             .setVisible(true);
         const to = floorCellAt(current.x, current.y, level);
         if (mode === "stair") {
-            const shape = this.stairShape();
+            // A gesture that starts on a placed stair moves it: the preview is that stair, at the tile reached.
+            const picked = start ? stairUnderPoint(placedModel, level, start.x, start.y) : undefined;
+            const shape = picked?.shape ?? this.stairShape();
             if (!shape) return;
             const model = placedModel;
-            const fits = canPlaceStair(model, shape, to, level, this.getBounds());
+            const origin = start ? floorCellAt(start.x, start.y, level) : to;
+            const target = picked ? { x: picked.foot.x + to.x - origin.x, y: picked.foot.y + to.y - origin.y } : to;
+            const fits = picked
+                ? canMoveStair(model, picked, target, this.getBounds())
+                : canPlaceStair(model, shape, target, level, this.getBounds());
             const color = fits ? OK_COLOR : REFUSED_COLOR;
             const top = level + shape.rise;
-            const ground = stairGroundBox(shape, to);
+            const ground = stairGroundBox(shape, target);
             // Where the stair will show.
-            const image = stairImagePosition(shape, to, level);
-            const box = stairScreenBox(shape, to);
+            const image = stairImagePosition(shape, target, level);
+            const box = stairScreenBox(shape, target);
             graphics.fillStyle(color, 0.3);
             graphics.fillRect(image.x, image.y, box.width, box.height);
             graphics.lineStyle(2, color, 1);
@@ -363,6 +398,19 @@ export class MapLayerFloorEditing {
         const y = Math.min(from.y, to.y) * size - level;
         const width = (Math.abs(to.x - from.x) + 1) * size;
         const height = (Math.abs(to.y - from.y) + 1) * size;
+        if (mode === "slabErase" && from.x === to.x && from.y === to.y) {
+            // A click here removes the stair under the pointer: the whole stair is shown, not a tile of it.
+            const stair = stairUnderPoint(placedModel, level, current.x, current.y);
+            if (stair) {
+                const image = stairImagePosition(stair.shape, stair.foot, stair.base);
+                const box = stairScreenBox(stair.shape, stair.foot);
+                graphics.fillStyle(ERASE_COLOR, 0.3);
+                graphics.fillRect(image.x, image.y, box.width, box.height);
+                graphics.lineStyle(2, ERASE_COLOR, 1);
+                graphics.strokeRect(image.x, image.y, box.width, box.height);
+                return;
+            }
+        }
         const color = mode === "slabErase" ? ERASE_COLOR : OK_COLOR;
         graphics.fillStyle(color, 0.3);
         graphics.fillRect(x, y, width, height);

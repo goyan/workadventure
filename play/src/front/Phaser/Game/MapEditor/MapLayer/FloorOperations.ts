@@ -10,6 +10,7 @@ import {
     slabPrefabName,
     stairGroundBox,
     stairPrefabName,
+    stairScreenBox,
 } from "./MapLayerFloors";
 import type { StairRise, StairShape, TilePoint } from "./MapLayerFloors";
 import type { MapBounds } from "./MapLayerOperations";
@@ -179,7 +180,7 @@ export function placeStair(
  * tile of the well gets the slab of a neighbour, when the floor reaches it.
  */
 export function removeStairAt(model: FloorModel, level: number, cell: TilePoint): boolean {
-    const stair = model.getStairs().find((candidate) => candidate.base === level && covers(candidate, cell));
+    const stair = stairAt(model, level, cell);
     if (!stair) return false;
     model.removeStair(stair);
     const well = stairCells(stair.shape, stair.foot);
@@ -197,6 +198,56 @@ export function removeStairAt(model: FloorModel, level: number, cell: TilePoint)
     }
     if (family) for (const covered of well) model.setSlab(stair.top, covered.x, covered.y, family);
     return true;
+}
+
+/** The stair that starts from this floor and covers this tile, if any. */
+export function stairAt(model: FloorModel, level: number, cell: TilePoint): PlacedStair | undefined {
+    return model.getStairs().find((candidate) => candidate.base === level && covers(candidate, cell));
+}
+
+/**
+ * The stair that starts from this floor and is under a point of the screen: the one whose tiles are there, else the
+ * one whose image is (its top is drawn further north than the tiles it stands on).
+ */
+export function stairUnderPoint(
+    model: FloorModel,
+    level: number,
+    worldX: number,
+    worldY: number,
+): PlacedStair | undefined {
+    const onTiles = stairAt(model, level, floorCellAt(worldX, worldY, level));
+    if (onTiles) return onTiles;
+    // The last one placed is drawn over the others.
+    return [...model.getStairs()].reverse().find((stair) => {
+        if (stair.base !== level) return false;
+        const image = stairImagePosition(stair.shape, stair.foot, stair.base);
+        const box = stairScreenBox(stair.shape, stair.foot);
+        return worldX >= image.x && worldX < image.x + box.width && worldY >= image.y && worldY < image.y + box.height;
+    });
+}
+
+/**
+ * Whether a placed stair can have its foot on another tile: inside the map, and not over another stair that starts
+ * from the same floor (itself does not count).
+ */
+export function canMoveStair(model: FloorModel, stair: PlacedStair, foot: TilePoint, bounds: MapBounds): boolean {
+    const cells = stairCells(stair.shape, foot);
+    if (!cells.every((cell) => inBounds(cell, bounds))) return false;
+    return !model
+        .getStairs()
+        .some((other) => other !== stair && other.base === stair.base && cells.some((cell) => covers(other, cell)));
+}
+
+/**
+ * Moves a placed stair, same shape, so that its foot is on another tile: the well it leaves is closed like a removal
+ * does, the well of the new place is cut. Nothing changes when it does not fit.
+ */
+export function moveStair(model: FloorModel, stair: PlacedStair, foot: TilePoint, bounds: MapBounds): boolean {
+    if (!canMoveStair(model, stair, foot, bounds)) return false;
+    if (foot.x === stair.foot.x && foot.y === stair.foot.y) return true;
+    const { shape, base } = stair;
+    if (!removeStairAt(model, base, stair.foot)) return false;
+    return placeStair(model, shape, foot, base, bounds);
 }
 
 /**

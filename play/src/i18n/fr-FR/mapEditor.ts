@@ -801,7 +801,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             slab: "Choisissez un niveau, puis glissez un rectangle pour poser les dalles d’un palier.",
             slabErase:
                 "Glissez un rectangle pour retirer des dalles du niveau, ou cliquez sur un escalier qui en part.",
-            stair: "Cliquez sur la case de la première marche, au niveau d’où part l’escalier. Survolez la carte pour voir où il arrive.",
+            stair: "Cliquez sur la case de la première marche, au niveau d’où part l’escalier. Survolez la carte pour voir où il arrive. Glissez un escalier déjà posé pour le déplacer.",
         },
         floors: "Sol",
         floorGuide: {
