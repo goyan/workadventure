@@ -9,22 +9,25 @@ interface LampPower {
 }
 
 /**
- * The share of its light each lamp gives while a switch turns it on or off: 1 on, 0 off, in between for 200 ms. A lamp
- * seen for the first time is at once as it is told (a player who joins sees no lamp fade), and with reduced motion
- * nothing fades.
+ * The share of its light each lamp gives while a switch turns it on or off: 1 on, 0 off, in between for `fadeMs`
+ * (200 ms by default). A lamp seen for the first time is at once as it is told (a player who joins sees no lamp fade),
+ * and with reduced motion nothing fades.
  */
 export class RgbLampPower {
     private readonly lamps = new Map<string, LampPower>();
 
-    constructor(private readonly reducedMotion: () => boolean) {}
+    constructor(
+        private readonly reducedMotion: () => boolean,
+        private readonly fadeMs = RGB_LAMP_POWER_FADE_MS,
+    ) {}
 
     public level(lampId: string, on: boolean, now: number): number {
         const lamp = this.lamps.get(lampId);
         if (!lamp || this.reducedMotion()) {
-            this.lamps.set(lampId, { on, from: on ? 1 : 0, since: now - RGB_LAMP_POWER_FADE_MS });
+            this.lamps.set(lampId, { on, from: on ? 1 : 0, since: now - this.fadeMs });
             return on ? 1 : 0;
         }
-        const current = levelOf(lamp, now);
+        const current = levelOf(lamp, now, this.fadeMs);
         if (lamp.on !== on) {
             lamp.on = on;
             lamp.from = current;
@@ -38,7 +41,7 @@ export class RgbLampPower {
     }
 }
 
-function levelOf({ on, from, since }: LampPower, now: number): number {
-    const done = Math.max(0, now - since) / RGB_LAMP_POWER_FADE_MS;
+function levelOf({ on, from, since }: LampPower, now: number, fadeMs: number): number {
+    const done = Math.max(0, now - since) / fadeMs;
     return on ? Math.min(1, from + done) : Math.max(0, from - done);
 }

@@ -2139,6 +2139,16 @@
                 }
               },
               "additionalProperties": false
+            },
+            "lighting": {
+              "type": "object",
+              "properties": {
+                "energySaving": {
+                  "type": "boolean",
+                  "default": false
+                }
+              },
+              "additionalProperties": false
             }
           },
           "additionalProperties": false

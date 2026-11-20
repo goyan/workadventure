@@ -216,6 +216,28 @@ describe("MapStorageServer entity edit permissions", () => {
         });
     });
 
+    describe("energy saving of the lamps", () => {
+        const saving: EditMapMessage = {
+            $case: "updateWAMSettingsMessage",
+            updateWAMSettingsMessage: {
+                message: {
+                    $case: "updateLightingSettingMessage",
+                    updateLightingSettingMessage: { energySaving: true },
+                },
+            },
+        };
+
+        it("lets a map editor turn it on, saves it and broadcasts the command (expectAccepted)", async () => {
+            await expectAccepted(MAP_EDITOR, saving);
+            expect(wamFile.getWam().settings?.lighting).toEqual({ energySaving: true });
+        });
+
+        it("refuses a visitor", async () => {
+            await expectRefused(VISITOR, saving);
+            expect(wamFile.getWam().settings?.lighting).toBeUndefined();
+        });
+    });
+
     describe("relief", () => {
         const dig = (cells: { x: number; y: number; height: number }[]): EditMapMessage => ({
             $case: "modifyTerrainMessage",

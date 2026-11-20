@@ -313,6 +313,44 @@ côte à côte (même faisceau au même moment) ; 120 tr/min avec 10° d'ouvertu
 d'une porte qui s'ouvre ; de nuit ; mouvement réduit du système ; effets lumineux coupés puis rallumés pour soi ; une dizaine de lampes tournantes à l'écran pour le
 débit d'images.
 
+### Économie d'énergie
+
+Réglage **par carte**, coupé par défaut (Paramètres → Ambiance → « Éclairage de la carte », visible pour qui peut
+éditer la carte, enregistré au changement) : les lampes RGB posées **dehors** s'éteignent le jour quand le ciel éclaire
+assez, et se rallument à la tombée du jour ou sous un gros orage. Valable pour tous les joueurs. Gyrophares compris ;
+torches, lampes de Jam, piste de danse et lampes des pièces jamais concernées.
+
+- **WAM** : `settings.lighting.energySaving` (absent = coupé), `LightingSettings` dans `libs/map-editor/src/types.ts`.
+  **Protocole** : `UpdateLightingSettingMessage { bool energySaving = 1; }`, case 10 de `UpdateWAMSettingsMessage` (le 9 est pris par les piscines de la PR #392)
+  (message à part : passer par celui de la météo relancerait son cycle, `map-storage` y réécrit `startedAt`).
+  `play`, `back` et `map-storage` se déploient ensemble.
+- **Règle** (`Lamps/EnergySaving.ts`, sans Phaser, testée) : lumière du jour = `min(1, élévation du soleil / 15°)` ×
+  facteur météo (`skyWeatherFactor` : clair 1, couvert 0,35, neige 0,5, pluie et brouillard 0,3, orage 0,15).
+  Extinction à 0,25, rallumage sous 0,18 (hystérésis). Entre les deux, l'état est celui du dernier instant hors de la
+  bande, cherché en remontant le temps par minutes (6 h au plus, « allumé » sinon) : un joueur qui arrive voit ce que
+  voient les autres. Calculé une fois par seconde. Heures à Paris, 20 novembre : ciel clair, éteintes 8 h 41,
+  rallumées 16 h 40 ; couvert 9 h 38 / 16 h 01 ; pluie ou brouillard 9 h 54 / 15 h 50 ; orage : jamais éteintes
+  (et rallumées s'il arrive en journée).
+- **Entrées, les mêmes pour tous** (`GameScene.mapDaylightAt`) : heure du serveur (rien n'est éteint tant qu'elle
+  n'est pas connue), soleil du lieu de la carte (Paris par défaut), météo de la carte à cet instant avec ses nuages.
+  Rien de personnel : ni « Désactiver la nuit », ni l'horloge de l'ordinateur, ni le thème saisonnier, ni les nuages
+  masqués. Écarts possibles : la personne qui essaie une météo dans le panneau (aperçu) voit les lampes suivre son
+  essai ; en météo Réelle, un navigateur qui attend encore la réponse du pusher affiche la météo automatique.
+- **Dehors** : pied de l'image de la lampe (milieu du bas), lu sur la grille dehors/dedans (`OutdoorGrid.isOutdoorAt`) ;
+  pour une lampe sur un palier, le sol sous elle. Une lampe dont le pied tombe dans un mur (façade) compte comme de
+  pièce. Grille pas encore connue : rien n'est éteint.
+- **Interrupteurs** : l'économie éteint par-dessus, sans rien écrire dans l'état partagé des lampes (`RgbLamps`,
+  option `isSaved`, multipliée par le niveau de l'interrupteur) : au retour de l'obscurité la lampe revient comme son
+  interrupteur l'a laissée. Une lampe éteinte ainsi ne dessine rien, ne renvoie rien sur les murs et ne perce plus le
+  voile de nuit. Fondu de 1,5 s (net en mouvement réduit). Dans l'éditeur, inchangé : lampes éteintes, ou allumées
+  quand le bouton soleil-lune montre l'éclairage du jeu, pour pouvoir les régler.
+
+Recette : activer le réglage sur une carte qui a une lampe dehors et une dans une pièce ; en journée, la lampe du
+dehors s'éteint en 1,5 s, celle de la pièce reste (`?nightAt` ne sert à rien ici : l'économie lit l'heure du
+serveur) ; choisir « Orage » dans la météo de la carte en plein jour : la lampe du dehors se rallume ; éteindre la
+lampe à son interrupteur, attendre le soir : elle reste éteinte ; deux navigateurs côte à côte à l'aube ou au
+crépuscule, l'un ouvert depuis longtemps, l'autre rechargé : même état.
+
 ## Interrupteurs
 
 Un **interrupteur** allume et éteint des lampes RGB, pour tout le monde. Plusieurs interrupteurs peuvent commander la

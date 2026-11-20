@@ -98,6 +98,8 @@ const clock = { now: 0 };
 let reducedMotion = false;
 /** The lamps a switch put out. */
 const switchedOff = new Set<string>();
+/** The lamps the energy saving puts out (see EnergySaving). */
+const saved = new Set<string>();
 
 function setup(grid = freeGrid()) {
     const scene = mockDeep<GameScene>();
@@ -114,6 +116,7 @@ function setup(grid = freeGrid()) {
         now: () => clock.now,
         reducedMotion,
         isOn: (id) => !switchedOff.has(id),
+        isSaved: (lamp) => saved.has(lamp.entityId),
         fadeNow: () => clock.now,
     });
     return { scene, state, lamps, worldView };
@@ -128,6 +131,7 @@ afterEach(() => {
     clock.now = 0;
     reducedMotion = false;
     switchedOff.clear();
+    saved.clear();
     setLightBounceStrength(0);
     setLightSecondBounce(false);
 });
@@ -500,6 +504,73 @@ describe("RgbLamps a switch puts out", () => {
         clock.now = 500;
         tick();
         expect(visuals[0].draws).toEqual([]);
+    });
+});
+
+describe("RgbLamps the energy saving puts out by day", () => {
+    it("gives no light at all while saved, though its switch left it on: nothing drawn, nothing through the veil", () => {
+        saved.add("a");
+        start([lamp("a", 624, 624).entity]);
+        expect(visuals[0].draws).toEqual([]);
+        expect(visuals[0].visible).toBe(false);
+        expect(get(rgbLampLightsStore)).toEqual([]);
+    });
+
+    it("sends nothing back from the walls while saved", () => {
+        setLightBounceStrength(1);
+        const grid = freeGrid();
+        for (let col = 0; col < 40; col++) grid[22][col] = 1;
+        const { tick } = start([lamp("a", 624, 624).entity], grid);
+        expect(get(rgbLampLightsStore).length).toBeGreaterThan(1);
+        saved.add("a");
+        tick();
+        clock.now = 1500;
+        tick();
+        expect(get(rgbLampLightsStore)).toEqual([]);
+        expect(visuals.every((visual) => !visual.visible)).toBe(true);
+    });
+
+    it("fades out over 1.5 s once saved, then leaves the night veil", () => {
+        const { tick, scene } = start([lamp("a", 624, 624).entity]);
+        saved.add("a");
+        tick();
+        clock.now = 750;
+        tick();
+        expect(visuals[0].draws.at(-1)?.intensity).toBeCloseTo(0.5);
+        expect(get(rgbLampLightsStore)).toHaveLength(1);
+        scene.markDirty.mockClear();
+        clock.now = 1500;
+        tick();
+        expect(visuals[0].visible).toBe(false);
+        expect(get(rgbLampLightsStore)).toEqual([]);
+        expect(scene.markDirty.mock.calls.length).toBeGreaterThan(0);
+    });
+
+    it("comes back as its switch left it once the daylight is gone: on, or still out", () => {
+        saved.add("a");
+        saved.add("b");
+        switchedOff.add("b");
+        const { tick } = start([lamp("a", 624, 624).entity, lamp("b", 224, 224).entity]);
+        saved.clear();
+        tick();
+        clock.now = 1500;
+        tick();
+        const lights = get(rgbLampLightsStore).map((light) => light.id);
+        expect(lights).toEqual(["a"]);
+    });
+
+    it("leaves the other lamps alone", () => {
+        saved.add("a");
+        start([lamp("a", 624, 624).entity, lamp("b", 224, 224).entity]);
+        expect(get(rgbLampLightsStore).map((light) => light.id)).toEqual(["b"]);
+    });
+
+    it("shines in the map editor that shows the lighting of the game, as before, so that it can be set", () => {
+        saved.add("a");
+        const { tick } = start([lamp("a", 624, 624).entity]);
+        tick(true, true);
+        expect(visuals[0].visible).toBe(true);
+        expect(get(rgbLampLightsStore)).toHaveLength(1);
     });
 });
 
