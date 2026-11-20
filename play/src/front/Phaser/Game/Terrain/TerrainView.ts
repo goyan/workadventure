@@ -680,13 +680,12 @@ export class TerrainView {
         if (!this.splat) return false;
         if (this.imagePools.pools.length > 0) return true;
         const terrain = this.water.relief();
-        if (this.poolsOf?.terrain !== terrain) {
-            const any = Object.values(terrain?.soil ?? {}).some((codes) =>
-                codes.some((code) => poolStyleOf(code) !== undefined),
-            );
-            this.poolsOf = { terrain, any };
-        }
-        return this.poolsOf.any;
+        if (this.poolsOf && this.poolsOf.terrain === terrain) return this.poolsOf.any;
+        const any = Object.values(terrain?.soil ?? {}).some((codes) =>
+            codes.some((code) => poolStyleOf(code) !== undefined),
+        );
+        this.poolsOf = { terrain, any };
+        return any;
     }
 
     /** The frost, the ice and the wet ground of now, for the shaders: the scene is drawn again when they move. */
