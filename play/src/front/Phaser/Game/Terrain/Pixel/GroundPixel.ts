@@ -1,6 +1,6 @@
 import { Season } from "@workadventure/map-editor";
 import { hash2, valueNoise } from "./PixelNoise";
-import type { Material, Rgb } from "./PixelPalette";
+import type { Material, Ramp, Rgb } from "./PixelPalette";
 import { RAMPS, rampsFor, shadeAt } from "./PixelPalette";
 
 /** The dark line on the grass side of a border. */
@@ -152,7 +152,7 @@ export function groundColor(
     /** Dense grass of the meadow: the flowers grow there. */
     dense = false,
 ): Rgb {
-    const ramp = rampsFor(season)[material];
+    const ramp = seasonPatch(material, season, x, y) ?? rampsFor(season)[material];
     if (outline === "dark") return material === "grass" ? GRASS_LINE : ramp[0];
     if (outline === "light") return RAMPS.snow[3];
     const sown = sprinkleAt(material, season, dense, x, y);
@@ -203,6 +203,20 @@ export function sprinkleAt(
     const rarer = season === Season.Summer ? SUMMER_RARER : 0;
     const draw = hash2(x * 3 + 1, y * 7 + 2);
     for (const [threshold, color] of FLOWERS) if (draw > threshold + rarer) return color;
+    return undefined;
+}
+
+/**
+ * The ramp a season puts on a material in patches, undefined elsewhere: the grass yellowed by the summer, the grass
+ * piercing the snow of the winter here and there.
+ */
+export function seasonPatch(material: Material, season: Season | undefined, x: number, y: number): Ramp | undefined {
+    if (season === Season.Summer && material === "grass" && valueNoise(x / 9 + 3, y / 9) > 0.66) {
+        return rampsFor(Season.Summer).straw;
+    }
+    if (season === Season.Winter && material === "snow" && valueNoise(x / 2.5, y / 2.5) > 0.86 && hash2(x, y) > 0.4) {
+        return rampsFor(Season.Winter).grass;
+    }
     return undefined;
 }
 

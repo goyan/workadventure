@@ -118,7 +118,8 @@ describe("the ground in the four seasons", () => {
         for (const season of [Season.Spring, Season.Summer, Season.Autumn, Season.Winter]) {
             const ramp = rampsFor(season).grass;
             const color = groundColor("grass", 5, 9, 0, 0, undefined, false, season, false);
-            const allowed = [...ramp, ...LEAVES];
+            // The summer yellows the grass in patches (seasonPatch).
+            const allowed = [...ramp, ...LEAVES, ...(season === Season.Summer ? rampsFor(Season.Summer).straw : [])];
             expect(
                 allowed.some((shade) => shade.every((channel, index) => channel === color[index])),
                 season,
@@ -144,5 +145,34 @@ describe("the ground in the four seasons", () => {
         expect(leaves(Season.Autumn)).toBeGreaterThan(0);
         expect(leaves(Season.Spring)).toBe(0);
         expect(leaves(Season.Winter)).toBe(0);
+    });
+});
+
+describe("the patches of the seasons", () => {
+    const shades = (colorAt: (x: number, y: number) => Rgb, ramp: readonly Rgb[]): number => {
+        let found = 0;
+        for (let x = 0; x < 160; x++) {
+            for (let y = 0; y < 160; y++) {
+                const color = colorAt(x, y);
+                if (ramp.some((shade) => shade.every((channel, index) => channel === color[index]))) found++;
+            }
+        }
+        return found;
+    };
+
+    it("yellows the grass in patches in summer only", () => {
+        const straw = rampsFor(Season.Summer).straw;
+        expect(
+            shades((x, y) => groundColor("grass", x, y, 0, 0, undefined, false, Season.Summer), straw),
+        ).toBeGreaterThan(500);
+        expect(shades((x, y) => groundColor("grass", x, y, 0, 0, undefined, false, Season.Spring), straw)).toBe(0);
+    });
+
+    it("lets the grass pierce the snow here and there in winter only", () => {
+        const grass = rampsFor(Season.Winter).grass;
+        const pierced = shades((x, y) => groundColor("snow", x, y, 0, 0, undefined, false, Season.Winter), grass);
+        expect(pierced).toBeGreaterThan(0);
+        expect(pierced).toBeLessThan(160 * 160 * 0.2);
+        expect(shades((x, y) => groundColor("snow", x, y, 0, 0, undefined, false, Season.Autumn), grass)).toBe(0);
     });
 });

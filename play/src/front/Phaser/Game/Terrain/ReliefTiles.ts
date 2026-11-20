@@ -9,6 +9,7 @@ import {
     groundValue,
     isContour,
     lightOfRise,
+    seasonPatch,
     sprinkleAt,
     textureIndex,
     textureTable,
@@ -623,7 +624,8 @@ export class ReliefTiles {
                             heights[index],
                         ) - contourShade(contour);
                     const shade = Math.round(value * 3 + bayerRow[x & 3] - 0.5);
-                    colors[index] = ramps[material][shade < 0 ? 0 : shade > 3 ? 3 : shade];
+                    const ramp = seasonPatch(material, season, x, y) ?? ramps[material];
+                    colors[index] = ramp[shade < 0 ? 0 : shade > 3 ? 3 : shade];
                 } else {
                     colors[index] = groundColor(material, x, y, light, heights[index], outline, contour, season, dense);
                 }
