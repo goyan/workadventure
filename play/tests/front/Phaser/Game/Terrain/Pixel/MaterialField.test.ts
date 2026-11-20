@@ -7,6 +7,7 @@ import {
     outlineOf,
     pickMaterial,
 } from "../../../../../../src/front/Phaser/Game/Terrain/Pixel/MaterialField";
+import type { CellInputs, Cover } from "../../../../../../src/front/Phaser/Game/Terrain/Pixel/MaterialField";
 import type { Material } from "../../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
 
 /** A dug cell painted with a soil (its number in SOILS: 4 sand). */
@@ -84,5 +85,60 @@ describe("the line drawn where two materials meet", () => {
         expect(outlineOf("sand", "grass")).toBeUndefined();
         expect(outlineOf("snow", "grass")).toBe("light");
         expect(outlineOf("grass", "grass")).toBeUndefined();
+    });
+});
+
+describe("what covers a cell of the flat ground", () => {
+    // A map without relief: 10 × 10 cells, the cells x ≥ 5 indoors, the cell 2,2 under a floor of the Carte tool, the
+    // cells y ≥ 8 grass tiles of the map, the cell 3,3 clay.
+    const clay = withSoils(undefined, new Map([[cellKey(3, 3), 3]]));
+    const flat = (overrides: Partial<CellInputs> = {}): CellInputs => ({
+        terrain: clay,
+        snowShown: 0,
+        outdoor: (cellX) => cellX < 5,
+        paved: (cellX, cellY) => cellX === 2 && cellY === 2,
+        mapGrass: (_cellX, cellY) => cellY >= 8,
+        moistureAt: () => 0,
+        waterDepthAt: () => 0,
+        ...overrides,
+    });
+
+    it("nothing indoors nor on a floor of the Carte tool, even under the snow", () => {
+        expect(cellMaterial(flat(), 6, 1)).toBe("none");
+        expect(cellMaterial(flat(), 2, 2)).toBe("none");
+        expect(cellMaterial(flat({ snowShown: 1 }), 6, 1)).toBe("none");
+        expect(cellMaterial(flat({ snowShown: 1 }), 2, 2)).toBe("none");
+    });
+
+    it("the grass tiles of the map, nothing on the bare ground outdoors, snow over all of it in winter", () => {
+        expect(cellMaterial(flat(), 1, 9)).toBe("grass");
+        expect(cellMaterial(flat(), 1, 1)).toBe("none");
+        expect(cellMaterial(flat({ snowShown: 1 }), 1, 1)).toBe("snow");
+    });
+
+    it("grass where the ground is dug, even with nothing painted nor growing", () => {
+        const dug = withHeights(undefined, new Map([[cellKey(1, 1), -32]]));
+        expect(cellMaterial(flat({ terrain: dug }), 1, 1)).toBe("grass");
+    });
+
+    it("mud where clay is wet, as the walk slows down there", () => {
+        expect(cellMaterial(flat(), 3, 3)).toBe("clay");
+        expect(cellMaterial(flat({ waterDepthAt: () => 0.5 }), 3, 3)).toBe("mud");
+        expect(cellMaterial(flat({ moistureAt: () => 0.6 }), 3, 3)).toBe("mud");
+        expect(cellMaterial(flat({ moistureAt: () => 0.59 }), 3, 3)).toBe("clay");
+    });
+
+    it("an irregular border between the grass and the bare ground too", () => {
+        const cell = (cellX: number): Cover => (cellX >= 24 ? "grass" : "none");
+        const switches = new Set<number>();
+        for (let y = 0; y < 320; y += 20) {
+            for (let x = 360; x < 410; x++) {
+                if (pickMaterial(cell, x, y) === "grass") {
+                    switches.add(x);
+                    break;
+                }
+            }
+        }
+        expect(switches.size).toBeGreaterThanOrEqual(3);
     });
 });

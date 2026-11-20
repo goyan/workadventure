@@ -15,6 +15,7 @@ import {
     TEXTURE_MASK,
 } from "./Pixel/GroundPixel";
 import { cellMaterial, outlineOf, pickMaterial } from "./Pixel/MaterialField";
+import type { Cover } from "./Pixel/MaterialField";
 import { bayer, RAMPS } from "./Pixel/PixelPalette";
 import type { Material, Ramp, Rgb as PaletteRgb } from "./Pixel/PixelPalette";
 import { DROP_SCALE, groundPointAt, MAX_DROP, paintColumn, RELIEF_TEXEL } from "./ReliefProjection";
@@ -43,8 +44,16 @@ const MATERIALS: readonly Material[] = [
     "ash",
     "ember",
     "snow",
+    "mud",
 ];
 const UNKNOWN_MATERIAL = 255;
+/**
+ * The index of what covers a point. Until the flat ground is drawn (lot B, task 3), the 3/4 relief is given no layout
+ * of the map and never meets "none": drawn as grass if it did.
+ */
+function indexOfCover(cover: Cover): number {
+    return MATERIAL_INDEX[cover === "none" ? "grass" : cover];
+}
 /** The time an image spends drawing a block (ms): the rest of the block waits for the next image. */
 const DRAW_BUDGET_MS = 6;
 /** The rows (or columns) of a block drawn between two looks at the time. */
@@ -259,7 +268,7 @@ export class ReliefTiles {
         let hash = 0;
         for (let row = 0; row < GRID_HEIGHT; row++) {
             for (let column = 0; column < GRID_WIDTH; column++) {
-                hash = (Math.imul(hash, 31) + MATERIAL_INDEX[cellMaterial(inputs, gridX + column, gridY + row)]) | 0;
+                hash = (Math.imul(hash, 31) + indexOfCover(cellMaterial(inputs, gridX + column, gridY + row))) | 0;
             }
         }
         return hash.toString(36);
@@ -370,7 +379,7 @@ export class ReliefTiles {
             const index = row * width + column;
             let known = this.cellMaterials[index];
             if (known === UNKNOWN_MATERIAL) {
-                known = MATERIAL_INDEX[cellMaterial(cellInputs, gridX + column, gridY + row)];
+                known = indexOfCover(cellMaterial(cellInputs, gridX + column, gridY + row));
                 this.cellMaterials[index] = known;
             }
             return MATERIALS[known];
@@ -416,7 +425,7 @@ export class ReliefTiles {
                             ? MATERIAL_INDEX[material]
                             : -1;
                 }
-                materials[index] = uniform >= 0 ? uniform : MATERIAL_INDEX[pickMaterial(cell, x, y)];
+                materials[index] = uniform >= 0 ? uniform : indexOfCover(pickMaterial(cell, x, y));
             }
             if ((row - firstRow) % ROWS_A_STEP === ROWS_A_STEP - 1) yield;
         }

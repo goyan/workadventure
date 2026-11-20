@@ -6,6 +6,8 @@ import { RAMPS, shadeAt } from "./PixelPalette";
 const GRASS_LINE: Rgb = [0x22, 0x36, 0x1c];
 const EMBER: Rgb = [0xff, 0x7a, 0x1a];
 const HOT_EMBER: Rgb = [0xff, 0xd2, 0x7a];
+/** A reflection of water on the mud. */
+const WATER_GLINT: Rgb = [0xb9, 0xca, 0xd6];
 /** How much the light of a slope lightens or darkens a point (a share of the ramp). */
 const LIGHT_SHARE = 0.45;
 /** How fast the light answers the rise of a slope: a gentle bowl is shaded too, a steep slope at the most. */
@@ -76,6 +78,8 @@ function texture(material: Material, x: number, y: number): number {
         case "ash":
         case "ember":
             return 0.4 + (valueNoise(x / 3, y / 3) - 0.5) * 0.5;
+        case "mud":
+            return 0.45 + (valueNoise(x / 5, y / 5) - 0.5) * 0.5;
         case "snow":
             return 0.75 + (valueNoise(x / 8, y / 8) - 0.5) * 0.2 + (hash2(x, y) > 0.985 ? 0.3 : 0);
     }
@@ -146,6 +150,7 @@ export function groundColor(
     const ramp = RAMPS[material];
     if (outline === "dark") return material === "grass" ? GRASS_LINE : ramp[0];
     if (outline === "light") return RAMPS.snow[3];
+    if (material === "mud" && hash2(x, y) > 0.96 && valueNoise(x / 4, y / 4) > 0.5) return WATER_GLINT;
     if (material === "ember") {
         const glow = hash2(x, y);
         if (glow > 0.98) return HOT_EMBER;

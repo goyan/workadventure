@@ -14,7 +14,8 @@ export type Material =
     | "straw"
     | "ash"
     | "ember"
-    | "snow";
+    | "snow"
+    | "mud";
 
 function ramp(...shades: [string, string, string, string]): Ramp {
     const [a, b, c, d] = shades.map((shade): Rgb => {
@@ -41,6 +42,8 @@ export const RAMPS: Record<Material | "wall", Ramp> = {
     ember: ASH,
     snow: ramp("#b9c6d6", "#d3dde8", "#e8eef5", "#fbfdff"),
     wall: ramp("#463b33", "#5e5146", "#7a6a5a", "#9c8a74"),
+    // Wet clay, where the walk slows down (reflections of water: GroundPixel).
+    mud: ramp("#2f2018", "#45301f", "#5c4129", "#735437"),
 };
 
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
