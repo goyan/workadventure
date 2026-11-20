@@ -57,6 +57,9 @@ import type { Seat } from "./Seat";
 import { findSeatOfCharacter, findSeatUnderFeet, getSeats, isSeatTaken } from "./Seat";
 import { findActionableObject } from "./ActionableObjects";
 
+/** The object the avatar can act on is searched again at least this often while it stands still. */
+const ACTION_SEARCH_KEPT_MS = 250;
+
 /** Water set to dive on contact: the body center this close to it makes the player dive. */
 const AUTO_DIVE_DISTANCE = 10;
 /** How deep a body must be in the water to swim without diving (Arcade's overlap bias). */
@@ -341,14 +344,33 @@ export class Player extends Character {
         this.scene.getPlayerVariablesManager()?.setVariableFromApp(SWIMWEAR_VARIABLE, style, { public: true });
     }
 
+    /** The last search of the object the avatar can act on, and where it stood then (see updateObjectAction). */
+    private actionSearch:
+        | { x: number; y: number; floor: number; at: number; object: ReturnType<typeof findActionableObject> }
+        | undefined;
+
     private updateObjectAction(): void {
         const body = this.getBody();
-        // The objects of the floor the avatar stands on.
-        const object = findActionableObject(
-            this.scene,
-            { x: this.x, y: this.y + body.offset.y + body.height / 2 },
-            this.getFloorZ(),
-        );
+        const feet = { x: this.x, y: this.y + body.offset.y + body.height / 2 };
+        const floor = this.getFloorZ();
+        // Every object of the map is looked at: not again while the avatar stands where it stood, except a few
+        // times a second (an object may be placed, moved or removed next to it).
+        const now = performance.now();
+        const searched = this.actionSearch;
+        let object: ReturnType<typeof findActionableObject>;
+        if (
+            searched &&
+            searched.x === feet.x &&
+            searched.y === feet.y &&
+            searched.floor === floor &&
+            now - searched.at < ACTION_SEARCH_KEPT_MS
+        ) {
+            object = searched.object;
+        } else {
+            // The objects of the floor the avatar stands on.
+            object = findActionableObject(this.scene, feet, floor);
+            this.actionSearch = { ...feet, floor, at: now, object };
+        }
         if (object?.entityId !== this.ignoredActionObjectId) this.ignoredActionObjectId = undefined;
         if (object?.entityId !== this.actionObject?.entityId || object?.action !== this.actionObject?.action)
             this.actionPrompt.hide();
