@@ -3334,6 +3334,11 @@ droite, sans recherche de chemin ; un lion ou un tigre revient autour de son arb
 
 ## Catastrophes : le météore
 
+> Depuis le 2026-11-20 la tuile de cette section s'appelle **« Comète »** dans le widget (elle apporte de l'eau et
+> lance une onde ; elle est dessinée en bleu glace). Son code garde ses noms (`CATASTROPHE_METEOR`, `Meteor.ts`,
+> `MeteorView`). La tuile « Météore » est désormais le météore brûlant décrit plus bas (« Catastrophes : le météore
+> brûlant »). Dans le texte qui suit, « météore » désigne donc la comète.
+
 Conception et plan dans le dépôt d'infra, `docs/superpowers/{specs,plans}/2026-11-19-catastrophes-meteore*`. Lot 1 :
 le météore, qui ne touche que l'eau du relief.
 
@@ -3417,6 +3422,52 @@ mourir à sec après 5 s. N'importe quel joueur peut inonder une carte à la lon
 avec 8 px apportés par cellule du cratère). Pas de son. Rien n'a été vu à l'écran à l'écriture de
 cette section : widget, viseur, chute, éclair et gerbe ne sont validés que par les tests ; l'effet sur l'eau en jeu
 n'est pas vu.
+
+
+## Catastrophes : le météore brûlant
+
+Conception et plan dans le dépôt d'infra, `docs/superpowers/{specs,plans}/2026-11-20-meteore-brulant*`.
+
+**Pour qui joue.** Tuile « Météore » du widget des catastrophes, à côté de « Comète ». Elle s'arme comme la comète
+(viseur, Échap annule), avec le même curseur de taille (rayon du cratère de 2 à 24 cases, 4 par défaut), et un clic
+gauche sur la carte lance le météore. Il tombe en 1,2 s comme la comète.
+
+**Ce qu'il fait à l'impact** (le serveur seul décide) :
+
+- le **cratère prend feu de force** : toute case de dehors dont le sol porte de l'herbe (terre, sol d'origine,
+  prairie, argile) est séchée d'un coup (humidité à zéro, sécheresse au maximum) et s'allume, même verte ou
+  détrempée, même sous la pluie ; les arbres dont le pied est dans le cratère aussi. Ne prennent pas : sable, rocher,
+  gravier, intérieurs, sols de l'outil Carte, cases sous l'eau, cases déjà en feu ou encore en cendres, arbres encore
+  noirs. Le feu vit ensuite selon les règles du pré (vent, pluie, eau) ;
+- des **braises** sont jetées autour, entre le bord du cratère et 2 fois son rayon : 3 par case de rayon, 48 au
+  plus (12 pour un cratère de 4 cases). Chacune allume un patch d'une case de rayon selon les règles normales du
+  feu ; le sol y garde son humidité, donc sur du vert ou du mouillé ce feu-là meurt vite ;
+- tombé **dans l'eau** : l'eau du cratère est retirée (comptée dans « Perdu » du bilan), sans onde ; les cases sous
+  l'eau ne brûlent pas.
+
+**Ce que tout le monde voit.** Boule orange à cœur jaune et longue traînée qui rougit, ombre, éclair (un toutes les
+334 ms au plus), gerbe orange, étincelles qui partent jusqu'à 2 fois le rayon du cratère (900 ms), panache de vapeur
+blanc pendant 2 s si le point d'impact est dans l'eau. Mouvement réduit : ni chute, ni éclair, ni étincelles, ni
+vapeur. L'interrupteur personnel de l'effet « Comètes et météores » masque les deux.
+
+**Qui décide.** `CatastropheManager.launch` accepte les genres `CATASTROPHE_METEOR` (comète) et
+`CATASTROPHE_FIREBALL` = 4 (énumération seule, aucun champ nouveau). Même annonce (`CatastropheMessage`), même
+plafond de 20 en vol dans la salle, comètes et météores comptés ensemble. À l'échéance : `strike` pour la comète,
+`burn` pour le météore, branché par `GameRoom` (`burnWith`) : `TerrainWaterManager.vaporise` d'abord, puis
+`MeadowManager.scorch`. Les braises sont tirées de l'identifiant de l'annonce (`fireballEmbers`), donc toujours les
+mêmes pour un météore donné.
+
+**Limites.** Pas de son. Rien sur les avatars, les objets, les murs ni le relief. Si le point d'impact est hors de
+la grille d'eau (sur la terre, à côté d'un lac), l'eau que le cratère recouvre n'est pas retirée. Le pré lit l'eau
+à son dernier pas : une case de rive encore comptée sous l'eau ne s'allume pas. Sur une carte dont l'herbe est
+coupée, rien ne brûle. Un navigateur d'avant ce lot dessine une comète à la place. `play` et `back` à déployer
+ensemble.
+
+**Fichiers.** `libs/map-editor/src/Catastrophe/Fireball.ts`, `Terrain/Meadow.ts` (`scorch`),
+`messages/protos/messages.proto`, `back/src/Model/{CatastropheManager,MeadowManager,TerrainWaterManager,GameRoom}.ts`,
+`play/src/front/Phaser/Game/Catastrophe/{MeteorFall,MeteorView}.ts`, `Stores/CatastropheStore.ts`,
+`Phaser/UserInput/GameSceneUserInputHandler.ts`, `Components/Catastrophe/CatastrophePanel.svelte`, icône `comet` de
+`PixelIcons.ts`, i18n `actionbar` et `menu` (fr, en).
 
 ## Catastrophes : le drain
 

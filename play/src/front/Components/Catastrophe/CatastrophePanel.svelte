@@ -32,11 +32,12 @@
         if (next === "weather") disarmCatastrophe();
     }
     const meteorArmed = $derived($armedCatastropheStore === "meteor");
+    const fireballArmed = $derived($armedCatastropheStore === "fireball");
     const downpourArmed = $derived($armedCatastropheStore === "downpour");
     const fireArmed = $derived($armedCatastropheStore === "fire");
     const drainArmed = $derived($armedCatastropheStore === "drain");
     // The size shown is that of the armed catastrophe, and stays that of the last one armed.
-    let sized = $state<"meteor" | "downpour" | "fire" | "drain">("meteor");
+    let sized = $state<"meteor" | "fireball" | "downpour" | "fire" | "drain">("meteor");
     $effect(() => {
         if ($armedCatastropheStore !== undefined) sized = $armedCatastropheStore;
     });
@@ -90,8 +91,20 @@
                     data-testid="catastrophe-meteor"
                     onclick={() => toggleArmedCatastrophe("meteor")}
                 >
-                    <PixelIcon name="meteor" size={16} />
+                    <PixelIcon name="comet" size={16} />
                     <span>{$LL.actionbar.catastrophe.meteor()}</span>
+                </button>
+                <button
+                    type="button"
+                    class="flex items-center gap-1 rounded-full px-2 py-1 {fireballArmed
+                        ? 'bg-white/30 ring-1 ring-white'
+                        : 'bg-white/10 hover:bg-white/20'}"
+                    aria-pressed={fireballArmed}
+                    data-testid="catastrophe-fireball"
+                    onclick={() => toggleArmedCatastrophe("fireball")}
+                >
+                    <PixelIcon name="meteor" size={16} />
+                    <span>{$LL.actionbar.catastrophe.fireball()}</span>
                 </button>
                 <button
                     type="button"
@@ -195,7 +208,7 @@
                 <span class="text-white/60">
                     {downpourArmed || drainArmed
                         ? $LL.actionbar.catastrophe.downpourArmedHelp()
-                        : meteorArmed || fireArmed
+                        : meteorArmed || fireballArmed || fireArmed
                           ? $LL.actionbar.catastrophe.armedHelp()
                           : $LL.actionbar.catastrophe.idleHelp()}
                 </span>

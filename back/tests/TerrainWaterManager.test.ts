@@ -249,6 +249,31 @@ describe("TerrainWaterManager", () => {
         expect(manager.getGrid()?.totalPx() ?? 0).toBeLessThanOrEqual(after);
     });
 
+    it("a fireball boils away the water of its crater, counted as lost, without a wave, and tells the room", () => {
+        const { manager, sent, steps } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        fillWithWater(manager);
+        sent.length = 0;
+        manager.vaporise(240, 240, 4);
+        expect(manager.getGrid()?.depthAt(15, 15)).toBe(0);
+        // Nothing is thrown out: the water around the crater is what it was.
+        expect(manager.getGrid()?.depthAt(28, 28)).toBe(8);
+        expect(sent).toHaveLength(1);
+        expect(sent[0].stats?.lost).toBeGreaterThan(0);
+        expect(sent[0].stats?.sources).toBe(0);
+        // No wave runs after it: the room is not told five times a second.
+        sent.length = 0;
+        steps(5);
+        expect(sent.length).toBeLessThan(5);
+    });
+
+    it("a fireball on a map without water does nothing", () => {
+        const { manager, sent } = createHarness({ wam: wamWith(undefined) });
+        manager.mapChanged();
+        expect(() => manager.vaporise(240, 240, 4)).not.toThrow();
+        expect(sent).toEqual([]);
+    });
+
     it("a strike on a map without water does nothing", () => {
         const { manager, sent } = createHarness({ wam: wamWith(undefined) });
         manager.mapChanged();

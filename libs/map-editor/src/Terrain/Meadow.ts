@@ -328,6 +328,39 @@ export class Meadow {
         return lit;
     }
 
+    /**
+     * The crater of a fireball: every tile within `radius` tiles whose soil grows grass and has no water lying on it
+     * is dried at once, and takes fire whatever it was, green or sodden, unless it is burning or still in ash.
+     * Returns how many took fire.
+     */
+    public scorch(tileX: number, tileY: number, radius: number): number {
+        if (!Number.isFinite(tileX) || !Number.isFinite(tileY) || !Number.isFinite(radius)) return 0;
+        const reach = Math.max(0, radius);
+        let lit = 0;
+        for (
+            let y = Math.max(0, Math.floor(tileY - reach));
+            y <= Math.min(this.height - 1, Math.ceil(tileY + reach));
+            y++
+        ) {
+            for (
+                let x = Math.max(0, Math.floor(tileX - reach));
+                x <= Math.min(this.width - 1, Math.ceil(tileX + reach));
+                x++
+            ) {
+                if ((x - tileX) ** 2 + (y - tileY) ** 2 > reach * reach) continue;
+                const index = y * this.width + x;
+                if (this.outdoor[index] !== 1 || this.fertility[index] <= 0) continue;
+                if (this.water[index] >= SOAKED_WATER_PX) continue;
+                this.moisture[index] = 0;
+                this.dryness[index] = 1;
+                if (!this.burns(index)) continue;
+                this.light(index);
+                lit++;
+            }
+        }
+        return lit;
+    }
+
     /** For the tests and a restored state: sets a tile. */
     public set(tileX: number, tileY: number, moisture: number, grass: number, dryness = 0): void {
         const index = this.indexOf(tileX, tileY);

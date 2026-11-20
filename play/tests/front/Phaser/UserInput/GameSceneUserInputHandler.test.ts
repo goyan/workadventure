@@ -716,6 +716,17 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             expect(scene.moveTo.mock.calls).toEqual([]);
         });
 
+        it("an armed fireball takes the left click, with the size chosen in the panel", () => {
+            catastrophePanelStore.set(true);
+            toggleArmedCatastrophe("fireball");
+            meteorRadiusTilesStore.set(9);
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+            meteorRadiusTilesStore.set(4);
+
+            expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_FIREBALL, 480, 640, 9]]);
+            expect(scene.moveTo.mock.calls).toEqual([]);
+        });
+
         it("launches the meteor of the size chosen in the panel", () => {
             arm();
             meteorRadiusTilesStore.set(12);

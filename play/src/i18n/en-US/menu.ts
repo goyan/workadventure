@@ -268,7 +268,7 @@ const menu: BaseTranslation = {
         effects: {
             title: "Effects",
             hint: "For you only: an effect turned off is not drawn on this computer; what it does still happens.",
-            meteor: "Meteors",
+            meteor: "Comets and meteors",
             downpour: "Downpours",
             fire: "Flames and smoke",
             detailedFlames: "Detailed flames",

@@ -443,6 +443,11 @@ export class GameRoom implements BrothersFinder {
         catastrophes.soakWith(meadow.soak.bind(meadow));
         // A patch of fire a player sets burns the grass of the meadow.
         catastrophes.igniteWith(meadow.ignite.bind(meadow));
+        // A fireball boils the water of its crater away first, then burns the ground it left dry.
+        catastrophes.burnWith((x, y, radiusTiles, id) => {
+            terrainWater.vaporise(x, y, radiusTiles);
+            meadow.scorch(x, y, radiusTiles, id);
+        });
         await meadow.restore();
         meadow.start();
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe

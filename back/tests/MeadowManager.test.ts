@@ -217,6 +217,42 @@ describe("MeadowManager", () => {
         second.manager.stop();
     });
 
+    it("burns the crater of a fireball on green grass under the rain, and leaves its ground dry", () => {
+        const { manager, sent, steps } = createHarness({ mapSize: () => ({ width: 80, height: 80 }) });
+        manager.mapChanged();
+        steps(400);
+        steps(1);
+        const green = drynessOf(sent[sent.length - 1])[20 * 40 + 20];
+        expect(manager.scorch(20 * 32 + 5, 20 * 32 + 5, 2, 7)).toBeGreaterThanOrEqual(13);
+        steps(1);
+        const last = sent[sent.length - 1];
+        expect(fireOf(last)[20 * 40 + 20]).toBeGreaterThan(0);
+        expect(fireOf(last)[20 * 40 + 22]).toBeGreaterThan(0);
+        expect(drynessOf(last)[20 * 40 + 20]).toBeGreaterThan(green);
+        expect(drynessOf(last)[20 * 40 + 20]).toBeGreaterThan(200);
+    });
+
+    it("lights dry grass around the crater of a fireball where its embers land", () => {
+        const { manager, steps, wam } = createHarness({ mapSize: () => ({ width: 80, height: 80 }) });
+        manager.mapChanged();
+        steps(400);
+        if (!wam.settings) throw new Error("no settings");
+        wam.settings.weather = WeatherType.Clear;
+        steps(150);
+        expect(manager.scorch(20 * 32 + 5, 20 * 32 + 5, 2, 7)).toBeGreaterThan(13);
+    });
+
+    it("burns nothing for a fireball on a map without a meadow, nor on one that turned it off", () => {
+        const none = createHarness({ mapSize: () => undefined });
+        none.manager.mapChanged();
+        expect(none.manager.scorch(10, 10, 2, 1)).toBe(0);
+        const off = createHarness({ meadow: { enabled: false, growMinutes: 10, thirstMinutes: 20, moistureHold: 1 } });
+        off.manager.mapChanged();
+        off.steps(5);
+        expect(off.manager.scorch(10, 10, 2, 1)).toBe(0);
+        off.manager.stop();
+    });
+
     it("lights nothing on a map without a meadow, nor on one that turned it off", () => {
         const none = createHarness({ mapSize: () => undefined });
         none.manager.mapChanged();

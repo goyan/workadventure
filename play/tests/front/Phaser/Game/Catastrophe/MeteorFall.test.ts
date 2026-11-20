@@ -1,8 +1,10 @@
 import { meteorShape } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
 import {
+    fireballSparks,
     flashAllowed,
     meteorFrame,
+    steamPuffs,
     waveCircles,
     wetStretches,
 } from "../../../../../src/front/Phaser/Game/Catastrophe/MeteorFall";
@@ -144,5 +146,53 @@ describe("wetStretches", () => {
 
     it("joins the stretch that goes round the start of the circle", () => {
         expect(wetStretches([true, false, false, true])).toEqual([{ from: 3, to: 5 }]);
+    });
+});
+
+describe("fireballSparks", () => {
+    it("has nothing to show before the impact nor 900 ms after it", () => {
+        expect(fireballSparks(-1, 64, 12)).toEqual([]);
+        expect(fireballSparks(900, 64, 12)).toEqual([]);
+    });
+
+    it("throws as many sparks as asked, within twice the radius of the crater", () => {
+        const sparks = fireballSparks(300, 64, 12);
+        expect(sparks).toHaveLength(12);
+        for (const spark of sparks) {
+            expect(Math.hypot(spark.x, spark.y)).toBeLessThanOrEqual(128);
+            expect(spark.alpha).toBeGreaterThan(0);
+            expect(spark.alpha).toBeLessThanOrEqual(1);
+        }
+    });
+
+    it("flies outwards and fades as time goes", () => {
+        const early = fireballSparks(300, 64, 12);
+        const late = fireballSparks(600, 64, 12);
+        late.forEach((spark, index) => {
+            expect(Math.hypot(spark.x, spark.y)).toBeGreaterThan(Math.hypot(early[index].x, early[index].y));
+            expect(spark.alpha).toBeLessThan(early[index].alpha);
+        });
+    });
+
+    it("is the same each time it is asked", () => {
+        expect(fireballSparks(450, 64, 12)).toEqual(fireballSparks(450, 64, 12));
+    });
+});
+
+describe("steamPuffs", () => {
+    it("has nothing to show before the impact nor 2 seconds after it", () => {
+        expect(steamPuffs(-1, 64)).toEqual([]);
+        expect(steamPuffs(2000, 64)).toEqual([]);
+    });
+
+    it("rises, widens and fades", () => {
+        const early = steamPuffs(400, 64);
+        const late = steamPuffs(1200, 64);
+        expect(early.length).toBeGreaterThan(0);
+        late.forEach((puff, index) => {
+            expect(puff.rise).toBeGreaterThan(early[index].rise);
+            expect(puff.radius).toBeGreaterThan(early[index].radius);
+            expect(puff.alpha).toBeLessThan(early[index].alpha);
+        });
     });
 });

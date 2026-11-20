@@ -14,6 +14,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { CatastropheManager } from "../src/Model/CatastropheManager";
 
 const METEOR = CatastropheKind.CATASTROPHE_METEOR;
+const FIREBALL = CatastropheKind.CATASTROPHE_FIREBALL;
 const MAP = { width: 640, height: 480 };
 
 function harness(mapSize: () => { width: number; height: number } | undefined = () => MAP) {
@@ -319,5 +320,61 @@ describe("a patch of fire", () => {
         expect(() => manager.request(1, FIRE, 10, 10, 2, false)).not.toThrow();
         manager.stop();
         expect(manager.request(2, FIRE, 10, 10, 2, false)).toBe(false);
+    });
+
+    describe("a fireball", () => {
+        const burning = () => {
+            const made = harness();
+            const burn = vi.fn<(x: number, y: number, radiusTiles: number, id: number) => void>();
+            made.manager.burnWith(burn);
+            return { ...made, burn };
+        };
+
+        it("is announced like a meteor, and burns at impact instead of striking the water", () => {
+            const { manager, sent, strike, burn } = burning();
+            expect(manager.request(1, FIREBALL, 100, 100, 6, false)).toBe(true);
+            expect(sent).toHaveLength(1);
+            expect(sent[0]).toMatchObject({ kind: FIREBALL, x: 100, y: 100, impactInMs: 1200, radiusTiles: 6 });
+            vi.advanceTimersByTime(METEOR_FALL_MS - 1);
+            expect(burn).not.toHaveBeenCalled();
+            vi.advanceTimersByTime(1);
+            expect(burn).toHaveBeenCalledWith(100, 100, 6, sent[0].id);
+            expect(strike).not.toHaveBeenCalled();
+        });
+
+        it("keeps its size within 2 to 24 tiles", () => {
+            const { manager, sent } = burning();
+            manager.launch(FIREBALL, 10, 10, 99);
+            manager.launch(FIREBALL, 10, 10, Number.NaN);
+            manager.launch(FIREBALL, 10, 10, 0);
+            expect(sent.map((message) => message.radiusTiles)).toEqual([24, 4, 2]);
+        });
+
+        it("is counted with the meteors against the twenty in flight", () => {
+            const { manager } = burning();
+            for (let count = 0; count < METEORS_PER_ROOM / 2; count++) {
+                expect(manager.launch(METEOR, 10, 10, 4)).toBe(true);
+                expect(manager.launch(FIREBALL, 10, 10, 4)).toBe(true);
+            }
+            expect(manager.launch(FIREBALL, 10, 10, 4)).toBe(false);
+        });
+
+        it("is refused outside the map", () => {
+            const { manager, sent } = burning();
+            expect(manager.launch(FIREBALL, -1, 10, 4)).toBe(false);
+            expect(manager.launch(FIREBALL, 10, MAP.height, 4)).toBe(false);
+            expect(sent).toEqual([]);
+        });
+
+        it("does not stop the room when burning fails", () => {
+            const { manager, burn } = burning();
+            const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+            burn.mockImplementation(() => {
+                throw new Error("no meadow");
+            });
+            manager.launch(FIREBALL, 10, 10, 4);
+            expect(() => vi.advanceTimersByTime(METEOR_FALL_MS)).not.toThrow();
+            expect(logged).toHaveBeenCalled();
+        });
     });
 });

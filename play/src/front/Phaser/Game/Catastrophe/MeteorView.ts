@@ -1,15 +1,31 @@
+import { CatastropheKind } from "@workadventure/messages";
 import type { CatastropheMessage } from "@workadventure/messages";
-import { METEOR_DEFAULT_TILES, METEOR_FALL_MS, meteorShape, TERRAIN_CELL } from "@workadventure/map-editor";
+import {
+    FIREBALL_EMBERS_PER_TILE,
+    FIREBALL_MAX_EMBERS,
+    METEOR_DEFAULT_TILES,
+    METEOR_FALL_MS,
+    meteorShape,
+    TERRAIN_CELL,
+} from "@workadventure/map-editor";
 import type { MeteorShape } from "@workadventure/map-editor";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import { LAMP_MIN_FLASH_INTERVAL_MS } from "../Lamps/LampSignal";
 import { isEffectShown } from "../../../Stores/EffectsStore";
-import { flashAllowed, meteorFrame, waveCircles, wetStretches } from "./MeteorFall";
+import { fireballSparks, flashAllowed, meteorFrame, steamPuffs, waveCircles, wetStretches } from "./MeteorFall";
 
 /** The meteor of the usual size is drawn this wide; the others in proportion to their crater. */
 const METEOR_RADIUS_PX = 10;
-const METEOR_COLOR = 0xffb347;
+/** A comet is ice: pale blue. A fireball is fire: orange, with a yellow heart and a tail that turns red. */
+const COMET_COLOR = 0xbfe6ff;
+const FIREBALL_COLOR = 0xffb347;
+const FIREBALL_HEART_COLOR = 0xfff1a8;
+const FIREBALL_TAIL_COLOR = 0xe5533d;
 const TRAIL_SEGMENTS = 3;
+const FIREBALL_TRAIL_SEGMENTS = 7;
+const FIRE_BURST_COLOR = 0xff8a2a;
+const SPARK_COLOR = 0xffd36b;
+const STEAM_COLOR = 0xffffff;
 const FLASH_ALPHA = 0.6;
 const BURST_STROKES = 12;
 /** The burst of an impact goes this many times the radius of the crater. */
@@ -30,6 +46,10 @@ interface Meteor {
     craterPx: number;
     /** How wide it is drawn next to the usual meteor. */
     scale: number;
+    /** A fireball, which burns where it lands, and not a comet, which brings water and a wave. */
+    burning: boolean;
+    /** How many sparks a fireball throws at impact. */
+    sparks: number;
     /** When the meteor was launched, in ms of the game. */
     launchedAt: number;
     /** Whether the meteor falls into water: read when it is announced, before the impact empties its crater. */
@@ -39,10 +59,11 @@ interface Meteor {
 }
 
 /**
- * The fall of the meteors the server announces: a shadow that grows on the ground, the meteor coming in, a flash and a
- * burst at impact, blue on water and brown dust elsewhere, then on water the circles of the wave running to the
- * shores. Drawn in code, all in one layer above everything. The
- * server alone decides what the water does.
+ * The fall of the comets and the fireballs the server announces: a shadow that grows on the ground, the body coming
+ * in, a flash and a burst at impact. A comet (ice blue) bursts blue on water and brown dust elsewhere, then on water
+ * the circles of its wave run to the shores. A fireball (orange, a tail of flames) bursts in fire and sparks, with
+ * steam rising where it fell into water, and no wave. Drawn in code, all in one layer above everything. The server
+ * alone decides what the water and the meadow do.
  */
 export class MeteorView {
     private readonly graphics: Phaser.GameObjects.Graphics;
@@ -67,6 +88,8 @@ export class MeteorView {
             shape,
             craterPx: shape.discCells * TERRAIN_CELL,
             scale: shape.radiusTiles / METEOR_DEFAULT_TILES,
+            burning: message.kind === CatastropheKind.CATASTROPHE_FIREBALL,
+            sparks: Math.min(FIREBALL_MAX_EMBERS, shape.radiusTiles * FIREBALL_EMBERS_PER_TILE),
             launchedAt: receivedAt + message.impactInMs - METEOR_FALL_MS,
             wet: this.isWet(message.x, message.y),
             flashes: undefined,
@@ -90,12 +113,19 @@ export class MeteorView {
             const sinceLaunch = now - meteor.launchedAt;
             const frame = meteorFrame(sinceLaunch, METEOR_FALL_MS, reduced);
             // The circles of the wave run on the water long after the burst: none on dry ground, none in reduced motion.
-            const circles = meteor.wet && !reduced ? waveCircles(sinceLaunch - METEOR_FALL_MS, meteor.shape) : [];
-            if (frame.done && circles.length === 0) {
+            const sinceImpact = sinceLaunch - METEOR_FALL_MS;
+            const circles = meteor.wet && !meteor.burning && !reduced ? waveCircles(sinceImpact, meteor.shape) : [];
+            // What a fireball leaves after its burst: sparks flying out, and steam where it fell into water.
+            const sparks =
+                meteor.burning && !reduced ? fireballSparks(sinceImpact, meteor.craterPx, meteor.sparks) : [];
+            const steam = meteor.burning && meteor.wet && !reduced ? steamPuffs(sinceImpact, meteor.craterPx) : [];
+            if (frame.done && circles.length === 0 && sparks.length === 0 && steam.length === 0) {
                 this.meteors.splice(index, 1);
                 continue;
             }
             this.drawWave(meteor, circles);
+            this.drawSteam(meteor, steam);
+            this.drawSparks(meteor, sparks);
             if (frame.done) continue;
             this.drawShadow(meteor, frame.shadowScale);
             if (frame.burst === undefined) {
@@ -105,7 +135,11 @@ export class MeteorView {
                     meteor.flashes = flashAllowed(now, this.lastFlashAt, LAMP_MIN_FLASH_INTERVAL_MS);
                     if (meteor.flashes) this.lastFlashAt = now;
                 }
-                this.drawBurst(meteor, frame.burst, meteor.wet);
+                this.drawBurst(
+                    meteor,
+                    frame.burst,
+                    meteor.burning ? FIRE_BURST_COLOR : meteor.wet ? WET_BURST_COLOR : DRY_BURST_COLOR,
+                );
             }
             if (frame.flash > 0 && meteor.flashes && !flashed) {
                 this.drawFlash(frame.flash);
@@ -131,17 +165,40 @@ export class MeteorView {
         const length = Math.hypot(offset.x, offset.y);
         // The trail goes back along the way the meteor came from.
         const back = length > 0 ? { x: offset.x / length, y: offset.y / length } : { x: 0, y: 0 };
-        for (let segment = TRAIL_SEGMENTS; segment >= 1; segment--) {
+        const segments = meteor.burning ? FIREBALL_TRAIL_SEGMENTS : TRAIL_SEGMENTS;
+        const color = meteor.burning ? FIREBALL_COLOR : COMET_COLOR;
+        for (let segment = segments; segment >= 1; segment--) {
             const distance = segment * size * 1.6;
-            this.graphics.fillStyle(METEOR_COLOR, 0.5 * (1 - segment / (TRAIL_SEGMENTS + 1)));
+            // The tail of a fireball turns red as it cools, away from its head.
+            const tail = meteor.burning && segment > segments / 2 ? FIREBALL_TAIL_COLOR : color;
+            this.graphics.fillStyle(tail, 0.5 * (1 - segment / (segments + 1)));
             this.graphics.fillCircle(
                 meteor.x + offset.x + back.x * distance,
                 meteor.y + offset.y + back.y * distance,
-                size * (1 - segment * 0.2),
+                size * (1 - (segment / (segments + 1)) * 0.8),
             );
         }
-        this.graphics.fillStyle(METEOR_COLOR, 1);
+        this.graphics.fillStyle(color, 1);
         this.graphics.fillCircle(meteor.x + offset.x, meteor.y + offset.y, size);
+        if (meteor.burning) {
+            this.graphics.fillStyle(FIREBALL_HEART_COLOR, 1);
+            this.graphics.fillCircle(meteor.x + offset.x, meteor.y + offset.y, size * 0.55);
+        }
+    }
+
+    private drawSparks(meteor: Meteor, sparks: { x: number; y: number; alpha: number }[]): void {
+        const size = Math.max(2, 2 * meteor.scale);
+        for (const spark of sparks) {
+            this.graphics.fillStyle(SPARK_COLOR, spark.alpha);
+            this.graphics.fillRect(meteor.x + spark.x - size / 2, meteor.y + spark.y - size / 2, size, size);
+        }
+    }
+
+    private drawSteam(meteor: Meteor, puffs: { radius: number; rise: number; alpha: number }[]): void {
+        for (const puff of puffs) {
+            this.graphics.fillStyle(STEAM_COLOR, puff.alpha);
+            this.graphics.fillCircle(meteor.x, meteor.y - puff.rise, puff.radius);
+        }
     }
 
     /** The circles of the wave, only where they lie on water: a wave does not run over the land. */
@@ -176,8 +233,8 @@ export class MeteorView {
         });
     }
 
-    private drawBurst(meteor: Meteor, burst: number, wet: boolean): void {
-        this.graphics.lineStyle(3 * Math.max(1, meteor.scale), wet ? WET_BURST_COLOR : DRY_BURST_COLOR, 1 - burst);
+    private drawBurst(meteor: Meteor, burst: number, color: number): void {
+        this.graphics.lineStyle(3 * Math.max(1, meteor.scale), color, 1 - burst);
         const outer = meteor.craterPx * BURST_REACH * burst;
         const inner = outer * 0.6;
         for (let stroke = 0; stroke < BURST_STROKES; stroke++) {
