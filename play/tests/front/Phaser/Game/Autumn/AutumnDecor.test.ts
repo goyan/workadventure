@@ -5,6 +5,7 @@ import type { SeasonalDecorDeps } from "../../../../../src/front/Phaser/Game/Sea
 
 const scatter = vi.hoisted(() => ({
     update: vi.fn((_view: unknown, _isGround: unknown, _sources: unknown, _force: boolean) => false),
+    refreshGround: vi.fn((_isGround: unknown) => false),
     setVisible: vi.fn(),
     setAlpha: vi.fn(),
     destroy: vi.fn(),
@@ -20,6 +21,7 @@ const kicked = vi.hoisted(() => ({
 vi.mock("../../../../../src/front/Phaser/Game/Autumn/LeafScatterLayer", () => ({
     LeafScatterLayer: class {
         public update = scatter.update;
+        public refreshGround = scatter.refreshGround;
         public setVisible = scatter.setVisible;
         public setAlpha = scatter.setAlpha;
         public destroy = scatter.destroy;
@@ -155,17 +157,20 @@ describe("AutumnDecor", () => {
         expect(scatter.update.mock.lastCall?.[3]).toBe(true);
     });
 
-    it("draws again when the water changes, at most every few seconds", () => {
+    it("looks where the leaves lie again when the water changes, at most every few seconds, without laying them again", () => {
         let version = 1;
         const autumn = decor({ waterVersion: () => version });
         autumn.update(0, []);
+        scatter.refreshGround.mockClear();
         version = 2;
         autumn.update(1000, []);
+        expect(scatter.refreshGround).not.toHaveBeenCalled();
+        scatter.refreshGround.mockReturnValueOnce(true);
+        expect(autumn.update(5000, [])).toBe(true);
+        expect(scatter.refreshGround).toHaveBeenCalledTimes(1);
         expect(scatter.update.mock.lastCall?.[3]).toBe(false);
-        autumn.update(5000, []);
-        expect(scatter.update.mock.lastCall?.[3]).toBe(true);
         autumn.update(5016, []);
-        expect(scatter.update.mock.lastCall?.[3]).toBe(false);
+        expect(scatter.refreshGround).toHaveBeenCalledTimes(1);
     });
 
     it("shows, hides and destroys its three layers", () => {

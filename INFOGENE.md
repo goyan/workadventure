@@ -2821,8 +2821,11 @@ n'est pas reçue, Auto n'affiche rien (`Seasonal/SeasonalTheme.ts`). `SeasonalTh
 
 **Feuilles au sol venues des arbres** (`Autumn/LeafDensity.ts`, pur ; avant : une feuille par carré de 48 px partout
 dehors, lacs, océan et piscines compris, signalé par l'utilisateur). Seuls les arbres qui se balancent et perdent leurs
-feuilles en sont la source (`keepsLeavesInAutumn` de `Nature/TreeLeafFall.ts` : sapins, cyprès, saules et palmiers,
-dont l'image d'automne est celle d'été, n'en perdent pas ; même règle que les feuilles qui tombent). Autour du pied de
+feuilles en sont la source (`keepsLeavesInAutumn` de `Nature/TreeLeafFall.ts`, même règle que les feuilles qui
+tombent : un arbre dont l'image d'automne est celle d'été n'en perd pas, soit les sapins sombres et clairs, cyprès,
+saules, palmiers, arbres nus et la famille `winter-auto-`). Écart connu : les « Sapin enneigé » et le « Palmier
+enneigé » (`snow-evergreen-`) ont une image d'automne propre et perdent donc des feuilles, comme avant pour celles qui
+tombent. Autour du pied de
 chaque arbre, un ovale de feuilles le plus dense au pied (90 % des carrés de 16 px en fin d'automne, un quart de cela
 le 1er septembre) qui s'éclaircit jusqu'à son bord : 72 px de rayon (ou les trois quarts de la largeur de l'arbre) en
 fin d'automne, la moitié au début ; chaque palier de vent l'allonge de 75 % sous le vent et le raccourcit de 12 % au
@@ -2834,8 +2837,10 @@ les piscines du sol, ni sur le tapis d'un arbre de rive (`isGroundUnderWater` de
 feuilles flottantes. Tas de feuilles dès 15 % de densité au pied de l'objet, feuilles soulevées dès 10 %. Coût : la
 densité de la zone dessinée est calculée en un passage où chaque arbre ne visite que les carrés qu'il atteint
 (`leafDensityField`), seulement quand la vue sort de sa marge, que les arbres, le vent arrondi ou l'avancée de
-l'automne changent, ou que l'eau a changé (au plus toutes les 5 s) ; mesuré hors jeu : 5 à 10 ms pour 400 arbres sur
-une zone de 1 650 × 930 à 6 000 × 3 400 px. Rien de loin (`seenFromFar`). Front seul.
+l'automne changent ; mesuré hors jeu : 5 à 10 ms pour 400 arbres sur une zone de 1 650 × 930 à 6 000 × 3 400 px (sans
+le dessin). Quand l'eau du relief change (chaque seconde), au plus toutes les 5 s, seules les feuilles déjà tirées sont
+relues sur leur sol, et la couche n'est redessinée que si l'une d'elles est atteinte ou quittée par l'eau
+(`LeafScatterLayer.refreshGround`). Rien de loin (`seenFromFar`). Front seul.
 
 Empreintes et feuilles soulevées sont calculées par chaque navigateur depuis les positions déjà reçues : rien sur le
 réseau. « Afficher la météo » coupé retire aussi ce qui tombe (flocons de Noël, feuilles) ; le reste suit le thème.

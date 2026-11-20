@@ -78,4 +78,21 @@ describe("LeafScatterLayer", () => {
         leaves.destroy();
         expect(graphics.destroy.mock.calls).toHaveLength(1);
     });
+
+    it("redraws when the water changes only if a drawn leaf is reached or left by it", () => {
+        const { graphics, leaves } = layer();
+        const near = { ...oak, trees: [{ x: 200, y: 200, width: 64 }] };
+        leaves.update({ x: 0, y: 0, width: 400, height: 400 }, outdoors, near, false);
+        const all = graphics.fillRect.mock.calls.length;
+        graphics.clear.mockClear();
+        // A lake far from the leaves: nothing to draw again.
+        expect(leaves.refreshGround((x) => x < 600)).toBe(false);
+        expect(graphics.clear.mock.calls).toHaveLength(0);
+        // The water reaches the foot of the tree: the leaves it covers go.
+        graphics.fillRect.mockClear();
+        expect(leaves.refreshGround((x) => x < 200)).toBe(true);
+        expect(graphics.fillRect.mock.calls.length).toBeGreaterThan(0);
+        expect(graphics.fillRect.mock.calls.length).toBeLessThan(all);
+        for (const [x] of graphics.fillRect.mock.calls) expect(x).toBeLessThan(200);
+    });
 });

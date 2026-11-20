@@ -18,8 +18,8 @@ import { LeafScatterLayer } from "./LeafScatterLayer";
 
 /** Kicked leaves only need a redraw now and then while they fly and fade. */
 const FLIGHT_REDRAW_MS = 100;
-/** The water of the relief changes every second: the leaves around it are laid again this often at most. */
-const WATER_REDRAW_MS = 5000;
+/** The water of the relief changes every second: where the leaves lie is looked at again this often at most. */
+const WATER_LOOK_MS = 5000;
 /** Autumn goes by steps of a thirtieth (about three days): the leaves on the ground are laid again then. */
 const PROGRESS_STEPS = 30;
 
@@ -40,8 +40,8 @@ export class AutumnDecor implements SeasonalDecor {
     private sources: LeafSources = { trees: [], wind: quantizeWind(undefined, undefined), progress: 1 };
     private sourcesKey = "";
     private treesChanged = false;
-    private drawnWater: number | undefined;
-    private lastWaterRedraw = -Infinity;
+    private lookedWater: number | undefined;
+    private lastWaterLook = -Infinity;
 
     constructor(
         private readonly scene: Phaser.Scene,
@@ -69,16 +69,17 @@ export class AutumnDecor implements SeasonalDecor {
     update(time: number, walkers: WalkerSample[]): boolean {
         const moved = this.refreshSources();
         if (moved) this.pile();
-        let force = this.groundChanged || this.treesChanged || moved;
-        const water = this.deps.waterVersion?.();
-        if (water !== this.drawnWater && time - this.lastWaterRedraw >= WATER_REDRAW_MS) force = true;
-        if (force) {
-            this.drawnWater = water;
-            this.lastWaterRedraw = time;
-        }
+        const force = this.groundChanged || this.treesChanged || moved;
         let dirty = this.scatter.update(this.scene.cameras.main.worldView, this.isGround, this.sources, force);
         this.groundChanged = false;
         this.treesChanged = false;
+        // The water of the relief changes every second: now and then, only the leaves it reached or left are redrawn.
+        const water = this.deps.waterVersion?.();
+        if (water !== this.lookedWater && time - this.lastWaterLook >= WATER_LOOK_MS) {
+            this.lookedWater = water;
+            this.lastWaterLook = time;
+            dirty = this.scatter.refreshGround(this.isGround) || dirty;
+        }
         // An empty list (editing) forgets where everyone was, so that leaving the editor kicks nothing.
         const leaves = this.trail.update(walkers, time);
         if (leaves.length > 0) {
