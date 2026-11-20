@@ -160,12 +160,14 @@ export function flameOutline(flame: Flame, scale: number): { x: number; y: numbe
     return [...left, ...right];
 }
 
-/** What burns: the grass gives a pale grey smoke, a tree a thick black one. */
-export type SmokeKind = "grass" | "tree";
+/** What burns: the grass gives a pale grey smoke, a tree a thick black one; water on a fire gives steam. */
+export type SmokeKind = "grass" | "tree" | "steam";
 /** The smoke of each: how many puffs, how opaque the thickest, how wide they start and end, how high they rise. */
 const SMOKE: Record<SmokeKind, { alpha: number; from: number; to: number; rise: number }> = {
     grass: { alpha: 0.6, from: 14, to: 46, rise: 190 },
     tree: { alpha: 0.82, from: 18, to: 58, rise: 230 },
+    // The steam of a fire that water put out: white, lighter, lower.
+    steam: { alpha: 0.7, from: 10, to: 36, rise: 150 },
 };
 const SMOKE_PUFFS = 3;
 /** A fire smokes from this strong on. */
