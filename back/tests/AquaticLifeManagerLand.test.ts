@@ -173,4 +173,16 @@ describe("AquaticLifeManager, the life of the land", () => {
         await second.manager.restore();
         expect(onLand(second.manager.snapshot()).sort()).toEqual([4, 5]);
     });
+
+    it("gives the fire of the map to the life: no antelope comes to a land that burns everywhere", () => {
+        const { manager, sent, steps } = harness();
+        manager.followFire(() => ({ near: () => undefined, burning: () => true }));
+        manager.start();
+        steps(4);
+        expect(onLand(sent[sent.length - 1])).toEqual([]);
+        // The fire out, they come as on any map.
+        manager.followFire(() => undefined);
+        steps(4);
+        expect(onLand(sent[sent.length - 1]).length).toBeGreaterThan(0);
+    });
 });

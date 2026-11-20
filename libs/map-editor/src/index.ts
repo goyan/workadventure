@@ -42,6 +42,7 @@ export * from "./Life/Swim";
 export * from "./Life/Population";
 export * from "./Life/Taming";
 export * from "./Life/Gulls";
+export * from "./Life/FireFear";
 export * from "./Life/LifeHistory";
 export * from "./Life/Fishing";
 export * from "./Life/FishingContest";

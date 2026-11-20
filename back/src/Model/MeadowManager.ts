@@ -3,6 +3,7 @@ import {
     burnableTreesOf,
     DEFAULT_MEADOW_SETTINGS,
     landWallsOf,
+    lifeFireOf,
     Meadow,
     MEADOW_STEP_SECONDS,
     minutesOfDayIn,
@@ -14,7 +15,7 @@ import {
     TreeFire,
     WeatherType,
 } from "@workadventure/map-editor";
-import type { Downpour, Ember, TerrainData, ToldTree, WaterGrid } from "@workadventure/map-editor";
+import type { Downpour, Ember, LifeFire, TerrainData, ToldTree, WaterGrid } from "@workadventure/map-editor";
 import type { MeadowMessage, TreeFireMessage } from "@workadventure/messages";
 import type { VariablesRepositoryInterface } from "../Services/Repository/VariablesRepositoryInterface";
 import type { GameRoom } from "./GameRoom";
@@ -335,6 +336,17 @@ export class MeadowManager {
     /** The trees on fire (map pixels): what the animals of the map run from. */
     public treeFires(): { x: number; y: number; fire: number }[] {
         return this.trees.fires();
+    }
+
+    /**
+     * The fire of the map as its animals see it (the grass and the trees that burn), for the life of the room: they
+     * run from it. Undefined while nothing burns, so that nothing is looked at.
+     */
+    public lifeFire(): LifeFire | undefined {
+        const trees = this.trees.fires();
+        if (trees.length === 0 && (this.meadow?.burning() ?? 0) === 0) return undefined;
+        const meadow = this.meadow;
+        return lifeFireOf({ fireAt: (tileX, tileY) => meadow?.fireAt(tileX, tileY) ?? 0 }, () => trees);
     }
 
     /** Tells the room the trees whose state changed and the embers that left, when there is anything to tell. */

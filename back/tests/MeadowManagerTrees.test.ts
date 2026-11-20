@@ -145,4 +145,22 @@ describe("MeadowManager and the trees", () => {
         expect(manager.treeSnapshot()).toBeUndefined();
         expect(manager.ignite(x, y, 1)).toBe(0);
     });
+
+    it("shows the animals of the map the fire of the grass and of the trees, and nothing while nothing burns", () => {
+        const { manager, steps } = createHarness();
+        manager.start();
+        steps(1);
+        expect(manager.lifeFire()).toBeUndefined();
+        const { x, y } = foot(10, 10);
+        expect(manager.ignite(x, y, 1)).toBeGreaterThan(0);
+        const fire = manager.lifeFire();
+        expect(fire).toBeDefined();
+        // At the foot of the tree that was lit: the fire is right there (the tree, or the grass around it).
+        const near = fire?.near(x, y);
+        expect(near).toBeDefined();
+        expect(Math.hypot((near?.x ?? 0) - x, (near?.y ?? 0) - y)).toBeLessThan(TILE_PX);
+        // Twenty tiles away: nothing to run from.
+        expect(fire?.near(x + 20 * TILE_PX, y)).toBeUndefined();
+        expect(fire?.burning(x + 20 * TILE_PX, y)).toBe(false);
+    });
 });

@@ -1,5 +1,6 @@
 import { TERRAIN_CELL } from "../types";
 import type { Animal } from "./Animal";
+import type { LifeFire } from "./FireFear";
 import type { LifeTally, Population, SpeciesTally } from "./Population";
 import { SPECIES } from "./Species";
 import type { SpeciesId } from "./Species";
@@ -34,6 +35,8 @@ export interface GullContext {
     random: () => number;
     /** The avatars on the ground, in map pixels. */
     threats: readonly { x: number; y: number }[];
+    /** The fire of the map, when one may burn: a landed gull flies from it, and none lands beside it. */
+    fire?: LifeFire;
     /** The speed of the map, in map pixels a second. */
     maxSpeed: number;
     times: { breedDelayMs: number; huntIntervalMs: number };
@@ -70,7 +73,11 @@ function fly(gull: Animal, x: number, y: number, speed: number, dtMs: number): b
  * hunger. Nothing here stops them: no wall, no depth.
  */
 export function stepGulls(context: GullContext): void {
-    const { population, bodies, land, now, dtMs, random, threats, maxSpeed, times, of, tally } = context;
+    const { population, bodies, land, now, dtMs, random, threats, fire, maxSpeed, times, of, tally } = context;
+    const byFire = (point: { x: number; y: number }): boolean => {
+        const flames = fire?.near(point.x, point.y);
+        return flames !== undefined && far(flames, point) < GULL_AVATAR_PX;
+    };
     const gulls = population.animals.filter((animal) => animal.kind === "gull");
     if (gulls.length === 0) return;
     const species = SPECIES.gull;
@@ -160,6 +167,7 @@ export function stepGulls(context: GullContext): void {
             const scared =
                 settled &&
                 (threats.some((threat) => far(threat, gull) < GULL_AVATAR_PX) ||
+                    byFire(gull) ||
                     lions.some((lion) => far(lion, gull) < GULL_LION_PX));
             if (scared) {
                 takeOff(gull, true);
@@ -237,7 +245,8 @@ export function stepGulls(context: GullContext): void {
             : shore
               ? { x: middle(shore.cellX), y: middle(shore.cellY) }
               : undefined;
-        if (!perch) {
+        // Not beside a fire: it waits in the air.
+        if (!perch || byFire(perch)) {
             circle(gull);
             continue;
         }
