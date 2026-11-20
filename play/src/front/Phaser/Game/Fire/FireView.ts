@@ -187,7 +187,7 @@ export class FireView {
                     .setTexture(tile.steam ? STEAM_TEXTURE : SMOKE_TEXTURE)
                     .setPosition(footX + puff.x * farScale, footY + (puff.y + 40) * farScale)
                     .setDisplaySize(puff.radius * 2 * farScale, puff.radius * 2 * farScale)
-                    .setAlpha(puff.alpha * share * (tile.steam ? 0.9 : 0.7))
+                    .setAlpha(Math.min(1, puff.alpha * share * (tile.steam ? 1.1 : 1.5)))
                     .setVisible(true);
             }
             if (tile.steam) continue;
