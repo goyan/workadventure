@@ -3,8 +3,11 @@ import type { BrushSettings, TerrainData } from "@workadventure/map-editor";
 
 /** What the panel of the relief tool sets: the force is automatic (an eighth of the diameter) until chosen. */
 export interface TerrainBrush {
-    /** A mode of the brush of the relief, or "soil": the brush paints the soil chosen, and no height. */
-    mode: BrushSettings["mode"] | "soil";
+    /**
+     * A mode of the brush of the relief, or "soil" and "pool": the brush paints the soil chosen (a pool is kept as a
+     * soil of its style, see Terrain/Pools.ts), and no height.
+     */
+    mode: BrushSettings["mode"] | "soil" | "pool";
     /** The soil the soil mode paints, as kept in the map (0 wipes the soil). */
     soil?: number;
     diameterTiles: number;

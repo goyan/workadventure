@@ -384,6 +384,7 @@ import { AquaticLife } from "./Life/AquaticLife";
 import { AquaticLifeView } from "./Life/AquaticLifeView";
 import { isOnFrozenWater, isPoolFrozen } from "./Ice/FrozenWater";
 import { FrozenPoolsView } from "./Ice/FrozenPoolsView";
+import { getFrozenPoolRectangles } from "./Water/WaterZones";
 import { LandLifeView } from "./Life/LandLifeView";
 import { GullLifeView, isGullKind } from "./Life/GullLifeView";
 import { LandCompanions } from "./Life/LandCompanions";
@@ -3096,6 +3097,11 @@ export class GameScene extends DirtyScene {
     /** Whether a pool of the ground is frozen for this player (FrozenWater.ts): its water is no water then. */
     public isPoolFrozen(pool: { x: number; y: number; width: number; height: number; entityId?: string }): boolean {
         return isPoolFrozen(this, pool);
+    }
+
+    /** Whether the water of this object (a pool) is frozen for this player: one walks onto its ice. */
+    public isPoolEntityFrozen(entityId: string): boolean {
+        return getFrozenPoolRectangles(this).some((pool) => pool.entityId === entityId);
     }
 
     public isDrainCalm(x: number, y: number): boolean {

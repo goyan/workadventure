@@ -1,3 +1,4 @@
+import { validPoolStyles } from "../../Terrain/Pools";
 import type { UpdateWAMSettingsMessage } from "@workadventure/messages";
 import type { WAMFileFormat, WAMSettings } from "../../types";
 import {
@@ -164,6 +165,11 @@ export class UpdateWAMSettingCommand extends Command {
                     // An older client says nothing of the inertia: the map keeps the water it had.
                     ...((inertia ?? this.wam.settings.water?.inertia) ? { inertia: true } : {}),
                 };
+                break;
+            }
+            case "updatePoolSettingMessage": {
+                const pools = validPoolStyles(message.updatePoolSettingMessage.pools);
+                this.wam.settings.pools = pools.length > 0 ? pools : undefined;
                 break;
             }
             case "updateMeadowSettingMessage": {

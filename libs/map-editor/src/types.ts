@@ -916,8 +916,10 @@ export const TERRAIN_CELL = 16;
 export const TERRAIN_CHUNK = 16;
 /** The lowest height a cell can have, in pixels of altitude: 8 tiles under the ground. */
 export const TERRAIN_MIN_HEIGHT = -256;
-/** The largest number a soil is kept as in a map (see Terrain/Soils.ts). */
-export const TERRAIN_MAX_SOIL = 6;
+/** The pools of a map are painted as soils: the styles of pool after the six soils (see Terrain/Pools.ts). */
+export const MAX_POOL_STYLES = 8;
+/** The largest number a soil is kept as in a map: the six soils (see Terrain/Soils.ts), then the pool styles. */
+export const TERRAIN_MAX_SOIL = 6 + MAX_POOL_STYLES;
 /** The highest height a cell can have, in pixels of altitude: 8 tiles over the ground. */
 export const TERRAIN_MAX_HEIGHT = 256;
 /**
@@ -1166,6 +1168,22 @@ export const LastSnow = z.object({
 });
 export type LastSnow = z.infer<typeof LastSnow>;
 
+/** A colour of a pool, `#rrggbb`. */
+const PoolColor = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+/**
+ * A style of pool of the map (see Terrain/Pools.ts): the colour of its water and of its coping, how deep it is (map
+ * pixels: the clearer the shallower, and the sooner it freezes), and whether its water is hot (it never freezes).
+ */
+export const PoolStyle = z.object({
+    water: PoolColor,
+    coping: PoolColor,
+    depthPx: z.number().min(8).max(160),
+    hot: z.boolean(),
+    /** Ladders along its top edge: none, one in its middle, or two at its quarters (one only on a short edge). */
+    ladders: z.number().int().min(0).max(2).default(2),
+});
+export type PoolStyle = z.infer<typeof PoolStyle>;
+
 export const WAMSettings = z.object({
     weather: Weather.optional().catch(undefined),
     weatherStartedAt: z.number().finite().nonnegative().optional().catch(undefined),
@@ -1181,6 +1199,8 @@ export const WAMSettings = z.object({
     water: WaterSettings.optional().catch(undefined),
     life: LifeSettings.optional().catch(undefined),
     meadow: MeadowSettings.optional().catch(undefined),
+    /** The styles of the pools painted on the map, by their number. Fail open: a broken list draws default pools. */
+    pools: z.array(PoolStyle).max(MAX_POOL_STYLES).optional().catch(undefined),
 });
 
 export const WAMFileFormat = z.object({

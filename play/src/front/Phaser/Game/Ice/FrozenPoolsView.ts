@@ -4,6 +4,7 @@ import { getWaterRectangles, getFrozenPoolRectangles } from "../Water/WaterZones
 import type { WaterRectangle } from "../Water/WaterZones";
 import { waterCycleNow } from "../Weather/Frost";
 import type { GameScene } from "../GameScene";
+import { classicPoolsShown } from "../Terrain/ImagePools";
 import { isPoolHot } from "./FrozenWater";
 
 /** The steam of a hot pool in the cold is drawn this often: each drawing draws the map again. */
@@ -40,7 +41,10 @@ export class FrozenPoolsView {
     private layIce(frozen: readonly WaterRectangle[]): void {
         const kept = new Set<string>();
         let changed = false;
-        for (const pool of frozen) {
+        // The shaders draw the ice of the painted pools, and of the image pools they draw in their place: a sheet only
+        // over the image pools kept to compare (classicPoolsShown).
+        const sheets = classicPoolsShown() ? frozen.filter((frozenPool) => !frozenPool.painted) : [];
+        for (const pool of sheets) {
             const key = `${pool.x},${pool.y},${pool.width},${pool.height}`;
             kept.add(key);
             if (this.sheets.has(key) || !this.scene.textures.exists(GROUND_TEXTURES.ice)) continue;
@@ -66,7 +70,7 @@ export class FrozenPoolsView {
     /** Steam over the heated pools of the ground while it freezes outdoors: a few puffs rising and fading. */
     private drawSteam(now: number): void {
         const { frost } = waterCycleNow(this.scene.getGameMap?.()?.getWamFile()?.getWam().settings);
-        const hot = frost > 0 ? getWaterRectangles(this.scene).filter((pool) => isPoolHot(pool.entityId)) : [];
+        const hot = frost > 0 ? getWaterRectangles(this.scene).filter((pool) => isPoolHot(pool)) : [];
         if (hot.length === 0) {
             if (this.steaming) {
                 this.steam.clear();

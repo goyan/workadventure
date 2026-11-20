@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { classicPoolsShown } from "../../../Phaser/Game/Terrain/ImagePools";
     import type { EntityPrefab } from "@workadventure/map-editor";
     import { onDestroy } from "svelte";
     import { derived, get } from "svelte/store";
@@ -36,7 +37,12 @@
     const entitiesCollectionsManager = gameManager.getCurrentGameScene().getEntitiesCollectionsManager();
     // Floors and walls have their own tool, the map tool: they are not offered as objects.
     const entitiesPrefabsVariants = derived(entitiesCollectionsManager.getEntitiesPrefabsVariantStore(), (variants) =>
-        variants.filter((variant) => !isHiddenFromLibrary(variant.defaultPrefab)),
+        variants.filter(
+            (variant) =>
+                !isHiddenFromLibrary(variant.defaultPrefab) &&
+                // The pools are painted with the relief tool now: the pools that are images only to compare.
+                !((variant.defaultPrefab.water?.length ?? 0) > 0 && !classicPoolsShown()),
+        ),
     );
     const MOST_USED_CATEGORY_LIMIT = 12;
 

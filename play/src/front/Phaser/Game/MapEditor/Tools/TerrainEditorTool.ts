@@ -86,7 +86,7 @@ export class TerrainEditorTool extends MapEditorTool {
         const brush = get(terrainBrushStore);
         const { mode } = brush;
         const done =
-            mode === "soil"
+            mode === "soil" || mode === "pool"
                 ? commitSoilStroke(path, brush.diameterTiles, brush.soil ?? 0, this.terrain(), this.allowed, (soils) =>
                       executeUpdateTerrain(new Map(), undefined, soils),
                   )

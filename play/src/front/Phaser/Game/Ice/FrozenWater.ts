@@ -26,16 +26,26 @@ export function isOnFrozenWater(scene: GameScene, point: { x: number; y: number 
  */
 export function isPoolFrozen(
     scene: Partial<GameScene>,
-    pool: { x: number; y: number; width: number; height: number; entityId?: string },
+    pool: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        entityId?: string;
+        painted?: { depthPx: number; hot: boolean };
+    },
 ): boolean {
+    // A pool painted with the relief tool: its own depth, and its hot water set in its style.
+    if (pool.painted?.hot) return false;
     const { ice } = waterCycleNow(scene.getGameMap?.()?.getWamFile()?.getWam().settings);
-    if (!isFrozen(POOL_DEPTH_PX, ice)) return false;
+    if (!isFrozen(pool.painted?.depthPx ?? POOL_DEPTH_PX, ice)) return false;
     if (scene.getOutdoorGrid?.()?.isOutdoorAt(pool.x + pool.width / 2, pool.y + pool.height / 2) === false)
         return false;
     return !(pool.entityId !== undefined && get(entityStatesManagerStore)?.isHot(pool.entityId));
 }
 
-/** Whether a pool is heated: it steams in the cold instead of freezing. */
-export function isPoolHot(entityId: string | undefined): boolean {
-    return entityId !== undefined && get(entityStatesManagerStore)?.isHot(entityId) === true;
+/** Whether a pool is heated (by a switch, or in the style of a painted pool): it steams in the cold, never freezes. */
+export function isPoolHot(pool: { entityId?: string; painted?: { hot: boolean } }): boolean {
+    if (pool.painted) return pool.painted.hot;
+    return pool.entityId !== undefined && get(entityStatesManagerStore)?.isHot(pool.entityId) === true;
 }

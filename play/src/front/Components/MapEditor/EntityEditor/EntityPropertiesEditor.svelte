@@ -36,6 +36,7 @@
     import { mapLayerBuiltLevelsStore } from "../../../Stores/MapLayerStore";
     import SwitchPropertyEditor from "../PropertyEditor/SwitchPropertyEditor.svelte";
     import WaterFlowPropertyEditor from "../PropertyEditor/WaterFlowPropertyEditor.svelte";
+    import { paintImagePool } from "../../../Phaser/Game/MapEditor/PoolConversion";
     import { waterAnchorOf } from "../../../Phaser/Game/Terrain/WaterAnchor";
     import { selfSensorProperty } from "../../../Phaser/Game/Switches/SwitchWiring";
     import DanceFloorSizeEditor from "./DanceFloorSizeEditor.svelte";
@@ -321,6 +322,21 @@
         }
     }
 
+    /** A pool placed as an image, turned into a pool painted with the relief tool: then edited on the map. */
+    let convertingPool = $state(false);
+    async function convertSelectedPool(): Promise<void> {
+        const entity = $mapEditorSelectedEntityStore;
+        if (!entity || convertingPool) return;
+        convertingPool = true;
+        try {
+            if (await paintImagePool(entity)) deleteSelectedEntity();
+        } catch (error) {
+            console.error("The pool could not be converted", error);
+        } finally {
+            convertingPool = false;
+        }
+    }
+
     function deleteSelectedEntity() {
         // Same as the Delete key: the entity tool removes the entity through a command.
         $mapEditorSelectedEntityStore?.delete();
@@ -521,6 +537,17 @@
             <div class="my-2">
                 <FloorLevelPicker objectLevel={selectedElevation} onObjectLevel={moveToLevel} />
             </div>
+        {/if}
+        {#if ($mapEditorSelectedEntityStore?.getPrefab().water?.length ?? 0) > 0}
+            <button
+                type="button"
+                class="flex flex-row items-center gap-2 p-2 my-2 rounded text-sm bg-secondary"
+                data-testid="convertPoolButton"
+                disabled={convertingPool}
+                onclick={convertSelectedPool}
+            >
+                {$LL.mapEditor.entityEditor.convertPool()}
+            </button>
         {/if}
         <button
             type="button"

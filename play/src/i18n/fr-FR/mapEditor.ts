@@ -686,7 +686,19 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         soil: "Sol",
         soilHint:
             "Peignez un sol sur la carte. Rocher et argile gardent l'eau ; sable et gravier la boivent, même dans un creux ; terre et prairie boivent une crue comme le sol d'origine. « Sol d'origine » efface la peinture.",
+        pool: "Piscine",
         soilErase: "Sol d'origine (effacer)",
+            pools: {
+                title: "Piscines",
+                hint: "Peignez une piscine au pinceau, de la forme voulue : ronde, en L, reliée à une autre. Chaque piscine a ses couleurs, sa profondeur et son eau chaude.",
+                pool: "Piscine {number}",
+                add: "+ Nouvelle piscine",
+                water: "Eau",
+                coping: "Margelle",
+                depth: "Profondeur : {depth} px",
+                ladders: "Échelles",
+                hot: "Eau chaude (ne gèle jamais, fume dans le froid)",
+            },
         hoverSoil: "Sol sous le curseur : {soil}",
         meadow: {
             title: "Herbe de la carte",
@@ -1006,6 +1018,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             searchPlaceholder: "Rechercher",
             backToSelectObject: "Retour à la sélection d'objet",
         },
+        convertPool: "Convertir en piscine modifiable (forme, couleurs, échelles)",
         deleteButton: "Supprimer",
         deleteCustomEntity: {
             title: "Supprimer « {name} » ?",

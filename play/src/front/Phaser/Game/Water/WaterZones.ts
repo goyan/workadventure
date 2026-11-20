@@ -1,5 +1,6 @@
 import type * as Phaser from "phaser";
-import type { InteractionTrigger } from "@workadventure/map-editor";
+import { poolStyleAt, poolStyleOf, TERRAIN_CELL, TERRAIN_CHUNK } from "@workadventure/map-editor";
+import type { InteractionTrigger, PoolStyle, TerrainData } from "@workadventure/map-editor";
 import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRectangles";
 import { getObjectInteraction } from "../../../Utils/ObjectCategories";
 import type { GameScene } from "../GameScene";
@@ -15,6 +16,8 @@ export interface WaterRectangle {
     /** The object (a pool) the water belongs to, and its depth on the screen: its ice is drawn just over it. */
     entityId?: string;
     depth?: number;
+    /** A pool painted with the relief tool (Terrain/Pools.ts): drawn by the shaders, its depth and hot water its own. */
+    painted?: { depthPx: number; hot: boolean };
 }
 
 interface Point {
@@ -81,6 +84,7 @@ function allWaterRectangles(scene: Phaser.Scene): CachedWater {
         }
     }
     // Asked of the scene (FrozenWater.ts through GameScene): what the cold does stays out of this module.
+    ground.push(...paintedPoolRectangles(gameScene));
     const frozen = gameScene.isPoolFrozen ? ground.filter((rectangle) => gameScene.isPoolFrozen?.(rectangle)) : [];
     cache = {
         scene,
@@ -189,4 +193,47 @@ function clamp(value: number, min: number, max: number): number {
 function clampInside(value: number, start: number, size: number): number {
     if (size <= DIVE_DEPTH * 2) return start + size / 2;
     return clamp(value, start + DIVE_DEPTH, start + size - DIVE_DEPTH);
+}
+
+let paintedCache:
+    | { terrain: TerrainData | undefined; styles: readonly PoolStyle[] | undefined; rectangles: WaterRectangle[] }
+    | undefined;
+
+/**
+ * The water of the pools painted with the relief tool: a band of cells for each row of each pool, the pool entered by
+ * walking into it. Worked out again when the relief or the styles of the pools change.
+ */
+function paintedPoolRectangles(scene: Partial<GameScene>): WaterRectangle[] {
+    const terrain = scene.getTerrainWater?.()?.relief();
+    const styles = scene.wamFile?.settings?.pools;
+    if (paintedCache && paintedCache.terrain === terrain && paintedCache.styles === styles) {
+        return paintedCache.rectangles;
+    }
+    const rectangles: WaterRectangle[] = [];
+    for (const [key, codes] of Object.entries(terrain?.soil ?? {})) {
+        const [chunkX, chunkY] = key.split(",").map(Number);
+        for (let row = 0; row < TERRAIN_CHUNK; row++) {
+            let start = -1;
+            let style: number | undefined;
+            for (let column = 0; column <= TERRAIN_CHUNK; column++) {
+                const here = column < TERRAIN_CHUNK ? poolStyleOf(codes[row * TERRAIN_CHUNK + column] ?? 0) : undefined;
+                if (here === style && column < TERRAIN_CHUNK) continue;
+                if (style !== undefined && start >= 0) {
+                    const pool = poolStyleAt(styles, style);
+                    rectangles.push({
+                        x: (chunkX * TERRAIN_CHUNK + start) * TERRAIN_CELL,
+                        y: (chunkY * TERRAIN_CHUNK + row) * TERRAIN_CELL,
+                        width: (column - start) * TERRAIN_CELL,
+                        height: TERRAIN_CELL,
+                        trigger: "auto",
+                        painted: { depthPx: pool.depthPx, hot: pool.hot },
+                    });
+                }
+                style = here;
+                start = column;
+            }
+        }
+    }
+    paintedCache = { terrain, styles, rectangles };
+    return rectangles;
 }

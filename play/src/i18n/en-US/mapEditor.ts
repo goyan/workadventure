@@ -675,7 +675,19 @@ const mapEditor: BaseTranslation = {
         soil: "Soil",
         soilHint:
             'Paint a soil on the map. Rock and clay keep the water; sand and gravel drink it, in a hollow too; earth and meadow drink a flood like the ground of the map. "Ground of the map" wipes the paint.',
+        pool: "Pool",
         soilErase: "Ground of the map (wipe)",
+            pools: {
+                title: "Pools",
+                hint: "Paint a pool with the brush, in any shape: round, in an L, joined to another. Each pool has its own colours, depth and hot water.",
+                pool: "Pool {number}",
+                add: "+ New pool",
+                water: "Water",
+                coping: "Coping",
+                depth: "Depth: {depth} px",
+                ladders: "Ladders",
+                hot: "Hot water (never freezes, steams in the cold)",
+            },
         hoverSoil: "Soil under the pointer: {soil}",
         meadow: {
             title: "Grass of the map",
@@ -994,6 +1006,7 @@ const mapEditor: BaseTranslation = {
             searchPlaceholder: "Search",
             backToSelectObject: "Back to select object",
         },
+        convertPool: "Turn into a pool to edit (shape, colours, ladders)",
         deleteButton: "Delete",
         deleteCustomEntity: {
             title: "Delete “{name}”?",

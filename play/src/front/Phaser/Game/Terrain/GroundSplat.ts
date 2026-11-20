@@ -1,4 +1,6 @@
 import * as Phaser from "phaser";
+import { DEFAULT_POOL_STYLE, poolStyleAt, poolStyleOf } from "@workadventure/map-editor";
+import type { PoolStyle } from "@workadventure/map-editor";
 import { refreshCanvasTexture } from "../CanvasTextureRefresh";
 import { DEEP_ICE_PX } from "../Weather/Frost";
 import type { WaterCycle } from "../Weather/Frost";
@@ -22,9 +24,14 @@ import type { GroundArea } from "./TexturedGround";
 /**
  * The picture of the weights: four packs side by side, each the size of the area (a pixel per cell): six soils, the
  * grass, the snow and the water; the relief (how deep a cell is dug, how high it is raised, in map pixels) and the
- * ash; the straw and the fire of the meadow.
+ * ash; the straw and the fire of the meadow, and what is outdoors; the pools (whether a cell is one, how deep, whether
+ * hot), the colour of their water and of their coping.
  */
-const PACKS = 5;
+const PACKS = 8;
+/** The packs are laid in a grid this many wide (and PACKS / PACKS_ACROSS high): a wide view stays within the size a
+ * texture may have on a phone. */
+const PACKS_ACROSS = 4;
+const PACKS_DOWN = PACKS / PACKS_ACROSS;
 /** The depth of water (map pixels) the water channel reaches its full value at. */
 const WATER_SCALE_PX = 128;
 /** How strong the dark of the hollows and the light of the mounts are, against the bare relief: the water and the
@@ -78,10 +85,24 @@ vec2 worldPoint() {
 }
 
 // One pack of the weights at a point of the map, smooth between the centres of the cells.
-vec3 pack(float index, vec2 world) {
-    vec2 cell = clamp((world - uArea.xy) / uArea.zw * uCells, vec2(0.5), uCells - 0.5);
-    vec2 uv = vec2((cell.x + index * uCells.x) / (uCells.x * ${PACKS}.0), 1.0 - cell.y / uCells.y);
+vec3 packIn(float index, vec2 cell) {
+    float across = mod(index, ${PACKS_ACROSS}.0);
+    float down = floor(index / ${PACKS_ACROSS}.0);
+    vec2 uv = vec2(
+        (cell.x + across * uCells.x) / (uCells.x * ${PACKS_ACROSS}.0),
+        1.0 - (cell.y + down * uCells.y) / (uCells.y * ${PACKS_DOWN}.0)
+    );
     return texture2D(uData, uv).rgb;
+}
+
+vec3 pack(float index, vec2 world) {
+    return packIn(index, clamp((world - uArea.xy) / uArea.zw * uCells, vec2(0.5), uCells - 0.5));
+}
+
+// One pack at the centre of the cell of a point: its exact value, never blended with a neighbour (a colour, a style).
+vec3 packNearest(float index, vec2 world) {
+    vec2 cell = floor(clamp((world - uArea.xy) / uArea.zw * uCells, vec2(0.0), uCells - 1.0)) + 0.5;
+    return packIn(index, cell);
 }
 
 // A ground texture repeated at its own size, fixed to the map.
@@ -268,10 +289,68 @@ uniform float uStrength;
 uniform sampler2D uIceTexture;
 uniform vec2 uIceSize;
 uniform float uIce;
+uniform float uSnow;
+
+// The snow lying on the ice, in drifts that grow with the snow of the map.
+vec3 snowOnIce(vec3 ice, vec2 world) {
+    if (uSnow <= 0.001) return ice;
+    float drift = 0.6 * fbm(world / 11.0) + 0.4 * hash(floor(world / 2.0));
+    float covered = step(1.0 - uSnow * 0.95, drift);
+    return mix(ice, vec3(0.95, 0.97, 1.0) * (0.94 + 0.06 * hash(floor(world))), covered);
+}
 
 const vec3 SHALLOW = vec3(0.1, 0.48, 0.52);
 const vec3 DEEP = vec3(0.05, 0.17, 0.34);
 const vec3 FOAM = vec3(0.93, 0.97, 1.0);
+
+// Whether the pool goes on d map pixels around a point, in eight directions: false near its rim (its coping).
+float poolAround(vec2 world, float d) {
+    float least = 1.0;
+    for (int i = 0; i < 8; i++) {
+        float angle = float(i) * 0.785398;
+        least = min(least, pack(5.0, world + vec2(cos(angle), sin(angle)) * d).r);
+    }
+    return step(0.5, least);
+}
+
+// A pool at a point inside its shape: its coping along the rim, then its tiled floor through its water (or its ice).
+vec4 poolColor(vec2 world, float t) {
+    vec3 style = packNearest(5.0, world);
+    vec3 water = packNearest(6.0, world);
+    vec3 coping = packNearest(7.0, world);
+    if (poolAround(world, 6.0) < 0.5) {
+        // Coping stones, 8 px a side, their joints dark, the inner edge lit.
+        vec2 stone = mod(world, 8.0);
+        float joint = max(step(7.0, stone.x), step(7.0, stone.y));
+        vec3 c = coping * (0.94 + 0.08 * hash(floor(world / 8.0))) * (1.0 - 0.2 * joint);
+        c *= mix(1.08, 1.0, poolAround(world, 3.0));
+        return vec4(c, 1.0);
+    }
+    float depthPx = style.g * 255.0;
+    float deep = clamp(depthPx / 160.0, 0.0, 1.0);
+    bool frozen = style.b < 0.5 && step(0.5, pack(4.0, world).b) > 0.5 &&
+        uIce >= 0.1 + 0.9 * min(1.0, depthPx / ${DEEP_ICE_PX}.0);
+    if (frozen) {
+        vec3 ice = texture2D(uIceTexture, fract(world / uIceSize)).rgb;
+        return vec4(snowOnIce(ice * mix(vec3(1.0), water, 0.15), world), 1.0);
+    }
+    // The floor tiles, 16 px, seen through the water: the deeper, the more the water's own colour.
+    vec2 tile = mod(world, 16.0);
+    float grout = max(step(15.0, tile.x), step(15.0, tile.y));
+    vec3 floorColor = mix(vec3(0.9, 0.95, 0.96), vec3(0.72, 0.82, 0.86), grout);
+    vec3 c = mix(floorColor * (water * 0.6 + 0.4), water * 0.55, 0.3 + 0.55 * deep);
+    // The walls shade the water along them.
+    c *= mix(0.82, 1.0, poolAround(world, 12.0));
+    // Caustics over the floor, and a glint now and then on the surface.
+    vec2 p = world / 34.0;
+    float n1 = fbm(p + vec2(t * 0.09, t * 0.05));
+    float n2 = fbm(p * 1.7 - vec2(t * 0.06, -t * 0.08) + 5.0);
+    float lines = 1.0 - smoothstep(0.0, 0.05, abs(n1 - n2));
+    c += lines * mix(0.2, 0.08, deep);
+    float glint = step(0.993, hash(floor(world / 2.0) + floor(t * 3.0))) * smoothstep(0.55, 0.7, n2);
+    c = mix(c, vec3(1.0), glint * 0.7);
+    return vec4(c, 1.0);
+}
 
 // How much water is over a point: 0 dry, 1 at the shore line, more inside.
 float wetAt(vec2 world) {
@@ -308,6 +387,7 @@ void main() {
         // Ice as on the rinks of the map, a little darker over the deep water under it.
         vec3 ice = texture2D(uIceTexture, fract(world / uIceSize)).rgb;
         ice *= 1.0 - 0.12 * clamp(depthPx / 128.0, 0.0, 1.0);
+        ice = snowOnIce(ice, world);
         float iceAlpha = 0.96 * cover;
         outColor = vec4(ice * iceAlpha, iceAlpha) + outColor * (1.0 - iceAlpha);
     } else if (cover > 0.001) {
@@ -340,6 +420,13 @@ void main() {
     }
 
     outColor *= uStrength;
+
+    // The pools (Terrain/Pools.ts): drawn whole, over the water of the relief, in their own colours.
+    if (pack(5.0, world).r > 0.5) {
+        vec4 pool = poolColor(world, t);
+        outColor = pool + outColor * (1.0 - pool.a);
+    }
+
     if (outColor.a <= 0.002) discard;
     gl_FragColor = outColor;
 }
@@ -365,6 +452,10 @@ export interface GroundWeights {
     fire: Uint8Array | undefined;
     /** 1 on the outdoor cells; undefined: all outdoors. Indoors the ground and the water never freeze nor get wet. */
     outdoor: Uint8Array | undefined;
+    /** The styles of the pools of the map (their cells are among `soils`, see Terrain/Pools.ts). */
+    poolStyles: readonly PoolStyle[] | undefined;
+    /** The pools placed as images, drawn in the default style in their place: 1 cold, 2 heated (ImagePools.ts). */
+    imagePools?: Uint8Array;
 }
 
 /**
@@ -380,6 +471,7 @@ export class GroundSplat {
     private strength = 1;
     private anyGround = false;
     private anyWater = false;
+    private anyPool = false;
 
     public static create(scene: Phaser.Scene, groundDepth: number, waterDepth: number): GroundSplat | undefined {
         const renderer = scene.game.renderer;
@@ -434,6 +526,7 @@ export class GroundSplat {
                         setUniform("uIceTexture", 1);
                         setUniform("uIceSize", this.sizeOf(GROUND_TEXTURES.ice));
                         setUniform("uIce", this.cycle.ice);
+                        setUniform("uSnow", this.snow);
                     },
                 },
                 0,
@@ -450,52 +543,57 @@ export class GroundSplat {
     private autumn = 0;
     /** The cycle of the water this player sees (Frost.ts): frost, ice and wet ground. */
     private cycle: WaterCycle = { frost: 0, ice: 0, wet: 0 };
+    private snow = 0;
 
     /** Lays the grounds over `area` from their weights. Nothing to draw: the ground shader is hidden. */
     public setGround(area: GroundArea, weights: GroundWeights): void {
         const pixels = this.pixelsFor(area);
         const { columns, rows } = area;
-        const width = columns * PACKS;
         const data = pixels.data;
+        const at = (pack: number, cell: number): number => texel(pack, cell, columns, rows);
+        const pools = poolCellsOf(weights.soils, columns * rows);
         let any = false;
-        for (let row = 0; row < rows; row++) {
-            for (let column = 0; column < columns; column++) {
-                const cell = row * columns + column;
-                for (let soil = 0; soil < 6; soil++) {
-                    const value = weights.soils.get(soil + 1)?.[cell] ? 255 : 0;
-                    if (value) any = true;
-                    data[(row * width + column + Math.floor(soil / 3) * columns) * 4 + (soil % 3)] = value;
-                }
-                const grass = weights.grass?.[cell] ?? 0;
-                const snow = weights.snow?.[cell] ?? 0;
-                if (grass || snow) any = true;
-                const at = (row * width + column + 2 * columns) * 4;
-                data[at] = grass;
-                data[at + 1] = snow;
-                const reliefAt = (row * width + column + 3 * columns) * 4;
-                data[reliefAt] = weights.dug[cell] ?? 0;
-                data[reliefAt + 1] = weights.raised[cell] ?? 0;
-                data[reliefAt + 2] = weights.ash?.[cell] ?? 0;
-                const meadowAt = (row * width + column + 4 * columns) * 4;
-                data[meadowAt] = weights.straw?.[cell] ?? 0;
-                data[meadowAt + 1] = weights.fire?.[cell] ?? 0;
-                data[meadowAt + 2] = weights.outdoor ? (weights.outdoor[cell] ? 255 : 0) : 255;
-                if (
-                    data[reliefAt] ||
-                    data[reliefAt + 1] ||
-                    data[reliefAt + 2] ||
-                    data[meadowAt] ||
-                    data[meadowAt + 1]
-                ) {
-                    any = true;
-                }
+        for (let cell = 0; cell < columns * rows; cell++) {
+            for (let soil = 0; soil < 6; soil++) {
+                const value = weights.soils.get(soil + 1)?.[cell] ? 255 : 0;
+                if (value) any = true;
+                data[at(Math.floor(soil / 3), cell) + (soil % 3)] = value;
             }
+            const grass = weights.grass?.[cell] ?? 0;
+            const snow = weights.snow?.[cell] ?? 0;
+            data[at(2, cell)] = grass;
+            data[at(2, cell) + 1] = snow;
+            const relief = at(3, cell);
+            data[relief] = weights.dug[cell] ?? 0;
+            data[relief + 1] = weights.raised[cell] ?? 0;
+            data[relief + 2] = weights.ash?.[cell] ?? 0;
+            const meadow = at(4, cell);
+            data[meadow] = weights.straw?.[cell] ?? 0;
+            data[meadow + 1] = weights.fire?.[cell] ?? 0;
+            data[meadow + 2] = weights.outdoor ? (weights.outdoor[cell] ? 255 : 0) : 255;
+            const image = weights.imagePools?.[cell] ?? 0;
+            const style = pools[cell]
+                ? poolStyleAt(weights.poolStyles, pools[cell] - 1)
+                : image
+                  ? { ...DEFAULT_POOL_STYLE, hot: image === 2 }
+                  : undefined;
+            const pool = at(5, cell);
+            data[pool] = style ? 255 : 0;
+            data[pool + 1] = style ? Math.min(255, Math.round(style.depthPx)) : 0;
+            data[pool + 2] = style?.hot ? 255 : 0;
+            writeColor(data, at(6, cell), style?.water);
+            writeColor(data, at(7, cell), style?.coping);
+            if (grass || snow || style || data[relief] || data[relief + 1] || data[relief + 2]) any = true;
+            if (data[meadow] || data[meadow + 1]) any = true;
         }
+        this.anyPool = pools.some((value) => value > 0) || (weights.imagePools?.some((value) => value > 0) ?? false);
         if (any) smoothWeights(data, columns, rows);
         this.autumn = weights.autumn;
         this.anyGround = any;
         this.upload();
         this.place(this.groundShader, area, any);
+        // The pools are drawn by the water shader, over the shades of the relief: it shows with them, water or not.
+        this.place(this.waterShader, area, this.anyWater || this.anyPool);
     }
 
     /** The depth of the water over the area (map pixels a cell, as the area of `setGround`); undefined: dry. */
@@ -505,23 +603,17 @@ export class GroundSplat {
         if (!area || !pixels) return;
         this.strength = strength;
         const { columns, rows } = area;
-        const width = columns * PACKS;
         const data = pixels.data;
         let any = false;
-        for (let row = 0; row < rows; row++) {
-            for (let column = 0; column < columns; column++) {
-                const depth = wet?.[row * columns + column] ?? 0;
-                if (depth > 0) any = true;
-                data[(row * width + column + 2 * columns) * 4 + 2] = Math.min(
-                    255,
-                    Math.round((depth * 255) / WATER_SCALE_PX),
-                );
-            }
+        for (let cell = 0; cell < columns * rows; cell++) {
+            const depth = wet?.[cell] ?? 0;
+            if (depth > 0) any = true;
+            data[texel(2, cell, columns, rows) + 2] = Math.min(255, Math.round((depth * 255) / WATER_SCALE_PX));
         }
         if (!any && !this.anyWater) return;
         this.anyWater = any;
         this.upload();
-        this.place(this.waterShader, area, any);
+        this.place(this.waterShader, area, any || this.anyPool);
     }
 
     /** Whether water is drawn: its surface moves, the scene must be drawn again for it. */
@@ -530,8 +622,13 @@ export class GroundSplat {
         this.cycle = cycle;
     }
 
+    /** How much the snow of the map covers the ground, 0 to 1: it lies on the ice too. */
+    public setSnow(snow: number): void {
+        this.snow = snow;
+    }
+
     public hasWater(): boolean {
-        return this.anyWater && this.waterShader.visible;
+        return (this.anyWater || this.anyPool) && this.waterShader.visible;
     }
 
     public hide(): void {
@@ -539,6 +636,7 @@ export class GroundSplat {
         this.waterShader.setVisible(false);
         this.anyWater = false;
         this.anyGround = false;
+        this.anyPool = false;
     }
 
     public destroy(): void {
@@ -562,13 +660,14 @@ export class GroundSplat {
 
     /** The pixels of the weights for this area; a new canvas when its size changes. */
     private pixelsFor(area: GroundArea): ImageData {
-        const width = area.columns * PACKS;
-        if (!this.pixels || this.pixels.width !== width || this.pixels.height !== area.rows) {
-            this.pixels = new ImageData(width, area.rows);
+        const width = area.columns * PACKS_ACROSS;
+        const height = area.rows * PACKS_DOWN;
+        if (!this.pixels || this.pixels.width !== width || this.pixels.height !== height) {
+            this.pixels = new ImageData(width, height);
             // Opaque: a canvas keeps its colours premultiplied, a weight in a transparent pixel would be lost.
             for (let at = 3; at < this.pixels.data.length; at += 4) this.pixels.data[at] = 255;
             if (this.scene.textures.exists(this.key)) this.scene.textures.remove(this.key);
-            const canvas = this.scene.textures.createCanvas(this.key, width, area.rows);
+            const canvas = this.scene.textures.createCanvas(this.key, width, height);
             canvas?.setFilter(Phaser.Textures.FilterMode.LINEAR);
             this.groundShader.setTextures([this.key, ...SOIL_KEYS, GROUND_TEXTURES.grass, GROUND_TEXTURES.snow]);
             this.waterShader.setTextures([this.key, GROUND_TEXTURES.ice]);
@@ -595,29 +694,55 @@ export class GroundSplat {
 
 /**
  * Rounds the weights of the grounds over their neighbours (a 1-2-1 blur, within each pack): an edge between two
- * grounds follows a curve, not the stairs of the cells.
+ * grounds follows a curve, not the stairs of the cells. What is exact is left as it is: the water (it moves on its
+ * own), what is outdoors, and the depth, the hot water and the colours of the pools.
  */
 function smoothWeights(data: Uint8ClampedArray, columns: number, rows: number): void {
-    const width = columns * PACKS;
     const source = data.slice();
-    // The water (blue of the third pack) moves on its own and keeps its cells: it is not blurred.
-    const channels = (pack: number): number[] => (pack === 2 ? [0, 1] : pack === 4 ? [0, 1] : [0, 1, 2]);
-    for (let row = 0; row < rows; row++) {
-        for (let pack = 0; pack < PACKS; pack++) {
-            for (let column = 0; column < columns; column++) {
-                for (const channel of channels(pack)) {
+    const channels: readonly (readonly number[])[] = [[0, 1, 2], [0, 1, 2], [0, 1], [0, 1, 2], [0, 1], [0], [], []];
+    for (let pack = 0; pack < PACKS; pack++) {
+        for (const channel of channels[pack] ?? []) {
+            for (let row = 0; row < rows; row++) {
+                for (let column = 0; column < columns; column++) {
                     let total = 0;
                     for (let dy = -1; dy <= 1; dy++) {
                         const y = Math.max(0, Math.min(rows - 1, row + dy));
                         for (let dx = -1; dx <= 1; dx++) {
                             const x = Math.max(0, Math.min(columns - 1, column + dx));
                             const weight = (dx === 0 ? 2 : 1) * (dy === 0 ? 2 : 1);
-                            total += weight * (source[(y * width + x + pack * columns) * 4 + channel] ?? 0);
+                            total += weight * (source[texel(pack, y * columns + x, columns, rows) + channel] ?? 0);
                         }
                     }
-                    data[(row * width + column + pack * columns) * 4 + channel] = Math.round(total / 16);
+                    data[texel(pack, row * columns + column, columns, rows) + channel] = Math.round(total / 16);
                 }
             }
         }
     }
+}
+
+/** Where a cell of a pack is in the pixels of the weights (its red byte): the packs in a grid PACKS_ACROSS wide. */
+function texel(pack: number, cell: number, columns: number, rows: number): number {
+    const across = pack % PACKS_ACROSS;
+    const down = Math.floor(pack / PACKS_ACROSS);
+    const row = Math.floor(cell / columns) + down * rows;
+    const column = (cell % columns) + across * columns;
+    return (row * columns * PACKS_ACROSS + column) * 4;
+}
+
+/** The style of pool of each cell, plus one (0: no pool), from the soils painted (a pool is kept as a soil). */
+function poolCellsOf(soils: ReadonlyMap<number, Uint8Array>, size: number): Uint8Array {
+    const pools = new Uint8Array(size);
+    for (const [code, cells] of soils) {
+        const style = poolStyleOf(code);
+        if (style === undefined) continue;
+        for (let cell = 0; cell < size; cell++) if (cells[cell]) pools[cell] = style + 1;
+    }
+    return pools;
+}
+
+function writeColor(data: Uint8ClampedArray, at: number, color: string | undefined): void {
+    const value = color ? Number.parseInt(color.slice(1), 16) : 0;
+    data[at] = (value >> 16) & 255;
+    data[at + 1] = (value >> 8) & 255;
+    data[at + 2] = value & 255;
 }

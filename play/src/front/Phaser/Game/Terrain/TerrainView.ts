@@ -4,12 +4,15 @@ import {
     snowCover,
     SOILS,
     soilAt,
+    DEFAULT_POOL_STYLE,
+    poolStyleAt,
+    poolStyleOf,
     TERRAIN_CELL,
     TERRAIN_CHUNK,
     TILE_PX,
 } from "@workadventure/map-editor";
 import { Season } from "@workadventure/map-editor";
-import type { TerrainData } from "@workadventure/map-editor";
+import type { PoolStyle, TerrainData } from "@workadventure/map-editor";
 import type { GameScene } from "../GameScene";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { createBlockSurface } from "../Weather/BlockSurface";
@@ -50,6 +53,9 @@ import type { TerrainWater } from "./TerrainWater";
 import { GROUND_TEXTURES, TexturedGround, WATER_FRAMES } from "./TexturedGround";
 import type { GroundArea } from "./TexturedGround";
 import { GroundSplat } from "./GroundSplat";
+import { classicPoolsShown, imagePoolCells, imagePoolsOf, signatureOf } from "./ImagePools";
+import { PoolLadders, topEdgesOf } from "./PoolLadders";
+import type { ImagePool, PlacedPool } from "./ImagePools";
 
 /** Over the grass of the seasons (0.6), under the puddles (0.7), the objects and the avatars. */
 const TERRAIN_DEPTH = 0.65;
@@ -99,6 +105,8 @@ interface ReliefLayers extends BlockCanvasArea {
     /** The outdoors these layers were read for, and 1 on each outdoor cell (shaders only): indoors nothing freezes. */
     outdoorGrid: OutdoorGrid | undefined;
     outdoor: Uint8Array | undefined;
+    /** The styles of the pools these layers were read with: a pool drawn again when its colours change. */
+    poolStyles: readonly PoolStyle[] | undefined;
 }
 
 /**
@@ -131,7 +139,14 @@ export class TerrainView {
     private relief: ReliefLayers | undefined;
     private meadowLayers: MeadowLayers | undefined;
     /** The ground once painted on the canvas (relief and meadow), kept while the water alone moves. */
-    private painted: { relief: ReliefLayers; meadow: MeadowLayers | undefined; snapshot: BlockSnapshot } | undefined;
+    private painted:
+        | { relief: ReliefLayers; meadow: MeadowLayers | undefined; snapshot: BlockSnapshot; imagePools: string }
+        | undefined;
+    /** The pools placed as images, drawn by the shaders in their place (ImagePools.ts), and the ones hidden for it. */
+    private imagePools: { pools: ImagePool[]; signature: string } = { pools: [], signature: "" };
+    private readonly hiddenPools = new Map<string, PlacedPool>();
+    /** The ladders of the pools drawn by the shaders. */
+    private readonly ladders: PoolLadders | undefined;
     private everywhere = new Uint8Array(0);
     /** The textured grounds; none with a surface of its own (tests): the soils are then flat tints. */
     private readonly grounds: Grounds | undefined;
@@ -142,6 +157,9 @@ export class TerrainView {
     private groundState: { terrain: TerrainData | undefined; meadow: number; season: Season | undefined } | undefined;
     private lastRipple = 0;
     private cycle: WaterCycle | undefined;
+    /** The snow of the map, laid on the ice too (in fiftieths: the scene is drawn again only when it shows). */
+    private snowOnIce = 0;
+    private poolsOf: { terrain: TerrainData | undefined; any: boolean } | undefined;
     private wet = new Uint8Array(0);
     private shore = new Uint8Array(0);
 
@@ -157,6 +175,7 @@ export class TerrainView {
         // The shaders draw the soils and the grass: the canvas keeps only the shades of the relief, smooth. Without
         // them the mottled grass and the soils are on the canvas: sharp cells, each keeps its own shade.
         this.splat = surface ? undefined : GroundSplat.create(scene, SOIL_GROUND_DEPTH, WATER_DEPTH);
+        this.ladders = this.splat ? new PoolLadders(scene) : undefined;
         this.surface = surface ?? createBlockSurface(scene, TERRAIN_DEPTH, this.splat !== undefined);
         this.grounds = surface || this.splat ? undefined : createGrounds(scene);
     }
@@ -168,7 +187,7 @@ export class TerrainView {
 
     public update(now: number): void {
         // Basique shows the ground of the map as it is: no water, relief, soils nor grass drawn over it.
-        if (isBasicActive() || (!this.water.hasAnything() && !this.meadow?.hasGrass())) {
+        if (isBasicActive() || (!this.water.hasAnything() && !this.meadow?.hasGrass() && !this.hasPools())) {
             if (this.visible) {
                 this.surface.hide();
                 this.hideGrounds();
@@ -183,7 +202,8 @@ export class TerrainView {
         this.flowCycle();
         const camera = this.scene.cameras.main.worldView;
         const screen = { x: camera.x, y: camera.y, width: camera.width, height: camera.height };
-        const key = `${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}`;
+        this.readImagePools();
+        const key = `${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}:${this.imagePools.signature}`;
         const inside = this.drawn !== undefined && wellInside(this.drawn, screen, DRAW_MARGIN / 5);
         if (key === this.lastKey && inside) return;
         this.lastKey = key;
@@ -210,9 +230,16 @@ export class TerrainView {
         // The ground changes seldom, the water five times a second while it moves: the ground is painted once for a
         // relief, a meadow and a canvas, then laid back under the water.
         const kept = this.painted;
-        if (!kept || kept.relief !== relief || kept.meadow !== meadow || !this.surface.restore?.(kept.snapshot)) {
+        if (
+            !kept ||
+            kept.relief !== relief ||
+            kept.meadow !== meadow ||
+            kept.imagePools !== this.imagePools.signature ||
+            !this.surface.restore?.(kept.snapshot)
+        ) {
             // The soils first: the shades of the relief and the water are drawn over them.
             if (this.splat) {
+                const imageCells = imagePoolCells(this.imagePools.pools, areaOf(canvas));
                 this.splat.setGround(areaOf(canvas), {
                     soils: relief.soils,
                     grass: meadow?.grass,
@@ -224,7 +251,10 @@ export class TerrainView {
                     ash: meadow?.ash,
                     fire: meadow?.fire,
                     outdoor: relief.outdoor,
+                    poolStyles: relief.poolStyles,
+                    imagePools: imageCells,
                 });
+                this.ladders?.draw(areaOf(canvas), topEdgesOf(poolMaskOf(relief.soils, imageCells, relief.poolStyles, size), canvas.columns, canvas.rows));
             } else if (this.grounds) {
                 this.layGrounds(this.grounds, canvas, relief, meadow);
             } else {
@@ -295,7 +325,7 @@ export class TerrainView {
                 );
             }
             const snapshot = this.surface.snapshot?.();
-            this.painted = snapshot ? { relief, meadow, snapshot } : undefined;
+            this.painted = snapshot ? { relief, meadow, snapshot, imagePools: this.imagePools.signature } : undefined;
         }
         // Water lies in the hollows, and on flat ground where they overflow or where a source pours.
         const anyWater = this.water.levelsOver(
@@ -350,7 +380,8 @@ export class TerrainView {
             kept.y === canvas.y &&
             kept.columns === canvas.columns &&
             kept.rows === canvas.rows &&
-            kept.outdoorGrid === this.scene.getOutdoorGrid?.()
+            kept.outdoorGrid === this.scene.getOutdoorGrid?.() &&
+            kept.poolStyles === this.scene.getGameMap?.()?.getWamFile()?.getWam().settings?.pools
         ) {
             return kept;
         }
@@ -373,6 +404,7 @@ export class TerrainView {
             dug: false,
             outdoorGrid: outdoors,
             outdoor: undefined,
+            poolStyles: this.scene.getGameMap?.()?.getWamFile()?.getWam().settings?.pools,
         };
         const left = canvas.x / TERRAIN_CELL;
         const top = canvas.y / TERRAIN_CELL;
@@ -606,9 +638,59 @@ export class TerrainView {
         );
     }
 
+    /**
+     * The pools placed as images, drawn by the shaders in their place: their images hidden while they are, shown again
+     * to compare (classicPoolsShown) or without the shaders.
+     */
+    private readImagePools(): void {
+        const replace = this.splat !== undefined && !classicPoolsShown();
+        const entities = replace
+            ? (this.scene.getGameMapFrontWrapper?.()?.getEntitiesManager?.()?.getEntities().values() ?? [])
+            : [];
+        const placed = [...entities].filter((entity) => (entity.getPrefab().water?.length ?? 0) > 0);
+        const pools = imagePoolsOf(placed);
+        const signature = signatureOf(pools);
+        const kept = new Set(pools.map((pool) => pool.entityId));
+        for (const [id, entity] of this.hiddenPools) {
+            if (kept.has(id)) continue;
+            entity.setVisible(true);
+            this.hiddenPools.delete(id);
+        }
+        for (const entity of placed) {
+            if (!kept.has(entity.entityId)) continue;
+            // Hidden again when its image showed up: an object is shown once its image is loaded, after this.
+            if (entity.visible) {
+                entity.setVisible(false);
+                this.scene.markDirty();
+            }
+            this.hiddenPools.set(entity.entityId, entity);
+        }
+        if (signature !== this.imagePools.signature) this.imagePools = { pools, signature };
+    }
+
+    /** Whether the map has pools painted (cells kept as soils of a pool style): drawn even with no water nor grass. */
+    private hasPools(): boolean {
+        if (!this.splat) return false;
+        if (this.imagePools.pools.length > 0) return true;
+        const terrain = this.water.relief();
+        if (this.poolsOf?.terrain !== terrain) {
+            const any = Object.values(terrain?.soil ?? {}).some((codes) =>
+                codes.some((code) => poolStyleOf(code) !== undefined),
+            );
+            this.poolsOf = { terrain, any };
+        }
+        return this.poolsOf.any;
+    }
+
     /** The frost, the ice and the wet ground of now, for the shaders: the scene is drawn again when they move. */
     private flowCycle(): void {
         if (!this.splat) return;
+        const snow = Math.round((this.scene.getMapSnowCoverage?.() ?? 0) * 50) / 50;
+        if (snow !== this.snowOnIce) {
+            this.snowOnIce = snow;
+            this.splat.setSnow(snow);
+            this.scene.markDirty();
+        }
         const cycle = waterCycleNow(this.scene.getGameMap().getWamFile()?.getWam().settings);
         if (cycle === this.cycle) return;
         this.cycle = cycle;
@@ -635,6 +717,7 @@ export class TerrainView {
 
     private hideGrounds(): void {
         this.splat?.hide();
+        this.ladders?.hide();
         if (!this.grounds) return;
         for (const ground of allGrounds(this.grounds)) ground.hide();
     }
@@ -642,6 +725,7 @@ export class TerrainView {
     public destroy(): void {
         this.surface.destroy();
         this.splat?.destroy();
+        this.ladders?.destroy();
         if (this.grounds) for (const ground of allGrounds(this.grounds)) ground.destroy();
     }
 }
@@ -669,4 +753,25 @@ function createGrounds(scene: GameScene): Grounds {
 
 function allGrounds(grounds: Grounds): TexturedGround[] {
     return [...grounds.soils, grounds.grass, grounds.autumnGrass, grounds.snow, grounds.water, grounds.deepWater];
+}
+
+/**
+ * The pools of a canvas, cell by cell, for their ladders: the number of ladders their pool asks for plus one (0: no
+ * pool). The pools painted (soils of a pool style) and the pools placed as images (the default style).
+ */
+function poolMaskOf(
+    soils: ReadonlyMap<number, Uint8Array>,
+    images: Uint8Array | undefined,
+    styles: readonly PoolStyle[] | undefined,
+    size: number,
+): Uint8Array {
+    const mask = new Uint8Array(size);
+    for (const [code, cells] of soils) {
+        const style = poolStyleOf(code);
+        if (style === undefined) continue;
+        const ladders = poolStyleAt(styles, style).ladders;
+        for (let cell = 0; cell < size; cell++) if (cells[cell]) mask[cell] = ladders + 1;
+    }
+    if (images) for (let cell = 0; cell < size; cell++) if (images[cell]) mask[cell] = DEFAULT_POOL_STYLE.ladders + 1;
+    return mask;
 }
