@@ -260,13 +260,10 @@ export function erasePlan(scene: TargetScene, start: Point, end: Point, path: re
     const wall = wallHitAt(scene.walls, scene.picker, groundOf(scene, start));
     if (wall) {
         const line = wallLine(scene.walls, wall.edge, groundOf(scene, end), wall.rise);
-        const along = line.length > 1 || (line.length === 1 && !sameEdge(line[0], wall.edge));
-        const refs: MapLayerTargetRef[] = along ? line.map((edge) => ({ kind: "wall", edge })) : [wall.ref];
+        if (!goesAlong(scene, wall, end, line)) return { refs: [wall.ref], outline: wallOutline(scene, [wall.ref]) };
+        const refs: MapLayerTargetRef[] = line.map((edge) => ({ kind: "wall", edge }));
         // A wall removed takes the door and the window it carries: they are outlined with it.
-        const shown: MapLayerTargetRef[] = along
-            ? [...refs, ...line.map((edge) => wallRefOn(scene.walls, edge))]
-            : refs;
-        return { refs, outline: wallOutline(scene, shown) };
+        return { refs, outline: wallOutline(scene, [...refs, ...line.map((edge) => wallRefOn(scene.walls, edge))]) };
     }
     if (scene.level > 0) {
         const targets = rectangleCells(
@@ -290,6 +287,22 @@ export function erasePlan(scene: TargetScene, start: Point, end: Point, path: re
 
 function sameEdge(a: WallEdgeRef, b: WallEdgeRef): boolean {
     return a.orientation === b.orientation && a.x === b.x && a.y === b.y;
+}
+
+function sameRef(a: MapLayerTargetRef, b: MapLayerTargetRef): boolean {
+    return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/**
+ * Whether an eraser gesture started on a wall, a door or a window runs along the line of its wall: it ends on another
+ * element, and the segments it passes over are not only the ones of the element it started on (the two leaves of a
+ * door are one door). Otherwise it is a click on that element.
+ */
+function goesAlong(scene: TargetScene, start: WallHit, end: Point, line: readonly WallEdgeRef[]): boolean {
+    const endHit = wallHitAt(scene.walls, scene.picker, groundOf(scene, end));
+    if (endHit && sameRef(endHit.ref, start.ref)) return false;
+    const own = start.ref.kind === "door" ? doorEdges(start.ref.door) : [start.edge];
+    return line.some((edge) => !own.some((mine) => sameEdge(mine, edge)));
 }
 
 /** Whether a target lives in the walls of a level (else in the raised floors). */

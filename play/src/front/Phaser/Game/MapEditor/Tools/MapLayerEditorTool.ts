@@ -1164,13 +1164,8 @@ export class MapLayerEditorTool extends MapEditorTool {
     }
 
     /** The map of the level edited as the targets read it. */
-    private sceneOf(walls: MapLayerModel, floors: FloorModel | undefined): TargetScene {
-        return {
-            walls,
-            picker: buildHeightPicker(walls),
-            floors: floors ?? new FloorModel(),
-            level: this.editedLevel(),
-        };
+    private sceneOf(walls: MapLayerModel, floors: FloorModel | undefined, level = this.editedLevel()): TargetScene {
+        return { walls, picker: buildHeightPicker(walls), floors: floors ?? new FloorModel(), level };
     }
 
     /** The map for the hover previews: read again after an edit (the raised floors a few times per second). */
@@ -1256,7 +1251,7 @@ export class MapLayerEditorTool extends MapEditorTool {
         const path = [...gesture.path];
         this.execute(() => {
             const walls = this.readModel(level);
-            const plan = erasePlan(this.sceneOf(walls, this.floorEditing?.readModel()), start, end, path);
+            const plan = erasePlan(this.sceneOf(walls, this.floorEditing?.readModel(), level), start, end, path);
             const wallRefs = plan.refs.filter(isWallLayerRef);
             const floorRefs = plan.refs.filter((ref) => !isWallLayerRef(ref));
             const commands: FrontCommand[] = [];
@@ -1289,6 +1284,8 @@ export class MapLayerEditorTool extends MapEditorTool {
             .executeCommands(factory)
             .then(() => {
                 this.forgetHoverModel();
+                // The eraser removes slabs and stairs too: the previews read the raised floors again.
+                this.floorEditing?.forgetPreviewModel();
                 this.floorEditing?.refreshLevels();
                 done?.();
             })

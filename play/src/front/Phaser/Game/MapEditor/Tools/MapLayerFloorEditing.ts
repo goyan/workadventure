@@ -135,6 +135,11 @@ export class MapLayerFloorEditing {
         return this.cached.model;
     }
 
+    /** The floors have been edited elsewhere (the eraser of the map tool): the previews read them again. */
+    public forgetPreviewModel(): void {
+        this.cached = undefined;
+    }
+
     public readModel(): FloorModel {
         const items = [];
         for (const entity of this.scene.getGameMapFrontWrapper().getEntitiesManager().getEntities().values()) {

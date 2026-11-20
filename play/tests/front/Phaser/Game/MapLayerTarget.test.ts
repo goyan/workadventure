@@ -157,6 +157,47 @@ describe("what an eraser gesture of the map tool removes", () => {
     });
 });
 
+describe("a click of the eraser removes what the hover outlines", () => {
+    /** Every kind of element of the map tool, some of them overlapping on the screen. */
+    function busyScene(level: number): TargetScene {
+        const walls = new MapLayerModel();
+        for (let x = 0; x < 4; x++) walls.setWall("h", x, 3, "blanc", 3);
+        for (let x = 4; x < 8; x++) walls.setWall("h", x, 6, "blanc");
+        walls.setDoor({ orientation: "h", x: 6, y: 6 });
+        for (let y = 2; y < 6; y++) walls.setWall("v", 10, y, "gris");
+        walls.setDoor({ orientation: "v", x: 10, y: 4 });
+        for (let x = 2; x < 6; x++) walls.setWall("h", x, 9, "gris", 2);
+        walls.setWindow(4, 9, 1);
+        for (let x = 0; x < 6; x++) for (let y = 3; y < 9; y++) walls.setFloor(x, y, "parquet-clair");
+        const floors = new FloorModel();
+        floors.addStair(north, { x: 14, y: 12 }, 0);
+        floors.addStair(ramp, { x: 16, y: 4 }, 0);
+        for (let x = 2; x < 9; x++) for (let y = 12; y < 18; y++) floors.setSlab(52, x, y, "parquet-clair");
+        floors.addStair(north, { x: 5, y: 16 }, 52);
+        return sceneOf(walls, floors, level);
+    }
+
+    for (const level of [0, 52]) {
+        it(`everywhere on the screen, on the level ${level}`, () => {
+            const scene = busyScene(level);
+            const mismatches: string[] = [];
+            for (let x = -8; x < 640; x += 4) {
+                for (let y = -8; y < 640; y += 4) {
+                    const point = { x, y };
+                    const target = eraseTargetUnder(scene, point);
+                    const ground = { x: Math.floor(x / 32), y: Math.floor((y + level) / 32) };
+                    const refs = erasePlan(scene, point, point, [ground]).refs;
+                    const expected = target ? [target.ref] : [];
+                    if (JSON.stringify(refs) !== JSON.stringify(expected)) {
+                        mismatches.push(`${x},${y}: ${JSON.stringify(expected)} -> ${JSON.stringify(refs)}`);
+                    }
+                }
+            }
+            expect(mismatches.slice(0, 5)).toEqual([]);
+        });
+    }
+});
+
 describe("a stair under a point, whatever the floor it starts from", () => {
     it("finds the stair whose image is under the point, the last placed first", () => {
         const floors = new FloorModel();

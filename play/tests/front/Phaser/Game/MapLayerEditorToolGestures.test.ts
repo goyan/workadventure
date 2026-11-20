@@ -1021,6 +1021,33 @@ describe("MapLayerEditorTool gestures", () => {
             const expected = stairImagePosition(ramp, { x: 5, y: 5 }, 0);
             expect([moved.entityData?.x, moved.entityData?.y]).toEqual([expected.x, expected.y]);
         });
+        it("erases only the door a click of the eraser outlines, by either of its leaves, never its walls", async () => {
+            placeDoor(false);
+            await activate();
+            mapLayerModeStore.set("erase");
+            // The right leaf: the segment 1 of the door on the segments 0 and 1 of the line 2.
+            down(40, 80);
+            up(40, 80);
+            const { created, deleted } = committedPieces();
+            expect(deleted).toEqual(expect.arrayContaining(["porte-h-blanc-d", "porte-h-blanc-g"]));
+            expect(created.filter((name) => name.startsWith("facade-")).length).toBeGreaterThanOrEqual(2);
+        });
+
+        it("outlines a slab of a raised floor where it is drawn, its altitude higher", async () => {
+            const floors = new FloorModel();
+            floors.setSlab(52, 4, 6, "parquet-clair");
+            placeRaisedFloors(floors);
+            await activate();
+            mapLayerModeStore.set("erase");
+            mapEditorPlacementLevelStore.set(52);
+            clearPreviewCalls();
+            move(4 * 32 + 5, 6 * 32 - 52 + 5);
+            // The preview is drawn on a layer raised by the level edited: the slab of the tile (4, 6) is at y = 6 * 32 on it.
+            expect(previewGraphics.setY.mock.lastCall).toEqual([-52]);
+            expect(strokedRects()).toContainEqual([128, 6 * 32, 32, 32]);
+            expect(previewGraphics.lineStyle.mock.calls.map(([, color]) => color)).toContain(RED);
+        });
+
         it("grabs a high window by its raised pane, outlined in white, and moves it from there", async () => {
             placeWall(true, 2);
             await activate();
