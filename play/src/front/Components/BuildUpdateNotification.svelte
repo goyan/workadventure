@@ -5,6 +5,7 @@
     import { getNewReleaseNotes, releaseNotes } from "../../common/ReleaseNotes";
     import type { ReleaseNote } from "../../common/ReleaseNotes";
     import ReleaseNotesModal from "./Modal/ReleaseNotesModal.svelte";
+    import ReleaseNoteItem from "./ReleaseNoteItem.svelte";
     import ToastContainer from "./Toasts/ToastContainer.svelte";
     import { modals } from "@wa-modals";
 
@@ -44,7 +45,7 @@
             {#if newNotes.length > 0}
                 <ul class="my-2 pl-4 text-sm max-h-40 overflow-y-auto">
                     {#each newNotes as note (note.id)}
-                        <li>{note.description}</li>
+                        <ReleaseNoteItem {note} />
                     {/each}
                 </ul>
             {:else}
@@ -77,7 +78,7 @@
             {#if reloadedNotes.length > 0}
                 <ul class="my-2 pl-4 text-sm max-h-40 overflow-y-auto">
                     {#each reloadedNotes as note (note.id)}
-                        <li>{note.description}</li>
+                        <ReleaseNoteItem {note} />
                     {/each}
                 </ul>
             {:else}
