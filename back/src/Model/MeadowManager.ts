@@ -2,6 +2,8 @@ import { gunzipSync, gzipSync } from "node:zlib";
 import {
     burnableTreesOf,
     DEFAULT_MEADOW_SETTINGS,
+    FIREBALL_EMBER_PATCH_TILES,
+    fireballEmbers,
     landWallsOf,
     lifeFireOf,
     Meadow,
@@ -289,6 +291,28 @@ export class MeadowManager {
         const lit =
             this.meadow.ignite(Math.floor(x / TILE_PX), Math.floor(y / TILE_PX), radiusTiles) +
             this.trees.ignite(x, y, Math.max(0, radiusTiles) * TILE_PX);
+        if (lit > 0) this.wasBurning = true;
+        return lit;
+    }
+
+    /**
+     * A fireball lands at a point of the map (pixels), its crater `radiusTiles` wide: the ground of the crater is
+     * dried and takes fire whatever it was, its trees with it, and embers light what can burn where they land around.
+     * `id` is the one the room was told: the embers of a fireball are always the same. Returns how much took fire.
+     */
+    public scorch(x: number, y: number, radiusTiles: number, id: number): number {
+        const settings = this.room.getWam()?.settings;
+        if (!this.meadow || !{ ...DEFAULT_MEADOW_SETTINGS, ...settings?.meadow }.enabled) return 0;
+        const tileX = Math.floor(x / TILE_PX);
+        const tileY = Math.floor(y / TILE_PX);
+        // The ground first: a tree takes only where its foot is not wet.
+        let lit =
+            this.meadow.scorch(tileX, tileY, radiusTiles) + this.trees.ignite(x, y, Math.max(0, radiusTiles) * TILE_PX);
+        for (const { dx, dy } of fireballEmbers(id, radiusTiles)) {
+            lit +=
+                this.meadow.ignite(Math.floor(tileX + dx), Math.floor(tileY + dy), FIREBALL_EMBER_PATCH_TILES) +
+                this.trees.ignite(x + dx * TILE_PX, y + dy * TILE_PX, FIREBALL_EMBER_PATCH_TILES * TILE_PX);
+        }
         if (lit > 0) this.wasBurning = true;
         return lit;
     }

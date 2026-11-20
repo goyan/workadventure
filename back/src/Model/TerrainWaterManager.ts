@@ -329,6 +329,26 @@ export class TerrainWaterManager {
         this.tell(grid);
     }
 
+    /**
+     * A fireball lands at a point of the map (pixels), its crater `radiusTiles` wide: the water of the crater boils
+     * away, counted as lost, and no wave leaves. The room is told at once. Nothing on a map without water.
+     */
+    public vaporise(x: number, y: number, radiusTiles: number): void {
+        const grid = this.grid;
+        if (!grid) return;
+        const taken = grid.takeDisc(
+            Math.floor(x / TERRAIN_CELL),
+            Math.floor(y / TERRAIN_CELL),
+            meteorShape(radiusTiles).discCells,
+        );
+        if (!taken || taken.takenPx <= 0) return;
+        this.sums.lostPx += taken.takenPx;
+        this.moving = true;
+        this.version++;
+        this.changedSinceSave = true;
+        this.tell(grid);
+    }
+
     /** The grid of the water, for what lives in it. Undefined on a map without water. */
     public getGrid(): WaterGrid | undefined {
         return this.grid;
