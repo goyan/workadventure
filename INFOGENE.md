@@ -2722,14 +2722,15 @@ après le dernier changement de mur ou de porte (`Outdoor/OutdoorTracker.ts`). A
 **Météo seulement dehors.** Pluie, neige, voile et lueur d'orage ne sont plus dessinés au-dessus des pièces
 (`WeatherManager`, option `outdoorGrid`). Les sons ne changent pas. Une carte sans mur reste entièrement dehors.
 
-**Thème saisonnier** (« Paramètres → Ambiance → Thème saisonnier ») : Auto, Automne, Noël, Aucun. Réglage perso
+**Thème saisonnier** (« Paramètres → Ambiance → Thème saisonnier ») : Auto, Automne, Hiver (appelé Noël jusqu'au
+2026-11-20 ; valeur `christmas` gardée dans le navigateur et le code), Aucun. Réglage perso
 (`seasonalTheme` dans le navigateur), appliqué sans recharger. Il remplace « Thème de Noël » (repris une fois :
 Toujours → Noël, Jamais → Aucun) et « Sol extérieur » (effacé). Auto suit le calendrier de Paris, revérifié chaque
-minute : automne du 1er septembre au 30 novembre, Noël du 1er décembre au 6 janvier ; tant que l'heure du serveur
+minute : automne du 1er septembre au 30 novembre, hiver du 1er décembre au 6 janvier ; tant que l'heure du serveur
 n'est pas reçue, Auto n'affiche rien (`Seasonal/SeasonalTheme.ts`). `SeasonalThemeManager` crée le décor du thème
 (`SeasonalDecor`), le masque pendant l'édition et le reconstruit quand un mur ou un objet change.
 
-- **Noël** (`Christmas/ChristmasDecor.ts`) : la météo affichée pour soi devient Neige (flocons et son de la météo
+- **Hiver** (ex-Noël, `Christmas/ChristmasDecor.ts`) : la météo affichée pour soi devient Neige (flocons et son de la météo
   existante), le sol extérieur se couvre de neige bleutée, les objets dehors portent une neige épaisse sur leur bord du
   haut, les sols posés dehors sont givrés, et chaque joueur laisse des empreintes (une tous les 16 px en marche, une
   trace en course, fondu en 45 s, 400 au plus). Les arbres saisonniers prennent leur image d'hiver, sans neige ajoutée.
@@ -2748,7 +2749,7 @@ Limites : un mur manquant laisse entrer le décor ; une image d'objet illisible 
 déplacé par une autre personne garde son décor à l'ancien endroit jusqu'au prochain changement de mur ou à la sortie de
 l'éditeur.
 
-Recette : thème « Automne » puis « Noël », marcher puis courir dehors et dans une pièce, poser un objet dehors, ouvrir
+Recette : thème « Automne » puis « Hiver », marcher puis courir dehors et dans une pièce, poser un objet dehors, ouvrir
 l'éditeur et retirer un mur d'une pièce puis le remettre ; « Aucun » et une carte en orage : pluie et voile seulement
 dehors.
 
