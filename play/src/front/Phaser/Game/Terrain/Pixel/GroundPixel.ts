@@ -7,7 +7,11 @@ const GRASS_LINE: Rgb = [0x22, 0x36, 0x1c];
 const EMBER: Rgb = [0xff, 0x7a, 0x1a];
 const HOT_EMBER: Rgb = [0xff, 0xd2, 0x7a];
 /** How much the light of a slope lightens or darkens a point (a share of the ramp). */
-const LIGHT_SHARE = 0.3;
+const LIGHT_SHARE = 0.45;
+/** How fast the light answers the rise of a slope: a gentle bowl is shaded too, a steep slope at the most. */
+const LIGHT_RESPONSE = 0.18;
+/** A level line is this much darker than the ground around it (about a shade of its ramp). */
+const CONTOUR_SHADE = 0.34;
 /** Each tile of depth darkens the ground this much, down to DEEPEST_SHADE. */
 const SHADE_A_TILE = 0.12;
 const DEEPEST_SHADE = 0.5;
@@ -128,6 +132,8 @@ export function groundColor(
     light: number,
     height: number,
     outline?: "dark" | "light",
+    /** On a level line (see isContour): a shade darker. */
+    contour = false,
 ): Rgb {
     const ramp = RAMPS[material];
     if (outline === "dark") return material === "grass" ? GRASS_LINE : ramp[0];
@@ -137,7 +143,9 @@ export function groundColor(
         if (glow > 0.98) return HOT_EMBER;
         if (glow > 0.94) return EMBER;
     }
-    return shadeAt(ramp, groundValue(textureTable(material)[textureIndex(x, y)], light, height), x, y);
+    const value =
+        groundValue(textureTable(material)[textureIndex(x, y)], light, height) - (contour ? CONTOUR_SHADE : 0);
+    return shadeAt(ramp, value, x, y);
 }
 
 /**
@@ -150,5 +158,24 @@ export function slopeLight(height: (x: number, y: number) => number, x: number, 
 
 /** slopeLight from the rise already summed: east minus west plus south minus north, 1 px apart. */
 export function lightOfRise(rise: number): number {
-    return Math.max(-1, Math.min(1, rise * 0.07));
+    if (rise === 0) return 0;
+    return Math.sign(rise) * Math.min(1, Math.sqrt(Math.abs(rise) * LIGHT_RESPONSE));
+}
+
+/** How much darker a point on a level line is (see isContour), as a share of its ramp. */
+export function contourShade(contour: boolean): number {
+    return contour ? CONTOUR_SHADE : 0;
+}
+
+/**
+ * Whether a point of dug ground carries a level line: one each tile of depth (TILE_DEPTH_PX), drawn on the deeper side
+ * where one of its four neighbours is a tile less deep. The lines say the shape and the depth of a hollow at a glance,
+ * even a gentle one, even under the snow.
+ */
+export function isContour(height: number, west: number, east: number, north: number, south: number): boolean {
+    if (height >= 0) return false;
+    const level = Math.floor(-height / TILE_DEPTH_PX);
+    if (level === 0) return false;
+    const levelOf = (neighbour: number): number => Math.floor(Math.max(0, -neighbour) / TILE_DEPTH_PX);
+    return levelOf(west) < level || levelOf(east) < level || levelOf(north) < level || levelOf(south) < level;
 }

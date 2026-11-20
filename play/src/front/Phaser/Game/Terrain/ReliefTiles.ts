@@ -3,7 +3,16 @@ import { heightAt, TERRAIN_CELL, TERRAIN_CHUNK } from "@workadventure/map-editor
 import type { Season, TerrainData } from "@workadventure/map-editor";
 import { refreshCanvasTexture } from "../CanvasTextureRefresh";
 import type { MeadowState } from "./MeadowState";
-import { groundColor, groundValue, lightOfRise, textureIndex, textureTable, TEXTURE_MASK } from "./Pixel/GroundPixel";
+import {
+    contourShade,
+    groundColor,
+    groundValue,
+    isContour,
+    lightOfRise,
+    textureIndex,
+    textureTable,
+    TEXTURE_MASK,
+} from "./Pixel/GroundPixel";
 import { cellMaterial, outlineOf, pickMaterial } from "./Pixel/MaterialField";
 import { bayer, RAMPS } from "./Pixel/PixelPalette";
 import type { Material, Ramp, Rgb as PaletteRgb } from "./Pixel/PixelPalette";
@@ -387,13 +396,22 @@ export class ReliefTiles {
                     heights[index - POINT_COLUMNS];
                 const x = originX + column;
                 const light = lightOfRise(rise);
+                const contour = isContour(
+                    heights[index],
+                    heights[index - 1],
+                    heights[index + 1],
+                    heights[index - POINT_COLUMNS],
+                    heights[index + POINT_COLUMNS],
+                );
                 if (outline === undefined && material !== "ember") {
                     // The common case of groundColor, without its calls: texture, light, depth, then the dither.
-                    const value = groundValue(textures[here][textureRow + (x & TEXTURE_MASK)], light, heights[index]);
+                    const value =
+                        groundValue(textures[here][textureRow + (x & TEXTURE_MASK)], light, heights[index]) -
+                        contourShade(contour);
                     const shade = Math.round(value * 3 + bayerRow[x & 3] - 0.5);
                     colors[index] = RAMPS[material][shade < 0 ? 0 : shade > 3 ? 3 : shade];
                 } else {
-                    colors[index] = groundColor(material, x, y, light, heights[index], outline);
+                    colors[index] = groundColor(material, x, y, light, heights[index], outline, contour);
                 }
             }
         }
