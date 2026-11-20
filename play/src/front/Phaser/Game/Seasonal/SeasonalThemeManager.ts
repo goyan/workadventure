@@ -8,7 +8,7 @@ import type { AlphaMask, SnowEntity } from "../Christmas/SnowCaps";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { basicActiveStore } from "../../../Stores/BasicModeStore";
 import type { LeafConditions, SeasonalDecor, SeasonalDecorDeps } from "./SeasonalDecor";
-import { activeSeasonalTheme, SeasonalTheme, SeasonalThemeMode } from "./SeasonalTheme";
+import { activeSeasonalTheme, SeasonalTheme, SeasonalThemeMode, shownSeasonalThemeMode } from "./SeasonalTheme";
 import { readFrameAlpha } from "./readFrameAlpha";
 
 /** The calendar is checked again every minute, so the theme changes at midnight without a reload. */
@@ -78,9 +78,9 @@ export class SeasonalThemeManager {
         private readonly deps: SeasonalThemeDeps,
     ) {
         this.unsubscribers.push(
-            // Basique has no seasonal decor.
+            // Basique has no seasonal decor; a saved Christmas choice counts as auto while the winter theme is off.
             derived([seasonalThemeModeStore, basicActiveStore], ([mode, basic]) =>
-                basic ? SeasonalThemeMode.None : mode,
+                basic ? SeasonalThemeMode.None : shownSeasonalThemeMode(mode),
             ).subscribe((mode) => {
                 this.mode = mode;
                 this.lastCheck = -Infinity;

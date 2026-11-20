@@ -13,6 +13,21 @@ export enum SeasonalTheme {
     Christmas = "christmas",
 }
 
+/**
+ * The winter (Christmas) theme is switched off: its snowy ground is a plain white that hides the textures of the tiles.
+ * Its code stays as it is; turn this on again once the snowy ground has its textures. While it is off, auto shows
+ * nothing from December 1st to January 6th, and a saved Christmas choice is kept but behaves and shows as auto.
+ */
+export const WINTER_THEME_ENABLED: boolean = false;
+
+/** The choice that applies: a saved Christmas choice counts as auto while the winter theme is off. */
+export function shownSeasonalThemeMode(
+    mode: SeasonalThemeMode,
+    winterThemeEnabled = WINTER_THEME_ENABLED,
+): SeasonalThemeMode {
+    return mode === SeasonalThemeMode.Christmas && !winterThemeEnabled ? SeasonalThemeMode.Auto : mode;
+}
+
 const parisMonthDay = new Intl.DateTimeFormat("en", { timeZone: "Europe/Paris", month: "numeric", day: "numeric" });
 
 /**
@@ -20,7 +35,12 @@ const parisMonthDay = new Intl.DateTimeFormat("en", { timeZone: "Europe/Paris", 
  * September 1st to November 30th, Christmas from December 1st to January 6th included. Without the server time yet,
  * auto shows nothing rather than switching right after loading.
  */
-export function activeSeasonalTheme(mode: SeasonalThemeMode, serverDate: Date | undefined): SeasonalTheme | undefined {
+export function activeSeasonalTheme(
+    savedMode: SeasonalThemeMode,
+    serverDate: Date | undefined,
+    winterThemeEnabled = WINTER_THEME_ENABLED,
+): SeasonalTheme | undefined {
+    const mode = shownSeasonalThemeMode(savedMode, winterThemeEnabled);
     if (mode === SeasonalThemeMode.Autumn) return SeasonalTheme.Autumn;
     if (mode === SeasonalThemeMode.Christmas) return SeasonalTheme.Christmas;
     if (mode === SeasonalThemeMode.None || !serverDate || !Number.isFinite(serverDate.getTime())) return undefined;
@@ -28,7 +48,7 @@ export function activeSeasonalTheme(mode: SeasonalThemeMode, serverDate: Date | 
     const month = Number(parts.find((part) => part.type === "month")?.value);
     const day = Number(parts.find((part) => part.type === "day")?.value);
     if (month >= 9 && month <= 11) return SeasonalTheme.Autumn;
-    if (month === 12 || (month === 1 && day <= 6)) return SeasonalTheme.Christmas;
+    if (winterThemeEnabled && (month === 12 || (month === 1 && day <= 6))) return SeasonalTheme.Christmas;
     return undefined;
 }
 
@@ -44,8 +64,12 @@ export function forcedTreeSeason(theme: SeasonalTheme | undefined): Season | und
  * and the theme following the calendar (auto). A chosen theme keeps its look whatever the weather: autumn stays orange,
  * none stays green, and Christmas draws its own snow.
  */
-export function mapSnowShown(mode: SeasonalThemeMode, weatherShown: boolean): boolean {
-    return weatherShown && mode === SeasonalThemeMode.Auto;
+export function mapSnowShown(
+    mode: SeasonalThemeMode,
+    weatherShown: boolean,
+    winterThemeEnabled = WINTER_THEME_ENABLED,
+): boolean {
+    return weatherShown && shownSeasonalThemeMode(mode, winterThemeEnabled) === SeasonalThemeMode.Auto;
 }
 
 /** The former "Christmas theme" setting (auto, always, never) carries over to the seasonal theme. */

@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { writable } from "svelte/store";
+import { get, writable } from "svelte/store";
 import { mockDeep } from "vitest-mock-extended";
 
 vi.mock("../../../../../src/front/Stores/MapEditorStore", () => ({ mapEditorModeStore: writable(false) }));
 
 const { mapEditorModeStore } = await import("../../../../../src/front/Stores/MapEditorStore");
 const { seasonalThemeModeStore } = await import("../../../../../src/front/Stores/SeasonalThemeStore");
-const { SeasonalTheme, SeasonalThemeMode } =
+const { SeasonalTheme, SeasonalThemeMode, WINTER_THEME_ENABLED } =
     await import("../../../../../src/front/Phaser/Game/Seasonal/SeasonalTheme");
 const { OutdoorGrid } = await import("../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid");
 const { SeasonalThemeManager } = await import("../../../../../src/front/Phaser/Game/Seasonal/SeasonalThemeManager");
@@ -76,15 +76,45 @@ afterEach(() => {
     manager = undefined;
 });
 
+// The tests that choose the Christmas theme hold only with the winter theme turned on (WINTER_THEME_ENABLED, off while
+// its snowy ground has no textures): they run again by themselves the day it is turned on.
+const itWithWinterTheme = it.runIf(WINTER_THEME_ENABLED);
+
 describe("SeasonalThemeManager", () => {
     it("creates the decor of the active theme and draws it", () => {
+        seasonalThemeModeStore.set(SeasonalThemeMode.Autumn);
+        setup().update(0, walking);
+        expect(events).toEqual(["autumn:create", "autumn:ground", "autumn:objects"]);
+        expect(manager?.activeTheme()).toBe(SeasonalTheme.Autumn);
+    });
+
+    itWithWinterTheme("creates the Christmas decor of the Christmas theme and draws it", () => {
         seasonalThemeModeStore.set(SeasonalThemeMode.Christmas);
         setup().update(0, walking);
         expect(events).toEqual(["christmas:create", "christmas:ground", "christmas:objects"]);
         expect(manager?.activeTheme()).toBe(SeasonalTheme.Christmas);
     });
 
-    it("switches decor without leftovers", () => {
+    it.runIf(!WINTER_THEME_ENABLED)("follows the calendar for a saved Christmas choice, with no winter", () => {
+        seasonalThemeModeStore.set(SeasonalThemeMode.Christmas);
+        let date = new Date("2026-10-01T10:00:00Z");
+        setup({ serverDate: () => date }).update(0, walking);
+        expect(manager?.activeTheme()).toBe(SeasonalTheme.Autumn);
+        date = new Date("2026-12-24T10:00:00Z");
+        manager?.update(60_000, walking);
+        expect(manager?.activeTheme()).toBeUndefined();
+        expect(events.filter((event) => event.startsWith("christmas"))).toEqual([]);
+        // The saved choice is kept, for the day the winter theme comes back.
+        expect(get(seasonalThemeModeStore)).toBe(SeasonalThemeMode.Christmas);
+    });
+
+    it.runIf(!WINTER_THEME_ENABLED)("shows no winter in auto in December", () => {
+        setup({ serverDate: () => new Date("2026-12-24T10:00:00Z") }).update(0, walking);
+        expect(manager?.activeTheme()).toBeUndefined();
+        expect(events).toEqual([]);
+    });
+
+    itWithWinterTheme("switches decor without leftovers", () => {
         seasonalThemeModeStore.set(SeasonalThemeMode.Christmas);
         setup().update(0, walking);
         events.length = 0;
@@ -106,6 +136,18 @@ describe("SeasonalThemeManager", () => {
     });
 
     it("checks the calendar again every minute", () => {
+        let date = new Date("2026-08-31T21:59:00Z");
+        setup({ serverDate: () => date });
+        manager?.update(0, walking);
+        date = new Date("2026-08-31T22:00:30Z");
+        manager?.update(30_000, walking);
+        expect(manager?.activeTheme()).toBeUndefined();
+        manager?.update(60_000, walking);
+        expect(manager?.activeTheme()).toBe(SeasonalTheme.Autumn);
+        expect(events).toContain("autumn:create");
+    });
+
+    itWithWinterTheme("checks the calendar again every minute, into the Christmas theme", () => {
         let date = new Date("2026-11-30T22:59:00Z");
         setup({ serverDate: () => date });
         manager?.update(0, walking);
@@ -231,7 +273,7 @@ describe("SeasonalThemeManager", () => {
             expect(decorOf(SeasonalTheme.Autumn).setAlpha).toHaveBeenLastCalledWith(1);
         });
 
-        it("keeps a single Christmas decor with the Christmas theme", () => {
+        itWithWinterTheme("keeps a single Christmas decor with the Christmas theme", () => {
             seasonalThemeModeStore.set(SeasonalThemeMode.Christmas);
             setup({ mapSnowCoverage: () => 0.5 }).update(0, walking);
             manager?.update(16, walking);

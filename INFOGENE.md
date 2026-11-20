@@ -2823,6 +2823,16 @@ minute : automne du 1er septembre au 30 novembre, Noël du 1er décembre au 6 ja
 n'est pas reçue, Auto n'affiche rien (`Seasonal/SeasonalTheme.ts`). `SeasonalThemeManager` crée le décor du thème
 (`SeasonalDecor`), le masque pendant l'édition et le reconstruit quand un mur ou un objet change.
 
+**Thème Noël (hiver) coupé** depuis le 2026-11-20, à la demande de l'utilisateur : son sol de neige est une couleur
+unie qui cache la texture des tuiles. Le code reste ; un seul interrupteur, `WINTER_THEME_ENABLED` (`false`) de
+`Seasonal/SeasonalTheme.ts`, lu par `activeSeasonalTheme` (Auto n'affiche rien du 1er décembre au 6 janvier),
+`shownSeasonalThemeMode` (un choix « Noël » enregistré reste enregistré mais vaut Auto, aussi pour la neige de la
+carte, `mapSnowShown`), `SeasonalThemeManager` et le sélecteur des Paramètres (choix « Noël » retiré, un choix
+enregistré affiché comme Auto). L'app de bureau peut encore enregistrer « Noël » : il vaut Auto. À rallumer (`true`)
+quand le sol enneigé aura ses textures ; les tests du thème de Noël tournent alors d'eux-mêmes (`it.runIf`). La météo
+« Neige » de la carte n'est pas coupée : elle fond le même décor de Noël (`SnowGround`, même sol uni) à proportion
+de la couverture de neige.
+
 - **Noël** (`Christmas/ChristmasDecor.ts`) : la météo affichée pour soi devient Neige (flocons et son de la météo
   existante), le sol extérieur se couvre de neige bleutée, les objets dehors portent une neige épaisse sur leur bord du
   haut, les sols posés dehors sont givrés, et chaque joueur laisse des empreintes (une tous les 16 px en marche, une
