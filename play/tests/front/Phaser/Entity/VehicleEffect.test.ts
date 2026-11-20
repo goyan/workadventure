@@ -105,4 +105,65 @@ describe("electric unicycle", () => {
         expect(body.setAngle.mock.calls.every(([angle]: [number]) => angle === 0)).toBe(true);
         effect.destroy();
     });
+    it("draws a climbing airplane bigger around its centre, wing tip lights included", () => {
+        const scene = mockDeep<Phaser.Scene>();
+        scene.textures.exists.mockReturnValue(true);
+        scene.add.sprite.mockImplementation(() => {
+            const sprite = mock<Phaser.GameObjects.Sprite>();
+            for (const method of [
+                "setVisible",
+                "setFrame",
+                "setY",
+                "setAngle",
+                "setScale",
+                "setTexture",
+                "setDepth",
+                "setAlpha",
+                "setPosition",
+            ] as const)
+                sprite[method].mockReturnValue(sprite);
+            Object.assign(sprite, { texture: { key: "" } });
+            return sprite;
+        });
+        const lights: ReturnType<typeof mock<Phaser.GameObjects.Rectangle>>[] = [];
+        scene.add.rectangle.mockImplementation(() => {
+            const light = mock<Phaser.GameObjects.Rectangle>();
+            for (const method of ["setVisible", "setPosition", "setScale"] as const)
+                light[method].mockReturnValue(light);
+            lights.push(light);
+            return light;
+        });
+        const container = mock<Phaser.GameObjects.Container>();
+        Object.assign(container, { x: 0, y: 0 });
+        const effect = new VehicleEffect(scene, container, Vehicle.Airplane);
+        const lightsAt = (scale: number): number[][] => {
+            effect.update(
+                true,
+                PositionMessage_Direction.DOWN,
+                readVehicleColors(null, Vehicle.Airplane),
+                true,
+                0,
+                {
+                    x: 0,
+                    y: 1,
+                },
+                { lift: 40, altitude: 1, groundDepth: 0, scale },
+            );
+            return lights.map((light) => [
+                light.setPosition.mock.lastCall?.[0] ?? 0,
+                light.setPosition.mock.lastCall?.[1] ?? 0,
+            ]);
+        };
+        const [small, big] = [lightsAt(1), lightsAt(2)];
+        const body = vi.mocked(scene.add.sprite.mock.results[0].value);
+        expect(body.setScale.mock.lastCall).toEqual([2]);
+        expect(body.setY.mock.lastCall).toEqual([16 - 40]);
+        // The centre of the plane stays where it is drawn: the lights move twice as far from it.
+        const centreY = 16 - 40;
+        for (const [index, light] of big.entries()) {
+            expect(light[0]).toBeCloseTo(2 * (small[index]?.[0] ?? 0));
+            expect((light[1] ?? 0) - centreY).toBeCloseTo(2 * ((small[index]?.[1] ?? 0) - centreY));
+        }
+        effect.destroy();
+    });
 });

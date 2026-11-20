@@ -87,6 +87,7 @@
     import SkyLightSettings from "./SkyLightSettings.svelte";
     import SeasonalThemeSettings from "./SeasonalThemeSettings.svelte";
     import MapWeatherSection from "./MapWeatherSection.svelte";
+    import MapLightingSection from "./MapLightingSection.svelte";
     import {
         IconAntennaBarsLow,
         IconAntennaBarsMid,
@@ -573,6 +574,7 @@
             <SkyLightSettings section="ambiance" />
         </SettingsSection>
         <MapWeatherSection />
+        <MapLightingSection />
     {:else if settingsTab === "graphics"}
         <GraphicsQualitySettings />
         <EffectsSettings />

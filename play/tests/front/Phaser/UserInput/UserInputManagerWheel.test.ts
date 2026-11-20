@@ -187,6 +187,35 @@ describe("UserInputManager wheel and Nerf events", () => {
         expect(scene.getActivatablesManager.mock.calls).toEqual([]);
     });
 
+    it("takes off a parked airplane with a real SPACE press, without the airplane's hint getting the pilot out", () => {
+        Object.defineProperty(nerf, "isEquipped", { configurable: true, value: false });
+        const activatables = mock<ActivatablesManager>();
+        scene.getActivatablesManager.mockReturnValue(activatables);
+        const parked = {
+            isInAirplane: () => true,
+            isFlying: () => false,
+            isAirplanePromptShown: () => true,
+            handlePressSpacePlayerTextCallback: vi.fn(),
+        };
+        Object.defineProperty(scene, "CurrentPlayer", { configurable: true, value: parked });
+        const getOut = vi.fn();
+        manager.addSpaceEventListener(getOut);
+        const press = (): void => {
+            scene.input.keyboard?.emit("keydown", new KeyboardEvent("keydown", { key: " ", code: "Space" }));
+            scene.input.keyboard?.emit("keyup-SPACE", new KeyboardEvent("keyup", { key: " ", code: "Space" }));
+            scene.input.keyboard?.emit("keyup", new KeyboardEvent("keyup", { key: " ", code: "Space" }));
+        };
+        press();
+        expect(manager.userInputHandler.isClimbPressed?.()).toBe(true);
+        expect(getOut).not.toHaveBeenCalled();
+        // Another prompt is shown along with the hint: the key is the prompt's, as before.
+        Object.assign(parked, { isAirplanePromptShown: () => false });
+        press();
+        expect(manager.userInputHandler.isClimbPressed?.()).toBe(false);
+        expect(getOut).toHaveBeenCalledTimes(1);
+        manager.removeSpaceEventListener(getOut);
+    });
+
     it.each(["input", "textarea", "button", "div"])("leaves SPACE in a focused %s to its native action", (tag) => {
         const element = document.createElement(tag);
         if (tag === "div") element.setAttribute("contenteditable", "true");

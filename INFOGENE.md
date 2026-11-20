@@ -313,6 +313,44 @@ côte à côte (même faisceau au même moment) ; 120 tr/min avec 10° d'ouvertu
 d'une porte qui s'ouvre ; de nuit ; mouvement réduit du système ; effets lumineux coupés puis rallumés pour soi ; une dizaine de lampes tournantes à l'écran pour le
 débit d'images.
 
+### Économie d'énergie
+
+Réglage **par carte**, coupé par défaut (Paramètres → Ambiance → « Éclairage de la carte », visible pour qui peut
+éditer la carte, enregistré au changement) : les lampes RGB posées **dehors** s'éteignent le jour quand le ciel éclaire
+assez, et se rallument à la tombée du jour ou sous un gros orage. Valable pour tous les joueurs. Gyrophares compris ;
+torches, lampes de Jam, piste de danse et lampes des pièces jamais concernées.
+
+- **WAM** : `settings.lighting.energySaving` (absent = coupé), `LightingSettings` dans `libs/map-editor/src/types.ts`.
+  **Protocole** : `UpdateLightingSettingMessage { bool energySaving = 1; }`, case 10 de `UpdateWAMSettingsMessage` (le 9 est pris par les piscines de la PR #392)
+  (message à part : passer par celui de la météo relancerait son cycle, `map-storage` y réécrit `startedAt`).
+  `play`, `back` et `map-storage` se déploient ensemble.
+- **Règle** (`Lamps/EnergySaving.ts`, sans Phaser, testée) : lumière du jour = `min(1, élévation du soleil / 15°)` ×
+  facteur météo (`skyWeatherFactor` : clair 1, couvert 0,35, neige 0,5, pluie et brouillard 0,3, orage 0,15).
+  Extinction à 0,25, rallumage sous 0,18 (hystérésis). Entre les deux, l'état est celui du dernier instant hors de la
+  bande, cherché en remontant le temps par minutes (6 h au plus, « allumé » sinon) : un joueur qui arrive voit ce que
+  voient les autres. Calculé une fois par seconde. Heures à Paris, 20 novembre : ciel clair, éteintes 8 h 41,
+  rallumées 16 h 40 ; couvert 9 h 38 / 16 h 01 ; pluie ou brouillard 9 h 54 / 15 h 50 ; orage : jamais éteintes
+  (et rallumées s'il arrive en journée).
+- **Entrées, les mêmes pour tous** (`GameScene.mapDaylightAt`) : heure du serveur (rien n'est éteint tant qu'elle
+  n'est pas connue), soleil du lieu de la carte (Paris par défaut), météo de la carte à cet instant avec ses nuages.
+  Rien de personnel : ni « Désactiver la nuit », ni l'horloge de l'ordinateur, ni le thème saisonnier, ni les nuages
+  masqués. Écarts possibles : la personne qui essaie une météo dans le panneau (aperçu) voit les lampes suivre son
+  essai ; en météo Réelle, un navigateur qui attend encore la réponse du pusher affiche la météo automatique.
+- **Dehors** : pied de l'image de la lampe (milieu du bas), lu sur la grille dehors/dedans (`OutdoorGrid.isOutdoorAt`) ;
+  pour une lampe sur un palier, le sol sous elle. Une lampe dont le pied tombe dans un mur (façade) compte comme de
+  pièce. Grille pas encore connue : rien n'est éteint.
+- **Interrupteurs** : l'économie éteint par-dessus, sans rien écrire dans l'état partagé des lampes (`RgbLamps`,
+  option `isSaved`, multipliée par le niveau de l'interrupteur) : au retour de l'obscurité la lampe revient comme son
+  interrupteur l'a laissée. Une lampe éteinte ainsi ne dessine rien, ne renvoie rien sur les murs et ne perce plus le
+  voile de nuit. Fondu de 1,5 s (net en mouvement réduit). Dans l'éditeur, inchangé : lampes éteintes, ou allumées
+  quand le bouton soleil-lune montre l'éclairage du jeu, pour pouvoir les régler.
+
+Recette : activer le réglage sur une carte qui a une lampe dehors et une dans une pièce ; en journée, la lampe du
+dehors s'éteint en 1,5 s, celle de la pièce reste (`?nightAt` ne sert à rien ici : l'économie lit l'heure du
+serveur) ; choisir « Orage » dans la météo de la carte en plein jour : la lampe du dehors se rallume ; éteindre la
+lampe à son interrupteur, attendre le soir : elle reste éteinte ; deux navigateurs côte à côte à l'aube ou au
+crépuscule, l'un ouvert depuis longtemps, l'autre rechargé : même état.
+
 ## Interrupteurs
 
 Un **interrupteur** allume et éteint des lampes RGB, pour tout le monde. Plusieurs interrupteurs peuvent commander la
@@ -2366,6 +2404,36 @@ mode « toujours » sur l'eau et « coupé » ailleurs ; `isCanoeAfloat`). Vites
 fois plus en pagayant fort (touche de course) ; le courant l'emporte moitié moins qu'un nageur. Pas de canoë à
 terre, dans une piscine (on y nage), sur un palier, en suivi, ni pour un costume qui n'est pas humain ; la roue
 d'actions ne propose rien pour lui. Dessiné en code (`Vehicle/CanoeArtwork.ts`), comme les autres véhicules.
+
+**Altitude de l'avion.** L'avion d'Amine (PR #379) décolle seul en avançant jusqu'à l'altitude de croisière
+(`AIRPLANE_ALTITUDE`, 1024) et survole tout sans collision. Le pilote règle maintenant l'altitude :
+**ESPACE maintenu monte**, **CTRL maintenu descend**, en douceur (pleine vitesse 480 par seconde en 0,4 s, autant pour
+s'arrêter), entre 64 (`AIRPLANE_MIN_FLIGHT_ALTITUDE`) et 2048 (`AIRPLANE_MAX_ALTITUDE`) ; relâchée, l'altitude tient
+(`AirplaneFlight.cruise`). Le sol ne s'atteint que par un atterrissage, sur un terrain dégagé comme tout atterrissage :
+V, ou CTRL tenu au plancher de 64 (l'avion se pose et reste garé). Dès que le pilote a pris l'altitude en main pendant
+un vol, lâcher les flèches tient l'altitude au lieu d'atterrir (changement voulu du comportement de la #379) ; ESPACE
+annule un atterrissage commencé seul, pas celui demandé par V. Chaque vol repart à la croisière.
+- **ESPACE** (`spaceClimbs`, `Vehicle/AirplaneAltitudeKeys.ts`) : en vol, il monte toujours (rien du sol n'est à portée,
+  comme avant). Au sol dans l'avion garé, il décolle seulement si rien d'autre ne le demande : une invite (siège,
+  porte, animal…), un objet sélectionné à côté, le Nerf ou la canne en main gardent la priorité. L'indice de l'avion
+  lui-même (« [V] pour descendre ») ne compte pas. Décidé à l'appui de la touche (`GameSceneUserInputHandler`), lu à
+  chaque image tant qu'elle est tenue (`UserInputEvent.Climb`) ; le relâchement n'active rien.
+- **CTRL** (`UserInputEvent.Descend`) : en vol seulement, hors éditeur, pas dans un champ de saisie, rien quand les
+  entrées sont coupées. En vol, les déplacements tenus avec CTRL continuent de diriger (le filtre `ctrlKey` de
+  `getEventListForGameTick` les laisse passer) et Ctrl + Z, Q, S, D, A, W ou une flèche ne déclenchent pas le
+  raccourci du navigateur quand il peut être empêché. Limites : Chrome ne laisse pas empêcher Ctrl + W (ferme
+  l'onglet), Linux quitte parfois sur Ctrl + Q, et macOS garde Ctrl + flèche pour changer de bureau (la page ne la
+  reçoit pas). Au sol, CTRL reste un modificateur comme avant.
+- **Rendu** : vu de dessus, l'avion grossit en montant, autour de son centre, de 1 au sol à 1,5 à la croisière et 2 à
+  2048, par seizièmes (`airplaneScale` : une image de pixel art agrandie à chaque image scintille ; filtre au plus
+  proche du jeu, pas de flou). Le pilote, le cockpit et les feux suivent la même échelle ; le nom monte au-dessus des
+  ailes. L'avion est dessiné au-dessus de son ombre de 40 px à la croisière, 80 au plus haut (`airplaneLift`).
+  L'ombre d'Amine reste telle quelle (plus petite et plus pâle en montant, au sol sous l'avion). Profondeur
+  inchangée : au-dessus des toits et du voile de nuit (`AIRPLANE_RENDER_DEPTH`).
+- **Partage** : l'altitude voyage déjà dans la variable de véhicule (`_avatarAirVehicle`, `_avatarVehicle`), bornée
+  de 0 à 2048 et refusée si elle n'est pas un nombre fini (`readVehicleState`) ; chacun en déduit la taille, donc rien
+  de géant ni de NaN. Envoyée au plus toutes les 200 ms tant qu'elle seule change, et lissée par chaque navigateur.
+  Aucun changement du protocole ni du `back`. Un client d'avant la borne à 1024 et la dessine sans agrandir.
 
 **`back` calcule** (`TerrainWaterManager`) : dix pas par seconde, avec la pluie sur les cellules creusées (et le
 ruissellement), l'évaporation des cellules mouillées par temps sec seulement, l'eau bue par le sol plat, les sources

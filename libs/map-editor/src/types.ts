@@ -1232,6 +1232,14 @@ export const PoolStyle = z.object({
     ladders: z.number().int().min(0).max(2).default(2),
 });
 export type PoolStyle = z.infer<typeof PoolStyle>;
+/**
+ * The lighting of a map. `energySaving`: its lamps standing outdoors go out by day, while the sky gives light enough
+ * (see Lamps/EnergySaving.ts in play). Absent from a map saved before it existed: off.
+ */
+export const LightingSettings = z.object({
+    energySaving: z.boolean().default(false),
+});
+export type LightingSettings = z.infer<typeof LightingSettings>;
 
 export const WAMSettings = z.object({
     weather: Weather.optional().catch(undefined),
@@ -1250,6 +1258,7 @@ export const WAMSettings = z.object({
     meadow: MeadowSettings.optional().catch(undefined),
     /** The styles of the pools painted on the map, by their number. Fail open: a broken list draws default pools. */
     pools: z.array(PoolStyle).max(MAX_POOL_STYLES).optional().catch(undefined),
+    lighting: LightingSettings.optional().catch(undefined),
 });
 
 export const WAMFileFormat = z.object({

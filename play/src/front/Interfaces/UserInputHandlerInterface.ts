@@ -24,6 +24,11 @@ export interface UserInputHandlerInterface {
 
     handleActivableEntity: () => void;
 
+    /** In flight: the control key comes down instead of being a modifier of the moves. */
+    isAltitudeKeysActive?: () => boolean;
+    /** The space key held now was given to the airplane to climb (see spaceClimbs). */
+    isClimbPressed?: () => boolean;
+
     addSpaceEventListener: (callback: () => void) => void;
     removeSpaceEventListener: (callback: () => void) => void;
 }
