@@ -14,6 +14,16 @@ const hollow = withHeights(
     ),
 );
 const floor = { x: 192, y: 250 };
+/** A mount raised 128 px on the same cells: its top drawn 64 px higher. */
+const mount = withHeights(
+    undefined,
+    new Map(
+        Array.from({ length: 4 * 12 }, (_, index): [string, number] => [
+            cellKey(10 + (index % 4), 10 + Math.floor(index / 4)),
+            128,
+        ]),
+    ),
+);
 
 describe("how much lower an avatar is drawn", () => {
     it("as much as the ground under its feet: half its depth", () => {
@@ -54,6 +64,23 @@ describe("how much lower an avatar is drawn", () => {
             expect(Math.abs(drop - previous)).toBeLessThanOrEqual(2);
             previous = drop;
         }
+    });
+});
+
+describe("how much higher an avatar is drawn on a mount", () => {
+    it("as much as the top of the mount: half its height", () => {
+        expect(avatarDrop(mount, floor, 0, 0, false, false)).toBe(-64);
+    });
+
+    it("not at all on a raised floor, on a bridge, nor while the map editor is open", () => {
+        expect(avatarDrop(mount, floor, 0, 52, false, false)).toBe(0);
+        expect(avatarDrop(mount, floor, 0, 0, true, false)).toBe(0);
+        expect(avatarDrop(mount, floor, 0, 0, false, true)).toBe(0);
+    });
+
+    it("at the surface of a lake in a crater at its top, for what lies on it", () => {
+        // 20 px of water over a top 128 px high: its surface is 148 px up, drawn 74 px higher.
+        expect(surfaceDropAt(mount, 20, floor.x, floor.y, false, false)).toBe(-74);
     });
 });
 

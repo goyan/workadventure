@@ -394,7 +394,7 @@ import { MapGroundLayout, GRASS_NAME, mapTileIsGrass } from "./Terrain/MapGround
 import { footprintSurface, GroundFootprints } from "./Terrain/Footprints";
 import { WaterGlints } from "./Terrain/WaterGlints";
 import { ReliefTiles } from "./Terrain/ReliefTiles";
-import { dropAt, hiddenBehindRim, projectionShown } from "./Terrain/ReliefProjection";
+import { hiddenBehindRim, projectionShown, shiftAt } from "./Terrain/ReliefProjection";
 import { CharacterDrops } from "./Terrain/CharacterDrops";
 import { avatarDrop, surfaceDropAt, waterDepthAtPoint } from "./Terrain/AvatarDrop";
 import { WaterFlowView } from "./Terrain/WaterFlowView";
@@ -3907,7 +3907,7 @@ export class GameScene extends DirtyScene {
                     this,
                     (x, y) => footprintSurface(this.reliefTiles?.coverAt(x, y, this.time.now) ?? "none"),
                     // As low as the ground is drawn: in 3/4 out of the editor.
-                    (x, y) => (get(mapEditorModeStore) ? 0 : dropAt(this.terrainWater.relief(), x, y)),
+                    (x, y) => (get(mapEditorModeStore) ? 0 : shiftAt(this.terrainWater.relief(), x, y)),
                     (x, y) => this.terrainWater.isBridgeAt(x, y),
                 );
                 this.characterDrops?.destroy();

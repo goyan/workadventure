@@ -33,6 +33,16 @@ describe("the characters drawn lower in the hollows", () => {
         expect(avatar.y).toBe(100);
     });
 
+    it("moves up a character on a mount, and puts it back", () => {
+        const scene = fakeScene();
+        const avatar = { y: 100, getGroundDrop: () => -40 };
+        new CharacterDrops(scene as never, () => [avatar]);
+        scene.emit(Phaser.Scenes.Events.PRE_RENDER);
+        expect(avatar.y).toBe(60);
+        scene.emit(Phaser.Scenes.Events.RENDER);
+        expect(avatar.y).toBe(100);
+    });
+
     it("puts back the place it moved even if the drop changed meanwhile", () => {
         const scene = fakeScene();
         let drop = 64;

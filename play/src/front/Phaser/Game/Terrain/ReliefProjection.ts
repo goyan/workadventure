@@ -25,16 +25,28 @@ export function heightAtPoint(terrain: TerrainData | undefined, x: number, y: nu
     return top * (1 - ty) + bottom * ty;
 }
 
-/** How much lower than its place a point of the ground is drawn. */
-export function dropAt(terrain: TerrainData | undefined, x: number, y: number): number {
-    return Math.min(MAX_DROP, Math.max(0, -heightAtPoint(terrain, x, y)) * DROP_SCALE);
+/** The highest a map is raised (256 px) drawn at half: no point of the ground is drawn higher than this. */
+export const MAX_RISE = 128;
+
+/** How far a point of the ground is drawn from its place, given its height (or that of the water over it). */
+export function shiftOfHeight(height: number): number {
+    // + 0: no -0 for a flat ground.
+    return Math.min(MAX_DROP, Math.max(-MAX_RISE, -height * DROP_SCALE)) + 0;
+}
+
+/**
+ * How much lower than its place a point of the ground is drawn: positive in a hollow, negative on a mount (drawn
+ * higher by half its height).
+ */
+export function shiftAt(terrain: TerrainData | undefined, x: number, y: number): number {
+    return shiftOfHeight(heightAtPoint(terrain, x, y));
 }
 
 /**
  * The point of the ground drawn under a point of the screen. Going from the north, the ground drawn last (the
- * southernmost) is the one seen: a rim hides what lies behind it, a bridge the hollow under it. A point on the face
- * of a drop (where the drawing of the ground jumps down) is taken to the foot of that face: one clicks where one
- * wants to go.
+ * southernmost) is the one seen: a rim hides what lies behind it, a mount the ground behind it, a bridge the hollow
+ * under it. A point on the face of a drop (where the drawing of the ground jumps down) is taken to the foot of that
+ * face: one clicks where one wants to go.
  */
 export function groundPointAt(
     terrain: TerrainData | undefined,
@@ -43,18 +55,24 @@ export function groundPointAt(
     onBridge?: (x: number, y: number) => boolean,
 ): { x: number; y: number } {
     if (!terrain) return { ...screen };
-    const drawnAt = (y: number): number => y + (onBridge?.(screen.x, y) ? 0 : dropAt(terrain, screen.x, y));
+    const drawnAt = (y: number): number => y + (onBridge?.(screen.x, y) ? 0 : shiftAt(terrain, screen.x, y));
     // A face: the drawing jumps down by more than FACE_JUMP_PX for a pixel of ground (as paintColumn draws one).
     const isFace = (y: number): boolean => drawnAt(y) - drawnAt(y - 1) > FACE_JUMP_PX;
     let found: number | undefined;
     let previous = drawnAt(screen.y - MAX_DROP - 1);
-    for (let y = screen.y - MAX_DROP; y <= screen.y; y++) {
+    // From as far north as a hollow draws its floor, to as far south as a mount draws its top.
+    for (let y = screen.y - MAX_DROP; y <= screen.y + MAX_RISE; y++) {
         const drawn = drawnAt(y);
-        // The pixel of ground y is drawn from just under the one before it down to its own place.
-        if (previous < screen.y && drawn >= screen.y - 0.5) {
+        // Drawn further down than the pixel of ground before it: from just under that one down to its own place (as
+        // paintColumn stretches it); drawn higher (the north side of a mount, hidden): its own row only.
+        const covers =
+            drawn > previous
+                ? previous < screen.y && drawn >= screen.y - 0.5
+                : drawn >= screen.y - 0.5 && drawn < screen.y + 0.5;
+        if (covers) {
             let foot = y;
             // On a face: down to where the ground stops falling away, its foot.
-            if (isFace(y)) while (foot < screen.y + MAX_DROP && isFace(foot + 1)) foot++;
+            if (isFace(y)) while (foot < screen.y + MAX_DROP + MAX_RISE && isFace(foot + 1)) foot++;
             found = foot;
         }
         previous = drawn;
@@ -64,9 +82,9 @@ export function groundPointAt(
 
 /**
  * Whether a point of the ground (or of the surface of its water: `dropOf`) is hidden in 3/4 by the ground south of it:
- * the south rim of a hollow, drawn over the floor behind it. A ground further south hides it when it is drawn as high
- * or higher on the screen; it can only be between the point and where the point is drawn (a ground is never drawn
- * higher than its place).
+ * the south rim of a hollow drawn over the floor behind it, or a mount drawn over the ground north of it. A ground
+ * further south hides it when it is drawn as high or higher on the screen; it can only be between the point and
+ * MAX_RISE south of where the point is drawn (a ground is never drawn higher than that above its place).
  */
 export function hiddenBehindRim(
     terrain: TerrainData | undefined,
@@ -76,7 +94,7 @@ export function hiddenBehindRim(
 ): boolean {
     if (!terrain) return false;
     const drawn = y + dropOf(x, y);
-    for (let south = Math.floor(y) + 1; south < drawn; south++) {
+    for (let south = Math.floor(y) + 1; south < drawn + MAX_RISE; south++) {
         if (south + dropOf(x, south) < drawn - 0.5) return true;
     }
     return false;

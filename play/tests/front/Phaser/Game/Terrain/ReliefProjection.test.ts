@@ -9,7 +9,8 @@ import {
     RELIEF_TEXEL,
     RIM_OUTLINE,
     MAX_DROP,
-    dropAt,
+    MAX_RISE,
+    shiftAt,
     groundPointAt,
     hiddenBehindRim,
     paintColumn,
@@ -26,15 +27,22 @@ function hollow(): TerrainData {
     return withHeights(undefined, changes);
 }
 
+/** A mount raised 128 px (4 tiles) on the same cells as the hollow: its top flat from y 168 to 344, drawn 64 px higher. */
+function mount(height = 128): TerrainData {
+    const changes = new Map<string, number>();
+    for (let x = 10; x <= 13; x++) for (let y = 10; y <= 21; y++) changes.set(cellKey(x, y), height);
+    return withHeights(undefined, changes);
+}
+
 const near = (value: number, expected: number) => expect(Math.abs(value - expected)).toBeLessThanOrEqual(2);
 
 describe("the relief seen in 3/4", () => {
     it("draws the dug ground lower by half its depth, at most 128 px", () => {
         expect(DROP_SCALE).toBe(0.5);
         expect(MAX_DROP).toBe(128);
-        expect(dropAt(hollow(), 192, 100)).toBe(0);
-        expect(dropAt(hollow(), 192, 250)).toBe(64);
-        expect(dropAt(undefined, 192, 250)).toBe(0);
+        expect(shiftAt(hollow(), 192, 100)).toBe(0);
+        expect(shiftAt(hollow(), 192, 250)).toBe(64);
+        expect(shiftAt(undefined, 192, 250)).toBe(0);
     });
 
     it("finds the floor of a hollow under the point of the screen where it is drawn", () => {
@@ -56,7 +64,7 @@ describe("the relief seen in 3/4", () => {
         const ramp = withHeights(undefined, changes);
         // Up to where the flat ground south of the ramp (from the row 31, drawn at its place) starts hiding it.
         for (let groundY = 200; groundY < 380; groundY += 3) {
-            const screenY = groundY + dropAt(ramp, 32, groundY);
+            const screenY = groundY + shiftAt(ramp, 32, groundY);
             near(groundPointAt(ramp, { x: 32, y: screenY }).y, groundY);
         }
     });
@@ -83,10 +91,32 @@ describe("the relief seen in 3/4", () => {
 
     it("tells a point of the floor hidden behind the south rim from one that shows", () => {
         // The floor near the south edge (y 340) is drawn 64 px lower, at 404: the rim south of the hollow is drawn there.
-        expect(hiddenBehindRim(hollow(), 192, 340, (x, y) => dropAt(hollow(), x, y))).toBe(true);
+        expect(hiddenBehindRim(hollow(), 192, 340, (x, y) => shiftAt(hollow(), x, y))).toBe(true);
         // The middle of the floor shows.
-        expect(hiddenBehindRim(hollow(), 192, 250, (x, y) => dropAt(hollow(), x, y))).toBe(false);
+        expect(hiddenBehindRim(hollow(), 192, 250, (x, y) => shiftAt(hollow(), x, y))).toBe(false);
         expect(hiddenBehindRim(undefined, 192, 250, () => 0)).toBe(false);
+    });
+
+    it("draws a mount higher by half its height, at most 128 px", () => {
+        expect(MAX_RISE).toBe(128);
+        expect(shiftAt(mount(), 192, 250)).toBe(-64);
+        expect(shiftAt(mount(256), 192, 250)).toBe(-128);
+        expect(shiftAt(mount(), 192, 100)).toBe(0);
+    });
+
+    it("finds the top of a mount under the point of the screen where it is drawn", () => {
+        near(groundPointAt(mount(), { x: 192, y: 250 - 64 }).y, 250);
+    });
+
+    it("gives the mount, not the ground behind it, where the mount is drawn over that ground", () => {
+        // Without the mount, the screen point y 150 would be the ground at y 150, north of the mount: the top of the
+        // mount (from y 168, drawn from 104 on) is drawn over it.
+        expect(groundPointAt(mount(), { x: 192, y: 150 }).y).toBeGreaterThan(160);
+    });
+
+    it("tells the ground hidden behind a mount from the ground south of it", () => {
+        expect(hiddenBehindRim(mount(), 192, 150, (x, y) => shiftAt(mount(), x, y))).toBe(true);
+        expect(hiddenBehindRim(mount(), 192, 400, (x, y) => shiftAt(mount(), x, y))).toBe(false);
     });
 
     it("leaves a point as it is on a map without relief", () => {
