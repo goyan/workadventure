@@ -8,11 +8,12 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
         actionbar: {
             catastrophe: {
                 label: label("Disaster"),
-                meteor: label("Meteor"),
+                meteor: label("Comet"),
+                fireball: label("Meteor"),
                 armedHelp: label("Click on the map · Esc to cancel"),
                 idleHelp: label("Pick a disaster"),
                 size: ({ tiles }: { tiles: number }) => `${tiles} tiles`,
-                sizeLabel: label("Size of the meteor: radius of its crater, in tiles"),
+                sizeLabel: label("Size: radius of the crater, in tiles"),
                 tabs: { catastrophes: label("Disasters"), weather: label("Weather") },
                 downpour: label("Downpour"),
                 fire: label("Fire"),
@@ -75,7 +76,7 @@ describe("CatastrophePanel", () => {
     it("shows the meteor tile and the idle help", () => {
         render();
         expect(tile()?.getAttribute("aria-pressed")).toBe("false");
-        expect(target.textContent).toContain("Meteor");
+        expect(target.textContent).toContain("Comet");
         expect(target.textContent).toContain("Pick a disaster");
     });
 
@@ -85,6 +86,20 @@ describe("CatastrophePanel", () => {
         flushSync();
         expect(tile()?.getAttribute("aria-pressed")).toBe("true");
         expect(get(armedCatastropheStore)).toBe("meteor");
+        expect(target.textContent).toContain("Click on the map · Esc to cancel");
+    });
+
+    it("arms the fireball, named Meteor, with the size and the help of the comet", () => {
+        render();
+        const fireball = target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-fireball"]');
+        expect(fireball?.textContent).toContain("Meteor");
+        expect(fireball?.getAttribute("aria-pressed")).toBe("false");
+        fireball?.click();
+        flushSync();
+        expect(fireball?.getAttribute("aria-pressed")).toBe("true");
+        expect(tile()?.getAttribute("aria-pressed")).toBe("false");
+        expect(get(armedCatastropheStore)).toBe("fireball");
+        expect(target.querySelector('[data-testid="catastrophe-meteor-size"]')).not.toBeNull();
         expect(target.textContent).toContain("Click on the map · Esc to cancel");
     });
 

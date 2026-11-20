@@ -23,6 +23,16 @@ describe("CatastropheStore", () => {
         expect(get(armedCatastropheStore)).toBeUndefined();
     });
 
+    it("arms the fireball, apart from the comet", () => {
+        toggleArmedCatastrophe("fireball");
+        expect(get(armedCatastropheStore)).toBe("fireball");
+        toggleArmedCatastrophe("meteor");
+        expect(get(armedCatastropheStore)).toBe("meteor");
+        toggleArmedCatastrophe("fireball");
+        toggleArmedCatastrophe("fireball");
+        expect(get(armedCatastropheStore)).toBeUndefined();
+    });
+
     it("forgets the choice when the panel is closed, so reopening does not come back armed", () => {
         toggleArmedCatastrophe("meteor");
         catastrophePanelStore.set(false);
