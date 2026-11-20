@@ -16,19 +16,23 @@ const floor = { x: 192, y: 250 };
 
 describe("how much lower an avatar is drawn", () => {
     it("as much as the ground under its feet: half its depth", () => {
-        expect(avatarDrop(hollow, floor, 0, 0, false)).toBe(64);
-        expect(avatarDrop(hollow, { x: 192, y: 100 }, 0, 0, false)).toBe(0);
+        expect(avatarDrop(hollow, floor, 0, 0, false, false)).toBe(64);
+        expect(avatarDrop(hollow, { x: 192, y: 100 }, 0, 0, false, false)).toBe(0);
     });
 
     it("at the surface of the water it swims in", () => {
         // 20 px of water over a floor 128 px deep: its surface is 108 px down, drawn 54 px lower.
-        expect(avatarDrop(hollow, floor, 20, 0, false)).toBe(54);
+        expect(avatarDrop(hollow, floor, 20, 0, false, false)).toBe(54);
     });
 
     it("not at all on a raised floor, nor while the map editor is open", () => {
-        expect(avatarDrop(hollow, floor, 0, 52, false)).toBe(0);
-        expect(avatarDrop(hollow, floor, 0, 0, true)).toBe(0);
-        expect(avatarDrop(undefined, floor, 0, 0, false)).toBe(0);
+        expect(avatarDrop(hollow, floor, 0, 52, false, false)).toBe(0);
+        expect(avatarDrop(hollow, floor, 0, 0, true, false)).toBe(0);
+        expect(avatarDrop(undefined, floor, 0, 0, false, false)).toBe(0);
+    });
+
+    it("not at all on the deck of a bridge over a hollow: it walks at the level of the deck", () => {
+        expect(avatarDrop(hollow, floor, 0, 0, false, true)).toBe(0);
     });
 
     it("goes down smoothly from the shore into a lake, as the lake is drawn", () => {
@@ -41,7 +45,7 @@ describe("how much lower an avatar is drawn", () => {
         let previous = 0;
         for (let y = 120; y <= 240; y++) {
             const feet = { x: 192, y };
-            const drop = avatarDrop(hollow, feet, waterDepthAtPoint(cellDepth, feet.x, feet.y), 0, false);
+            const drop = avatarDrop(hollow, feet, waterDepthAtPoint(cellDepth, feet.x, feet.y), 0, false, false);
             expect(Math.abs(drop - previous)).toBeLessThanOrEqual(2);
             previous = drop;
         }

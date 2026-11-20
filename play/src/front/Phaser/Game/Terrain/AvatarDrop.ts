@@ -16,8 +16,10 @@ export function avatarDrop(
     waterDepth: number,
     floorZ: number,
     editorOpen: boolean,
+    /** On the deck of a bridge: it walks at the level of the deck, over the hollow and its water. */
+    onBridge: boolean,
 ): number {
-    if (!terrain || editorOpen || floorZ >= ON_A_FLOOR) return 0;
+    if (!terrain || editorOpen || onBridge || floorZ >= ON_A_FLOOR) return 0;
     const surface = heightAtPoint(terrain, feet.x, feet.y) + Math.max(0, waterDepth);
     return Math.min(MAX_DROP, Math.max(0, -surface) * DROP_SCALE);
 }

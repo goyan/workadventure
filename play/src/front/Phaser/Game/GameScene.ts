@@ -2397,6 +2397,7 @@ export class GameScene extends DirtyScene {
                         waterDepthAtPoint((x, y) => this.terrainWater.depthAt(x, y, time), character.x, character.y),
                         character.getFloorZ(),
                         !projected,
+                        this.terrainWater.isBridgeAt(character.x, character.y),
                     );
                 if (this.CurrentPlayer) this.CurrentPlayer.setGroundDrop(dropOf(this.CurrentPlayer));
                 for (const remote of this.MapPlayersByKey.values()) remote.setGroundDrop(dropOf(remote));

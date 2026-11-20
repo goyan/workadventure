@@ -68,6 +68,14 @@ describe("the relief seen in 3/4", () => {
         near(ground.y, 380);
     });
 
+    it("finds the deck of a bridge over a hollow where it is, and the floor beside it", () => {
+        // A bridge over the hollow on the tile x 192 to 224, y 224 to 256: its deck is at the level of the ground.
+        const onBridge = (x: number, y: number): boolean => x >= 192 && x < 224 && y >= 224 && y < 256;
+        near(groundPointAt(hollow(), { x: 200, y: 240 }, onBridge).y, 240);
+        // Beside the bridge, the same point of the screen shows the floor of the hollow, 64 px higher on the map.
+        near(groundPointAt(hollow(), { x: 176, y: 240 }, onBridge).y, 176);
+    });
+
     it("leaves a point as it is on a map without relief", () => {
         expect(groundPointAt(undefined, { x: 10, y: 20 })).toEqual({ x: 10, y: 20 });
     });

@@ -30,15 +30,18 @@ export function dropAt(terrain: TerrainData | undefined, x: number, y: number): 
 
 /**
  * The point of the ground drawn under a point of the screen. Going from the north, the ground drawn last (the
- * southernmost) is the one seen: a rim hides what lies behind it. A point on the face of a drop (where the drawing of
- * the ground jumps down) is taken to the foot of that face: one clicks where one wants to go.
+ * southernmost) is the one seen: a rim hides what lies behind it, a bridge the hollow under it. A point on the face
+ * of a drop (where the drawing of the ground jumps down) is taken to the foot of that face: one clicks where one
+ * wants to go.
  */
 export function groundPointAt(
     terrain: TerrainData | undefined,
     screen: { x: number; y: number },
+    /** Whether a point of the map is on the deck of a bridge: drawn at its place, over the hollow under it. */
+    onBridge?: (x: number, y: number) => boolean,
 ): { x: number; y: number } {
     if (!terrain) return { ...screen };
-    const drawnAt = (y: number): number => y + dropAt(terrain, screen.x, y);
+    const drawnAt = (y: number): number => y + (onBridge?.(screen.x, y) ? 0 : dropAt(terrain, screen.x, y));
     // A face: the drawing jumps down by more than a texel for a pixel of ground (as paintColumn draws one).
     const isFace = (y: number): boolean => drawnAt(y) - drawnAt(y - 1) > RELIEF_TEXEL;
     let found: number | undefined;

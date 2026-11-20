@@ -110,7 +110,9 @@ export class ReliefTiles {
 
     /** The point of the ground drawn under a point of the map on the screen (groundPointAt); itself when flat. */
     public groundPointAt(point: { x: number; y: number }): { x: number; y: number } {
-        return this.isActive() ? groundPointAt(this.inputs.relief(), point) : { x: point.x, y: point.y };
+        return this.isActive()
+            ? groundPointAt(this.inputs.relief(), point, (x, y) => this.inputs.water.isBridgeAt(x, y))
+            : { x: point.x, y: point.y };
     }
 
     public setHidden(hidden: boolean): void {
