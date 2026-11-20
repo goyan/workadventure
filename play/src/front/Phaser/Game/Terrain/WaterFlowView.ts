@@ -2,6 +2,7 @@ import { TERRAIN_CELL, waterObjectsOf } from "@workadventure/map-editor";
 import type { WAMFileFormat, WaterObject } from "@workadventure/map-editor";
 import { FLOOR_OBJECT_DEPTH } from "../../ECS/EntityLayerDepth";
 import { distinguishable } from "../Weather/ScreenScale";
+import { isEffectShown } from "../../../Stores/EffectsStore";
 import type { CurrentWater } from "./WaterCurrent";
 import { waterCurrentAt } from "./WaterCurrent";
 import type { FoamView } from "./WaterFoam";
@@ -80,7 +81,12 @@ export class WaterFlowView {
     /** `now` in ms of the game. */
     public update(now: number): void {
         // Seen from far a streak of foam is under a pixel: neither moved nor drawn.
-        if (this.reducedMotion || !this.options.water.hasAnything() || !distinguishable(this.scene, FOAM_STREAK_PX)) {
+        if (
+            this.reducedMotion ||
+            !isEffectShown("waterFlow") ||
+            !this.options.water.hasAnything() ||
+            !distinguishable(this.scene, FOAM_STREAK_PX)
+        ) {
             this.clear();
             return;
         }

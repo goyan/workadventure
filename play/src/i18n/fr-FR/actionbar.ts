@@ -75,6 +75,13 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
     calendar: "Calendrier",
     todoList: "Liste de tâches",
     weather: "Météo",
+    basicMode: {
+        label: "Basique",
+        switch: "Mode basique : aucun effet",
+        on: "Mode basique actif : ni météo, ni nuit, ni lumière, ni eau, ni catastrophe. Clique pour revoir les effets.",
+        off: "Mode basique : masquer tous les effets (météo, nuit, lumière, eau, catastrophes), pour toi seul.",
+        hint: "Pour toi seul, et tes réglages détaillés sont conservés : désactivé, tout revient comme avant. L'eau du relief ne te fait plus nager ni dériver. L'éditeur de carte montre toujours tout.",
+    },
     catastrophe: {
         label: "Catastrophe",
         meteor: "Météore",

@@ -54,6 +54,7 @@
     import { requestedMicrophoneDeviceIdStore, silentStore } from "../Stores/MediaStore";
     import { hideActionBarStoreBecauseOfChatBar } from "../Chat/ChatSidebarWidthStore";
     import { floorLevelsStore } from "../Stores/FloorLevelsStore";
+    import { basicActiveStore } from "../Stores/BasicModeStore";
     import AvatarVideoBubbles from "./Video/AvatarVideoBubbles.svelte";
     import { mapEditorSideBarWidthStore } from "./MapEditor/MapEditorSideBarWidthStore";
     import { calendarRemindersStore, startCalendarReminders } from "./Calendar/CalendarReminder";
@@ -535,7 +536,9 @@
                 <!-- The weather now, in one hour and in four hours, under the clock (apps menu, "Weather"). -->
                 <WeatherForecastBanner />
                 <!-- The disaster picker (apps menu, "Disaster"): arms a catastrophe for the next click on the map. -->
-                <CatastrophePanel />
+                {#if !$basicActiveStore}
+                    <CatastrophePanel />
+                {/if}
                 <JamDrawer listening={$listeningSpaceName !== undefined || $joinedJamStore !== undefined} />
             </div>
 

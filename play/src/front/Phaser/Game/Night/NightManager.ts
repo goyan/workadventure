@@ -1,4 +1,4 @@
-import type { Unsubscriber } from "svelte/store";
+import { derived, type Unsubscriber } from "svelte/store";
 import type { AreaData } from "@workadventure/map-editor";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
@@ -30,6 +30,7 @@ import {
     setLightSecondBounce,
     setLightSoftEdgePx,
 } from "../Lamps/LightSoftEdge";
+import { basicActiveStore } from "../../../Stores/BasicModeStore";
 import {
     forcedSunMinutes,
     NIGHT_MAX_OPACITY,
@@ -208,7 +209,10 @@ export class NightManager {
             this.previous = undefined;
             this.scene.markDirty();
         });
-        this.unsubscribeMode = nightModeStore.subscribe((mode) => {
+        // Basique is the diffuse light of day, whatever the night chosen.
+        this.unsubscribeMode = derived([nightModeStore, basicActiveStore], ([mode, basic]) =>
+            basic ? NightMode.Disabled : mode,
+        ).subscribe((mode) => {
             this.mode = mode;
             this.disabled = mode === NightMode.Disabled;
             this.lastClockAt = undefined;

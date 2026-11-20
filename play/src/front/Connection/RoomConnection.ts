@@ -844,12 +844,17 @@ export class RoomConnection implements RoomConnection {
                         // The position is where the colleague stands: often on a seat or against a desk, whose hitbox
                         // makes that exact point unreachable. Walk to the nearest free spot instead of not moving, and
                         // stop one tile before them rather than on top of them.
-                        gameManager
-                            .getCurrentGameScene()
-                            .moveTo(message.moveToPositionMessage.position, true, WOKA_SPEED * 2.5, GO_TO_USER_GAP)
-                            .catch((error) => {
-                                console.warn(error);
-                            });
+                        const scene = gameManager.getCurrentGameScene();
+                        // An accepted invitation takes one to the caller at once, as a call would.
+                        if (scene.inviteManager?.takePendingTeleport()) {
+                            scene.teleportNextTo(message.moveToPositionMessage.position, GO_TO_USER_GAP);
+                        } else {
+                            scene
+                                .moveTo(message.moveToPositionMessage.position, true, WOKA_SPEED * 2.5, GO_TO_USER_GAP)
+                                .catch((error) => {
+                                    console.warn(error);
+                                });
+                        }
                     }
                     this._moveToPositionMessageStream.next(message.moveToPositionMessage);
                     break;

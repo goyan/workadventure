@@ -72,6 +72,13 @@ const chat: DeepPartial<Translation["chat"]> = {
         invitationAccepted: "Votre invitation a été acceptée par {name}",
         defaultResponderName: "L'utilisateur",
         limitReached: "Vous avez envoyé trop d'invitations à des réunions. Veuillez réessayer plus tard.",
+        incomingCall: "{name} vous appelle",
+        ringing: "Ça sonne, encore {seconds} s",
+        missedCall: "Appel manqué de {name}",
+        callBack: "Rappeler",
+        close: "Fermer",
+        noAnswer: "{name} n'a pas répondu",
+        cannotJoin: "Impossible de rejoindre cette personne : elle est dans un endroit auquel vous n'avez pas accès.",
     },
     imagePreview: {
         close: "Fermer",
