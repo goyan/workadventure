@@ -9,6 +9,8 @@ const sounds = vi.hoisted(() => ({ update: vi.fn() }));
 const surface = vi.hoisted(() => ({
     /** How many times the canvas of the clouds was painted again. */
     begins: 0,
+    /** The depth each block surface was made at, in order. */
+    depths: [] as number[],
     graphics: undefined as
         | undefined
         | {
@@ -21,50 +23,58 @@ vi.mock("../../../../../src/front/Phaser/Game/Weather/BlockSurface", () => {
     let canvas: Cells = { x: 0, y: 0, columns: 0, rows: 0 };
     let size = 1;
     return {
-        createBlockSurface: () => ({
-            begin(view: { x: number; y: number; width: number; height: number }, resolution: number): Cells {
-                surface.begins++;
-                size = resolution;
-                canvas = {
-                    x: Math.floor(view.x / resolution) * resolution,
-                    y: Math.floor(view.y / resolution) * resolution,
-                    columns: Math.ceil(view.width / resolution) + 1,
-                    rows: Math.ceil(view.height / resolution) + 1,
-                };
-                return canvas;
-            },
-            // Each painted cell as a rectangle of the map, by level, like the blocks drawn before the canvas.
-            paintField(
-                field: Cells,
-                levels: Uint8Array,
-                outdoor: Uint8Array,
-                shift: { columns: number; rows: number },
-                color: number,
-                alphaOf: (level: number) => number,
-            ): void {
-                const columnOffset = Math.round((canvas.x - field.x) / size) - shift.columns;
-                const lineOffset = Math.round((canvas.y - field.y) / size) - shift.rows;
-                for (let level = 1; level <= 8; level++) {
-                    let styled = false;
-                    for (let line = 0; line < canvas.rows; line++) {
-                        for (let column = 0; column < canvas.columns; column++) {
-                            if (!outdoor[line * canvas.columns + column]) continue;
-                            const fieldLine = line + lineOffset;
-                            const fieldColumn = column + columnOffset;
-                            if (fieldLine < 0 || fieldLine >= field.rows || fieldColumn < 0) continue;
-                            if (fieldColumn >= field.columns) continue;
-                            if (levels[fieldLine * field.columns + fieldColumn] !== level) continue;
-                            if (!styled) surface.graphics?.fillStyle(color, alphaOf(level));
-                            styled = true;
-                            surface.graphics?.fillRect(canvas.x + column * size, canvas.y + line * size, size, size);
+        createBlockSurface: (_scene: unknown, depth: number) => {
+            surface.depths.push(depth);
+            return {
+                begin(view: { x: number; y: number; width: number; height: number }, resolution: number): Cells {
+                    surface.begins++;
+                    size = resolution;
+                    canvas = {
+                        x: Math.floor(view.x / resolution) * resolution,
+                        y: Math.floor(view.y / resolution) * resolution,
+                        columns: Math.ceil(view.width / resolution) + 1,
+                        rows: Math.ceil(view.height / resolution) + 1,
+                    };
+                    return canvas;
+                },
+                // Each painted cell as a rectangle of the map, by level, like the blocks drawn before the canvas.
+                paintField(
+                    field: Cells,
+                    levels: Uint8Array,
+                    outdoor: Uint8Array,
+                    shift: { columns: number; rows: number },
+                    color: number,
+                    alphaOf: (level: number) => number,
+                ): void {
+                    const columnOffset = Math.round((canvas.x - field.x) / size) - shift.columns;
+                    const lineOffset = Math.round((canvas.y - field.y) / size) - shift.rows;
+                    for (let level = 1; level <= 8; level++) {
+                        let styled = false;
+                        for (let line = 0; line < canvas.rows; line++) {
+                            for (let column = 0; column < canvas.columns; column++) {
+                                if (!outdoor[line * canvas.columns + column]) continue;
+                                const fieldLine = line + lineOffset;
+                                const fieldColumn = column + columnOffset;
+                                if (fieldLine < 0 || fieldLine >= field.rows || fieldColumn < 0) continue;
+                                if (fieldColumn >= field.columns) continue;
+                                if (levels[fieldLine * field.columns + fieldColumn] !== level) continue;
+                                if (!styled) surface.graphics?.fillStyle(color, alphaOf(level));
+                                styled = true;
+                                surface.graphics?.fillRect(
+                                    canvas.x + column * size,
+                                    canvas.y + line * size,
+                                    size,
+                                    size,
+                                );
+                            }
                         }
                     }
-                }
-            },
-            end(): void {},
-            hide(): void {},
-            destroy(): void {},
-        }),
+                },
+                end(): void {},
+                hide(): void {},
+                destroy(): void {},
+            };
+        },
     };
 });
 const ground = vi.hoisted(() => ({ update: vi.fn(), destroy: vi.fn() }));
@@ -92,6 +102,8 @@ const { SeasonalTheme, SeasonalThemeMode } =
     await import("../../../../../src/front/Phaser/Game/Seasonal/SeasonalTheme");
 const { seasonalThemeModeStore } = await import("../../../../../src/front/Stores/SeasonalThemeStore");
 const { OutdoorGrid } = await import("../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid");
+const { DEPTH_DOOR_LOCK_INDEX, DEPTH_LAMP_LIGHT_INDEX } =
+    await import("../../../../../src/front/Phaser/Game/DepthIndexes");
 const { NIGHT_CLOUD_COLOR } = await import("../../../../../src/front/Phaser/Game/Weather/Clouds");
 
 let manager: InstanceType<typeof WeatherManager> | undefined;
@@ -548,6 +560,88 @@ describe("weather rendering lifecycle", () => {
             manager.update(2800, new Date(2800), true);
             expect(graphics.clear.mock.calls).toHaveLength(4);
             expect(scene.markDirty.mock.calls).toHaveLength(4);
+        });
+
+        // Seen from far, bright rooms and their lamps stood out of a map washed by the fog (the team map in the beta).
+        describe("seen from far", () => {
+            const covers = (graphics: ReturnType<typeof fixture>["graphics"], x: number, y: number) =>
+                graphics.fillRect.mock.calls.some(
+                    ([left, top, width, height]) => left <= x && x < left + width && top <= y && y < top + height,
+                );
+            // Two closed rooms, the avatar in the first one.
+            const twoRooms = () => {
+                const { scene, graphics, wam } = fixture();
+                wam.settings = { weather: WeatherType.Fog };
+                scene.cameras.main.worldView.width = 640;
+                scene.cameras.main.worldView.height = 320;
+                const grid = OutdoorGrid.fromWalls(640, 320, 32, [
+                    { x: 64, y: 64, width: 160, height: 32 },
+                    { x: 64, y: 192, width: 160, height: 32 },
+                    { x: 64, y: 96, width: 32, height: 96 },
+                    { x: 192, y: 96, width: 32, height: 96 },
+                    { x: 352, y: 64, width: 160, height: 32 },
+                    { x: 352, y: 192, width: 160, height: 32 },
+                    { x: 352, y: 96, width: 32, height: 96 },
+                    { x: 480, y: 96, width: 32, height: 96 },
+                ]);
+                return { scene, graphics, grid };
+            };
+
+            it("passes over the other buildings, never over the room the avatar stands in", () => {
+                const { scene, graphics, grid } = twoRooms();
+                scene.cameras.main.zoom = 0.3;
+                manager = new WeatherManager(scene, {
+                    outdoorGrid: () => grid,
+                    avatarRoom: () => grid.roomAt(144, 144),
+                });
+                manager.update(0, new Date(0));
+                expect(covers(graphics, 432, 144)).toBe(true);
+                expect(covers(graphics, 144, 144)).toBe(false);
+                // The veil over the buildings as thick as outdoors.
+                expect(fogFill(graphics).some(([, alpha]) => Math.abs((alpha ?? 0) - 0.6) < 1e-9)).toBe(true);
+            });
+
+            it("leaves the rooms clear seen from close", () => {
+                const { scene, graphics, grid } = twoRooms();
+                scene.cameras.main.zoom = 1;
+                manager = new WeatherManager(scene, { outdoorGrid: () => grid, avatarRoom: () => undefined });
+                manager.update(0, new Date(0));
+                expect(covers(graphics, 432, 144)).toBe(false);
+                expect(covers(graphics, 144, 144)).toBe(false);
+            });
+
+            it("thickens over the buildings as the camera rises, with no jump", () => {
+                const veilOverRoom = (zoom: number) => {
+                    const { scene, graphics, grid } = twoRooms();
+                    scene.cameras.main.zoom = zoom;
+                    manager?.destroy();
+                    manager = new WeatherManager(scene, { outdoorGrid: () => grid });
+                    manager.update(0, new Date(0));
+                    const order = graphics.fillStyle.mock.invocationCallOrder;
+                    // The style last set before the rectangle drawn over the centre of the second room.
+                    const index = graphics.fillRect.mock.calls.findIndex(
+                        ([left, top, width, height]) =>
+                            left <= 432 && 432 < left + width && top <= 144 && 144 < top + height,
+                    );
+                    if (index < 0) return 0;
+                    const at = graphics.fillRect.mock.invocationCallOrder[index];
+                    const style = order.filter((call) => call < at).length - 1;
+                    return graphics.fillStyle.mock.calls[style][1] ?? 0;
+                };
+                const middle = veilOverRoom(0.575);
+                expect(veilOverRoom(0.7)).toBe(0);
+                expect(middle).toBeGreaterThan(0.2);
+                expect(middle).toBeLessThan(0.4);
+                expect(veilOverRoom(0.45)).toBeCloseTo(0.6, 5);
+            });
+
+            it("lies over the lights of the lamps", () => {
+                surface.depths.length = 0;
+                const { scene } = fixture();
+                manager = new WeatherManager(scene);
+                expect(surface.depths).toContain(DEPTH_LAMP_LIGHT_INDEX + 10);
+                expect(Math.max(...surface.depths)).toBeLessThan(DEPTH_DOOR_LOCK_INDEX);
+            });
         });
 
         it("keeps the sound of fine weather", () => {

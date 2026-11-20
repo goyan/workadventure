@@ -2802,6 +2802,18 @@ après le dernier changement de mur ou de porte (`Outdoor/OutdoorTracker.ts`). A
 **Météo seulement dehors.** Pluie, neige, voile et lueur d'orage ne sont plus dessinés au-dessus des pièces
 (`WeatherManager`, option `outdoorGrid`). Les sons ne changent pas. Une carte sans mur reste entièrement dehors.
 
+**Brouillard vu de loin** (2026-11-20, signalé en beta sur la carte d'équipe : dézoomé au maximum, les bâtiments
+restaient en pleines couleurs dans une carte délavée, lampes et piste de danse comprises). En dézoomant, le brouillard
+passe aussi sur les bâtiments (pièces, murs, paliers), aux mêmes zooms que les nuages sur les toits
+(`cloudsOverRoofs` : rien au-dessus de 0,7 pixel d'écran par pixel de carte, plein à 0,45, fondu linéaire entre les
+deux) ; plein, il a l'épaisseur du dehors (voile 0,6 et plaques, plus léger la nuit). La pièce où se tiennent les pieds
+de l'avatar reste nette à tous les zooms (`farFogCells`, option `avatarRoom` : `OutdoorGrid.roomAt`), ses murs non.
+Ce voile intérieur est peint dans un second canevas (`DEPTH_FAR_FOG_INDEX`, au-dessus des lumières des lampes, sous les
+cadenas, les bulles et les noms) : les lampes RGB, les lampes de Jam, les torches et le feu à l'intérieur ne le percent
+plus ; la piste de danse et la lumière des fenêtres, plus bas, sont voilées comme le sol. Vu de près, rien ne change.
+Limites : le brouillard du dehors reste sous les lumières (une lampe dehors le perce comme avant) ; pluie et neige
+gardent leur voile au dehors seul.
+
 **Thème saisonnier** (« Paramètres → Ambiance → Thème saisonnier ») : Auto, Automne, Noël, Aucun. Réglage perso
 (`seasonalTheme` dans le navigateur), appliqué sans recharger. Il remplace « Thème de Noël » (repris une fois :
 Toujours → Noël, Jamais → Aucun) et « Sol extérieur » (effacé). Auto suit le calendrier de Paris, revérifié chaque
