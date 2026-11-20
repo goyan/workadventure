@@ -2,6 +2,7 @@ import type * as Phaser from "phaser";
 import type { InteractionTrigger } from "@workadventure/map-editor";
 import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRectangles";
 import { getObjectInteraction } from "../../../Utils/ObjectCategories";
+import { waterDepthAtPoint } from "../Terrain/AvatarDrop";
 import type { GameScene } from "../GameScene";
 
 /** A rectangle of water in world pixels. */
@@ -94,7 +95,9 @@ export function isDeepTerrainWater(
 ): boolean {
     // On the deck of a bridge one walks, whatever water runs under it.
     if (water === undefined || water.isBridgeAt?.(point.x, point.y)) return false;
-    return water.depthAt(point.x, point.y, now) >= SWIM_DEPTH_PX;
+    // The water as it is drawn (between the centres of the cells, as the lake and the avatar in it are), so that one
+    // swims where the water is drawn dark: not by squares of a cell.
+    return waterDepthAtPoint((x, y) => water.depthAt(x, y, now), point.x, point.y) >= SWIM_DEPTH_PX;
 }
 
 export function isPointInWater(rectangles: WaterRectangle[], point: Point): boolean {

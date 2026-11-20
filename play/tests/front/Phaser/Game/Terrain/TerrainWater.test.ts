@@ -139,6 +139,13 @@ describe("swimming in the water of the relief", () => {
         expect(isDeepTerrainWater(depth(0), { x: 0, y: 0 }, 0)).toBe(false);
         expect(isDeepTerrainWater(undefined, { x: 0, y: 0 }, 0)).toBe(false);
     });
+
+    it("reads the water as it is drawn, between the centres of the cells, not by squares of 16 px", () => {
+        // 20 px of water on the cell 0,0, none east of it: at x 15 the water drawn is about 11 px deep, one wades.
+        const water = { depthAt: (x: number) => (Math.floor(x / 16) === 0 ? 20 : 0) };
+        expect(isDeepTerrainWater(water, { x: 8, y: 8 }, 0)).toBe(true);
+        expect(isDeepTerrainWater(water, { x: 15, y: 8 }, 0)).toBe(false);
+    });
 });
 
 describe("the bridges over the water of the relief", () => {
