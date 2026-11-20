@@ -30,6 +30,7 @@ import { mapSnowCoverage } from "../Weather/SnowCover";
 import { entityPlacementBlockerStore } from "../../../Stores/MapEditorStore";
 import { getTileCollisionGrid, reverseCollisionGrid } from "../../../Utils/EntityHitbox";
 import { actionsMenuStore } from "../../../Stores/ActionsMenuStore";
+import { armedCatastropheStore } from "../../../Stores/CatastropheStore";
 import {
     mapEditorEntityEraserStore,
     mapEditorEntityModeStore,
@@ -608,6 +609,11 @@ export class EntitiesManager extends EventEmitter {
             }
             // A right click (Ctrl+click on a Mac) drops the object being placed: it does not open the one under it.
             if (pointer.button !== 0 || pointer.rightButtonDown()) {
+                return;
+            }
+
+            // An armed catastrophe takes the click, in the map editor too: the object under it is not picked.
+            if (get(armedCatastropheStore) !== undefined) {
                 return;
             }
 

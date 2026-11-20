@@ -927,6 +927,15 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 expect(remove).toHaveBeenCalled();
             });
 
+            it("rains in the map editor too", () => {
+                mapEditorModeStore.set(true);
+                armDownpour();
+                handler.handlePointerDownEvent(held(), []);
+                expect(launch).toHaveBeenCalledTimes(1);
+                expect(launch.mock.calls[0][0]).toBe(CatastropheKind.CATASTROPHE_DOWNPOUR);
+                mapEditorModeStore.set(false);
+            });
+
             it("does not rain with the right button", () => {
                 armDownpour();
                 const right = pointer(2, 1);
@@ -936,15 +945,18 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             });
         });
 
-        it("nothing is launched with the right button, in the editor, or unarmed", () => {
+        it("launches in the map editor too", () => {
+            mapEditorModeStore.set(true);
+            arm();
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+            expect(launch).toHaveBeenCalledTimes(1);
+            mapEditorModeStore.set(false);
+        });
+
+        it("nothing is launched with the right button or unarmed", () => {
             arm();
             handler.handlePointerUpEvent(pointer(2, 1), []);
             expect(launch).not.toHaveBeenCalled();
-
-            mapEditorModeStore.set(true);
-            handler.handlePointerUpEvent(pointer(0, 1), []);
-            expect(launch).not.toHaveBeenCalled();
-            mapEditorModeStore.set(false);
 
             catastrophePanelStore.set(false);
             handler.handlePointerUpEvent(pointer(0, 1), []);
