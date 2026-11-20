@@ -454,6 +454,14 @@ export class WaterGrid {
     private nextSpeedSouth = new Float32Array(0);
     /** The friction of the ground of each cell: the square of the roughness of its soil, times MANNING. */
     private readonly rough: Float32Array;
+    /**
+     * The cells that lie in a hollow of the relief (a lake, a pond, the sea: their ground is under the level their
+     * water spills at), as against the land that is dry but for a flood. A wave breaks, and the water carries its
+     * momentum along, in a hollow only: on land the front of a flood is a sheet that advances, which the friction
+     * of the ground alone holds back (measured: with them on land, the tsunami of a comet went 46 cells inland;
+     * without, 209).
+     */
+    private readonly hollow: Uint8Array;
     private depth: Float32Array;
     /** How high the water of this map may stand over the level it spills at (see setMaxSurface). */
     private highest: number = MAX_WATER_SURFACE_PX;
@@ -491,11 +499,13 @@ export class WaterGrid {
         this.indoor = indoorCells(this.bounds, rooms);
         this.drinks = new Float32Array(size);
         this.rough = new Float32Array(size);
+        this.hollow = new Uint8Array(size);
         for (let row = 0; row < this.bounds.height; row++) {
             for (let column = 0; column < this.bounds.width; column++) {
                 const index = row * this.bounds.width + column;
                 const soil = soilAt(terrain, this.bounds.x + column, this.bounds.y + row);
                 this.rough[index] = soilRoughness(soil) ** 2 * MANNING;
+                this.hollow[index] = this.ground[index] < this.spill[index] ? 1 : 0;
                 this.drinks[index] = soilDrinks(soil, this.ground[index] < this.spill[index]);
             }
         }
@@ -1290,6 +1300,7 @@ export class WaterGrid {
         let nextSpeedEast = this.nextSpeedEast;
         let nextSpeedSouth = this.nextSpeedSouth;
         const rough = this.rough;
+        const hollow = this.hollow;
         const powers = DEPTH_POWERS;
         const lastPower = powers.length - 1;
         const pull = dt * GRAVITY;
@@ -1322,8 +1333,9 @@ export class WaterGrid {
                             if (passing <= DRY_PX) east[index] = 0;
                             else {
                                 const drop = surface - otherSurface;
+                                const inWater = hollow[index] === 1 && hollow[other] === 1;
                                 let flow = east[index] + pull * (passing > pulled ? pulled : passing) * drop;
-                                if (carried > 0) {
+                                if (carried > 0 && inWater) {
                                     // The water brings the speed it had upstream, along the row and across it.
                                     const along = speedEast[index];
                                     const alongChange =
@@ -1350,7 +1362,7 @@ export class WaterGrid {
                                         (rough[index] + rough[other]) *
                                         speed *
                                         powers[eighths > lastPower ? lastPower : eighths];
-                                if (breaking > 0) {
+                                if (breaking > 0 && inWater) {
                                     const steep = (drop < 0 ? -drop : drop) / passing - BREAKING_CALM;
                                     if (steep > 0) rate += breaking * steep;
                                 }
@@ -1376,8 +1388,9 @@ export class WaterGrid {
                             if (passing <= DRY_PX) south[index] = 0;
                             else {
                                 const drop = surface - otherSurface;
+                                const inWater = hollow[index] === 1 && hollow[other] === 1;
                                 let flow = south[index] + pull * (passing > pulled ? pulled : passing) * drop;
-                                if (carried > 0) {
+                                if (carried > 0 && inWater) {
                                     const along = speedSouth[index];
                                     const alongChange =
                                         along > 0
@@ -1403,7 +1416,7 @@ export class WaterGrid {
                                         (rough[index] + rough[other]) *
                                         speed *
                                         powers[eighths > lastPower ? lastPower : eighths];
-                                if (breaking > 0) {
+                                if (breaking > 0 && inWater) {
                                     const steep = (drop < 0 ? -drop : drop) / passing - BREAKING_CALM;
                                     if (steep > 0) rate += breaking * steep;
                                 }

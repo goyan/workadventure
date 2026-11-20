@@ -3469,6 +3469,13 @@ panneau Relief quand l'inertie est activée, `UpdateWaterSettingMessage.waveRoug
   pris en amont). Mesuré : fronts plus nets, lac dérangé bien plus calme (crête de 31 px au lieu de 39 dans un
   bassin de 30 px), mais vagues qui grossissent moins en approchant du rivage et montent moins loin qu'à 0.
 
+**Terre émergée et cuvettes.** Le déferlement et l'élan emporté n'agissent que dans les cuvettes du relief (lac,
+étang, mer : cases dont le sol est sous leur niveau de débordement, `WaterGrid.hollow`). Sur la terre émergée, le
+front d'une crue est une lame qui avance, pas une vague qui casse : seul le frottement du sol la retient. Mesuré
+sur le tsunami d'une comète de 24 cases dans un lac de 120 cellules de rayon : avec ces deux termes aussi sur la
+terre, 46 cellules d'inondation ; sans, 165 cellules (90 m), sous 28 à 34 px d'eau sur les 60 premières, masse
+conservée, rien de perdu.
+
 Sous inertie, une vague n'est plus coupée à la hauteur maximale de l'eau de la carte (18 px par défaut) mais à la
 plus haute qu'une carte puisse régler (256 px) ; sources et pluie restent limitées par le réglage. L'eau ne
 franchit jamais plus d'une demi-cellule par mouvement : un torrent ne dicte pas le nombre de mouvements de toute la

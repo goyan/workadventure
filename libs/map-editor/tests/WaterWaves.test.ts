@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { advanceImpactWave, startImpactWave } from "../src/Catastrophe/ImpactWave";
+import type { ImpactWave } from "../src/Catastrophe/ImpactWave";
+import { meteorShape } from "../src/Catastrophe/Meteor";
 import { UpdateWAMSettingCommand } from "../src/Commands/WAM/UpdateWAMSettingCommand";
 import { soilCode } from "../src/Terrain/Soils";
 import type { SoilName } from "../src/Terrain/Soils";
@@ -146,6 +149,63 @@ describe("the waves of the water with inertia", () => {
         for (let step = 0; step < 20; step++) lost += waves.step(withWaves()).lostPx;
         expect(lost).toBe(0);
         expect(waves.totalPx()).toBeCloseTo(before, 1);
+    });
+});
+
+describe("the tsunami of a comet", { timeout: 30_000 }, () => {
+    // A round lake 40 cells in radius, 60 px deep, full to 55 px, flat land around; a comet 6 tiles in radius
+    // falls in its middle. The shore is 40 cells east of it.
+    const side = 200;
+    const middle = 100;
+    const shore = 40;
+    const strike = (input: WaterStepInput): { reach: number; high: number; lost: number; drift: number } => {
+        const cells = new Map<string, number>();
+        const inLake = (x: number, y: number): boolean => (x - middle) ** 2 + (y - middle) ** 2 <= shore * shore;
+        for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) if (inLake(x, y)) cells.set(cellKey(x, y), -60);
+        const grid = new WaterGrid(withHeights(undefined, cells), { x: 0, y: 0, width: side, height: side });
+        fill(grid, (x, y) => (inLake(x, y) ? 55 : 0));
+        const before = grid.totalPx();
+        const started = startImpactWave(grid, middle, middle, meteorShape(6));
+        if (!started) throw new Error("The comet missed the lake");
+        let wave: ImpactWave | undefined = started.wave;
+        let lost = 0;
+        let reach = 0;
+        let high = 0;
+        for (let step = 0; step < 300; step++) {
+            if (wave) {
+                const moved = advanceImpactWave(grid, wave);
+                lost += moved.lostPx;
+                if (moved.done) wave = undefined;
+            }
+            lost += grid.step(input).lostPx;
+            if (step % 5 !== 0) continue;
+            for (let x = middle + shore + 1; x < side - 2; x++) {
+                const held = grid.depthAt(x, middle);
+                if (held > 1 && x - middle - shore > reach) reach = x - middle - shore;
+                if (x === middle + shore + 10 && held > high) high = held;
+            }
+        }
+        return { reach, high, lost, drift: before + started.addedPx - lost - grid.totalPx() };
+    };
+
+    it("floods the land far beyond the shore, loses no water and stays sound", () => {
+        const { reach, high, drift } = strike(withWaves());
+        // Tens of cells inland, and a sheet over a quarter of a tile deep ten cells from the shore.
+        // Measured when written: 48 cells inland, 12 px of water ten cells from the shore.
+        expect(reach).toBeGreaterThan(20);
+        expect(high).toBeGreaterThan(4);
+        expect(Number.isFinite(drift)).toBe(true);
+        expect(Math.abs(drift)).toBeLessThan(5);
+    });
+
+    it("goes as far inland whether the waves break or not: on land a flood is a sheet, not a wave", () => {
+        const breaking = strike(withWaves({ breaking: 5 }));
+        const never = strike(withWaves({ breaking: 0 }));
+        expect(breaking.reach).toBeGreaterThan(never.reach * 0.7);
+    });
+
+    it("goes further inland than the water that creeps", () => {
+        expect(strike(withWaves()).reach).toBeGreaterThan(strike(still).reach);
     });
 });
 
