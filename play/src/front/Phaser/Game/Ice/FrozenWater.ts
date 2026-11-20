@@ -1,10 +1,7 @@
 import { get } from "svelte/store";
 import { entityStatesManagerStore } from "../../../Stores/EntityStatesStore";
 import type { GameScene } from "../GameScene";
-import { isFrozen, waterCycleNow } from "../Weather/Frost";
-
-/** How deep a pool is, for the ice: it freezes with the shallows of a lake this deep. */
-const POOL_DEPTH_PX = 32;
+import { isFrozen, POOL_ICE_DEPTH_PX, waterCycleNow } from "../Weather/Frost";
 
 /**
  * Whether the point is on water of the relief frozen for this player (Frost.ts): it is skated on as on a rink, nobody
@@ -35,10 +32,10 @@ export function isPoolFrozen(
         painted?: { depthPx: number; hot: boolean };
     },
 ): boolean {
-    // A pool painted with the relief tool: its own depth, and its hot water set in its style.
+    // A pool painted with the relief tool: its hot water set in its style.
     if (pool.painted?.hot) return false;
     const { ice } = waterCycleNow(scene.getGameMap?.()?.getWamFile()?.getWam().settings);
-    if (!isFrozen(pool.painted?.depthPx ?? POOL_DEPTH_PX, ice)) return false;
+    if (!isFrozen(POOL_ICE_DEPTH_PX, ice)) return false;
     if (scene.getOutdoorGrid?.()?.isOutdoorAt(pool.x + pool.width / 2, pool.y + pool.height / 2) === false)
         return false;
     return !(pool.entityId !== undefined && get(entityStatesManagerStore)?.isHot(pool.entityId));

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { frostAt, iceAt, isFrozen, towards } from "../../../../../src/front/Phaser/Game/Weather/Frost";
+import {
+    frostAt,
+    iceAt,
+    isFrozen,
+    POOL_ICE_DEPTH_PX,
+    towards,
+} from "../../../../../src/front/Phaser/Game/Weather/Frost";
 
 describe("Frost", () => {
     it("whitens the ground from 0 °C, all of it at -10 °C", () => {
@@ -25,6 +31,12 @@ describe("Frost", () => {
         // No water, no ice.
         expect(isFrozen(0, 1)).toBe(false);
         expect(isFrozen(4, 0)).toBe(false);
+    });
+
+    it("freezes a pool from its surface at -10 °C, the deep water of a lake still open", () => {
+        expect(isFrozen(POOL_ICE_DEPTH_PX, iceAt(-10))).toBe(true);
+        expect(isFrozen(POOL_ICE_DEPTH_PX, iceAt(-5))).toBe(false);
+        expect(isFrozen(64, iceAt(-10))).toBe(false);
     });
 
     it("moves towards the weather of now at its own pace each way, never past it", () => {

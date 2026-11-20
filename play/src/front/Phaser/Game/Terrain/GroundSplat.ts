@@ -2,7 +2,7 @@ import * as Phaser from "phaser";
 import { DEFAULT_POOL_STYLE, poolStyleAt, poolStyleOf } from "@workadventure/map-editor";
 import type { PoolStyle } from "@workadventure/map-editor";
 import { refreshCanvasTexture } from "../CanvasTextureRefresh";
-import { DEEP_ICE_PX } from "../Weather/Frost";
+import { DEEP_ICE_PX, POOL_ICE_DEPTH_PX } from "../Weather/Frost";
 import type { WaterCycle } from "../Weather/Frost";
 import { GROUND_TEXTURES } from "./TexturedGround";
 import type { GroundArea } from "./TexturedGround";
@@ -329,7 +329,7 @@ vec4 poolColor(vec2 world, float t) {
     float depthPx = style.g * 255.0;
     float deep = clamp(depthPx / 160.0, 0.0, 1.0);
     bool frozen = style.b < 0.5 && step(0.5, pack(4.0, world).b) > 0.5 &&
-        uIce >= 0.1 + 0.9 * min(1.0, depthPx / ${DEEP_ICE_PX}.0);
+        uIce >= 0.1 + 0.9 * min(1.0, ${POOL_ICE_DEPTH_PX}.0 / ${DEEP_ICE_PX}.0);
     if (frozen) {
         vec3 ice = texture2D(uIceTexture, fract(world / uIceSize)).rgb;
         return vec4(snowOnIce(ice * mix(vec3(1.0), water, 0.15), world), 1.0);

@@ -326,7 +326,7 @@
     let convertingPool = $state(false);
     async function convertSelectedPool(): Promise<void> {
         const entity = $mapEditorSelectedEntityStore;
-        if (!entity || convertingPool) return;
+        if (!entity) return;
         convertingPool = true;
         try {
             if (await paintImagePool(entity)) deleteSelectedEntity();

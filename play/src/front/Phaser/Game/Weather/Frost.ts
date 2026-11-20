@@ -31,6 +31,8 @@ const ICE_START_C = 0;
 const FULL_ICE_C = -15;
 /** Depth of water (map pixels) that freezes last: deeper freezes with it. */
 export const DEEP_ICE_PX = 64;
+/** A pool freezes from its surface, as still water this deep, whatever the depth of its basin. */
+export const POOL_ICE_DEPTH_PX = 32;
 /** How fast it goes towards the weather of now, a share a second of the game clock: about two minutes each way. */
 const ICE_RATE = 1 / 120;
 const FROST_RATE = 1 / 60;

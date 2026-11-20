@@ -1,11 +1,11 @@
 <script lang="ts">
-    import { classicPoolsShown } from "../../../Phaser/Game/Terrain/ImagePools";
     import type { EntityPrefab } from "@workadventure/map-editor";
     import { onDestroy } from "svelte";
     import { derived, get } from "svelte/store";
     import { LL } from "../../../../i18n/i18n-svelte";
     import { localUserStore } from "../../../Connection/LocalUserStore";
     import { gameManager } from "../../../Phaser/Game/GameManager";
+    import { classicPoolsShown } from "../../../Phaser/Game/Terrain/ImagePools";
     import type { EntityVariant } from "../../../Phaser/Game/MapEditor/Entities/EntityVariant";
     import { mapEditorEntityEraserStore, mapEditorSnapEnabledStore } from "../../../Stores/MapEditorStore";
     import type { CategoryTag, SelectableTag } from "../../../Stores/MapEditorStore";
