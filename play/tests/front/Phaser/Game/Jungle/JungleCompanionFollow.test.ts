@@ -162,3 +162,48 @@ describe("JungleCompanionFollower", () => {
         expect(pose.x).toBeLessThan(150);
     });
 });
+
+describe("JungleCompanionFollower on raised floors", () => {
+    /** The master walks 200 px on the ground, climbs a stair 64 px long up to 52 px, then walks on that floor. */
+    function masterAt(travelled: number): Point {
+        const z = Math.min(52, Math.max(0, ((travelled - 200) / 64) * 52));
+        return z > 0 ? { x: travelled, y: 0, z } : { x: travelled, y: 0 };
+    }
+
+    it("climbs the stairs its master climbed: at each place of the way, the altitude its master had there", () => {
+        const follower = new JungleCompanionFollower({ x: 0, y: 0 }, 0);
+        let nowMs = 0;
+        let onStair = 0;
+        let last = follower.poseAt(nowMs, masterAt(0), true);
+        for (let travelled = 4; travelled <= 500; travelled += 4) {
+            nowMs += FRAME_MS;
+            last = follower.poseAt(nowMs, masterAt(travelled), true);
+            const expected = masterAt(last.x).z ?? 0;
+            expect(Math.abs((last.z ?? 0) - expected)).toBeLessThan(4);
+            if (last.x > 210 && last.x < 254) onStair++;
+        }
+        expect(onStair).toBeGreaterThan(3);
+        // Arrived two tiles behind its master, on the same floor.
+        const settled = wait(follower, masterAt(500), nowMs, 2000);
+        expect(settled.z).toBe(52);
+    });
+
+    it("stays on the ground behind a master on the ground: no altitude in its pose", () => {
+        const follower = new JungleCompanionFollower({ x: 0, y: 0 }, 0);
+        const { nowMs } = walk(
+            follower,
+            [
+                { x: 0, y: 0 },
+                { x: 150, y: 0 },
+            ],
+            0,
+        );
+        expect(wait(follower, { x: 150, y: 0 }, nowMs, 1000).z).toBeUndefined();
+    });
+
+    it("jumps onto the floor of a master who went far away at once", () => {
+        const follower = new JungleCompanionFollower({ x: 0, y: 0 }, 0);
+        const pose = follower.poseAt(16, { x: COMPANION_TELEPORT_PX + 100, y: 0, z: 52 }, true);
+        expect(pose.z).toBe(52);
+    });
+});
