@@ -16,7 +16,23 @@ export interface SeasonalDecor {
     destroy(): void;
 }
 
+/** The wind of the map and the date, as the leaves of autumn follow them. */
+export interface LeafConditions {
+    /** km/h, undefined without a real wind (a light breeze then). */
+    windSpeed?: number;
+    /** Where the wind comes from, degrees, 0 north; undefined without a real wind. */
+    windFrom?: number;
+    /** How far into autumn it is, 0 to 1. */
+    progress: number;
+}
+
 export interface SeasonalDecorDeps {
     isOutdoor: (x: number, y: number) => boolean;
     readPixels: (entity: SnowEntity) => AlphaMask | undefined;
+    /** Autumn: the wind and the date the leaves follow; without it a breeze at the end of autumn. */
+    leafConditions?: () => LeafConditions;
+    /** Whether a point is under water (the relief, a pool): nothing lies there. */
+    isWet?: (x: number, y: number) => boolean;
+    /** Changes when the water does. */
+    waterVersion?: () => number;
 }

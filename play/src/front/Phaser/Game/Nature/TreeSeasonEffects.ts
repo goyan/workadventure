@@ -2,7 +2,7 @@ import { Season } from "@workadventure/map-editor";
 import type * as Phaser from "phaser";
 import { FLOOR_OBJECT_DEPTH, OVERHEAD_OBJECT_DEPTH } from "../../ECS/EntityLayerDepth";
 import { seenFromFar } from "../Weather/ScreenScale";
-import { groundLeaves, treeLeaves, type TreeBox } from "./TreeLeafFall";
+import { BREEZE_KMH, groundLeaves, keepsLeavesInAutumn, treeLeaves, type TreeBox } from "./TreeLeafFall";
 import { snowClumps, SNOW_DUMP_SECONDS, treeSnowCycle } from "./TreeSnowLoad";
 import { phaseOf } from "./TreeSway";
 
@@ -34,13 +34,13 @@ export interface TreeSeasonEffectsOptions {
     /** False while the map is edited, or the weather effects are hidden: the trees look as they always did. */
     enabled: () => boolean;
     isOutdoor: (x: number, y: number) => boolean;
+    /** Whether a point is under water: no leaf lies there. */
+    isWet?: (x: number, y: number) => boolean;
     /** What the camera shows, in map pixels. */
     view: () => TreeBox;
     reducedMotion?: boolean;
 }
 
-/** Wind of the light breeze without a real weather, as the swaying of the trees. */
-const BREEZE_KMH = 10;
 /** Leaves and snow move 15 times a second, as the trees sway: each move draws the whole map again. */
 const FRAME_MS = 1000 / 15;
 /** A tree a little outside the screen still drops what falls into it. */
@@ -111,10 +111,11 @@ export class TreeSeasonEffects {
             if (!this.options.isOutdoor(box.x + box.width / 2, box.y + box.height - 1)) continue;
             if (autumn) {
                 // Evergreens and palms keep their leaves: their autumn image is their summer one.
-                const seasons = object.getPrefab().seasonal;
-                if (seasons && seasons[Season.Autumn] === seasons[Season.Summer]) continue;
+                if (keepsLeavesInAutumn(object.getPrefab().seasonal)) continue;
                 // Seen from far the carpet of a tree is a few pixels, and the view holds hundreds of trees: none.
                 for (const leaf of far ? [] : groundLeaves(phaseOf(id), fallen, box)) {
+                    // The carpet of a tree on the shore does not spread over the lake.
+                    if (this.options.isWet?.(leaf.x, leaf.y)) continue;
                     this.ground.fillStyle(leaf.color, 0.9);
                     this.ground.fillRect(leaf.x, leaf.y, leaf.vertical ? 3 : 4, leaf.vertical ? 4 : 3);
                     drawn = true;

@@ -4,6 +4,7 @@ import type { InteractionTrigger, PoolStyle, TerrainData } from "@workadventure/
 import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRectangles";
 import { getObjectInteraction } from "../../../Utils/ObjectCategories";
 import type { GameScene } from "../GameScene";
+import { MASS_MIN_DEPTH_PX } from "../Terrain/WaterMasses";
 
 /** A rectangle of water in world pixels. */
 export interface WaterRectangle {
@@ -233,4 +234,17 @@ function paintedPoolRectangles(scene: Partial<GameScene>): WaterRectangle[] {
     }
     paintedCache = { terrain, styles, rectangles };
     return rectangles;
+}
+
+/**
+ * Whether a point of the ground is under water: the relief as every browser knows it alike (from the depth where a
+ * body of water starts), or a pool of the ground. What lies on the ground (the leaves of autumn) is not drawn there.
+ */
+export function isGroundUnderWater(
+    scene: Phaser.Scene,
+    water: { walkerSettledDepthAt(x: number, y: number): number },
+    x: number,
+    y: number,
+): boolean {
+    return water.walkerSettledDepthAt(x, y) >= MASS_MIN_DEPTH_PX || isPointInWater(getWaterRectangles(scene), { x, y });
 }
