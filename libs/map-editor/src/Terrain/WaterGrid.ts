@@ -559,6 +559,30 @@ export class WaterGrid {
         return laid;
     }
 
+    /**
+     * A drain takes water from the cells of a rectangle (its top left cell, and how many cells wide and high): up to
+     * `px` from each, nothing from a wall, and only from the cells of the grid. Returns what was taken.
+     */
+    public drainOn(cellX: number, cellY: number, cellsWide: number, cellsHigh: number, px: number): number {
+        if (!Number.isFinite(px) || px <= 0) return 0;
+        const { x, y, width, height } = this.bounds;
+        const fromRow = Math.max(0, cellY - y);
+        const toRow = Math.min(height - 1, cellY + cellsHigh - 1 - y);
+        const fromColumn = Math.max(0, cellX - x);
+        const toColumn = Math.min(width - 1, cellX + cellsWide - 1 - x);
+        let taken = 0;
+        for (let row = fromRow; row <= toRow; row++) {
+            for (let column = fromColumn; column <= toColumn; column++) {
+                const index = row * width + column;
+                if (this.blocked[index]) continue;
+                const goes = Math.min(px, this.depth[index]);
+                this.depth[index] -= goes;
+                taken += goes;
+            }
+        }
+        return taken;
+    }
+
     /** One step: what comes in and goes out, then the water moves towards the lower neighbours. */
     public step(input: WaterStepInput): WaterTally {
         const tally: WaterTally = {
