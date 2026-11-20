@@ -1,5 +1,7 @@
 import { heightAt, TERRAIN_CELL } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
+import { shadeAt } from "./Pixel/PixelPalette";
+import type { Ramp, Rgb } from "./Pixel/PixelPalette";
 
 /**
  * The relief seen in 3/4, as the floors are: a point of the dug ground is drawn lower on the screen by half its depth
@@ -42,8 +44,8 @@ export function groundPointAt(
 ): { x: number; y: number } {
     if (!terrain) return { ...screen };
     const drawnAt = (y: number): number => y + (onBridge?.(screen.x, y) ? 0 : dropAt(terrain, screen.x, y));
-    // A face: the drawing jumps down by more than a texel for a pixel of ground (as paintColumn draws one).
-    const isFace = (y: number): boolean => drawnAt(y) - drawnAt(y - 1) > RELIEF_TEXEL;
+    // A face: the drawing jumps down by more than FACE_JUMP_PX for a pixel of ground (as paintColumn draws one).
+    const isFace = (y: number): boolean => drawnAt(y) - drawnAt(y - 1) > FACE_JUMP_PX;
     let found: number | undefined;
     let previous = drawnAt(screen.y - MAX_DROP - 1);
     for (let y = screen.y - MAX_DROP; y <= screen.y; y++) {
@@ -60,48 +62,57 @@ export function groundPointAt(
     return { x: screen.x, y: found ?? screen.y };
 }
 
-/** Map pixels for a texel of the drawing of the relief. */
-export const RELIEF_TEXEL = 2;
+/** Map pixels for a texel of the drawing of the relief: pixel art, one for one. */
+export const RELIEF_TEXEL = 1;
 /**
- * The face of a drop: this much lighter than its tint at the rim, darker as it goes down, as dark as WALL_FOOT from
- * WALL_DARK_DROP px of drop on. Shaded by how far down it is, not by its place in one gap: a slope drawn as many small
- * gaps is one even face, not stripes.
+ * A face of a drop: where the drawing of the ground falls more than this many pixels for a pixel of ground (the ground
+ * slopes down more than twice as fast as it goes south). Gentler, the ground is only stretched on the screen.
  */
-const WALL_TOP = 1.15;
-const WALL_FOOT = 0.55;
+export const FACE_JUMP_PX = 2;
+/** The dark line along the top of the face of a drop: the rim of a hollow. */
+export const RIM_OUTLINE: Rgb = [0x2a, 0x24, 0x20];
+/** The face is as dark as its foot from this drop on (px). */
 const WALL_DARK_DROP = 64;
-/** A darker stratum of the face every this many texels of the screen. */
-const STRATUM_TEXELS = 4;
-const STRATUM_SHADE = 0.85;
+/** A darker stratum of the face every this many rows of the screen. */
+const STRATUM_ROWS = 5;
 
-/** A texel of the ground of a column, as `paintColumn` draws it. */
+/** A pixel of the ground of a column, as `paintColumn` draws it. */
 export interface ColumnSample {
     /** Its place on the ground (map pixels). */
     groundY: number;
     /** How much lower it is drawn (dropAt, or the drop of the surface of the water over it). */
     drop: number;
-    color: readonly [number, number, number];
-    /** The colour of the face of a drop that starts at it. */
-    wallTint: readonly [number, number, number];
+    color: Rgb;
+    /** The shades of the face of a drop that goes down from it. */
+    wallRamp: Ramp;
     /** Flat ground: left to the map, unless it hides something drawn before it. */
     plain: boolean;
 }
 
-function put(out: Uint8ClampedArray, index: number, red: number, green: number, blue: number): void {
-    out[index] = red;
-    out[index + 1] = green;
-    out[index + 2] = blue;
+function put(out: Uint8ClampedArray, index: number, color: Rgb): void {
+    out[index] = color[0];
+    out[index + 1] = color[1];
+    out[index + 2] = color[2];
     out[index + 3] = 255;
 }
 
+/** The shade of the face of a drop at a row of the screen, for the drop reached there. */
+function wallShade(ramp: Ramp, drop: number, column: number, screenRow: number): Rgb {
+    const reached = Math.min(1, drop / WALL_DARK_DROP);
+    const stratum = screenRow % STRATUM_ROWS === 0 ? 0.2 : 0;
+    return shadeAt(ramp, 0.75 - reached * 0.6 - stratum, column, screenRow);
+}
+
 /**
- * Draws one column of texels of a block of the relief (`rows` texels from the screen row `firstRow`, one texel a
- * RELIEF_TEXEL of the screen) into the RGBA pixels `out`, `stride` texels a row. The samples go from the north to
- * the south, from far enough north for the highest face to reach the block. Each one is drawn over what is there
- * (the south rim hides the floor behind it); where the drawing jumps down, the face of the drop fills the gap.
+ * Draws one column of a block of the relief (`rows` pixels from the screen row `firstRow`) into the RGBA pixels `out`,
+ * `stride` pixels a row. The `count` first samples go from the north to the south, from far enough north for the
+ * highest face to reach the block. Each one is drawn over what is there (the south rim hides the floor behind it).
+ * Where the drawing falls more than FACE_JUMP_PX, the face of the drop fills the gap, cerned at its top, and the
+ * sample at its foot is part of it: a steep slope is one face, not lines of ground across it.
  */
 export function paintColumn(
     samples: readonly ColumnSample[],
+    count: number,
     rows: number,
     firstRow: number,
     out: Uint8ClampedArray,
@@ -111,27 +122,35 @@ export function paintColumn(
     const index = (row: number): number => (row * stride + column) * 4;
     let previous: number | undefined;
     let previousDrop = 0;
-    let previousTint: readonly [number, number, number] | undefined;
-    for (const sample of samples) {
-        const at = Math.round((sample.groundY + sample.drop) / RELIEF_TEXEL) - firstRow;
-        if (previous !== undefined && previousTint && at > previous + 1) {
-            const span = at - previous;
-            for (let k = 1; k < span; k++) {
+    let onFace = false;
+    for (let sampleIndex = 0; sampleIndex < count; sampleIndex++) {
+        const sample = samples[sampleIndex];
+        const at = Math.round(sample.groundY + sample.drop) - firstRow;
+        const jump = previous === undefined ? 0 : at - previous;
+        if (previous !== undefined && jump > FACE_JUMP_PX) {
+            for (let k = 1; k < jump; k++) {
                 const row = previous + k;
                 if (row < 0 || row >= rows) continue;
-                const drop = previousDrop + ((sample.drop - previousDrop) * k) / span;
-                const t = Math.min(1, drop / WALL_DARK_DROP);
-                const stratum = (row + firstRow) % STRATUM_TEXELS === 0 ? STRATUM_SHADE : 1;
-                const shade = (WALL_TOP * (1 - t) + WALL_FOOT * t) * stratum;
-                put(out, index(row), previousTint[0] * shade, previousTint[1] * shade, previousTint[2] * shade);
+                const drop = previousDrop + ((sample.drop - previousDrop) * k) / jump;
+                const color =
+                    k === 1 && !onFace ? RIM_OUTLINE : wallShade(sample.wallRamp, drop, column, row + firstRow);
+                put(out, index(row), color);
             }
-        }
-        if (at >= 0 && at < rows && (!sample.plain || out[index(at) + 3] > 0)) {
-            put(out, index(at), sample.color[0], sample.color[1], sample.color[2]);
+            if (at >= 0 && at < rows)
+                put(out, index(at), wallShade(sample.wallRamp, sample.drop, column, at + firstRow));
+            onFace = true;
+        } else {
+            // A gentle slope: the ground stretched over the row it skips.
+            const from = previous !== undefined && jump === FACE_JUMP_PX ? at - 1 : at;
+            for (let row = from; row <= at; row++) {
+                if (row >= 0 && row < rows && (!sample.plain || out[index(row) + 3] > 0)) {
+                    put(out, index(row), sample.color);
+                }
+            }
+            onFace = false;
         }
         previous = at;
         previousDrop = sample.drop;
-        previousTint = sample.wallTint;
     }
 }
 

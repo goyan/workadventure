@@ -6,6 +6,7 @@ import { ASH_COLOR, ashAlpha, GRASS_COLOR, grassAlpha, mottledCover } from "./Me
 import type { MeadowState } from "./MeadowState";
 import { DROP_SCALE, groundPointAt, MAX_DROP, paintColumn, RELIEF_TEXEL } from "./ReliefProjection";
 import type { ColumnSample } from "./ReliefProjection";
+import { RAMPS } from "./Pixel/PixelPalette";
 import { ReliefTileSchedule, reliefSignature } from "./ReliefTileSchedule";
 import {
     DEEP_WATER_COLOR,
@@ -88,7 +89,7 @@ export class ReliefTiles {
         groundY: 0,
         drop: 0,
         color: [0, 0, 0] as Rgb,
-        wallTint: [0, 0, 0] as Rgb,
+        wallRamp: RAMPS.wall,
         plain: true,
     }));
     private readonly levels = new Uint8Array(GRID_WIDTH * GRID_HEIGHT);
@@ -280,7 +281,7 @@ export class ReliefTiles {
                 const water = wet ? bilinear(this.gridWater, x, y) : 0;
                 const sample = samples[count++];
                 sample.groundY = y;
-                sample.wallTint = color.wall;
+                sample.wallRamp = RAMPS.wall;
                 if (water >= WATER_SEEN_PX) {
                     sample.drop = Math.min(MAX_DROP, Math.max(0, -(ground + water)) * DROP_SCALE);
                     sample.color = this.waterOver(color.ground, water);
@@ -291,7 +292,7 @@ export class ReliefTiles {
                     sample.plain = ground > -0.5;
                 }
             }
-            paintColumn(samples, BLOCK_TEXELS, top / RELIEF_TEXEL, pixels.data, BLOCK_TEXELS, column);
+            paintColumn(samples, count, BLOCK_TEXELS, top / RELIEF_TEXEL, pixels.data, BLOCK_TEXELS, column);
         }
         context.putImageData(pixels, 0, 0);
         refreshCanvasTexture(block.texture);
