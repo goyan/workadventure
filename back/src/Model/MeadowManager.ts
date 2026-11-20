@@ -10,6 +10,7 @@ import {
     MEADOW_STEP_SECONDS,
     minutesOfDayIn,
     pavedTilesOf,
+    liquidRainRate,
     rainRateAt,
     seasonAt,
     TERRAIN_CELL,
@@ -17,7 +18,15 @@ import {
     TreeFire,
     WeatherType,
 } from "@workadventure/map-editor";
-import type { Downpour, Ember, LifeFire, TerrainData, ToldTree, WaterGrid } from "@workadventure/map-editor";
+import type {
+    Downpour,
+    Ember,
+    LifeFire,
+    PrecipitationAir,
+    TerrainData,
+    ToldTree,
+    WaterGrid,
+} from "@workadventure/map-editor";
 import type { MeadowMessage, TreeFireMessage } from "@workadventure/messages";
 import type { VariablesRepositoryInterface } from "../Services/Repository/VariablesRepositoryInterface";
 import type { GameRoom } from "./GameRoom";
@@ -72,6 +81,8 @@ export class MeadowManager {
     private timer: ReturnType<typeof setInterval> | undefined;
     private steps = 0;
     private rainRate = 0;
+    /** The air the rain of the map falls through: the conditions of the room, once it gives them. */
+    private air: () => PrecipitationAir | undefined = () => undefined;
     private sentGrass: Uint8Array | undefined;
     private sentMoisture: Uint8Array | undefined;
     private sentDryness: Uint8Array | undefined;
@@ -208,6 +219,14 @@ export class MeadowManager {
         }
     }
 
+    /**
+     * The temperature and the humidity the rain of the map falls through (the conditions of the room): in the cold it
+     * falls as snow, which brings no water (see liquidRainRate).
+     */
+    public fallThrough(air: () => PrecipitationAir | undefined): void {
+        this.air = air;
+    }
+
     /** One step of the meadow (every two seconds); every ten seconds the room is told when it changed. */
     public step(): void {
         const meadow = this.meadow;
@@ -217,7 +236,8 @@ export class MeadowManager {
         if (this.steps % STEPS_PER_MESSAGE === 0) {
             const slots =
                 settings?.weather === WeatherType.Real ? this.rain.slotsFor(settings.weatherLocation) : undefined;
-            this.rainRate = rainRateAt(settings, this.now(), slots);
+            // What falls as snow lies where it fell: only the rain runs to the hollows and soaks the soil.
+            this.rainRate = liquidRainRate(rainRateAt(settings, this.now(), slots), this.air());
         }
         this.steps++;
         const set = { ...DEFAULT_MEADOW_SETTINGS, ...settings?.meadow };

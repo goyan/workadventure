@@ -13,7 +13,9 @@ describe("desktopWeatherMode", () => {
     });
 
     it("shows the other modes as they are, clear for a map without weather", () => {
-        expect(desktopWeatherMode(WeatherType.Snow)).toBe(WeatherType.Snow);
+        expect(desktopWeatherMode(WeatherType.Storm)).toBe(WeatherType.Storm);
+        // A map saved with a snow: the rain it now is.
+        expect(desktopWeatherMode(WeatherType.Snow)).toBe(WeatherType.Rain);
         expect(desktopWeatherMode(WeatherType.Automatic)).toBe(WeatherType.Automatic);
         expect(desktopWeatherMode(undefined)).toBe(WeatherType.Clear);
     });

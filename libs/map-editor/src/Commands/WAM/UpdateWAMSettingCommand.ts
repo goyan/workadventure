@@ -21,6 +21,7 @@ import {
     MEADOW_BOUNDS,
     POOL_LADDER_CELL,
     MegaphoneSettings,
+    precipitationWeather,
     PrefabOverride,
     RecordingSettings,
     WAVE_BOUNDS,
@@ -98,21 +99,10 @@ export class UpdateWAMSettingCommand extends Command {
                 break;
             }
             case "updateWeatherSettingMessage": {
-                const weather = Weather.parse(message.updateWeatherSettingMessage.weather);
-                const previous = this.wam.settings.weather;
-                const previousStart = this.wam.settings.weatherStartedAt;
+                // An older client may still send a snow: it is a rain (see precipitationWeather).
+                const weather = precipitationWeather(Weather.parse(message.updateWeatherSettingMessage.weather));
                 // The server stamps the change; a client applying its own change first uses its clock until then.
-                const changedAt = message.updateWeatherSettingMessage.startedAt ?? Date.now();
-                const snowGoesOn = previous === WeatherType.Snow && weather === WeatherType.Snow;
-                // A snow chosen again goes on: its ground keeps the snow it already holds.
-                this.wam.settings.weatherStartedAt = snowGoesOn ? previousStart : changedAt;
-                // A snow that stops leaves its ground to melt (see snowCoverage).
-                if (previous === WeatherType.Snow && !snowGoesOn) {
-                    this.wam.settings.lastSnow = {
-                        ...(previousStart !== undefined ? { startedAt: previousStart } : {}),
-                        endedAt: changedAt,
-                    };
-                }
+                this.wam.settings.weatherStartedAt = message.updateWeatherSettingMessage.startedAt ?? Date.now();
                 this.wam.settings.weather = weather;
                 // Back to the default place on request. Otherwise older clients send no place: keep the existing one.
                 // A broken place is ignored.
@@ -127,7 +117,7 @@ export class UpdateWAMSettingCommand extends Command {
                 if (autoFrequency !== undefined && autoFrequency !== "") {
                     const auto = AutoWeather.safeParse({
                         frequency: autoFrequency,
-                        include: autoInclude,
+                        include: autoInclude.filter((included) => included !== WeatherType.Snow),
                         clouds: autoClouds ?? this.wam.settings.weatherAuto?.clouds,
                     });
                     if (auto.success) {

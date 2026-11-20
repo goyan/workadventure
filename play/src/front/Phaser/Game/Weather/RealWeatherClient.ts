@@ -274,6 +274,17 @@ export function shownWeatherForecast(settings: MapSnowSettings | undefined, date
     return weatherForecast(shown, date.getTime(), real);
 }
 
+/**
+ * The weather timeline at the place of the map as shown to this person (the one being tried, if any; Paris without
+ * one), whatever weather the map shows: its air says whether a rain falls as snow. Asking follows the place, as the
+ * banner and the frost of the ground do.
+ */
+export function shownPlaceTimeline(settings: MapSnowSettings | undefined): RealForecastState {
+    const shown = withWeatherPreview(settings, preview);
+    follow(shown?.weatherLocation);
+    return knownFor(shown?.weatherLocation);
+}
+
 /** The place of the map as shown to this person (the one being tried, if any): its day and night follow it. */
 export function shownMapPlace(settings: MapSnowSettings | undefined): WeatherLocation | undefined {
     return withWeatherPreview(settings, preview)?.weatherLocation;

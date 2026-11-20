@@ -114,8 +114,7 @@ describe("skyWeatherFactor", () => {
         expect(skyWeatherFactor(WeatherType.Clear, 1)).toBeCloseTo(0.35, 5);
     });
 
-    it("dims the shadows in the rain, the snow, the storm and the fog, without hiding them", () => {
-        expect(skyWeatherFactor(WeatherType.Snow, 0)).toBe(0.5);
+    it("dims the shadows in the rain, the storm and the fog, without hiding them", () => {
         expect(skyWeatherFactor(WeatherType.Rain, 0)).toBe(0.3);
         expect(skyWeatherFactor(WeatherType.Fog, 0)).toBe(0.3);
         expect(skyWeatherFactor(WeatherType.Storm, 0)).toBe(0.15);

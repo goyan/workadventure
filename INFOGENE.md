@@ -325,7 +325,7 @@ torches, lampes de Jam, piste de danse et lampes des pièces jamais concernées.
   (message à part : passer par celui de la météo relancerait son cycle, `map-storage` y réécrit `startedAt`).
   `play`, `back` et `map-storage` se déploient ensemble.
 - **Règle** (`Lamps/EnergySaving.ts`, sans Phaser, testée) : lumière du jour = `min(1, élévation du soleil / 15°)` ×
-  facteur météo (`skyWeatherFactor` : clair 1, couvert 0,35, neige 0,5, pluie et brouillard 0,3, orage 0,15).
+  facteur météo (`skyWeatherFactor` : clair 1, couvert 0,35, pluie (gouttes ou flocons) et brouillard 0,3, orage 0,15).
   Extinction à 0,25, rallumage sous 0,18 (hystérésis). Entre les deux, l'état est celui du dernier instant hors de la
   bande, cherché en remontant le temps par minutes (6 h au plus, « allumé » sinon) : un joueur qui arrive voit ce que
   voient les autres. Calculé une fois par seconde. Heures à Paris, 20 novembre : ciel clair, éteintes 8 h 41,
@@ -2861,6 +2861,61 @@ Les arbres `Nature:tree-*` se balancent avec le vent de la météo de la carte (
 - Même pose pour tous (heure du serveur, identifiant de l'arbre). Rien en mode édition, ni avec la météo masquée ou le
   mouvement réduit.
 
+### Neige : une pluie par temps froid
+
+Depuis le 2026-11-21 la neige n'est plus une météo : c'est la forme que prend une précipitation quand l'air est assez
+froid, décision de l'utilisateur (« la neige est de la pluie en condition de température et d'hygrométrie propice,
+donc pas un mode »). Ce qui précède et suit dans ce document sur la tuile Neige, la neige du mode Automatique, la
+couverture de neige au sol et les arbres qui blanchissent décrit l'état d'avant.
+
+- **Plus de mode Neige.** La tuile Neige et la case Neige des « Temps possibles » ont disparu. Le mode Automatique ne
+  tire plus de neige : la part qu'elle avait est passée à la pluie (`SEASON_WEIGHTS` : pluie 45 % en hiver, 32 % au
+  printemps, 12 % en été, 35 % en automne ; autant de précipitations qu'avant). Le programme de toutes les cartes en
+  Automatique change une fois (la graine dépend des temps possibles). En mode Réel les codes WMO de neige (71 à 77,
+  85, 86) sont une précipitation comme la pluie, avec son intensité (`precipitation` d'Open-Meteo, en eau).
+- **Cartes existantes.** `WeatherType.Snow` reste dans l'énumération, dépréciée, pour lire les anciennes cartes et les
+  anciens onglets ; `precipitationWeather` la lit comme une pluie partout (ciel, panneau, bureau, serveur). Une neige
+  envoyée par un ancien onglet est enregistrée en pluie, `snow` est retiré des temps possibles à l'enregistrement.
+  `lastSnow` n'est plus écrit ni lu (champ gardé dans le schéma).
+- **Règle** (`libs/map-editor/src/Weather/Precipitation.ts`, pure, commune au serveur et au navigateur) :
+  `snowShare(température, humidité)` rend la part de neige, de 0 à 1, d'après la température du thermomètre mouillé
+  (ajustement de Stull 2011, J. Appl. Meteor. Climatol. 50, valable de −20 à 50 °C et de 5 à 99 %) : neige à 0,5 °C et
+  moins, pluie à 1,5 °C et plus, mélange linéaire entre les deux, moitié-moitié à 1,0 °C (seuil à 50 % sur terre de Sims
+  et Liu 2015 et de Behrangi et al. 2018 ; la largeur du mélange est un choix). Au-delà de 4 °C d'air la neige cède,
+  plus rien à 6 °C (choix : l'ajustement n'est plus fiable en air très sec). Exemples : 2 °C et 40 % → thermomètre
+  mouillé −2,3 °C, neige ; 2 °C et 95 % → 1,45 °C, pluie (5 % de flocons) ; 1 °C et 99 % → 71 % de neige ; 0 °C →
+  neige ; 3 °C et 70 % → neige ; 5 °C et 90 % → pluie.
+- **D'où viennent la température et l'humidité** (`Weather/PrecipitationAir.ts` `precipitationAirNow`, mêmes sources
+  et même ordre que le givre du sol de `Weather/Frost.ts`) : la ville que le joueur suit pour lui seul s'il en a
+  choisi une (météo personnelle), sinon la température et l'humidité réglées à la main dans Catastrophe → Météo
+  (pour toute la salle), sinon l'air réel du lieu de la carte (Paris sans lieu), **quelle que soit la météo de la
+  carte** : une carte en Pluie fixe ou en Automatique neige quand il fait réellement assez froid à son lieu. Les deux
+  dernières sources sont les mêmes pour tous les joueurs de la carte. Tant que rien n'est connu (frise pas encore
+  reçue, humidité absente), il pleut, toujours. Rien ne dépend du calendrier. Les conditions de feu de la salle,
+  elles, restent douces hors météo Réelle : elles ne servent plus à la forme de la pluie.
+- **Rendu.** Quand il pleut, la part de neige devient des flocons (`snowflakes`, les mêmes que l'ancienne neige,
+  d'autant plus nombreux que la précipitation est forte : `snowfall`), le reste des gouttes : pluie et flocons mêlés
+  dans le mélange. Les flocons sont emportés par le vent de la carte. Le voile sombre et les nuages gris de la pluie
+  restent. Son : une chute à moitié neigeuse ou plus a l'ambiance feutrée de la neige, sinon la pluie, moins forte à
+  proportion. Bandeau : une pluie dont au moins la moitié tombe en neige est nommée « Neige », d'après la température
+  et l'humidité réelles prévues au lieu pour chaque quart d'heure (maintenant, +1 h, +4 h), ou d'après les conditions
+  réglées à la main pour « maintenant ».
+- **Sol et arbres.** Plus rien ne blanchit : le décor de neige (`Christmas/` : sol uni, calottes, empreintes) n'est
+  plus affiché, les arbres gardent l'image de leur saison, et la couche de neige du sol en shader (#392) reste vide
+  (`mapSnowCoverage` et `GameScene.getMapSnowCoverage` rendent 0). Ce code reste, débranché : il servira à la neige
+  qui tient vraiment (étape suivante : neige accumulée par le serveur d'après ce qui tombe et le froid). Le givre et
+  le gel de #392 sont inchangés. La neige des hauteurs du relief (`Terrain/SnowLine.ts`)
+  est inchangée ; elle suit l'altitude et la saison, pas la température.
+- **Serveur.** L'eau du relief et l'humidité du pré ne reçoivent que la part liquide (`liquidRainRate`,
+  `fallThrough`, air lu par `FireConditionsManager.air` : réglé à la main, sinon réel au lieu de la carte dans tous
+  les modes ; le serveur a sa propre frise Open-Meteo, un léger écart avec celle des navigateurs est possible) : ce qui tombe en neige n'apporte pas d'eau, comme l'ancienne météo Neige, qui comptait pour zéro. La
+  fonte n'existe pas encore : cette eau est perdue.
+- **Limites.** Rien n'est lissé dans le temps (la forme suit les conditions du quart d'heure) ; le thermomètre mouillé
+  au sol ignore une couche chaude en altitude (une pluie verglaçante réelle est dessinée en neige) ; les flaques se
+  remplissent encore sous la neige ; un joueur qui suit sa propre ville voit la forme de la pluie de cette ville, le
+  serveur celle du lieu de la carte.
+  `play`, `back` et `map-storage` se déploient ensemble.
+
 ### Arbres : feuilles d'automne et neige
 
 Les arbres qui se balancent (`Nature:tree-*`, `Nature/TreeSway.ts`) réagissent à la saison qu'ils affichent
@@ -2920,7 +2975,7 @@ enregistré, l'ancien réglage « Toujours » et la commande « christmas: alway
 ne passe plus en hiver, et rien de ce que le thème forçait ne s'affiche : flocons et météo Neige pour soi
 (`effectiveWeather` retiré), sol uni, calottes, empreintes, arbres en image d'hiver (`forcedTreeSeason`) et neige sur
 les arbres. Le code du décor de neige (`Christmas/` : `ChristmasDecor`, `SnowGround`, calottes, empreintes) reste :
-la météo « Neige » de la carte le fond à proportion de sa couverture (même sol uni) et la PR #392 le modifie ;
+débranché depuis le 2026-11-21 (voir « Neige : une pluie par temps froid ») et modifié par la PR #392 ;
 `SeasonalTheme.Christmas` n'y est plus que le nom de ce décor.
 
 - **Noël** (`Christmas/ChristmasDecor.ts`) : la météo affichée pour soi devient Neige (flocons et son de la météo
@@ -3050,7 +3105,7 @@ civil, et seulement levée de 2° au moins), bleu froid, 0,3 au plus × lumière
 éteints, jamais deux jeux d'ombres nets. Lumière de la phase (`moonPhaseLight`) : « Réaliste » (défaut), loi de
 Krisciunas & Schaefer 1991 (PASP 103, éq. 8-9, d'après Allen 1976), un quartier ≈ 9 % de la pleine lune ; « Linéaire »,
 la fraction éclairée. La météo de la carte l'atténue sans cacher les ombres (`skyWeatherFactor` : ciel couvert 35 %,
-neige 50 %, pluie et brouillard 30 %, orage 15 %) ; la neige du thème de Noël, décor personnel, n'atténue rien ; météo
+pluie, en gouttes ou en flocons, et brouillard 30 %, orage 15 %) ; météo
 masquée ou nuages coupés : ciel clair. Une lune brillante éclaircit le
 voile de nuit d'un cinquième (30 % au plus avec une intensité réglée plus haut, `moonlitNightOpacity`), rien par
 nouvelle lune.

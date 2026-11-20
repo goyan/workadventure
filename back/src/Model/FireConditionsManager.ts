@@ -6,7 +6,7 @@ import {
     REAL_WEATHER_SLOT_MS,
     WeatherType,
 } from "@workadventure/map-editor";
-import type { FireConditions, FireThresholds, RealWeatherSlot } from "@workadventure/map-editor";
+import type { FireConditions, FireThresholds, PrecipitationAir, RealWeatherSlot } from "@workadventure/map-editor";
 import type { FireConditionsMessage, SetFireConditionsMessage } from "@workadventure/messages";
 import type { GameRoom } from "./GameRoom";
 import type { RainTimelineService } from "./Services/RainTimelineService";
@@ -113,14 +113,34 @@ export class FireConditionsManager {
         this.room.sendSubMessageToRoom({ message: { $case: "fireConditionsMessage", fireConditionsMessage } });
     }
 
+    /**
+     * The air the precipitation of the map falls through, which says whether it is rain or snow (snowShare): the heat
+     * and the humidity set by hand, else the real ones at the place of the map (Paris without one) whatever weather
+     * the map shows, as the players see it fall (precipitationAirNow in the front). Undefined while not known: it
+     * then rains. The fire itself keeps its mild conditions on a map that is not in real weather.
+     */
+    public air(): PrecipitationAir | undefined {
+        if (this.manual) return this.manual;
+        const slot = this.slotNow();
+        const temperature = slot?.temperature;
+        const humidity = slot?.humidity;
+        if (temperature === null || temperature === undefined || humidity === undefined) return undefined;
+        return { temperature, humidity };
+    }
+
+    /** The quarter hour under way at the place of the map, once its timeline is known. */
+    private slotNow(): RealWeatherSlot | undefined {
+        const now = this.now();
+        return this.rain
+            .slotsFor(this.room.getWam()?.settings?.weatherLocation)
+            ?.find((candidate) => candidate.at <= now && now < candidate.at + REAL_WEATHER_SLOT_MS);
+    }
+
     /** The quarter hour under way at the place of a map in real weather; what it does not give is mild. */
     private real(): FireConditions {
         const settings = this.room.getWam()?.settings;
         if (settings?.weather !== WeatherType.Real) return NEUTRAL_FIRE_CONDITIONS;
-        const now = this.now();
-        const slot: RealWeatherSlot | undefined = this.rain
-            .slotsFor(settings.weatherLocation)
-            ?.find((candidate) => candidate.at <= now && now < candidate.at + REAL_WEATHER_SLOT_MS);
+        const slot = this.slotNow();
         if (!slot) return NEUTRAL_FIRE_CONDITIONS;
         return boundedFireConditions(
             {

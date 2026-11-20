@@ -8,7 +8,6 @@ import {
 } from "../../../../../src/front/Phaser/Game/Weather/RealWeather";
 import type { RealWeatherSlot } from "../../../../../src/common/RealWeather";
 import { fogStrength } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
-import { snowCoverage } from "../../../../../src/front/Phaser/Game/Weather/SnowCover";
 import { mapGroundWetness } from "../../../../../src/front/Phaser/Game/Weather/Puddles";
 
 const auto = { frequency: "calm" as const, include: [WeatherType.Rain] };
@@ -54,10 +53,6 @@ describe("a real weather fades in from the moment it began", () => {
         // A fixed fog without a start keeps its full thickness, as before.
         expect(fogStrength(WeatherType.Fog, new Date(since))).toBe(1);
     });
-
-    it("builds up snow on the ground over ten minutes", () => {
-        expect(snowCoverage(WeatherType.Snow, since + 5 * 60_000, since)).toBeCloseTo(0.5);
-    });
 });
 
 describe("a real weather fades out when its run ends", () => {
@@ -69,15 +64,9 @@ describe("a real weather fades out when its run ends", () => {
         expect(fogStrength(WeatherType.Fog, new Date(until - 10 * 60_000), undefined, since, until)).toBe(1);
     });
 
-    it("melts the snow on the ground over ten minutes after it stopped", () => {
-        expect(snowCoverage(WeatherType.Clear, since + 5 * 60_000, undefined, undefined, since)).toBeCloseTo(0.5);
-        expect(snowCoverage(WeatherType.Rain, since + 10 * 60_000, undefined, undefined, since)).toBe(0);
-        expect(snowCoverage(WeatherType.Clear, since + 5 * 60_000)).toBe(0);
-    });
-
-    it("gives the end of the run and the end of a snow to the map settings", () => {
+    it("gives the end of the run to the map settings, and leaves no snow to melt after a rain in the cold", () => {
         const slots: RealWeatherSlot[] = [
-            { at: since - SLOT, weather: WeatherType.Snow, temperature: -1 },
+            { at: since - SLOT, weather: WeatherType.Rain, temperature: -1 },
             { at: since, weather: WeatherType.Fog, temperature: 0 },
             { at: since + SLOT, weather: WeatherType.Clear, temperature: 1 },
         ];
@@ -87,20 +76,20 @@ describe("a real weather fades out when its run ends", () => {
             weather: WeatherType.Fog,
             since,
             until: since + SLOT,
-            snowMeltFrom: since,
+            rainDryFrom: since,
         });
         expect(withRealWeather({ weather: WeatherType.Real }, state)).toEqual({
             weather: WeatherType.Fog,
             weatherStartedAt: since,
             weatherEndsAt: since + SLOT,
-            snowMeltFrom: since,
+            rainDryFrom: since,
         });
         expect(realWeatherStateAt({ status: "known", slots }, new Date(since - 1))).toEqual({
             status: "known",
-            weather: WeatherType.Snow,
+            weather: WeatherType.Rain,
             since: since - SLOT,
             until: since,
-            snowMeltFrom: undefined,
+            rainSince: since - SLOT,
         });
     });
 });

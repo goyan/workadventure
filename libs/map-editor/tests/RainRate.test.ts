@@ -27,9 +27,25 @@ describe("rainRateAt", () => {
         expect(rainRateAt({ weather: WeatherType.Cloudy }, 0, undefined)).toBe(0);
     });
 
-    it("rains when a fixed snow falls out of its season, not in winter", () => {
+    it("reads a map saved with a fixed snow as a rain, in any season", () => {
         expect(rainRateAt({ weather: WeatherType.Snow }, Date.UTC(2026, 6, 14, 12), undefined)).toBe(2);
-        expect(rainRateAt({ weather: WeatherType.Snow }, Date.UTC(2026, 0, 14, 12), undefined)).toBe(0);
+        expect(rainRateAt({ weather: WeatherType.Snow }, Date.UTC(2026, 0, 14, 12), undefined)).toBe(2);
+    });
+
+    it("gives the water a real snowfall holds: the cold of the room says how much of it is snow", () => {
+        // WMO 73 (moderate snow fall) with 0.5 mm of water in the quarter hour, 71 (slight) with 0.1 mm.
+        const snowy = slotsFromOpenMeteo({
+            minutely_15: {
+                time: [0, 1].map((quarter) => START + quarter * 900),
+                weather_code: [73, 71],
+                temperature_2m: [-1, -1],
+                precipitation: [0.5, 0.1],
+            },
+        });
+        expect(snowy?.map((slot) => slot.weather)).toEqual([WeatherType.Rain, WeatherType.Rain]);
+        const real = { weather: WeatherType.Real };
+        expect(rainRateAt(real, (snowy?.[0].at ?? 0) + 1, snowy)).toBeCloseTo(2);
+        expect(rainRateAt(real, (snowy?.[1].at ?? 0) + 1, snowy)).toBeCloseTo(0.4);
     });
 
     it("follows the automatic schedule", () => {

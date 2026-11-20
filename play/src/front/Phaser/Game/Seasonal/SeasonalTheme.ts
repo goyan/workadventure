@@ -13,7 +13,8 @@ export enum SeasonalThemeMode {
 
 /**
  * What the seasonal manager draws outdoors. Autumn is the only theme; the snow decor (still named Christmas, as its
- * code in Christmas/) is drawn only under the snow of the map weather, fading in as it builds up.
+ * code in Christmas/) is no longer drawn: the snow is a precipitation falling in cold air, and nothing lies yet (see
+ * mapSnowCoverage). Its code waits for the snow that really holds on the ground.
  */
 export enum SeasonalTheme {
     Autumn = "autumn",
@@ -37,15 +38,6 @@ export function activeSeasonalTheme(mode: SeasonalThemeMode, serverDate: Date | 
 /** The theme shows its season on the seasonal trees, for this person only. */
 export function forcedTreeSeason(theme: SeasonalTheme | undefined): Season | undefined {
     return theme === SeasonalTheme.Autumn ? Season.Autumn : undefined;
-}
-
-/**
- * Whether the snow of the map weather may whiten the ground and the trees for this person: only with the weather shown
- * and the theme following the calendar (auto). A chosen theme keeps its look whatever the weather: autumn stays orange,
- * none stays green.
- */
-export function mapSnowShown(mode: SeasonalThemeMode, weatherShown: boolean): boolean {
-    return weatherShown && mode === SeasonalThemeMode.Auto;
 }
 
 /**

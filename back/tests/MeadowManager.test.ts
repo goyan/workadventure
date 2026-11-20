@@ -104,6 +104,23 @@ describe("MeadowManager", () => {
         manager.stop();
     });
 
+    it("leaves the soil dry under a rain that falls as snow in the cold of the room", () => {
+        const snowy = createHarness();
+        snowy.manager.fallThrough(() => ({ temperature: -2, humidity: 80 }));
+        snowy.manager.mapChanged();
+        snowy.steps(400);
+        // Nothing soaked the soil: no grass, nothing to tell.
+        expect(snowy.sent).toEqual([]);
+        snowy.manager.stop();
+        // The same rain in mild air grows the grass.
+        const mild = createHarness();
+        mild.manager.fallThrough(() => ({ temperature: 20, humidity: 60 }));
+        mild.manager.mapChanged();
+        mild.steps(400);
+        expect(grassOf(mild.sent[mild.sent.length - 1]).every((cover) => cover > 0)).toBe(true);
+        mild.manager.stop();
+    });
+
     it("says nothing of a dry and bare map, nor twice the same state", () => {
         const dry = createHarness({ weather: WeatherType.Clear });
         dry.manager.mapChanged();

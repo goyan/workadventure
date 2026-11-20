@@ -98,15 +98,15 @@ describe("RealWeatherClient", () => {
     });
 
     it("keeps its timeline through a failed poll, and falls back to Auto on a first failure", async () => {
-        fetchMock.mockResolvedValueOnce(timeline(WeatherType.Snow)).mockRejectedValue(new Error("offline"));
+        fetchMock.mockResolvedValueOnce(timeline(WeatherType.Storm)).mockRejectedValue(new Error("offline"));
         client.shownWeatherSettings(real(), at());
         await vi.advanceTimersByTimeAsync(0);
         client.shownWeatherSettings(real(), at(5 * MINUTE));
         await vi.advanceTimersByTimeAsync(5 * MINUTE);
         expect(fetchMock).toHaveBeenCalledTimes(2);
-        expect(client.shownWeatherSettings(real(), at(5 * MINUTE))?.weather).toBe(WeatherType.Snow);
+        expect(client.shownWeatherSettings(real(), at(5 * MINUTE))?.weather).toBe(WeatherType.Storm);
         // A new place whose first answer fails.
-        expect(client.shownWeatherSettings(real(brest), at(6 * MINUTE))?.weather).toBe(WeatherType.Snow);
+        expect(client.shownWeatherSettings(real(brest), at(6 * MINUTE))?.weather).toBe(WeatherType.Storm);
         await vi.advanceTimersByTimeAsync(0);
         expect(client.shownWeatherSettings(real(brest), at(6 * MINUTE))?.weather).toBe(WeatherType.Automatic);
     });
@@ -129,21 +129,21 @@ describe("RealWeatherClient", () => {
 
     it("the banner shows the real temperature of the place under a weather that is not the real one", async () => {
         fetchMock.mockResolvedValue(timeline(WeatherType.Fog));
-        const snowing = { weather: WeatherType.Snow, weatherLocation: brest };
-        expect(client.shownWeatherForecast(snowing, at()).map((cell) => cell.weather)).toEqual([
-            WeatherType.Snow,
-            WeatherType.Snow,
-            WeatherType.Snow,
+        const stormy = { weather: WeatherType.Storm, weatherLocation: brest };
+        expect(client.shownWeatherForecast(stormy, at()).map((cell) => cell.weather)).toEqual([
+            WeatherType.Storm,
+            WeatherType.Storm,
+            WeatherType.Storm,
         ]);
         await vi.advanceTimersByTimeAsync(0);
         expect(asked()[0].searchParams.get("latitude")).toBe("48.39");
-        expect(client.shownWeatherForecast(snowing, at())).toMatchObject([
-            { weather: WeatherType.Snow, temperature: 5 },
-            { weather: WeatherType.Snow, temperature: 5 },
-            { weather: WeatherType.Snow, temperature: 5 },
+        expect(client.shownWeatherForecast(stormy, at())).toMatchObject([
+            { weather: WeatherType.Storm, temperature: 5 },
+            { weather: WeatherType.Storm, temperature: 5 },
+            { weather: WeatherType.Storm, temperature: 5 },
         ]);
         // The game itself still follows the weather of the map, not the real one.
-        expect(client.shownWeatherSettings(snowing, at())?.weather).toBe(WeatherType.Snow);
+        expect(client.shownWeatherSettings(stormy, at())?.weather).toBe(WeatherType.Storm);
     });
 
     it("shows the weather being tried, until the panel closes", () => {

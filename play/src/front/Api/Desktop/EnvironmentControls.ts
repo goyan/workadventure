@@ -1,6 +1,12 @@
 import { get } from "svelte/store";
 import { z } from "zod";
-import { AutoWeather, DEFAULT_AUTO_WEATHER, Weather, WeatherType } from "@workadventure/map-editor";
+import {
+    AutoWeather,
+    DEFAULT_AUTO_WEATHER,
+    precipitationWeather,
+    Weather,
+    WeatherType,
+} from "@workadventure/map-editor";
 import { desktopGraphicsMetricsRequestedStore, perfStatsStore } from "../../Stores/PerfStore";
 import {
     applyGraphicsQuality,
@@ -120,7 +126,8 @@ function legacyChristmasMode(mode: SeasonalThemeMode): LegacyChristmasMode {
 export function desktopWeatherMode(weather: WeatherType | undefined): WeatherType {
     if (weather === WeatherType.Real) return WeatherType.Automatic;
     if (weather === WeatherType.Cloudy || weather === WeatherType.Fog) return WeatherType.Clear;
-    return weather ?? WeatherType.Clear;
+    // A map saved with a snow: the rain it now is.
+    return precipitationWeather(weather ?? WeatherType.Clear);
 }
 
 /** The same settings and editing rights as the web controls, read without opening their panels. */

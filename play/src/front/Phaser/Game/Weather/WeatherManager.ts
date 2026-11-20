@@ -29,8 +29,9 @@ import {
     lightningBolt,
     outdoorCells,
     paddedView,
+    snowfall,
+    snowflakes,
     stormFlash,
-    weatherParticles,
     weatherAtTime,
     wellInside,
 } from "./WeatherFrame";
@@ -139,6 +140,11 @@ export interface WeatherManagerOptions {
     avatarRoom?: () => number | undefined;
     /** The personal seasonal theme: autumn colours the grass. */
     seasonalTheme?: () => SeasonalTheme | undefined;
+    /**
+     * The share of a precipitation that falls as snow, 0 to 1, in the air of the room (snowShareOf its conditions, the
+     * same for everyone): flakes instead of as many drops. Rain when not given.
+     */
+    snowShare?: () => number;
     /** Overrides the system "reduced motion" setting (read once from matchMedia otherwise). Used by tests. */
     reducedMotion?: boolean;
 }
@@ -240,12 +246,13 @@ export class WeatherManager {
         const forcedRain = forcedRainLevel(this.forcedRain, now);
         const rain = forcedRain ?? rainIntensity(settings?.rainRate, storm);
         const raining = storm || weather === WeatherType.Rain;
+        // In cold air the precipitation falls as snow, wholly or among the drops: the weather itself stays a rain.
+        const snow = raining ? Math.max(0, Math.min(1, this.options.snowShare?.() ?? 0)) : 0;
         // A forced level (development) soaks the ground as much, so the puddles can be seen at once.
         const wetness = Math.max(mapGroundWetness(settings, serverDate), raining ? (forcedRain ?? 0) : 0);
         this.drawPuddles(this.weatherShown && !this.editing ? wetness : 0);
-        this.sounds.update(weather, serverDate, this.editing, night, rain);
+        this.sounds.update(weather, serverDate, this.editing, night, rain, snow);
         const enabled = this.weatherShown && !this.editing;
-        // The snow of the map is the snow decor fading in (SeasonalThemeManager): this ground stays grass.
         this.snowGround.update(now, serverDate, !this.editing, theme === SeasonalTheme.Autumn);
         const showWeather = enabled && weather !== WeatherType.Clear;
         // Clouds of a clear sky, still fading out over the first minutes of a bad weather; none at night.
@@ -385,9 +392,7 @@ export class WeatherManager {
                 this.paintFarFog(view, canvas, size, outdoor, levels, density, grid, avatarRoom);
             }
         } else if (showWeather) {
-            if (weather !== WeatherType.Snow) {
-                this.fillVeil(canvas, outdoor, veil, 0x27344b, storm ? 0.2 : rainVeilAlpha(rain), paint);
-            }
+            this.fillVeil(canvas, outdoor, veil, 0x27344b, storm ? 0.2 : rainVeilAlpha(rain), paint);
             // The rain falls from grey clouds, the storm from dark ones (not at night, with the personal switch).
             const covering =
                 weather === WeatherType.Storm ? STORM_CLOUDS : weather === WeatherType.Rain ? RAIN_CLOUDS : undefined;
@@ -430,14 +435,15 @@ export class WeatherManager {
                     };
                 }
             }
-            if (weather === WeatherType.Snow) {
+            const lean = rainLean(settings?.windFrom, settings?.windSpeed, this.rainSettings.lean);
+            // The part that falls as rain as drops, the part that falls as snow as flakes: both in a sleet.
+            if (snow < 1) this.drawRain(epoch, view, rain * (1 - snow), lean, isOutdoor, underClouds);
+            const flakes = snowfall(rain * this.rainSettings.amount, snow);
+            if (flakes > 0) {
                 this.graphics.fillStyle(0xf2f5ff, 0.8);
-                for (const particle of keepOutdoorParticles(weatherParticles(weather, epoch, view), isOutdoor)) {
-                    this.graphics.fillRect(Math.round(particle.x), Math.round(particle.y), 2, 2);
+                for (const flake of keepOutdoorParticles(snowflakes(epoch, view, flakes, lean), isOutdoor)) {
+                    this.graphics.fillRect(Math.round(flake.x), Math.round(flake.y), 2, 2);
                 }
-            } else {
-                const lean = rainLean(settings?.windFrom, settings?.windSpeed, this.rainSettings.lean);
-                this.drawRain(epoch, view, rain, lean, isOutdoor, underClouds);
             }
             if (storm && serverDate) this.drawLightning(epoch, view, veil, isOutdoor);
         }

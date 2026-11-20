@@ -20,7 +20,10 @@ export function roundedCoordinate(value: number): number {
  */
 export const REAL_WEATHER_POLL_MS = 5 * 60 * 1000;
 
-/** A weather that can be observed: the map modes (Automatic, Real) are not. */
+/**
+ * A weather that can be observed: the map modes (Automatic, Real) are not. The snow is only there to read the answer
+ * of a pusher from before: no observation gives it any more (weatherFromWmoCode).
+ */
 export const ObservedWeather = z.enum([
     WeatherType.Clear,
     WeatherType.Fog,
@@ -47,7 +50,10 @@ export const RealWeatherSlot = z.object({
     windFrom: z.number().min(0).max(360).optional(),
     /** Speed of the wind of the quarter hour, km/h at 10 m (absent: not given). */
     windSpeed: z.number().min(0).max(500).optional(),
-    /** How hard it rains over the quarter hour, mm an hour (a rain or a storm only; absent: not given). */
+    /**
+     * How hard it rains over the quarter hour, mm of water an hour, the snow counted as the water it holds (a rain or a
+     * storm only; absent: not given).
+     */
     rainRate: z.number().min(0).max(2000).optional(),
     /** Relative humidity of the air over the quarter hour, in % (absent: not given). */
     humidity: z.number().min(0).max(100).optional(),
@@ -162,6 +168,8 @@ export interface RealWeatherAt {
     until: number | undefined;
     before: ObservedWeather | undefined;
     temperature: number | null;
+    /** Relative humidity of the air over the quarter hour under way, in %, when given. */
+    humidity: number | undefined;
     /** Start of the quarter hour under way, its clouds and those of the quarter hour before (0 if none). */
     slotAt: number;
     cloudiness: number;
@@ -226,6 +234,7 @@ export function realWeatherAt(slots: readonly RealWeatherSlot[], epoch: number):
         until: next?.weather ? next.at : undefined,
         before: previous?.weather ?? undefined,
         temperature: current.temperature,
+        humidity: current.humidity,
         slotAt: current.at,
         cloudiness: current.cloudiness ?? 0,
         cloudinessBefore: index > 0 && follows(index, index - 1) ? (slots[index - 1].cloudiness ?? 0) : 0,
@@ -250,16 +259,17 @@ export function cloudinessFromWmoCode(code: number): number | undefined {
 
 /**
  * The game weather for a WMO weather interpretation code, as reported by Open-Meteo. Clouds count as clear; freezing
- * drizzle and rain fall as rain; hail is part of a thunderstorm. An unknown code has no weather.
+ * drizzle and rain fall as rain; hail is part of a thunderstorm. Snow falls, grains and showers (71 to 77, 85, 86)
+ * are a precipitation like the rain: whether it is drawn as flakes follows from the temperature and the humidity
+ * (Precipitation.ts), not from the code. An unknown code has no weather.
  */
 export function weatherFromWmoCode(code: number): ObservedWeather | undefined {
     if (!Number.isInteger(code)) return undefined;
     if (code >= 0 && code <= 3) return WeatherType.Clear;
     if (code === 45 || code === 48) return WeatherType.Fog;
-    if ((code >= 51 && code <= 57) || (code >= 61 && code <= 67) || (code >= 80 && code <= 82)) {
-        return WeatherType.Rain;
-    }
-    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return WeatherType.Snow;
+    const rain = (code >= 51 && code <= 57) || (code >= 61 && code <= 67) || (code >= 80 && code <= 82);
+    const snow = (code >= 71 && code <= 77) || code === 85 || code === 86;
+    if (rain || snow) return WeatherType.Rain;
     if (code >= 95 && code <= 99) return WeatherType.Storm;
     return undefined;
 }

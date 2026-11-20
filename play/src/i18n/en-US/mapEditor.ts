@@ -1192,7 +1192,6 @@ const mapEditor: BaseTranslation = {
                 stormy: "Stormy",
                 include: "Possible weather",
                 stormHint: "in the afternoon, mostly in summer",
-                snowHint: "from November to March",
                 fogHint: "in the morning",
                 now: "{season} · Now: {weather} until {time}",
                 then: "then {weather} at {time}",
@@ -1204,7 +1203,8 @@ const mapEditor: BaseTranslation = {
                 autumn: "Autumn",
             },
             fixed: {
-                snowHint: "Outside November–March, it falls as rain.",
+                rainHint:
+                    "In cold air it falls as snow: by the real temperature and humidity at the place of the map, or the ones set in Catastrophe → Weather.",
                 fogHint: "All day long.",
             },
             previewHint: "Preview for you only. Save to show it to everyone.",

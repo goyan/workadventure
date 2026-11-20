@@ -12,6 +12,7 @@ import {
     landWallsOf,
     LITRES_PER_M3,
     meteorShape,
+    liquidRainRate,
     rainRateAt,
     startImpactWave,
     ratesOf,
@@ -27,6 +28,7 @@ import {
 } from "@workadventure/map-editor";
 import type {
     Downpour,
+    PrecipitationAir,
     Drain,
     ImpactWave,
     TerrainData,
@@ -95,6 +97,8 @@ export class TerrainWaterManager {
     private moving = true;
     /** How hard it rains (mm an hour), read once a second. */
     private rainRate = 0;
+    /** The air the rain of the map falls through: the conditions of the room, once it gives them. */
+    private air: () => PrecipitationAir | undefined = () => undefined;
     /** What the room was last told, to send only what changed since. */
     private sentBytes: Uint8Array | undefined;
     private sentRates = false;
@@ -197,6 +201,14 @@ export class TerrainWaterManager {
         }
     }
 
+    /**
+     * The temperature and the humidity the rain of the map falls through (the conditions of the room): in the cold it
+     * falls as snow, which brings no water (see liquidRainRate).
+     */
+    public fallThrough(air: () => PrecipitationAir | undefined): void {
+        this.air = air;
+    }
+
     /** One step of the water (ten a second), and once a second the room is told. */
     public step(): void {
         const grid = this.grid;
@@ -214,7 +226,8 @@ export class TerrainWaterManager {
             // Only a map in real weather has a timeline to read.
             const slots =
                 settings?.weather === WeatherType.Real ? this.rain.slotsFor(settings.weatherLocation) : undefined;
-            this.rainRate = rainRateAt(settings, this.now(), slots);
+            // What falls as snow lies where it fell: only the rain runs to the hollows and soaks the soil.
+            this.rainRate = liquidRainRate(rainRateAt(settings, this.now(), slots), this.air());
         }
         this.steps++;
         // Both each step: a downpour goes on raining while the wave of a meteor runs.
