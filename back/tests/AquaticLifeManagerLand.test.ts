@@ -186,12 +186,15 @@ describe("AquaticLifeManager, the life of the land", () => {
             manager.snapshot()?.species.find((entry) => entry.species === ANTELOPE)?.cap;
         // The west bank (80 tiles) is too small for antelopes: only the east one (480 tiles) counts.
         expect(capOf()).toBe(12);
-        for (const x of [4, 5]) {
+        // A deck 20 px over the river (tiles 4 and 5), a ramp on each bank.
+        const pieces = { 3: "rampe-e-l1-h1", 4: "dalle-bois", 5: "dalle-bois", 6: "rampe-o-l1-h1" };
+        for (const [x, name] of Object.entries(pieces)) {
             wam.entities[`bridge${x}`] = {
-                x: x * 32,
-                y: 320,
-                prefabRef: { collectionName: "Carte Ponts", id: "Carte Ponts:pont-bois-10:Default:Down" },
+                x: Number(x) * 32,
+                y: 300,
+                prefabRef: { collectionName: "Carte Paliers", id: `Carte Paliers:${name}:Default:Down` },
                 properties: [],
+                ...(name === "dalle-bois" ? { elevation: 20 } : {}),
             };
         }
         manager.mapChanged();

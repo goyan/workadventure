@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { floorDepth } from "../../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorDepth";
 import { AquaticLife } from "../../../../../src/front/Phaser/Game/Life/AquaticLife";
 import { directionOf, landFrame, LandLifeView } from "../../../../../src/front/Phaser/Game/Life/LandLifeView";
 import { drinkStance } from "../../../../../src/front/Phaser/Game/Wander/WanderDrink";
@@ -107,12 +108,14 @@ function createView({
     shown = { value: true },
     lead,
     grassAt,
+    liftAt,
 }: {
     sheets?: Record<string, number>;
     sheetOf?: (species: string) => string | undefined;
     shown?: { value: boolean };
     lead?: ConstructorParameters<typeof LandLifeView>[5];
     grassAt?: ConstructorParameters<typeof LandLifeView>[6];
+    liftAt?: ConstructorParameters<typeof LandLifeView>[7];
 } = {}) {
     const { scene, sprites, loaded, markDirty } = createScene(sheets);
     const life = new AquaticLife(isLandKind);
@@ -124,6 +127,7 @@ function createView({
         sheetOf,
         lead,
         grassAt,
+        liftAt,
     );
     return { view, life, sprites, loaded, markDirty, shown };
 }
@@ -172,6 +176,22 @@ describe("LandLifeView", () => {
         view.update(0);
         expect(sprites.map((sprite) => sprite.key)).toEqual(["drawn:antelope", "drawn:lion"]);
         expect(sprites[0]).toMatchObject({ x: 100, y: 50, depth: 50 });
+    });
+
+    it("on a bridge is drawn as high as its deck, over the slabs of that height", () => {
+        const { view, life, sprites } = createView({ liftAt: (x) => (x >= 100 ? 20 : 0) });
+        life.receive(
+            [
+                { id: 1, kind: 4, x: 50, y: 80 },
+                { id: 2, kind: 4, x: 100, y: 80 },
+            ],
+            0,
+        );
+        view.update(0);
+        expect(sprites[0]).toMatchObject({ x: 50, y: 80, depth: 80 });
+        expect(sprites[1]).toMatchObject({ x: 100, y: 60, depth: floorDepth(20, 80) });
+        // The slabs of the deck are drawn just under what stands on it.
+        expect(sprites[1].depth).toBeGreaterThan(floorDepth(20, 0) - 1);
     });
 
     it("turns the image drawn here towards where the animal goes", () => {

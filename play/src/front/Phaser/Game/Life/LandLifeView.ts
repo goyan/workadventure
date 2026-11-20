@@ -3,6 +3,7 @@ import { drinkStance } from "../Wander/WanderDrink";
 import type { WanderDirection } from "../Wander/WanderSchedule";
 import { WANDER_FRAME_SIZE, WANDER_WALK_COLUMNS, wanderIdleFrame, wanderWalkFrames } from "../Wander/WanderSheet";
 import { placeAtDepth } from "../DepthSort";
+import { floorDepth } from "../MapEditor/MapLayer/FloorDepth";
 import type { AquaticLife, ShownAnimal } from "./AquaticLife";
 import { ensureLandTexture, landSpeciesOf } from "./LandSprites";
 import type { LandSpecies } from "./LandSprites";
@@ -81,6 +82,8 @@ export class LandLifeView {
             undefined,
         /** Whether there is grass to graze at a point of the map (map pixels): an antelope standing there eats. */
         private readonly grassAt: (x: number, y: number) => boolean = () => false,
+        /** How high over the ground one walks above a point of the ground (map pixels): the bridges of the map. */
+        private readonly liftAt: (x: number, y: number) => number = () => 0,
     ) {}
 
     public update(now: number): void {
@@ -110,7 +113,9 @@ export class LandLifeView {
             if (led === "hidden") continue;
             seen.add(animal.id);
             const x = Math.round(led?.x ?? animal.x);
-            const y = Math.round(led?.y ?? animal.y);
+            // On a bridge it is drawn as high as the deck, over its slabs: the life tells its place on the ground.
+            const lift = led ? 0 : Math.round(this.liftAt(animal.x, animal.y));
+            const y = Math.round(led?.y ?? animal.y) - lift;
             const columns = this.columnsOf(species);
             const key = columns === undefined ? ensureLandTexture(this.scene, species) : this.sheetOf(species);
             if (key === undefined) continue;
@@ -148,7 +153,7 @@ export class LandLifeView {
             entry.moving = moving;
             entry.led = led !== undefined;
             sprite.setPosition(x, y);
-            placeAtDepth(sprite, y);
+            placeAtDepth(sprite, lift > 0 ? floorDepth(lift, y + lift) : y);
             sprite.setAlpha(animal.alpha);
             // Head down at the water (the stance of the wandering animals, without its sway of a pixel: the place
             // of the sprite tells whether the animal moved).

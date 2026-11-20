@@ -33,7 +33,6 @@ import { switchPropertyOf } from "../Game/Switches/SwitchTargets";
 import {
     WALL_THICKNESS,
     MAP_LAYER_FLOOR_DEPTH,
-    MAP_LAYER_BRIDGE_DEPTH,
     isMapLayerPrefab,
     mapLayerGroundBottom,
     parseMapLayerPrefab,
@@ -479,13 +478,8 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
     /** The depth the entity has standing on the ground, sorted by its foot. */
     /** Returns whether the object hangs on the face of a wall (it is then drawn right over that wall). */
     private updateGroundDepth(depthOffset: number): boolean {
-        const mapLayerKind = parseMapLayerPrefab(this.prefab.collectionName, this.prefab.id)?.kind;
-        if (mapLayerKind === "floor") {
+        if (parseMapLayerPrefab(this.prefab.collectionName, this.prefab.id)?.kind === "floor") {
             this.setDepth(MAP_LAYER_FLOOR_DEPTH);
-            return false;
-        }
-        if (mapLayerKind === "bridge") {
-            this.setDepth(MAP_LAYER_BRIDGE_DEPTH);
             return false;
         }
         if (this.prefab.layer === "floor" || this.prefab.layer === "overhead") {
@@ -551,7 +545,7 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
                         height: neighbour.displayHeight - WALL_THICKNESS,
                     });
                 }
-                if (depthOffset < 0 && piece.kind !== "floor" && piece.kind !== "bridge") {
+                if (depthOffset < 0 && piece.kind !== "floor") {
                     // A high wall draws its cap above the tiles north of it: the wall stands where its foot is.
                     walls.push({ ...neighbourBox, footY: mapLayerGroundBottom(piece, neighbour.y) });
                 }
@@ -585,7 +579,7 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
             this.getOverlappingEntities()
                 .filter(
                     (entity) =>
-                        !isGroundDeck(parseMapLayerPrefab(entity.prefab.collectionName, entity.prefab.id)?.kind) &&
+                        parseMapLayerPrefab(entity.prefab.collectionName, entity.prefab.id)?.kind !== "floor" &&
                         standsOnSameFloor(this.entityData.elevation, {
                             elevation: entity.getElevation(),
                             floorPiece: parseFloorPiece(entity.prefab.collectionName, entity.prefab.id) !== undefined,
@@ -1058,9 +1052,4 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
             this.debugActivationZoneCircle = null;
         }
     }
-}
-
-/** The pieces of the map layer that lie flat on the ground, under everything: nothing is stacked on them. */
-function isGroundDeck(kind: string | undefined): boolean {
-    return kind === "floor" || kind === "bridge";
 }

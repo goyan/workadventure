@@ -42,8 +42,9 @@ import {
     type WAMFileFormat,
     WAMSettingsUtils,
     WeatherType,
-    bridgeTilesOf,
+    bridgesOf,
 } from "@workadventure/map-editor";
+import type { Bridges } from "@workadventure/map-editor";
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
 import Debug from "debug";
 import { asError } from "catch-unknown";
@@ -607,6 +608,8 @@ export class GameScene extends DirtyScene {
     private readonly terrainWater = new TerrainWater();
     /** When the bridges of the map were last read, in ms of the game. */
     private bridgesReadAt = -Infinity;
+    /** The bridges of the map: decks one walks up to from the ground (see bridgesOf). */
+    private bridges: Bridges | undefined;
     /** The grass and the moisture of the soil of the map, as the server tells them. */
     private readonly meadow = new MeadowState();
     private meadowSubscription: Subscription | undefined;
@@ -1919,13 +1922,19 @@ export class GameScene extends DirtyScene {
     }
 
     /**
-     * The bridges of the map are read again twice a second at most: an editor lays or erases one, and what walks
-     * (the avatars, the wandering animals) crosses the water there, or no longer.
+     * The bridges of the map are read again twice a second at most: an editor lays or erases one, and the animals
+     * cross the water there, or no longer. An avatar walks on their slabs as on any raised floor.
      */
     private refreshBridges(time: number): void {
         if (time - this.bridgesReadAt < 500) return;
         this.bridgesReadAt = time;
-        this.terrainWater.setBridges(bridgeTilesOf(this.getGameMap().getWamFile()?.getWam()));
+        this.bridges = bridgesOf(this.getGameMap().getWamFile()?.getWam());
+        this.terrainWater.setBridges(this.bridges.tiles);
+    }
+
+    /** How high over the ground an animal walks above a point of the ground (map pixels): 0 off the bridges. */
+    public getBridgeElevationAt(x: number, y: number): number {
+        return this.bridges?.elevationAt(x, y) ?? 0;
     }
 
     /** The floor tiles of the map layer laid on the ground. */
@@ -3877,6 +3886,7 @@ export class GameScene extends DirtyScene {
                     (species) => this.gameJungle?.sheetOf(species),
                     (animal, now) => companions.poseOf(animal.id, now),
                     (x, y) => this.meadow.coverAt(x, y) >= GRAZING_COVER,
+                    (x, y) => this.getBridgeElevationAt(x, y),
                 );
                 // The shadows of the sun and of the moon, outdoors. One set at a time.
                 this.skyShadowManager?.destroy();

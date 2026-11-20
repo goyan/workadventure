@@ -4,6 +4,7 @@ import { slabImagePosition, stairImagePosition } from "./FloorModel";
 import type { FloorModel, PlacedStair } from "./FloorModel";
 import {
     FLOOR_WALL_HEIGHTS,
+    LOW_FLOOR_ELEVATION,
     MAP_LAYER_FLOOR_SLAB_COLLECTION,
     STAIR_RISES,
     floorElevation,
@@ -201,10 +202,12 @@ export function removeStairAt(model: FloorModel, level: number, cell: TilePoint)
 
 /**
  * The floors the editor offers above the ground: the ones on the walls of 2, 3 and 4 tiles, the ones already on the
- * map, and `wallTops`, the tops of the walls standing on a floor (a floor over the floor).
+ * map, and `wallTops`, the tops of the walls standing on a floor (a floor over the floor). With `low`, the low floor
+ * of the bridges too (the catalog of the room has its ramps and stairs).
  */
-export function availableLevels(model: FloorModel, wallTops: readonly number[] = []): number[] {
+export function availableLevels(model: FloorModel, wallTops: readonly number[] = [], low = false): number[] {
     const levels = new Set<number>(FLOOR_WALL_HEIGHTS.map((height) => floorElevation(height)));
+    if (low) levels.add(LOW_FLOOR_ELEVATION);
     for (const level of model.getLevels()) levels.add(level);
     for (const level of wallTops) levels.add(level);
     return [...levels].sort((a, b) => a - b);
