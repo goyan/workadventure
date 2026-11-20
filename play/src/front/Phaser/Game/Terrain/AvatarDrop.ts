@@ -41,3 +41,18 @@ export function waterDepthAtPoint(depthAt: (x: number, y: number) => number, x: 
     const bottom = at(cx, cy + 1) * (1 - tx) + at(cx + 1, cy + 1) * tx;
     return top * (1 - ty) + bottom * ty;
 }
+
+/**
+ * How much lower the surface of the water under a point is drawn (ReliefProjection), for what lies on it: fish,
+ * dolphins, the float of a line, the glints. Not on the deck of a bridge, nor while the map editor is open.
+ */
+export function surfaceDropAt(
+    terrain: TerrainData | undefined,
+    waterDepth: number,
+    x: number,
+    y: number,
+    onBridge: boolean,
+    editorOpen: boolean,
+): number {
+    return avatarDrop(terrain, { x, y }, waterDepth, 0, editorOpen, onBridge);
+}

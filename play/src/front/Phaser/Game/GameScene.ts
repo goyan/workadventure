@@ -396,7 +396,7 @@ import { WaterGlints } from "./Terrain/WaterGlints";
 import { ReliefTiles } from "./Terrain/ReliefTiles";
 import { dropAt, projectionShown } from "./Terrain/ReliefProjection";
 import { CharacterDrops } from "./Terrain/CharacterDrops";
-import { avatarDrop, waterDepthAtPoint } from "./Terrain/AvatarDrop";
+import { avatarDrop, surfaceDropAt, waterDepthAtPoint } from "./Terrain/AvatarDrop";
 import { WaterFlowView } from "./Terrain/WaterFlowView";
 import { gunzip } from "./Terrain/WaterStateCodec";
 import { MeadowState } from "./Terrain/MeadowState";
@@ -3124,6 +3124,22 @@ export class GameScene extends DirtyScene {
         this.markDirty();
     }
 
+    /**
+     * How much lower the surface of the water under a point is drawn (a lake at the bottom of a hollow, in 3/4): fish,
+     * floats and glints lie on it. Nothing on a bridge nor while the map is edited.
+     */
+    public surfaceDropAt(x: number, y: number): number {
+        const now = this.time.now;
+        return surfaceDropAt(
+            this.terrainWater.relief(),
+            waterDepthAtPoint((pointX, pointY) => this.terrainWater.depthAt(pointX, pointY, now), x, y),
+            x,
+            y,
+            this.terrainWater.isBridgeAt(x, y),
+            get(mapEditorModeStore),
+        );
+    }
+
     /** The drawing of the relief, for the editor to show the bottom through the water while it is edited. */
     public getReliefTiles(): ReliefTiles | undefined {
         return this.reliefTiles;
@@ -3871,7 +3887,7 @@ export class GameScene extends DirtyScene {
                 this.waterGlints?.destroy();
                 this.waterGlints = new WaterGlints(this, {
                     waterAt: (x, y) => this.terrainWater.depthAt(x, y, this.time.now),
-                    dropAt: () => 0,
+                    dropAt: (x, y) => this.surfaceDropAt(x, y),
                     reducedMotion: () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
                     shown: () => !isBasicActive(),
                 });
@@ -3902,6 +3918,7 @@ export class GameScene extends DirtyScene {
                     this.aquaticLife,
                     () => get(aquaticLifeShownStore) && !isBasicActive(),
                     () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+                    (x, y) => this.surfaceDropAt(x, y),
                 );
                 // The gulls over that water: shown and hidden with the fish.
                 this.gullLifeView?.destroy();

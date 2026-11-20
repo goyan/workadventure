@@ -42,6 +42,8 @@ export class FishingView {
     constructor(
         private readonly scene: FishingScene,
         private readonly reducedMotion: boolean,
+        /** How much lower the surface of the water is drawn at a point: the float lies on it. */
+        private readonly dropAt: (x: number, y: number) => number = () => 0,
     ) {
         this.graphics = scene.add.graphics();
         this.graphics.setDepth(FISHING_DEPTH);
@@ -76,7 +78,10 @@ export class FishingView {
         }
 
         for (const line of lines) {
-            const float = { x: line.x, y: line.y + bobOffset(line.state, time, this.reducedMotion) };
+            const float = {
+                x: line.x,
+                y: line.y + this.dropAt(line.x, line.y) + bobOffset(line.state, time, this.reducedMotion),
+            };
             const tip = tips.get(line.userId);
             if (tip) {
                 const points = lineCurve(tip, float, line.state === FISHING_LINE.waiting ? SLACK_PX : 0);

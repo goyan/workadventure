@@ -27,6 +27,8 @@ export class AquaticLifeView {
         private readonly life: AquaticLife,
         private readonly isShown: () => boolean,
         private readonly reducedMotion: () => boolean,
+        /** How much lower the surface of the water is drawn at a point: a lake at the bottom of a hollow, in 3/4. */
+        private readonly dropAt: (x: number, y: number) => number = () => 0,
     ) {}
 
     public update(now: number): void {
@@ -53,7 +55,7 @@ export class AquaticLifeView {
             if (!distinguishable(this.scene, animal.kind >> 1 === 1 ? DOLPHIN_PX : FISH_PX, 1)) continue;
             seen.add(animal.id);
             const x = Math.round(animal.x);
-            const y = Math.round(animal.y);
+            const y = Math.round(animal.y + this.dropAt(animal.x, animal.y));
             const alpha = animal.alpha * AQUATIC_ALPHA;
             let image = this.images.get(animal.id);
             if (!image) {

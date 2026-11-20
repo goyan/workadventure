@@ -48,7 +48,7 @@ function createScene() {
 }
 type SceneOfView = ConstructorParameters<typeof AquaticLifeView>[0];
 
-function createView(shown = { value: true }) {
+function createView(shown = { value: true }, dropAt?: (x: number, y: number) => number) {
     const { scene, images, markDirty } = createScene();
     const life = new AquaticLife();
     // The fake scene has only what the view uses.
@@ -57,6 +57,7 @@ function createView(shown = { value: true }) {
         life,
         () => shown.value,
         () => false,
+        dropAt,
     );
     return { view, life, images, markDirty, shown };
 }
@@ -70,6 +71,13 @@ describe("AquaticLifeView", () => {
         expect(images).toHaveLength(1);
         expect(images[0]).toMatchObject({ x: 80, y: 50, flipX: true });
         expect(images[0].alpha).toBeCloseTo(0.7);
+    });
+
+    it("draws a fish of a lake at the bottom of a hollow on the water drawn lower", () => {
+        const { view, life, images } = createView({ value: true }, () => 30);
+        life.receive([{ id: 1, kind: 0, x: 100, y: 50 }], 0);
+        view.update(0);
+        expect(images[0]).toMatchObject({ x: 100, y: 80 });
     });
 
     it("asks for the scene to be drawn again only while an animal on screen moves or fades", () => {

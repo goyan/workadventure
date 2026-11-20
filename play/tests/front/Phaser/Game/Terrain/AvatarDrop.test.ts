@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cellKey, withHeights } from "@workadventure/map-editor";
-import { avatarDrop, waterDepthAtPoint } from "../../../../../src/front/Phaser/Game/Terrain/AvatarDrop";
+import { avatarDrop, surfaceDropAt, waterDepthAtPoint } from "../../../../../src/front/Phaser/Game/Terrain/AvatarDrop";
 import { AIRPLANE_AREA_LEVEL } from "../../../../../src/front/Phaser/Vehicle/Vehicle";
 
 /** A hollow 128 px deep: cells 10 to 13 across and 10 to 21 down (its floor from x 168 to 216, y 168 to 344). */
@@ -54,5 +54,15 @@ describe("how much lower an avatar is drawn", () => {
             expect(Math.abs(drop - previous)).toBeLessThanOrEqual(2);
             previous = drop;
         }
+    });
+});
+
+describe("how much lower the surface of the water is drawn", () => {
+    it("as low as the surface of a lake at the bottom of a hollow, not at all on a bridge nor in the editor", () => {
+        // 20 px of water over a floor 128 px deep: its surface is 108 px down, drawn 54 px lower.
+        expect(surfaceDropAt(hollow, 20, floor.x, floor.y, false, false)).toBe(54);
+        expect(surfaceDropAt(hollow, 20, floor.x, floor.y, true, false)).toBe(0);
+        expect(surfaceDropAt(hollow, 20, floor.x, floor.y, false, true)).toBe(0);
+        expect(surfaceDropAt(undefined, 20, floor.x, floor.y, false, false)).toBe(0);
     });
 });
