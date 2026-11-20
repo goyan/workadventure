@@ -36,6 +36,8 @@ export function glintsIn(
     dropAt: (x: number, y: number) => number,
     /** The open water starts this deep (px): not on the foam of a shore, nor on the ice of a winter shore. */
     openFrom: number = SHORE_PX,
+    /** Whether a point of the water is hidden by the south rim of its hollow (3/4). */
+    hiddenAt?: (x: number, y: number) => boolean,
 ): Glint[] {
     const first = { x: Math.floor(view.x / GRID_PX), y: Math.floor(view.y / GRID_PX) };
     const last = { x: Math.floor((view.x + view.width) / GRID_PX), y: Math.floor((view.y + view.height) / GRID_PX) };
@@ -52,6 +54,7 @@ export function glintsIn(
             const y = squareY * GRID_PX + Math.floor(hash2(squareX + 5, squareY) * GRID_PX);
             // As the water is drawn (by steps of 2 px, WATER_STEP_PX of the blocks).
             if (Math.floor(waterAt(x, y) / 2) * 2 < openFrom) continue;
+            if (hiddenAt?.(x, y)) continue;
             glints.push({ x, y: y + dropAt(x, y), size: draw > 0.995 ? 2 : 1 });
             if (glints.length >= GLINTS_MAX) return glints;
         }
@@ -65,6 +68,8 @@ export interface WaterGlintsDeps {
     /** How much lower the surface of the water is drawn at a point (a hollow in 3/4). */
     dropAt(x: number, y: number): number;
     reducedMotion(): boolean;
+    /** Whether a point of the water is hidden by the south rim of its hollow (3/4). */
+    hiddenAt?(x: number, y: number): boolean;
     /** The season of the ground: in winter the shore is ice further out. */
     season?(): Season | undefined;
     /** Whether the water is shown (not in the basic mode). */
@@ -101,6 +106,7 @@ export class WaterGlints {
             (x, y) => this.deps.waterAt(x, y),
             (x, y) => this.deps.dropAt(x, y),
             this.deps.season?.() === Season.Winter ? ICE_PX : SHORE_PX,
+            (x, y) => this.deps.hiddenAt?.(x, y) ?? false,
         );
         // Nothing shone and nothing shines: the scene is not drawn again for them.
         if (glints.length === 0 && !this.drawn) return;

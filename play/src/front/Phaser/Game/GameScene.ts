@@ -394,7 +394,7 @@ import { MapGroundLayout, GRASS_NAME, mapTileIsGrass } from "./Terrain/MapGround
 import { footprintSurface, GroundFootprints } from "./Terrain/Footprints";
 import { WaterGlints } from "./Terrain/WaterGlints";
 import { ReliefTiles } from "./Terrain/ReliefTiles";
-import { dropAt, projectionShown } from "./Terrain/ReliefProjection";
+import { dropAt, hiddenBehindRim, projectionShown } from "./Terrain/ReliefProjection";
 import { CharacterDrops } from "./Terrain/CharacterDrops";
 import { avatarDrop, surfaceDropAt, waterDepthAtPoint } from "./Terrain/AvatarDrop";
 import { WaterFlowView } from "./Terrain/WaterFlowView";
@@ -3140,6 +3140,14 @@ export class GameScene extends DirtyScene {
         );
     }
 
+    /** Whether a point of the water is hidden by the south rim of its hollow, as the relief is drawn in 3/4. */
+    public hiddenOnWater(x: number, y: number): boolean {
+        if (get(mapEditorModeStore)) return false;
+        return hiddenBehindRim(this.terrainWater.relief(), x, y, (pointX, pointY) =>
+            this.surfaceDropAt(pointX, pointY),
+        );
+    }
+
     /** The drawing of the relief, for the editor to show the bottom through the water while it is edited. */
     public getReliefTiles(): ReliefTiles | undefined {
         return this.reliefTiles;
@@ -3888,6 +3896,7 @@ export class GameScene extends DirtyScene {
                 this.waterGlints = new WaterGlints(this, {
                     waterAt: (x, y) => this.terrainWater.depthAt(x, y, this.time.now),
                     dropAt: (x, y) => this.surfaceDropAt(x, y),
+                    hiddenAt: (x, y) => this.hiddenOnWater(x, y),
                     season: () =>
                         this.seasonalThemeManager?.groundSeason(this.getGroundSeason()) ?? this.getGroundSeason(),
                     reducedMotion: () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
@@ -3921,6 +3930,7 @@ export class GameScene extends DirtyScene {
                     () => get(aquaticLifeShownStore) && !isBasicActive(),
                     () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
                     (x, y) => this.surfaceDropAt(x, y),
+                    (x, y) => this.hiddenOnWater(x, y),
                 );
                 // The gulls over that water: shown and hidden with the fish.
                 this.gullLifeView?.destroy();

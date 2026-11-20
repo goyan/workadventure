@@ -62,6 +62,26 @@ export function groundPointAt(
     return { x: screen.x, y: found ?? screen.y };
 }
 
+/**
+ * Whether a point of the ground (or of the surface of its water: `dropOf`) is hidden in 3/4 by the ground south of it:
+ * the south rim of a hollow, drawn over the floor behind it. A ground further south hides it when it is drawn as high
+ * or higher on the screen; it can only be between the point and where the point is drawn (a ground is never drawn
+ * higher than its place).
+ */
+export function hiddenBehindRim(
+    terrain: TerrainData | undefined,
+    x: number,
+    y: number,
+    dropOf: (x: number, y: number) => number,
+): boolean {
+    if (!terrain) return false;
+    const drawn = y + dropOf(x, y);
+    for (let south = Math.floor(y) + 1; south < drawn; south++) {
+        if (south + dropOf(x, south) < drawn - 0.5) return true;
+    }
+    return false;
+}
+
 /** Map pixels for a texel of the drawing of the relief: pixel art, one for one. */
 export const RELIEF_TEXEL = 1;
 /**

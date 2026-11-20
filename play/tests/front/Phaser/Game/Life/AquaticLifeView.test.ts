@@ -8,7 +8,7 @@ vi.mock("../../../../../src/front/Phaser/Game/Life/AquaticSprites", () => ({
 
 /** A scene that keeps the images it is asked for, and whose camera sees the map from 0 to 200 on both axes. */
 function createScene() {
-    const images: { x: number; y: number; alpha: number; flipX: boolean; destroyed: boolean }[] = [];
+    const images: { x: number; y: number; alpha: number; flipX: boolean; destroyed: boolean; visible: boolean }[] = [];
     const markDirty = vi.fn();
     const scene = {
         markDirty,
@@ -19,12 +19,17 @@ function createScene() {
                     x,
                     y,
                     alpha: 1,
+                    visible: true,
                     flipX: false,
                     destroyed: false,
                     setDepth: () => image,
                     setPosition: (nextX: number, nextY: number) => {
                         image.x = nextX;
                         image.y = nextY;
+                        return image;
+                    },
+                    setVisible: (visible: boolean) => {
+                        image.visible = visible;
                         return image;
                     },
                     setAlpha: (alpha: number) => {
@@ -48,7 +53,11 @@ function createScene() {
 }
 type SceneOfView = ConstructorParameters<typeof AquaticLifeView>[0];
 
-function createView(shown = { value: true }, dropAt?: (x: number, y: number) => number) {
+function createView(
+    shown = { value: true },
+    dropAt?: (x: number, y: number) => number,
+    hiddenAt?: (x: number, y: number) => boolean,
+) {
     const { scene, images, markDirty } = createScene();
     const life = new AquaticLife();
     // The fake scene has only what the view uses.
@@ -58,6 +67,7 @@ function createView(shown = { value: true }, dropAt?: (x: number, y: number) => 
         () => shown.value,
         () => false,
         dropAt,
+        hiddenAt,
     );
     return { view, life, images, markDirty, shown };
 }
@@ -78,6 +88,23 @@ describe("AquaticLifeView", () => {
         life.receive([{ id: 1, kind: 0, x: 100, y: 50 }], 0);
         view.update(0);
         expect(images[0]).toMatchObject({ x: 100, y: 80 });
+    });
+
+    it("does not draw a fish of the part of a lake that the south rim of its hollow hides", () => {
+        const { view, life, images } = createView(
+            { value: true },
+            () => 30,
+            (_x, y) => y > 100,
+        );
+        life.receive(
+            [
+                { id: 1, kind: 0, x: 100, y: 50 },
+                { id: 2, kind: 0, x: 100, y: 150 },
+            ],
+            0,
+        );
+        view.update(0);
+        expect(images.map((image) => image.visible)).toEqual([true, false]);
     });
 
     it("asks for the scene to be drawn again only while an animal on screen moves or fades", () => {

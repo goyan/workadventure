@@ -29,6 +29,8 @@ export class AquaticLifeView {
         private readonly reducedMotion: () => boolean,
         /** How much lower the surface of the water is drawn at a point: a lake at the bottom of a hollow, in 3/4. */
         private readonly dropAt: (x: number, y: number) => number = () => 0,
+        /** Whether a point of the water is hidden by the south rim of its hollow (3/4): its animals are not drawn. */
+        private readonly hiddenAt: (x: number, y: number) => boolean = () => false,
     ) {}
 
     public update(now: number): void {
@@ -67,6 +69,7 @@ export class AquaticLifeView {
                 changed ||= onScreen(x, y) || onScreen(image.x, image.y);
             }
             image.setPosition(x, y);
+            image.setVisible(!this.hiddenAt(animal.x, animal.y));
             image.setAlpha(alpha);
             image.setFlipX(animal.facingLeft);
         }

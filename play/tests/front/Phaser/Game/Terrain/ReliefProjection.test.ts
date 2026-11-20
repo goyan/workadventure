@@ -11,6 +11,7 @@ import {
     MAX_DROP,
     dropAt,
     groundPointAt,
+    hiddenBehindRim,
     paintColumn,
     projectionShown,
 } from "../../../../../src/front/Phaser/Game/Terrain/ReliefProjection";
@@ -78,6 +79,14 @@ describe("the relief seen in 3/4", () => {
         near(groundPointAt(hollow(), { x: 200, y: 240 }, onBridge).y, 240);
         // Beside the bridge, the same point of the screen shows the floor of the hollow, 64 px higher on the map.
         near(groundPointAt(hollow(), { x: 176, y: 240 }, onBridge).y, 176);
+    });
+
+    it("tells a point of the floor hidden behind the south rim from one that shows", () => {
+        // The floor near the south edge (y 340) is drawn 64 px lower, at 404: the rim south of the hollow is drawn there.
+        expect(hiddenBehindRim(hollow(), 192, 340, (x, y) => dropAt(hollow(), x, y))).toBe(true);
+        // The middle of the floor shows.
+        expect(hiddenBehindRim(hollow(), 192, 250, (x, y) => dropAt(hollow(), x, y))).toBe(false);
+        expect(hiddenBehindRim(undefined, 192, 250, () => 0)).toBe(false);
     });
 
     it("leaves a point as it is on a map without relief", () => {
