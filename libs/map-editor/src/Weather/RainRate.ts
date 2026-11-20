@@ -1,8 +1,7 @@
-import { WeatherType } from "../types";
+import { precipitationWeather, WeatherType } from "../types";
 import type { WAMSettings } from "../types";
 import { realWeatherAt } from "./RealWeather";
 import type { RealWeatherSlot } from "./RealWeather";
-import { snowPossibleAt } from "./SeasonClock";
 import { autoWeatherAt } from "./WeatherSchedule";
 
 /**
@@ -17,7 +16,8 @@ function usualRate(weather: WeatherType): number {
 }
 
 /**
- * How hard it rains on a map at an instant, in mm an hour (0 in dry weather), from its weather settings: the same
+ * How hard it rains on a map at an instant, in mm of water an hour (0 in dry weather), whatever falls: rain or, in
+ * cold air, snow (liquidRainRate gives the part that runs as water). From its weather settings: the same
  * figure for the back, which fills the hollows of the relief, as what the players see falling. `slots` is the real
  * weather timeline at the place of the map, when known (a map in Real only).
  */
@@ -26,15 +26,12 @@ export function rainRateAt(
     epoch: number,
     slots: readonly RealWeatherSlot[] | undefined,
 ): number {
-    const configured = settings?.weather ?? WeatherType.Clear;
+    const configured = precipitationWeather(settings?.weather ?? WeatherType.Clear);
     const date = new Date(epoch);
     switch (configured) {
         case WeatherType.Rain:
         case WeatherType.Storm:
             return usualRate(configured);
-        case WeatherType.Snow:
-            // Out of its season the snow of a map falls as rain.
-            return Number.isFinite(epoch) && !snowPossibleAt(date) ? USUAL_RAIN_RATE : 0;
         case WeatherType.Automatic:
             return usualRate(autoWeatherAt(date, settings?.weatherAuto));
         case WeatherType.Real: {

@@ -14,7 +14,6 @@ import {
     UpdateWAMMetadataCommand,
     UpdateTerrainCommand,
     UpdateWAMSettingCommand,
-    WeatherType,
 } from "@workadventure/map-editor";
 import type {
     EditMapCommandMessage,
@@ -431,12 +430,8 @@ const mapStorageServer: MapStorageServer = {
                         const message = editMapMessage.updateWAMSettingsMessage;
                         const wam = wamFile.getWam();
                         if (message.message?.$case === "updateWeatherSettingMessage") {
-                            const weatherMessage = message.message.updateWeatherSettingMessage;
-                            // A snow chosen again goes on from its own start: the ground keeps its snow.
-                            const snowGoesOn =
-                                wam.settings?.weather === WeatherType.Snow &&
-                                weatherMessage.weather === WeatherType.Snow;
-                            weatherMessage.startedAt = snowGoesOn ? wam.settings?.weatherStartedAt : Date.now();
+                            // The server stamps when the weather changed: the same date for everyone.
+                            message.message.updateWeatherSettingMessage.startedAt = Date.now();
                         }
                         await mapsManager.executeCommand(
                             mapKey,

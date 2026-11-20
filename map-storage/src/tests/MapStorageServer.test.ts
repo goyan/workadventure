@@ -164,7 +164,7 @@ describe("MapStorageServer entity edit permissions", () => {
             updateWAMSettingsMessage: {
                 message: {
                     $case: "updateWeatherSettingMessage",
-                    updateWeatherSettingMessage: { weather: WeatherType.Snow, startedAt: 999, autoInclude: [] },
+                    updateWeatherSettingMessage: { weather: WeatherType.Storm, startedAt: 999, autoInclude: [] },
                 },
             },
         });
@@ -264,7 +264,7 @@ describe("MapStorageServer entity edit permissions", () => {
         });
     });
 
-    it("keeps the start of a snow chosen again, so that its ground keeps the snow it holds", async () => {
+    it("stores a snow sent by an older client as a rain that starts now, like any weather", async () => {
         wamFile.getWam().settings = { weather: WeatherType.Snow, weatherStartedAt: 600_000 };
         vi.spyOn(Date, "now").mockReturnValue(1_800_000);
         const response = await send(MAP_EDITOR, {
@@ -276,13 +276,15 @@ describe("MapStorageServer entity edit permissions", () => {
                 },
             },
         });
-        expect(wamFile.getWam().settings?.weatherStartedAt).toBe(600_000);
+        expect(wamFile.getWam().settings?.weather).toBe(WeatherType.Rain);
+        expect(wamFile.getWam().settings?.weatherStartedAt).toBe(1_800_000);
+        expect(wamFile.getWam().settings?.lastSnow).toBeUndefined();
         const message = response.editMapMessage?.message;
         expect(
             message?.$case === "updateWAMSettingsMessage" &&
                 message.updateWAMSettingsMessage.message?.$case === "updateWeatherSettingMessage" &&
                 message.updateWAMSettingsMessage.message.updateWeatherSettingMessage.startedAt,
-        ).toBe(600_000);
+        ).toBe(1_800_000);
     });
 
     describe("delete", () => {

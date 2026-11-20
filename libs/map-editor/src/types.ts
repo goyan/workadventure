@@ -859,6 +859,11 @@ export enum WeatherType {
     /** The weather at the place of the map (Paris by default), from Open-Meteo through the pusher (else Automatic). */
     Real = "real",
     Rain = "rain",
+    /**
+     * @deprecated No longer a weather of its own: snow is a precipitation falling in cold air (Weather/Precipitation.ts).
+     * Kept so that maps saved with it and older clients are still read; shown and stored as a rain
+     * (precipitationWeather), and nothing produces it any more.
+     */
     Snow = "snow",
     Storm = "storm",
 }
@@ -878,8 +883,13 @@ export type AutoWeatherSettings = z.infer<typeof AutoWeather>;
 
 export const DEFAULT_AUTO_WEATHER: AutoWeatherSettings = {
     frequency: "normal",
-    include: [WeatherType.Rain, WeatherType.Snow, WeatherType.Storm, WeatherType.Fog],
+    include: [WeatherType.Rain, WeatherType.Storm, WeatherType.Fog],
 };
+
+/** The weather a saved or sent one stands for: a snow (maps and clients from before) is a rain. */
+export function precipitationWeather(weather: WeatherType): WeatherType {
+    return weather === WeatherType.Snow ? WeatherType.Rain : weather;
+}
 
 /** Where the map is: its real weather and its day/night follow this place (Paris when absent). */
 /** Whether this is a time zone the clock knows (an IANA name, like "Europe/Paris"). */
@@ -1205,8 +1215,7 @@ export const LifeSettings = z.object({
 export type LifeSettings = z.infer<typeof LifeSettings>;
 
 /**
- * The last snow of the map once another weather took its place: its ground melts from `endedAt`. Without `startedAt`,
- * a snow from before its start was kept: its ground was full.
+ * @deprecated Written by maps that had a snow weather; read so that they still load, used by nothing.
  */
 export const LastSnow = z.object({
     startedAt: z.number().finite().nonnegative().optional(),

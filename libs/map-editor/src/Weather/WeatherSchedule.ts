@@ -1,19 +1,26 @@
 import { DEFAULT_AUTO_WEATHER, Season, WeatherType } from "../types";
 import type { AutoWeatherFrequency, AutoWeatherSettings } from "../types";
-import { seasonAt, snowPossibleAt } from "./SeasonClock";
+import { seasonAt } from "./SeasonClock";
 
-/** Weathers the automatic schedule can draw, clear being the remainder. */
-type DrawnWeather = WeatherType.Clear | WeatherType.Rain | WeatherType.Storm | WeatherType.Snow | WeatherType.Fog;
+/**
+ * Weathers the automatic schedule can draw, clear being the remainder. No snow: a precipitation is drawn as a rain,
+ * and falls as snow when the air is cold enough (Precipitation.ts). A snow asked for by a map saved before counts for
+ * nothing.
+ */
+type DrawnWeather = WeatherType.Clear | WeatherType.Rain | WeatherType.Storm | WeatherType.Fog;
 type BadWeather = Exclude<DrawnWeather, WeatherType.Clear>;
 
-const BAD_WEATHERS: readonly BadWeather[] = [WeatherType.Rain, WeatherType.Storm, WeatherType.Snow, WeatherType.Fog];
+const BAD_WEATHERS: readonly BadWeather[] = [WeatherType.Rain, WeatherType.Storm, WeatherType.Fog];
 
-/** Normal-frequency shares (in %) per season; clear is what remains of 100. */
+/**
+ * Normal-frequency shares (in %) per season; clear is what remains of 100. The share the snow had when it was a
+ * weather (winter 20, spring 2, autumn 5) went to the rain: as many precipitations as before.
+ */
 export const SEASON_WEIGHTS: Readonly<Record<Season, Readonly<Record<DrawnWeather, number>>>> = {
-    [Season.Winter]: { clear: 45, rain: 25, storm: 0, snow: 20, fog: 10 },
-    [Season.Spring]: { clear: 55, rain: 30, storm: 8, snow: 2, fog: 5 },
-    [Season.Summer]: { clear: 70, rain: 12, storm: 15, snow: 0, fog: 3 },
-    [Season.Autumn]: { clear: 45, rain: 30, storm: 5, snow: 5, fog: 15 },
+    [Season.Winter]: { clear: 45, rain: 45, storm: 0, fog: 10 },
+    [Season.Spring]: { clear: 55, rain: 32, storm: 8, fog: 5 },
+    [Season.Summer]: { clear: 70, rain: 12, storm: 15, fog: 3 },
+    [Season.Autumn]: { clear: 45, rain: 35, storm: 5, fog: 15 },
 };
 
 /** Multiplier applied to every non-clear weather. */
@@ -137,7 +144,7 @@ export function fadedCloudiness(previous: number, current: number, elapsed: numb
 
 /**
  * How cloudy the automatic weather is at `date`, 0 to 1, identical for every client with the same settings. Clouds are
- * a chain of their own over the clear slots of the schedule: the schedule itself (rain, storms, snow, fog) is the same
+ * a chain of their own over the clear slots of the schedule: the schedule itself (rain, storms, fog) is the same
  * with or without them. None when the map turns them off (`clouds: false`).
  */
 export function cloudinessAt(date: Date, auto: AutoWeatherSettings = DEFAULT_AUTO_WEATHER): number {
@@ -250,7 +257,6 @@ function computeDay(day: string, settings: Normalised, start: WeatherType): Weat
     computations++;
     // Noon UTC is always inside the same Paris calendar day.
     const noon = new Date(`${day}T12:00:00Z`);
-    const snowAllowed = snowPossibleAt(noon);
     const weights = drawWeights(seasonAt(noon), settings);
     const random = mulberry32(fnv1a(`${day}|${settings.frequency}|${settings.include.join(",")}`));
     const schedule: WeatherType[] = [];
@@ -260,7 +266,7 @@ function computeDay(day: string, settings: Normalised, start: WeatherType): Weat
         const keep = random() < PERSISTENCE;
         const drawn = pick(weights, random());
         const candidate = keep ? previous : drawn;
-        previous = applyRules(previous, candidate, Math.floor(slot / 2), snowAllowed, settings.include);
+        previous = applyRules(previous, candidate, Math.floor(slot / 2), settings.include);
         schedule.push(previous);
     }
     return schedule;
@@ -290,11 +296,9 @@ function applyRules(
     previous: WeatherType,
     candidate: WeatherType,
     hour: number,
-    snowAllowed: boolean,
     include: readonly BadWeather[],
 ): WeatherType {
     let weather = candidate;
-    if (weather === WeatherType.Snow && !snowAllowed) weather = WeatherType.Rain;
     // A storm starts only after clear or rain (an ongoing storm may go on).
     if (
         weather === WeatherType.Storm &&
@@ -304,7 +308,6 @@ function applyRules(
     ) {
         weather = WeatherType.Rain;
     }
-    if (weather === WeatherType.Snow && previous === WeatherType.Storm) weather = WeatherType.Rain;
     if (weather === WeatherType.Fog && hour >= FOG_UNTIL_HOUR) weather = WeatherType.Clear;
     if (weather === WeatherType.Storm && (hour < STORM_HOURS[0] || hour >= STORM_HOURS[1])) {
         weather = WeatherType.Rain;
