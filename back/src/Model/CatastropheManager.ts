@@ -3,13 +3,15 @@ import {
     DOWNPOUR_MIN_REPORT_MS,
     downpourTiles,
     DOWNPOURS_PER_ROOM,
+    DRAIN_LASTS_MS,
+    DRAINS_PER_ROOM,
     FIRE_PATCHES_PER_SECOND,
     fireTiles,
     METEOR_FALL_MS,
     meteorShape,
     METEORS_PER_ROOM,
 } from "@workadventure/map-editor";
-import type { Downpour } from "@workadventure/map-editor";
+import type { Downpour, Drain } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
 import type { GameRoom } from "./GameRoom";
 
@@ -20,8 +22,16 @@ import type { GameRoom } from "./GameRoom";
  *
  * A downpour is the other kind: it rains hard on a disc of the map (or on all of it) for as long as its player keeps
  * telling where, a second more at most. One for each player; the water and the meadow read those that are falling.
+ *
+ * A drain is its opposite: the water is taken hard from a square of the map for as long as its player keeps telling
+ * where. One for each player too; the water reads those that are open.
  */
 interface LiveDownpour extends Downpour {
+    until: number;
+    toldAt: number;
+}
+
+interface LiveDrain extends Drain {
     until: number;
     toldAt: number;
 }
@@ -30,6 +40,8 @@ export class CatastropheManager {
     private nextId = 1;
     /** The downpour of each player, by the id of the player. */
     private readonly raining = new Map<number, LiveDownpour>();
+    /** The drain of each player, by the id of the player. */
+    private readonly draining = new Map<number, LiveDrain>();
     private stopped = false;
     /** When each player set their last patches of fire, within the last second. */
     private readonly patches = new Map<number, number[]>();
@@ -109,6 +121,48 @@ export class CatastropheManager {
         for (const [userId, downpour] of this.raining) if (downpour.until <= now) this.raining.delete(userId);
     }
 
+    /**
+     * A player drains the water around a point of the map (pixels): the drain of that player opens, or moves there
+     * and goes on. The room is told each time. False when it is refused.
+     */
+    public drain(userId: number, x: number, y: number): boolean {
+        if (this.stopped) return false;
+        const size = this.mapSize();
+        if (!size || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+        if (x < 0 || y < 0 || x >= size.width || y >= size.height) return false;
+        const now = this.now();
+        this.forgetClosed(now);
+        const open = this.draining.get(userId);
+        if (open ? now - open.toldAt < DOWNPOUR_MIN_REPORT_MS : this.draining.size >= DRAINS_PER_ROOM) return false;
+        const drain: LiveDrain = { id: open?.id ?? this.nextId++, x, y, until: now + DRAIN_LASTS_MS, toldAt: now };
+        this.draining.set(userId, drain);
+        this.room.sendSubMessageToRoom({
+            message: {
+                $case: "catastropheMessage",
+                catastropheMessage: {
+                    id: drain.id,
+                    kind: CatastropheKind.CATASTROPHE_DRAIN,
+                    x,
+                    y,
+                    impactInMs: DRAIN_LASTS_MS,
+                    radiusTiles: 0,
+                    wholeMap: false,
+                },
+            },
+        });
+        return true;
+    }
+
+    /** The drains open now. */
+    public drains(): Drain[] {
+        this.forgetClosed(this.now());
+        return [...this.draining.values()];
+    }
+
+    private forgetClosed(now: number): void {
+        for (const [userId, drain] of this.draining) if (drain.until <= now) this.draining.delete(userId);
+    }
+
     /** What a patch of fire lights is made after the catastrophes of a room: it is given here. */
     public igniteWith(ignite: (x: number, y: number, radiusTiles: number) => void): void {
         this.ignite = ignite;
@@ -150,6 +204,7 @@ export class CatastropheManager {
     ): boolean {
         if (kind === CatastropheKind.CATASTROPHE_DOWNPOUR) return this.rain(userId, x, y, radiusTiles, wholeMap);
         if (kind === CatastropheKind.CATASTROPHE_FIRE) return this.fire(userId, x, y, radiusTiles);
+        if (kind === CatastropheKind.CATASTROPHE_DRAIN) return this.drain(userId, x, y);
         return this.launch(kind, x, y, radiusTiles);
     }
 
@@ -199,5 +254,6 @@ export class CatastropheManager {
         for (const timer of this.inFlight) clearTimeout(timer);
         this.inFlight.clear();
         this.raining.clear();
+        this.draining.clear();
     }
 }

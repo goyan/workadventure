@@ -3,6 +3,8 @@ import {
     DOWNPOUR_LASTS_MS,
     DOWNPOUR_MAX_TILES,
     DOWNPOURS_PER_ROOM,
+    DRAIN_LASTS_MS,
+    DRAINS_PER_ROOM,
     METEOR_FALL_MS,
     METEORS_PER_ROOM,
 } from "@workadventure/map-editor";
@@ -203,6 +205,62 @@ describe("CatastropheManager, downpours", () => {
         manager.stop();
         expect(manager.downpours()).toHaveLength(0);
         expect(manager.rain(1, 10, 10, 3, false)).toBe(false);
+    });
+});
+
+describe("CatastropheManager, drains", () => {
+    const DRAIN = CatastropheKind.CATASTROPHE_DRAIN;
+
+    it("a drain opens, is told to the room and closes a second after the last message", () => {
+        const { manager, sent } = harness();
+        expect(manager.request(7, DRAIN, 100, 80, 0, false)).toBe(true);
+        expect(sent[0]).toMatchObject({ kind: DRAIN, x: 100, y: 80, wholeMap: false });
+        expect(sent[0].impactInMs).toBe(DRAIN_LASTS_MS);
+        expect(manager.drains()).toEqual([expect.objectContaining({ id: sent[0].id, x: 100, y: 80 })]);
+        vi.advanceTimersByTime(DRAIN_LASTS_MS - 1);
+        expect(manager.drains()).toHaveLength(1);
+        vi.advanceTimersByTime(1);
+        expect(manager.drains()).toHaveLength(0);
+    });
+
+    it("follows its player under the same id, and ignores messages that come too fast", () => {
+        const { manager, sent } = harness();
+        manager.drain(7, 100, 80);
+        vi.advanceTimersByTime(50);
+        expect(manager.drain(7, 300, 90)).toBe(false);
+        vi.advanceTimersByTime(150);
+        expect(manager.drain(7, 300, 90)).toBe(true);
+        expect(sent).toHaveLength(2);
+        expect(sent[1].id).toBe(sent[0].id);
+        expect(manager.drains()).toEqual([expect.objectContaining({ x: 300, y: 90 })]);
+    });
+
+    it("refuses a point outside the map, numbers that are not, and one drain more than the room may have", () => {
+        const { manager, sent } = harness();
+        expect(manager.drain(1, -1, 10)).toBe(false);
+        expect(manager.drain(1, 10, MAP.height)).toBe(false);
+        expect(manager.drain(1, Number.NaN, 10)).toBe(false);
+        for (let user = 1; user <= DRAINS_PER_ROOM; user++) expect(manager.drain(user, 10, 10)).toBe(true);
+        expect(manager.drain(99, 10, 10)).toBe(false);
+        expect(sent).toHaveLength(DRAINS_PER_ROOM);
+    });
+
+    it("the drain of a player does not keep their downpour going, nor the other way", () => {
+        const { manager } = harness();
+        manager.rain(7, 100, 80, 3, false);
+        vi.advanceTimersByTime(600);
+        expect(manager.drain(7, 100, 80)).toBe(true);
+        vi.advanceTimersByTime(500);
+        expect(manager.downpours()).toHaveLength(0);
+        expect(manager.drains()).toHaveLength(1);
+    });
+
+    it("drains no more once the room stops", () => {
+        const { manager } = harness();
+        manager.drain(7, 100, 80);
+        manager.stop();
+        expect(manager.drains()).toHaveLength(0);
+        expect(manager.drain(7, 100, 80)).toBe(false);
     });
 });
 
