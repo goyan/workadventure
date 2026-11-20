@@ -156,7 +156,8 @@ function makeScene(
         getTerrainWater: () => ({
             version: () => water.version,
             coveredArea: () => ({ x: 0, y: 0, width: 320, height: 320 }),
-            settledDepthAt: (x: number, y: number) => water.depths[`${Math.floor(x / 16)},${Math.floor(y / 16)}`] ?? 0,
+            walkerSettledDepthAt: (x: number, y: number) =>
+                water.depths[`${Math.floor(x / 16)},${Math.floor(y / 16)}`] ?? 0,
         }),
         getGameMap: () => ({
             getWamFile: () => ({ getWam: () => ({ settings: drinkInterval ? { life: { drinkInterval } } : {} }) }),
