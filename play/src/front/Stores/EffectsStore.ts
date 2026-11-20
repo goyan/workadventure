@@ -25,6 +25,12 @@ export const effectShownStores: Readonly<Record<EffectName, Writable<boolean>>> 
     EFFECTS.map((name) => [name, createPersistedSwitchStore(`effectShown.${name}`, true)]),
 ) as Record<EffectName, Writable<boolean>>;
 
+/**
+ * The flames of a fire as this person wants them: detailed (a pixel-art fire, more frames, drawn more often) or the
+ * quick ones (fewer frames, lighter to draw). Detailed by default.
+ */
+export const detailedFlamesStore = createPersistedSwitchStore("fireDetailedFlames", true);
+
 /** Shown when its own switch wants it and Basique does not apply. */
 export function isEffectShown(name: EffectName): boolean {
     return get(effectShownStores[name]) && !isBasicActive();

@@ -5,6 +5,8 @@ export const CHAR_DEGREES = 4;
 /** What burnt of a tree is told from 0 to this (see TreeFire in libs/map-editor). */
 const TOLD_DAMAGE = 16;
 const TOLD_FIRE = 255;
+/** A tree whose fire went out smoulders this long. */
+export const SMOULDER_MS = 30_000;
 
 /** How charred a tree is drawn for what burnt of it as the server tells it (0 to 16): 0 green, 4 black and thinned. */
 export function charDegree(damage: number): number {
@@ -30,6 +32,8 @@ export interface FlyingEmber {
 export class TreeFireState {
     private readonly trees = new Map<string, { fire: number; damage: number }>();
     private flying: FlyingEmber[] = [];
+    /** When the fire of a tree went out before the eyes of this browser: it smoulders a while. */
+    private readonly outAt = new Map<string, number>();
 
     /** Takes a message of the server. Returns the trees whose image may have to change. */
     public receive(message: TreeFireMessage, now: number): string[] {
@@ -38,8 +42,12 @@ export class TreeFireState {
             for (const id of this.trees.keys()) touched.add(id);
             this.trees.clear();
         }
+        if (message.whole) this.outAt.clear();
         for (const tree of message.trees) {
             touched.add(tree.id);
+            const burnt = (this.trees.get(tree.id)?.fire ?? 0) > 0;
+            if (tree.fire > 0) this.outAt.delete(tree.id);
+            else if (burnt && tree.damage > 0) this.outAt.set(tree.id, now);
             if (tree.fire <= 0 && tree.damage <= 0) this.trees.delete(tree.id);
             else this.trees.set(tree.id, { fire: Math.min(1, tree.fire / TOLD_FIRE), damage: tree.damage });
         }
@@ -82,8 +90,23 @@ export class TreeFireState {
         return [...this.trees.keys()];
     }
 
+    /**
+     * The trees whose fire went out less than SMOULDER_MS ago, with what is left of their smouldering (1 as the fire
+     * goes out, 0 at the end): a pale smoke and a few red points on their black crown.
+     */
+    public smouldering(now: number): { id: string; left: number }[] {
+        const trees: { id: string; left: number }[] = [];
+        for (const [id, at] of this.outAt) {
+            const left = 1 - (now - at) / SMOULDER_MS;
+            if (left <= 0 || !this.trees.has(id)) this.outAt.delete(id);
+            else trees.push({ id, left: Math.min(1, left) });
+        }
+        return trees;
+    }
+
     public clear(): string[] {
         const touched = [...this.trees.keys()];
+        this.outAt.clear();
         this.trees.clear();
         this.flying = [];
         return touched;

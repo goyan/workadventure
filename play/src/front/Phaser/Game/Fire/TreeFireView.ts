@@ -1,9 +1,10 @@
 import * as Phaser from "phaser";
 import { DEPTH_LAMP_LIGHT_INDEX, DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import { seedOf } from "../Nature/SnowyTreeTexture";
-import { seenFromFar } from "../Weather/ScreenScale";
-import { FLAMES_TEXTURE, GLOW_TEXTURE, SMOKE_TEXTURE } from "./FireView";
-import { FLAME_FRAMES_PER_SECOND, flamePose, glowShare, smokeOf } from "./FlameShape";
+import { screenScale, seenFromFar } from "../Weather/ScreenScale";
+import { GLOW_TEXTURE, SMOKE_TEXTURE, TREE_SMOKE_TEXTURE } from "./FireView";
+import { flamePose, glowShare, smokeFarScale, smokeOf } from "./FlameShape";
+import { FLAMES_TEXTURE, flameStyle } from "./FlameStyle";
 import type { TreeFireState } from "./TreeFireState";
 import { emberPoint, treeFlameIntensity, treeFlames } from "./TreeFlames";
 import type { TreeFlame } from "./TreeFlames";
@@ -15,9 +16,13 @@ const VIEW_MARGIN_PX = 200;
 /** The glow of a tree on fire, as a share of the width of its crown, and how strong at its height. */
 const TREE_GLOW_WIDTHS = 2.4;
 const TREE_GLOW_ALPHA = 0.9;
-/** The smoke of a tree: each puff of the grass, this many times as big, from this many points of the crown. */
-const TREE_SMOKE_SCALE = 2.2;
+/** The smoke of a tree: each of its puffs this many times as big, from this many points of the crown. */
+const TREE_SMOKE_SCALE = 1.6;
 const TREE_SMOKE_COLUMNS = 2;
+/** A tree whose fire went out: red points this wide on its crown (map pixels), this many, and a pale smoke. */
+const SMOULDER_POINTS = 6;
+const SMOULDER_POINT_PX = 7;
+const SMOULDER_SMOKE_ALPHA = 0.5;
 /** An ember in flight: a bright point this wide (map pixels), and the glow around it. */
 const EMBER_PX = 6;
 const EMBER_GLOW_PX = 36;
@@ -52,7 +57,7 @@ export class TreeFireView {
 
     constructor(
         private readonly scene: Phaser.Scene & { markDirty(): void },
-        private readonly state: Pick<TreeFireState, "burning" | "isBurning" | "embers">,
+        private readonly state: Pick<TreeFireState, "burning" | "isBurning" | "embers" | "smouldering">,
         private readonly tree: (id: string) => BurningTreeObject | undefined,
         private readonly wind: () => { windFrom?: number; windSpeed?: number } | undefined,
         private readonly reducedMotion: () => boolean,
@@ -62,18 +67,22 @@ export class TreeFireView {
     public update(now: number): void {
         const reducedMotion = this.reducedMotion();
         this.drawEmbers(now, reducedMotion);
-        if (!this.enabled() || !this.state.isBurning()) {
+        const smouldering = this.enabled() ? this.state.smouldering(now) : [];
+        if (!this.enabled() || (!this.state.isBurning() && smouldering.length === 0)) {
             if (this.drawn) this.clear();
             return;
         }
         // The flames move with their frames: between two of them nothing changes, and nothing is drawn again.
-        const step = Math.floor((now / 1000) * FLAME_FRAMES_PER_SECOND);
+        const style = flameStyle(this.scene);
+        const step = Math.floor((now / 1000) * style.loop.framesPerSecond);
         if (step === this.lastStep) return;
         this.lastStep = step;
         const view = this.scene.cameras.main.worldView;
         const far = seenFromFar(this.scene);
         const wind = this.wind();
         const seconds = now / 1000;
+        // Seen from high the smoke is drawn bigger: it is what shows where it burns.
+        const smokeScale = TREE_SMOKE_SCALE * smokeFarScale(screenScale(this.scene));
         const burning = this.state.burning();
         let flames = 0;
         let glows = 0;
@@ -111,10 +120,10 @@ export class TreeFireView {
                     seed: flame.seed,
                     reducedMotion,
                 };
-                const pose = flamePose(input);
+                const pose = flamePose(input, style.loop);
                 const image = this.imageAt(this.flames, flames++, FLAMES_TEXTURE)
                     .setOrigin(0.5, 1)
-                    .setFrame(pose.frame)
+                    .setTexture(style.texture, style.frameOf(pose.frame, flame.seed))
                     .setPosition(flame.x, flame.y)
                     .setScale(pose.scaleX * flame.scale, pose.scaleY * flame.scale)
                     .setRotation(pose.rotation)
@@ -136,26 +145,83 @@ export class TreeFireView {
                 .setAlpha(fire * TREE_GLOW_ALPHA * glowShare(Math.ceil(burning.length / 4)))
                 .setVisible(true);
             for (let column = 0; column < (single ? 1 : TREE_SMOKE_COLUMNS); column++) {
-                const smoke = smokeOf({
-                    intensity: fire,
-                    windFrom: wind?.windFrom,
-                    windSpeed: wind?.windSpeed,
-                    seconds,
-                    seed: (seedOf(id) + column * 0.37) % 1,
-                    reducedMotion,
-                });
+                const smoke = smokeOf(
+                    {
+                        intensity: fire,
+                        windFrom: wind?.windFrom,
+                        windSpeed: wind?.windSpeed,
+                        seconds,
+                        seed: (seedOf(id) + column * 0.37) % 1,
+                        reducedMotion,
+                    },
+                    "tree",
+                );
                 for (const puff of smoke) {
-                    const size = puff.radius * 2 * TREE_SMOKE_SCALE;
-                    this.imageAt(this.puffs, puffs++, SMOKE_TEXTURE)
+                    const size = puff.radius * 2 * smokeScale;
+                    this.imageAt(this.puffs, puffs++, TREE_SMOKE_TEXTURE)
+                        .setTexture(TREE_SMOKE_TEXTURE)
                         .setDepth(DEPTH_NIGHT_INDEX - 1)
+                        .setBlendMode(Phaser.BlendModes.NORMAL)
                         .setPosition(
-                            middleX + (column - 0.5) * tree.displayWidth * 0.3 + puff.x * TREE_SMOKE_SCALE,
-                            crownY + puff.y * TREE_SMOKE_SCALE,
+                            middleX + (column - 0.5) * tree.displayWidth * 0.3 + puff.x * smokeScale,
+                            crownY + puff.y * smokeScale,
                         )
                         .setDisplaySize(size, size)
                         .setAlpha(puff.alpha)
                         .setVisible(true);
                 }
+            }
+        }
+        // A tree whose fire just went out: a pale smoke that thins out, and red points that die on its black crown.
+        for (const { id, left } of smouldering) {
+            const tree = this.tree(id);
+            if (!tree || !tree.visible) continue;
+            if (
+                tree.x > view.right + VIEW_MARGIN_PX ||
+                tree.x + tree.displayWidth < view.x - VIEW_MARGIN_PX ||
+                tree.y > view.bottom + VIEW_MARGIN_PX ||
+                tree.y + tree.displayHeight < view.y - VIEW_MARGIN_PX
+            ) {
+                continue;
+            }
+            const middleX = tree.x + tree.displayWidth / 2;
+            const crownY = tree.y + tree.displayHeight * 0.35;
+            const smoke = smokeOf({
+                intensity: 0.4 + 0.6 * left,
+                windFrom: wind?.windFrom,
+                windSpeed: wind?.windSpeed,
+                seconds,
+                seed: seedOf(id),
+                reducedMotion,
+            });
+            for (const puff of smoke) {
+                const size = puff.radius * 2 * smokeScale;
+                this.imageAt(this.puffs, puffs++, SMOKE_TEXTURE)
+                    .setTexture(SMOKE_TEXTURE)
+                    .setDepth(DEPTH_NIGHT_INDEX - 1)
+                    .setBlendMode(Phaser.BlendModes.NORMAL)
+                    .setPosition(middleX + puff.x * smokeScale, crownY + puff.y * smokeScale)
+                    .setDisplaySize(size, size)
+                    .setAlpha(puff.alpha * SMOULDER_SMOKE_ALPHA * left)
+                    .setVisible(true);
+            }
+            if (far) continue;
+            for (let point = 0; point < SMOULDER_POINTS; point++) {
+                const seed = (seedOf(id) * 31 + point * 0.618) % 1;
+                // Each dies in its own time, the last with the smouldering, and pulses slowly while it lives.
+                const life = left - (point / SMOULDER_POINTS) * 0.7;
+                if (life <= 0) continue;
+                const pulse = reducedMotion ? 0.8 : 0.6 + 0.4 * Math.sin(seconds * 2.2 + seed * 40);
+                this.imageAt(this.glows, glows++, GLOW_TEXTURE)
+                    .setDepth(tree.depth + 0.3)
+                    .setBlendMode(Phaser.BlendModes.ADD)
+                    .setPosition(
+                        tree.x + tree.displayWidth * (0.25 + 0.5 * seed),
+                        tree.y + tree.displayHeight * (0.15 + 0.4 * ((seed * 7) % 1)),
+                    )
+                    .setDisplaySize(SMOULDER_POINT_PX, SMOULDER_POINT_PX)
+                    .setAlpha(Math.min(1, life * 3) * pulse)
+                    .setVisible(true);
             }
         }
         for (const id of this.anchors.keys()) if (!seen.has(id)) this.anchors.delete(id);

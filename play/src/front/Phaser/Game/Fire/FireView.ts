@@ -3,6 +3,7 @@ import { TILE_PX } from "@workadventure/map-editor";
 import { DEPTH_LAMP_LIGHT_INDEX, DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import { placeAtDepth } from "../DepthSort";
 import type { MeadowState } from "../Terrain/MeadowState";
+import { screenScale } from "../Weather/ScreenScale";
 import { isEffectShown } from "../../../Stores/EffectsStore";
 import {
     drawnEmbers,
@@ -10,16 +11,17 @@ import {
     FLAME_FRAME_HEIGHT_PX,
     FLAME_FRAME_WIDTH_PX,
     FLAME_FRAMES,
-    FLAME_FRAMES_PER_SECOND,
     FLAME_MAX_HEIGHT_PX,
     flameOutline,
     flamePose,
     GLOW_NEIGHBOUR_REACH,
     glowShare,
+    smokeFarScale,
     smokeOf,
     spreadTiles,
     tileSeed,
 } from "./FlameShape";
+import { FLAMES_TEXTURE, flameStyle } from "./FlameStyle";
 
 /** Flames are drawn on about this many tiles at most: beyond, on a share of them all over the view, bigger. */
 const MAX_FLAMES = 600;
@@ -37,10 +39,13 @@ const TONGUES: readonly { scale: number; color: string; alpha: number }[] = [
 const EMBER_COLOR = "#ffb347";
 const GLOW_RADIUS_PX = 72;
 const GLOW_ALPHA = 0.16;
-/** The drawn frames of the flames, a soft disc for their glow, another for their smoke: drawn once for the game. */
-export const FLAMES_TEXTURE = "fire-flames";
+/**
+ * A soft disc for the glow of the flames, another for the smoke of the grass (a pale grey) and one for the smoke of
+ * the trees (black): drawn once for the game, with the frames of the quick flames.
+ */
 export const GLOW_TEXTURE = "fire-glow";
 export const SMOKE_TEXTURE = "fire-smoke";
+export const TREE_SMOKE_TEXTURE = "fire-smoke-tree";
 const SOFT_DISC_PX = 64;
 
 /**
@@ -72,7 +77,8 @@ export class FireView {
             return;
         }
         // The flames move with their frames: between two of them nothing changes, and nothing is drawn again.
-        const step = Math.floor((now / 1000) * FLAME_FRAMES_PER_SECOND);
+        const style = flameStyle(this.scene);
+        const step = Math.floor((now / 1000) * style.loop.framesPerSecond);
         if (step === this.lastStep) return;
         this.lastStep = step;
         const view = this.scene.cameras.main.worldView;
@@ -95,6 +101,8 @@ export class FireView {
         const wind = this.wind();
         const reducedMotion = this.reducedMotion();
         const seconds = now / 1000;
+        // Seen from high the smoke is drawn bigger: it is what shows where it burns.
+        const smokeScale = scale * smokeFarScale(screenScale(this.scene));
         let puffs = 0;
         shown.forEach((tile, index) => {
             const input = {
@@ -107,10 +115,10 @@ export class FireView {
             };
             const footX = (tile.x + 0.5) * TILE_PX;
             const footY = (tile.y + FOOT_IN_TILE) * TILE_PX;
-            const pose = flamePose(input);
+            const pose = flamePose(input, style.loop);
             // At the depth of its foot: what stands lower on the map is drawn over it.
             const flame = this.flameAt(index)
-                .setFrame(pose.frame)
+                .setTexture(style.texture, style.frameOf(pose.frame, input.seed))
                 .setPosition(footX, footY)
                 .setScale(pose.scaleX * scale, pose.scaleY * scale)
                 .setRotation(pose.rotation)
@@ -124,8 +132,8 @@ export class FireView {
                 .setVisible(true);
             for (const puff of smokeOf(input)) {
                 this.puffAt(puffs++)
-                    .setPosition(footX + puff.x * scale, footY + puff.y * scale)
-                    .setDisplaySize(puff.radius * 2 * scale, puff.radius * 2 * scale)
+                    .setPosition(footX + puff.x * smokeScale, footY + puff.y * smokeScale)
+                    .setDisplaySize(puff.radius * 2 * smokeScale, puff.radius * 2 * smokeScale)
                     .setAlpha(puff.alpha)
                     .setVisible(true);
             }
@@ -222,7 +230,8 @@ export class FireView {
             }
         }
         this.drawSoftDisc(GLOW_TEXTURE, `rgba(255, 122, 26, ${GLOW_ALPHA * 2})`, "rgba(255, 122, 26, 0)");
-        this.drawSoftDisc(SMOKE_TEXTURE, "rgba(58, 54, 50, 1)", "rgba(58, 54, 50, 0)");
+        this.drawSoftDisc(SMOKE_TEXTURE, "rgba(168, 166, 162, 1)", "rgba(168, 166, 162, 0)");
+        this.drawSoftDisc(TREE_SMOKE_TEXTURE, "rgba(22, 20, 19, 1)", "rgba(22, 20, 19, 0)");
     }
 
     private drawSoftDisc(key: string, middle: string, edge: string): void {

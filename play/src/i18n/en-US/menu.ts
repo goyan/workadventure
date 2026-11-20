@@ -271,6 +271,8 @@ const menu: BaseTranslation = {
             meteor: "Meteors",
             downpour: "Downpours",
             fire: "Flames and smoke",
+            detailedFlames: "Detailed flames",
+            detailedFlamesHint: "A nicer fire, drawn more often. Off: simpler flames, lighter to display.",
             treeSway: "Trees swaying in the wind",
             windowLight: "Light through the windows",
             waterFlow: "Foam and whirls on the water",

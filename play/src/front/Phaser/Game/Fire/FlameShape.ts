@@ -104,6 +104,14 @@ export function drawnEmbers(frame: number): { x: number; y: number; alpha: numbe
 }
 
 /** How a drawn frame is laid on a tile on fire: which frame, how wide and tall, and turned how far (radians). */
+/** A loop of drawn frames: how many, and at which pace. The frame after the last is the flame that stands still. */
+export interface FlameLoop {
+    frames: number;
+    framesPerSecond: number;
+}
+/** The loop of the quick flames. */
+export const QUICK_FLAME_LOOP: FlameLoop = { frames: FLAME_FRAMES, framesPerSecond: FLAME_FRAMES_PER_SECOND };
+
 export interface FlamePose {
     frame: number;
     scaleX: number;
@@ -116,13 +124,13 @@ export interface FlamePose {
  * the wind lays it, in its own time and at its own pace. For who asked for less motion, the frame after the loop:
  * a flame that stands still, without embers.
  */
-export function flamePose(input: FlameInput): FlamePose {
+export function flamePose(input: FlameInput, loop: FlameLoop = QUICK_FLAME_LOOP): FlamePose {
     const flame = flameOf(input);
     const rise = flame.height - flame.tip.y;
     const pace = 0.8 + 0.4 * ((input.seed * 7) % 1);
     const frame = input.reducedMotion
-        ? FLAME_FRAMES
-        : Math.floor(input.seconds * FLAME_FRAMES_PER_SECOND * pace + input.seed * FLAME_FRAMES) % FLAME_FRAMES;
+        ? loop.frames
+        : Math.floor(input.seconds * loop.framesPerSecond * pace + input.seed * loop.frames) % loop.frames;
     return {
         frame,
         scaleX: flame.width / FLAME_MAX_WIDTH_PX,
@@ -152,25 +160,57 @@ export function flameOutline(flame: Flame, scale: number): { x: number; y: numbe
     return [...left, ...right];
 }
 
-/** Smoke over a strong fire: puffs that rise, widen, thin out and drift downwind. One still puff for less motion. */
-export function smokeOf(input: FlameInput): { x: number; y: number; radius: number; alpha: number }[] {
-    if (input.intensity < 0.4) return [];
+/** What burns: the grass gives a pale grey smoke, a tree a thick black one. */
+export type SmokeKind = "grass" | "tree";
+/** The smoke of each: how many puffs, how opaque the thickest, how wide they start and end, how high they rise. */
+const SMOKE: Record<SmokeKind, { alpha: number; from: number; to: number; rise: number }> = {
+    grass: { alpha: 0.6, from: 14, to: 46, rise: 190 },
+    tree: { alpha: 0.82, from: 18, to: 58, rise: 230 },
+};
+const SMOKE_PUFFS = 3;
+/** A fire smokes from this strong on. */
+const SMOKE_FROM_INTENSITY = 0.25;
+
+/**
+ * Smoke over a fire: puffs that rise high, widen, thin out and drift downwind; a fire is seen from far by its smoke.
+ * Thicker and wider over a tree than over the grass. One still puff for less motion.
+ */
+export function smokeOf(
+    input: FlameInput,
+    kind: SmokeKind = "grass",
+): { x: number; y: number; radius: number; alpha: number }[] {
+    if (input.intensity < SMOKE_FROM_INTENSITY) return [];
     const intensity = unit(input.intensity);
-    if (input.reducedMotion) return [{ x: 0, y: -(FLAME_MAX_HEIGHT_PX + 20), radius: 14, alpha: 0.2 * intensity }];
+    const smoke = SMOKE[kind];
+    // Even a low fire smokes well: half of its smoke at least.
+    const thick = smoke.alpha * (0.5 + 0.5 * intensity);
+    if (input.reducedMotion) {
+        return [{ x: 0, y: -(FLAME_MAX_HEIGHT_PX + 30), radius: (smoke.from + smoke.to) / 2, alpha: thick * 0.6 }];
+    }
     const to = windTo(input.windFrom);
     const carried = Math.min(1.5, speedOf(input.windSpeed) / 40);
     const puffs: { x: number; y: number; radius: number; alpha: number }[] = [];
-    for (let puff = 0; puff < 2; puff++) {
-        const phase = (input.seconds * 0.18 + input.seed * 1.7 + puff / 2) % 1;
-        const rise = 50 + phase * 110;
+    for (let puff = 0; puff < SMOKE_PUFFS; puff++) {
+        const phase = (input.seconds * 0.14 + input.seed * 1.7 + puff / SMOKE_PUFFS) % 1;
+        const rise = 36 + phase * smoke.rise;
         puffs.push({
-            x: to.x * carried * phase * 90,
-            y: -rise + to.y * carried * phase * 30,
-            radius: 8 + phase * 16,
-            alpha: 0.3 * (1 - phase) * intensity,
+            x: to.x * carried * phase * 150 + Math.sin(phase * 5 + input.seed * 9) * 6,
+            y: -rise + to.y * carried * phase * 50,
+            radius: smoke.from + phase * (smoke.to - smoke.from),
+            alpha: thick * (1 - phase) ** 0.7,
         });
     }
     return puffs;
+}
+
+/**
+ * How many times bigger the smoke is drawn when the map is seen from high (`screenScale`: screen pixels a map pixel):
+ * as it is from 1.5 on, then bigger as the map shrinks, three times at most. Seen from high the flames are a few
+ * pixels: the smoke is what shows where it burns.
+ */
+export function smokeFarScale(screenScale: number): number {
+    if (!Number.isFinite(screenScale) || screenScale <= 0) return 1;
+    return Math.min(3, Math.max(1, 1.5 / screenScale));
 }
 
 /** The own time of a tile, from 0 to 1, always the same for a tile: its flames breathe apart from its neighbours'. */
