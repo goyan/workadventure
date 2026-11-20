@@ -54,6 +54,7 @@ import { SpeechDomElement } from "../Entity/SpeechDomElement";
 import LL from "../../../i18n/i18n-svelte";
 import { DEBUG_MODE } from "../../Enum/EnvironmentVariable";
 import { TexturesHelper } from "../Helpers/TexturesHelper";
+import { reachesView } from "../Game/ViewCulling";
 import { getLayerDepth, stackableDepths } from "./EntityLayerDepth";
 
 import Sprite = Phaser.GameObjects.Sprite;
@@ -144,6 +145,19 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         this.on(Phaser.Input.Events.DRAG, () => {
             this.updateDebugActivationZone();
         });
+    }
+
+    /**
+     * Not drawn when out of what the camera of the scene shows (Phaser draws every object, on screen or not). Only
+     * for that camera: a texture an object is drawn into has its own, with another view.
+     */
+    public override willRender(camera: Phaser.Cameras.Scene2D.Camera): boolean {
+        if (!super.willRender(camera)) return false;
+        if (camera !== this.scene.cameras.main) return true;
+        return reachesView(
+            { x: this.x, y: this.y, width: this.displayWidth, height: this.displayHeight },
+            camera.worldView,
+        );
     }
 
     /** Shows the loaded image of the prefab, played in a loop when it is an animated strip. */

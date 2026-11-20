@@ -103,6 +103,21 @@ export function rainUnderCloud(thickness: number, effect = 1): number {
     return 1 + effect * (0.9 * Math.max(0, Math.min(1, thickness)) - 0.5);
 }
 
+/** Up to this many screen pixels a map pixel, the rain is drawn in map pixels: the size it was set at. */
+const RAIN_NATIVE_SCALE = 2.5;
+
+/**
+ * How many times finer than the map the rain is drawn when the map is seen from this close (`screenScale`: screen
+ * pixels a map pixel). The drops are sized in map pixels: zoomed in to the full, a drop was a streak as thick as a
+ * finger and they hid the map. Past the usual zooms the rain is worked out on a grid this many times finer, so it
+ * looks on screen as it does at a usual zoom: 1 up to RAIN_NATIVE_SCALE, then doubling with the zoom (by steps, so
+ * the drops jump only when a step is crossed).
+ */
+export function rainFineness(screenScale: number): number {
+    if (!Number.isFinite(screenScale) || screenScale <= RAIN_NATIVE_SCALE) return 1;
+    return 2 ** Math.ceil(Math.log2(screenScale / RAIN_NATIVE_SCALE));
+}
+
 const FALL_CYCLES = 100_000;
 
 /** Base cells across the view: the drops are as many on the screen at any zoom, never countless zoomed out. */
