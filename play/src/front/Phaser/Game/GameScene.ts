@@ -392,6 +392,8 @@ import { LifeSpeciesStats, withoutSpeciesCounts } from "./Life/LifeSpeciesStats"
 import { LifeStats } from "./Life/LifeStats";
 import { TerrainView } from "./Terrain/TerrainView";
 import { ReliefTiles } from "./Terrain/ReliefTiles";
+import { CharacterDrops } from "./Terrain/CharacterDrops";
+import { avatarDrop } from "./Terrain/AvatarDrop";
 import { WaterFlowView } from "./Terrain/WaterFlowView";
 import { gunzip } from "./Terrain/WaterStateCodec";
 import { MeadowState } from "./Terrain/MeadowState";
@@ -638,6 +640,8 @@ export class GameScene extends DirtyScene {
     private terrainView: TerrainView | undefined;
     /** The relief seen in 3/4: the dug ground drawn lower, its faces, its water. */
     private reliefTiles: ReliefTiles | undefined;
+    /** The characters drawn lower in the hollows of the relief, while the image is drawn. */
+    private characterDrops: CharacterDrops | undefined;
     private waterFlowView: WaterFlowView | undefined;
     private terrainWaterQueue: Promise<void> = Promise.resolve();
     private skyShadowManager: SkyShadowManager | undefined;
@@ -1735,6 +1739,8 @@ export class GameScene extends DirtyScene {
         this.terrainView = undefined;
         this.reliefTiles?.destroy();
         this.reliefTiles = undefined;
+        this.characterDrops?.destroy();
+        this.characterDrops = undefined;
         this.waterFlowView?.destroy();
         this.waterFlowView = undefined;
         this.aquaticLifeView?.destroy();
@@ -2376,6 +2382,20 @@ export class GameScene extends DirtyScene {
             this.terrainView?.setProjected(!editorOpen && this.reliefTiles !== undefined);
             this.terrainView?.update(time);
             this.reliefTiles?.update(time);
+            // Every character drawn as low as the ground (or the water) under it, in a hollow.
+            if (this.reliefTiles) {
+                const relief = this.terrainWater.relief();
+                const dropOf = (character: { x: number; y: number; getFloorZ(): number }): number =>
+                    avatarDrop(
+                        relief,
+                        character,
+                        this.terrainWater.depthAt(character.x, character.y, time),
+                        character.getFloorZ(),
+                        editorOpen,
+                    );
+                if (this.CurrentPlayer) this.CurrentPlayer.setGroundDrop(dropOf(this.CurrentPlayer));
+                for (const remote of this.MapPlayersByKey.values()) remote.setGroundDrop(dropOf(remote));
+            }
             this.waterFlowView?.update(time);
             this.aquaticLifeView?.update(time);
             this.gullLifeView?.update(time);
@@ -3815,6 +3835,11 @@ export class GameScene extends DirtyScene {
                     season: () => this.getGroundSeason(),
                     snowShown: () => this.seasonalThemeManager?.groundSnow() ?? 0,
                 });
+                this.characterDrops?.destroy();
+                this.characterDrops = new CharacterDrops(this, () => [
+                    ...(this.CurrentPlayer ? [this.CurrentPlayer] : []),
+                    ...this.MapPlayersByKey.values(),
+                ]);
                 // The water seen moving: foam on its current, whirls over the sinks, rings over the sources.
                 this.waterFlowView?.destroy();
                 this.waterFlowView = new WaterFlowView(this, {

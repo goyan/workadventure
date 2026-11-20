@@ -541,6 +541,23 @@ export abstract class Character extends Container implements OutlineableInterfac
 
     /** SPIKE (floors study): altitude of the floor the character stands on, in pixels above the ground. */
     private floorZ = 0;
+    /** How much lower the character is drawn, standing in a hollow of the relief seen in 3/4 (avatarDrop). */
+    private groundDrop = 0;
+    public getGroundDrop(): number {
+        return this.groundDrop;
+    }
+
+    /**
+     * Draws the character this much lower, in a hollow of the relief: its sprites while the image is drawn
+     * (CharacterDrops), its name here. Its place, its body and its depth do not change.
+     */
+    public setGroundDrop(drop: number): void {
+        const rounded = Math.round(drop);
+        if (rounded === this.groundDrop) return;
+        this.groundDrop = rounded;
+        this.updateUsernameDisplayPosition();
+        this.scene.markDirty();
+    }
     public getFloorZ(): number {
         return this.isFlying() ? AIRPLANE_AREA_LEVEL : this.floorZ;
     }
@@ -764,7 +781,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     }
 
     protected updateUsernameDisplayPosition(x = this.x, y = this.y): void {
-        this.usernameDisplay?.setPosition(x, y + playerNameY - this.flightLift);
+        this.usernameDisplay?.setPosition(x, y + playerNameY - this.flightLift + this.groundDrop);
     }
 
     public setVideoBubbleVisible(visible: boolean): void {
