@@ -12,6 +12,7 @@
         mapLayerDoorHeightsAvailableStore,
         mapLayerDoorGlazedStore,
         mapLayerDoorsAvailableStore,
+        mapLayerBridgesAvailableStore,
         mapLayerGlazedDoorHeightsAvailableStore,
         mapLayerGlazedDoorsAvailableStore,
         mapLayerGlassSlabsAvailableStore,
@@ -48,6 +49,7 @@
     import {
         IconArrowAutofitHeight,
         IconBrush,
+        IconBuildingBridge,
         IconStack2,
         IconStairs,
         IconBucket,
@@ -82,6 +84,7 @@
                 { mode: "floorBrush", icon: IconBrush },
                 { mode: "floorRectangle", icon: IconRectangle },
                 { mode: "floorFill", icon: IconBucket },
+                { mode: "bridge", icon: IconBuildingBridge },
             ],
         },
         {
@@ -133,6 +136,7 @@
             $mapLayerModeStore !== "slabErase" &&
             $mapLayerModeStore !== "stair" &&
             $mapLayerModeStore !== "erase" &&
+            $mapLayerModeStore !== "bridge" &&
             $mapLayerModeStore !== "door" &&
             $mapLayerModeStore !== "window" &&
             $mapLayerModeStore !== "height",
@@ -189,7 +193,11 @@
         type="button"
         disabled={(mode === "door" && !$mapLayerDoorsAvailableStore) ||
             (mode === "window" && !$mapLayerWindowsAvailableStore) ||
+            (mode === "bridge" && !$mapLayerBridgesAvailableStore) ||
             (isFloorMode(mode) && !$mapLayerFloorsAvailableStore)}
+        title={mode === "bridge" && !$mapLayerBridgesAvailableStore
+            ? $LL.mapEditor.mapLayer.status.bridgesUnavailable()
+            : undefined}
         class="build-slot labeled"
         data-testid="mapLayerMode-{mode}"
         aria-label={$LL.mapEditor.mapLayer.modes[mode]()}

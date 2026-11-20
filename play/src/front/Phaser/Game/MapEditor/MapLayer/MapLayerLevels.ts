@@ -83,7 +83,8 @@ export function levelPlacements(placements: readonly MapLayerPlacement[], level:
     return placements
         .filter(
             (item) =>
-                item.collectionName !== MAP_LAYER_FLOOR_COLLECTION && item.collectionName !== MAP_LAYER_BRIDGE_COLLECTION,
+                item.collectionName !== MAP_LAYER_FLOOR_COLLECTION &&
+                item.collectionName !== MAP_LAYER_BRIDGE_COLLECTION,
         )
         .map((item) => {
             const upper = upperPrefabOf(item.collectionName, item.prefabId);

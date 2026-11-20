@@ -767,6 +767,7 @@ const mapEditor: BaseTranslation = {
             floorBrush: "Floor brush",
             floorRectangle: "Floor rectangle",
             floorFill: "Floor fill",
+            bridge: "Bridge",
             door: "Door",
             window: "Window",
             height: "Height",
@@ -781,6 +782,7 @@ const mapEditor: BaseTranslation = {
             floorBrush: "Hold the button and paint floor tiles.",
             floorRectangle: "Drag a rectangle to fill it with the floor.",
             floorFill: "Click inside a closed room to fill it.",
+            bridge: "Hold the button and paint the deck of a bridge, tile by tile. Everything that walks crosses it dry; the water runs under it.",
             door: "Click on a wall to turn two of its segments into a door. It opens when someone comes near.",
             window: "Click or drag along a horizontal wall to put windows in it. You can see through them. Drag a placed window to move it.",
             height: "Click a wall, a door or a window (or drag along a wall) to select it, then choose its height.",
@@ -874,6 +876,7 @@ const mapEditor: BaseTranslation = {
             doorsUnavailable: "This room has no door catalog: doors are not available.",
             windowInvalid: "A window goes on a free horizontal wall (no door, no window yet). Click on a wall.",
             windowsUnavailable: "This room has no window catalog: windows are not available.",
+            bridgesUnavailable: "This room has no bridge catalog: bridges are not available.",
             slabOnGround:
                 "Choose a level above the ground first: the floors of the ground are drawn with the floor modes.",
             stairNoArrival:

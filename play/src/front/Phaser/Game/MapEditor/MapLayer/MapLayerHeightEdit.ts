@@ -64,7 +64,7 @@ function pickableSprites(model: MapLayerModel): PickableSprite[] {
     const sprites: PickableSprite[] = [];
     for (const placement of computePlacements(model)) {
         const piece = parseMapLayerPrefab(placement.collectionName, placement.prefabId);
-        if (!piece || (piece.kind === "floor" || piece.kind === "bridge") || piece.kind === "joint") continue;
+        if (!piece || piece.kind === "floor" || piece.kind === "bridge" || piece.kind === "joint") continue;
         const rise = wallRise(piece.height);
         let edge: WallEdgeRef;
         let target: HeightTarget | undefined;

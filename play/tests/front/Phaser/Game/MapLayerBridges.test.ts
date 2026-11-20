@@ -23,7 +23,9 @@ const bounds = { columns: 10, rows: 10 };
 const bridgeAt = (model: MapLayerModel, x: number, y: number): string | undefined =>
     computePlacements(model).find(
         (placement) =>
-            placement.collectionName === MAP_LAYER_BRIDGE_COLLECTION && placement.x === x * 32 && placement.y === y * 32,
+            placement.collectionName === MAP_LAYER_BRIDGE_COLLECTION &&
+            placement.x === x * 32 &&
+            placement.y === y * 32,
     )?.prefabId;
 const idOf = (mask: number): string => mapLayerPrefabId(MAP_LAYER_BRIDGE_COLLECTION, bridgePrefabName(mask));
 
@@ -107,10 +109,11 @@ describe("the piece of each tile of a bridge", () => {
         const model = new MapLayerModel();
         model.setFloor(5, 5, "parquet-clair");
         model.setBridge(5, 5);
-        expect(computePlacements(model).map((placement) => placement.collectionName).sort()).toEqual([
-            "Carte Ponts",
-            "Carte Sols",
-        ]);
+        expect(
+            computePlacements(model)
+                .map((placement) => placement.collectionName)
+                .sort(),
+        ).toEqual(["Carte Ponts", "Carte Sols"]);
     });
 });
 

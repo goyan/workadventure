@@ -9,6 +9,7 @@ export type MapLayerMode =
     | "floorBrush"
     | "floorRectangle"
     | "floorFill"
+    | "bridge"
     | "door"
     | "window"
     | "height"
@@ -61,6 +62,9 @@ export const mapLayerCatalogAvailableStore = writable<boolean | undefined>(undef
 /** Whether the door catalog is loaded in the current room: the door mode is disabled without it. */
 export const mapLayerDoorsAvailableStore = writable<boolean>(false);
 
+/** Whether the bridge catalog is loaded in the current room: the bridge mode is disabled without it. */
+export const mapLayerBridgesAvailableStore = writable<boolean>(false);
+
 /** Whether the slabs laid are of glass, instead of the floor chosen. */
 export const mapLayerSlabGlassStore = writable<boolean>(false);
 /** Whether the catalog of the raised floors has the glass slab: the "Glass" switch is disabled without it. */
@@ -84,6 +88,7 @@ export type MapLayerStatus =
     | "doorsUnavailable"
     | "windowInvalid"
     | "windowsUnavailable"
+    | "bridgesUnavailable"
     | "slabOnGround"
     | "stairInvalid"
     | "stairNoArrival"
