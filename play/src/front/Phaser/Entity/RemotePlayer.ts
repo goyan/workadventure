@@ -318,7 +318,11 @@ export class RemotePlayer extends Character implements ActivatableInterface {
             priority: 3,
             style: "bg-white/10 hover:bg-white/30",
             callback: () => {
-                const sent = this.scene.inviteManager?.requestMeetingInvitation(this.userUuid, this.userId);
+                const sent = this.scene.inviteManager?.requestMeetingInvitation(
+                    this.userUuid,
+                    this.userId,
+                    this.playerName,
+                );
                 if (sent) {
                     try {
                         this.scene.playSound("meeting-in", 0.15);

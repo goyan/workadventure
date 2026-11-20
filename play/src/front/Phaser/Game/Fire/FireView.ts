@@ -3,6 +3,7 @@ import { TILE_PX } from "@workadventure/map-editor";
 import { DEPTH_LAMP_LIGHT_INDEX, DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import { placeAtDepth } from "../DepthSort";
 import type { MeadowState } from "../Terrain/MeadowState";
+import { isEffectShown } from "../../../Stores/EffectsStore";
 import {
     drawnEmbers,
     drawnFlame,
@@ -66,7 +67,7 @@ export class FireView {
     }
 
     public update(now: number): void {
-        if (!this.meadow.isBurning()) {
+        if (!this.meadow.isBurning() || !isEffectShown("fire")) {
             if (this.drawn) this.clear();
             return;
         }

@@ -1,12 +1,24 @@
 <script lang="ts">
     import { LL } from "../../../i18n/i18n-svelte";
     import { gameManager } from "../../Phaser/Game/GameManager";
-    import { meetingInvitationRequestStore } from "../../Stores/MeetingInvitationStore";
+    import { meetingInvitationRequestStore, meetingInvitationRingEndStore } from "../../Stores/MeetingInvitationStore";
     import Button from "../UI/Button.svelte";
     import WokaFromUserId from "../Woka/WokaFromUserId.svelte";
     import { IconUsersGroup } from "@wa-icons";
 
     let request = $derived($meetingInvitationRequestStore);
+
+    // The call rings: seconds left before it is missed, counted down each second.
+    let now = $state(Date.now());
+    $effect(() => {
+        const timer = setInterval(() => (now = Date.now()), 1000);
+        return () => clearInterval(timer);
+    });
+    let secondsLeft = $derived(
+        $meetingInvitationRingEndStore === null
+            ? undefined
+            : Math.max(0, Math.ceil(($meetingInvitationRingEndStore - now) / 1000)),
+    );
 
     function onAccept() {
         gameManager.getCurrentGameScene().inviteManager?.handleAccept({
@@ -49,8 +61,13 @@
             </div>
             <div class="flex-1 min-w-0 pt-0.5">
                 <p class="text-sm text-white/95 leading-snug">
-                    {$LL.chat.meetingInvitation.title({ name: request?.senderName ?? "" })}
+                    {$LL.chat.meetingInvitation.incomingCall({ name: request?.senderName ?? "" })}
                 </p>
+                {#if secondsLeft !== undefined}
+                    <p class="text-xs text-white/60 leading-snug m-0" data-testid="meeting-invitation-countdown">
+                        {$LL.chat.meetingInvitation.ringing({ seconds: secondsLeft })}
+                    </p>
+                {/if}
             </div>
         </div>
     </div>

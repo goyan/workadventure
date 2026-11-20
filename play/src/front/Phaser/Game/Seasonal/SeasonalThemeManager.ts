@@ -1,4 +1,4 @@
-import { get, type Unsubscriber } from "svelte/store";
+import { get, type Unsubscriber, derived } from "svelte/store";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { seasonalThemeModeStore } from "../../../Stores/SeasonalThemeStore";
 import { AutumnDecor } from "../Autumn/AutumnDecor";
@@ -6,6 +6,7 @@ import { ChristmasDecor } from "../Christmas/ChristmasDecor";
 import type { WalkerSample } from "../Christmas/FootprintTrail";
 import type { AlphaMask, SnowEntity } from "../Christmas/SnowCaps";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
+import { basicActiveStore } from "../../../Stores/BasicModeStore";
 import type { SeasonalDecor, SeasonalDecorDeps } from "./SeasonalDecor";
 import { activeSeasonalTheme, SeasonalTheme, SeasonalThemeMode } from "./SeasonalTheme";
 import { readFrameAlpha } from "./readFrameAlpha";
@@ -71,7 +72,10 @@ export class SeasonalThemeManager {
         private readonly deps: SeasonalThemeDeps,
     ) {
         this.unsubscribers.push(
-            seasonalThemeModeStore.subscribe((mode) => {
+            // Basique has no seasonal decor.
+            derived([seasonalThemeModeStore, basicActiveStore], ([mode, basic]) =>
+                basic ? SeasonalThemeMode.None : mode,
+            ).subscribe((mode) => {
                 this.mode = mode;
                 this.lastCheck = -Infinity;
             }),
