@@ -2405,9 +2405,19 @@ dessin tombe de plus de 2 px pour un pixel de sol (`FACE_JUMP_PX`, sur la chute 
 prend sa couleur (plus de rayures), le haut d'une paroi est cerné de sombre (`RIM_OUTLINE`) ; plus doux, le sol est
 étiré, éclairé par sa pente même douce, et une **courbe de niveau** d'1 px plus sombre marque chaque case de
 profondeur (`isContour`) : la forme d'une cuvette se lit même sous la neige. Sur un **pont**,
-un avatar reste au niveau du tablier et un clic vise le tablier. Le sol plat, l'eau et les saisons suivront (lots B
-et C). `TerrainView` ne dessine alors plus
-l'assombrissement des creux ni l'eau. **Avatars** : chacun, le sien et ceux des autres, est dessiné plus bas de la
+un avatar reste au niveau du tablier et un clic vise le tablier.
+
+**Tout le sol dehors** (lot B) : les mêmes blocs dessinent aussi le sol plat, carte sans relief comprise. Une cellule
+prend une matière (`Pixel/MaterialField.ts`) : rien dans une pièce ni sur un sol de l'outil Carte ou le tablier d'un
+pont (les tuiles de la carte se voient), neige sous le thème Hiver ou la neige de la carte, neige des hauteurs (ligne
+de neige du calendrier), braise, cendre, paille, herbe de la prairie, **boue** (argile mouillée, règle de la marche),
+sol peint, herbe sur les **tuiles d'herbe de la carte** (`Terrain/MapGroundLayout.ts`, même détection que l'ancienne
+herbe saisonnière) ou au fond d'un trou ; sinon rien. Les couleurs suivent **la saison du thème, sinon du
+calendrier** (`SeasonalThemeManager.groundSeason`, `Pixel/PixelPalette.ts` `rampsFor`) ; fleurs d'1 px dans l'herbe
+dense au printemps (plus rares en été), feuilles tombées en automne. Dans l'éditeur, le sol est dessiné à plat dans le
+même style (eau plus transparente pendant l'outil Relief) ; rien en mode Basique. `TerrainView` et les deux couches
+`SnowGround` (herbe d'automne, neige de l'hiver) sont retirées. **Traces de pas** (`Terrain/Footprints.ts`) : toute
+l'année, dans la neige, la boue et le sable, de la couleur du sol, posées au fond d'un trou à son décalage. **Avatars** : chacun, le sien et ceux des autres, est dessiné plus bas de la
 profondeur du sol (ou de la surface de l'eau où il nage) sous lui (`Terrain/AvatarDrop.ts`), seulement le temps du
 dessin (`Terrain/CharacterDrops.ts`, comme les arbres au vent) ; son nom suit (`Character.setGroundDrop`) ; rien sur
 un palier. **Clic** et altitude sous le pointeur passent par `groundPointAt` : un clic sur une paroi mène à son pied.
@@ -2746,10 +2756,11 @@ n'est pas reçue, Auto n'affiche rien (`Seasonal/SeasonalTheme.ts`). `SeasonalTh
 (`SeasonalDecor`), le masque pendant l'édition et le reconstruit quand un mur ou un objet change.
 
 - **Hiver** (ex-Noël, `Christmas/ChristmasDecor.ts`) : la météo affichée pour soi devient Neige (flocons et son de la météo
-  existante), le sol extérieur se couvre de neige bleutée, les objets dehors portent une neige épaisse sur leur bord du
-  haut, les sols posés dehors sont givrés, et chaque joueur laisse des empreintes (une tous les 16 px en marche, une
-  trace en course, fondu en 45 s, 400 au plus). Les arbres saisonniers prennent leur image d'hiver, sans neige ajoutée.
-- **Automne** (`Autumn/`) : la météo de la carte est gardée ; l'herbe prend la texture d'automne d'Amine, les arbres
+  existante), le sol extérieur se couvre de neige (dessinée par le terrain en pixel art), les objets dehors portent une
+  neige épaisse sur leur bord du haut, les sols posés dehors sont givrés ; chaque joueur laisse des empreintes (une
+  tous les 16 px en marche, une trace en course, fondu en 45 s, 400 au plus), désormais toute l'année dans la neige,
+  la boue et le sable. Les arbres saisonniers prennent leur image d'hiver, sans neige ajoutée.
+- **Automne** (`Autumn/`) : la météo de la carte est gardée ; l'herbe prend les couleurs d'automne du terrain, les arbres
   leur image d'automne ; feuilles éparses (une par carré de 48 px, placement fixe), feuilles qui tombent (couche de la
   boucle météo, même par temps clair), tas de feuilles au pied des objets dehors (arbres compris), feuilles soulevées
   par les pas (3-4 feuilles de 5×3 px tous les 24 px en marche, 5-6 tous les 16 px en course, 120 au plus). Palette `#c8642a`, `#d9a23b`,
