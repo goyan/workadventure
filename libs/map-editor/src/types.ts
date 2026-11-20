@@ -918,6 +918,10 @@ export const TERRAIN_CHUNK = 16;
 export const TERRAIN_MIN_HEIGHT = -256;
 /** The pools of a map are painted as soils: the styles of pool after the six soils (see Terrain/Pools.ts). */
 export const MAX_POOL_STYLES = 8;
+/** How many ladders can be put by hand on the pools of a map. */
+export const MAX_POOL_LADDERS = 200;
+/** The key "x,y" of a cell of the relief. */
+export const POOL_LADDER_CELL = /^-?\d+,-?\d+$/;
 /** The largest number a soil is kept as in a map: the six soils (see Terrain/Soils.ts), then the pool styles. */
 export const TERRAIN_MAX_SOIL = 6 + MAX_POOL_STYLES;
 /** The highest height a cell can have, in pixels of altitude: 8 tiles over the ground. */
@@ -1258,6 +1262,11 @@ export const WAMSettings = z.object({
     meadow: MeadowSettings.optional().catch(undefined),
     /** The styles of the pools painted on the map, by their number. Fail open: a broken list draws default pools. */
     pools: z.array(PoolStyle).max(MAX_POOL_STYLES).optional().catch(undefined),
+    /**
+     * The ladders put by hand on the pools, by the cell of the top edge each stands on ("x,y"). The top edge of a pool
+     * with none gets the ladders of its style.
+     */
+    poolLadders: z.array(z.string().regex(POOL_LADDER_CELL)).max(MAX_POOL_LADDERS).optional().catch(undefined),
     lighting: LightingSettings.optional().catch(undefined),
 });
 

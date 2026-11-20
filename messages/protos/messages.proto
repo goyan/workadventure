@@ -404,6 +404,7 @@ message UpdateWAMSettingsMessage {
     UpdateMeadowSettingMessage updateMeadowSettingMessage = 8;
     UpdatePoolSettingMessage updatePoolSettingMessage = 9;
     UpdateLightingSettingMessage updateLightingSettingMessage = 10;
+    UpdatePoolLaddersSettingMessage updatePoolLaddersSettingMessage = 11;
   }
 }
 
@@ -422,6 +423,11 @@ message PoolStyleMessage {
   bool hot = 4;
   // Ladders along its top edge: 0, 1 or 2. Absent from older clients: 2.
   optional uint32 ladders = 5;
+}
+
+// The ladders put by hand on the pools of the map: the cells ("x,y") of the top edges they stand on, the whole list.
+message UpdatePoolLaddersSettingMessage {
+  repeated string cells = 1;
 }
 
 // The lighting of the map (LightingSettings in libs/map-editor). energySaving: the lamps standing outdoors go out by

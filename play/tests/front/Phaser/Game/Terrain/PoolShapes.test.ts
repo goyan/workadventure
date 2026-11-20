@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { poolSoilCode, TERRAIN_CELL, withSoils } from "@workadventure/map-editor";
-import { poolAt, poolShapeChanges, shapeCells } from "@wa/front/Phaser/Game/Terrain/PoolShapes";
+import { poolAt, poolShapeChanges, shapeCells, toggledLadders } from "@wa/front/Phaser/Game/Terrain/PoolShapes";
 
 const at = (cellX: number, cellY: number) => ({ x: (cellX + 0.5) * TERRAIN_CELL, y: (cellY + 0.5) * TERRAIN_CELL });
 const everywhere = () => true;
@@ -53,5 +53,21 @@ describe("PoolShapes", () => {
         expect(pool?.style).toBe(0);
         expect(pool?.cells.sort()).toEqual(["0,0", "1,0", "1,1"]);
         expect(poolAt(terrain, 3, 3)).toBeUndefined();
+    });
+
+    it("puts a ladder on the top edge of the pool, in the column clicked, and takes it off with a second click", () => {
+        const code = poolSoilCode(0);
+        const terrain = withSoils(
+            undefined,
+            new Map([
+                ["4,2", code],
+                ["4,3", code],
+                ["4,4", code],
+            ]),
+        );
+        const placed = toggledLadders(terrain, 4, 4, ["9,9"]);
+        expect(placed).toEqual(["9,9", "4,2"]);
+        expect(toggledLadders(terrain, 4, 3, placed)).toEqual(["9,9"]);
+        expect(toggledLadders(terrain, 0, 0, placed)).toBeUndefined();
     });
 });

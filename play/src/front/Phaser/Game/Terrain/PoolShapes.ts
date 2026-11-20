@@ -1,10 +1,13 @@
 import { cellKey, cellOf, poolStyleOf, soilAt, TERRAIN_CELL } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 
-/** How a pool is drawn in the pool mode of the relief tool: a shape dragged from corner to corner, or the brush. */
-export type PoolTool = "rectangle" | "ellipse" | "brush" | "eraser";
+/**
+ * How the pool mode of the relief tool works: a shape dragged from corner to corner, the brush, the eraser, or a ladder
+ * put on (or taken off) a pool with a click.
+ */
+export type PoolTool = "rectangle" | "ellipse" | "brush" | "eraser" | "ladder";
 
-export const POOL_TOOLS: readonly PoolTool[] = ["rectangle", "ellipse", "brush", "eraser"];
+export const POOL_TOOLS: readonly PoolTool[] = ["rectangle", "ellipse", "brush", "eraser", "ladder"];
 
 /** Beyond this many cells a pool is not selected whole: a map painted with pools everywhere stays responsive. */
 const MAX_SELECTED_CELLS = 20000;
@@ -88,4 +91,23 @@ export function poolAt(
         }
     }
     return { style, cells: [...seen] };
+}
+
+/**
+ * The hand ladders of the map with a ladder put on the top edge of the pool clicked, in the column clicked, or taken
+ * off when one stands there already. Undefined off a pool.
+ */
+export function toggledLadders(
+    terrain: TerrainData | undefined,
+    cellX: number,
+    cellY: number,
+    ladders: readonly string[] | undefined,
+): string[] | undefined {
+    const code = soilAt(terrain, cellX, cellY);
+    if (poolStyleOf(code) === undefined) return undefined;
+    let top = cellY;
+    while (soilAt(terrain, cellX, top - 1) === code) top--;
+    const key = cellKey(cellX, top);
+    const kept = ladders ?? [];
+    return kept.includes(key) ? kept.filter((ladder) => ladder !== key) : [...kept, key];
 }

@@ -679,7 +679,7 @@ const mapEditor: BaseTranslation = {
         soilErase: "Ground of the map (wipe)",
         pools: {
             title: "Pools",
-            hint: "Drag to draw a pool: a rectangle or an ellipse, or the brush for a free shape. Click a pool to select it: change its style or delete it. Each style has its colours, depth, ladders and hot water.",
+            hint: "Drag to draw a pool: a rectangle or an ellipse, or the brush for a free shape. Click a pool to select it: change its style or delete it. Each style has its colours, depth, ladders and hot water. The Ladder tool puts a ladder on the top edge of the pool clicked, a second click takes it off.",
             pool: "Pool {number}",
             add: "+ New pool",
             water: "Water",
@@ -693,6 +693,7 @@ const mapEditor: BaseTranslation = {
                 ellipse: "Ellipse",
                 brush: "Brush",
                 eraser: "Eraser",
+                ladder: "Ladder",
             },
             selected: "Selected pool: {cells} cells. Pick a style to repaint it.",
             delete: "Delete",

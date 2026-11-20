@@ -12,7 +12,7 @@ import type { TerrainData } from "@workadventure/map-editor";
 import type { EditMapCommandMessage } from "@workadventure/messages";
 import * as Phaser from "phaser";
 import { get } from "svelte/store";
-import { poolAt, poolShapeChanges, shapeCells } from "@wa/front/Phaser/Game/Terrain/PoolShapes";
+import { poolAt, poolShapeChanges, shapeCells, toggledLadders } from "@wa/front/Phaser/Game/Terrain/PoolShapes";
 import type { Point } from "@wa/front/Phaser/Game/Terrain/PoolShapes";
 import { mapEditorVisibilityStore } from "../../../../Stores/MapEditorStore";
 import {
@@ -31,7 +31,7 @@ import type { GameScene } from "../../GameScene";
 import { contourSegments } from "../../Terrain/TerrainContours";
 import { brushSettingsOf, commitSoils, commitSoilStroke, commitStroke } from "../../Terrain/TerrainStroke";
 import { WaterMarksView } from "../../Terrain/WaterMarksView";
-import { executeUpdateTerrain } from "../Commands/Facades";
+import { executeUpdateTerrain, executeUpdateWAMSettings } from "../Commands/Facades";
 import { UpdateTerrainFrontCommand } from "../Commands/Terrain/UpdateTerrainFrontCommand";
 import type { MapEditorModeManager } from "../MapEditorModeManager";
 import { MapEditorTool } from "./MapEditorTool";
@@ -101,11 +101,15 @@ export class TerrainEditorTool extends MapEditorTool {
         this.cancelStroke();
         const brush = get(terrainBrushStore);
         const { mode } = brush;
+        if (mode === "pool" && brush.poolTool === "ladder") {
+            this.toggleLadder(path[path.length - 1]);
+            return;
+        }
         if (mode === "pool" && this.pickPool(path)) return;
         selectedPoolStore.set(undefined);
         const shape = mode === "pool" ? (brush.poolTool ?? "rectangle") : undefined;
         const done =
-            shape && shape !== "brush"
+            shape && shape !== "brush" && shape !== "ladder"
                 ? commitSoils(
                       poolShapeChanges(
                           this.terrain(),
@@ -300,6 +304,21 @@ export class TerrainEditorTool extends MapEditorTool {
         return true;
     }
 
+    /** The ladder tool: a ladder put on the top edge of the pool clicked, or taken off. */
+    private toggleLadder(point: Point): void {
+        const ladders = toggledLadders(
+            this.terrain(),
+            this.cellOf(point.x),
+            this.cellOf(point.y),
+            this.scene.getGameMap().getWamFile()?.getWam().settings?.poolLadders,
+        );
+        if (!ladders) return;
+        executeUpdateWAMSettings({
+            $case: "updatePoolLaddersSettingMessage",
+            updatePoolLaddersSettingMessage: { cells: ladders },
+        }).catch((error: unknown) => console.error("The ladder could not be placed", error));
+    }
+
     private drawSelection(pool: { cells: readonly string[] } | undefined): void {
         const graphics = this.selection;
         if (!graphics) return;
@@ -362,9 +381,13 @@ export class TerrainEditorTool extends MapEditorTool {
     }
 
     /** The cell under the pointer, and while dragging the shape that will be drawn (red for the eraser). */
-    private drawShapePreview(graphics: Phaser.GameObjects.Graphics, shape: "rectangle" | "ellipse" | "eraser"): void {
+    private drawShapePreview(
+        graphics: Phaser.GameObjects.Graphics,
+        shape: "rectangle" | "ellipse" | "eraser" | "ladder",
+    ): void {
         const color = shape === "eraser" ? BLOCKED_COLOR : BRUSH_COLOR;
-        const from = this.path?.[0];
+        // The ladder is put with a click: only the cell under the pointer is shown.
+        const from = shape === "ladder" ? undefined : this.path?.[0];
         const to = this.path?.[this.path.length - 1] ?? this.hover;
         if (from && to) {
             const left = Math.floor(Math.min(from.x, to.x) / TERRAIN_CELL) * TERRAIN_CELL;

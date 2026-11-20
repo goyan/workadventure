@@ -52,6 +52,24 @@ export function laddersOf(edge: PoolEdge): number[] {
 }
 
 /**
+ * Where the ladders of an edge go, in cells of the canvas: those put by hand on it (`hand`: the keys "x,y" of the
+ * cells of the map), else those its style asks for.
+ */
+export function edgeLadders(
+    edge: PoolEdge,
+    area: { x: number; y: number; cell: number },
+    hand: ReadonlySet<string>,
+): number[] {
+    const firstColumn = Math.round(area.x / area.cell);
+    const row = Math.round(area.y / area.cell) + edge.row;
+    const placed: number[] = [];
+    for (let column = edge.column; column < edge.column + edge.length; column++) {
+        if (hand.has(`${firstColumn + column},${row}`)) placed.push(column + 0.5);
+    }
+    return placed.length > 0 ? placed : laddersOf(edge);
+}
+
+/**
  * The ladders of the pools drawn by the shaders, as on a real pool: two steel rails curving over the coping of the
  * top edge and going down into the water, with their rungs. Drawn again with the ground.
  */
@@ -62,10 +80,14 @@ export class PoolLadders {
         this.graphics = scene.add.graphics().setDepth(LADDER_DEPTH);
     }
 
-    public draw(area: { x: number; y: number; cell: number }, edges: readonly PoolEdge[]): void {
+    public draw(
+        area: { x: number; y: number; cell: number },
+        edges: readonly PoolEdge[],
+        hand: ReadonlySet<string> = new Set(),
+    ): void {
         const graphics = this.graphics.clear();
         for (const edge of edges) {
-            for (const at of laddersOf(edge)) {
+            for (const at of edgeLadders(edge, area, hand)) {
                 const x = Math.round(area.x + at * area.cell);
                 // Under the coping the shader draws along the rim (COPING_PX inside the pool).
                 const y = Math.round(area.y + edge.row * area.cell) + COPING_PX;

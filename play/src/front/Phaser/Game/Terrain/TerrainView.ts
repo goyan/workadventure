@@ -107,6 +107,8 @@ interface ReliefLayers extends BlockCanvasArea {
     outdoor: Uint8Array | undefined;
     /** The styles of the pools these layers were read with: a pool drawn again when its colours change. */
     poolStyles: readonly PoolStyle[] | undefined;
+    /** The ladders put by hand on the pools (cells "x,y"), as the map keeps them. */
+    poolLadders: readonly string[] | undefined;
 }
 
 /**
@@ -144,6 +146,11 @@ export class TerrainView {
         | undefined;
     /** The pools placed as images, drawn by the shaders in their place (ImagePools.ts), and the ones hidden for it. */
     private imagePools: { pools: ImagePool[]; signature: string } = { pools: [], signature: "" };
+    private poolSettingsSeen: { pools: unknown; ladders: unknown; version: number } = {
+        pools: undefined,
+        ladders: undefined,
+        version: 0,
+    };
     private readonly hiddenPools = new Map<string, PlacedPool>();
     /** The ladders of the pools drawn by the shaders. */
     private readonly ladders: PoolLadders | undefined;
@@ -203,7 +210,7 @@ export class TerrainView {
         const camera = this.scene.cameras.main.worldView;
         const screen = { x: camera.x, y: camera.y, width: camera.width, height: camera.height };
         this.readImagePools();
-        const key = `${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}:${this.imagePools.signature}`;
+        const key = `${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}:${this.imagePools.signature}:${this.poolSettingsVersion()}`;
         const inside = this.drawn !== undefined && wellInside(this.drawn, screen, DRAW_MARGIN / 5);
         if (key === this.lastKey && inside) return;
         this.lastKey = key;
@@ -214,6 +221,20 @@ export class TerrainView {
         this.draw(this.drawn, now);
         this.visible = true;
         this.scene.markDirty();
+    }
+
+    /** A number that changes whenever the styles or the hand ladders of the pools of the map change: drawn again then. */
+    private poolSettingsVersion(): number {
+        const settings = this.scene.getGameMap?.()?.getWamFile()?.getWam().settings;
+        const seen = this.poolSettingsSeen;
+        if (seen.pools !== settings?.pools || seen.ladders !== settings?.poolLadders) {
+            this.poolSettingsSeen = {
+                pools: settings?.pools,
+                ladders: settings?.poolLadders,
+                version: seen.version + 1,
+            };
+        }
+        return this.poolSettingsSeen.version;
     }
 
     private draw(view: WeatherView, now: number): void {
@@ -261,6 +282,7 @@ export class TerrainView {
                         canvas.columns,
                         canvas.rows,
                     ),
+                    new Set(relief.poolLadders),
                 );
             } else if (this.grounds) {
                 this.layGrounds(this.grounds, canvas, relief, meadow);
@@ -388,7 +410,8 @@ export class TerrainView {
             kept.columns === canvas.columns &&
             kept.rows === canvas.rows &&
             kept.outdoorGrid === this.scene.getOutdoorGrid?.() &&
-            kept.poolStyles === this.scene.getGameMap?.()?.getWamFile()?.getWam().settings?.pools
+            kept.poolStyles === this.scene.getGameMap?.()?.getWamFile()?.getWam().settings?.pools &&
+            kept.poolLadders === this.scene.getGameMap?.()?.getWamFile()?.getWam().settings?.poolLadders
         ) {
             return kept;
         }
@@ -412,6 +435,7 @@ export class TerrainView {
             outdoorGrid: outdoors,
             outdoor: undefined,
             poolStyles: this.scene.getGameMap?.()?.getWamFile()?.getWam().settings?.pools,
+            poolLadders: this.scene.getGameMap?.()?.getWamFile()?.getWam().settings?.poolLadders,
         };
         const left = canvas.x / TERRAIN_CELL;
         const top = canvas.y / TERRAIN_CELL;

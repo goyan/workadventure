@@ -690,7 +690,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         soilErase: "Sol d'origine (effacer)",
         pools: {
             title: "Piscines",
-            hint: "Tracez une piscine en glissant : rectangle ou ellipse, ou au pinceau pour une forme libre. Un clic sur une piscine la sélectionne : changez son style ou supprimez-la. Chaque style a ses couleurs, sa profondeur, ses échelles et son eau chaude.",
+            hint: "Tracez une piscine en glissant : rectangle ou ellipse, ou au pinceau pour une forme libre. Un clic sur une piscine la sélectionne : changez son style ou supprimez-la. Chaque style a ses couleurs, sa profondeur, ses échelles et son eau chaude. L'outil Échelle pose une échelle sur le bord haut de la piscine cliquée, un second clic la retire.",
             pool: "Piscine {number}",
             add: "+ Nouvelle piscine",
             water: "Eau",
@@ -704,6 +704,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 ellipse: "Ellipse",
                 brush: "Pinceau",
                 eraser: "Gomme",
+                ladder: "Échelle",
             },
             selected: "Piscine sélectionnée : {cells} cases. Choisissez un style pour la repeindre.",
             delete: "Supprimer",
