@@ -1,4 +1,17 @@
+import { Season } from "@workadventure/map-editor";
 import { hash01, leafColor } from "../Autumn/LeafPalette";
+
+/** Wind (km/h) of the light breeze without a real weather: the trees sway with it and drop their leaves in it. */
+export const BREEZE_KMH = 10;
+
+/**
+ * Evergreens and palms keep their leaves: their autumn image is their summer one. `seasonal` is the images of an
+ * object of the catalogue by season, when it has some.
+ */
+export function keepsLeavesInAutumn(seasonal: unknown): boolean {
+    if (typeof seasonal !== "object" || seasonal === null) return false;
+    return Reflect.get(seasonal, Season.Autumn) === Reflect.get(seasonal, Season.Summer);
+}
 
 /** The image of a tree on the map: its top left corner and its size. */
 export interface TreeBox {

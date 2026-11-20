@@ -3,6 +3,7 @@ import type { InteractionTrigger } from "@workadventure/map-editor";
 import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRectangles";
 import { getObjectInteraction } from "../../../Utils/ObjectCategories";
 import type { GameScene } from "../GameScene";
+import { MASS_MIN_DEPTH_PX } from "../Terrain/WaterMasses";
 
 /** A rectangle of water in world pixels. */
 export interface WaterRectangle {
@@ -170,4 +171,17 @@ function clamp(value: number, min: number, max: number): number {
 function clampInside(value: number, start: number, size: number): number {
     if (size <= DIVE_DEPTH * 2) return start + size / 2;
     return clamp(value, start + DIVE_DEPTH, start + size - DIVE_DEPTH);
+}
+
+/**
+ * Whether a point of the ground is under water: the relief as every browser knows it alike (from the depth where a
+ * body of water starts), or a pool of the ground. What lies on the ground (the leaves of autumn) is not drawn there.
+ */
+export function isGroundUnderWater(
+    scene: Phaser.Scene,
+    water: { walkerSettledDepthAt(x: number, y: number): number },
+    x: number,
+    y: number,
+): boolean {
+    return water.walkerSettledDepthAt(x, y) >= MASS_MIN_DEPTH_PX || isPointInWater(getWaterRectangles(scene), { x, y });
 }

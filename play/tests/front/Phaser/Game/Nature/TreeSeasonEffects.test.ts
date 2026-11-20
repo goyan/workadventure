@@ -15,7 +15,14 @@ interface FakeImage {
 }
 
 function fixture(
-    overrides: { season?: Season; enabled?: boolean; reducedMotion?: boolean; coverage?: number; pose?: number } = {},
+    overrides: {
+        season?: Season;
+        enabled?: boolean;
+        reducedMotion?: boolean;
+        coverage?: number;
+        pose?: number;
+        isWet?: (x: number, y: number) => boolean;
+    } = {},
 ) {
     const state = {
         season: overrides.season ?? Season.Autumn,
@@ -118,6 +125,7 @@ function fixture(
         snowCoverage: () => state.coverage,
         enabled: () => state.enabled,
         isOutdoor: () => state.outdoor,
+        isWet: overrides.isWet,
         view: () => state.view,
         reducedMotion: overrides.reducedMotion ?? false,
     });
@@ -165,6 +173,15 @@ describe("TreeSeasonEffects", () => {
         ground.fillRect.mockClear();
         effects.update(1000, at(1));
         expect(ground.fillRect).not.toHaveBeenCalled();
+    });
+
+    it("keeps the carpet of a tree on the shore out of the water", () => {
+        const { effects, ground } = fixture({ isWet: (x) => x >= 132 });
+        effects.update(0, at(0));
+        const calls = ground.fillRect.mock.calls;
+        expect(calls.length).toBeGreaterThan(0);
+        expect(calls.length).toBeLessThan(40);
+        for (const [x] of calls) expect(x).toBeLessThan(132);
     });
 
     it("draws 15 times a second at most", () => {
