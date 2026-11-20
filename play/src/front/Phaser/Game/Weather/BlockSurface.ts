@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import { refreshCanvasTexture } from "../CanvasTextureRefresh";
 import type { WeatherView } from "./WeatherFrame";
 
 /** Where a block canvas lies on the map: its top left corner (map pixels) and its size, one pixel a block. */
@@ -189,7 +190,7 @@ export class CanvasBlockSurface implements BlockSurface {
             return;
         }
         this.texture.getContext().putImageData(this.pixels, 0, 0);
-        this.texture.refresh();
+        refreshCanvasTexture(this.texture);
         this.image
             .setPosition(this.area.x, this.area.y)
             .setDisplaySize(this.area.columns * this.resolution, this.area.rows * this.resolution)

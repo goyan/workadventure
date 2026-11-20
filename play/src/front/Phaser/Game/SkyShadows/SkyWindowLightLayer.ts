@@ -1,6 +1,7 @@
 import * as Phaser from "phaser";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import type { WeatherView } from "../Weather/WeatherFrame";
+import { refreshCanvasTexture } from "../CanvasTextureRefresh";
 import type { Point } from "./SkyShadowGeometry";
 
 /** Over the shadows of the sky (0.7), under everything sorted by its y: a light on the floor of the room. */
@@ -88,7 +89,7 @@ export class SkyWindowLightLayer {
             context.fill();
             context.restore();
         }
-        texture.refresh();
+        refreshCanvasTexture(texture);
         this.revision += 1;
         this.square = { x: area.x, y: area.y, size: texels / scale };
         this.image

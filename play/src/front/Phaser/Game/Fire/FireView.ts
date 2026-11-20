@@ -5,6 +5,7 @@ import { placeAtDepth } from "../DepthSort";
 import type { MeadowState } from "../Terrain/MeadowState";
 import { screenScale } from "../Weather/ScreenScale";
 import { isEffectShown } from "../../../Stores/EffectsStore";
+import { refreshCanvasTexture } from "../CanvasTextureRefresh";
 import {
     drawnEmbers,
     drawnFlame,
@@ -302,7 +303,7 @@ export class FireView {
                     sheet.add(frame, 0, frame * FLAME_FRAME_WIDTH_PX, 0, FLAME_FRAME_WIDTH_PX, FLAME_FRAME_HEIGHT_PX);
                 }
                 context.globalAlpha = 1;
-                sheet.refresh();
+                refreshCanvasTexture(sheet);
             }
         }
         this.drawSoftDisc(GLOW_TEXTURE, `rgba(255, 122, 26, ${GLOW_ALPHA * 2})`, "rgba(255, 122, 26, 0)");
@@ -325,6 +326,6 @@ export class FireView {
         gradient.addColorStop(1, edge);
         context.fillStyle = gradient;
         context.fillRect(0, 0, SOFT_DISC_PX, SOFT_DISC_PX);
-        disc.refresh();
+        refreshCanvasTexture(disc);
     }
 }
