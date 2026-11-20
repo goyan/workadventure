@@ -1,6 +1,7 @@
 import {
     DEFAULT_SINK_RADIUS_TILES,
     DEFAULT_WATER_SETTINGS,
+    DEFAULT_WAVE_SETTINGS,
     TERRAIN_CELL,
     TILE_PX,
     WaterSinkPropertyData,
@@ -89,7 +90,9 @@ export function stepInputOf(
         // its speed.
         flowSteps: Math.max(1, Math.min(MAX_FLOW_STEPS, Math.round(figure(settings.speed, 1) / SPEED_PER_FLOW_STEP))),
         // The water with inertia, on a map that chose it: it needs the real time of the step, whatever the speed.
-        ...(settings.inertia ? { inertia: true, seconds: figure(seconds) } : {}),
+        ...(settings.inertia
+            ? { inertia: true, seconds: figure(seconds), waves: { ...DEFAULT_WAVE_SETTINGS, ...settings.waves } }
+            : {}),
         flows: objects
             .filter((object) => Number.isFinite(object.litresPerMinute) && hours > 0)
             .map((object) => ({

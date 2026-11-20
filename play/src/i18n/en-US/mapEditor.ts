@@ -738,6 +738,20 @@ const mapEditor: BaseTranslation = {
         current: "Strength of the current (0: avatars are not carried)",
         maxSurface: "Highest water over the ground",
         inertia: "Water with inertia (on trial)",
+        waves: {
+            roughness: "Friction of the ground",
+            roughnessHint:
+                "How many times the friction the soils of the map give (meadow and rock hold back more than sand and clay). It grows with the speed of the water and falls with its depth: next to nothing under a swell at sea, strong under a sheet of water running on land. Higher: waves run less far up the shores.",
+            damping: "Damping of the water",
+            dampingHint:
+                "The share of its flow the water loses each second, whatever its depth and its speed. 0.02 by default: a swell crosses a lake. Higher: a stirred lake calms quickly, but waves die out before they reach the shore.",
+            breaking: "Breaking of the waves",
+            breakingHint:
+                "What a wave whose front is steep for the water it runs in loses: it breaks near the shore and on land. 0: waves never break and run further up.",
+            momentum: "Momentum carried by the water",
+            momentumHint:
+                "At 1, the water carries its speed along: fronts are sharp and a stirred lake rocks less. At 0, each passage keeps its own flow only: waves grow more as they near the shore and run further up, but the water rocks for a long time.",
+        },
         real: {
             inertia:
                 "The water keeps its momentum from one moment to the next: waves run, a stirred lake levels in about a minute instead of spreading slowly. Off: the water creeps from cell to cell, as before.",

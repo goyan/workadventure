@@ -1,5 +1,5 @@
-import { CELL_METRES, heightAt, steadyFlowSpeed } from "@workadventure/map-editor";
-import type { TerrainData } from "@workadventure/map-editor";
+import { CELL_METRES, heightAt, soilAt, soilRoughness, steadyFlowSpeed } from "@workadventure/map-editor";
+import type { TerrainData, WaveSettings } from "@workadventure/map-editor";
 import type { SettledWater } from "./TerrainWater";
 
 /** Water thinner than this is a film: it has no flow to show, and its edge is a shore. */
@@ -33,8 +33,9 @@ function depthOf(water: SettledWater, cellX: number, cellY: number, from: Float3
 /**
  * The flow of the water over a cell of the relief, read from what this browser knows: the depths the server sent.
  * The water runs down the slope of its surface (ground and water), as fast as the model of the map makes it run
- * (`inertia`: the water with inertia, else the water that creeps). A dry neighbour is a shore, not a slope, unless
- * its ground is lower than the water: then the water falls there. Still under a film, or where the surface is level.
+ * (`inertia`: the water with inertia, held back by the friction of the soil of the cell and by the `waves` of the
+ * map; else the water that creeps). A dry neighbour is a shore, not a slope, unless its ground is lower than the
+ * water: then the water falls there. Still under a film, or where the surface is level.
  */
 export function flowAtCell(
     water: SettledWater,
@@ -42,6 +43,7 @@ export function flowAtCell(
     cellX: number,
     cellY: number,
     inertia: boolean,
+    waves?: WaveSettings,
 ): WaterFlow {
     const depth = depthOf(water, cellX, cellY, water.depths);
     if (depth < FLOW_MIN_DEPTH_PX) return STILL;
@@ -61,7 +63,8 @@ export function flowAtCell(
     return {
         x: -slopeX / slope || 0,
         y: -slopeY / slope || 0,
-        speed: steadyFlowSpeed(slope, depth, inertia) * CELL_METRES,
+        speed:
+            steadyFlowSpeed(slope, depth, inertia, waves, soilRoughness(soilAt(terrain, cellX, cellY))) * CELL_METRES,
         depth,
         rate,
     };
@@ -79,8 +82,9 @@ export function flowOverBlock(
     cellY: number,
     size: number,
     inertia: boolean,
+    waves?: WaveSettings,
 ): WaterFlow {
-    if (size <= 1) return flowAtCell(water, terrain, cellX, cellY, inertia);
+    if (size <= 1) return flowAtCell(water, terrain, cellX, cellY, inertia, waves);
     const half = Math.floor(size / 2);
     const quarter = Math.floor(size / 4);
     const places =
@@ -99,7 +103,7 @@ export function flowOverBlock(
     let depth = 0;
     let rate = 0;
     for (const [awayX, awayY] of places) {
-        const flow = flowAtCell(water, terrain, cellX + awayX, cellY + awayY, inertia);
+        const flow = flowAtCell(water, terrain, cellX + awayX, cellY + awayY, inertia, waves);
         if (flow.depth <= 0) continue;
         wet++;
         x += flow.x * flow.speed;

@@ -749,6 +749,20 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         current: "Force du courant (0 : les avatars ne sont pas emportés)",
         maxSurface: "Hauteur maximale de l'eau au-dessus du sol",
         inertia: "Eau à inertie (à l'essai)",
+        waves: {
+            roughness: "Frottement du sol",
+            roughnessHint:
+                "Combien de fois le frottement que donnent les sols de la carte (prairie et rocher freinent plus que sable et argile). Il grandit avec la vitesse de l'eau et faiblit avec sa profondeur : presque rien sous une houle au large, fort sous une lame d'eau qui court sur la terre. Plus haut : les vagues montent moins loin sur les rives.",
+            damping: "Amorti de l'eau",
+            dampingHint:
+                "Part de son débit que l'eau perd chaque seconde, quelles que soient sa profondeur et sa vitesse. 0,02 par défaut : une houle traverse un lac. Plus haut : un lac dérangé se calme vite, mais les vagues s'éteignent avant d'atteindre la rive.",
+            breaking: "Déferlement des vagues",
+            breakingHint:
+                "Ce que perd une vague dont le front est raide pour l'eau où elle court : elle casse près du rivage et sur la terre. 0 : les vagues ne cassent jamais et montent plus loin.",
+            momentum: "Élan emporté par l'eau",
+            momentumHint:
+                "À 1, l'eau emporte sa vitesse avec elle : les fronts sont nets et un lac dérangé clapote moins. À 0, chaque passage ne garde que son propre débit : les vagues grossissent davantage en approchant du rivage et montent plus loin, mais l'eau clapote longtemps.",
+        },
         real: {
             inertia:
                 "L'eau garde son élan d'un instant à l'autre : des vagues courent, un lac dérangé se remet à niveau en une minute environ au lieu de s'étaler lentement. Coupé : l'eau avance de proche en proche, comme avant.",

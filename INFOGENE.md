@@ -3447,6 +3447,36 @@ immobile après un redémarrage du serveur.
 Coût mesuré (grille de 600 × 600, conteneur Linux sur Mac) : 11 ms par pas sous 20 px d'eau, 16 ms sous 80 px,
 27 ms sous 240 px, contre 4 à 5 ms pour l'eau d'avant ; 4 ms contre 2 sur une grille presque sèche.
 
+
+### Vagues : frottement du sol, déferlement, élan (réglables par carte)
+
+Le premier jet freinait l'eau de la même façon partout (20 % de son débit par seconde) : mesuré hors jeu, une
+vague perdait 80 % de sa hauteur en 200 cellules et n'atteignait jamais la rive. Ce qui retient l'eau dépend
+maintenant de l'endroit où elle court, par quatre réglages de la carte (`settings.water.waves`, curseurs du
+panneau Relief quand l'inertie est activée, `UpdateWaterSettingMessage.waveRoughness`, `waveDamping`,
+`waveBreaking`, `waveMomentum`, champs 9 à 12, facultatifs) :
+
+- **Frottement du sol** (`roughness`, × 0 à 10, 1 par défaut) : frottement de Manning. La part de débit perdue par
+  seconde vaut le carré de la rugosité du sol × la vitesse de l'eau / sa profondeur à la puissance 4/3 : presque
+  rien sous une houle au large, fort sous une lame d'eau rapide sur la terre. La rugosité vient du sol peint sur
+  chaque case (`soilRoughness` : argile 0,022, sable 0,025, terre, gravier et case non peinte 0,03, rocher 0,04,
+  prairie 0,045).
+- **Amorti** (`damping`, 0 à 1 par seconde, 0,02 par défaut) : perte de débit uniforme, ce qui calme un lac dérangé.
+  Plus haut, les vagues s'éteignent avant la rive.
+- **Déferlement** (`breaking`, × 0 à 5, 1 par défaut) : un front dont la surface tombe de plus d'un dixième de
+  l'eau qui passe perd son débit en proportion ; une houle douce n'est pas touchée.
+- **Élan emporté** (`momentum`, 0 à 1, 1 par défaut) : l'eau emporte sa vitesse avec elle (terme d'advection,
+  pris en amont). Mesuré : fronts plus nets, lac dérangé bien plus calme (crête de 31 px au lieu de 39 dans un
+  bassin de 30 px), mais vagues qui grossissent moins en approchant du rivage et montent moins loin qu'à 0.
+
+Sous inertie, une vague n'est plus coupée à la hauteur maximale de l'eau de la carte (18 px par défaut) mais à la
+plus haute qu'une carte puisse régler (256 px) ; sources et pluie restent limitées par le réglage. Une eau rapide
+compte aussi dans le nombre de mouvements par pas (10 au plus). Les deux tests du premier jet qui exigeaient un
+lac calme en 90 s ont été assouplis exprès : une eau profonde clapote maintenant plusieurs minutes.
+
+Coût mesuré avec ces vagues (conteneur Linux sur Mac) : 27 ms par pas sous 20 px d'eau sur une grille de
+600 × 600, 32 sous 80 px, 47 sous 240 px ; 24 ms sur la carte d'équipe locale rejouée (2,5 ms sans inertie).
+
 ## Ponts de l'outil Carte
 
 Un pont est un **tablier posé case par case** par un éditeur de la carte. Tout ce qui marche le traverse à sec :

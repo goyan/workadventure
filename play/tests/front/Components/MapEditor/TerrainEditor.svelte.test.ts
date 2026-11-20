@@ -15,6 +15,7 @@ const { executeUpdateTerrain, executeUpdateWAMSettings, mapSettings } = vi.hoist
         maxSurface: 18,
         indoorDrain: 300,
         inertia: false,
+        waves: { roughness: 1, damping: 0.02, breaking: 1, momentum: 1 },
         meadow: { enabled: true, growMinutes: 10, thirstMinutes: 20, moistureHold: 1 },
         life: {
             enabled: false,
@@ -146,6 +147,37 @@ describe("TerrainEditor", () => {
         expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
             $case: "updateWaterSettingMessage",
             updateWaterSettingMessage: expect.objectContaining({ inertia: false }),
+        });
+    });
+
+    it("sets the waves of the water with inertia, shown only for it", () => {
+        render();
+        expect(target.querySelector('[data-testid="terrain-wave-roughness"]')).toBeNull();
+        byTestId("terrain-inertia").querySelector("input")?.click();
+        flushSync();
+        // Turning the inertia on sends the waves the map had.
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: expect.objectContaining({
+                inertia: true,
+                waveRoughness: 1,
+                waveDamping: 0.02,
+                waveBreaking: 1,
+                waveMomentum: 1,
+            }),
+        });
+        setRange("terrain-wave-roughness", 3);
+        setRange("terrain-wave-damping", 0.1);
+        setRange("terrain-wave-breaking", 0);
+        setRange("terrain-wave-momentum", 0.5);
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: expect.objectContaining({
+                waveRoughness: 3,
+                waveDamping: 0.1,
+                waveBreaking: 0,
+                waveMomentum: 0.5,
+            }),
         });
     });
 
