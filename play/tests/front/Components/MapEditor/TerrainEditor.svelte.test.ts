@@ -13,6 +13,7 @@ const { executeUpdateTerrain, executeUpdateWAMSettings, mapSettings } = vi.hoist
         absorption: 5,
         current: 1,
         maxSurface: 18,
+        indoorDrain: 300,
         meadow: { enabled: true, growMinutes: 10, thirstMinutes: 20, moistureHold: 1 },
         life: {
             enabled: false,
@@ -104,6 +105,7 @@ describe("TerrainEditor real values", () => {
             ["terrain-speed", "speed"],
             ["terrain-current", "current"],
             ["terrain-max-surface", "maxSurface"],
+            ["terrain-indoor-drain", "indoorDrain"],
         ]) {
             expect(byTestId(id).textContent).toContain(`mapEditor.terrain.real.${key}`);
         }
@@ -175,6 +177,7 @@ describe("TerrainEditor", () => {
                 absorption: 5,
                 current: 1,
                 maxSurface: 18,
+                indoorDrain: 300,
             },
         });
         setRange("terrain-evaporation", 1);
@@ -187,6 +190,7 @@ describe("TerrainEditor", () => {
                 absorption: 5,
                 current: 1,
                 maxSurface: 18,
+                indoorDrain: 300,
             },
         });
         setRange("terrain-speed", 300);
@@ -199,6 +203,7 @@ describe("TerrainEditor", () => {
                 absorption: 5,
                 current: 1,
                 maxSurface: 18,
+                indoorDrain: 300,
             },
         });
         setRange("terrain-absorption", 20);
@@ -211,6 +216,7 @@ describe("TerrainEditor", () => {
                 absorption: 20,
                 current: 1,
                 maxSurface: 18,
+                indoorDrain: 300,
             },
         });
     });
@@ -230,6 +236,7 @@ describe("TerrainEditor", () => {
                 absorption: 5,
                 current: 1,
                 maxSurface: 120,
+                indoorDrain: 300,
             },
         });
     });
@@ -249,6 +256,27 @@ describe("TerrainEditor", () => {
                 absorption: 5,
                 current: 0,
                 maxSurface: 18,
+                indoorDrain: 300,
+            },
+        });
+    });
+
+    it("saves how fast the floors of the rooms drain, from none to 10000 mm/h", () => {
+        render();
+        const slider = byTestId("terrain-indoor-drain").querySelector<HTMLInputElement>('input[type="range"]');
+        expect(Number(slider?.min)).toBe(0);
+        expect(Number(slider?.max)).toBe(10000);
+        setRange("terrain-indoor-drain", 0);
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: {
+                runoff: 10,
+                evaporation: 0.2,
+                speed: 60,
+                absorption: 5,
+                current: 1,
+                maxSurface: 18,
+                indoorDrain: 0,
             },
         });
     });

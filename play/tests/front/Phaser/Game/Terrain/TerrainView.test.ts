@@ -164,6 +164,39 @@ describe("TerrainView", () => {
         expect(fields[0].reduce((sum, level) => sum + level, 0)).toBe(255);
     });
 
+    // An avatar that walks moves the camera at every image: the relief was read again at each drawing of the water.
+    it("keeps the relief read while a scroll stays inside what was drawn", () => {
+        let reads = 0;
+        const counted: TerrainData = {
+            ...pit,
+            get chunks() {
+                reads++;
+                return pit.chunks;
+            },
+        };
+        const { view, water, surface, worldView } = fixture(counted);
+        view.update(0);
+        const afterFirst = reads;
+        // The camera follows the avatar a few pixels while more water comes.
+        worldView.x = 12;
+        worldView.y = 7;
+        water.receive(stateOf(1, 4), 16);
+        view.update(16);
+        worldView.x = 30;
+        water.receive(stateOf(2, 8), 1016);
+        view.update(1500);
+        expect(surface.begin).toHaveBeenCalledTimes(3);
+        expect(reads).toBe(afterFirst);
+        // The same part of the map each time: the canvas does not follow the camera inside its margin.
+        const views = surface.begin.mock.calls.map((call) => call[0]);
+        expect(views[1]).toEqual(views[0]);
+        expect(views[2]).toEqual(views[0]);
+        // Out of what was drawn: drawn again around the camera.
+        worldView.x = 2000;
+        view.update(1600);
+        expect(surface.begin.mock.calls.at(-1)?.[0]).not.toEqual(views[0]);
+    });
+
     // While the water moves the ground does not change: it is painted once, then laid back under the water.
     it("paints the ground once and lays it back while the water alone moves", () => {
         const { view, water, surface } = fixture();

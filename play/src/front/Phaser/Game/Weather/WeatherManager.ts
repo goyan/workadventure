@@ -40,6 +40,7 @@ import {
     forcedRainLevel,
     parseRainLevel,
     rainDrops,
+    rainFineness,
     rainIntensity,
     rainLean,
     rainSplashes,
@@ -91,6 +92,14 @@ const NO_SHIFT = { columns: 0, rows: 0 };
 const DRAW_MARGIN = 0.1;
 /** The outdoors of the view is read for a view widened to whole steps of this many map pixels (see veilOver). */
 const VEIL_STEP = 256;
+/**
+ * How many times a second the clouds and the fog are painted, for blocks of this size (map pixels): they drift by
+ * whole blocks, so large blocks (seen from far) move seldom.
+ */
+export function blocksPerSecond(blockSize: number): number {
+    return blockSize >= 32 ? 6 : blockSize >= 16 ? 8 : 10;
+}
+
 /** A veil of more rectangles than this is painted in the canvas of the clouds instead (see fillVeil). */
 const VEIL_MAX_RECTS = 96;
 /**
@@ -160,6 +169,20 @@ export class WeatherManager {
     private lastFogKey: string | undefined;
     /** What the last drawing covered (the view and its margin), to draw again before a scroll reaches its edge. */
     private drawn: WeatherView | undefined;
+    /** The canvas of the clouds and the fog as it was last painted (see update): kept between two paintings. */
+    private blockFrame:
+        | {
+              key: string;
+              veil: readonly WeatherView[] | undefined;
+              at: number;
+              view: WeatherView;
+              canvas: BlockCanvasArea;
+              outdoor: Uint8Array;
+              size: number;
+              /** The clouds of the rain as they were painted: the rain falls thicker under them. */
+              rainLevels: Uint8Array | undefined;
+          }
+        | undefined;
     /** A field that covers every cell of the canvas of the clouds: a veil painted in it (see fillVeil). */
     private everyCell = new Uint8Array(0);
     /** The outdoors last read, and what it was read from (see veilOver). */
@@ -237,6 +260,7 @@ export class WeatherManager {
             if (this.visible) {
                 this.graphics.clear().setVisible(false);
                 this.blocks.hide();
+                this.blockFrame = undefined;
                 this.visible = false;
                 this.scene.markDirty();
             }
@@ -296,6 +320,7 @@ export class WeatherManager {
             if (this.visible) {
                 this.graphics.clear().setVisible(false);
                 this.blocks.hide();
+                this.blockFrame = undefined;
                 this.visible = false;
                 this.scene.markDirty();
             }
@@ -312,23 +337,53 @@ export class WeatherManager {
         const cloudBlock = cloudBlockSize(this.scene.cameras.main.zoom);
         const foggy = showWeather && weather === WeatherType.Fog;
         const size = foggy ? Math.max(FOG_BLOCK, cloudBlock) : cloudBlock;
-        const canvas = this.blocks.begin(view, size);
-        // The walls once for all the layers: a cell is painted when its centre is outdoors.
-        const outdoor = grid ? outdoorCells(canvas, size, veil) : new Uint8Array(canvas.columns * canvas.rows).fill(1);
-        // Seen from high above, the clouds pass over the buildings too (their shadows stay on the ground outdoors).
-        const overRoofs = grid ? cloudsOverRoofs(this.screenScale()) : 0;
-        this.roofs = overRoofs > 0 ? { cells: outdoor.map((cell) => (cell ? 0 : 1)), share: overRoofs } : undefined;
+        // The clouds and the fog drift slowly, by whole blocks: they are painted a few times a second, while what
+        // falls is drawn 30 times. Painted again at once when what they show changes or the scroll nears their edge.
+        const blockKey = [weather, showClouds, this.cloudsShown, night, size, this.reducedMotion].join("|");
+        // The outdoors the walls leave (the same list while they do not change); the whole view without walls.
+        const outdoors = grid ? veil : undefined;
+        const kept = this.blockFrame;
+        const paint =
+            !kept ||
+            kept.key !== blockKey ||
+            kept.veil !== outdoors ||
+            now - kept.at >= 1000 / blocksPerSecond(size) ||
+            !wellInside(kept.view, screen, DRAW_MARGIN / 2);
+        let canvas: BlockCanvasArea;
+        let outdoor: Uint8Array;
+        if (paint || !kept) {
+            canvas = this.blocks.begin(view, size);
+            // The walls once for all the layers: a cell is painted when its centre is outdoors.
+            outdoor = grid ? outdoorCells(canvas, size, veil) : new Uint8Array(canvas.columns * canvas.rows).fill(1);
+            // Seen from high above, the clouds pass over the buildings too (their shadows stay on the ground outdoors).
+            const overRoofs = grid ? cloudsOverRoofs(this.screenScale()) : 0;
+            this.roofs = overRoofs > 0 ? { cells: outdoor.map((cell) => (cell ? 0 : 1)), share: overRoofs } : undefined;
+            this.blockFrame = {
+                key: blockKey,
+                veil: outdoors,
+                at: now,
+                view,
+                canvas,
+                outdoor,
+                size,
+                rainLevels: undefined,
+            };
+        } else {
+            ({ canvas, outdoor } = kept);
+        }
         if (showWeather && weather === WeatherType.Fog) {
             const density = fogStrengthNow * (night ? FOG_NIGHT_FACTOR : 1);
-            this.fillVeil(canvas, outdoor, veil, FOG_COLOR, FOG_VEIL_ALPHA * density);
-            // The patches stop at the walls: only outdoor cells are painted.
-            const levels = fieldLevels(canvas, size, fogPatches(epoch, view, this.reducedMotion));
-            this.blocks.paintField(canvas, levels, outdoor, NO_SHIFT, FOG_COLOR, (level) => {
-                return ((FOG_PATCH_ALPHA * level) / FOG_LEVELS) * density;
-            });
+            this.fillVeil(canvas, outdoor, veil, FOG_COLOR, FOG_VEIL_ALPHA * density, paint);
+            if (paint) {
+                // The patches stop at the walls: only outdoor cells are painted.
+                const levels = fieldLevels(canvas, size, fogPatches(epoch, view, this.reducedMotion));
+                this.blocks.paintField(canvas, levels, outdoor, NO_SHIFT, FOG_COLOR, (level) => {
+                    return ((FOG_PATCH_ALPHA * level) / FOG_LEVELS) * density;
+                });
+            }
         } else if (showWeather) {
             if (weather !== WeatherType.Snow) {
-                this.fillVeil(canvas, outdoor, veil, 0x27344b, storm ? 0.2 : rainVeilAlpha(rain));
+                this.fillVeil(canvas, outdoor, veil, 0x27344b, storm ? 0.2 : rainVeilAlpha(rain), paint);
             }
             // The rain falls from grey clouds, the storm from dark ones (not at night, with the personal switch).
             const covering =
@@ -340,19 +395,37 @@ export class WeatherManager {
                     settings?.cloudCover === undefined
                         ? covering.cloudiness
                         : Math.max(MIN_RAIN_COVER, settings.cloudCover);
-                const patches = cloudPatches(epoch, view, shownRainCover(cover), this.reducedMotion, sky);
-                const levels = fieldLevels(canvas, size, patches);
-                if (this.cloudsShown) {
-                    const body = covering.alpha * this.zoomFade();
-                    this.paintCumulus(canvas, levels, outdoor, size, rainPalette(covering.color), body, sunlight.night);
+                if (paint && this.blockFrame) {
+                    const patches = cloudPatches(epoch, view, shownRainCover(cover), this.reducedMotion, sky);
+                    const painted = fieldLevels(canvas, size, patches);
+                    this.blockFrame.rainLevels = painted;
+                    if (this.cloudsShown) {
+                        const body = covering.alpha * this.zoomFade();
+                        this.paintCumulus(
+                            canvas,
+                            painted,
+                            outdoor,
+                            size,
+                            rainPalette(covering.color),
+                            body,
+                            sunlight.night,
+                        );
+                    }
                 }
-                // More rain under the thick of a cloud, less in a gap: the showers cross the map with the clouds.
-                underClouds = (x, y) => {
-                    const column = Math.floor((x - canvas.x) / size);
-                    const row = Math.floor((y - canvas.y) / size);
-                    if (column < 0 || row < 0 || column >= canvas.columns || row >= canvas.rows) return 1;
-                    return rainUnderCloud(levels[row * canvas.columns + column] / FOG_LEVELS, this.rainSettings.clouds);
-                };
+                // More rain under the thick of a cloud, less in a gap: the showers cross the map with the clouds
+                // (the clouds as they were last painted).
+                const levels = this.blockFrame?.rainLevels;
+                if (levels) {
+                    underClouds = (x, y) => {
+                        const column = Math.floor((x - canvas.x) / size);
+                        const row = Math.floor((y - canvas.y) / size);
+                        if (column < 0 || row < 0 || column >= canvas.columns || row >= canvas.rows) return 1;
+                        return rainUnderCloud(
+                            levels[row * canvas.columns + column] / FOG_LEVELS,
+                            this.rainSettings.clouds,
+                        );
+                    };
+                }
             }
             if (weather === WeatherType.Snow) {
                 this.graphics.fillStyle(0xf2f5ff, 0.8);
@@ -379,6 +452,7 @@ export class WeatherManager {
                 shadowOffset,
                 veilAlpha,
                 zoom,
+                paint,
             );
         }
         if (showLeaves) {
@@ -392,7 +466,7 @@ export class WeatherManager {
                 this.graphics.fillRect(leaf.x, leaf.y, leaf.vertical ? 3 : 4, leaf.vertical ? 4 : 3);
             }
         }
-        this.blocks.end();
+        if (paint) this.blocks.end();
         this.scene.markDirty();
     }
 
@@ -407,12 +481,15 @@ export class WeatherManager {
         veil: readonly WeatherView[],
         color: number,
         alpha: number,
+        paint: boolean,
     ): void {
         if (veil.length <= VEIL_MAX_RECTS) {
             this.graphics.fillStyle(color, alpha);
             for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
             return;
         }
+        // In the canvas of the clouds: painted with them, kept between two of their paintings.
+        if (!paint) return;
         if (this.everyCell.length !== outdoor.length) this.everyCell = new Uint8Array(outdoor.length).fill(1);
         this.blocks.paintField(canvas, this.everyCell, outdoor, NO_SHIFT, color, () => alpha);
     }
@@ -464,8 +541,10 @@ export class WeatherManager {
         shadowOffset: { x: number; y: number } | undefined,
         veilAlpha: number,
         zoom: number,
+        paint: boolean,
     ): void {
-        if (veilAlpha > 0) this.fillVeil(canvas, outdoor, veil, OVERCAST_COLOR, veilAlpha);
+        if (veilAlpha > 0) this.fillVeil(canvas, outdoor, veil, OVERCAST_COLOR, veilAlpha, paint);
+        if (!paint) return;
         // One field of clouds for the clouds and their shadows (the same clouds, moved by whole cells), wide enough for
         // the shadows of clouds just out of the canvas.
         const shift = shadowOffset
@@ -537,14 +616,26 @@ export class WeatherManager {
         local: RainLocal | undefined,
     ): void {
         const amount = intensity * this.rainSettings.amount;
+        // Seen from very close the rain is worked out on a finer grid than the map, then brought back to it: the
+        // drops keep on screen the size and the number they have at a usual zoom.
+        const fine = rainFineness(this.screenScale());
+        const finer =
+            fine === 1
+                ? view
+                : { x: view.x * fine, y: view.y * fine, width: view.width * fine, height: view.height * fine };
+        const localFine: RainLocal | undefined = local && fine !== 1 ? (x, y) => local(x / fine, y / fine) : local;
         // A drop shows where its whole streak is outdoors (head, middle and tail): no trail over the edge of a roof.
-        const drops = rainDrops(epoch, view, amount, lean, local).filter(
-            (drop) =>
-                !isOutdoor ||
-                [0, 0.5, 1].every((share) =>
-                    isOutdoor(drop.x - lean * drop.length * share, drop.y - drop.length * share),
-                ),
-        );
+        const drops = rainDrops(epoch, finer, amount, lean, localFine)
+            .map((drop) =>
+                fine === 1 ? drop : { ...drop, x: drop.x / fine, y: drop.y / fine, length: drop.length / fine },
+            )
+            .filter(
+                (drop) =>
+                    !isOutdoor ||
+                    [0, 0.5, 1].every((share) =>
+                        isOutdoor(drop.x - lean * drop.length * share, drop.y - drop.length * share),
+                    ),
+            );
         for (let layer = 0; layer < 3; layer++) {
             const plane = drops.filter((drop) => drop.layer === layer);
             if (plane.length === 0) continue;
@@ -554,7 +645,7 @@ export class WeatherManager {
                 [0.5, 1],
             ] as const) {
                 // The near drops are thicker: they read as closer.
-                this.graphics.lineStyle(layer === 2 ? 1.5 : 1, RAIN_COLOR, plane[0].alpha * fade);
+                this.graphics.lineStyle((layer === 2 ? 1.5 : 1) / fine, RAIN_COLOR, plane[0].alpha * fade);
                 this.graphics.beginPath();
                 for (const drop of plane) {
                     const height = drop.length * share;
@@ -568,21 +659,26 @@ export class WeatherManager {
         const splashing = intensity * this.rainSettings.splashes;
         const lakes = this.scene.getTerrainWater?.();
         const time = this.scene.time.now;
-        for (const splash of keepOutdoorParticles(rainSplashes(epoch, view, splashing, local), isOutdoor)) {
+        // The splashes as the drops: on the finer grid, brought back to the map, each this many times smaller.
+        const dot = 1 / fine;
+        const splashes = rainSplashes(epoch, finer, splashing, localFine).map((splash) =>
+            fine === 1 ? splash : { ...splash, x: splash.x / fine, y: splash.y / fine },
+        );
+        for (const splash of keepOutdoorParticles(splashes, isOutdoor)) {
             if (lakes && lakes.depthAt(splash.x, splash.y, time) > 0) {
                 // On the water of the relief a drop leaves a ring that widens and fades.
-                this.graphics.lineStyle(1, RAIN_COLOR, SPLASH_ALPHAS[splash.stage]);
-                this.graphics.strokeCircle(splash.x, splash.y, 1.5 + splash.stage * 1.5);
+                this.graphics.lineStyle(dot, RAIN_COLOR, SPLASH_ALPHAS[splash.stage]);
+                this.graphics.strokeCircle(splash.x, splash.y, (1.5 + splash.stage * 1.5) * dot);
                 continue;
             }
             this.graphics.fillStyle(RAIN_COLOR, SPLASH_ALPHAS[splash.stage]);
             if (splash.stage === 0) {
-                this.graphics.fillRect(splash.x, splash.y, 1, 1);
+                this.graphics.fillRect(splash.x, splash.y, dot, dot);
             } else {
-                const spread = splash.stage + 1;
-                this.graphics.fillRect(splash.x - spread, splash.y - 1, 1, 1);
-                this.graphics.fillRect(splash.x + spread, splash.y - 1, 1, 1);
-                if (splash.stage === 1) this.graphics.fillRect(splash.x, splash.y, 1, 1);
+                const spread = (splash.stage + 1) * dot;
+                this.graphics.fillRect(splash.x - spread, splash.y - dot, dot, dot);
+                this.graphics.fillRect(splash.x + spread, splash.y - dot, dot, dot);
+                if (splash.stage === 1) this.graphics.fillRect(splash.x, splash.y, dot, dot);
             }
         }
     }

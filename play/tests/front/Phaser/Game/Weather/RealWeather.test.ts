@@ -4,6 +4,7 @@ import {
     realWeatherStateAt,
     withRealWeather,
     withWeatherPreview,
+    withRealWind,
 } from "../../../../../src/front/Phaser/Game/Weather/RealWeather";
 import type { RealWeatherSlot } from "../../../../../src/common/RealWeather";
 import { fogStrength } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
@@ -276,5 +277,32 @@ describe("wind of the real weather", () => {
         expect(withRealWeather({ weather: WeatherType.Real }, state(2 * SLOT + 10 * 60_000))).toMatchObject({
             rainRate: 9,
         });
+    });
+});
+
+describe("withRealWind", () => {
+    const lille = { name: "Lille", latitude: 50.6, longitude: 3.05 };
+    const known = { status: "known", weather: WeatherType.Rain, since: 0, windFrom: 225, windSpeed: 12 } as const;
+
+    // The banner shows the real wind of the place whatever the weather of the map: the clouds went against it.
+    it("gives a fixed or automatic weather the real wind of the place, and leaves the weather itself", () => {
+        for (const weather of [WeatherType.Rain, WeatherType.Clear, WeatherType.Fog, WeatherType.Automatic]) {
+            const settings = { weather, weatherLocation: lille, cloudiness: 0.4 };
+            expect(withRealWind(settings, known)).toEqual({ ...settings, windFrom: 225, windSpeed: 12 });
+        }
+    });
+
+    it("keeps the usual drift while the real wind is not known", () => {
+        const settings = { weather: WeatherType.Rain, weatherLocation: lille };
+        expect(withRealWind(settings, { status: "pending" })).toBe(settings);
+        expect(withRealWind(settings, { status: "unavailable" })).toBe(settings);
+        // A timeline without wind (an older pusher).
+        expect(withRealWind(settings, { status: "known", weather: WeatherType.Rain, since: 0 })).toBe(settings);
+        expect(withRealWind(undefined, known)).toBeUndefined();
+    });
+
+    it("leaves a map in Real alone: it already has its wind", () => {
+        const settings = { weather: WeatherType.Real, weatherLocation: lille };
+        expect(withRealWind(settings, known)).toBe(settings);
     });
 });
