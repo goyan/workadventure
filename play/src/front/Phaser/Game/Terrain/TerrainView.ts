@@ -16,6 +16,7 @@ import type { PoolStyle, TerrainData } from "@workadventure/map-editor";
 import type { OutdoorGrid } from "@wa/front/Phaser/Game/Outdoor/OutdoorGrid";
 import { waterCycleNow } from "@wa/front/Phaser/Game/Weather/Frost";
 import type { WaterCycle } from "@wa/front/Phaser/Game/Weather/Frost";
+import type { WaterRing } from "@wa/front/Phaser/Game/Catastrophe/MeteorFall";
 import type { GameScene } from "../GameScene";
 import { createBlockSurface } from "../Weather/BlockSurface";
 import type { BlockCanvasArea, BlockSnapshot, BlockSurface } from "../Weather/BlockSurface";
@@ -729,6 +730,22 @@ export class TerrainView {
     }
 
     /** The ripples of the water twinkle in place: the next image of the water, a few times a second. */
+    /**
+     * The fronts of the waves of the comets fallen into the water, drawn by the water shader. False without it: the
+     * meteors draw their circles then.
+     */
+    /** Whether the water shader draws the waves of the comets. */
+    public drawsWaterRings(): boolean {
+        return this.splat !== undefined;
+    }
+
+    public setWaterRings(rings: readonly WaterRing[]): boolean {
+        if (!this.splat) return false;
+        if (rings.length > 0 || this.splat.hasRings()) this.scene.markDirty();
+        this.splat.setRings(rings);
+        return true;
+    }
+
     private ripple(now: number): void {
         if (this.splat) {
             if (this.splat.hasWater() && now - this.lastRipple >= WATER_FRAME_MS) {

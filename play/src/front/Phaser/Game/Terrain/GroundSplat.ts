@@ -4,6 +4,7 @@ import type { PoolStyle } from "@workadventure/map-editor";
 import { refreshCanvasTexture } from "@wa/front/Phaser/Game/CanvasTextureRefresh";
 import { DEEP_ICE_PX, POOL_ICE_DEPTH_PX } from "@wa/front/Phaser/Game/Weather/Frost";
 import type { WaterCycle } from "@wa/front/Phaser/Game/Weather/Frost";
+import type { WaterRing } from "@wa/front/Phaser/Game/Catastrophe/MeteorFall";
 import { GROUND_TEXTURES } from "./TexturedGround";
 import type { GroundArea } from "./TexturedGround";
 
@@ -290,6 +291,22 @@ uniform sampler2D uIceTexture;
 uniform vec2 uIceSize;
 uniform float uIce;
 uniform float uSnow;
+// The fronts of the waves of the comets fallen into the water (x, y, radius in map pixels, strength 0 to 1).
+uniform vec4 uRing0;
+uniform vec4 uRing1;
+uniform vec4 uRing2;
+uniform vec4 uRing3;
+
+// The water raised by the front of a comet's wave, and lowered just behind it: -1 to 1.
+float ringAt(vec4 ring, vec2 world) {
+    if (ring.w <= 0.0) return 0.0;
+    float d = distance(world, ring.xy) - ring.z;
+    return ring.w * (exp(-d * d / 50.0) - 0.6 * exp(-(d + 9.0) * (d + 9.0) / 70.0));
+}
+
+float ringsAt(vec2 world) {
+    return ringAt(uRing0, world) + ringAt(uRing1, world) + ringAt(uRing2, world) + ringAt(uRing3, world);
+}
 
 // The snow lying on the ice, in drifts that grow with the snow of the map.
 vec3 snowOnIce(vec3 ice, vec2 world) {
@@ -395,9 +412,14 @@ void main() {
         vec3 water = mix(SHALLOW, DEEP, deep);
         float alpha = mix(0.5, 0.92, deep);
 
+        // The waves of the comets: a bright crest running to the shores, a dark trough behind, the surface pushed.
+        float shock = ringsAt(world);
+        water += shock * 0.22;
+        alpha = clamp(alpha + abs(shock) * 0.15, 0.0, 1.0);
+
         // The surface: two noises sliding across each other; where they cross, bright lines of light (caustics
         // over the shallows, glints over the deep).
-        vec2 p = world / 46.0;
+        vec2 p = (world + vec2(shock * 5.0)) / 46.0;
         float n1 = fbm(p + vec2(t * 0.06, t * 0.035));
         float n2 = fbm(p * 1.6 - vec2(t * 0.045, -t * 0.07) + 9.0);
         float lines = 1.0 - smoothstep(0.0, 0.04, abs(n1 - n2));
@@ -433,6 +455,8 @@ void main() {
 `;
 
 let splatCount = 0;
+/** How many waves of comets the water shader draws at once. */
+const MAX_WATER_RINGS = 4;
 
 /** What the ground shader is given: the weight of each soil (by its number in the map), the grass, the snow. */
 export interface GroundWeights {
@@ -527,6 +551,13 @@ export class GroundSplat {
                         setUniform("uIceSize", this.sizeOf(GROUND_TEXTURES.ice));
                         setUniform("uIce", this.cycle.ice);
                         setUniform("uSnow", this.snow);
+                        for (let index = 0; index < MAX_WATER_RINGS; index++) {
+                            const ring = this.rings[index];
+                            setUniform(
+                                `uRing${index}`,
+                                ring ? [ring.x, ring.y, ring.radius, ring.strength] : [0, 0, 0, 0],
+                            );
+                        }
                     },
                 },
                 0,
@@ -544,6 +575,7 @@ export class GroundSplat {
     /** The cycle of the water this player sees (Frost.ts): frost, ice and wet ground. */
     private cycle: WaterCycle = { frost: 0, ice: 0, wet: 0 };
     private snow = 0;
+    private rings: readonly WaterRing[] = [];
 
     /** Lays the grounds over `area` from their weights. Nothing to draw: the ground shader is hidden. */
     public setGround(area: GroundArea, weights: GroundWeights): void {
@@ -621,6 +653,15 @@ export class GroundSplat {
     /** The frost, the ice and the wet of now: read by the shaders at their next drawing. */
     public setCycle(cycle: WaterCycle): void {
         this.cycle = cycle;
+    }
+
+    /** The fronts of the waves of the comets fallen into the water: the first MAX_WATER_RINGS are drawn. */
+    public setRings(rings: readonly WaterRing[]): void {
+        this.rings = rings;
+    }
+
+    public hasRings(): boolean {
+        return this.rings.length > 0;
     }
 
     /** How much the snow of the map covers the ground, 0 to 1: it lies on the ice too. */

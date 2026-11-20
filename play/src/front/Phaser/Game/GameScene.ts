@@ -2356,6 +2356,7 @@ export class GameScene extends DirtyScene {
             this._torchManager?.update(time);
             this._fishingManager?.update(time);
             this.meteorView?.update(time);
+            this.terrainView?.setWaterRings(this.meteorView?.waterRings(time) ?? []);
             this.fireView?.update(time);
             this.treeFireView?.update(time);
             this.downpourView?.update(time);
@@ -4333,6 +4334,7 @@ export class GameScene extends DirtyScene {
             (x, y) => this.terrainWater.depthAt(x, y, this.time.now) >= METEOR_WET_DEPTH_PX,
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
             () => this.getGameMap().getWamFile()?.getWam().settings?.water?.inertia === true,
+            () => this.terrainView?.drawsWaterRings() === true,
         );
         this.meteorView = meteorView;
         // The flames of the tiles on fire, laid by the wind of the scene.

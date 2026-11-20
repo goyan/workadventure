@@ -5,9 +5,10 @@ import {
     flashAllowed,
     meteorFrame,
     steamPuffs,
+    waterRingOf,
     waveCircles,
     wetStretches,
-} from "../../../../../src/front/Phaser/Game/Catastrophe/MeteorFall";
+} from "@wa/front/Phaser/Game/Catastrophe/MeteorFall";
 
 const FALL_MS = 1200;
 
@@ -194,5 +195,21 @@ describe("steamPuffs", () => {
             expect(puff.radius).toBeGreaterThan(early[index].radius);
             expect(puff.alpha).toBeLessThan(early[index].alpha);
         });
+    });
+});
+
+describe("waterRingOf", () => {
+    const comet = { x: 100, y: 200, shape: meteorShape(4) };
+
+    it("puts the front of the wave where its first circle runs, full strength at impact, fading as it goes", () => {
+        const front = waveCircles(1000, comet.shape)[0];
+        expect(waterRingOf(comet, 1000)).toMatchObject({ x: 100, y: 200, radius: front.radius });
+        expect(waterRingOf(comet, 0)?.strength).toBeCloseTo(1);
+        expect(waterRingOf(comet, 4000)?.strength ?? 1).toBeLessThan(waterRingOf(comet, 1000)?.strength ?? 0);
+    });
+
+    it("has no front before the impact nor once the wave has run", () => {
+        expect(waterRingOf(comet, -1)).toBeUndefined();
+        expect(waterRingOf(comet, 5600)).toBeUndefined();
     });
 });
