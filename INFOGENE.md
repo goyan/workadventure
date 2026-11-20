@@ -825,7 +825,9 @@ Le bandeau reprend `ToastContainer` et propose « Rafraîchir » ou « Plus tard
 « Plus tard » masque la notification pour cette session. Les pages déjà ouvertes avant l'installation de ce
 patch doivent être rafraîchies une première fois pour pouvoir recevoir les prochaines notifications.
 Les nouveaux messages sont traduits ; le haut et le bas sorabe utilisent provisoirement l'anglais.
-Le bandeau décrit aussi les fonctionnalités et correctifs ajoutés depuis le front chargé.
+Le bandeau décrit aussi les fonctionnalités et correctifs ajoutés depuis le front chargé, chacun suivi
+de son auteur en plus discret (« … — Hervé », `Components/ReleaseNoteItem.svelte`), le même nom public que
+dans « Outils → Nouveautés » ; une ligne sans auteur s'affiche sans tiret.
 « Outils → Nouveautés » ouvre l'historique complet, accessible sans droit d'édition, avec
 type, date, heure et auteur. Les textes sont les sujets français des commits publics `feat(front):`
 et `fix(front):` depuis `v1.32.6`, du plus récent au plus ancien ; les dates sont celles des
