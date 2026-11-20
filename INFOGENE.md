@@ -3268,7 +3268,11 @@ ce lot dessine le feu. Rien ne change côté serveur ni sur le fil.
 - Chaque navigateur dessine ses flammes : deux joueurs voient le même feu, pas forcément la même image de la boucle.
 - **Sol gardé en mémoire** (`TerrainView`, `BlockSurface.snapshot` / `restore`) : sols, herbe, paille, cendres et
   relief sont composés une fois pour un relief, un pré et une vue, puis reposés sous l'eau ; tant que l'eau bouge
-  (10 dessins par seconde) seule l'eau est repeinte.
+  (10 dessins par seconde) seule l'eau est repeinte. Le relief et le pré sont lus à part (`reliefOver`,
+  `meadowOver`) : quand le serveur redit l'état du pré (toutes les 10 s, toutes les 2 s pendant un feu), seul le pré
+  est relu, tuile par tuile, et le sol repeint ; le relief, long à lire sur une vue large, ne l'est plus. Mesuré
+  dézoomé au maximum sur la carte d'équipe (3600 × 1800, navigateur sans écran) : l'image qui suit une annonce du pré
+  passe de 66 à 72 ms à 20 à 25 ms.
 
 Limites : pas de son, la lueur n'éclaire pas la nuit comme une lampe (elle ne perce pas le voile). Les arbres
 brûlent depuis le lot 4, ci-dessous.

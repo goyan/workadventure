@@ -3,6 +3,15 @@ import type { TerrainData } from "@workadventure/map-editor";
 import { describe, expect, it, vi } from "vitest";
 import type { GameScene } from "../../../../../src/front/Phaser/Game/GameScene";
 import { TerrainView } from "../../../../../src/front/Phaser/Game/Terrain/TerrainView";
+import {
+    ASH_COLOR,
+    FIRE_GLOW_COLOR,
+    GRASS_COLOR,
+    MeadowState,
+    mottledCover,
+    STRAW_COLOR,
+    strawLevel,
+} from "../../../../../src/front/Phaser/Game/Terrain/MeadowState";
 import { TerrainWater } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
 import type { WaterState } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
 
@@ -224,5 +233,139 @@ describe("TerrainView", () => {
         water.receive(stateOf(3, 48), 2000);
         view.update(2016);
         expect(surface.paintField.mock.calls.length - first - second).toBe(first);
+    });
+
+    describe("with a meadow", () => {
+        const CANVAS = { x: -160, y: -128, columns: 62, rows: 47 };
+        const WIDTH = 12;
+        const HEIGHT = 10;
+
+        /** A meadow of 12 × 10 tiles: grass on a diagonal, one tile dry, one burnt, one on fire, `extra` more grass. */
+        function meadowState(extra = 0) {
+            const tiles = WIDTH * HEIGHT;
+            const grass = new Uint8Array(tiles);
+            const dryness = new Uint8Array(tiles);
+            const fire = new Uint8Array(tiles);
+            const ash = new Uint8Array(tiles);
+            for (let tile = 0; tile < HEIGHT; tile++) grass[tile * WIDTH + tile] = 40 + tile * 20 + extra;
+            dryness[3 * WIDTH + 3] = 200;
+            dryness[1 * WIDTH + 6] = 120;
+            ash[4 * WIDTH + 7] = 180;
+            fire[5 * WIDTH + 8] = 255;
+            return { width: WIDTH, height: HEIGHT, grass, moisture: new Uint8Array(tiles), dryness, fire, ash };
+        }
+
+        /** Outdoors everywhere but a strip of the map: no grass is drawn under its roof. */
+        const outdoors = { isOutdoorAt: (x: number, _y: number): boolean => !(x >= 96 && x < 128) };
+
+        function meadowFixture(terrain: TerrainData = pit) {
+            const worldView = { x: 0, y: 0, width: 640, height: 480 };
+            const scene = {
+                cameras: { main: { worldView } },
+                markDirty: vi.fn(),
+                getOutdoorGrid: () => outdoors,
+            };
+            const surface = {
+                begin: vi.fn((_view: unknown, _resolution: number) => CANVAS),
+                paintField: vi.fn(),
+                end: vi.fn(),
+                hide: vi.fn(),
+                destroy: vi.fn(),
+            };
+            const water = new TerrainWater();
+            water.setTerrain(terrain);
+            const meadow = new MeadowState();
+            meadow.receive(meadowState());
+            const view = new TerrainView(scene as unknown as GameScene, water, surface, meadow);
+            return { view, water, surface, meadow };
+        }
+
+        /** The last field painted in a colour, copied (the view may reuse its arrays). */
+        function fieldOf(surface: { paintField: { mock: { calls: unknown[][] } } }, color: number) {
+            const call = [...surface.paintField.mock.calls].reverse().find((args) => args[4] === color);
+            return call ? Array.from(call[1] as Uint8Array) : undefined;
+        }
+
+        /** The layers of the meadow over the canvas, cell by cell, as the rule tells them. */
+        function expectedLayers(state: ReturnType<typeof meadowState>) {
+            const size = CANVAS.columns * CANVAS.rows;
+            const layers = {
+                grass: new Array<number>(size).fill(0),
+                straw: new Array<number>(size).fill(0),
+                ash: new Array<number>(size).fill(0),
+                fire: new Array<number>(size).fill(0),
+            };
+            for (let row = 0; row < CANVAS.rows; row++) {
+                for (let column = 0; column < CANVAS.columns; column++) {
+                    const cellX = CANVAS.x / 16 + column;
+                    const cellY = CANVAS.y / 16 + row;
+                    const tileX = Math.floor(cellX / 2);
+                    const tileY = Math.floor(cellY / 2);
+                    if (tileX < 0 || tileY < 0 || tileX >= WIDTH || tileY >= HEIGHT) continue;
+                    if (!outdoors.isOutdoorAt((cellX + 0.5) * 16, (cellY + 0.5) * 16)) continue;
+                    const tile = tileY * WIDTH + tileX;
+                    const index = row * CANVAS.columns + column;
+                    const drawn = state.grass[tile] === 0 ? 0 : mottledCover(state.grass[tile], cellX, cellY);
+                    layers.grass[index] = drawn;
+                    layers.ash[index] = state.ash[tile];
+                    layers.fire[index] = state.fire[tile];
+                    if (state.dryness[tile] > 0) layers.straw[index] = strawLevel(drawn, state.dryness[tile]);
+                }
+            }
+            return layers;
+        }
+
+        it("paints the grass, the straw, the ash and the fire of each tile on its outdoor cells", () => {
+            const { view, surface } = meadowFixture();
+            view.update(0);
+            const expected = expectedLayers(meadowState());
+            expect(fieldOf(surface, GRASS_COLOR)).toEqual(expected.grass);
+            expect(fieldOf(surface, STRAW_COLOR)).toEqual(expected.straw);
+            expect(fieldOf(surface, ASH_COLOR)).toEqual(expected.ash);
+            expect(fieldOf(surface, FIRE_GLOW_COLOR)).toEqual(expected.fire);
+            // The roof of the strip keeps the grass off: the tile (3, 3) lies under it.
+            expect(expected.grass.some((level) => level > 0)).toBe(true);
+            expect(expected.grass[(8 + 6) * CANVAS.columns + 10 + 6]).toBe(0);
+        });
+
+        // The meadow is told again every ten seconds: the relief, long to read on a wide view, is not read for it.
+        it("reads the meadow again when it changes, not the relief", () => {
+            let reads = 0;
+            const counted: TerrainData = {
+                ...pit,
+                get chunks() {
+                    reads++;
+                    return pit.chunks;
+                },
+            };
+            const { view, surface, meadow } = meadowFixture(counted);
+            view.update(0);
+            const afterFirst = reads;
+            expect(afterFirst).toBeGreaterThan(0);
+            meadow.receive(meadowState(15));
+            view.update(16);
+            expect(surface.begin).toHaveBeenCalledTimes(2);
+            expect(reads).toBe(afterFirst);
+            expect(fieldOf(surface, GRASS_COLOR)).toEqual(expectedLayers(meadowState(15)).grass);
+        });
+
+        it("paints the ground again when the meadow changed, and lays it back when it did not", () => {
+            const { view, water, surface, meadow } = meadowFixture();
+            const keeping = Object.assign(surface, {
+                snapshot: vi.fn(() => ({ pixels: new Uint8ClampedArray(4) })),
+                restore: vi.fn(() => true),
+            });
+            view.update(0);
+            expect(keeping.snapshot).toHaveBeenCalledTimes(1);
+            water.receive(stateOf(1, 32), 1000);
+            view.update(1016);
+            expect(keeping.restore).toHaveBeenCalledTimes(1);
+            expect(keeping.snapshot).toHaveBeenCalledTimes(1);
+            meadow.receive(meadowState(15));
+            view.update(2000);
+            // The ground kept shows the old grass: painted anew, and kept again.
+            expect(keeping.restore).toHaveBeenCalledTimes(1);
+            expect(keeping.snapshot).toHaveBeenCalledTimes(2);
+        });
     });
 });
