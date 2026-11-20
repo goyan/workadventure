@@ -32,6 +32,8 @@ const PLACE_EASE_MS = 250;
 const STILL_BELOW_PX_PER_S = 8;
 /** The way is read that far ahead of the companion, so that a small wobble of the master does not turn the group. */
 const HEADING_LOOKAHEAD_PX = 16;
+/** A companion left on the ground looks for its way back to its master this often, until it finds one. */
+export const WAY_BACK_RETRY_MS = 2_000;
 
 /** A copy of a place, with its altitude only when it is over the ground (see Point). */
 function placeOf(point: Point): Point {
@@ -46,6 +48,9 @@ function placeOf(point: Point): Point {
  *
  * The places are where the feet are on the ground, with the altitude of a master on a raised floor or a stair (see
  * Point): the companion climbs the stairs its master climbed, and stands on the floor they stand on.
+ *
+ * A companion does not fly. While its master flies (`flying`), it stays on the ground where it was and rests; once
+ * they landed it waits for a way on the ground to them (`seekWayBack`, `rejoin`), walks it, and follows again.
  */
 export class JungleCompanionFollower {
     /** Its place on the way of the master. */
@@ -61,6 +66,14 @@ export class JungleCompanionFollower {
     private trail: Point[] = [];
     private lastMs: number;
     private stoppedAt: number;
+    /** Left on the ground by a master who flew: it waits there until it is given a way back (`rejoin`). */
+    private waiting = false;
+    /** On its way back to a master who landed: however far they are, it walks, it does not jump to them. */
+    private rejoining = false;
+    /** When a way back was last asked for, whether the answer is awaited, and which wait it was asked for. */
+    private askedAt = Number.NEGATIVE_INFINITY;
+    private asking = false;
+    private waits = 0;
 
     constructor(start: Point, nowMs: number) {
         this.position = placeOf(start);
@@ -74,11 +87,24 @@ export class JungleCompanionFollower {
      * position where the master should not be followed (in the water) is not recorded (`record` false): the companion
      * waits at the last one.
      */
-    public poseAt(nowMs: number, master: Point, record: boolean, slot = 0): WanderPose {
+    public poseAt(nowMs: number, master: Point, record: boolean, slot = 0, flying = false): WanderPose {
         const elapsedMs = Math.min(MAX_FRAME_MS, Math.max(0, nowMs - this.lastMs));
         this.lastMs = nowMs;
+        if (flying) {
+            // Its master flies: it stops where it is, and forgets the way they went (it led to the plane).
+            if (!this.waiting || this.asking) this.waits++;
+            this.waiting = true;
+            this.rejoining = false;
+            this.asking = false;
+            this.askedAt = Number.NEGATIVE_INFINITY;
+            this.trail = [];
+            return this.still(nowMs);
+        }
+        if (this.waiting) return this.still(nowMs);
         const place = COMPANION_SLOTS[slot] ?? COMPANION_SLOTS[0];
-        if (Math.hypot(master.x - this.position.x, master.y - this.position.y) > COMPANION_TELEPORT_PX) {
+        const away = Math.hypot(master.x - this.position.x, master.y - this.position.y);
+        if (this.rejoining && away <= COMPANION_TELEPORT_PX) this.rejoining = false;
+        if (!this.rejoining && away > COMPANION_TELEPORT_PX) {
             this.position = placeOf(master);
             this.trail = [];
             this.offset = this.placeOffset(place);
@@ -121,6 +147,41 @@ export class JungleCompanionFollower {
     private raised(pose: WanderPose): WanderPose {
         if ((this.position.z ?? 0) > 0) pose.z = this.position.z;
         return pose;
+    }
+
+    /** Where it waits for a way back to its master, after their flight; undefined when it follows them. */
+    public waitingPlace(): Point | undefined {
+        return this.waiting ? placeOf(this.position) : undefined;
+    }
+
+    /** Gives the waiting companion its way on the ground to its master: it walks it, then follows as ever. */
+    public rejoin(path: readonly Point[]): void {
+        if (!this.waiting) return;
+        this.waiting = false;
+        this.rejoining = true;
+        this.trail = path.map(placeOf);
+    }
+
+    /**
+     * While it waits for a master who landed (at `master`): asks for a way on the ground to them, at most every
+     * WAY_BACK_RETRY_MS, and takes it when there is one. Without a way (an island, a roof), it keeps waiting.
+     */
+    public seekWayBack(nowMs: number, master: Point, findPath: (from: Point, to: Point) => Promise<Point[]>): void {
+        if (!this.waiting || this.asking || nowMs - this.askedAt < WAY_BACK_RETRY_MS) return;
+        this.askedAt = nowMs;
+        this.asking = true;
+        const wait = this.waits;
+        findPath(placeOf(this.position), placeOf(master)).then(
+            (path) => {
+                // Its master took off again meanwhile: that way leads nowhere.
+                if (wait !== this.waits) return;
+                this.asking = false;
+                if (path.length > 0) this.rejoin(path);
+            },
+            () => {
+                if (wait === this.waits) this.asking = false;
+            },
+        );
     }
 
     private still(nowMs: number): WanderPose {

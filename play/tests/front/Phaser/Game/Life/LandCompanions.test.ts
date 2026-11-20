@@ -204,3 +204,61 @@ describe("LandCompanions, where a tamed animal is shown", () => {
         expect(prompt.kind).toBe("tame");
     });
 });
+
+describe("LandCompanions, a master who flies", () => {
+    it("leaves the lion on the ground where it was, then walks it back by the ground once they landed", async () => {
+        const flying = new Set<number>();
+        const asked: { x: number; y: number }[][] = [];
+        const { companions, tell, frame, feet, time } = create({
+            playerFlying: (userId) => flying.has(userId),
+            groundPath: (from, to) => {
+                asked.push([from, to]);
+                return Promise.resolve([{ x: 400, y: 300 }, to]);
+            },
+        });
+        tell([{ id: 1, kind: LION, x: 100, y: 100, owner: ME }]);
+        const before = companions.poseOf(1, time());
+        if (!before || before === "hidden") throw new Error("not led");
+        // The master takes off and flies far away.
+        flying.add(ME);
+        for (let step = 1; step <= 100; step++) {
+            feet.set(ME, { x: 100 + step * 10, y: 100 });
+            frame();
+            const pose = companions.poseOf(1, time());
+            if (!pose || pose === "hidden") throw new Error("not led");
+            expect(Math.hypot(pose.x - before.x, pose.y - before.y)).toBeLessThan(1);
+            expect(pose.moving).toBe(false);
+        }
+        expect(asked).toEqual([]);
+        // Landed: a way on the ground is asked for, and walked (round by y = 300), without a jump.
+        flying.delete(ME);
+        frame();
+        let previous = companions.poseOf(1, time());
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(asked).toHaveLength(1);
+        expect(asked[0][1]).toEqual({ x: 1100, y: 100 });
+        let lowest = 0;
+        for (let step = 0; step < 500; step++) {
+            frame();
+            const pose = companions.poseOf(1, time());
+            if (!pose || pose === "hidden" || !previous || previous === "hidden") throw new Error("not led");
+            expect(Math.hypot(pose.x - previous.x, pose.y - previous.y)).toBeLessThan(16);
+            lowest = Math.max(lowest, pose.y);
+            previous = pose;
+        }
+        if (!previous || previous === "hidden") throw new Error("not led");
+        expect(lowest).toBeGreaterThan(250);
+        expect(Math.hypot(previous.x - 1100, previous.y - 100)).toBeLessThan(70);
+    });
+
+    it("shows the lion of a master seen flying first where the server keeps it: on the ground", () => {
+        const { companions, tell, frame, feet, time } = create({ playerFlying: () => true });
+        tell([{ id: 1, kind: LION, x: 100, y: 100, owner: OTHER }]);
+        expect(companions.poseOf(1, time())).toBe("hidden");
+        // The master comes into view, flying: nobody here saw where the lion was left.
+        feet.set(OTHER, { x: 500, y: 500 });
+        frame();
+        expect(companions.poseOf(1, time())).toBeUndefined();
+    });
+});

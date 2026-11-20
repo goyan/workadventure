@@ -527,3 +527,88 @@ describe("JungleCompanions on raised floors", () => {
         expect(pose).toMatchObject({ x: 320, y: 372, z: 52 });
     });
 });
+
+describe("JungleCompanions, a master who flies", () => {
+    function makeFlightWorld() {
+        const made = makeWorld();
+        const flying = new Set<number>();
+        const asked: Point[][] = [];
+        const ways = { answer: [] as Point[] };
+        made.world.playerFlying = (userId) => flying.has(userId);
+        made.world.groundPath = (from, to) => {
+            asked.push([from, to]);
+            return Promise.resolve(ways.answer);
+        };
+        return { ...made, flying, asked, ways };
+    }
+
+    it("the companion stays on the ground where it was, and rejoins by the ground after the landing", async () => {
+        const { world, prompt, leads, feet, flying, asked, ways } = makeFlightWorld();
+        const companions = new JungleCompanions(world);
+        tameNow(companions, prompt, 0);
+        companions.update(16);
+        const lead = leads.get(LION.id);
+        const before = lead?.poseAt(32);
+        expect(before).toBeDefined();
+        flying.add(ME);
+        let now = 32;
+        for (let step = 1; step <= 100; step++) {
+            now += 16;
+            feet.set(ME, { x: 320 + step * 10, y: 352 });
+            const pose = lead?.poseAt(now);
+            expect(pose?.moving).toBe(false);
+            expect(Math.hypot((pose?.x ?? 0) - (before?.x ?? 0), (pose?.y ?? 0) - (before?.y ?? 0))).toBeLessThan(1);
+        }
+        expect(asked).toEqual([]);
+        // Landed ten tiles and more away, behind a river: no way yet, it waits (no jump to its master).
+        flying.delete(ME);
+        now += 16;
+        const waiting = lead?.poseAt(now);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(asked).toHaveLength(1);
+        expect(asked[0][1]).toEqual({ x: 1320, y: 352 });
+        expect(Math.hypot((waiting?.x ?? 0) - (before?.x ?? 0), (waiting?.y ?? 0) - (before?.y ?? 0))).toBeLessThan(1);
+        // Two seconds later there is one (a bridge was laid): it walks it.
+        ways.answer = [
+            { x: 800, y: 600 },
+            { x: 1320, y: 352 },
+        ];
+        let previous = waiting;
+        let lowest = 0;
+        for (let t = 0; t < 12_000; t += 16) {
+            now += 16;
+            const pose = lead?.poseAt(now);
+            // eslint-disable-next-line no-await-in-loop -- the answers of the pathfinding come between two frames
+            if (t % 480 === 0) await Promise.resolve();
+            expect(Math.hypot((pose?.x ?? 0) - (previous?.x ?? 0), (pose?.y ?? 0) - (previous?.y ?? 0))).toBeLessThan(
+                16,
+            );
+            lowest = Math.max(lowest, pose?.y ?? 0);
+            previous = pose;
+        }
+        expect(asked.length).toBe(2);
+        expect(lowest).toBeGreaterThan(550);
+        expect(Math.hypot((previous?.x ?? 0) - 1320, (previous?.y ?? 0) - 352)).toBeLessThan(70);
+    });
+
+    it("a companion whose master is first seen flying stays where it is; lost from view, it shows again at the landing", () => {
+        const { world, leads, feet, flying } = makeFlightWorld();
+        const companions = new JungleCompanions(world);
+        companions.update(0);
+        // Another player, seen flying from the start, with the lion: here it is still where it wandered.
+        flying.add(9);
+        feet.set(9, { x: 900, y: 900 });
+        companions.receive(9, JUNGLE_COMPANION_EVENT, claim([LION.id, 500]), 0);
+        companions.update(16);
+        expect(leads.get(LION.id)?.poseAt(32)).toMatchObject({ ...LION.nest, moving: false });
+        // Its master flies out of view, then back: nobody here knows where it was left, it is not shown.
+        feet.delete(9);
+        expect(leads.get(LION.id)?.poseAt(48)).toBeUndefined();
+        feet.set(9, { x: 1500, y: 900 });
+        expect(leads.get(LION.id)?.poseAt(64)).toBeUndefined();
+        // Landed: it is at their feet, as when a master comes back into view.
+        flying.delete(9);
+        expect(leads.get(LION.id)?.poseAt(80)).toMatchObject({ x: 1500, y: 900 });
+    });
+});
