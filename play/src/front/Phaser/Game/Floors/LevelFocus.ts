@@ -117,7 +117,16 @@ export function stairShows(stair: { base: number; top: number }, current: Readon
     return current.has(stair.base) || current.has(stair.top);
 }
 
-/** In construction mode only the selected platform is visible; auto keeps the whole building. */
-export function editorLevelAlpha(elevation: number, selected: number): number {
-    return !Number.isFinite(selected) || elevation === selected ? 1 : 0;
+/** In the editor, a floor in the open air above the platform edited: seen through, what is edited under it shows. */
+export const EDITOR_OPEN_AIR_ABOVE_ALPHA = 0.6;
+
+/**
+ * In construction mode only the selected platform is visible; auto keeps the whole building. A floor in the open air
+ * (`openAir`, the deck of a bridge) stays in view whatever the platform edited: a ramp placed on the ground is aimed at
+ * its edge.
+ */
+export function editorLevelAlpha(elevation: number, selected: number, openAir = false): number {
+    if (!Number.isFinite(selected) || elevation === selected) return 1;
+    if (openAir) return elevation > selected ? EDITOR_OPEN_AIR_ABOVE_ALPHA : 1;
+    return 0;
 }

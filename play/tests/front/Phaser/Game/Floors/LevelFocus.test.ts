@@ -3,6 +3,7 @@ import {
     LEVEL_FADE_MS,
     VEIL_ALPHA,
     aboveLevelShows,
+    EDITOR_OPEN_AIR_ABOVE_ALPHA,
     editorLevelAlpha,
     currentLevels,
     stairCoversAvatar,
@@ -154,6 +155,15 @@ describe("construction level visibility", () => {
         expect([52, 104, 156].map((level) => editorLevelAlpha(level, 104))).toEqual([0, 1, 0]);
         expect(editorLevelAlpha(52, 0)).toBe(0);
         expect(editorLevelAlpha(52, 84)).toBe(0);
+    });
+    it("keeps a floor in the open air in view, seen through when it is above the platform edited", () => {
+        expect(editorLevelAlpha(52, 0, true)).toBe(EDITOR_OPEN_AIR_ABOVE_ALPHA);
+        expect(editorLevelAlpha(20, 0, true)).toBe(EDITOR_OPEN_AIR_ABOVE_ALPHA);
+        expect(editorLevelAlpha(52, 52, true)).toBe(1);
+        expect(editorLevelAlpha(52, 116, true)).toBe(1);
+        expect(editorLevelAlpha(52, Number.POSITIVE_INFINITY, true)).toBe(1);
+        expect(EDITOR_OPEN_AIR_ABOVE_ALPHA).toBeGreaterThan(0.3);
+        expect(EDITOR_OPEN_AIR_ABOVE_ALPHA).toBeLessThan(1);
     });
     it("keeps the whole building available in automatic mode", () => {
         expect(editorLevelAlpha(52, Number.POSITIVE_INFINITY)).toBe(1);
