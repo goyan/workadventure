@@ -60,7 +60,6 @@
         IconRectangle,
         IconWall,
         IconWindow,
-        IconLayersSubtract,
     } from "@wa-icons";
 
     const toolGroups: {
@@ -101,7 +100,6 @@
             modes: [
                 { mode: "height", icon: IconArrowAutofitHeight },
                 { mode: "erase", icon: IconEraser },
-                { mode: "slabErase", icon: IconLayersSubtract },
             ],
         },
     ];
@@ -133,7 +131,6 @@
 
     let usesFloor = $derived(
         $mapLayerModeStore !== "wall" &&
-            $mapLayerModeStore !== "slabErase" &&
             $mapLayerModeStore !== "stair" &&
             $mapLayerModeStore !== "erase" &&
             $mapLayerModeStore !== "door" &&

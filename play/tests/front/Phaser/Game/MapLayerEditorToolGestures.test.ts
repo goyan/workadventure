@@ -13,6 +13,11 @@ import type { MapEditorModeManager } from "../../../../src/front/Phaser/Game/Map
 import type { EntitiesCollectionsManager } from "../../../../src/front/Phaser/Game/MapEditor/EntitiesCollectionsManager";
 import { MapLayerEditorTool } from "../../../../src/front/Phaser/Game/MapEditor/Tools/MapLayerEditorTool";
 import { MAP_LAYER_FLOOR_SLAB_COLLECTION } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
+import { FloorModel, stairImagePosition } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorModel";
+import { computeFloorPlacements } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorOperations";
+import { stairGroundBox, stairScreenBox } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
+import type { StairShape } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
+import { mapEditorPlacementLevelStore } from "../../../../src/front/Stores/MapEditorStore";
 import {
     MAP_LAYER_DOOR_COLLECTION,
     MAP_LAYER_FLOOR_COLLECTION,
@@ -219,6 +224,7 @@ describe("MapLayerEditorTool gestures", () => {
         mapLayerWallHeightStore.set(1);
         mapLayerDoorHeightStore.set("auto");
         mapLayerWindowHeightStore.set(1);
+        mapEditorPlacementLevelStore.set("auto");
     });
 
     /** A horizontal wall of three segments on the line 2: its facades fill the tile row 2 (y 64 to 96). */
@@ -862,5 +868,225 @@ describe("MapLayerEditorTool gestures", () => {
         tool = new MapLayerEditorTool(modeManager);
         await activate();
         expect(get(mapLayerShortStairsAvailableStore)).toBe(false);
+    });
+    describe("what the pointer points at", () => {
+        const RED = 0xff3b30;
+        const WHITE = 0xffffff;
+        const north: StairShape = { direction: "n", width: 1, rise: 52, open: false };
+        const ramp: StairShape = { direction: "e", width: 1, rise: 20, open: true, ramp: true };
+
+        /** The entities of the raised floors of a model, with their altitude (ids `palier-<index>`). */
+        function placeRaisedFloors(model: FloorModel): string[] {
+            return computeFloorPlacements(model).map((item, index) => {
+                const entityId = `palier-${index}-${item.prefabId.split(":")[1]}`;
+                const entity = mock<Entity>({ entityId, x: item.x, y: item.y });
+                entity.getElevation.mockReturnValue(item.elevation);
+                entity.getEntityData.mockReturnValue({
+                    ...ENTITY_DATA,
+                    x: item.x,
+                    y: item.y,
+                    elevation: item.elevation,
+                });
+                entity.getPrefab.mockReturnValue(prefab(item.collectionName, item.prefabId));
+                entities.set(entityId, entity);
+                return entityId;
+            });
+        }
+
+        function stairBox(shape: StairShape, foot: { x: number; y: number }, base: number) {
+            const image = stairImagePosition(shape, foot, base);
+            const box = stairScreenBox(shape, foot);
+            return { x: image.x, y: image.y, width: box.width, height: box.height };
+        }
+
+        function strokedRects(): number[][] {
+            return previewGraphics.strokeRect.mock.calls.map((call) => call.slice(0, 4));
+        }
+
+        function clearPreviewCalls(): void {
+            previewGraphics.strokeRect.mockClear();
+            previewGraphics.fillRect.mockClear();
+            previewGraphics.lineStyle.mockClear();
+            previewGraphics.fillStyle.mockClear();
+        }
+
+        it("outlines a whole stair in red under the eraser, never a tile under it", async () => {
+            const floors = new FloorModel();
+            floors.addStair(north, { x: 5, y: 10 }, 0);
+            placeRaisedFloors(floors);
+            await activate();
+            mapLayerModeStore.set("erase");
+            const box = stairBox(north, { x: 5, y: 10 }, 0);
+            clearPreviewCalls();
+            move(box.x + 10, box.y + 4);
+            expect(strokedRects()).toContainEqual([box.x, box.y, box.width, box.height]);
+            expect(previewGraphics.lineStyle.mock.calls.map(([, color]) => color)).toContain(RED);
+            expect(strokedRects()).not.toContainEqual([160, Math.floor((box.y + 4) / 32) * 32, 32, 32]);
+        });
+
+        it("erases the stair a click of the eraser was outlining, and not the floor it stands on", async () => {
+            const floors = new FloorModel();
+            for (let x = 2; x < 9; x++) for (let y = 2; y < 14; y++) floors.setSlab(52, x, y, "parquet-clair");
+            floors.addStair(north, { x: 5, y: 10 }, 52);
+            const ids = placeRaisedFloors(floors);
+            await activate();
+            mapLayerModeStore.set("erase");
+            // The room has the raised floors but not the walls of the raised floors: the eraser edits the floor 52.
+            mapEditorPlacementLevelStore.set(52);
+            const point = { x: 5 * 32 + 10, y: 10 * 32 + 10 - 52 };
+            down(point.x, point.y);
+            up(point.x, point.y);
+            const stairId = ids.find((id) => id.includes("escalier"));
+            const { created, deleted } = committedPieces();
+            expect(deleted).toEqual([stairId]);
+            expect(created.every((name) => name.startsWith("dalle-"))).toBe(true);
+        });
+
+        it("erases a slab of the floor edited on a click", async () => {
+            const floors = new FloorModel();
+            floors.setSlab(52, 4, 6, "parquet-clair");
+            floors.setSlab(52, 5, 6, "parquet-clair");
+            const ids = placeRaisedFloors(floors);
+            await activate();
+            mapLayerModeStore.set("erase");
+            mapEditorPlacementLevelStore.set(52);
+            down(4 * 32 + 5, 6 * 32 - 52 + 5);
+            up(4 * 32 + 5, 6 * 32 - 52 + 5);
+            expect(committedPieces()).toEqual({ created: [], deleted: [ids[0]] });
+        });
+
+        it("outlines the stair under the eraser on the level Auto, by the part of its image over a higher floor", async () => {
+            const floors = new FloorModel();
+            const ground = stairGroundBox(north, { x: 5, y: 10 });
+            const south = (ground.y + ground.height) / 32;
+            floors.setSlab(52, 5, south, "parquet-clair");
+            floors.setSlab(52, 5, south + 1, "parquet-clair");
+            floors.addStair(north, { x: 5, y: 10 }, 0);
+            placeRaisedFloors(floors);
+            await activate();
+            mapLayerModeStore.set("erase");
+            const box = stairBox(north, { x: 5, y: 10 }, 0);
+            clearPreviewCalls();
+            // In the image of the stair, and over the slab south of it on the floor 52.
+            move(5 * 32 + 10, south * 32 - 20);
+            expect(strokedRects()).toContainEqual([box.x, box.y, box.width, box.height]);
+        });
+
+        it("outlines a high wall in red by its raised top, with its whole image", async () => {
+            placeWall(false, 3);
+            await activate();
+            mapLayerModeStore.set("erase");
+            clearPreviewCalls();
+            // The wall of the line 2, three tiles high: drawn from y = 0 to its foot at y = 96.
+            move(40, 20);
+            expect(previewGraphics.lineStyle.mock.calls.map(([, color]) => color)).toContain(RED);
+            const rects = strokedRects();
+            expect(rects.length).toBeGreaterThan(0);
+            expect(rects.some(([, y, , height]) => y < 32 && height > 32)).toBe(true);
+        });
+
+        it("outlines a placed stair in white in the stair mode, the stair a drag moves, not a new stair", async () => {
+            const floors = new FloorModel();
+            floors.addStair(north, { x: 5, y: 10 }, 0);
+            placeRaisedFloors(floors);
+            await activate();
+            mapLayerModeStore.set("stair");
+            const box = stairBox(north, { x: 5, y: 10 }, 0);
+            clearPreviewCalls();
+            move(box.x + 10, box.y + box.height - 10);
+            expect(strokedRects()).toContainEqual([box.x, box.y, box.width, box.height]);
+            expect(previewGraphics.lineStyle.mock.calls.map(([, color]) => color)).toContain(WHITE);
+            // No preview of a new stair (green where it fits, red where it does not).
+            expect(previewGraphics.fillStyle.mock.calls.map(([color]) => color)).not.toContain(0x22c55e);
+            expect(previewGraphics.fillStyle.mock.calls.map(([color]) => color)).not.toContain(0xef4444);
+        });
+
+        it("moves a ramp of a bridge dragged in the stair mode, in one command", async () => {
+            const floors = new FloorModel();
+            floors.addStair(ramp, { x: 3, y: 4 }, 0);
+            const [rampId] = placeRaisedFloors(floors);
+            await activate();
+            mapLayerModeStore.set("stair");
+            const box = stairBox(ramp, { x: 3, y: 4 }, 0);
+            down(box.x + 10, box.y + box.height / 2);
+            move(box.x + 10 + 64, box.y + box.height / 2 + 32);
+            up(box.x + 10 + 64, box.y + box.height / 2 + 32);
+            const { created, deleted } = committedPieces();
+            expect(deleted).toEqual([rampId]);
+            expect(created).toEqual([rampId.split("-").slice(2).join("-")]);
+            const factory = modeManager.executeCommands.mock.calls[0][0] as () => readonly object[];
+            const moved = factory().find((command) => command.constructor.name === "CreateEntityFrontCommand") as {
+                entityData?: WAMEntityData;
+            };
+            const expected = stairImagePosition(ramp, { x: 5, y: 5 }, 0);
+            expect([moved.entityData?.x, moved.entityData?.y]).toEqual([expected.x, expected.y]);
+        });
+        it("erases only the door a click of the eraser outlines, by either of its leaves, never its walls", async () => {
+            placeDoor(false);
+            await activate();
+            mapLayerModeStore.set("erase");
+            // The right leaf: the segment 1 of the door on the segments 0 and 1 of the line 2.
+            down(40, 80);
+            up(40, 80);
+            const { created, deleted } = committedPieces();
+            expect(deleted).toEqual(expect.arrayContaining(["porte-h-blanc-d", "porte-h-blanc-g"]));
+            expect(created.filter((name) => name.startsWith("facade-")).length).toBeGreaterThanOrEqual(2);
+        });
+
+        it("outlines a slab of a raised floor where it is drawn, its altitude higher", async () => {
+            const floors = new FloorModel();
+            floors.setSlab(52, 4, 6, "parquet-clair");
+            placeRaisedFloors(floors);
+            await activate();
+            mapLayerModeStore.set("erase");
+            mapEditorPlacementLevelStore.set(52);
+            clearPreviewCalls();
+            move(4 * 32 + 5, 6 * 32 - 52 + 5);
+            // The preview is drawn on a layer raised by the level edited: the slab of the tile (4, 6) is at y = 6 * 32 on it.
+            expect(previewGraphics.setY.mock.lastCall).toEqual([-52]);
+            expect(strokedRects()).toContainEqual([128, 6 * 32, 32, 32]);
+            expect(previewGraphics.lineStyle.mock.calls.map(([, color]) => color)).toContain(RED);
+        });
+
+        it("grabs a high window by its raised pane, outlined in white, and moves it from there", async () => {
+            placeWall(true, 2);
+            await activate();
+            mapLayerModeStore.set("window");
+            input.setDefaultCursor.mockClear();
+            clearPreviewCalls();
+            // The window of the segment 0 of the line 2, two tiles high: drawn from y = 32 to its foot at y = 96.
+            move(10, 40);
+            expect(input.setDefaultCursor.mock.calls.at(-1)?.[0]).toBe("grab");
+            expect(previewGraphics.lineStyle.mock.calls.map(([, color]) => color)).toContain(WHITE);
+            expect(strokedRects().some(([, y]) => y < 64)).toBe(true);
+            // Dragged one segment east by its pane: it goes to the segment 1, on the same wall.
+            down(10, 40);
+            move(42, 40);
+            up(42, 40);
+            const { created, deleted } = committedPieces();
+            expect(deleted).toContain("fenetre-blanc-left-h2");
+            expect(created.some((name) => name.startsWith("fenetre-blanc-mid"))).toBe(true);
+        });
+
+        it("shows a placed high door that a click changes over its whole height", async () => {
+            const pieces: [string, string, number][] = [
+                [MAP_LAYER_DOOR_COLLECTION, "porte-h-blanc-g-h2", 0],
+                [MAP_LAYER_DOOR_COLLECTION, "porte-h-blanc-d-h2", 32],
+                [MAP_LAYER_WALL_COLLECTION, "facade-blanc-right-h2", 64],
+            ];
+            for (const [collection, name, x] of pieces) {
+                const entity = mock<Entity>({ entityId: name, x, y: 32 });
+                entity.getEntityData.mockReturnValue(ENTITY_DATA);
+                entity.getPrefab.mockReturnValue(prefab(collection, `${collection}:${name}:Default:Down`));
+                entities.set(name, entity);
+            }
+            await activate();
+            mapLayerModeStore.set("door");
+            mapLayerDoorGlazedStore.set(true);
+            clearPreviewCalls();
+            move(40, 80);
+            expect(previewGraphics.fillStyle.mock.calls.map(([color]) => color)).toEqual([0x2ecc71]);
+            expect(previewGraphics.fillRect.mock.lastCall?.slice(0, 4)).toEqual([0, 32, 64, 64]);
+        });
     });
 });

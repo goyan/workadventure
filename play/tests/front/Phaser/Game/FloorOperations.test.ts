@@ -3,17 +3,21 @@ import { FloorModel } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer
 import {
     applySlabs,
     availableLevels,
+    canMoveStair,
     canPlaceStair,
     computeFloorPlacements,
     diffFloorPlacements,
     eraseSlabs,
     floorCellAt,
     levelUnderPoint,
+    moveStair,
     placeStair,
     reachableLevels,
     removeStairAt,
     stairArrivalCells,
+    stairAt,
     stairHasArrival,
+    stairUnderPoint,
     stairTarget,
     stairTargets,
     stepLevel,
@@ -148,6 +152,53 @@ describe("floor operations", () => {
         expect(model.slabAt(52, 5, 5)).toBe("moquette-olive");
         expect(model.slabAt(52, 5, 6)).toBe("moquette-olive");
         expect(removeStairAt(model, 0, { x: 5, y: 5 })).toBe(false);
+    });
+
+    it("moves a placed stair: the well it leaves is closed, the well of its new place is cut", () => {
+        const model = new FloorModel();
+        applySlabs(model, 52, { x: 4, y: 2 }, { x: 9, y: 6 }, "moquette-olive", BOUNDS);
+        placeStair(model, north, { x: 5, y: 6 }, 0, BOUNDS);
+        const stair = stairAt(model, 0, { x: 5, y: 5 });
+        expect(stair).toBeDefined();
+        if (!stair) return;
+        expect(moveStair(model, stair, { x: 8, y: 6 }, BOUNDS)).toBe(true);
+        expect(model.getStairs()).toHaveLength(1);
+        expect(model.getStairs()[0]?.foot).toEqual({ x: 8, y: 6 });
+        expect(model.getStairs()[0]?.shape).toEqual(north);
+        // The old well is a floor again, the new one is a hole.
+        expect(model.slabAt(52, 5, 5)).toBe("moquette-olive");
+        expect(model.hasSlab(52, 8, 5)).toBe(false);
+    });
+
+    it("refuses to move a stair out of the map or over another stair, and changes nothing", () => {
+        const model = new FloorModel();
+        placeStair(model, north, { x: 5, y: 6 }, 0, BOUNDS);
+        placeStair(model, north, { x: 9, y: 6 }, 0, BOUNDS);
+        const stair = stairAt(model, 0, { x: 5, y: 6 });
+        if (!stair) throw new Error("stair expected");
+        expect(canMoveStair(model, stair, { x: 9, y: 6 }, BOUNDS)).toBe(false);
+        expect(moveStair(model, stair, { x: 9, y: 6 }, BOUNDS)).toBe(false);
+        expect(moveStair(model, stair, { x: 5, y: -4 }, BOUNDS)).toBe(false);
+        expect(model.getStairs().map((placed) => placed.foot)).toEqual([
+            { x: 5, y: 6 },
+            { x: 9, y: 6 },
+        ]);
+        // A stair does not block itself: one tile further is fine.
+        expect(moveStair(model, stair, { x: 6, y: 6 }, BOUNDS)).toBe(true);
+    });
+
+    it("finds a stair under a point of its image, above the tiles it stands on", () => {
+        const model = new FloorModel();
+        placeStair(model, north, { x: 5, y: 6 }, 0, BOUNDS);
+        const stair = model.getStairs()[0];
+        if (!stair) throw new Error("stair expected");
+        // On its foot.
+        expect(stairUnderPoint(model, 0, 5 * 32 + 10, 6 * 32 + 10)).toBe(stair);
+        // On the top of its image: further north than its tiles by its rise.
+        expect(stairUnderPoint(model, 0, 5 * 32 + 10, stair.ground.y - 40)).toBe(stair);
+        // Beside it, or from another floor: nothing.
+        expect(stairUnderPoint(model, 0, 7 * 32 + 10, 6 * 32 + 10)).toBeUndefined();
+        expect(stairUnderPoint(model, 52, 5 * 32 + 10, 6 * 32 + 10 - 52)).toBeUndefined();
     });
 
     it("offers the floors of the walls of 2, 3 and 4, and the ones already on the map", () => {
