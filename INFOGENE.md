@@ -3476,6 +3476,18 @@ sur le tsunami d'une comète de 24 cases dans un lac de 120 cellules de rayon : 
 terre, 46 cellules d'inondation ; sans, 165 cellules (90 m), sous 28 à 34 px d'eau sur les 60 premières, masse
 conservée, rien de perdu.
 
+**Comète sous inertie : impact physique seul.** Sur une carte à inertie, la comète ne pose plus son onde anneau
+par anneau (`ImpactWave`) : l'eau du cratère et celle qu'elle apporte sont jetées en bourrelet autour du cratère
+(jusqu'à une fois et demie son rayon, au-dessus du niveau des crues s'il le faut, `strikeWater`), et l'eau fait
+elle-même la vague. Les cercles dessinés par le navigateur ne le sont plus (ils suivaient l'onde d'avant), et la
+salle reçoit l'eau cinq fois par seconde pendant trente secondes après l'impact. Sans inertie, rien ne change.
+
+**Bouton « Réaliste »** (panneau Relief, en tête des réglages de la carte) : remet tous les réglages de l'eau sur
+leurs valeurs physiques (`REALISTIC_WATER_SETTINGS` : vitesse 1, inertie activée, vagues par défaut, hauteur d'eau
+à 256 px, ruissellement 10, évaporation 0,2 mm/h, absorption 5 mm/h, vidange 300 mm/h). Seul l'amorti (0,02) n'est
+pas physique : 0 en réel, c'est le minimum qui garde le calcul calme. Chaque réglage dit sa valeur réelle dans sa
+description.
+
 Sous inertie, une vague n'est plus coupée à la hauteur maximale de l'eau de la carte (18 px par défaut) mais à la
 plus haute qu'une carte puisse régler (256 px) ; sources et pluie restent limitées par le réglage. L'eau ne
 franchit jamais plus d'une demi-cellule par mouvement : un torrent ne dicte pas le nombre de mouvements de toute la

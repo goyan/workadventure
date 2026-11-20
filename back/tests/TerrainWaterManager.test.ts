@@ -150,6 +150,22 @@ describe("TerrainWaterManager", () => {
         expect(sent[0].stats?.sources).toBeGreaterThan(0);
     });
 
+    it("a strike on a water with inertia throws a rim around its crater, and the room sees the real wave five times a second", () => {
+        const wam = wamWith(wideLake);
+        if (wam.settings?.water) wam.settings.water.inertia = true;
+        const { manager, sent, steps } = createHarness({ wam });
+        manager.mapChanged();
+        fillWithWater(manager);
+        manager.strike(240, 240, 4);
+        // The crater (8 cells around the cell 15, 15) is empty, the rim next to it stands over the water around.
+        expect(manager.getGrid()?.depthAt(15, 15)).toBe(0);
+        expect(manager.getGrid()?.depthAt(15 + 10, 15)).toBeGreaterThan(8);
+        expect(sent[0].stats?.sources).toBeGreaterThan(0);
+        const afterImpact = sent.length;
+        steps(4);
+        expect(sent.length - afterImpact).toBe(2);
+    });
+
     it("the wave of a strike goes on step after step, and the room sees it five times a second", () => {
         const { manager, sent, steps } = createHarness({ wam: wamWith(wideLake) });
         manager.mapChanged();

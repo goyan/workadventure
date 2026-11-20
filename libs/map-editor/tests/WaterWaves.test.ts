@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { advanceImpactWave, startImpactWave } from "../src/Catastrophe/ImpactWave";
+import { advanceImpactWave, startImpactWave, strikeWater } from "../src/Catastrophe/ImpactWave";
 import type { ImpactWave } from "../src/Catastrophe/ImpactWave";
 import { meteorShape } from "../src/Catastrophe/Meteor";
 import { UpdateWAMSettingCommand } from "../src/Commands/WAM/UpdateWAMSettingCommand";
@@ -187,6 +187,24 @@ describe("the tsunami of a comet", { timeout: 30_000 }, () => {
         }
         return { reach, high, lost, drift: before + started.addedPx - lost - grid.totalPx() };
     };
+
+    it("thrown as a rim on a water with inertia: the crater is empty, its water stands around it, none further", () => {
+        const cells = new Map<string, number>();
+        for (let y = 0; y < 120; y++) for (let x = 0; x < 120; x++) cells.set(cellKey(x, y), -60);
+        const grid = new WaterGrid(withHeights(undefined, cells), { x: 0, y: 0, width: 120, height: 120 });
+        fill(grid, () => 55);
+        const before = grid.totalPx();
+        const shape = meteorShape(6);
+        const struck = strikeWater(grid, 60, 60, shape);
+        expect(struck?.lostPx).toBeCloseTo(0, 1);
+        expect(grid.depthAt(60, 60)).toBe(0);
+        // The rim, between the crater (12 cells) and one and a half times its radius.
+        expect(grid.depthAt(60 + 15, 60)).toBeGreaterThan(55 + 18);
+        // Further, the lake is as it was: no ring laid ahead, the water itself will make the wave.
+        expect(grid.depthAt(60 + 30, 60)).toBe(55);
+        expect(grid.totalPx()).toBeCloseTo(before + (struck?.addedPx ?? 0), 0);
+        expect(strikeWater(grid, 9999, 9999, shape)).toBeUndefined();
+    });
 
     it("floods the land far beyond the shore, loses no water and stays sound", () => {
         const { reach, high, drift } = strike(withWaves());

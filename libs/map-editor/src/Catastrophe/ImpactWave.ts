@@ -66,3 +66,35 @@ export function advanceImpactWave(grid: WaterGrid, wave: ImpactWave): { done: bo
     wave.carriedPx = 0;
     return { done: true, lostPx };
 }
+
+/** The rim an impact throws up around its crater reaches this many times the radius of the crater. */
+const RIM_REACH = 1.5;
+
+/**
+ * An impact on a map whose water has inertia: the water of the crater, and the water the meteor brings, are thrown
+ * up in a rim around it (over the level of a flood if need be), and nothing else: the water itself then makes the
+ * wave, which runs, breaks and floods as the map makes its water do. What finds no room in the rim is lost
+ * (`lostPx`). Undefined outside the grid or in a wall: nothing happens there.
+ */
+export function strikeWater(
+    grid: WaterGrid,
+    cellX: number,
+    cellY: number,
+    shape: MeteorShape,
+): { addedPx: number; lostPx: number } | undefined {
+    const crater = grid.takeDisc(cellX, cellY, shape.discCells);
+    if (!crater) return undefined;
+    const addedPx = METEOR_ADDED_PX * crater.cells;
+    const thrown = crater.takenPx + addedPx;
+    const laid = grid.layRing(
+        cellX,
+        cellY,
+        shape.discCells,
+        shape.discCells * RIM_REACH,
+        thrown,
+        Infinity,
+        Infinity,
+        true,
+    );
+    return { addedPx, lostPx: Math.max(0, thrown - laid) };
+}

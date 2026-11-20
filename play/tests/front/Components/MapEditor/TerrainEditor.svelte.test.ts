@@ -150,6 +150,33 @@ describe("TerrainEditor", () => {
         });
     });
 
+    it("sets every setting of the water back to its realistic value with one button", () => {
+        render();
+        setRange("terrain-runoff", 50);
+        byTestId("terrain-water-realistic").querySelector("button")?.click();
+        flushSync();
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: {
+                runoff: 10,
+                evaporation: 0.2,
+                speed: 1,
+                absorption: 5,
+                current: 1,
+                maxSurface: 256,
+                indoorDrain: 300,
+                inertia: true,
+                waveRoughness: 1,
+                waveDamping: 0.02,
+                waveBreaking: 1,
+                waveMomentum: 1,
+            },
+        });
+        // The sliders follow, those of the waves now shown.
+        expect(byTestId("terrain-speed").querySelector<HTMLInputElement>('input[type="range"]')?.value).toBe("1");
+        expect(target.querySelector('[data-testid="terrain-wave-roughness"]')).not.toBeNull();
+    });
+
     it("sets the waves of the water with inertia, shown only for it", () => {
         render();
         expect(target.querySelector('[data-testid="terrain-wave-roughness"]')).toBeNull();

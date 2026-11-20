@@ -6,6 +6,7 @@
         MAX_WATER_CURRENT,
         MAX_WATER_INDOOR_DRAIN,
         MAX_WATER_MAX_SURFACE,
+        REALISTIC_WATER_SETTINGS,
         WAVE_BOUNDS,
         MAX_WATER_SPEED,
         MEADOW_BOUNDS,
@@ -69,6 +70,17 @@
             forcePx: forceAuto ? undefined : forcePx,
             targetPx: flattenFromStart ? undefined : flattenLevelPx,
         }));
+    }
+
+    /** Every setting of the water back to what it is in reality, and saved. */
+    function setRealistic(): void {
+        ({ runoff, evaporation, speed, absorption, current, maxSurface, indoorDrain, inertia } =
+            REALISTIC_WATER_SETTINGS);
+        waveRoughness = REALISTIC_WATER_SETTINGS.waves.roughness;
+        waveDamping = REALISTIC_WATER_SETTINGS.waves.damping;
+        waveBreaking = REALISTIC_WATER_SETTINGS.waves.breaking;
+        waveMomentum = REALISTIC_WATER_SETTINGS.waves.momentum;
+        saveWater();
     }
 
     function saveWater(): void {
@@ -283,6 +295,12 @@
     <TerrainWaterDashboard {evaporation} {absorption} />
 
     <span class="retro-title mt-2">{$LL.mapEditor.terrain.mapSettings()}</span>
+    <div data-testid="terrain-water-realistic">
+        <button type="button" class="btn btn-sm btn-light btn-ghost w-full" onclick={setRealistic}>
+            {$LL.mapEditor.terrain.realistic()}
+        </button>
+        <p class="retro-hint m-0">{$LL.mapEditor.terrain.realisticHint()}</p>
+    </div>
     <div data-testid="terrain-max-depth">
         <RangeSlider
             id="terrain-max-depth"

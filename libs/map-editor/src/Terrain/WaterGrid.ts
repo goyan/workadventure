@@ -598,7 +598,9 @@ export class WaterGrid {
      * Lays up to `px` of water on the ring around a cell: the cells further than `inner` cells from it and no further
      * than `outer`, reached from it without crossing a wall (all the disc when `inner` is negative). Each cell takes
      * an even share, never over its highest level, and a cell already `deepPx` deep no more than `crestPx`: open water
-     * only swells as a wave goes by, the ground around it is flooded. Returns what was laid.
+     * only swells as a wave goes by, the ground around it is flooded. `overFlood` lets the water stand over the
+     * level the map sets for its floods, up to the highest a map may set: the rim an impact throws up. Returns what
+     * was laid.
      */
     public layRing(
         cellX: number,
@@ -608,19 +610,21 @@ export class WaterGrid {
         px: number,
         crestPx = Infinity,
         deepPx = Infinity,
+        overFlood = false,
     ): number {
         const centre = this.indexOf(cellX, cellY);
         if (centre === undefined || this.blocked[centre] || px <= 0) return 0;
         const { width } = this.bounds;
         const column = centre % width;
         const row = (centre - column) / width;
+        const top = overFlood ? Math.max(this.highest, MAX_WATER_MAX_SURFACE) : this.highest;
         const cells: number[] = [];
         const rooms: number[] = [];
         for (const index of this.discAround(centre, outer, discLimit(outer))) {
             const x = index % width;
             const y = (index - x) / width;
             if (inner >= 0 && (x - column) ** 2 + (y - row) ** 2 <= inner * inner) continue;
-            let room = this.spill[index] + this.highest - (this.ground[index] + this.depth[index]);
+            let room = this.spill[index] + top - (this.ground[index] + this.depth[index]);
             if (this.depth[index] >= deepPx) room = Math.min(room, crestPx);
             if (room <= 0) continue;
             cells.push(index);

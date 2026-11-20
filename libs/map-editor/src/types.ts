@@ -972,6 +972,22 @@ export const WAVE_BOUNDS = {
     breaking: [0, 5],
     momentum: [0, 1],
 } as const satisfies Record<keyof typeof DEFAULT_WAVE_SETTINGS, readonly [number, number]>;
+/**
+ * The water of a map as in reality (the "Realistic" button of the relief tool): it goes at its real pace, has
+ * inertia and makes its waves as the ground and its depth make them, and no flood is cut short. The damping is the
+ * only figure that is not physical (0 in reality): the least that keeps the computation calm.
+ */
+export const REALISTIC_WATER_SETTINGS = {
+    runoff: 10,
+    evaporation: 0.2,
+    speed: 1,
+    absorption: 5,
+    current: 1,
+    maxSurface: 256,
+    indoorDrain: 300,
+    inertia: true,
+    waves: DEFAULT_WAVE_SETTINGS,
+} as const;
 /** The fastest the floors of the rooms of a map may drain, in mm an hour. */
 export const MAX_WATER_INDOOR_DRAIN = 10000;
 /** The strongest current a map may set: twice the usual one. */
