@@ -71,6 +71,13 @@ const chat: BaseTranslation = {
         invitationAccepted: "Your invitation was accepted by {name}",
         defaultResponderName: "The user",
         limitReached: "You have sent too many meeting invitations. Please try again later.",
+        incomingCall: "{name} is calling you",
+        ringing: "Ringing, {seconds} s left",
+        missedCall: "Missed call from {name}",
+        callBack: "Call back",
+        close: "Close",
+        noAnswer: "{name} did not answer",
+        cannotJoin: "You cannot join this person: they are in a place you do not have access to.",
     },
     imagePreview: {
         close: "Close",

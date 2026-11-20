@@ -1,6 +1,7 @@
 import type { CatastropheMessage } from "@workadventure/messages";
 import { downpourTiles, TILE_PX } from "@workadventure/map-editor";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
+import { isEffectShown } from "../../../Stores/EffectsStore";
 import { DOWNPOUR_FALL_PX, downpourAlpha, downpourDrops, SPLASH_FROM } from "./DownpourFall";
 
 const CLOUD_COLOR = 0x4a5568;
@@ -77,6 +78,12 @@ export class DownpourView {
     }
 
     public update(now: number): void {
+        // Turned off on this computer: the downpour goes on (its water is the server's), unseen.
+        const visible = isEffectShown("downpour");
+        if (this.graphics.visible !== visible) {
+            this.graphics.setVisible(visible);
+            this.scene.markDirty();
+        }
         if (this.shown.size === 0) {
             this.lastUpdate = undefined;
             return;

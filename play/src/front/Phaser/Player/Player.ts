@@ -51,6 +51,7 @@ import {
 import { getSolidRectangles } from "@wa/front/Utils/EntityHitbox";
 import { NERF_KNOCKBACK_MS, NERF_KNOCKBACK_PX } from "../Game/Nerf/NerfBlink";
 import { groundPace } from "../Game/Terrain/GroundPace";
+import { isInActiveConversationStore } from "../../Stores/StreamableCollectionStore";
 import { RUN_ANIMATION_SPEED } from "./Animation";
 import { computeTileSnapTarget, getFeetTile } from "./TileSnap";
 import type { Seat } from "./Seat";
@@ -727,7 +728,8 @@ export class Player extends Character {
         // What the keys ask for, before the water has its say: the avatar keeps facing where it is steered.
         const steeredX = x;
         const steeredY = y;
-        if (!followMode && !this.isSeated()) {
+        // In a call the current carries nobody: it would take one out of the bubble of the conversation.
+        if (!followMode && !this.isSeated() && !get(isInActiveConversationStore)) {
             // The current of the water of the relief carries the avatar, on top of what it does by itself.
             const push = this.waterCurrentPush(WOKA_SPEED * 20);
             // A canoe holds against the current better than a swimmer.

@@ -299,6 +299,7 @@ import {
     terrainWaterStatsStore,
 } from "../../Stores/TerrainEditorStore";
 import { jungleEnabledStore } from "../../Stores/JungleStore";
+import { isEffectShown } from "../../Stores/EffectsStore";
 import { fireConditionsStore } from "../../Stores/FireConditionsStore";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
@@ -3809,7 +3810,7 @@ export class GameScene extends DirtyScene {
                     entities: () => this.shadowSourceEntities(),
                     outdoorGrid: () => this.getOutdoorGrid(),
                     outdoorVersion: () => this.getOutdoorVersion(),
-                    enabled: () => !get(mapEditorModeStore),
+                    enabled: () => !get(mapEditorModeStore) && isEffectShown("windowLight"),
                     // The light of the sky comes in through the doors that are open now.
                     isDoorOpen: (entityId) => this.isDoorOpen(entityId),
                 });
@@ -3822,7 +3823,8 @@ export class GameScene extends DirtyScene {
                     windSpeed: () => this.shownWeather()?.windSpeed,
                     windFrom: () => this.shownWeather()?.windFrom,
                     poseTexture: (key, pose) => treePoses.key(key, pose),
-                    enabled: () => !get(mapEditorModeStore) && get(weatherEffectsEnabledStore),
+                    enabled: () =>
+                        !get(mapEditorModeStore) && get(weatherEffectsEnabledStore) && isEffectShown("treeSway"),
                 });
                 // The raised floors: the ones placed on the map, or a trial layout asked by `?palier=`.
                 if (!this.floorSpike) {
@@ -5976,6 +5978,26 @@ ${escapedMessage}
             return;
         }
         areasManager.getAreaById(blockingArea.id)?.displayBlockedWarningMessage();
+    }
+
+    /**
+     * Teleports next to a point (the caller of an accepted invitation): on the free tile nearest to the one `gap`
+     * pixels in front of it, within a few tiles; on the point itself when none can be reached. Not where the user may
+     * not go.
+     */
+    public teleportNextTo(position: { x: number; y: number }, gap: number): void {
+        const reach = 3 * 32;
+        const spot =
+            this.nearestReachablePointIn(
+                { x: position.x - reach, y: position.y - reach, width: 2 * reach, height: 2 * reach },
+                { x: position.x, y: position.y + gap },
+            ) ?? position;
+        if (!this.isPositionAllowedForCurrentUser(spot)) {
+            warningMessageStore.addWarningMessage(get(LL).chat.meetingInvitation.cannotJoin(), { closable: true });
+            return;
+        }
+        this.CurrentPlayer.teleportTo(spot.x, spot.y);
+        this.getCameraManager().resumePlayerFollow();
     }
 
     /** The Home action is explicit: a reload or server restart must never teleport to the personal desk. */

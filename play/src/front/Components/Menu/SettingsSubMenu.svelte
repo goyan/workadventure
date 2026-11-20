@@ -81,6 +81,7 @@
     import NightSettings from "./NightSettings.svelte";
     import RainSettings from "./RainSettings.svelte";
     import GraphicsQualitySettings from "./GraphicsQualitySettings.svelte";
+    import EffectsSettings from "./EffectsSettings.svelte";
     import SkyShadowCategories from "./SkyShadowCategories.svelte";
     import SkyLightSettings from "./SkyLightSettings.svelte";
     import SeasonalThemeSettings from "./SeasonalThemeSettings.svelte";
@@ -564,6 +565,7 @@
         <MapWeatherSection />
     {:else if settingsTab === "graphics"}
         <GraphicsQualitySettings />
+        <EffectsSettings />
         <SettingsSection title={$LL.menu.settings.graphics.renderQuality()} dataTestId="graphics-sky-settings">
             <InputSwitch
                 id="weather-effects-enabled"

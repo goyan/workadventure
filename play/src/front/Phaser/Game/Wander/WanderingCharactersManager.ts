@@ -13,6 +13,7 @@ import type { GameScene } from "../GameScene";
 import { JUNGLE_RADIUS_TILES } from "../Jungle/JunglePlan";
 import type { JungleAnimal } from "../Jungle/JunglePlan";
 import { getSolidRectangles } from "../../../Utils/EntityHitbox";
+import { isEffectShown } from "../../../Stores/EffectsStore";
 import { blockRectangles, sameGrids, withAreaBorders } from "./WanderCollisions";
 import type { WanderRectangle } from "./WanderCollisions";
 import { drinkStance } from "./WanderDrink";
@@ -705,7 +706,9 @@ export class WanderingCharactersManager {
             }
 
             // Reapplied every frame: the entity becomes visible again when its image finishes loading.
-            const showSprite = sprite !== undefined && character.hasPose && !this.isEditorMode;
+            // Turned off on this computer: no animal walks, nor stands at its nest (the map editor still shows them).
+            const hiddenByUser = !this.isEditorMode && !isEffectShown("wanderers");
+            const showSprite = sprite !== undefined && character.hasPose && !this.isEditorMode && !hiddenByUser;
             if (sprite && sprite.visible !== showSprite) {
                 sprite.setVisible(showSprite);
                 changed = true;
@@ -713,7 +716,7 @@ export class WanderingCharactersManager {
             // A led character out of view is nowhere: its object is not shown at its nest either. But in the map editor
             // the object is shown, to be edited; and without a sprite (sheet loading or failed), it stays as it is.
             const hiddenByLead = character.lead !== undefined && sprite !== undefined && !this.isEditorMode;
-            if (character.entity && this.showEntity(character.entity, !showSprite && !hiddenByLead)) {
+            if (character.entity && this.showEntity(character.entity, !showSprite && !hiddenByLead && !hiddenByUser)) {
                 changed = true;
             }
         }
