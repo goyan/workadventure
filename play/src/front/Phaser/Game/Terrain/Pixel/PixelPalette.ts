@@ -42,7 +42,8 @@ export const RAMPS: Record<Material | "wall" | "water", Ramp> = {
     ash: ASH,
     // Embers are ash with glowing points (GroundPixel).
     ember: ASH,
-    snow: ramp("#b9c6d6", "#d3dde8", "#e8eef5", "#fbfdff"),
+    // Spread wide: the shape of a snowy relief (slopes, level lines, shadows) shows, at night too.
+    snow: ramp("#8b9db5", "#b4c3d5", "#dce5ef", "#fbfdff"),
     wall: ramp("#463b33", "#5e5146", "#7a6a5a", "#9c8a74"),
     // Wet clay, where the walk slows down (reflections of water: GroundPixel).
     mud: ramp("#2f2018", "#45301f", "#5c4129", "#735437"),

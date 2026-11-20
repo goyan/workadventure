@@ -5,6 +5,7 @@ import {
     groundColor,
     isContour,
     lightOfRise,
+    shadowedLight,
     slopeLight,
 } from "../../../../../../src/front/Phaser/Game/Terrain/Pixel/GroundPixel";
 import type { Material, Rgb } from "../../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
@@ -85,11 +86,40 @@ describe("the colour of a point of the ground in pixel art", () => {
         expect(isContour(-31, -31, -31, -31, -33)).toBe(false);
         expect(isContour(-40, -40, -40, -40, -40)).toBe(false);
         expect(isContour(-70, -70, -63, -70, -70)).toBe(true);
-        // Above the ground: no line (the mounts are lot D).
+        // Under the first tile of height or depth: no line.
         expect(isContour(10, 40, 10, 10, 10)).toBe(false);
         const plain = average((x, y) => groundColor("snow", x, y, 0, -40));
         const line = average((x, y) => groundColor("snow", x, y, 0, -40, undefined, true));
         expect(line).toBeLessThan(plain);
+    });
+});
+
+describe("the shape of a mount and of the snow", () => {
+    it("draws a level line on the higher side wherever a mount crosses a tile of height", () => {
+        expect(isContour(33, 33, 33, 31, 33)).toBe(true);
+        expect(isContour(31, 31, 31, 31, 33)).toBe(false);
+        expect(isContour(40, 40, 40, 40, 40)).toBe(false);
+        expect(isContour(70, 70, 63, 70, 70)).toBe(true);
+        // The foot of a mount on a hollow's rim: the line on the mount, and on the floor of the hollow.
+        expect(isContour(33, -1, 33, 33, 33)).toBe(true);
+    });
+
+    const lightness = (color: Rgb) => (color[0] + color[1] + color[2]) / 3;
+
+    it("spreads the shades of the snow wide enough for its shape to show, at night too", () => {
+        for (const season of [undefined, Season.Winter]) {
+            const snow = rampsFor(season).snow;
+            expect(lightness(snow[0])).toBeLessThan(lightness(snow[3]) * 0.65);
+        }
+    });
+
+    it("shades a slope of the snow, a level line on it and its shadow clearly", () => {
+        const at = (light: number, contour = false) =>
+            average((x, y) => groundColor("snow", x, y, light, 40, undefined, contour, Season.Winter));
+        // Sums of the three channels: before, 72, 51 and 45 (hard to see at night).
+        expect(at(lightOfRise(2)) - at(lightOfRise(-2))).toBeGreaterThan(100);
+        expect(at(0) - at(0, true)).toBeGreaterThan(70);
+        expect(at(0) - at(shadowedLight(0))).toBeGreaterThan(65);
     });
 });
 

@@ -240,16 +240,20 @@ export function contourShade(contour: boolean): number {
 }
 
 /**
- * Whether a point of dug ground carries a level line: one each tile of depth (TILE_DEPTH_PX), drawn on the deeper side
- * where one of its four neighbours is a tile less deep. The lines say the shape and the depth of a hollow at a glance,
- * even a gentle one, even under the snow.
+ * Whether a point of the relief carries a level line: one each tile of depth or height (TILE_DEPTH_PX), drawn on the
+ * side further from the ground level where one of its four neighbours is a tile nearer to it. The lines say the shape,
+ * the depth and the height of a hollow or a mount at a glance, even a gentle one, even under the snow.
  */
 export function isContour(height: number, west: number, east: number, north: number, south: number): boolean {
-    if (height >= 0) return false;
-    const level = Math.floor(-height / TILE_DEPTH_PX);
+    // Tiles below (negative) or above (positive) the ground level.
+    const levelOf = (value: number): number =>
+        value < 0 ? -Math.floor(-value / TILE_DEPTH_PX) : Math.floor(value / TILE_DEPTH_PX);
+    const level = levelOf(height);
     if (level === 0) return false;
-    const levelOf = (neighbour: number): number => Math.floor(Math.max(0, -neighbour) / TILE_DEPTH_PX);
-    return levelOf(west) < level || levelOf(east) < level || levelOf(north) < level || levelOf(south) < level;
+    // A neighbour a tile nearer to the ground level (or on the other side of it).
+    const nearer = (neighbour: number): boolean =>
+        level > 0 ? levelOf(neighbour) < level : levelOf(neighbour) > level;
+    return nearer(west) || nearer(east) || nearer(north) || nearer(south);
 }
 
 /** The shadow of a mount: cast along a ray rising this steeply (px of height a px of the map) from the north-west. */
