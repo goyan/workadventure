@@ -2161,6 +2161,8 @@ prend que l'eau au-dessus (trop-plein). À chaque pas, l'un et l'autre sont limi
 au niveau (`heldFlow` de `WaterGrid.ts`) ; un puits à niveau ne prend que dans son disque, il n'aspire pas le plan
 d'eau. Un lac reste ainsi plein quelle que soit la météo, sans déborder. Sans `level`, rien ne change. Le repère de
 l'outil Relief écrit le niveau après le débit (« +60 m³/h → −0.5 m »).
+Le panneau enregistre la propriété entière à chaque changement (`onSetProperty`) : décocher « Tenir un niveau »
+retire bien le niveau de la carte (une fusion le gardait, corrigé le 2026-11-20).
 
 **Modèle** (`libs/map-editor/src/Terrain/`, lu à l'identique par `back` et par le front). Le relief est un champ
 facultatif du WAM (`terrain` : hauteurs par cellule de 16 px, 0 au sol, négatif creusé, par blocs de 16 × 16 ; absent =
@@ -2385,6 +2387,50 @@ de la pluie ne se posent pas sur le relief ; les éclaboussures deviennent des r
 murs). Pas de mode Rivière tracée. Relief négatif seulement, au sol et dehors. Animaux et compagnons ignorent l'eau.
 Pas de courant qui pousse l'avatar. Un geste immense part en plusieurs commandes (autant d'annulations). Les valeurs
 par défaut du rythme sont à doser avec le tableau de bord. `play`, `back` et `map-storage` se déploient ensemble.
+
+## Eau à inertie (à l'essai)
+
+Réglage de carte `settings.water.inertia` (interrupteur « Eau à inertie (à l'essai) » du panneau Relief,
+`UpdateWaterSettingMessage.inertia`, champ 8, facultatif ; absent ou faux : rien ne change). Sur une carte qui
+l'active, l'eau ne se contente plus d'avancer de proche en proche (un cinquième de l'écart de niveau par pas,
+`WaterGrid.flow`) : chaque passage entre deux cellules garde son **débit** d'un pas à l'autre
+(`WaterGrid.flowWithInertia`, `flowEast` et `flowSouth`). Le débit accélère avec l'écart des surfaces et la hauteur
+d'eau qui passe (gravité à l'échelle de la carte : une onde court à 4,5 cellules par seconde sous 18 px d'eau, 17
+sous 256 px), ralentit par frottement (20 % par seconde, davantage dans une eau mince), et une cellule ne donne
+jamais plus que ce qu'elle a. L'eau a donc de l'élan : des vagues courent et rebondissent, un lac dérangé se remet
+à niveau en une minute environ.
+
+Une eau profonde est déplacée en plusieurs mouvements par pas (jusqu'à 8), pour que ses ondes ne dépassent pas un
+tiers de cellule par mouvement : au-delà le calcul s'emballe. Murs, bord de la grille et hauteur maximale de l'eau
+sont ceux de l'eau d'avant. Sources, puits, pluie, drains, comète et les échanges lointains des cartes accélérées
+ne changent pas : ils posent ou retirent de l'eau, l'inertie la fait ensuite courir. Les débits ne sont ni envoyés
+aux navigateurs ni sauvegardés : le courant senti par les avatars reste déduit de la pente, et l'eau repart
+immobile après un redémarrage du serveur.
+
+Coût mesuré (grille de 600 × 600, conteneur Linux sur Mac) : 11 ms par pas sous 20 px d'eau, 16 ms sous 80 px,
+27 ms sous 240 px, contre 4 à 5 ms pour l'eau d'avant ; 4 ms contre 2 sur une grille presque sèche.
+
+Le même chiffre sur une vraie carte (carte d'équipe locale rejouée hors jeu, 480 × 320 cellules dont 59 000 sous
+l'eau, 10 à 80 px d'eau) : 14 ms par pas, contre 2,5 ms.
+
+### Effets connus de l'inertie sur le reste (mesurés hors jeu, à juger à l'écran)
+
+- **Crue sur sol plat moins étalée** : pour la même eau, trois fois moins de cellules mouillées (le frottement
+  retient les films minces ; la nappe est plus épaisse et plus ramassée).
+- **Lac plus plat entre une source et un puits** : la pente permanente de l'un à l'autre disparaît presque. Le
+  courant senti par les avatars et les canoës, encore déduit de la pente, y est donc plus faible.
+- **Puits fort plus efficace** : à la vitesse 1, un puits qui demande plus que son disque vide un lac 2,5 fois plus
+  vite (l'eau court vers lui) ; sur une carte accélérée, où les échanges lointains jouaient déjà, presque rien ne
+  change.
+- **Eau qui converge autour d'un puits** : un puits à grand disque, ou un trop-plein (puits qui tient un niveau),
+  creuse un trou où l'eau se rue et forme une bosse ; un peu d'eau est alors jetée par la hauteur maximale, et un
+  trop-plein fait descendre le lac sous son niveau. Défaut connu, non corrigé.
+- **Comète** : son onde reste posée anneau par anneau (`ImpactWave`), et l'inertie fait courir en plus de vraies
+  vagues depuis le cratère et depuis chaque anneau : deux ondes se superposent, les cercles dessinés suivent la
+  première seulement.
+- **Météore brûlant et drain** : ils retirent de l'eau comme avant ; le trou se referme par une vraie vague au lieu
+  de se combler sans bruit.
+
 
 ## Vie aquatique (poissons et dauphins)
 
@@ -3424,28 +3470,6 @@ avec 8 px apportés par cellule du cratère). Pas de son. Rien n'a été vu à l
 cette section : widget, viseur, chute, éclair et gerbe ne sont validés que par les tests ; l'effet sur l'eau en jeu
 n'est pas vu.
 
-
-## Eau à inertie (à l'essai)
-
-Réglage de carte `settings.water.inertia` (interrupteur « Eau à inertie (à l'essai) » du panneau Relief,
-`UpdateWaterSettingMessage.inertia`, champ 8, facultatif ; absent ou faux : rien ne change). Sur une carte qui
-l'active, l'eau ne se contente plus d'avancer de proche en proche (un cinquième de l'écart de niveau par pas,
-`WaterGrid.flow`) : chaque passage entre deux cellules garde son **débit** d'un pas à l'autre
-(`WaterGrid.flowWithInertia`, `flowEast` et `flowSouth`). Le débit accélère avec l'écart des surfaces et la hauteur
-d'eau qui passe (gravité à l'échelle de la carte : une onde court à 4,5 cellules par seconde sous 18 px d'eau, 17
-sous 256 px), ralentit par frottement (20 % par seconde, davantage dans une eau mince), et une cellule ne donne
-jamais plus que ce qu'elle a. L'eau a donc de l'élan : des vagues courent et rebondissent, un lac dérangé se remet
-à niveau en une minute environ.
-
-Une eau profonde est déplacée en plusieurs mouvements par pas (jusqu'à 8), pour que ses ondes ne dépassent pas un
-tiers de cellule par mouvement : au-delà le calcul s'emballe. Murs, bord de la grille et hauteur maximale de l'eau
-sont ceux de l'eau d'avant. Sources, puits, pluie, drains, comète et les échanges lointains des cartes accélérées
-ne changent pas : ils posent ou retirent de l'eau, l'inertie la fait ensuite courir. Les débits ne sont ni envoyés
-aux navigateurs ni sauvegardés : le courant senti par les avatars reste déduit de la pente, et l'eau repart
-immobile après un redémarrage du serveur.
-
-Coût mesuré (grille de 600 × 600, conteneur Linux sur Mac) : 11 ms par pas sous 20 px d'eau, 16 ms sous 80 px,
-27 ms sous 240 px, contre 4 à 5 ms pour l'eau d'avant ; 4 ms contre 2 sur une grille presque sèche.
 
 ## Ponts de l'outil Carte
 
