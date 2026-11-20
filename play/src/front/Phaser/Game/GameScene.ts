@@ -3868,6 +3868,7 @@ export class GameScene extends DirtyScene {
                     (x, y) => footprintSurface(this.reliefTiles?.coverAt(x, y, this.time.now) ?? "none"),
                     // As low as the ground is drawn: in 3/4 out of the editor.
                     (x, y) => (get(mapEditorModeStore) ? 0 : dropAt(this.terrainWater.relief(), x, y)),
+                    (x, y) => this.terrainWater.isBridgeAt(x, y),
                 );
                 this.characterDrops?.destroy();
                 this.characterDrops = new CharacterDrops(this, () => [

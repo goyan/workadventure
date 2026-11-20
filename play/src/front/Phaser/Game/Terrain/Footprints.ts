@@ -34,8 +34,10 @@ export class GroundFootprints {
         scene: Phaser.Scene,
         private readonly surfaceAt: (x: number, y: number) => FootprintSurface | undefined,
         private readonly dropAt: (x: number, y: number) => number,
+        /** Whether a point is on the deck of a bridge: a wooden deck keeps no print. */
+        private readonly onBridge: (x: number, y: number) => boolean = () => false,
     ) {
-        this.trail = new FootprintTrail((x, y) => this.surfaceAt(x, y) !== undefined);
+        this.trail = new FootprintTrail((x, y) => !this.onBridge(x, y) && this.surfaceAt(x, y) !== undefined);
         this.layer = new FootprintLayer(scene);
     }
 

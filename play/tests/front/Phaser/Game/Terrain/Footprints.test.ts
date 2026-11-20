@@ -93,4 +93,18 @@ describe("the footprints on the ground", () => {
         expect(prints.length).toBeGreaterThan(0);
         expect(prints.every((print) => print.y >= 50 + 32 - 4)).toBe(true);
     });
+
+    it("leave nothing on the deck of a bridge, and are never drawn lower there", () => {
+        const { scene: fake, prints } = scene();
+        // A bridge over a hollow of snow from x 140 on.
+        const footprints = new GroundFootprints(
+            fake as never,
+            () => "snow",
+            () => 32,
+            (x) => x >= 140,
+        );
+        walk(footprints, 50);
+        expect(prints.length).toBeGreaterThan(0);
+        expect(prints.every((print) => print.x < 140)).toBe(true);
+    });
 });
