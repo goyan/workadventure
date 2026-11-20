@@ -1,3 +1,4 @@
+import * as Phaser from "phaser";
 import type { CatastropheMessage } from "@workadventure/messages";
 import { drainCalms, drainTiles, TILE_PX } from "@workadventure/map-editor";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
