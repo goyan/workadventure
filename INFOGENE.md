@@ -3452,6 +3452,10 @@ sur une case de pont, la hauteur d'eau vue par ce qui marche est 0 (`dryOnBridge
   promeneurs.
 - Eau, poissons, averse, drain, météore, dessin de l'eau : inchangés, le pont n'existe pas pour eux.
 
+**Saisons.** Pour la neige et les feuilles d'automne, un tablier est un sol (`FLOOR_COLLECTIONS`) : la neige givre
+toute sa surface au lieu de poser une calotte sur le bord de chaque dalle, et aucun tas de feuilles ne se forme au
+pied des dalles.
+
 **À savoir.** Un pont est toujours à sec, même sous une crue. On y entre et on en sort par n'importe quel bord (pas
 de collision). On peut pêcher depuis un pont. Un lion ou un tigre peut prendre un poisson qui passe sous le tablier
 (pour lui la case est à sec). Le pont ne brûle pas et un météore ne le casse pas. Une seule matière : le bois. Pas de

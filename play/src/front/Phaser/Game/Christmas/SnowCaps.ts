@@ -1,4 +1,8 @@
-import { MAP_LAYER_FLOOR_COLLECTION, isRaisedFloorCollection } from "../MapEditor/MapLayer/MapLayerCatalog";
+import {
+    MAP_LAYER_BRIDGE_COLLECTION,
+    MAP_LAYER_FLOOR_COLLECTION,
+    isRaisedFloorCollection,
+} from "../MapEditor/MapLayer/MapLayerCatalog";
 import { OUTDOOR_WALL_COLLECTIONS, type OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { paintSnowCap } from "./SnowCapShape";
 
@@ -23,7 +27,15 @@ export interface AlphaMask {
     alpha: Uint8ClampedArray;
 }
 
-export const FLOOR_COLLECTIONS: readonly string[] = [MAP_LAYER_FLOOR_COLLECTION, "Infogène Sols"];
+/**
+ * What lies flat on the ground: the snow frosts all of its surface instead of capping its top edge, and no leaves
+ * pile at its foot. The deck of a bridge is one of them.
+ */
+export const FLOOR_COLLECTIONS: readonly string[] = [
+    MAP_LAYER_FLOOR_COLLECTION,
+    MAP_LAYER_BRIDGE_COLLECTION,
+    "Infogène Sols",
+];
 const FROST_COLOR = 0xeef1fb;
 export const MISSING_TEXTURE = "__MISSING";
 const FROST_ALPHA = 0.35;
