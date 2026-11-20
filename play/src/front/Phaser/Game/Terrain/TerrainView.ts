@@ -63,20 +63,26 @@ interface ReliefLayers extends BlockCanvasArea {
     season: Season | undefined;
     /** For each soil painted on the canvas (by its number in the map): 1 on its cells. */
     soils: Map<number, Uint8Array>;
-    /** The grass of the meadow over the canvas, and the state of the meadow it was read from. */
+    shaded: Uint8Array;
+    lit: Uint8Array;
+    /** Whether any cell of the canvas is dug or sloped: nothing to paint otherwise. */
+    dug: boolean;
+}
+
+/**
+ * The meadow over a canvas, as layers to paint. Kept apart from the relief: the server tells the meadow again every
+ * few seconds, and the relief, long to read on a wide view, must not be read again for it.
+ */
+interface MeadowLayers extends BlockCanvasArea {
+    /** The state of the meadow these layers were read from. */
+    version: number;
+    /** The grass of the meadow over the canvas; undefined where none grows. */
     grass: Uint8Array | undefined;
     /** The straw of the grass gone dry over the canvas (see strawLevel); undefined on a green meadow. */
     straw: Uint8Array | undefined;
     /** The ash and the fire of the meadow over the canvas; undefined where nothing burnt nor burns. */
     ash: Uint8Array | undefined;
     fire: Uint8Array | undefined;
-    meadowVersion: number;
-    /** These layers once painted on the canvas, kept while the water alone moves: laid back, not painted again. */
-    painted?: BlockSnapshot;
-    shaded: Uint8Array;
-    lit: Uint8Array;
-    /** Whether any cell of the canvas is dug or sloped: nothing to paint otherwise. */
-    dug: boolean;
 }
 
 /**
@@ -91,6 +97,9 @@ export class TerrainView {
     private visible = false;
     private seeThrough = false;
     private relief: ReliefLayers | undefined;
+    private meadowLayers: MeadowLayers | undefined;
+    /** The ground once painted on the canvas (relief and meadow), kept while the water alone moves. */
+    private painted: { relief: ReliefLayers; meadow: MeadowLayers | undefined; snapshot: BlockSnapshot } | undefined;
     private everywhere = new Uint8Array(0);
     private wet = new Uint8Array(0);
     private shore = new Uint8Array(0);
@@ -144,6 +153,7 @@ export class TerrainView {
         const canvas = this.surface.begin(view, TERRAIN_CELL);
         const size = canvas.columns * canvas.rows;
         const relief = this.reliefOver(canvas);
+        const meadow = this.meadowOver(canvas);
         if (this.everywhere.length !== size) {
             this.everywhere = new Uint8Array(size).fill(1);
             this.wet = new Uint8Array(size);
@@ -152,26 +162,27 @@ export class TerrainView {
         const { everywhere, wet, shore } = this;
         // The ground changes seldom, the water five times a second while it moves: the ground is painted once for a
         // relief, a meadow and a canvas, then laid back under the water.
-        if (!relief.painted || !this.surface.restore?.(relief.painted)) {
+        const kept = this.painted;
+        if (!kept || kept.relief !== relief || kept.meadow !== meadow || !this.surface.restore?.(kept.snapshot)) {
             // The soils first: the shades of the relief and the water are drawn over them.
             for (const [code, cells] of relief.soils) {
                 const tint = SOIL_TINTS[SOILS[code - 1]];
                 if (tint) this.surface.paintField(canvas, cells, everywhere, NO_SHIFT, tint.color, () => tint.alpha);
             }
-            if (relief.grass) {
-                this.surface.paintField(canvas, relief.grass, everywhere, NO_SHIFT, GRASS_COLOR, grassAlpha);
+            if (meadow?.grass) {
+                this.surface.paintField(canvas, meadow.grass, everywhere, NO_SHIFT, GRASS_COLOR, grassAlpha);
             }
-            if (relief.straw) {
+            if (meadow?.straw) {
                 // The grass gone dry under the heat and the wind: straw over the green.
-                this.surface.paintField(canvas, relief.straw, everywhere, NO_SHIFT, STRAW_COLOR, strawAlpha);
+                this.surface.paintField(canvas, meadow.straw, everywhere, NO_SHIFT, STRAW_COLOR, strawAlpha);
             }
-            if (relief.ash) {
+            if (meadow?.ash) {
                 // What a fire left: the ground blackened, until the grass grows back.
-                this.surface.paintField(canvas, relief.ash, everywhere, NO_SHIFT, ASH_COLOR, ashAlpha);
+                this.surface.paintField(canvas, meadow.ash, everywhere, NO_SHIFT, ASH_COLOR, ashAlpha);
             }
-            if (relief.fire) {
+            if (meadow?.fire) {
                 // The tiles on fire glow on the ground, under their flames.
-                this.surface.paintField(canvas, relief.fire, everywhere, NO_SHIFT, FIRE_GLOW_COLOR, fireGlowAlpha);
+                this.surface.paintField(canvas, meadow.fire, everywhere, NO_SHIFT, FIRE_GLOW_COLOR, fireGlowAlpha);
             }
             if (relief.dug) {
                 this.surface.paintField(canvas, relief.ground, everywhere, NO_SHIFT, 0x000000, (level) =>
@@ -192,7 +203,8 @@ export class TerrainView {
                     slopeAlpha(level / 255),
                 );
             }
-            relief.painted = this.surface.snapshot?.();
+            const snapshot = this.surface.snapshot?.();
+            this.painted = snapshot ? { relief, meadow, snapshot } : undefined;
         }
         // Water lies in the hollows, and on flat ground where they overflow or where a source pours.
         const anyWater = this.water.levelsOver(
@@ -238,7 +250,6 @@ export class TerrainView {
         if (
             kept &&
             kept.terrain === terrain &&
-            kept.meadowVersion === (this.meadow?.version() ?? 0) &&
             kept.season === this.season?.() &&
             kept.x === canvas.x &&
             kept.y === canvas.y &&
@@ -261,11 +272,6 @@ export class TerrainView {
             snow: undefined,
             season,
             soils: new Map(),
-            grass: undefined,
-            straw: undefined,
-            ash: undefined,
-            fire: undefined,
-            meadowVersion: this.meadow?.version() ?? 0,
             shaded: new Uint8Array(size),
             lit: new Uint8Array(size),
             dug: false,
@@ -328,57 +334,83 @@ export class TerrainView {
                 }
             }
         }
-        if (this.meadow?.hasGrass()) {
-            // The grass of each tile, on its cells that are outdoors for this browser (a roof drawn in the map).
-            const outdoor = this.scene.getOutdoorGrid?.();
-            const cellsATile = TILE_PX / TERRAIN_CELL;
-            const grass = new Uint8Array(size);
-            const straw = new Uint8Array(size);
-            const ash = new Uint8Array(size);
-            const fire = new Uint8Array(size);
-            let any = false;
-            let dry = false;
-            let burnt = false;
-            let burning = false;
-            for (let row = 0; row < canvas.rows; row++) {
-                for (let column = 0; column < canvas.columns; column++) {
-                    const cellX = left + column;
-                    const cellY = top + row;
-                    const tileX = Math.floor(cellX / cellsATile);
-                    const tileY = Math.floor(cellY / cellsATile);
-                    const cover = this.meadow.grassAt(tileX, tileY);
-                    const dryness = this.meadow.drynessAt(tileX, tileY);
-                    const ashes = this.meadow.ashAt(tileX, tileY);
-                    const flames = this.meadow.fireAt(tileX, tileY);
-                    if (cover === 0 && dryness === 0 && ashes === 0 && flames === 0) continue;
-                    if (outdoor && !outdoor.isOutdoorAt((cellX + 0.5) * TERRAIN_CELL, (cellY + 0.5) * TERRAIN_CELL)) {
-                        continue;
+        this.relief = layers;
+        return layers;
+    }
+
+    /**
+     * The meadow under a canvas: read again for each state the server tells, tile by tile (a tile with nothing on it,
+     * most of a map, costs one look), on the cells of the tile that are outdoors for this browser (a roof drawn in
+     * the map keeps the grass off).
+     */
+    private meadowOver(canvas: BlockCanvasArea): MeadowLayers | undefined {
+        const meadow = this.meadow;
+        if (!meadow?.hasGrass()) {
+            this.meadowLayers = undefined;
+            return undefined;
+        }
+        const kept = this.meadowLayers;
+        if (
+            kept &&
+            kept.version === meadow.version() &&
+            kept.x === canvas.x &&
+            kept.y === canvas.y &&
+            kept.columns === canvas.columns &&
+            kept.rows === canvas.rows
+        ) {
+            return kept;
+        }
+        const size = canvas.columns * canvas.rows;
+        const layers: MeadowLayers = {
+            x: canvas.x,
+            y: canvas.y,
+            columns: canvas.columns,
+            rows: canvas.rows,
+            version: meadow.version(),
+            grass: undefined,
+            straw: undefined,
+            ash: undefined,
+            fire: undefined,
+        };
+        const outdoor = this.scene.getOutdoorGrid?.();
+        const cellsATile = TILE_PX / TERRAIN_CELL;
+        const left = canvas.x / TERRAIN_CELL;
+        const top = canvas.y / TERRAIN_CELL;
+        const lastTileX = Math.floor((left + canvas.columns - 1) / cellsATile);
+        const lastTileY = Math.floor((top + canvas.rows - 1) / cellsATile);
+        for (let tileY = Math.floor(top / cellsATile); tileY <= lastTileY; tileY++) {
+            for (let tileX = Math.floor(left / cellsATile); tileX <= lastTileX; tileX++) {
+                const cover = meadow.grassAt(tileX, tileY);
+                const dryness = meadow.drynessAt(tileX, tileY);
+                const ashes = meadow.ashAt(tileX, tileY);
+                const flames = meadow.fireAt(tileX, tileY);
+                if (cover === 0 && dryness === 0 && ashes === 0 && flames === 0) continue;
+                const firstRow = Math.max(0, tileY * cellsATile - top);
+                const lastRow = Math.min(canvas.rows, (tileY + 1) * cellsATile - top);
+                const firstColumn = Math.max(0, tileX * cellsATile - left);
+                const lastColumn = Math.min(canvas.columns, (tileX + 1) * cellsATile - left);
+                for (let row = firstRow; row < lastRow; row++) {
+                    for (let column = firstColumn; column < lastColumn; column++) {
+                        const cellX = left + column;
+                        const cellY = top + row;
+                        if (
+                            outdoor &&
+                            !outdoor.isOutdoorAt((cellX + 0.5) * TERRAIN_CELL, (cellY + 0.5) * TERRAIN_CELL)
+                        ) {
+                            continue;
+                        }
+                        const index = row * canvas.columns + column;
+                        const drawn = cover === 0 ? 0 : mottledCover(cover, cellX, cellY);
+                        if (drawn > 0) (layers.grass ??= new Uint8Array(size))[index] = drawn;
+                        if (ashes > 0) (layers.ash ??= new Uint8Array(size))[index] = ashes;
+                        if (flames > 0) (layers.fire ??= new Uint8Array(size))[index] = flames;
+                        // A dry ground yellows with or without grass on it.
+                        if (dryness > 0) (layers.straw ??= new Uint8Array(size))[index] = strawLevel(drawn, dryness);
                     }
-                    const drawn = cover === 0 ? 0 : mottledCover(cover, cellX, cellY);
-                    if (drawn > 0) {
-                        grass[row * canvas.columns + column] = drawn;
-                        any = true;
-                    }
-                    if (ashes > 0) {
-                        ash[row * canvas.columns + column] = ashes;
-                        burnt = true;
-                    }
-                    if (flames > 0) {
-                        fire[row * canvas.columns + column] = flames;
-                        burning = true;
-                    }
-                    if (dryness === 0) continue;
-                    // A dry ground yellows with or without grass on it.
-                    straw[row * canvas.columns + column] = strawLevel(drawn, dryness);
-                    dry = true;
                 }
             }
-            if (any) layers.grass = grass;
-            if (dry) layers.straw = straw;
-            if (burnt) layers.ash = ash;
-            if (burning) layers.fire = fire;
         }
-        this.relief = layers;
+        this.meadowLayers = layers;
         return layers;
     }
 
