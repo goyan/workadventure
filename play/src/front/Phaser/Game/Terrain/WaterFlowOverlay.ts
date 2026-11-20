@@ -98,7 +98,7 @@ export class WaterFlowOverlay {
         const lastY = Math.min(water.y + water.height, Math.ceil((view.y + view.height) / TERRAIN_CELL));
         const graphics = this.graphics;
         graphics.clear();
-        const line = 2 / zoom;
+        const line = 2.5 / zoom;
         const seconds = now / 1000;
         for (let cellY = firstY; cellY < lastY; cellY += size) {
             for (let cellX = firstX; cellX < lastX; cellX += size) {
@@ -124,11 +124,11 @@ export class WaterFlowOverlay {
                 const toY = middleY + (flow.y * length) / 2;
                 const color = flowSpeedColor(flow.speed);
                 // A dark line under the coloured one: an arrow reads on pale water as on dark ground.
-                graphics.lineStyle(line * 2, 0x0b1320, 0.55);
+                graphics.lineStyle(line * 2.2, 0x0b1320, 0.6);
                 graphics.lineBetween(fromX, fromY, toX, toY);
                 graphics.lineStyle(line, color, 0.95);
                 graphics.lineBetween(fromX, fromY, toX, toY);
-                const head = Math.min(length * 0.4, 7 / zoom);
+                const head = Math.min(length * 0.45, 9 / zoom);
                 // The two barbs of the head, 30 degrees on each side of the shaft.
                 for (const turn of [0.5, -0.5]) {
                     const cos = Math.cos(turn);
@@ -143,7 +143,7 @@ export class WaterFlowOverlay {
                 // The dot runs along the arrow, faster in faster water, each arrow out of step with the next.
                 const along = (seconds * (0.35 + flow.speed * 0.6) + ((cellX * 7 + cellY * 13) % 10) / 10) % 1;
                 graphics.fillStyle(0xffffff, 0.95);
-                graphics.fillCircle(fromX + (toX - fromX) * along, fromY + (toY - fromY) * along, 1.8 / zoom);
+                graphics.fillCircle(fromX + (toX - fromX) * along, fromY + (toY - fromY) * along, 2.4 / zoom);
             }
         }
         this.placeLabels(water, now, view, zoom);
