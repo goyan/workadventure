@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { cellKey, withHeights } from "@workadventure/map-editor";
 import { avatarDrop, waterDepthAtPoint } from "../../../../../src/front/Phaser/Game/Terrain/AvatarDrop";
+import { AIRPLANE_AREA_LEVEL } from "../../../../../src/front/Phaser/Vehicle/Vehicle";
 
 /** A hollow 128 px deep: cells 10 to 13 across and 10 to 21 down (its floor from x 168 to 216, y 168 to 344). */
 const hollow = withHeights(
@@ -29,6 +30,10 @@ describe("how much lower an avatar is drawn", () => {
         expect(avatarDrop(hollow, floor, 0, 52, false, false)).toBe(0);
         expect(avatarDrop(hollow, floor, 0, 0, true, false)).toBe(0);
         expect(avatarDrop(undefined, floor, 0, 0, false, false)).toBe(0);
+    });
+
+    it("not at all in a plane flying over a hollow (its floor is the level of the air)", () => {
+        expect(avatarDrop(hollow, floor, 0, AIRPLANE_AREA_LEVEL, false, false)).toBe(0);
     });
 
     it("not at all on the deck of a bridge over a hollow: it walks at the level of the deck", () => {
