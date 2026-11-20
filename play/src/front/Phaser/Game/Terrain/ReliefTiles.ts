@@ -36,7 +36,8 @@ const BLOCK_PX = TERRAIN_CHUNK * TERRAIN_CELL;
 const BLOCK_TEXELS = BLOCK_PX / RELIEF_TEXEL;
 /** The ground of a block seen from above: 1 px more all around than the block, MAX_DROP px north and MAX_RISE south. */
 const POINT_COLUMNS = BLOCK_PX + 2;
-const POINT_ROWS = MAX_DROP + BLOCK_PX + MAX_RISE + 2;
+// One row more each way than the deepest face and the highest top (firstY, endY), and one for the neighbours of a point.
+const POINT_ROWS = MAX_DROP + BLOCK_PX + MAX_RISE + 4;
 const MATERIALS: readonly Material[] = [
     "grass",
     "earth",
@@ -154,7 +155,7 @@ export class ReliefTiles {
     ).fill(undefined);
     /** One sample a texel of a column, from MAX_DROP north of the block to MAX_RISE south of it: reused, nothing allocated. */
     private readonly samples: ColumnSample[] = Array.from(
-        { length: (MAX_DROP + BLOCK_PX + MAX_RISE) / RELIEF_TEXEL + 1 },
+        { length: (MAX_DROP + BLOCK_PX + MAX_RISE) / RELIEF_TEXEL + 4 },
         () => ({
             groundY: 0,
             drop: 0,

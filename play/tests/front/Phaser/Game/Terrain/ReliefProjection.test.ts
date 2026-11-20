@@ -264,6 +264,19 @@ describe("a column of the relief drawn in 3/4", () => {
         expect(rgb(out, 9)).toEqual(FLAT);
     });
 
+    it("cerns no slope that only looks compressed: a line where something is hidden, not a band", () => {
+        // The drawing goes down 0.1 px a pixel of ground (a slope rising 1.8 px a px towards the viewer): each row shows
+        // a ground 10 px further south than the row above, yet nothing is hidden.
+        const out = paint(
+            samples((y) => (y < 20 ? 0 : y < 80 ? -(y - 20) * 0.9 : -54), 100),
+            120,
+            0,
+        );
+        let rims = 0;
+        for (let row = 0; row < 120; row++) if (isRim(rgb(out, row))) rims++;
+        expect(rims).toBeLessThanOrEqual(1);
+    });
+
     it("draws a mount against a hollow as a flank then a face, cerned once where they meet", () => {
         // Raised 128 px (drawn 64 higher) from y 20 to 49, dug 128 px (drawn 64 lower) from y 50 on.
         const out = paint(

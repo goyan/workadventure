@@ -28,15 +28,15 @@ describe("the blocks of the relief to draw", () => {
         expect(reliefSignature(far, 0, 1)).toBe(reliefSignature(before, 0, 1));
     });
 
-    it("draws again a block whose relief changed in its 8 rows south (a mount rises into it) or 4 columns west (its shadow)", () => {
+    it("draws again a block whose relief changed in its 8 rows south (a mount rises into it) or 8 columns west (its shadow)", () => {
         const base = withHeights(undefined, new Map([[cellKey(3, 3), -32]]));
         const changed = (cell: string) =>
             reliefSignature(withHeights(base, new Map([[cell, 64]])), 0, 0) !== reliefSignature(base, 0, 0);
-        // The block 0,0 is the cells 0 to 15: 8 rows south and one more, 4 columns west and one more.
+        // The block 0,0 is the cells 0 to 15: 8 rows south and one more, 8 columns west and one more; not the next cell.
         expect(changed(cellKey(3, 24))).toBe(true);
-        expect(changed(cellKey(-5, 3))).toBe(true);
-        expect(changed(cellKey(3, 26))).toBe(false);
-        expect(changed(cellKey(-7, 3))).toBe(false);
+        expect(changed(cellKey(-9, 3))).toBe(true);
+        expect(changed(cellKey(3, 25))).toBe(false);
+        expect(changed(cellKey(-10, 3))).toBe(false);
     });
 
     it("reads the cells all around a block that its drawing reads, the edge of a hollow next to it included", () => {

@@ -258,8 +258,11 @@ export function isContour(height: number, west: number, east: number, north: num
 
 /** The shadow of a mount: cast along a ray rising this steeply (px of height a px of the map) from the north-west. */
 export const SHADOW_SLOPE = 1.6;
-/** The farthest the ray of a shadow is followed from the edge of a block (px of the map, along each axis). */
-export const SHADOW_REACH_PX = 64;
+/**
+ * The farthest the ray of a shadow is followed from the edge of a block (px of the map, along each axis): as far as the
+ * shadow of the highest mount (256 px) reaches, 113 px; the window of a block reads this far west (SHADOW_CELLS).
+ */
+export const SHADOW_REACH_PX = 128;
 /** How much darker a point in the shadow is, as a share of its ramp. */
 export const SHADOW_SHADE = 0.3;
 /** How much the ray of a shadow rises for a pixel of the map along the diagonal (√2 px away). */

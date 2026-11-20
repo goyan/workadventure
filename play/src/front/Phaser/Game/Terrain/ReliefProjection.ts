@@ -158,6 +158,8 @@ function wallShade(ramp: Ramp, drop: number, column: number, screenRow: number):
 
 /** The point of the ground each row of the column shows, from the row -1 (just above the block): NaN where none. */
 let rowGround = new Float64Array(0);
+/** Whether that point is drawn higher than the one before it in the walk: it hides what was drawn there. */
+let rowOver = new Uint8Array(0);
 
 /**
  * Draws one column of a block of the relief (`rows` pixels from the screen row `firstRow`) into the RGBA pixels `out`,
@@ -178,10 +180,16 @@ export function paintColumn(
     column: number,
 ): void {
     const index = (row: number): number => (row * stride + column) * 4;
-    if (rowGround.length < rows + 1) rowGround = new Float64Array(rows + 1);
+    if (rowGround.length < rows + 1) {
+        rowGround = new Float64Array(rows + 1);
+        rowOver = new Uint8Array(rows + 1);
+    }
     rowGround.fill(Number.NaN, 0, rows + 1);
-    const showGround = (row: number, groundY: number): void => {
-        if (row >= -1 && row < rows) rowGround[row + 1] = groundY;
+    rowOver.fill(0, 0, rows + 1);
+    const showGround = (row: number, groundY: number, over = false): void => {
+        if (row < -1 || row >= rows) return;
+        rowGround[row + 1] = groundY;
+        rowOver[row + 1] = over ? 1 : 0;
     };
     let previous: number | undefined;
     let previousDrawn = 0;
@@ -245,7 +253,8 @@ export function paintColumn(
         } else {
             // A gentle slope: the ground stretched over the rows it skips.
             const from = previous !== undefined && jump > 1 ? previous + 1 : at;
-            for (let row = from; row <= at; row++) showGround(row, sample.groundY);
+            // Drawn higher than the sample before it: over what was drawn there (a mount, the south rim of a hollow).
+            for (let row = from; row <= at; row++) showGround(row, sample.groundY, jump < 0);
             paintGround(sample, from, at, rows, out, index);
             onFace = false;
         }
@@ -253,8 +262,10 @@ export function paintColumn(
         previousDrawn = drawn;
         previousDrop = sample.drop;
     }
-    // The silhouette: a drawn pixel that shows a ground far south of the one just above it hides that ground.
+    // The silhouette: a pixel drawn over what was there, that shows a ground far south of the one just above it, hides
+    // that ground. A slope only compressed on the screen (each row a little further south, nothing drawn over) is not.
     for (let row = 0; row < rows; row++) {
+        if (!rowOver[row + 1]) continue;
         const above = rowGround[row];
         if (!(rowGround[row + 1] - above > SILHOUETTE_GAP_PX)) continue;
         if (out[index(row) + 3] > 0) put(out, index(row), RIM_OUTLINE);

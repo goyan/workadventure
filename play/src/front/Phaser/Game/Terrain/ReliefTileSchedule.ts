@@ -5,8 +5,11 @@ import type { TerrainData } from "@workadventure/map-editor";
 export const NORTH_ROWS = 8;
 /** Rows of cells south of a block read to draw it: the highest top of a mount (128 px drawn, 8 cells) rises into it. */
 export const SOUTH_ROWS = 8;
-/** Columns of cells west of a block read to draw it: the shadow of a mount (64 px, 4 cells) falls south-east. */
-export const SHADOW_CELLS = 4;
+/**
+ * Columns of cells west of a block read to draw it: the shadow of the highest mount (256 px high, 113 px long, 8 cells)
+ * falls south-east into it.
+ */
+export const SHADOW_CELLS = 8;
 
 /**
  * The cells a block of the relief is drawn from: its own, NORTH_ROWS north of it (the faces of the hollows),

@@ -218,6 +218,37 @@ describe("the blocks of the relief seen in 3/4", () => {
         return total / 64;
     };
 
+    it("draws a block whose window holds both the deepest hollow and the highest mount", () => {
+        const changes = new Map<string, number>();
+        for (let x = 20; x <= 23; x++) for (let y = 16; y <= 19; y++) changes.set(cellKey(x, y), -256);
+        for (let x = 24; x <= 27; x++) for (let y = 32; y <= 35; y++) changes.set(cellKey(x, y), 256);
+        const { settle, painted } = fixture(withHeights(undefined, changes));
+        expect(() => settle()).not.toThrow();
+        expect(painted.get("relief-block:1,1")).toBeDefined();
+    });
+
+    it("casts the shadow of a high mount across the edge of a block, not cut along it", () => {
+        // Sand dug 8 px on the cells 10 to 40, a mount 256 px high on the cells 22 to 27, 18 to 21 (x 352 to 447): its
+        // shadow reaches over the edge between the blocks 1,1 and 2,1 (x 512), more than 64 px east of it.
+        const sand = new Map<string, number>();
+        const changes = new Map<string, number>();
+        for (let x = 10; x <= 40; x++)
+            for (let y = 10; y <= 40; y++) {
+                sand.set(cellKey(x, y), 4);
+                changes.set(cellKey(x, y), -8);
+            }
+        for (let x = 22; x <= 27; x++) for (let y = 18; y <= 21; y++) changes.set(cellKey(x, y), 256);
+        const { settle, painted } = fixture(withHeights(withSoils(undefined, sand), changes));
+        settle();
+        const west = painted.get("relief-block:1,1");
+        const east = painted.get("relief-block:2,1");
+        if (!west || !east) throw new Error("no block");
+        // x 504 to 511 and 512 to 519, y 380 to 387 (drawn 4 px lower): both in the shadow.
+        const westLight = lightness(west, 248, 128);
+        const eastLight = lightness(east, 0, 128);
+        expect(Math.abs(westLight - eastLight)).toBeLessThan(westLight * 0.08);
+    });
+
     it("casts the shadow of a mount on the ground south-east of it", () => {
         const { settle, painted } = fixture(mountOnSand(128));
         settle();
