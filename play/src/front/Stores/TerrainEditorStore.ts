@@ -9,6 +9,9 @@ import type { TerrainBrush } from "../Phaser/Game/Terrain/TerrainStroke";
 export const DEFAULT_TERRAIN_BRUSH: TerrainBrush = { mode: "dig", diameterTiles: 4, forcePx: undefined };
 export const terrainBrushStore = writable<TerrainBrush>(DEFAULT_TERRAIN_BRUSH);
 
+/** The pool picked with a click in the pool mode of the relief tool: its style and its cells (keys); undefined: none. */
+export const selectedPoolStore = writable<{ style: number; cells: string[] } | undefined>(undefined);
+
 /** Whether the pointer is over ground that may not be dug (indoors, under a wall): the panel says why nothing happens. */
 export const terrainBlockedStore = writable(false);
 

@@ -69,6 +69,24 @@ export function waveCircles(sinceImpactMs: number, shape: MeteorShape): { radius
     })).filter((circle) => circle.radius > 0);
 }
 
+/** The front of the wave of a comet as the water shader draws it: a ring of raised water, 0 to 1 strong. */
+export interface WaterRing {
+    x: number;
+    y: number;
+    radius: number;
+    strength: number;
+}
+
+/** The front of the wave of a comet fallen into water, `sinceImpactMs` after its impact; undefined once it has run. */
+export function waterRingOf(
+    meteor: { x: number; y: number; shape: MeteorShape },
+    sinceImpactMs: number,
+): WaterRing | undefined {
+    const front = waveCircles(sinceImpactMs, meteor.shape)[0];
+    if (!front) return undefined;
+    return { x: meteor.x, y: meteor.y, radius: front.radius, strength: front.alpha / WAVE_FRONT_ALPHA };
+}
+
 /**
  * The stretches of a circle that lie on water, from what was read at `wet.length` points evenly spaced along it:
  * each from a point to the one after its last (so `to` goes past the number of points for the stretch that goes

@@ -294,7 +294,8 @@ export const RgbLampPropertyData = PropertyBase.extend({
  * The states an object of the map may have, kept by the server (never in the WAM): a lamp is `on` or not. A closed
  * list: a new kind of object that can be switched (a shutter that is `open`) adds its key here.
  */
-export const ENTITY_STATE_KEYS = ["on"] as const;
+/** The states an object may be switched in: lit ("on"), and the hot water of a pool ("hot", that never freezes). */
+export const ENTITY_STATE_KEYS = ["on", "hot"] as const;
 /** A switch commands at most this many objects. */
 export const SWITCH_MAX_TARGETS = 200;
 
@@ -915,8 +916,14 @@ export const TERRAIN_CELL = 16;
 export const TERRAIN_CHUNK = 16;
 /** The lowest height a cell can have, in pixels of altitude: 8 tiles under the ground. */
 export const TERRAIN_MIN_HEIGHT = -256;
-/** The largest number a soil is kept as in a map (see Terrain/Soils.ts). */
-export const TERRAIN_MAX_SOIL = 6;
+/** The pools of a map are painted as soils: the styles of pool after the six soils (see Terrain/Pools.ts). */
+export const MAX_POOL_STYLES = 8;
+/** How many ladders can be put by hand on the pools of a map. */
+export const MAX_POOL_LADDERS = 200;
+/** The key "x,y" of a cell of the relief. */
+export const POOL_LADDER_CELL = /^-?\d+,-?\d+$/;
+/** The largest number a soil is kept as in a map: the six soils (see Terrain/Soils.ts), then the pool styles. */
+export const TERRAIN_MAX_SOIL = 6 + MAX_POOL_STYLES;
 /** The highest height a cell can have, in pixels of altitude: 8 tiles over the ground. */
 export const TERRAIN_MAX_HEIGHT = 256;
 /**
@@ -1214,6 +1221,21 @@ export const LastSnow = z.object({
 });
 export type LastSnow = z.infer<typeof LastSnow>;
 
+/** A colour of a pool, `#rrggbb`. */
+const PoolColor = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+/**
+ * A style of pool of the map (see Terrain/Pools.ts): the colour of its water and of its coping, how deep it is (map
+ * pixels: the clearer the shallower, and the sooner it freezes), and whether its water is hot (it never freezes).
+ */
+export const PoolStyle = z.object({
+    water: PoolColor,
+    coping: PoolColor,
+    depthPx: z.number().min(8).max(160),
+    hot: z.boolean(),
+    /** Ladders along its top edge: none, one in its middle, or two at its quarters (one only on a short edge). */
+    ladders: z.number().int().min(0).max(2).default(2),
+});
+export type PoolStyle = z.infer<typeof PoolStyle>;
 /**
  * The lighting of a map. `energySaving`: its lamps standing outdoors go out by day, while the sky gives light enough
  * (see Lamps/EnergySaving.ts in play). Absent from a map saved before it existed: off.
@@ -1238,6 +1260,13 @@ export const WAMSettings = z.object({
     water: WaterSettings.optional().catch(undefined),
     life: LifeSettings.optional().catch(undefined),
     meadow: MeadowSettings.optional().catch(undefined),
+    /** The styles of the pools painted on the map, by their number. Fail open: a broken list draws default pools. */
+    pools: z.array(PoolStyle).max(MAX_POOL_STYLES).optional().catch(undefined),
+    /**
+     * The ladders put by hand on the pools, by the cell of the top edge each stands on ("x,y"). The top edge of a pool
+     * with none gets the ladders of its style.
+     */
+    poolLadders: z.array(z.string().regex(POOL_LADDER_CELL)).max(MAX_POOL_LADDERS).optional().catch(undefined),
     lighting: LightingSettings.optional().catch(undefined),
 });
 

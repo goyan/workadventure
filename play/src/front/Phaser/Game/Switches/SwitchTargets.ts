@@ -65,14 +65,21 @@ export function roomIdAt(point: { x: number; y: number }, rooms: readonly Switch
 
 const NO_KEYS: readonly EntityStateKey[] = [];
 const LAMP_KEYS: readonly EntityStateKey[] = ["on"];
+const POOL_KEYS: readonly EntityStateKey[] = ["hot"];
+const LAMP_POOL_KEYS: readonly EntityStateKey[] = ["on", "hot"];
 
 /**
- * The states an object has, from its catalog entry: an RGB lamp is `on` or not. The one place where a new kind of
+ * The states an object has, from its catalog entry: an RGB lamp is `on` or not, a pool `hot` or not. The one place where a new kind of
  * object that can be switched (a shutter, `open`) is declared. The lamps that follow the music of a Jam are not
  * switched: they light with the music.
  */
-export function entityStateKeysOf(prefab: Pick<EntityPrefab, "lamp">): readonly EntityStateKey[] {
-    return prefab.lamp?.kind === "rgb" ? LAMP_KEYS : NO_KEYS;
+export function entityStateKeysOf(prefab: Pick<EntityPrefab, "lamp" | "water">): readonly EntityStateKey[] {
+    const lamp = prefab.lamp?.kind === "rgb";
+    // A pool (an object with water) has hot water or not: heated, it never freezes.
+    const pool = (prefab.water?.length ?? 0) > 0;
+    if (lamp && pool) return LAMP_POOL_KEYS;
+    if (lamp) return LAMP_KEYS;
+    return pool ? POOL_KEYS : NO_KEYS;
 }
 
 /**

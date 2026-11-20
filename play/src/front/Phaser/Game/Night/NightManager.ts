@@ -1,5 +1,5 @@
-import { derived, type Unsubscriber } from "svelte/store";
-import type { AreaData } from "@workadventure/map-editor";
+import { derived, get, type Unsubscriber } from "svelte/store";
+import type { AreaData, WeatherLocation } from "@workadventure/map-editor";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import {
@@ -10,6 +10,10 @@ import {
     nightDateStore,
     nightInEditorStore,
     nightModeStore,
+    worldCityStore,
+    worldCustomMinutesStore,
+    worldMomentStore,
+    worldPointStore,
     realFalloffStore,
     realisticNightStore,
     shownAmbienceStrengthStore,
@@ -47,6 +51,7 @@ import type { SunPosition } from "./NightClock";
 import { roomAmbience, type AmbienceSettings } from "./AmbientLight";
 import { moonPhaseAt, moonPositionAt } from "./MoonClock";
 import { NightHalos } from "./NightHalos";
+import { placeOfPoint, worldCityAt, worldMomentMinutes } from "./WorldDaylight";
 import { coversMostly, isInLightableArea, lightableAreas, NightLights, roomsThatLightUp } from "./NightLights";
 import type { LitArea, NightRect } from "./NightLights";
 import { NightOverlay } from "./NightOverlay";
@@ -75,6 +80,9 @@ export class NightManager {
     private readonly forcedMinutes: number | undefined;
     private readonly unsubscribeEditor: Unsubscriber;
     private readonly unsubscribeMode: Unsubscriber;
+    private readonly unsubscribeWorld: Unsubscriber;
+    /** The city whose sky is shown (NightMode.World), kept while it stays near the moment chosen. */
+    private worldCity: WeatherLocation | undefined;
     private readonly unsubscribeParty: Unsubscriber;
     private readonly unsubscribeLamps: Unsubscriber;
     private readonly unsubscribeTorches: Unsubscriber;
@@ -218,6 +226,15 @@ export class NightManager {
             this.lastClockAt = undefined;
             this.scene.markDirty();
         });
+        // Another moment of the sky of the world: its city and its light at once.
+        this.unsubscribeWorld = derived(
+            [worldMomentStore, worldCustomMinutesStore, worldPointStore],
+            (values) => values,
+        ).subscribe(() => {
+            this.worldCity = undefined;
+            this.lastClockAt = undefined;
+            this.scene.markDirty();
+        });
     }
 
     public update(now: number): void {
@@ -228,9 +245,24 @@ export class NightManager {
             const sunAt = this.sunInstant(date);
             // The sun of the place of the map (Paris when it has none), shared with its real weather.
             const mapPlace = shownMapPlace(this.scene.getGameMap().getWamFile()?.getWam().settings);
-            // The clock shown follows the time of the place of the map.
-            mapTimeZoneStore.set(mapPlace?.timezone);
-            const place = sunPlaceOf(this.mode === NightMode.Computer || this.sunMinutes() !== undefined, mapPlace);
+            // The sky of the world: the point chosen on its map, or the city where it is now the moment chosen.
+            const point = get(worldPointStore);
+            this.worldCity =
+                this.mode !== NightMode.World || !date
+                    ? undefined
+                    : point
+                      ? placeOfPoint(point)
+                      : worldCityAt(
+                            date,
+                            worldMomentMinutes(get(worldMomentStore), get(worldCustomMinutesStore)),
+                            this.worldCity,
+                        );
+            worldCityStore.set(this.worldCity);
+            // The clock shown follows the time of the place of the map (of the city of the world).
+            mapTimeZoneStore.set(this.worldCity?.timezone ?? mapPlace?.timezone);
+            const place =
+                this.worldCity ??
+                sunPlaceOf(this.mode === NightMode.Computer || this.sunMinutes() !== undefined, mapPlace);
             // The same sun lights the clouds and casts their shadows (WeatherManager).
             this.sun = sunAt === undefined ? undefined : sunPositionAt(sunAt, place);
             // The light of the sky, at the same instant and place: the sun, or the moon at night. With the night
@@ -358,6 +390,8 @@ export class NightManager {
         mapTimeZoneStore.set(undefined);
         this.unsubscribeEditor();
         this.unsubscribeMode();
+        this.unsubscribeWorld();
+        worldCityStore.set(undefined);
         this.unsubscribeRealistic();
         this.unsubscribeDarkness();
         this.unsubscribeKeptInEditor();

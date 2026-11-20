@@ -52,6 +52,7 @@ import { AirplaneSounds, AIRPLANE_SOUND } from "@wa/front/Phaser/Vehicle/Airplan
 import { SkateboardSounds, SKATEBOARD_SOUNDS } from "@wa/front/Phaser/Vehicle/SkateboardSounds";
 import { Vehicle } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { AIRPLANE_IMAGE_URL, AIRPLANE_SOURCE_TEXTURE } from "@wa/front/Phaser/Vehicle/AirplaneArtwork";
+import { GROUND_TEXTURE_URLS } from "@wa/front/Phaser/Game/Terrain/TexturedGround";
 import { textMessageStore } from "@wa/front/Stores/TypeMessageStore/TextMessageStore";
 import { connectionManager } from "@wa/front/Connection/ConnectionManager";
 import { urlManager } from "@wa/front/Url/UrlManager";
@@ -288,6 +289,7 @@ import {
     jungleVolumeStore,
     notificationSoundVolumeStore,
 } from "@wa/front/Stores/SoundEffectsStore";
+import { waterCycleNow } from "@wa/front/Phaser/Game/Weather/Frost";
 import { karaokeSingerActiveStore } from "../../Karaoke/KaraokeGameStore";
 import type { TileBarriers } from "../../Utils/TileBarriers";
 import { nerfEquippedStore } from "../../Stores/NerfStore";
@@ -385,6 +387,9 @@ import { WeatherManager } from "./Weather/WeatherManager";
 import { TerrainWater } from "./Terrain/TerrainWater";
 import { AquaticLife } from "./Life/AquaticLife";
 import { AquaticLifeView } from "./Life/AquaticLifeView";
+import { isOnFrozenWater, isPoolFrozen } from "./Ice/FrozenWater";
+import { FrozenPoolsView } from "./Ice/FrozenPoolsView";
+import { getFrozenPoolRectangles } from "./Water/WaterZones";
 import { LandLifeView } from "./Life/LandLifeView";
 import { GullLifeView, isGullKind } from "./Life/GullLifeView";
 import { LandCompanions } from "./Life/LandCompanions";
@@ -631,6 +636,8 @@ export class GameScene extends DirtyScene {
     private catastropheSubscription: Subscription | undefined;
     /** The animals of the water of the relief, as the server tells them. */
     private readonly aquaticLife = new AquaticLife();
+    /** The ice of the frozen pools and the steam of the heated ones, in the cold. */
+    private frozenPoolsView: FrozenPoolsView | undefined;
     private aquaticLifeView: AquaticLifeView | undefined;
     private readonly gullLife = new AquaticLife(isGullKind);
     private gullLifeView: GullLifeView | undefined;
@@ -799,6 +806,8 @@ export class GameScene extends DirtyScene {
     //hook preload scene
     preload(): void {
         this.load.image(AIRPLANE_SOURCE_TEXTURE, AIRPLANE_IMAGE_URL);
+        // The ground textures of the relief (soils, grass, snow): ready before its first drawing.
+        for (const url of GROUND_TEXTURE_URLS) this.load.image(url, url);
         //initialize frame event of scripting API
         this.listenToIframeEvents();
 
@@ -1743,6 +1752,8 @@ export class GameScene extends DirtyScene {
         this.terrainView = undefined;
         this.waterFlowView?.destroy();
         this.waterFlowView = undefined;
+        this.frozenPoolsView?.destroy();
+        this.frozenPoolsView = undefined;
         this.waterFlowOverlay?.destroy();
         this.waterFlowOverlay = undefined;
         this.aquaticLifeView?.destroy();
@@ -2354,6 +2365,7 @@ export class GameScene extends DirtyScene {
             this._torchManager?.update(time);
             this._fishingManager?.update(time);
             this.meteorView?.update(time);
+            this.terrainView?.setWaterRings(this.meteorView?.waterRings(time) ?? []);
             this.fireView?.update(time);
             this.treeFireView?.update(time);
             this.downpourView?.update(time);
@@ -2395,6 +2407,7 @@ export class GameScene extends DirtyScene {
             this.waterFlowView?.update(time);
             this.waterFlowOverlay?.update(time);
             this.aquaticLifeView?.update(time);
+            this.frozenPoolsView?.update(time);
             this.gullLifeView?.update(time);
             this.landCompanions?.update(time);
             this.landLifeView?.update(time);
@@ -3105,6 +3118,21 @@ export class GameScene extends DirtyScene {
     }
 
     /** Whether a point of the map (pixels) is in or near an open drain: the current carries no avatar there. */
+    /** Whether the water of the relief is frozen there for this player (FrozenWater.ts): skated on, not swum in. */
+    public isFrozenWaterAt(x: number, y: number): boolean {
+        return isOnFrozenWater(this, { x, y });
+    }
+
+    /** Whether a pool of the ground is frozen for this player (FrozenWater.ts): its water is no water then. */
+    public isPoolFrozen(pool: { x: number; y: number; width: number; height: number; entityId?: string }): boolean {
+        return isPoolFrozen(this, pool);
+    }
+
+    /** Whether the water of this object (a pool) is frozen for this player: one walks onto its ice. */
+    public isPoolEntityFrozen(entityId: string): boolean {
+        return getFrozenPoolRectangles(this).some((pool) => pool.entityId === entityId);
+    }
+
     public isDrainCalm(x: number, y: number): boolean {
         return this.drainView?.calms(x, y) ?? false;
     }
@@ -3844,7 +3872,10 @@ export class GameScene extends DirtyScene {
                     water: this.terrainWater,
                     wam: () => this.getGameMap().getWamFile()?.getWam(),
                     view: () => this.cameras.main.worldView,
+                    isFrozenAt: (x, y) => isOnFrozenWater(this, { x, y }),
                 });
+                this.frozenPoolsView?.destroy();
+                this.frozenPoolsView = new FrozenPoolsView(this);
                 // The flows of that water drawn over the map, for whoever asked (apps menu, "Visualisation").
                 this.waterFlowOverlay?.destroy();
                 this.waterFlowOverlay = new WaterFlowOverlay(this, {
@@ -3860,6 +3891,7 @@ export class GameScene extends DirtyScene {
                     this.aquaticLife,
                     () => get(aquaticLifeShownStore) && !isBasicActive(),
                     () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+                    (x, y) => isOnFrozenWater(this, { x, y }),
                 );
                 // The gulls over that water: shown and hidden with the fish.
                 this.gullLifeView?.destroy();
@@ -4041,6 +4073,7 @@ export class GameScene extends DirtyScene {
                     },
                     isWet: (x, y) => isGroundUnderWater(this, this.terrainWater, x, y),
                     waterVersion: () => this.terrainWater.version(),
+                    frost: () => waterCycleNow(this.getGameMap().getWamFile()?.getWam().settings).frost,
                 });
                 // Same: one event subscription and one timer at a time.
                 this._knockManager?.destroy();
@@ -4304,6 +4337,7 @@ export class GameScene extends DirtyScene {
             (x, y) => this.terrainWater.depthAt(x, y, this.time.now) >= METEOR_WET_DEPTH_PX,
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
             () => this.getGameMap().getWamFile()?.getWam().settings?.water?.inertia === true,
+            () => this.terrainView?.drawsWaterRings() === true,
         );
         this.meteorView = meteorView;
         // The flames of the tiles on fire, laid by the wind of the scene.

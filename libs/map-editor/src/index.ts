@@ -23,6 +23,7 @@ export * from "./Terrain/Meadow";
 export * from "./Terrain/Bridges";
 export * from "./Terrain/SnowLine";
 export * from "./Terrain/Soils";
+export * from "./Terrain/Pools";
 export * from "./Terrain/TerrainGrid";
 export * from "./Terrain/TerrainBrush";
 export * from "./Terrain/WaterGrid";

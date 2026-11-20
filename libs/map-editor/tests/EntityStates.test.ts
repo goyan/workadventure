@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     ENTITY_STATE_DEFAULT,
+    entityStateDefault,
     SWITCH_MAX_REACH_PX,
     EntityRawPrefab,
     SWITCH_MAX_TARGETS,
@@ -11,6 +12,14 @@ import {
     switchMayReach,
     switchPropertyIn,
 } from "../src";
+
+describe("entityStateDefault", () => {
+    it("keeps an object nobody switched lit, and the water of a pool cold", () => {
+        expect(entityStateDefault("on")).toBe("true");
+        expect(entityStateDefault("hot")).toBe("false");
+        expect(isEntityStateKey("hot")).toBe(true);
+    });
+});
 
 describe("entity states", () => {
     it("knows the closed list of state keys", () => {

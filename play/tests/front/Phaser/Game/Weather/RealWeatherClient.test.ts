@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cloudinessAt } from "../../../../../src/front/Phaser/Game/Weather/WeatherSchedule";
 import type * as ClientModule from "../../../../../src/front/Phaser/Game/Weather/RealWeatherClient";
 
+// This player follows the server: no place of their own.
+vi.mock("../../../../../src/front/Phaser/Game/Weather/ChosenPlaceWeather", () => ({
+    chosenWeatherNow: () => ({ place: undefined, state: { status: "pending" } }),
+}));
 vi.mock("../../../../../src/front/Connection/LocalUserStore", () => ({
     localUserStore: { getAuthToken: () => "token" },
 }));

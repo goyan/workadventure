@@ -20,6 +20,7 @@ function createScene() {
                     y,
                     alpha: 1,
                     flipX: false,
+                    tint: undefined as number | undefined,
                     destroyed: false,
                     setDepth: () => image,
                     setPosition: (nextX: number, nextY: number) => {
@@ -35,6 +36,14 @@ function createScene() {
                         image.flipX = flip;
                         return image;
                     },
+                    setTint: (tint: number) => {
+                        image.tint = tint;
+                        return image;
+                    },
+                    clearTint: () => {
+                        image.tint = undefined;
+                        return image;
+                    },
                     destroy: () => {
                         image.destroyed = true;
                     },
@@ -48,7 +57,7 @@ function createScene() {
 }
 type SceneOfView = ConstructorParameters<typeof AquaticLifeView>[0];
 
-function createView(shown = { value: true }) {
+function createView(shown = { value: true }, frozen = { value: false }) {
     const { scene, images, markDirty } = createScene();
     const life = new AquaticLife();
     // The fake scene has only what the view uses.
@@ -57,11 +66,27 @@ function createView(shown = { value: true }) {
         life,
         () => shown.value,
         () => false,
+        () => frozen.value,
     );
-    return { view, life, images, markDirty, shown };
+    return { view, life, images, markDirty, shown, frozen };
 }
 
 describe("AquaticLifeView", () => {
+    it("stops an animal caught in the ice, pale and blue, and lets it swim on once the water thaws", () => {
+        const { view, life, images, frozen } = createView();
+        life.receive([{ id: 1, kind: 0, x: 100, y: 50 }], 0);
+        view.update(0);
+        frozen.value = true;
+        life.receive([{ id: 1, kind: 0, x: 60, y: 50 }], 1000);
+        view.update(1500);
+        expect(images[0]).toMatchObject({ x: 100, y: 50, tint: 0xbfe0f0 });
+        expect(images[0].alpha).toBeCloseTo(0.45);
+        frozen.value = false;
+        view.update(2000);
+        expect(images[0]).toMatchObject({ x: 60, y: 50, tint: undefined });
+        expect(images[0].alpha).toBeCloseTo(0.7);
+    });
+
     it("draws an image for each animal, where it is, turned towards where it goes", () => {
         const { view, life, images } = createView();
         life.receive([{ id: 1, kind: 0, x: 100, y: 50 }], 0);

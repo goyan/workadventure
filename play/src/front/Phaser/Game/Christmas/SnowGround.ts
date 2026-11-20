@@ -1,85 +1,85 @@
-import * as Phaser from "phaser";
+import { GROUND_TEXTURES, TexturedGround } from "@wa/front/Phaser/Game/Terrain/TexturedGround";
 import { DEPTH_SNOW_GROUND_INDEX } from "../DepthIndexes";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 
-/** The ground is drawn at 1/8 of the map size, then stretched: the smoothing softens the edges. */
-const GROUND_SCALE = 1 / 8;
-const SNOW_COLOR = "#dde3f4";
-const GRAIN_COLOR = "#d0d7ee";
+/** Snow textured beyond each edge of the screen, in cells: a short scroll keeps the same drawing. */
+const MARGIN_CELLS = 6;
 
-let groundCount = 0;
-
-/** A layer of snow over the outdoor cells, above the map tiles and below every object and avatar. */
+/**
+ * A layer of snow over the outdoor cells, above the map tiles and below every object and avatar: the snow texture,
+ * sharp and fixed to the map, shown where the cells are snowy through a smooth mask (soft edges along the walls).
+ * Only the part of the map around the screen is laid, again when the view leaves it.
+ */
 export class SnowGround {
-    private image: Phaser.GameObjects.Image | undefined;
-    private textureKey: string | undefined;
+    private readonly ground: TexturedGround;
+    private grid: OutdoorGrid | undefined;
+    private snowy: Uint8Array = new Uint8Array(0);
+    private window: { col: number; row: number; cols: number; rows: number } | undefined;
     private visible = true;
     private alpha = 1;
+    /** Changes with the grid: the pieces of the snow mask are kept while it does not. */
+    private stamp = 0;
 
-    constructor(private readonly scene: Phaser.Scene) {}
+    constructor(private readonly scene: Phaser.Scene) {
+        this.ground = new TexturedGround(scene, GROUND_TEXTURES.snow, DEPTH_SNOW_GROUND_INDEX);
+    }
 
     draw(grid: OutdoorGrid): void {
-        this.clear();
-        const pxPerCell = grid.cellSize * GROUND_SCALE;
-        const width = Math.ceil(grid.cols * pxPerCell);
-        const height = Math.ceil(grid.rows * pxPerCell);
-        if (width === 0 || height === 0) return;
-        const key = `xmas-ground-${++groundCount}`;
-        const canvas = this.scene.textures.createCanvas(key, width, height);
-        const context = canvas?.getContext();
-        if (!canvas || !context) return;
-        this.textureKey = key;
-        const snowy = snowyCells(grid);
-        context.fillStyle = SNOW_COLOR;
-        for (let row = 0; row < grid.rows; row++) {
-            let start = -1;
-            for (let col = 0; col <= grid.cols; col++) {
-                const isSnowy = col < grid.cols && snowy[row * grid.cols + col] === 1;
-                if (isSnowy && start < 0) start = col;
-                if (!isSnowy && start >= 0) {
-                    context.fillRect(start * pxPerCell, row * pxPerCell, (col - start) * pxPerCell, pxPerCell);
-                    start = -1;
-                }
-            }
-        }
-        // A discreet grain: about one pixel in twelve, the same on every computer.
-        context.fillStyle = GRAIN_COLOR;
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-                const cell = Math.floor(y / pxPerCell) * grid.cols + Math.floor(x / pxPerCell);
-                if (grainAt(x, y) && snowy[cell] === 1) context.fillRect(x, y, 1, 1);
-            }
-        }
-        const mapView = { width: grid.cols * grid.cellSize, height: grid.rows * grid.cellSize };
-        canvas.refresh();
-        canvas.setFilter(Phaser.Textures.FilterMode.LINEAR);
-        this.image = this.scene.add.image(0, 0, key);
-        this.image.setOrigin(0);
-        this.image.setDisplaySize(mapView.width, mapView.height);
-        this.image.setDepth(DEPTH_SNOW_GROUND_INDEX);
-        this.image.setVisible(this.visible);
-        this.image.setAlpha(this.alpha);
+        this.grid = grid;
+        this.snowy = snowyCells(grid);
+        this.stamp++;
+        this.window = undefined;
+        this.follow();
+    }
+
+    /** Lays the snow around the screen when the view left what was laid; true when it was laid again. */
+    follow(): boolean {
+        const grid = this.grid;
+        if (!grid || grid.cols === 0 || grid.rows === 0 || !this.visible) return false;
+        const view = this.scene.cameras.main.worldView;
+        const size = grid.cellSize;
+        const col = Math.max(0, Math.floor(view.x / size) - MARGIN_CELLS);
+        const row = Math.max(0, Math.floor(view.y / size) - MARGIN_CELLS);
+        const last = this.window;
+        const inside =
+            last &&
+            col >= last.col &&
+            row >= last.row &&
+            Math.ceil(view.right / size) <= last.col + last.cols &&
+            Math.ceil(view.bottom / size) <= last.row + last.rows;
+        if (inside) return false;
+        const cols = Math.min(grid.cols - col, Math.ceil(view.width / size) + 2 * MARGIN_CELLS + 1);
+        const rows = Math.min(grid.rows - row, Math.ceil(view.height / size) + 2 * MARGIN_CELLS + 1);
+        if (cols <= 0 || rows <= 0) return false;
+        this.window = { col, row, cols, rows };
+        const snowy = this.snowy;
+        this.ground.show(
+            { x: col * size, y: row * size, columns: cols, rows, cell: size },
+            (index) => {
+                const cell = (row + Math.floor(index / cols)) * grid.cols + col + (index % cols);
+                return snowy[cell] ?? 0;
+            },
+            this.stamp,
+            this.alpha,
+        );
+        return true;
     }
 
     setVisible(visible: boolean): void {
         this.visible = visible;
-        this.image?.setVisible(visible);
+        if (!visible) {
+            this.ground.hide();
+            this.window = undefined;
+        } else this.follow();
     }
 
     setAlpha(alpha: number): void {
         this.alpha = alpha;
-        this.image?.setAlpha(alpha);
+        this.ground.setAlpha(alpha);
     }
 
     destroy(): void {
-        this.clear();
-    }
-
-    private clear(): void {
-        this.image?.destroy();
-        this.image = undefined;
-        if (this.textureKey && this.scene.textures.exists(this.textureKey)) this.scene.textures.remove(this.textureKey);
-        this.textureKey = undefined;
+        this.ground.destroy();
     }
 }
 
@@ -101,8 +101,4 @@ function snowyCells(grid: OutdoorGrid): Uint8Array {
         }
     }
     return snowy;
-}
-
-function grainAt(x: number, y: number): boolean {
-    return Math.floor(Math.abs(Math.sin(x * 12.9898 + y * 78.233) * 43758.5453) * 12) % 12 === 0;
 }

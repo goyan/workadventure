@@ -22,6 +22,12 @@ const forecastAsked = vi.hoisted((): { settings: unknown[]; dates: Date[] } => (
 const wamSettings = vi.hoisted((): { value: unknown } => ({ value: {} }));
 const place = vi.hoisted((): { value: { name: string } | undefined } => ({ value: undefined }));
 const clock = vi.hoisted((): { store: Writable<Date | undefined> | undefined } => ({ store: undefined }));
+const chosen = vi.hoisted(
+    (): {
+        place: { store: Writable<{ name: string; latitude: number; longitude: number } | undefined> | undefined };
+        cells: { at: number; weather?: string; temperature?: number; windSpeed?: number; windFrom?: number }[];
+    } => ({ place: { store: undefined }, cells: [] }),
+);
 
 vi.mock("../../../../src/i18n/i18n-svelte", () => {
     const label = (text: string) => () => text;
@@ -70,6 +76,10 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 },
                 unknown: label("Unknown forecast"),
                 close: label("Hide the weather"),
+                unfold: label("Show the full weather"),
+                fold: label("Fold the weather"),
+                server: label("Server weather"),
+                local: label("Your weather"),
                 defaultCity: label("Paris"),
             },
         },
@@ -112,6 +122,17 @@ vi.mock("../../../../src/front/Stores/NightStore", async () => {
     return { nightDateStore: store };
 });
 
+vi.mock("../../../../src/front/Phaser/Game/Weather/ChosenPlaceWeather", async () => {
+    const { readable: makeReadable, writable: makeWritable } = await import("svelte/store");
+    const place = makeWritable<{ name: string; latitude: number; longitude: number } | undefined>(undefined);
+    chosen.place.store = place;
+    return {
+        chosenPlaceStore: place,
+        chosenWeatherStateStore: makeReadable({ place: undefined, state: { status: "pending" } }),
+        chosenPlaceForecast: () => chosen.cells,
+    };
+});
+
 import WeatherForecastBanner from "../../../../src/front/Components/Weather/WeatherForecastBanner.svelte";
 import { fireConditionsStore } from "../../../../src/front/Stores/FireConditionsStore";
 import { weatherBannerStore } from "../../../../src/front/Stores/WeatherBannerStore";
@@ -135,11 +156,18 @@ const conditions = {
 let target: HTMLElement;
 let component: ReturnType<typeof mount> | undefined;
 
-function render(): void {
+/** Mounts the banner; opened, its full brief is shown as after a click on the chip. */
+function render(opened = true): void {
     target = document.createElement("div");
     document.body.append(target);
     component = mount(WeatherForecastBanner, { target });
     flushSync();
+    if (opened) chip()?.click();
+    flushSync();
+}
+
+function chip(): HTMLButtonElement | null {
+    return target.querySelector<HTMLButtonElement>('[data-testid="weather-chip"]');
 }
 
 function banner(): HTMLElement | null {
@@ -147,6 +175,9 @@ function banner(): HTMLElement | null {
 }
 
 beforeEach(() => {
+    localStorage.removeItem("weatherCardsOpen");
+    chosen.place.store?.set(undefined);
+    chosen.cells = [];
     fireConditionsStore.set(undefined);
     place.value = undefined;
     weatherBannerStore.set(true);
@@ -267,22 +298,22 @@ describe("WeatherForecastBanner", () => {
             weatherLocation: { name: "Lyon, Auvergne-Rhône-Alpes, France", latitude: 45.75, longitude: 4.85 },
         };
         render();
-        expect(target.querySelector('[data-testid="weather-banner-city"]')?.textContent?.trim()).toBe("Lyon");
+        expect(target.querySelector('[data-testid="weather-card-server-city"]')?.textContent?.trim()).toBe("Lyon");
     });
 
     it("names Paris for a map without a place", () => {
         wamSettings.value = { weather: "automatic" };
         render();
-        expect(target.querySelector('[data-testid="weather-banner-city"]')?.textContent?.trim()).toBe("Paris");
+        expect(target.querySelector('[data-testid="weather-card-server-city"]')?.textContent?.trim()).toBe("Paris");
     });
 
     it("follows a town tried in the panel at the next tick, the map settings being the same object", () => {
         render();
-        expect(target.querySelector('[data-testid="weather-banner-city"]')?.textContent?.trim()).toBe("Paris");
+        expect(target.querySelector('[data-testid="weather-card-server-city"]')?.textContent?.trim()).toBe("Paris");
         place.value = { name: "Perpignan, Occitanie, France" };
         nightDate().set(new Date(NOW.getTime() + 1000));
         flushSync();
-        expect(target.querySelector('[data-testid="weather-banner-city"]')?.textContent?.trim()).toBe("Perpignan");
+        expect(target.querySelector('[data-testid="weather-card-server-city"]')?.textContent?.trim()).toBe("Perpignan");
     });
 
     it("calls a clear sky with a few clouds clear, from 0.2 cloudy", () => {
@@ -366,5 +397,52 @@ describe("WeatherForecastBanner", () => {
         expect(target.querySelector('[data-testid="weather-banner-wind"]')?.textContent).toBe("23 km/h");
         expect(target.querySelector('[data-testid="weather-banner-wind-icon"]')).not.toBeNull();
         expect(target.querySelector('[data-testid="weather-banner-wind-arrow"]')).toBeNull();
+    });
+
+    it("shows only the town, the weather of now and the wind at a glance, the full brief on a click", () => {
+        cells.value = [{ at: NOW.getTime(), weather: "rain", temperature: 8.2, windSpeed: 20, windFrom: 270 }];
+        place.value = { name: "Los Angeles, California, USA" };
+        render(false);
+        expect(target.querySelector('[data-testid="weather-chip-server"]')?.textContent?.trim()).toBe("Los Angeles");
+        // A wind from the west blows to the east: the arrow points there.
+        expect(target.querySelector('[data-testid="weather-chip-server-wind"]')?.getAttribute("data-towards")).toBe(
+            "90",
+        );
+        expect(target.querySelector('[data-testid="weather-banner-cell"]')).toBeNull();
+        expect(chip()?.getAttribute("aria-expanded")).toBe("false");
+        chip()?.click();
+        flushSync();
+        expect(target.querySelectorAll('[data-testid="weather-banner-cell"]')).toHaveLength(1);
+        expect(localStorage.getItem("weatherCardsOpen")).toBe("true");
+    });
+
+    it("shows the weather of the server with a globe and this player's own with a computer", () => {
+        chosen.cells = [{ at: NOW.getTime(), weather: "snow", temperature: -3 }];
+        render(false);
+        expect(target.querySelector('[data-testid="weather-chip-local"]')).toBeNull();
+        chosen.place.store?.set({ name: "Lille, Hauts-de-France, France", latitude: 50.6, longitude: 3.1 });
+        flushSync();
+        expect(target.querySelector('[data-testid="weather-chip-local"]')?.textContent?.trim()).toBe("Lille");
+        chip()?.click();
+        flushSync();
+        const server = target.querySelector('[data-testid="weather-card-server-kind"]');
+        const local = target.querySelector('[data-testid="weather-card-local-kind"]');
+        expect(server?.getAttribute("data-kind")).toBe("server");
+        expect(server?.getAttribute("aria-label")).toBe("Server weather");
+        expect(local?.getAttribute("data-kind")).toBe("local");
+        expect(target.querySelector('[data-testid="weather-card-local-city"]')?.textContent).toBe("Lille");
+        expect(
+            target
+                .querySelector('[data-testid="weather-card-local"]')
+                ?.querySelector('[data-testid="weather-banner-cell"]')
+                ?.textContent?.replace(/\s+/g, " ")
+                .trim(),
+        ).toBe("Now -3°");
+    });
+
+    it("shows no badge while the player follows the server: there is one weather only", () => {
+        render();
+        expect(target.querySelector('[data-testid="weather-card-server-kind"]')).toBeNull();
+        expect(target.querySelector('[data-testid="weather-card-local"]')).toBeNull();
     });
 });

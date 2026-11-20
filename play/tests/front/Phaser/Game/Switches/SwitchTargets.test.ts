@@ -30,6 +30,12 @@ describe("entityStateKeysOf", () => {
         expect(entityStateKeysOf({ lamp: { kind: "rgb" } })).toEqual(["on"]);
     });
 
+    it("gives a pool the key `hot`: its water heated, it never freezes", () => {
+        const water = [{ x: 0, y: 0, width: 32, height: 32 }];
+        expect(entityStateKeysOf({ water })).toEqual(["hot"]);
+        expect(entityStateKeysOf({ lamp: { kind: "rgb" }, water })).toEqual(["on", "hot"]);
+    });
+
     it("gives nothing to the lamps that follow the music, nor to a plain object", () => {
         expect(entityStateKeysOf({ lamp: { kind: "disco" } })).toEqual([]);
         expect(entityStateKeysOf({})).toEqual([]);

@@ -6,6 +6,7 @@ import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
 import { v4 as uuidv4 } from "uuid";
 import { withNewPropertyIds } from "@workadventure/map-editor/src/Utils";
+import { openPoolAt } from "@wa/front/Phaser/Game/MapEditor/PoolOpening";
 import { mapLayerPickLevelStore } from "../../../../Stores/MapLayerStore";
 import { mapEditorPlacementLevelStore } from "../../../../Stores/MapEditorStore";
 import { floorLevelTiles } from "../MapLayer/MapLayerFloors";
@@ -315,6 +316,14 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
     protected handlePointerMoveEvent(pointer: Pointer, gameObjects: GameObject[]): void {
         // TODO: add shadow when moving into the area
         // .setDropShadow(4, 4, 0x000000);
+        if (
+            !this.entityPrefabPreview &&
+            gameObjects.length === 0 &&
+            openPoolAt(this.mapEditorModeManager, this.scene, { x: pointer.worldX, y: pointer.worldY })
+        ) {
+            return;
+        }
+
         if (!this.entityPrefabPreview || !this.entityPrefab) {
             return;
         }
