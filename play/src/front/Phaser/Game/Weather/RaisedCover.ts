@@ -21,6 +21,13 @@ export class RaisedCover {
         return row * KEY_SPAN + column;
     }
 
+    /** Whether this cover holds exactly the cells of another: what was read from it can be kept. */
+    public sameAs(other: RaisedCover): boolean {
+        if (other.cells.size !== this.cells.size) return false;
+        for (const cell of this.cells) if (!other.cells.has(cell)) return false;
+        return true;
+    }
+
     public get empty(): boolean {
         return this.cells.size === 0;
     }
