@@ -155,6 +155,7 @@ export class ReliefTiles {
             drop: 0,
             color: RAMPS.grass[0],
             wallRamp: RAMPS.wall,
+            flankRamp: RAMPS.grass,
             plain: true,
         }),
     );
@@ -642,6 +643,8 @@ export class ReliefTiles {
                 const here = materials[index];
                 sample.groundY = y;
                 sample.wallRamp = here === NONE_INDEX ? RAMPS.wall : WALL_RAMPS[COVERS[here] as Material];
+                // The flank of a mount: its own ground in the shade (grass where nothing covers it).
+                sample.flankRamp = here === NONE_INDEX ? ramps.grass : ramps[COVERS[here] as Material];
                 if (water >= WATER_SEEN_PX) {
                     // The water as its signature knows it (WATER_STEP_PX): a block is drawn again only when it shows.
                     const depth = Math.max(WATER_SEEN_PX, Math.floor(water / WATER_STEP_PX) * WATER_STEP_PX);

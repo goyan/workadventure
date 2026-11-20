@@ -109,6 +109,18 @@ export const RELIEF_TEXEL = 1;
 export const FACE_JUMP_PX = 2;
 /** The dark line along the top of the face of a drop: the rim of a hollow. */
 export const RIM_OUTLINE: Rgb = [0x2a, 0x24, 0x20];
+/**
+ * The south flank of a mount (a face that comes down from a raised ground): its ground in the shade while the drawing
+ * falls less than this many pixels for a pixel of ground, rock from there on (a cliff).
+ */
+export const CLIFF_JUMP_PX = 6;
+/**
+ * The silhouette of a mount (or the south rim of a hollow) where it hides the ground behind it: two pixels one over the
+ * other whose points of the ground are further apart than this on the map. Cerned with RIM_OUTLINE.
+ */
+export const SILHOUETTE_GAP_PX = 6;
+/** The shade of the ground of the flank of a mount (0 to 1 on its ramp). */
+const FLANK_SHADE = 0.25;
 /** The face is as dark as its foot from this drop on (px). */
 const WALL_DARK_DROP = 64;
 /** A darker stratum of the face every this many rows of the screen. */
@@ -124,6 +136,8 @@ export interface ColumnSample {
     color: Rgb | undefined;
     /** The shades of the face of a drop that goes down from it. */
     wallRamp: Ramp;
+    /** The shades of its ground, for the gentle flank of a mount that comes down to it. */
+    flankRamp: Ramp;
     /** Flat ground: left to the map, unless it hides something drawn before it. */
     plain: boolean;
 }
@@ -142,12 +156,17 @@ function wallShade(ramp: Ramp, drop: number, column: number, screenRow: number):
     return shadeAt(ramp, 0.75 - reached * 0.6 - stratum, column, screenRow);
 }
 
+/** The point of the ground each row of the column shows, from the row -1 (just above the block): NaN where none. */
+let rowGround = new Float64Array(0);
+
 /**
  * Draws one column of a block of the relief (`rows` pixels from the screen row `firstRow`) into the RGBA pixels `out`,
  * `stride` pixels a row. The `count` first samples go from the north to the south, from far enough north for the
- * highest face to reach the block. Each one is drawn over what is there (the south rim hides the floor behind it).
- * Where the drawing falls more than FACE_JUMP_PX, the face of the drop fills the gap, cerned at its top, and the
- * sample at its foot is part of it: a steep slope is one face, not lines of ground across it.
+ * deepest face to reach the block to far enough south for the highest mount. Each one is drawn over what is there
+ * (the south rim hides the floor behind it, a mount the ground behind it). Where the drawing falls more than
+ * FACE_JUMP_PX, a face fills the gap: the face of a hollow (below the ground, rock, cerned at its top) or the south
+ * flank of a mount (above it: its ground in the shade, rock where it is a cliff, cerned at its foot). The silhouette
+ * of what hides the ground behind it is cerned too.
  */
 export function paintColumn(
     samples: readonly ColumnSample[],
@@ -159,6 +178,11 @@ export function paintColumn(
     column: number,
 ): void {
     const index = (row: number): number => (row * stride + column) * 4;
+    if (rowGround.length < rows + 1) rowGround = new Float64Array(rows + 1);
+    rowGround.fill(Number.NaN, 0, rows + 1);
+    const showGround = (row: number, groundY: number): void => {
+        if (row >= -1 && row < rows) rowGround[row + 1] = groundY;
+    };
     let previous: number | undefined;
     let previousDrawn = 0;
     let previousDrop = 0;
@@ -171,32 +195,87 @@ export function paintColumn(
         // A face where the drawing falls more than FACE_JUMP_PX exactly (as groundPointAt sees it), not after the
         // rounding: a slope near the threshold would else alternate face and ground, a stripe each time.
         if (previous !== undefined && drawn - previousDrawn > FACE_JUMP_PX) {
+            const steep = drawn - previousDrawn >= CLIFF_JUMP_PX;
+            const next = sampleIndex + 1 < count ? samples[sampleIndex + 1] : undefined;
+            // The face goes on with the next sample: its foot is further south.
+            const goesOn = next !== undefined && next.groundY + next.drop - drawn > FACE_JUMP_PX;
+            let wasFlank = previousDrop < 0;
+            let flankRows = 0;
             for (let k = 1; k < jump; k++) {
                 const row = previous + k;
-                if (row < 0 || row >= rows) continue;
                 const drop = previousDrop + ((sample.drop - previousDrop) * k) / jump;
-                const color =
-                    k === 1 && !onFace ? RIM_OUTLINE : wallShade(sample.wallRamp, drop, column, row + firstRow);
-                put(out, index(row), color);
+                const flank = drop < 0;
+                let color: Rgb;
+                if (flank) {
+                    color = steep
+                        ? wallShade(sample.wallRamp, -drop, column, row + firstRow)
+                        : shadeAt(sample.flankRamp, FLANK_SHADE, column, row + firstRow);
+                    flankRows++;
+                } else {
+                    // The rim of a hollow: where its face starts, under flat ground or at the foot of a flank.
+                    const rim = wasFlank || (k === 1 && !onFace);
+                    color = rim ? RIM_OUTLINE : wallShade(sample.wallRamp, drop, column, row + firstRow);
+                }
+                wasFlank = flank;
+                showGround(row, sample.groundY);
+                if (row >= 0 && row < rows) put(out, index(row), color);
             }
-            if (at >= 0 && at < rows)
-                put(out, index(at), wallShade(sample.wallRamp, sample.drop, column, at + firstRow));
+            showGround(at, sample.groundY);
+            if (sample.drop > 0 || previousDrop >= 0) {
+                // The face of a hollow (or a flank going on down into one): its foot is part of it.
+                if (at >= 0 && at < rows)
+                    put(out, index(at), wallShade(sample.wallRamp, sample.drop, column, at + firstRow));
+            } else if (goesOn) {
+                // The flank goes on: this sample is part of it.
+                if (at >= 0 && at < rows)
+                    put(
+                        out,
+                        index(at),
+                        steep
+                            ? wallShade(sample.wallRamp, -sample.drop, column, at + firstRow)
+                            : shadeAt(sample.flankRamp, FLANK_SHADE, column, at + firstRow),
+                    );
+            } else {
+                // The foot of the flank: cerned, then its ground.
+                const foot = at - 1;
+                if (flankRows > 0 && foot >= 0 && foot < rows) put(out, index(foot), RIM_OUTLINE);
+                paintGround(sample, at, at, rows, out, index);
+            }
             onFace = true;
         } else {
             // A gentle slope: the ground stretched over the rows it skips.
             const from = previous !== undefined && jump > 1 ? previous + 1 : at;
-            for (let row = from; row <= at; row++) {
-                if (row >= 0 && row < rows && (!sample.plain || out[index(row) + 3] > 0)) {
-                    if (sample.color) put(out, index(row), sample.color);
-                    // Bare ground that hides what is behind it: its own tiles show there.
-                    else out[index(row) + 3] = 0;
-                }
-            }
+            for (let row = from; row <= at; row++) showGround(row, sample.groundY);
+            paintGround(sample, from, at, rows, out, index);
             onFace = false;
         }
         previous = at;
         previousDrawn = drawn;
         previousDrop = sample.drop;
+    }
+    // The silhouette: a drawn pixel that shows a ground far south of the one just above it hides that ground.
+    for (let row = 0; row < rows; row++) {
+        const above = rowGround[row];
+        if (!(rowGround[row + 1] - above > SILHOUETTE_GAP_PX)) continue;
+        if (out[index(row) + 3] > 0) put(out, index(row), RIM_OUTLINE);
+    }
+}
+
+/** Draws the ground of a sample over the rows `from` to `to` (the plain ground is left to the map). */
+function paintGround(
+    sample: ColumnSample,
+    from: number,
+    to: number,
+    rows: number,
+    out: Uint8ClampedArray,
+    index: (row: number) => number,
+): void {
+    for (let row = from; row <= to; row++) {
+        if (row >= 0 && row < rows && (!sample.plain || out[index(row) + 3] > 0)) {
+            if (sample.color) put(out, index(row), sample.color);
+            // Bare ground that hides what is behind it: its own tiles show there.
+            else out[index(row) + 3] = 0;
+        }
     }
 }
 

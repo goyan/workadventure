@@ -128,13 +128,21 @@ describe("a column of the relief drawn in 3/4", () => {
     const FLAT: Rgb = [200, 210, 220];
     const FLOOR: Rgb = [90, 100, 80];
     const WALL = RAMPS.wall;
+    const GRASS = RAMPS.grass;
     const isWall = (color: number[]) =>
         [...WALL, RIM_OUTLINE].some((shade) => shade.every((channel, index) => channel === color[index]));
     /** One sample a pixel of the ground from y 0, drawn `dropOf(y)` px lower; dug where the drop is not 0. */
     function samples(dropOf: (y: number) => number, count = 100): ColumnSample[] {
         return Array.from({ length: count }, (_, y) => {
             const drop = dropOf(y);
-            return { groundY: y, drop, color: drop > 0 ? FLOOR : FLAT, wallRamp: WALL, plain: drop === 0 };
+            return {
+                groundY: y,
+                drop,
+                color: drop > 0 ? FLOOR : FLAT,
+                wallRamp: WALL,
+                flankRamp: GRASS,
+                plain: drop === 0,
+            };
         });
     }
     const dug = (from: number, to: number, drop: number) => (y: number) => (y >= from && y <= to ? drop : 0);
@@ -213,6 +221,65 @@ describe("a column of the relief drawn in 3/4", () => {
         const out = paint(samples(dug(20, 79, 32), 100), 120, 0);
         expect(rgb(out, 85)).toEqual(FLAT);
         expect(alpha(out, 115)).toBe(0);
+    });
+
+    const isRim = (color: number[]) => color.every((channel, index) => channel === RIM_OUTLINE[index]);
+    const isOf = (ramp: readonly Rgb[], color: number[]) =>
+        ramp.some((shade) => shade.every((channel, index) => channel === color[index]));
+    const raised = (from: number, to: number, rise: number) => (y: number) => (y >= from && y <= to ? -rise : 0);
+
+    it("draws the south flank of a steep mount in rock, cerned at its foot", () => {
+        // Raised 64 px from y 40 to 79: its top drawn 32 px higher (rows 8 to 47), the flank from 48 down to its foot.
+        const out = paint(samples(raised(40, 79, 32), 100), 120, 0);
+        for (let row = 48; row <= 78; row++) expect(isOf(WALL, rgb(out, row)), `row ${row}`).toBe(true);
+        expect(isRim(rgb(out, 79))).toBe(true);
+        // The flat ground at its foot is left to the map.
+        expect(alpha(out, 80)).toBe(0);
+    });
+
+    it("draws the south flank of a gentle mount in shaded grass, one face without lines of ground across it", () => {
+        // Down 32 px over 12 px of ground south of the top: the drawing falls 3.7 px a pixel, under CLIFF_JUMP_PX.
+        const out = paint(
+            samples((y) => (y < 40 ? 0 : y <= 60 ? -32 : y < 72 ? -32 + ((y - 60) * 32) / 12 : 0), 100),
+            120,
+            0,
+        );
+        // The flank: from under the top (drawn at 28) to the foot (72).
+        let grass = 0;
+        for (let row = 30; row <= 70; row++) {
+            const color = rgb(out, row);
+            expect(isOf(WALL, color), `row ${row}`).toBe(false);
+            expect(color, `row ${row}`).not.toEqual(FLAT);
+            if (isOf(GRASS, color)) grass++;
+        }
+        expect(grass).toBeGreaterThan(30);
+        expect(isRim(rgb(out, 71))).toBe(true);
+    });
+
+    it("cerns the silhouette of a mount where it hides the ground behind it", () => {
+        // The ground north of the mount (y 0 to 39, plain) is drawn at its place; the top of the mount over its rows 8 on.
+        const out = paint(samples(raised(40, 79, 32), 100), 120, 0);
+        expect(alpha(out, 7)).toBe(0);
+        expect(isRim(rgb(out, 8))).toBe(true);
+        expect(rgb(out, 9)).toEqual(FLAT);
+    });
+
+    it("draws a mount against a hollow as a flank then a face, cerned once where they meet", () => {
+        // Raised 128 px (drawn 64 higher) from y 20 to 49, dug 128 px (drawn 64 lower) from y 50 on.
+        const out = paint(
+            samples((y) => (y < 20 ? 0 : y < 50 ? -64 : 64), 100),
+            200,
+            -60,
+        );
+        // Rows of the screen: row index = screen row + 60. The top ends at 49 - 64 = -15, the floor starts at 114.
+        let rims = 0;
+        for (let screen = -14; screen < 114; screen++) {
+            const color = rgb(out, screen + 60);
+            expect(color, `row ${screen}`).not.toEqual(FLAT);
+            expect(color, `row ${screen}`).not.toEqual(FLOOR);
+            if (isRim(color)) rims++;
+        }
+        expect(rims).toBe(1);
     });
 
     it("draws in a block the face of a drop that starts north of it", () => {
