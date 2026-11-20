@@ -3,8 +3,9 @@ import {
     DEFAULT_MAX_DEPTH_TILES,
     DEFAULT_MEADOW_SETTINGS,
     DEFAULT_WATER_SETTINGS,
+    DEFAULT_WAVE_SETTINGS,
 } from "@workadventure/map-editor";
-import type { LifeSettings, MeadowSettings } from "@workadventure/map-editor";
+import type { LifeSettings, MeadowSettings, WaveSettings } from "@workadventure/map-editor";
 import { gameManager } from "../GameManager";
 
 /** What the map says of its relief and of the pace of its water, with the defaults of a map that says nothing. */
@@ -17,6 +18,8 @@ export function readTerrainMapSettings(): {
     current: number;
     maxSurface: number;
     indoorDrain: number;
+    inertia: boolean;
+    waves: WaveSettings;
     life: LifeSettings;
     meadow: MeadowSettings;
 } {
@@ -30,6 +33,8 @@ export function readTerrainMapSettings(): {
         current: wam?.settings?.water?.current ?? DEFAULT_WATER_SETTINGS.current,
         maxSurface: wam?.settings?.water?.maxSurface ?? DEFAULT_WATER_SETTINGS.maxSurface,
         indoorDrain: wam?.settings?.water?.indoorDrain ?? DEFAULT_WATER_SETTINGS.indoorDrain,
+        inertia: wam?.settings?.water?.inertia ?? false,
+        waves: { ...DEFAULT_WAVE_SETTINGS, ...wam?.settings?.water?.waves },
         life: { ...DEFAULT_LIFE_SETTINGS, ...wam?.settings?.life },
         meadow: { ...DEFAULT_MEADOW_SETTINGS, ...wam?.settings?.meadow },
     };

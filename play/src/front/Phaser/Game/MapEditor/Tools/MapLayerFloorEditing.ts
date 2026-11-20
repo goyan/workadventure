@@ -4,7 +4,7 @@ import { asError } from "catch-unknown";
 import { get } from "svelte/store";
 import { v4 as uuidv4 } from "uuid";
 import type { WAMEntityData } from "@workadventure/map-editor";
-import { SLAB_GLASS_FAMILY, SLAB_WOOD_FAMILY } from "../MapLayer/MapLayerFloors";
+import { SLAB_GLASS_FAMILY, SLAB_WOOD_FAMILY, newStairIsShort } from "../MapLayer/MapLayerFloors";
 import { FLOOR_PREVIEW_DEPTH } from "../MapLayer/FloorDepth";
 import { mapEditorPlacementLevelStore } from "../../../../Stores/MapEditorStore";
 import {
@@ -199,22 +199,16 @@ export class MapLayerFloorEditing {
         const rise = target === undefined ? undefined : stairRiseBetween(level, target);
         // The stairs of 20 px came with the pieces of the bridges.
         if (rise === undefined || (rise === 20 && !get(mapLayerBridgePiecesAvailableStore))) return undefined;
+        const direction = get(mapLayerStairDirectionStore);
         if (get(mapLayerStairRampStore) && get(mapLayerBridgePiecesAvailableStore)) {
-            return {
-                direction: get(mapLayerStairDirectionStore),
-                width: get(mapLayerStairWidthStore),
-                rise,
-                open: true,
-                ramp: true,
-            };
+            return { direction, width: get(mapLayerStairWidthStore), rise, open: true, ramp: true };
         }
         return {
-            direction: get(mapLayerStairDirectionStore),
+            direction,
             width: get(mapLayerStairWidthStore),
             rise,
             open: get(mapLayerStairOpenStore),
-            // New stairs are short, when the catalog of the room has them.
-            ...(get(mapLayerShortStairsAvailableStore) ? { short: true } : {}),
+            ...(newStairIsShort(direction, get(mapLayerShortStairsAvailableStore)) ? { short: true } : {}),
         };
     }
 

@@ -6,6 +6,8 @@
         MAX_WATER_CURRENT,
         MAX_WATER_INDOOR_DRAIN,
         MAX_WATER_MAX_SURFACE,
+        REALISTIC_WATER_SETTINGS,
+        WAVE_BOUNDS,
         MAX_WATER_SPEED,
         MEADOW_BOUNDS,
         SOILS,
@@ -45,6 +47,11 @@
     let current = $state(saved.current);
     let maxSurface = $state(saved.maxSurface);
     let indoorDrain = $state(saved.indoorDrain);
+    let inertia = $state(saved.inertia);
+    let waveRoughness = $state(saved.waves.roughness);
+    let waveDamping = $state(saved.waves.damping);
+    let waveBreaking = $state(saved.waves.breaking);
+    let waveMomentum = $state(saved.waves.momentum);
 
     let diameterTiles = $state($terrainBrushStore.diameterTiles);
     let forceAuto = $state($terrainBrushStore.forcePx === undefined);
@@ -65,10 +72,32 @@
         }));
     }
 
+    /** Every setting of the water back to what it is in reality, and saved. */
+    function setRealistic(): void {
+        ({ runoff, evaporation, speed, absorption, current, maxSurface, indoorDrain, inertia } =
+            REALISTIC_WATER_SETTINGS);
+        waveRoughness = REALISTIC_WATER_SETTINGS.waves.roughness;
+        waveDamping = REALISTIC_WATER_SETTINGS.waves.damping;
+        waveBreaking = REALISTIC_WATER_SETTINGS.waves.breaking;
+        waveMomentum = REALISTIC_WATER_SETTINGS.waves.momentum;
+        saveWater();
+    }
+
     function saveWater(): void {
         executeUpdateWAMSettings({
             $case: "updateWaterSettingMessage",
-            updateWaterSettingMessage: { runoff, evaporation, speed, absorption, current, maxSurface, indoorDrain },
+            updateWaterSettingMessage: {
+                runoff,
+                evaporation,
+                speed,
+                absorption,
+                current,
+                maxSurface,
+                indoorDrain,
+                inertia,
+                // The waves only matter to the water with inertia: a map without it keeps what it had.
+                ...(inertia ? { waveRoughness, waveDamping, waveBreaking, waveMomentum } : {}),
+            },
         }).catch((error: unknown) => console.error("The pace of the water could not be saved", error));
     }
 
@@ -266,6 +295,12 @@
     <TerrainWaterDashboard {evaporation} {absorption} />
 
     <span class="retro-title mt-2">{$LL.mapEditor.terrain.mapSettings()}</span>
+    <div data-testid="terrain-water-realistic">
+        <button type="button" class="btn btn-sm btn-light btn-ghost w-full" onclick={setRealistic}>
+            {$LL.mapEditor.terrain.realistic()}
+        </button>
+        <p class="retro-hint m-0">{$LL.mapEditor.terrain.realisticHint()}</p>
+    </div>
     <div data-testid="terrain-max-depth">
         <RangeSlider
             id="terrain-max-depth"
@@ -378,6 +413,74 @@
         />
         <p class="retro-hint m-0">{$LL.mapEditor.terrain.real.maxSurface()}</p>
     </div>
+    <div data-testid="terrain-inertia">
+        <InputSwitch
+            id="terrain-inertia"
+            bind:value={inertia}
+            label={$LL.mapEditor.terrain.inertia()}
+            labelPosition="right"
+            onchange={saveWater}
+        />
+        <p class="retro-hint m-0">{$LL.mapEditor.terrain.real.inertia()}</p>
+    </div>
+    {#if inertia}
+        <div data-testid="terrain-wave-roughness">
+            <RangeSlider
+                id="terrain-wave-roughness"
+                label={$LL.mapEditor.terrain.waves.roughness()}
+                unit="×"
+                min={WAVE_BOUNDS.roughness[0]}
+                max={WAVE_BOUNDS.roughness[1]}
+                step={0.1}
+                bind:value={waveRoughness}
+                onchange={saveWater}
+                buttonShape="square"
+            />
+            <p class="retro-hint m-0">{$LL.mapEditor.terrain.waves.roughnessHint()}</p>
+        </div>
+        <div data-testid="terrain-wave-damping">
+            <RangeSlider
+                id="terrain-wave-damping"
+                label={$LL.mapEditor.terrain.waves.damping()}
+                unit="/s"
+                min={WAVE_BOUNDS.damping[0]}
+                max={WAVE_BOUNDS.damping[1]}
+                step={0.01}
+                bind:value={waveDamping}
+                onchange={saveWater}
+                buttonShape="square"
+            />
+            <p class="retro-hint m-0">{$LL.mapEditor.terrain.waves.dampingHint()}</p>
+        </div>
+        <div data-testid="terrain-wave-breaking">
+            <RangeSlider
+                id="terrain-wave-breaking"
+                label={$LL.mapEditor.terrain.waves.breaking()}
+                unit="×"
+                min={WAVE_BOUNDS.breaking[0]}
+                max={WAVE_BOUNDS.breaking[1]}
+                step={0.1}
+                bind:value={waveBreaking}
+                onchange={saveWater}
+                buttonShape="square"
+            />
+            <p class="retro-hint m-0">{$LL.mapEditor.terrain.waves.breakingHint()}</p>
+        </div>
+        <div data-testid="terrain-wave-momentum">
+            <RangeSlider
+                id="terrain-wave-momentum"
+                label={$LL.mapEditor.terrain.waves.momentum()}
+                unit="×"
+                min={WAVE_BOUNDS.momentum[0]}
+                max={WAVE_BOUNDS.momentum[1]}
+                step={0.05}
+                bind:value={waveMomentum}
+                onchange={saveWater}
+                buttonShape="square"
+            />
+            <p class="retro-hint m-0">{$LL.mapEditor.terrain.waves.momentumHint()}</p>
+        </div>
+    {/if}
     <p class="retro-hint m-0">{$LL.mapEditor.terrain.paceHint()}</p>
 
     <span class="retro-title mt-2">{$LL.mapEditor.terrain.meadow.title()}</span>

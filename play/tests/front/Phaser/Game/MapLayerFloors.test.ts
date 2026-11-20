@@ -17,6 +17,7 @@ import {
     stairGroundBox,
     stairPrefabName,
     stairRun,
+    newStairIsShort,
     stairScreenBox,
 } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
 
@@ -273,5 +274,18 @@ describe("raised floors of the map layer", () => {
         });
         // The floors of the ground have no glass.
         expect(parseFloorPiece("Carte Sols", "Carte Sols:sol-verre-uni:Default:Down")).toBeUndefined();
+    });
+});
+
+describe("the stairs the editor places", () => {
+    it("are short going north or south, when the catalog of the room has the short ones", () => {
+        expect(newStairIsShort("n", true)).toBe(true);
+        expect(newStairIsShort("s", true)).toBe(true);
+        expect(newStairIsShort("n", false)).toBe(false);
+    });
+
+    it("keep their length going east or west: on one tile, a stair seen from the side is a wall of pillars", () => {
+        expect(newStairIsShort("e", true)).toBe(false);
+        expect(newStairIsShort("o", true)).toBe(false);
     });
 });

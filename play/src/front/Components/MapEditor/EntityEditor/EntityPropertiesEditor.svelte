@@ -155,7 +155,10 @@
         }
     }
 
-    /** Replaces the property whole (updateProperty merges: a list in it, the targets of a switch, would only grow). */
+    /**
+     * Replaces the property whole. updateProperty merges: a list in it (the targets of a switch) would only grow, and
+     * a field taken out (the level a source holds) would stay.
+     */
     function onSetProperty(property: EntityDataProperty) {
         if ($mapEditorSelectedEntityStore) {
             $mapEditorSelectedEntityStore.setProperty($state.snapshot(property));
@@ -807,7 +810,7 @@
                                     onclose={() => {
                                         onDeleteProperty(property.id);
                                     }}
-                                    onchange={() => onUpdateProperty(properties[i])}
+                                    onchange={() => onSetProperty(properties[i])}
                                 />{/if}
                         {:else if properties[i].type === "lampPropertyData"}
                             {#if $mapEditorSelectedEntityStore?.getPrefab().lamp?.kind !== "dancefloor" && $mapEditorSelectedEntityStore?.getPrefab().lamp?.kind !== "rgb"}
