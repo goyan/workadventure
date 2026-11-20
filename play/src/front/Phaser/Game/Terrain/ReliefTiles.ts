@@ -23,7 +23,7 @@ import type { Material, Ramp, Rgb as PaletteRgb } from "./Pixel/PixelPalette";
 import { DROP_SCALE, groundPointAt, MAX_DROP, paintColumn, RELIEF_TEXEL } from "./ReliefProjection";
 import type { ColumnSample } from "./ReliefProjection";
 import { ReliefTileSchedule, reliefSignature } from "./ReliefTileSchedule";
-import { DEEP_WATER_COLOR, deepWaterAlpha, SHALLOW_WATER, SHORE_PX, SHORE_WATER } from "./TerrainShading";
+import { waterColor } from "./Pixel/WaterPixel";
 import type { TerrainWater } from "./TerrainWater";
 
 /** The ground outdoors: under the foam and the life of the water (0.66), the objects and the avatars. */
@@ -57,10 +57,6 @@ const COVER_INDEX = Object.fromEntries(COVERS.map((cover, index) => [cover, inde
 const NONE_INDEX = COVER_INDEX.none;
 /** From this much grass of the meadow (0 to 255), the grass is dense: the flowers of the season grow there. */
 const DENSE_GRASS = 160;
-/** While the relief is edited, the water is drawn this much fainter, so the bottom shows through. */
-const SEE_THROUGH = 0.45;
-/** The ground under water where nothing else covers it. */
-const BARE_UNDER_WATER: PaletteRgb = RAMPS.earth[2];
 /** The time an image spends drawing a block (ms): the rest of the block waits for the next image. */
 const DRAW_BUDGET_MS = 6;
 /** The rows (or columns) of a block drawn between two looks at the time. */
@@ -84,16 +80,8 @@ const GRID_WIDTH = TERRAIN_CHUNK + 2;
 const GRID_HEIGHT = TERRAIN_CHUNK + MAX_DROP / TERRAIN_CELL + 2;
 /** Water thinner than this is not drawn (as on the flat drawing). */
 const WATER_SEEN_PX = 0.5;
-
-type Rgb = [number, number, number];
-
-/** Lays a colour over another, in place. */
-function blend(under: Rgb, color: number, alpha: number): void {
-    if (alpha <= 0) return;
-    under[0] = under[0] * (1 - alpha) + ((color >> 16) & 0xff) * alpha;
-    under[1] = under[1] * (1 - alpha) + ((color >> 8) & 0xff) * alpha;
-    under[2] = under[2] * (1 - alpha) + (color & 0xff) * alpha;
-}
+/** The water is drawn, and its blocks drawn again, by steps of this many pixels of depth. */
+const WATER_STEP_PX = 2;
 
 export interface ReliefInputs {
     relief(): TerrainData | undefined;
@@ -167,8 +155,6 @@ export class ReliefTiles {
         plain: true,
     }));
     private readonly levels = new Uint8Array(GRID_WIDTH * GRID_HEIGHT);
-    /** The colour of the water of each sample of a column: reused. */
-    private readonly waterColors: Rgb[] = Array.from({ length: this.samples.length }, (): Rgb => [0, 0, 0]);
 
     constructor(
         private readonly scene: Phaser.Scene & { markDirty(): void },
@@ -413,7 +399,8 @@ export class ReliefTiles {
         if (!any) return "";
         let hash = 0;
         for (let index = 0; index < GRID_WIDTH * GRID_HEIGHT; index++) {
-            hash = (Math.imul(hash, 31) + this.levels[index]) | 0;
+            // As the water is drawn: by steps of WATER_STEP_PX (a lake rising slowly is not drawn again each time).
+            hash = (Math.imul(hash, 31) + Math.floor(this.levels[index] / WATER_STEP_PX)) | 0;
         }
         return hash.toString(36);
     }
@@ -648,13 +635,10 @@ export class ReliefTiles {
                 sample.groundY = y;
                 sample.wallRamp = here === NONE_INDEX ? RAMPS.wall : WALL_RAMPS[COVERS[here] as Material];
                 if (water >= WATER_SEEN_PX) {
-                    sample.drop = Math.min(MAX_DROP, Math.max(0, -(ground + water)) * scale);
-                    sample.color = this.waterOver(
-                        colors[index] ?? BARE_UNDER_WATER,
-                        water,
-                        this.seeThrough ? SEE_THROUGH : 1,
-                        this.waterColors[count - 1],
-                    );
+                    // The water as its signature knows it (WATER_STEP_PX): a block is drawn again only when it shows.
+                    const depth = Math.max(WATER_SEEN_PX, Math.floor(water / WATER_STEP_PX) * WATER_STEP_PX);
+                    sample.drop = Math.min(MAX_DROP, Math.max(0, -(ground + depth)) * scale);
+                    sample.color = waterColor(depth, x, y, season, colors[index], this.seeThrough);
                     sample.plain = false;
                 } else {
                     sample.drop = Math.min(MAX_DROP, Math.max(0, -ground) * scale);
@@ -672,19 +656,5 @@ export class ReliefTiles {
         block.projected = this.projected;
         block.image.setVisible(!this.hidden);
         this.scene.markDirty();
-    }
-
-    /**
-     * The water over a ground: light blue, darker with its depth, a pale shore where it is thin. Written into `into`
-     * (a colour kept for the sample): nothing allocated for each pixel under water.
-     */
-    private waterOver(ground: PaletteRgb, depth: number, strength: number, into: Rgb): Rgb {
-        into[0] = ground[0];
-        into[1] = ground[1];
-        into[2] = ground[2];
-        blend(into, SHALLOW_WATER.color, SHALLOW_WATER.alpha * strength);
-        blend(into, DEEP_WATER_COLOR, deepWaterAlpha(depth) * strength);
-        if (depth < SHORE_PX) blend(into, SHORE_WATER.color, SHORE_WATER.alpha * strength);
-        return into;
     }
 }

@@ -4,6 +4,7 @@ import type { TerrainData } from "@workadventure/map-editor";
 import { ReliefTiles } from "../../../../../src/front/Phaser/Game/Terrain/ReliefTiles";
 import type { GroundLayout } from "../../../../../src/front/Phaser/Game/Terrain/ReliefTiles";
 import { TerrainWater } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
+import type { WaterState } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
 import { MeadowState } from "../../../../../src/front/Phaser/Game/Terrain/MeadowState";
 import { RAMPS, rampsFor } from "../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
 import type { Rgb } from "../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
@@ -82,7 +83,11 @@ function fixture(
             quiet = tiles.isDrawing() || tiles.redraws() !== before ? 0 : quiet + 1;
         }
     };
-    return { tiles, worldView, images, settle, painted, setTerrain, scene };
+    /** Jumps the time of the game: the water has glided to its last state. */
+    const skip = (ms: number) => {
+        clock += ms;
+    };
+    return { tiles, worldView, images, settle, painted, setTerrain, scene, water, clock: () => clock, skip };
 }
 
 describe("the blocks of the relief seen in 3/4", () => {
@@ -448,6 +453,107 @@ describe("the blocks of the relief seen in 3/4", () => {
             settle();
             expect(tiles.redraws()).toBeGreaterThan(drawn);
             expect(tiles.isActive()).toBe(true);
+        });
+    });
+
+    describe("the water in pixel art", () => {
+        /** A state of the water: `depth` px over the cells x 16 to 31, y 16 to 31 (the block 1,1), dry elsewhere. */
+        const lake = (seq: number, depth: number): WaterState => {
+            const bytes = new Uint8Array(64 * 64 * 2);
+            for (let y = 16; y < 32; y++) {
+                for (let x = 16; x < 32; x++) {
+                    const eighths = Math.round(depth * 8);
+                    bytes[(y * 64 + x) * 2] = eighths & 255;
+                    bytes[(y * 64 + x) * 2 + 1] = eighths >> 8;
+                }
+            }
+            return { x: 0, y: 0, width: 64, height: 64, seq, full: true, depths: bytes };
+        };
+        const hollow = () =>
+            withHeights(
+                undefined,
+                new Map(
+                    Array.from({ length: 64 * 64 }, (_, index): [string, number] => [
+                        cellKey(index % 64, Math.floor(index / 64)),
+                        -64,
+                    ]),
+                ),
+            );
+        const count = (block: Uint8ClampedArray, colors: readonly (readonly number[])[]) => {
+            let found = 0;
+            for (let index = 0; index < 256 * 256; index++) {
+                const color = [block[index * 4], block[index * 4 + 1], block[index * 4 + 2]];
+                if (colors.some((shade) => same(shade, color))) found++;
+            }
+            return found;
+        };
+
+        it("paints a lake with the shades of the water", () => {
+            const { settle, painted, water, skip } = fixture(hollow());
+            water.receive(lake(1, 20), 0);
+            skip(10_000);
+            settle();
+            const block = painted.get("relief-block:1,1");
+            if (!block) throw new Error("no block");
+            expect(count(block, RAMPS.water)).toBeGreaterThan(20_000);
+        });
+
+        it("draws a block again only when its water changes in a way that shows", () => {
+            const { settle, tiles, water, clock, skip } = fixture(hollow());
+            water.receive(lake(1, 20), 0);
+            skip(10_000);
+            settle();
+            const drawn = tiles.redraws();
+            water.receive(lake(2, 21), clock());
+            skip(10_000);
+            settle();
+            expect(tiles.redraws()).toBe(drawn);
+            water.receive(lake(3, 33), clock());
+            skip(10_000);
+            settle();
+            expect(tiles.redraws()).toBeGreaterThan(drawn);
+        });
+
+        it("draws a thin flood on flat ground as the foam of a shore, not as deep water", () => {
+            const flat = withSoils(
+                undefined,
+                new Map(
+                    Array.from({ length: 64 * 64 }, (_, index): [string, number] => [
+                        cellKey(index % 64, Math.floor(index / 64)),
+                        4,
+                    ]),
+                ),
+            );
+            const layout: GroundLayout = {
+                outdoor: () => true,
+                paved: () => false,
+                mapGrass: () => false,
+                version: () => 1,
+            };
+            const { settle, painted, water, skip } = fixture(flat, undefined, { layout });
+            water.receive(lake(1, 1), 0);
+            skip(10_000);
+            settle();
+            const block = painted.get("relief-block:1,1");
+            if (!block) throw new Error("no block");
+            expect(count(block, [[0xd6, 0xec, 0xf6]])).toBeGreaterThan(20_000);
+            expect(count(block, RAMPS.water)).toBe(0);
+        });
+
+        it("lets the bottom show through the water while the relief is edited", () => {
+            const { settle, painted, water, tiles, skip } = fixture(hollow());
+            water.receive(lake(1, 20), 0);
+            skip(10_000);
+            settle();
+            const before = painted.get("relief-block:1,1");
+            if (!before) throw new Error("no block");
+            const plain = count(before, RAMPS.grass);
+            tiles.setSeeThrough(true);
+            settle();
+            const through = painted.get("relief-block:1,1");
+            if (!through) throw new Error("no block");
+            // One pixel of the lake in two shows the grass of its bottom.
+            expect(count(through, RAMPS.grass)).toBeGreaterThan(plain + 10_000);
         });
     });
 });
