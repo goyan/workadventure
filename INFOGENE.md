@@ -3741,6 +3741,21 @@ avec 8 px apportés par cellule du cratère). Pas de son. Rien n'a été vu à l
 cette section : widget, viseur, chute, éclair et gerbe ne sont validés que par les tests ; l'effet sur l'eau en jeu
 n'est pas vu.
 
+## Éditeur : choisir un niveau
+
+Le sélecteur de niveau de l'éditeur (`FloorLevelPicker.svelte`) propose **tous les niveaux où l'on peut construire**,
+avec ou sans dalles : le sol, le niveau 1 des ponts (20 px, quand le catalogue de la salle a leurs pièces), les dessus
+des murs de 2, 3 et 4 cases, les dessus des murs posés sur un étage, et tout étage déjà construit. Avant, seuls le sol
+et les étages qui avaient des dalles étaient listés : le niveau d'un pont pas encore posé ne se choisissait qu'en
+dépliant « Ajuster la hauteur ».
+
+- Chaque niveau porte le nom de sa hauteur, qui ne change pas : « Niveau 1 », « Niveau 2 »… Un niveau qui a des
+  dalles porte en plus son nom dans le jeu : « Niveau 2 · Étage 1 ».
+- Les flèches vont au niveau suivant ou précédent de la liste, construit ou non.
+- « Ajuster la hauteur » reste pour les hauteurs hors liste (une case de mur à la fois).
+- La liste des niveaux offerts est tenue par l'outil Carte : dans un autre outil ouvert sans être passé par lui, elle
+  se réduit au sol et aux étages construits.
+
 ## Ponts : un palier bas, des traverses et des rampes
 
 Un pont est un **palier en plein air** : des dalles posées au-dessus d'une rivière, avec une rampe ou un escalier à
