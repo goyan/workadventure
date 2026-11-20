@@ -392,6 +392,7 @@ import { LifeSpeciesStats, withoutSpeciesCounts } from "./Life/LifeSpeciesStats"
 import { LifeStats } from "./Life/LifeStats";
 import { MapGroundLayout, GRASS_NAME, mapTileIsGrass } from "./Terrain/MapGroundLayout";
 import { footprintSurface, GroundFootprints } from "./Terrain/Footprints";
+import { WaterGlints } from "./Terrain/WaterGlints";
 import { ReliefTiles } from "./Terrain/ReliefTiles";
 import { dropAt, projectionShown } from "./Terrain/ReliefProjection";
 import { CharacterDrops } from "./Terrain/CharacterDrops";
@@ -642,6 +643,8 @@ export class GameScene extends DirtyScene {
     private mapGroundLayout: MapGroundLayout | undefined;
     /** The footprints of the players in the snow, the mud and the sand. */
     private groundFootprints: GroundFootprints | undefined;
+    /** The glints that shine on the water. */
+    private waterGlints: WaterGlints | undefined;
     /** The relief seen in 3/4: the dug ground drawn lower, its faces, its water. */
     private reliefTiles: ReliefTiles | undefined;
     /** The characters drawn lower in the hollows of the relief, while the image is drawn. */
@@ -1742,6 +1745,8 @@ export class GameScene extends DirtyScene {
         this.mapGroundLayout = undefined;
         this.groundFootprints?.destroy();
         this.groundFootprints = undefined;
+        this.waterGlints?.destroy();
+        this.waterGlints = undefined;
         this.reliefTiles?.destroy();
         this.reliefTiles = undefined;
         this.characterDrops?.destroy();
@@ -2392,6 +2397,7 @@ export class GameScene extends DirtyScene {
             this.reliefTiles?.setHidden(isBasicActive());
             this.reliefTiles?.setProjected(!get(mapEditorModeStore));
             this.reliefTiles?.update(time);
+            this.waterGlints?.update(time);
             // The footprints: none laid while the map is edited, none shown in the basic mode.
             this.groundFootprints?.setVisible(!isBasicActive());
             if (this.groundFootprints?.update(time, get(mapEditorModeStore) ? [] : this.seasonalWalkers())) {
@@ -3861,6 +3867,13 @@ export class GameScene extends DirtyScene {
                     snowShown: () => this.seasonalThemeManager?.groundSnow() ?? 0,
                     layout: this.mapGroundLayout,
                     snowLineSeason: () => this.getGroundSeason(),
+                });
+                this.waterGlints?.destroy();
+                this.waterGlints = new WaterGlints(this, {
+                    waterAt: (x, y) => this.terrainWater.depthAt(x, y, this.time.now),
+                    dropAt: () => 0,
+                    reducedMotion: () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+                    shown: () => !isBasicActive(),
                 });
                 this.groundFootprints?.destroy();
                 this.groundFootprints = new GroundFootprints(
