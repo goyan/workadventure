@@ -190,6 +190,28 @@ const FAR_SHARE = 0.25;
 /** How far around the disc of a sink the water moves again during a step, in cells: eight tiles. */
 const SINK_RUSH_CELLS = 16;
 
+/**
+ * The water with inertia: how fast the flow between two cells picks up, for each pixel of water that passes and
+ * each pixel of difference of level, a second. It is the gravity at the scale of the map (a cell is about 0.55 m
+ * wide, a pixel of water 3.4 cm): a wave runs at the square root of this times the depth, in cells a second (4.5
+ * under 18 px of water, 17 under 256 px).
+ */
+const GRAVITY = (9.81 * -metresOf(-1)) / CELL_AREA_M2;
+/**
+ * The share of its flow the water loses a second. Under it a stirred lake goes on rocking for minutes, and at half
+ * of it the computation no longer damps what it stirs up itself; over it a long lake takes much longer to level.
+ */
+const FLOW_FRICTION = 0.2;
+/** The thinner the water, the more the ground holds it back: this much more friction a second under one pixel. */
+const THIN_FRICTION = 1;
+/**
+ * A wave crosses no more than this share of a cell in one move. At half a cell the computation rocks by itself
+ * with this friction (measured: a small basin never calms down); at a third it calms down.
+ */
+const WAVE_CELLS_PER_MOVE = 0.35;
+/** The most moves of the water with inertia in a step: enough for the deepest water a map holds. */
+const MAX_INERTIA_MOVES = 8;
+
 /** The cells a water grid covers, in cells of the relief. */
 export interface WaterGridBounds {
     x: number;
@@ -297,6 +319,14 @@ export interface WaterStepInput {
      * sink as far as the step is long.
      */
     flowSteps?: number;
+    /**
+     * Whether the water has inertia: the flow between two cells is kept from a step to the next, picks up with the
+     * slope of the surface and slows down by friction, so waves run and a lake levels as fast as its depth allows.
+     * Absent: the water creeps from cell to cell, a share of each difference of level a step.
+     */
+    inertia?: boolean;
+    /** How long the step lasts, in seconds, for the water with inertia (a tenth of a second when absent). */
+    seconds?: number;
 }
 
 /** What came in and went out during one step, in pixels of water over one cell (CELL_LITRES_PER_PX litres each). */
@@ -350,6 +380,14 @@ export class WaterGrid {
     /** For the levelling over long distances: the stretch of water each cell belongs to along a line. */
     private stretch = new Int32Array(0);
     private farTurn = false;
+    /**
+     * The water with inertia: the flow from each cell to the next one of its row (`flowEast`) and of its column
+     * (`flowSouth`), in pixels of water over one cell a second, negative the other way; and the share of what it
+     * gives each cell can afford. Empty on a map whose water only creeps.
+     */
+    private flowEast = new Float32Array(0);
+    private flowSouth = new Float32Array(0);
+    private afford = new Float32Array(0);
     private depth: Float32Array;
     /** How high the water of this map may stand over the level it spills at (see setMaxSurface). */
     private highest: number = MAX_WATER_SURFACE_PX;
@@ -668,7 +706,13 @@ export class WaterGrid {
                 if (-px - taken > 0 && flow.level === undefined) sinks.push({ index, radius, left: -px - taken });
             }
         }
-        if (this.flow(tally)) tally.moved = true;
+        if (input.inertia) {
+            if (this.flowWithInertia(tally, input.seconds)) tally.moved = true;
+        } else {
+            // A map that went back to the water that creeps: its water forgets the way it was going.
+            if (this.flowEast.length > 0) this.forgetFlows();
+            if (this.flow(tally)) tally.moved = true;
+        }
         // On a map that goes faster than reality the water also levels over long distances: a lake would otherwise
         // take minutes to feel a sink or a source at its other end.
         // Every other step: half the cost for the server, and still far ahead of the moves from cell to cell.
@@ -720,6 +764,7 @@ export class WaterGrid {
     /** Reads depths written by a grid of the same size; bytes of another size are left alone. */
     public readDepths(bytes: Uint8Array): boolean {
         if (bytes.length !== this.depth.length * 2) return false;
+        this.forgetFlows();
         for (let index = 0; index < this.depth.length; index++) {
             this.depth[index] = this.blocked[index] ? 0 : (bytes[index * 2] | (bytes[index * 2 + 1] << 8)) / 8;
         }
@@ -1114,6 +1159,156 @@ export class WaterGrid {
                         depth[drop > 0 ? other : index] += amount;
                         moved = true;
                     }
+                }
+            }
+        }
+        return moved;
+    }
+
+    /** The water stops where it is: what it was doing a step before no longer counts. */
+    private forgetFlows(): void {
+        this.flowEast.fill(0);
+        this.flowSouth.fill(0);
+    }
+
+    /**
+     * Moves the water one step, with inertia: the flow between two cells picks up with the difference of their
+     * surfaces and the water that passes between them, slows down by friction, and never takes from a cell more
+     * than it holds. A deep water is moved in several shorter moves, so that its waves stay within what the
+     * computation bears. The walls, the edge of the grid and the highest level are those of `flow`. Returns whether
+     * any moved.
+     */
+    private flowWithInertia(tally: WaterTally, seconds: number | undefined): boolean {
+        const { width, height } = this.bounds;
+        const size = width * height;
+        if (this.flowEast.length !== size) {
+            this.flowEast = new Float32Array(size);
+            this.flowSouth = new Float32Array(size);
+            this.afford = new Float32Array(size);
+        }
+        const step = seconds !== undefined && Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds, 1) : 0.1;
+        let deepest = 0;
+        for (let index = 0; index < size; index++) if (this.depth[index] > deepest) deepest = this.depth[index];
+        if (deepest <= DRY_PX) return false;
+        const moves = Math.min(
+            MAX_INERTIA_MOVES,
+            Math.max(1, Math.ceil((Math.sqrt(GRAVITY * deepest) * step) / WAVE_CELLS_PER_MOVE)),
+        );
+        const dt = step / moves;
+        const depth = this.depth;
+        const ground = this.ground;
+        const closed = this.closed;
+        const east = this.flowEast;
+        const south = this.flowSouth;
+        const afford = this.afford;
+        const pull = dt * GRAVITY;
+        // What a cell at the edge of the grid loses by each of its open sides, as when the water creeps.
+        const edgeShare = FLOW_SHARE / moves;
+        let moved = false;
+        for (let move = 0; move < moves; move++) {
+            // The flows pick up and slow down.
+            for (let row = 0; row < height; row++) {
+                for (let column = 0; column < width; column++) {
+                    const index = row * width + column;
+                    const held = depth[index];
+                    const bed = ground[index];
+                    const surface = bed + held;
+                    if (column + 1 < width) {
+                        const other = index + 1;
+                        const otherHeld = depth[other];
+                        if ((held <= 0 && otherHeld <= 0) || closed[index] & 1) east[index] = 0;
+                        else {
+                            const otherBed = ground[other];
+                            const otherSurface = otherBed + otherHeld;
+                            // The water that passes: what stands over the higher of the two grounds.
+                            const passing =
+                                (surface > otherSurface ? surface : otherSurface) - (bed > otherBed ? bed : otherBed);
+                            if (passing <= DRY_PX) east[index] = 0;
+                            else {
+                                east[index] =
+                                    (east[index] + pull * passing * (surface - otherSurface)) /
+                                    (1 + dt * (FLOW_FRICTION + THIN_FRICTION / passing));
+                            }
+                        }
+                    }
+                    if (row + 1 < height) {
+                        const other = index + width;
+                        const otherHeld = depth[other];
+                        if ((held <= 0 && otherHeld <= 0) || closed[index] & 4) south[index] = 0;
+                        else {
+                            const otherBed = ground[other];
+                            const otherSurface = otherBed + otherHeld;
+                            const passing =
+                                (surface > otherSurface ? surface : otherSurface) - (bed > otherBed ? bed : otherBed);
+                            if (passing <= DRY_PX) south[index] = 0;
+                            else {
+                                south[index] =
+                                    (south[index] + pull * passing * (surface - otherSurface)) /
+                                    (1 + dt * (FLOW_FRICTION + THIN_FRICTION / passing));
+                            }
+                        }
+                    }
+                }
+            }
+            // A cell never gives more than it holds: what it gives is cut down, by all its sides alike.
+            for (let row = 0; row < height; row++) {
+                for (let column = 0; column < width; column++) {
+                    const index = row * width + column;
+                    let out = 0;
+                    if (column + 1 < width && east[index] > 0) out += east[index];
+                    if (column > 0 && east[index - 1] < 0) out -= east[index - 1];
+                    if (row + 1 < height && south[index] > 0) out += south[index];
+                    if (row > 0 && south[index - width] < 0) out -= south[index - width];
+                    afford[index] = out * dt > depth[index] ? depth[index] / (out * dt) : 1;
+                }
+            }
+            for (let row = 0; row < height; row++) {
+                for (let column = 0; column < width; column++) {
+                    const index = row * width + column;
+                    if (column + 1 < width && east[index] !== 0) {
+                        east[index] *= east[index] > 0 ? afford[index] : afford[index + 1];
+                        if (east[index] * dt > DRY_PX / 4 || east[index] * dt < -DRY_PX / 4) moved = true;
+                    }
+                    if (row + 1 < height && south[index] !== 0) {
+                        south[index] *= south[index] > 0 ? afford[index] : afford[index + width];
+                        if (south[index] * dt > DRY_PX / 4 || south[index] * dt < -DRY_PX / 4) moved = true;
+                    }
+                }
+            }
+            // The depths follow the flows.
+            for (let row = 0; row < height; row++) {
+                for (let column = 0; column < width; column++) {
+                    const index = row * width + column;
+                    let net = 0;
+                    let outside = 0;
+                    if (column + 1 < width) net -= east[index];
+                    else outside++;
+                    if (column > 0) net += east[index - 1];
+                    else outside++;
+                    if (row + 1 < height) net -= south[index];
+                    else outside++;
+                    if (row > 0) net += south[index - width];
+                    else outside++;
+                    let held = depth[index] + net * dt;
+                    if (held < 0) held = 0;
+                    if (held > 0) {
+                        // Water at the edge of the grid falls away.
+                        if (outside > 0 && held > DRY_PX) {
+                            const gone = Math.min(held, held * edgeShare * outside);
+                            held -= gone;
+                            tally.lostPx += gone;
+                            if (gone > DRY_PX / 4) moved = true;
+                        }
+                        // What stands over the highest level is lost, as when the water creeps.
+                        const over = ground[index] + held - (this.spill[index] + this.highest);
+                        if (over > 0) {
+                            const gone = Math.min(over, held);
+                            held -= gone;
+                            tally.lostPx += gone;
+                            moved = true;
+                        }
+                    }
+                    depth[index] = held;
                 }
             }
         }

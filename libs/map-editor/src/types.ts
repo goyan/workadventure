@@ -999,6 +999,11 @@ export const WaterSettings = z.object({
      * the floor (sinks) take it faster. 0 keeps the water inside.
      */
     indoorDrain: z.number().min(0).max(MAX_WATER_INDOOR_DRAIN).default(DEFAULT_WATER_SETTINGS.indoorDrain),
+    /**
+     * Whether the water has inertia (on trial): it keeps its flow from a step to the next, so waves run and a lake
+     * levels as fast as its depth allows. Absent or false: the water creeps from cell to cell.
+     */
+    inertia: z.boolean().optional(),
 });
 export type WaterSettings = z.infer<typeof WaterSettings>;
 

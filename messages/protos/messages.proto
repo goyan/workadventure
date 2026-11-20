@@ -455,6 +455,8 @@ message UpdateWaterSettingMessage {
   optional double maxSurface = 6;
   // Water the floors of the rooms drain, in mm an hour. Absent from older clients: kept.
   optional double indoorDrain = 7;
+  // Whether the water has inertia (flows kept from a step to the next). Absent from older clients: kept.
+  optional bool inertia = 8;
 }
 
 // Map-wide weather, validated against WeatherType before it is stored.

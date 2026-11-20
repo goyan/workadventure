@@ -3423,6 +3423,29 @@ avec 8 px apportés par cellule du cratère). Pas de son. Rien n'a été vu à l
 cette section : widget, viseur, chute, éclair et gerbe ne sont validés que par les tests ; l'effet sur l'eau en jeu
 n'est pas vu.
 
+
+## Eau à inertie (à l'essai)
+
+Réglage de carte `settings.water.inertia` (interrupteur « Eau à inertie (à l'essai) » du panneau Relief,
+`UpdateWaterSettingMessage.inertia`, champ 8, facultatif ; absent ou faux : rien ne change). Sur une carte qui
+l'active, l'eau ne se contente plus d'avancer de proche en proche (un cinquième de l'écart de niveau par pas,
+`WaterGrid.flow`) : chaque passage entre deux cellules garde son **débit** d'un pas à l'autre
+(`WaterGrid.flowWithInertia`, `flowEast` et `flowSouth`). Le débit accélère avec l'écart des surfaces et la hauteur
+d'eau qui passe (gravité à l'échelle de la carte : une onde court à 4,5 cellules par seconde sous 18 px d'eau, 17
+sous 256 px), ralentit par frottement (20 % par seconde, davantage dans une eau mince), et une cellule ne donne
+jamais plus que ce qu'elle a. L'eau a donc de l'élan : des vagues courent et rebondissent, un lac dérangé se remet
+à niveau en une minute environ.
+
+Une eau profonde est déplacée en plusieurs mouvements par pas (jusqu'à 8), pour que ses ondes ne dépassent pas un
+tiers de cellule par mouvement : au-delà le calcul s'emballe. Murs, bord de la grille et hauteur maximale de l'eau
+sont ceux de l'eau d'avant. Sources, puits, pluie, drains, comète et les échanges lointains des cartes accélérées
+ne changent pas : ils posent ou retirent de l'eau, l'inertie la fait ensuite courir. Les débits ne sont ni envoyés
+aux navigateurs ni sauvegardés : le courant senti par les avatars reste déduit de la pente, et l'eau repart
+immobile après un redémarrage du serveur.
+
+Coût mesuré (grille de 600 × 600, conteneur Linux sur Mac) : 11 ms par pas sous 20 px d'eau, 16 ms sous 80 px,
+27 ms sous 240 px, contre 4 à 5 ms pour l'eau d'avant ; 4 ms contre 2 sur une grille presque sèche.
+
 ## Ponts de l'outil Carte
 
 Un pont est un **tablier posé case par case** par un éditeur de la carte. Tout ce qui marche le traverse à sec :

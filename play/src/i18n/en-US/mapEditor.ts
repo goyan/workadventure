@@ -737,7 +737,10 @@ const mapEditor: BaseTranslation = {
         },
         current: "Strength of the current (0: avatars are not carried)",
         maxSurface: "Highest water over the ground",
+        inertia: "Water with inertia (on trial)",
         real: {
+            inertia:
+                "The water keeps its momentum from one moment to the next: waves run, a stirred lake levels in about a minute instead of spreading slowly. Off: the water creeps from cell to cell, as before.",
             maxDepth: "In reality: a tile is about 1.10 m. Pond: 1 tile; large pond: 2 to 3; lake: 4 and more.",
             runoff: "In reality: the ground feeding a pond is 5 to 20 times its surface; 0 for a built basin.",
             evaporation: "In reality: 0.05 mm/h in winter, 0.1 to 0.3 mm/h in summer (3 to 6 mm a day).",
