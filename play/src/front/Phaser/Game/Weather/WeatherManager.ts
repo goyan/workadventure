@@ -40,6 +40,7 @@ import {
     forcedRainLevel,
     parseRainLevel,
     rainDrops,
+    rainFineness,
     rainIntensity,
     rainLean,
     rainSplashes,
@@ -615,14 +616,26 @@ export class WeatherManager {
         local: RainLocal | undefined,
     ): void {
         const amount = intensity * this.rainSettings.amount;
+        // Seen from very close the rain is worked out on a finer grid than the map, then brought back to it: the
+        // drops keep on screen the size and the number they have at a usual zoom.
+        const fine = rainFineness(this.screenScale());
+        const finer =
+            fine === 1
+                ? view
+                : { x: view.x * fine, y: view.y * fine, width: view.width * fine, height: view.height * fine };
+        const localFine: RainLocal | undefined = local && fine !== 1 ? (x, y) => local(x / fine, y / fine) : local;
         // A drop shows where its whole streak is outdoors (head, middle and tail): no trail over the edge of a roof.
-        const drops = rainDrops(epoch, view, amount, lean, local).filter(
-            (drop) =>
-                !isOutdoor ||
-                [0, 0.5, 1].every((share) =>
-                    isOutdoor(drop.x - lean * drop.length * share, drop.y - drop.length * share),
-                ),
-        );
+        const drops = rainDrops(epoch, finer, amount, lean, localFine)
+            .map((drop) =>
+                fine === 1 ? drop : { ...drop, x: drop.x / fine, y: drop.y / fine, length: drop.length / fine },
+            )
+            .filter(
+                (drop) =>
+                    !isOutdoor ||
+                    [0, 0.5, 1].every((share) =>
+                        isOutdoor(drop.x - lean * drop.length * share, drop.y - drop.length * share),
+                    ),
+            );
         for (let layer = 0; layer < 3; layer++) {
             const plane = drops.filter((drop) => drop.layer === layer);
             if (plane.length === 0) continue;
@@ -632,7 +645,7 @@ export class WeatherManager {
                 [0.5, 1],
             ] as const) {
                 // The near drops are thicker: they read as closer.
-                this.graphics.lineStyle(layer === 2 ? 1.5 : 1, RAIN_COLOR, plane[0].alpha * fade);
+                this.graphics.lineStyle((layer === 2 ? 1.5 : 1) / fine, RAIN_COLOR, plane[0].alpha * fade);
                 this.graphics.beginPath();
                 for (const drop of plane) {
                     const height = drop.length * share;
@@ -646,21 +659,26 @@ export class WeatherManager {
         const splashing = intensity * this.rainSettings.splashes;
         const lakes = this.scene.getTerrainWater?.();
         const time = this.scene.time.now;
-        for (const splash of keepOutdoorParticles(rainSplashes(epoch, view, splashing, local), isOutdoor)) {
+        // The splashes as the drops: on the finer grid, brought back to the map, each this many times smaller.
+        const dot = 1 / fine;
+        const splashes = rainSplashes(epoch, finer, splashing, localFine).map((splash) =>
+            fine === 1 ? splash : { ...splash, x: splash.x / fine, y: splash.y / fine },
+        );
+        for (const splash of keepOutdoorParticles(splashes, isOutdoor)) {
             if (lakes && lakes.depthAt(splash.x, splash.y, time) > 0) {
                 // On the water of the relief a drop leaves a ring that widens and fades.
-                this.graphics.lineStyle(1, RAIN_COLOR, SPLASH_ALPHAS[splash.stage]);
-                this.graphics.strokeCircle(splash.x, splash.y, 1.5 + splash.stage * 1.5);
+                this.graphics.lineStyle(dot, RAIN_COLOR, SPLASH_ALPHAS[splash.stage]);
+                this.graphics.strokeCircle(splash.x, splash.y, (1.5 + splash.stage * 1.5) * dot);
                 continue;
             }
             this.graphics.fillStyle(RAIN_COLOR, SPLASH_ALPHAS[splash.stage]);
             if (splash.stage === 0) {
-                this.graphics.fillRect(splash.x, splash.y, 1, 1);
+                this.graphics.fillRect(splash.x, splash.y, dot, dot);
             } else {
-                const spread = splash.stage + 1;
-                this.graphics.fillRect(splash.x - spread, splash.y - 1, 1, 1);
-                this.graphics.fillRect(splash.x + spread, splash.y - 1, 1, 1);
-                if (splash.stage === 1) this.graphics.fillRect(splash.x, splash.y, 1, 1);
+                const spread = (splash.stage + 1) * dot;
+                this.graphics.fillRect(splash.x - spread, splash.y - dot, dot, dot);
+                this.graphics.fillRect(splash.x + spread, splash.y - dot, dot, dot);
+                if (splash.stage === 1) this.graphics.fillRect(splash.x, splash.y, dot, dot);
             }
         }
     }
