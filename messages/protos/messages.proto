@@ -831,6 +831,8 @@ enum CatastropheKind {
   CATASTROPHE_FIRE = 2;
   // A drain: the water is taken hard from a square under the pointer of a player, for as long as they keep telling.
   CATASTROPHE_DRAIN = 3;
+  // A burning meteor: it sets its crater on fire, throws embers around and boils away the water it falls into.
+  CATASTROPHE_FIREBALL = 4;
 }
 
 // Browser to server: a player sets the conditions the fire of the room goes by (heat, humidity of the air, wind) by

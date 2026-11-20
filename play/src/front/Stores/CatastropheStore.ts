@@ -2,12 +2,13 @@ import { DOWNPOUR_DEFAULT_TILES, FIRE_DEFAULT_TILES, METEOR_DEFAULT_TILES } from
 import { derived, get, writable } from "svelte/store";
 import { mapEditorModeStore } from "./MapEditorStore";
 
-export type CatastropheChoice = "meteor" | "downpour" | "fire" | "drain";
+/** "meteor" is the comet, which brings water; "fireball" is the burning meteor, which sets its crater on fire. */
+export type CatastropheChoice = "meteor" | "fireball" | "downpour" | "fire" | "drain";
 
 /** Whether the catastrophe panel is shown. Session only: closed at each page load. */
 export const catastrophePanelStore = writable<boolean>(false);
 
-/** How wide the crater of the next meteor is, in tiles: chosen in the panel, kept for the session. */
+/** How wide the crater of the next comet or fireball is, in tiles: chosen in the panel, kept for the session. */
 export const meteorRadiusTilesStore = writable<number>(METEOR_DEFAULT_TILES);
 
 /** How wide the downpour is, in tiles, and whether it falls on the whole map instead: kept for the session. */

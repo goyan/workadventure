@@ -30,6 +30,7 @@ export * from "./Terrain/WaterInputs";
 export * from "./Terrain/WaterWalls";
 export * from "./Terrain/LandWalls";
 export * from "./Catastrophe/Meteor";
+export * from "./Catastrophe/Fireball";
 export * from "./Catastrophe/FirePatch";
 export * from "./Catastrophe/ImpactWave";
 export * from "./Catastrophe/Downpour";

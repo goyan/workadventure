@@ -301,9 +301,11 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         ) {
             return;
         }
-        // The server decides what the meteor does there.
+        // The server decides what the comet or the fireball does there.
         this.gameScene.connection?.emitLaunchCatastrophe(
-            CatastropheKind.CATASTROPHE_METEOR,
+            get(armedCatastropheStore) === "fireball"
+                ? CatastropheKind.CATASTROPHE_FIREBALL
+                : CatastropheKind.CATASTROPHE_METEOR,
             worldPoint.x,
             worldPoint.y,
             get(meteorRadiusTilesStore),

@@ -24,6 +24,7 @@ import {
     tileSeed,
 } from "./FlameShape";
 import { FLAMES_TEXTURE, flameStyle } from "./FlameStyle";
+import { SmoulderingGround, smoulderPoints } from "./Smoulder";
 
 /** Flames are drawn on about this many tiles at most: beyond, on a share of them all over the view, bigger. */
 const MAX_FLAMES = 600;
@@ -48,6 +49,13 @@ const GLOW_ALPHA = 0.16;
 export const GLOW_TEXTURE = "fire-glow";
 export const SMOKE_TEXTURE = "fire-smoke";
 export const TREE_SMOKE_TEXTURE = "fire-smoke-tree";
+export const STEAM_TEXTURE = "fire-steam";
+/** The ground a fire left smokes and glows on this many tiles of the view at most. */
+const MAX_SMOULDERING = 240;
+/** A soil this wet (0 to 1) put the fire out: steam. */
+const STEAM_MOISTURE = 0.6;
+/** An ember on the ground: this wide (map pixels). */
+const GROUND_EMBER_PX = 8;
 const SOFT_DISC_PX = 64;
 
 /**
@@ -63,10 +71,12 @@ export class FireView {
     private readonly puffs: Phaser.GameObjects.Image[] = [];
     private lastStep = -1;
     private drawn = false;
+    /** The ground the fire has just left, as this browser saw it. */
+    private readonly smouldering = new SmoulderingGround();
 
     constructor(
         private readonly scene: Phaser.Scene & { markDirty(): void },
-        private readonly meadow: Pick<MeadowState, "fireAt" | "isBurning">,
+        private readonly meadow: Pick<MeadowState, "fireAt" | "isBurning"> & Partial<Pick<MeadowState, "moistureAt">>,
         private readonly wind: () => { windFrom?: number; windSpeed?: number } | undefined,
         private readonly reducedMotion: () => boolean,
     ) {
@@ -74,7 +84,12 @@ export class FireView {
     }
 
     public update(now: number): void {
-        if (!this.meadow.isBurning() || !isEffectShown("fire")) {
+        if (!isEffectShown("fire")) {
+            this.smouldering.clear();
+            if (this.drawn) this.clear();
+            return;
+        }
+        if (!this.meadow.isBurning() && !this.smouldering.watching()) {
             if (this.drawn) this.clear();
             return;
         }
@@ -95,7 +110,13 @@ export class FireView {
                 if (fire > 0) burning.push({ x, y, fire });
             }
         }
-        if (burning.length === 0) {
+        // A tile whose fire went out since the last look smokes and glows a while, or steams if water put it out.
+        const moistureAt = this.meadow.moistureAt?.bind(this.meadow);
+        this.smouldering.see(burning, { fromX, toX, fromY, toY }, now, (x, y) =>
+            moistureAt ? moistureAt((x + 0.5) * TILE_PX, (y + 0.5) * TILE_PX) >= STEAM_MOISTURE : false,
+        );
+        const left = this.smouldering.tiles(now).slice(0, MAX_SMOULDERING);
+        if (burning.length === 0 && left.length === 0) {
             if (this.drawn) this.clear();
             return;
         }
@@ -138,14 +159,49 @@ export class FireView {
             const share = smokeShare(around);
             for (const puff of smokeOf(input)) {
                 this.puffAt(puffs++)
+                    .setTexture(SMOKE_TEXTURE)
                     .setPosition(footX + puff.x * smokeScale, footY + puff.y * smokeScale)
                     .setDisplaySize(puff.radius * 2 * smokeScale, puff.radius * 2 * smokeScale)
                     .setAlpha(puff.alpha * share)
                     .setVisible(true);
             }
         });
+        let glows = shown.length;
+        const farScale = smokeFarScale(screenScale(this.scene));
+        for (const tile of left) {
+            const footX = (tile.x + 0.5) * TILE_PX;
+            const footY = (tile.y + FOOT_IN_TILE) * TILE_PX;
+            const input = {
+                // It thins out as the ground cools.
+                intensity: 0.3 + 0.5 * tile.left,
+                windFrom: wind?.windFrom,
+                windSpeed: wind?.windSpeed,
+                seconds,
+                seed: tileSeed(tile.x, tile.y),
+                reducedMotion,
+            };
+            const share = smokeShare(this.smoulderingAround(left, tile)) * tile.left;
+            for (const puff of smokeOf(input, tile.steam ? "steam" : "grass")) {
+                // From the ground itself: there is no flame to keep clear any more.
+                this.puffAt(puffs++)
+                    .setTexture(tile.steam ? STEAM_TEXTURE : SMOKE_TEXTURE)
+                    .setPosition(footX + puff.x * farScale, footY + (puff.y + 40) * farScale)
+                    .setDisplaySize(puff.radius * 2 * farScale, puff.radius * 2 * farScale)
+                    .setAlpha(Math.min(1, puff.alpha * share * (tile.steam ? 1.1 : 1.5)))
+                    .setVisible(true);
+            }
+            if (tile.steam) continue;
+            for (const ember of smoulderPoints(tile.x, tile.y, tile.left)) {
+                const pulse = reducedMotion ? 0.8 : 0.65 + 0.35 * Math.sin(seconds * 2.4 + ember.x * 0.37);
+                this.glowAt(glows++)
+                    .setPosition(ember.x, ember.y)
+                    .setDisplaySize(GROUND_EMBER_PX, GROUND_EMBER_PX)
+                    .setAlpha(ember.alpha * pulse)
+                    .setVisible(true);
+            }
+        }
         for (let index = shown.length; index < this.flames.length; index++) this.flames[index].setVisible(false);
-        for (let index = shown.length; index < this.glows.length; index++) this.glows[index].setVisible(false);
+        for (let index = glows; index < this.glows.length; index++) this.glows[index].setVisible(false);
         for (let index = puffs; index < this.puffs.length; index++) this.puffs[index].setVisible(false);
         this.drawn = true;
         this.scene.markDirty();
@@ -167,6 +223,20 @@ export class FireView {
             }
         }
         return burning;
+    }
+
+    /** The tiles that smoulder around one of them (two tiles each way), itself counted: they share their smoke. */
+    private smoulderingAround(tiles: readonly { x: number; y: number }[], tile: { x: number; y: number }): number {
+        let around = 0;
+        for (const other of tiles) {
+            if (
+                Math.abs(other.x - tile.x) <= GLOW_NEIGHBOUR_REACH &&
+                Math.abs(other.y - tile.y) <= GLOW_NEIGHBOUR_REACH
+            ) {
+                around++;
+            }
+        }
+        return around;
     }
 
     private flameAt(index: number): Phaser.GameObjects.Image {
@@ -238,6 +308,7 @@ export class FireView {
         this.drawSoftDisc(GLOW_TEXTURE, `rgba(255, 122, 26, ${GLOW_ALPHA * 2})`, "rgba(255, 122, 26, 0)");
         this.drawSoftDisc(SMOKE_TEXTURE, "rgba(168, 166, 162, 1)", "rgba(168, 166, 162, 0)");
         this.drawSoftDisc(TREE_SMOKE_TEXTURE, "rgba(22, 20, 19, 1)", "rgba(22, 20, 19, 0)");
+        this.drawSoftDisc(STEAM_TEXTURE, "rgba(246, 248, 250, 1)", "rgba(246, 248, 250, 0)");
     }
 
     private drawSoftDisc(key: string, middle: string, edge: string): void {

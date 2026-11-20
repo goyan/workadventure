@@ -1,4 +1,9 @@
-import { METEOR_WAVE_CELLS_PER_STEP, TERRAIN_CELL, WATER_STEP_MS } from "@workadventure/map-editor";
+import {
+    FIREBALL_EMBER_REACH,
+    METEOR_WAVE_CELLS_PER_STEP,
+    TERRAIN_CELL,
+    WATER_STEP_MS,
+} from "@workadventure/map-editor";
 import type { MeteorShape } from "@workadventure/map-editor";
 
 export interface MeteorFrame {
@@ -86,4 +91,58 @@ export function wetStretches(wet: readonly boolean[]): { from: number; to: numbe
         }
     }
     return stretches.sort((one, other) => one.from - other.from);
+}
+
+const SPARKS_MS = 900;
+/** The golden angle: sparks turned by it from one to the next never line up. */
+const GOLDEN_TURN = 2.399963229728653;
+/**
+ * The sparks a fireball throws out of its crater, `sinceImpactMs` after it lands: where each is from the impact
+ * point (map pixels) and how bright. They fly out to FIREBALL_EMBER_REACH times the radius of the crater at most,
+ * each at its own pace, on a low arc, fading as they go. Always the same for the same time. None before the impact
+ * nor once they are out.
+ */
+export function fireballSparks(
+    sinceImpactMs: number,
+    craterPx: number,
+    count: number,
+): { x: number; y: number; alpha: number }[] {
+    if (sinceImpactMs < 0 || sinceImpactMs >= SPARKS_MS) return [];
+    const time = sinceImpactMs / SPARKS_MS;
+    const sparks: { x: number; y: number; alpha: number }[] = [];
+    for (let index = 0; index < count; index++) {
+        const turn = index * GOLDEN_TURN;
+        // From half the reach to all of it, by turns.
+        const pace = 0.5 + (0.5 * ((index * 7) % 10)) / 9;
+        const far = craterPx * FIREBALL_EMBER_REACH * pace * time;
+        // The arc lifts a spark above the straight line, never past the reach: it only shortens the way out.
+        const lift = Math.sin(time * Math.PI) * 0.15;
+        sparks.push({
+            x: Math.cos(turn) * far,
+            y: Math.sin(turn) * far * (1 - lift),
+            alpha: 1 - time,
+        });
+    }
+    return sparks;
+}
+
+const STEAM_MS = 2000;
+const STEAM_PUFFS = 5;
+/**
+ * The steam above a fireball that fell into water, `sinceImpactMs` after it: puffs that rise (`rise`, map pixels
+ * above the impact point), widen and fade. None before the impact nor once it is gone.
+ */
+export function steamPuffs(sinceImpactMs: number, craterPx: number): { radius: number; rise: number; alpha: number }[] {
+    if (sinceImpactMs < 0 || sinceImpactMs >= STEAM_MS) return [];
+    const time = sinceImpactMs / STEAM_MS;
+    const puffs: { radius: number; rise: number; alpha: number }[] = [];
+    for (let index = 0; index < STEAM_PUFFS; index++) {
+        const share = (index + 1) / STEAM_PUFFS;
+        puffs.push({
+            radius: craterPx * (0.3 + 0.5 * time) * (1.2 - 0.6 * share),
+            rise: craterPx * 1.5 * time * share,
+            alpha: 0.5 * (1 - time),
+        });
+    }
+    return puffs;
 }

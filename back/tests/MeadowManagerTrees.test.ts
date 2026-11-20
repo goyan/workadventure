@@ -85,6 +85,16 @@ describe("MeadowManager and the trees", () => {
         expect(manager.treeFires()).toEqual([expect.objectContaining({ x, y })]);
     });
 
+    it("lights the trees in the crater of a fireball, not those far from it", () => {
+        const { manager, told, steps } = createHarness();
+        manager.start();
+        const { x, y } = foot(10, 10);
+        expect(manager.scorch(x, y, 2, 3)).toBeGreaterThan(0);
+        steps(1);
+        expect(told[0].trees.map((tree) => tree.id)).toEqual(["oak"]);
+        expect(told[0].trees[0].fire).toBeGreaterThan(0);
+    });
+
     it("tells the embers that leave, in whole map pixels and milliseconds", () => {
         const { manager, told, steps } = createHarness({ random: () => 0, wind: { windFrom: 270, windSpeed: 30 } });
         manager.start();

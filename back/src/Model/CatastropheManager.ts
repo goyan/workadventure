@@ -47,6 +47,8 @@ export class CatastropheManager {
     private readonly patches = new Map<number, number[]>();
     /** What a patch of fire lights: the meadow of the room, given once it is made. */
     private ignite: (x: number, y: number, radiusTiles: number) => void = () => undefined;
+    /** What a fireball does where it lands: the water and the meadow of the room, given once they are made. */
+    private burn: (x: number, y: number, radiusTiles: number, id: number) => void = () => undefined;
     private readonly inFlight = new Set<ReturnType<typeof setTimeout>>();
 
     constructor(
@@ -163,6 +165,11 @@ export class CatastropheManager {
         for (const [userId, drain] of this.draining) if (drain.until <= now) this.draining.delete(userId);
     }
 
+    /** What a fireball burns is made after the catastrophes of a room: it is given here. */
+    public burnWith(burn: (x: number, y: number, radiusTiles: number, id: number) => void): void {
+        this.burn = burn;
+    }
+
     /** What a patch of fire lights is made after the catastrophes of a room: it is given here. */
     public igniteWith(ignite: (x: number, y: number, radiusTiles: number) => void): void {
         this.ignite = ignite;
@@ -209,11 +216,13 @@ export class CatastropheManager {
     }
 
     /**
-     * A player launches a catastrophe at a point of the map (pixels): a meteor whose crater is `radiusTiles` wide,
-     * kept within what a meteor may be. False when it is refused.
+     * A player launches a catastrophe at a point of the map (pixels): a meteor or a fireball whose crater is
+     * `radiusTiles` wide, kept within what a meteor may be. After the fall, the water takes the impact of a meteor;
+     * a fireball burns its crater instead. False when it is refused.
      */
     public launch(kind: CatastropheKind, x: number, y: number, radiusTiles: number): boolean {
-        if (this.stopped || kind !== CatastropheKind.CATASTROPHE_METEOR) return false;
+        const burning = kind === CatastropheKind.CATASTROPHE_FIREBALL;
+        if (this.stopped || (kind !== CatastropheKind.CATASTROPHE_METEOR && !burning)) return false;
         const size = this.mapSize();
         if (!size || !Number.isFinite(x) || !Number.isFinite(y)) return false;
         if (x < 0 || y < 0 || x >= size.width || y >= size.height) return false;
@@ -221,11 +230,12 @@ export class CatastropheManager {
         // waves together.
         if (this.inFlight.size >= METEORS_PER_ROOM) return false;
         const tiles = meteorShape(radiusTiles).radiusTiles;
+        const id = this.nextId++;
         this.room.sendSubMessageToRoom({
             message: {
                 $case: "catastropheMessage",
                 catastropheMessage: {
-                    id: this.nextId++,
+                    id,
                     kind,
                     x,
                     y,
@@ -238,7 +248,8 @@ export class CatastropheManager {
         const timer = setTimeout(() => {
             this.inFlight.delete(timer);
             try {
-                this.strike(x, y, tiles);
+                if (burning) this.burn(x, y, tiles, id);
+                else this.strike(x, y, tiles);
             } catch (error) {
                 console.error("A meteor of the map could not strike", error);
             }

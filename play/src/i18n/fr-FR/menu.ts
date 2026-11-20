@@ -283,7 +283,7 @@ const menu: DeepPartial<Translation["menu"]> = {
         effects: {
             title: "Effets",
             hint: "Pour toi seul : un effet coupé n'est plus dessiné sur ce poste ; ce qu'il représente se produit quand même.",
-            meteor: "Météores",
+            meteor: "Comètes et météores",
             downpour: "Averses",
             fire: "Flammes et fumée",
             detailedFlames: "Flammes détaillées",

@@ -303,3 +303,66 @@ describe("the ash", () => {
         expect(next.fireAt(3, 3)).toBeGreaterThan(0);
     });
 });
+
+describe("the crater of a fireball", () => {
+    it("lights green and sodden grass, and leaves its ground dry", () => {
+        const meadow = prairie(0);
+        for (let y = 0; y < size.height; y++) for (let x = 0; x < size.width; x++) meadow.set(x, y, 1, 1, 0);
+        expect(meadow.ignite(10, 10, 2)).toBe(0);
+        expect(meadow.scorch(10, 10, 2)).toBe(13);
+        expect(meadow.fireAt(10, 10)).toBeGreaterThan(0);
+        expect(meadow.fireAt(12, 10)).toBeGreaterThan(0);
+        expect(meadow.moistureAt(10, 10)).toBe(0);
+        expect(meadow.drynessAt(10, 10)).toBe(1);
+    });
+
+    it("dries a bare fertile tile and lights its litter", () => {
+        const meadow = prairie(0);
+        meadow.set(6, 6, 0.6, 0, 0);
+        expect(meadow.scorch(6, 6, 0)).toBe(1);
+        expect(meadow.fireAt(6, 6)).toBeGreaterThan(0);
+    });
+
+    it("leaves sand and paved tiles alone", () => {
+        const terrain = withSoils(undefined, new Map(tile(4, 4, soilCode("sand"))));
+        const meadow = new Meadow(size, terrain, undefined, new Set(["8,8"]));
+        meadow.set(4, 4, 0.5, 0, 0.2);
+        meadow.set(8, 8, 0.5, 0, 0.2);
+        expect(meadow.scorch(4, 4, 0)).toBe(0);
+        expect(meadow.scorch(8, 8, 0)).toBe(0);
+        expect(meadow.fireAt(4, 4)).toBe(0);
+        expect(meadow.fireAt(8, 8)).toBe(0);
+        expect(meadow.drynessAt(4, 4)).toBeCloseTo(0.2);
+        expect(meadow.drynessAt(8, 8)).toBeCloseTo(0.2);
+    });
+
+    it("lights nothing under water", () => {
+        const meadow = prairie(1);
+        meadow.step({ ...night, waterAt: (tileX, tileY) => (tileX === 2 && tileY === 2 ? 4 : 0) });
+        const moisture = meadow.moistureAt(2, 2);
+        expect(meadow.scorch(2, 2, 0)).toBe(0);
+        expect(meadow.fireAt(2, 2)).toBe(0);
+        expect(meadow.moistureAt(2, 2)).toBe(moisture);
+    });
+
+    it("does not light again a tile on fire nor one still in ash", () => {
+        const meadow = prairie(1);
+        meadow.ignite(10, 10, 0);
+        run(meadow, 40);
+        expect(meadow.ashAt(10, 10)).toBe(1);
+        expect(meadow.scorch(10, 10, 0)).toBe(0);
+        expect(meadow.fireAt(10, 10)).toBe(0);
+        meadow.ignite(3, 3, 0);
+        expect(meadow.scorch(3, 3, 0)).toBe(0);
+        expect(meadow.burning()).toBe(1);
+    });
+
+    it("touches nothing outside its disc, and nothing for a size that is not a number", () => {
+        const meadow = prairie(0);
+        expect(meadow.scorch(10, 10, 1)).toBe(5);
+        expect(meadow.fireAt(12, 10)).toBe(0);
+        expect(meadow.drynessAt(12, 10)).toBe(0);
+        expect(meadow.scorch(10, 10, Number.NaN)).toBe(0);
+        expect(meadow.scorch(-50, 400, 2)).toBe(0);
+    });
+});
