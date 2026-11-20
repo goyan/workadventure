@@ -14,6 +14,8 @@ function dugEverywhere(): TerrainData {
 function fixture(terrain: TerrainData = dugEverywhere()) {
     const worldView = { x: 300, y: 300, width: 600, height: 400 };
     const images: { visible: boolean }[] = [];
+    /** The last pixels put in each block, by texture key. */
+    const painted = new Map<string, Uint8ClampedArray>();
     const image = () => {
         const object = {
             visible: true,
@@ -37,7 +39,7 @@ function fixture(terrain: TerrainData = dugEverywhere()) {
         destroy: vi.fn(),
         getContext: () => ({
             createImageData: (width: number, height: number) => ({ data: new Uint8ClampedArray(width * height * 4) }),
-            putImageData: vi.fn(),
+            putImageData: (pixels: { data: Uint8ClampedArray }) => painted.set(key, pixels.data),
         }),
     });
     const scene = {
@@ -58,7 +60,7 @@ function fixture(terrain: TerrainData = dugEverywhere()) {
     const settle = () => {
         for (let frame = 0; frame < 100; frame++) tiles.update(frame);
     };
-    return { tiles, worldView, images, settle };
+    return { tiles, worldView, images, settle, painted };
 }
 
 describe("the blocks of the relief seen in 3/4", () => {
@@ -118,5 +120,24 @@ describe("the blocks of the relief seen in 3/4", () => {
         expect(tiles.groundPointAt({ x: 300, y: 300 + 32 }).y).toBeCloseTo(300, 0);
         tiles.setHidden(true);
         expect(tiles.groundPointAt({ x: 300, y: 332 })).toEqual({ x: 300, y: 332 });
+    });
+
+    it("leaves no seam between two blocks dug as deep as a map allows", () => {
+        // Dug 256 px deep (8 tiles) all over: drawn 128 px lower, every texel of a block is the floor.
+        const deepest = withHeights(
+            undefined,
+            new Map(
+                Array.from({ length: 96 * 96 }, (_, index): [string, number] => [
+                    cellKey(index % 96, Math.floor(index / 96)),
+                    -256,
+                ]),
+            ),
+        );
+        const { settle, painted } = fixture(deepest);
+        settle();
+        const block = painted.get("relief-block:2,2");
+        expect(block).toBeDefined();
+        const firstRow = Array.from({ length: 128 }, (_, column) => block?.[column * 4 + 3]);
+        expect(firstRow.every((alpha) => alpha === 255)).toBe(true);
     });
 });

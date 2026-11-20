@@ -8,6 +8,7 @@ import {
     dropAt,
     groundPointAt,
     paintColumn,
+    projectionShown,
 } from "../../../../../src/front/Phaser/Game/Terrain/ReliefProjection";
 
 /**
@@ -41,6 +42,24 @@ describe("the relief seen in 3/4", () => {
         // The north face runs on the screen from the rim (y 152) to where the floor starts (168 + 64 = 232).
         const ground = groundPointAt(hollow(), { x: 192, y: 190 });
         near(ground.y, 168);
+    });
+
+    it("finds the ground of a gentle slope under every point of the screen, not the bottom of the slope", () => {
+        // Going down 8 px a cell southwards from the cell row 10 to 30: drawn 4 px lower a cell, no face.
+        const changes = new Map<string, number>();
+        for (let y = 10; y <= 30; y++) for (let x = 0; x < 4; x++) changes.set(cellKey(x, y), -8 * (y - 9));
+        const ramp = withHeights(undefined, changes);
+        // Up to where the flat ground south of the ramp (from the row 31, drawn at its place) starts hiding it.
+        for (let groundY = 200; groundY < 380; groundY += 3) {
+            const screenY = groundY + dropAt(ramp, 32, groundY);
+            near(groundPointAt(ramp, { x: 32, y: screenY }).y, groundY);
+        }
+    });
+
+    it("takes every click on the face of a drop to its foot", () => {
+        for (let screenY = 156; screenY <= 228; screenY += 2) {
+            near(groundPointAt(hollow(), { x: 192, y: screenY }).y, 168);
+        }
     });
 
     it("gives the ground of the south rim where it hides the floor", () => {
@@ -107,5 +126,13 @@ describe("a column of the relief drawn in 3/4", () => {
         const out = paint(samples(26, 79, 32), 60, 30);
         expect(alpha(out, 0)).toBe(255);
         expect(alpha(out, 11)).toBe(255);
+    });
+});
+
+describe("when the relief is seen in 3/4", () => {
+    it("out of the editor and out of the basic mode only", () => {
+        expect(projectionShown({ editorOpen: false, basic: false })).toBe(true);
+        expect(projectionShown({ editorOpen: true, basic: false })).toBe(false);
+        expect(projectionShown({ editorOpen: false, basic: true })).toBe(false);
     });
 });

@@ -392,8 +392,9 @@ import { LifeSpeciesStats, withoutSpeciesCounts } from "./Life/LifeSpeciesStats"
 import { LifeStats } from "./Life/LifeStats";
 import { TerrainView } from "./Terrain/TerrainView";
 import { ReliefTiles } from "./Terrain/ReliefTiles";
+import { projectionShown } from "./Terrain/ReliefProjection";
 import { CharacterDrops } from "./Terrain/CharacterDrops";
-import { avatarDrop } from "./Terrain/AvatarDrop";
+import { avatarDrop, waterDepthAtPoint } from "./Terrain/AvatarDrop";
 import { WaterFlowView } from "./Terrain/WaterFlowView";
 import { gunzip } from "./Terrain/WaterStateCodec";
 import { MeadowState } from "./Terrain/MeadowState";
@@ -2381,9 +2382,9 @@ export class GameScene extends DirtyScene {
                 pointerAltitude(terrain, pointed && (this.reliefTiles?.groundPointAt(pointed) ?? pointed)),
             );
             // The relief is drawn in 3/4 out of the editor; flat in it, to dig and place where one aims.
-            const editorOpen = get(mapEditorModeStore);
-            this.reliefTiles?.setHidden(editorOpen);
-            this.terrainView?.setProjected(!editorOpen && this.reliefTiles !== undefined);
+            const projected = projectionShown({ editorOpen: get(mapEditorModeStore), basic: isBasicActive() });
+            this.reliefTiles?.setHidden(!projected);
+            this.terrainView?.setProjected(projected && this.reliefTiles !== undefined);
             this.terrainView?.update(time);
             this.reliefTiles?.update(time);
             // Every character drawn as low as the ground (or the water) under it, in a hollow.
@@ -2393,9 +2394,9 @@ export class GameScene extends DirtyScene {
                     avatarDrop(
                         relief,
                         character,
-                        this.terrainWater.depthAt(character.x, character.y, time),
+                        waterDepthAtPoint((x, y) => this.terrainWater.depthAt(x, y, time), character.x, character.y),
                         character.getFloorZ(),
-                        editorOpen,
+                        !projected,
                     );
                 if (this.CurrentPlayer) this.CurrentPlayer.setGroundDrop(dropOf(this.CurrentPlayer));
                 for (const remote of this.MapPlayersByKey.values()) remote.setGroundDrop(dropOf(remote));

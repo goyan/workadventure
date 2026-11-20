@@ -1,3 +1,4 @@
+import { TERRAIN_CELL } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 import { DROP_SCALE, heightAtPoint, MAX_DROP } from "./ReliefProjection";
 
@@ -19,4 +20,22 @@ export function avatarDrop(
     if (!terrain || editorOpen || floorZ >= ON_A_FLOOR) return 0;
     const surface = heightAtPoint(terrain, feet.x, feet.y) + Math.max(0, waterDepth);
     return Math.min(MAX_DROP, Math.max(0, -surface) * DROP_SCALE);
+}
+
+/**
+ * The depth of the water at a point, between the centres of the cells (as the lake is drawn, ReliefTiles), from the
+ * depth of the cell at a point: a swimmer goes down into a lake as smoothly as its shore is drawn.
+ */
+export function waterDepthAtPoint(depthAt: (x: number, y: number) => number, x: number, y: number): number {
+    const fx = x / TERRAIN_CELL - 0.5;
+    const fy = y / TERRAIN_CELL - 0.5;
+    const cx = Math.floor(fx);
+    const cy = Math.floor(fy);
+    const tx = fx - cx;
+    const ty = fy - cy;
+    const at = (column: number, row: number): number =>
+        depthAt((column + 0.5) * TERRAIN_CELL, (row + 0.5) * TERRAIN_CELL);
+    const top = at(cx, cy) * (1 - tx) + at(cx + 1, cy) * tx;
+    const bottom = at(cx, cy + 1) * (1 - tx) + at(cx + 1, cy + 1) * tx;
+    return top * (1 - ty) + bottom * ty;
 }

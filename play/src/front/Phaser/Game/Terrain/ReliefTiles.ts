@@ -84,14 +84,14 @@ export class ReliefTiles {
     private readonly gridWater = new Uint8Array(GRID_WIDTH * GRID_HEIGHT);
     private readonly cellColorCache: ({ ground: Rgb; wall: Rgb } | undefined)[] = new Array(GRID_WIDTH * GRID_HEIGHT);
     /** One sample a texel of a column, from MAX_DROP north of the block to its bottom: reused, nothing allocated. */
-    private readonly samples: ColumnSample[] = Array.from({ length: (MAX_DROP + BLOCK_PX) / RELIEF_TEXEL }, () => ({
+    private readonly samples: ColumnSample[] = Array.from({ length: (MAX_DROP + BLOCK_PX) / RELIEF_TEXEL + 1 }, () => ({
         groundY: 0,
         drop: 0,
         color: [0, 0, 0] as Rgb,
         wallTint: [0, 0, 0] as Rgb,
         plain: true,
     }));
-    private readonly levels = new Uint8Array(TERRAIN_CHUNK * (TERRAIN_CHUNK + MAX_DROP / TERRAIN_CELL));
+    private readonly levels = new Uint8Array(GRID_WIDTH * GRID_HEIGHT);
 
     constructor(
         private readonly scene: Phaser.Scene & { markDirty(): void },
@@ -184,20 +184,20 @@ export class ReliefTiles {
     /** The water a block is drawn with (its cells and the rows north of it), as a short text; empty when dry. */
     private waterSignature(key: string, now: number): string {
         const [blockX, blockY] = key.split(",").map(Number);
-        const northRows = MAX_DROP / TERRAIN_CELL;
-        const rows = TERRAIN_CHUNK + northRows;
+        // The same cells as the drawing reads (draw): its own, the rows north of it, one more all around.
         const any = this.inputs.water.levelsOver(
-            blockX * TERRAIN_CHUNK,
-            blockY * TERRAIN_CHUNK - northRows,
-            TERRAIN_CHUNK,
-            rows,
+            blockX * TERRAIN_CHUNK - 1,
+            blockY * TERRAIN_CHUNK - MAX_DROP / TERRAIN_CELL - 1,
+            GRID_WIDTH,
+            GRID_HEIGHT,
             now,
             this.levels,
         );
         if (!any) return "";
         let hash = 0;
-        for (let index = 0; index < TERRAIN_CHUNK * rows; index++)
+        for (let index = 0; index < GRID_WIDTH * GRID_HEIGHT; index++) {
             hash = (Math.imul(hash, 31) + this.levels[index]) | 0;
+        }
         return hash.toString(36);
     }
 
@@ -265,7 +265,8 @@ export class ReliefTiles {
             const x = left + column * RELIEF_TEXEL + RELIEF_TEXEL / 2;
             const cellX = Math.floor(x / TERRAIN_CELL);
             let count = 0;
-            for (let y = top - MAX_DROP + RELIEF_TEXEL / 2; y < top + BLOCK_PX; y += RELIEF_TEXEL) {
+            // From a texel further north than the deepest drop: drawn 128 px lower, it still reaches the first row.
+            for (let y = top - MAX_DROP - RELIEF_TEXEL / 2; y < top + BLOCK_PX; y += RELIEF_TEXEL) {
                 const cellY = Math.floor(y / TERRAIN_CELL);
                 const cellIndex = (cellY - gridY) * width + (cellX - gridX);
                 let color = this.cellColorCache[cellIndex];

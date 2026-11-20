@@ -9,17 +9,19 @@ export const BLOCKS_AN_IMAGE = 2;
 export const KEPT_BLOCKS = 64;
 
 /**
- * The heights a block of the relief is drawn from (its cells and the NORTH_ROWS rows north of it), as a short text:
+ * The heights a block of the relief is drawn from (its cells, the NORTH_ROWS rows north of it, one more all around), as a short text:
  * the same relief gives the same text. Empty when none of them is dug.
  */
 export function reliefSignature(terrain: TerrainData | undefined, blockX: number, blockY: number): string {
     if (!terrain) return "";
     let hash = 0;
     let dug = false;
-    const firstX = blockX * TERRAIN_CHUNK;
-    const firstY = blockY * TERRAIN_CHUNK - NORTH_ROWS;
-    for (let y = firstY; y < (blockY + 1) * TERRAIN_CHUNK; y++) {
-        for (let x = firstX; x < firstX + TERRAIN_CHUNK; x++) {
+    // The cells the drawing of the block reads: its own and the NORTH_ROWS north of it, and one more all around
+    // (the heights are interpolated between the centres of the cells).
+    const firstX = blockX * TERRAIN_CHUNK - 1;
+    const firstY = blockY * TERRAIN_CHUNK - NORTH_ROWS - 1;
+    for (let y = firstY; y <= (blockY + 1) * TERRAIN_CHUNK; y++) {
+        for (let x = firstX; x <= firstX + TERRAIN_CHUNK + 1; x++) {
             const height = heightAt(terrain, x, y);
             if (height < 0) dug = true;
             hash = (Math.imul(hash, 31) + height + 1000) | 0;

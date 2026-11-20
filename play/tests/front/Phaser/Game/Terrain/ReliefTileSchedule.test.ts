@@ -26,6 +26,19 @@ describe("the blocks of the relief to draw", () => {
         expect(reliefSignature(far, 0, 1)).toBe(reliefSignature(before, 0, 1));
     });
 
+    it("reads the cells all around a block that its drawing reads, the edge of a hollow next to it included", () => {
+        // A hollow in the first column of the block east of the block 0,0: the slope of its edge is drawn in 0,0.
+        const east = withHeights(undefined, new Map([[cellKey(16, 5), -64]]));
+        expect(reliefSignature(east, 0, 0)).not.toBe("");
+        // Changed by someone else in the column just east, or in the 9th row north, or the row just south.
+        const base = withHeights(undefined, new Map([[cellKey(3, 3), -32]]));
+        for (const cell of [cellKey(16, 3), cellKey(-1, 3), cellKey(3, -9), cellKey(3, 16)]) {
+            expect(reliefSignature(withHeights(base, new Map([[cell, -16]])), 0, 0)).not.toBe(
+                reliefSignature(base, 0, 0),
+            );
+        }
+    });
+
     it("draws at most two blocks an image, the visible ones first", () => {
         const schedule = new ReliefTileSchedule();
         const visible = Array.from({ length: 10 }, (_, index) => `${index},0`);

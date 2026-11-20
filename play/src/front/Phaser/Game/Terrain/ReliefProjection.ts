@@ -39,16 +39,17 @@ export function groundPointAt(
 ): { x: number; y: number } {
     if (!terrain) return { ...screen };
     const drawnAt = (y: number): number => y + dropAt(terrain, screen.x, y);
+    // A face: the drawing jumps down by more than a texel for a pixel of ground (as paintColumn draws one).
+    const isFace = (y: number): boolean => drawnAt(y) - drawnAt(y - 1) > RELIEF_TEXEL;
     let found: number | undefined;
     let previous = drawnAt(screen.y - MAX_DROP - 1);
     for (let y = screen.y - MAX_DROP; y <= screen.y; y++) {
         const drawn = drawnAt(y);
-        if (Math.abs(drawn - screen.y) <= 0.5) {
-            found = y;
-        } else if (previous < screen.y && drawn > screen.y) {
-            // On the face of a drop: down to where the ground stops falling away.
+        // The pixel of ground y is drawn from just under the one before it down to its own place.
+        if (previous < screen.y && drawn >= screen.y - 0.5) {
             let foot = y;
-            while (foot < screen.y + MAX_DROP && drawnAt(foot + 1) - drawnAt(foot) > 1) foot++;
+            // On a face: down to where the ground stops falling away, its foot.
+            if (isFace(y)) while (foot < screen.y + MAX_DROP && isFace(foot + 1)) foot++;
             found = foot;
         }
         previous = drawn;
@@ -129,4 +130,12 @@ export function paintColumn(
         previousDrop = sample.drop;
         previousTint = sample.wallTint;
     }
+}
+
+/**
+ * Whether the relief is drawn in 3/4: not while the map editor is open (one digs and places where one aims, on a flat
+ * relief), nor in the basic mode (the relief and its water are not drawn at all there).
+ */
+export function projectionShown(where: { editorOpen: boolean; basic: boolean }): boolean {
+    return !where.editorOpen && !where.basic;
 }
