@@ -35,13 +35,30 @@
     import Companion from "../../Companion/Companion.svelte";
     import ExternalComponents from "../../ExternalModules/ExternalComponents.svelte";
     import CamSettingsIcon from "../../Icons/CamSettingsIcon.svelte";
-    import { IconBug, IconFileDownload, IconHelpCircle, IconLogout } from "../../Icons";
+    import { IconWalk, IconBug, IconFileDownload, IconHelpCircle, IconLogout } from "../../Icons";
     import ProfilIcon from "../../Icons/ProfilIcon.svelte";
     import SettingsIcon from "../../Icons/SettingsIcon.svelte";
     import Woka from "../../Woka/WokaFromUserId.svelte";
+    import VehicleIcon from "../../Woka/VehicleIcon.svelte";
+    import { localUserStore } from "../../../Connection/LocalUserStore";
+    import { Vehicle, VehicleMedium } from "../../../Phaser/Vehicle/Vehicle";
     import AdditionalMenuItems from "./AdditionalMenuItems.svelte";
     import ContextualMenuItems from "./ContextualMenuItems.svelte";
     import HeaderMenuItem from "./HeaderMenuItem.svelte";
+
+    import VehicleMenu from "./VehicleMenu.svelte";
+
+    let selectedVehicleIcon = $state(localUserStore.getVehicleForMedium(VehicleMedium.Land));
+
+    function updateVehicleIcon(): void {
+        const preferences = localUserStore.getVehiclePreferences();
+        selectedVehicleIcon =
+            preferences[VehicleMedium.Land] !== Vehicle.None
+                ? preferences[VehicleMedium.Land]
+                : (Object.values(preferences).find((vehicle) => vehicle !== Vehicle.None) ?? Vehicle.None);
+    }
+
+    let showVehicleMenu = $state(false);
 
     interface Props {
         showContextualMenuItems: boolean;
@@ -63,6 +80,7 @@
 
     // Warm the woka list while the menu is open, so that "My avatar" opens without waiting for the server.
     onMount(() => {
+        updateVehicleIcon();
         gameManager.loadWokaData().catch((err: unknown) => console.warn("Could not preload the woka list", err));
     });
 
@@ -158,7 +176,12 @@
     }
 </script>
 
-<div class="bg-contrast/80 backdrop-blur rounded-md p-1 w-56 text-white select-none" data-testid="profile-menu">
+<div
+    class="bg-contrast/80 backdrop-blur rounded-md p-1 {showVehicleMenu
+        ? 'w-80'
+        : 'w-56'} max-w-[calc(100vw-24px)] text-white select-none"
+    data-testid="profile-menu"
+>
     <div class="p-0 m-0 list-none overflow-y-auto max-h-[calc(100vh-96px)]">
         <ExternalComponents zone="menuTop" />
         <AvailabilityStatusList statusInformation={getStatusInformation(statusToShow)} />
@@ -192,6 +215,25 @@
         >
             <Companion userId={-1} placeholderSrc="../static/images/default-companion.png" width="26px" height="26px" />
         </ActionBarButton>
+
+        <ActionBarButton
+            label={$LL.woka.vehicle.myVehicle()}
+            dataTestId="profile-vehicle"
+            state={showVehicleMenu ? "active" : "normal"}
+            onclick={() => (showVehicleMenu = !showVehicleMenu)}
+        >
+            {#if selectedVehicleIcon !== Vehicle.None}
+                <VehicleIcon
+                    vehicle={selectedVehicleIcon}
+                    colors={localUserStore.getVehicleColors(selectedVehicleIcon)}
+                />
+            {:else}
+                <IconWalk font-size="22" />
+            {/if}
+        </ActionBarButton>
+        {#if showVehicleMenu}
+            <VehicleMenu onchange={updateVehicleIcon} />
+        {/if}
 
         <HeaderMenuItem label={$LL.menu.sub.settings()} />
         <ActionBarButton label={$LL.actionbar.editCamMic()} onclick={openEnableCameraScene}>

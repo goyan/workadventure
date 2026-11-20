@@ -11,8 +11,10 @@ import {
     readVehicle,
     readVehicleState,
     Vehicle,
+    VehicleMedium,
     VehicleMode,
     VEHICLE_VARIABLE,
+    VEHICLE_PREFERENCE_KEY,
     vehicleSpeedFactor,
 } from "@wa/front/Phaser/Vehicle/Vehicle";
 
@@ -58,8 +60,8 @@ function paddler(depth: number): { player: Paddler; publish: ReturnType<typeof v
 beforeEach(() => {
     localStorage.clear();
     followStateStore.set("off");
-    localUserStore.setVehicle(Vehicle.Canoe);
-    localUserStore.setVehicleColors({ color: "#3258dd" });
+    localStorage.setItem(VEHICLE_PREFERENCE_KEY, Vehicle.Canoe);
+    localUserStore.setVehicleColors(Vehicle.Canoe, { color: "#3258dd" });
 });
 afterEach(() => {
     followStateStore.set("off");
@@ -91,7 +93,7 @@ describe("the canoe", () => {
         expect(player.speed(false)).toBe(WOKA_SPEED);
         expect(player.speed(true)).toBe(WOKA_SPEED * 2);
         player.board();
-        expect(publish).toHaveBeenCalledTimes(1);
+        expect(publish.mock.calls.filter(([key]) => key === VEHICLE_VARIABLE)).toHaveLength(1);
     });
 
     it("is left on the shore: out of deep water the avatar walks", () => {
@@ -100,7 +102,7 @@ describe("the canoe", () => {
         water.depth = 6;
         player.board();
         expect(player.vehicleMode).toBe(VehicleMode.Off);
-        expect(publish).toHaveBeenCalledTimes(2);
+        expect(publish.mock.calls.filter(([key]) => key === VEHICLE_VARIABLE)).toHaveLength(2);
     });
 
     it("is never ridden on the ground, by the wheel of actions nor by a sprint", () => {
@@ -110,7 +112,7 @@ describe("the canoe", () => {
         player.equipVehicle(VehicleMode.Sprint);
         player.board();
         expect(player.vehicleMode).toBe(VehicleMode.Off);
-        expect(publish).not.toHaveBeenCalled();
+        expect(publish.mock.calls.every(([, state]) => state.mode === VehicleMode.Off)).toBe(true);
     });
 
     it("is not boarded in a pool, on a raised floor, while following someone, nor by an animal costume", () => {
@@ -133,11 +135,50 @@ describe("the canoe", () => {
         expect(duck.player.vehicleMode).toBe(VehicleMode.Off);
     });
 
+    it("restores the equipped land vehicle after crossing water and applies quick changes immediately", () => {
+        localUserStore.setVehicleForMedium(VehicleMedium.Land, Vehicle.ElectricUnicycle);
+        const { player, water } = paddler(0);
+        Object.assign(player, { isInWater: () => false });
+        player.equipVehicle(VehicleMode.Always);
+        water.depth = 20;
+        player.board();
+        expect(player.vehicle).toBe(Vehicle.Canoe);
+        expect(player.pathSpeed()).toBe(WOKA_SPEED);
+        water.depth = 0;
+        player.board();
+        expect(player.vehicle).toBe(Vehicle.ElectricUnicycle);
+        expect(player.vehicleMode).toBe(VehicleMode.Always);
+        expect(player.pathSpeed()).toBe(WOKA_SPEED * 5);
+        water.depth = 20;
+        player.board();
+        localUserStore.setVehicleForMedium(VehicleMedium.Water, Vehicle.None);
+        player.refreshVehicles();
+        expect(player.vehicle).toBe(Vehicle.None);
+        expect(player.vehicleMode).toBe(VehicleMode.Off);
+        water.depth = 0;
+        player.board();
+        expect(player.vehicle).toBe(Vehicle.ElectricUnicycle);
+        expect(player.vehicleMode).toBe(VehicleMode.Always);
+    });
+
+    it("choosing no land vehicle dismounts it until it is explicitly equipped again", () => {
+        localUserStore.setVehicleForMedium(VehicleMedium.Land, Vehicle.Skateboard);
+        const { player } = paddler(0);
+        Object.assign(player, { isInWater: () => false });
+        player.equipVehicle(VehicleMode.Always);
+        localUserStore.setVehicleForMedium(VehicleMedium.Land, Vehicle.None);
+        player.refreshVehicles();
+        localUserStore.setVehicleForMedium(VehicleMedium.Land, Vehicle.ElectricUnicycle);
+        player.refreshVehicles();
+        expect(player.vehicleMode).toBe(VehicleMode.Off);
+    });
+
     it("leaves the swimmers alone: with another vehicle chosen, deep water is swum", () => {
-        localUserStore.setVehicle(Vehicle.Skateboard);
+        localUserStore.setVehicleForMedium(VehicleMedium.Land, Vehicle.Skateboard);
+        localUserStore.setVehicleForMedium(VehicleMedium.Water, Vehicle.None);
         const { player, publish } = paddler(20);
         player.board();
         expect(player.vehicleMode).toBe(VehicleMode.Off);
-        expect(publish).not.toHaveBeenCalled();
+        expect(publish.mock.calls.every(([, state]) => state.mode === VehicleMode.Off)).toBe(true);
     });
 });

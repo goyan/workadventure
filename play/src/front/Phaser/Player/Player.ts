@@ -8,6 +8,9 @@ import {
     CANOE_SPRINT_FACTOR,
     isCanoeAfloat,
     Vehicle,
+    VehicleMedium,
+    vehicleMedia,
+    activeVehicleMedium,
     VehicleMode,
     VEHICLE_VARIABLE,
     vehicleSpeedFactor,
@@ -21,6 +24,8 @@ import { UserInputEvent } from "@wa/front/Phaser/UserInput/UserInputManager";
 import { Character } from "@wa/front/Phaser/Entity/Character";
 import type { PathFollowResult } from "@wa/front/Phaser/Entity/Character";
 import { PathTileType } from "@wa/front/Utils/PathfindingManager";
+import { getPrefabCollisionRectangles } from "@wa/front/Utils/PrefabCollisionRectangles";
+import { getSolidRectangles } from "@wa/front/Utils/EntityHitbox";
 import { isWaypointBlocked } from "@wa/front/Utils/PathValidation";
 import { userMovingStore, userSeatedStore } from "@wa/front/Stores/GameStore";
 import { followStateStore, followRoleStore, followUsersStore } from "@wa/front/Stores/FollowStore";
@@ -28,12 +33,12 @@ import { ENABLE_TILE_SNAP, WOKA_SPEED } from "@wa/front/Enum/EnvironmentVariable
 import { visibilityStore } from "@wa/front/Stores/VisibilityStore";
 import { passStatusToOnline } from "@wa/front/Rules/StatusRules/statusChangerFunctions";
 import { localUserStore } from "@wa/front/Connection/LocalUserStore";
+import { bindingKeys, shortcutsStore } from "@wa/front/Stores/ShortcutsStore";
 import { WalkDestinationMarker } from "@wa/front/Phaser/Components/WalkDestinationMarker";
 import { RunSmokeTrail } from "@wa/front/Phaser/Components/RunSmokeTrail";
 import { findDiveTarget, getWaterRectangles, intersectsWater } from "@wa/front/Phaser/Game/Water/WaterZones";
 import { InteractionPrompt } from "@wa/front/Phaser/Game/Water/InteractionPrompt";
 import { iceStep, type Vector } from "@wa/front/Phaser/Game/Ice/IcePhysics";
-import { getPrefabCollisionRectangles } from "@wa/front/Utils/PrefabCollisionRectangles";
 import LL from "@wa/i18n/i18n-svelte";
 import {
     AvatarAction,
@@ -48,8 +53,10 @@ import {
     SWIMWEAR_VARIABLE,
     SWIMWEAR_COLOR_VARIABLE,
 } from "@wa/front/Phaser/Entity/Swimwear";
-import { getSolidRectangles } from "@wa/front/Utils/EntityHitbox";
 import { NERF_KNOCKBACK_MS, NERF_KNOCKBACK_PX } from "../Game/Nerf/NerfBlink";
+import { AirplaneFlight } from "../Vehicle/AirplaneFlight";
+import { findLandingZone, type LandingPoint } from "../Vehicle/AirplaneLanding";
+import { FLOOR_Z_VARIABLE } from "../Game/Floors/FloorProtocol";
 import { groundPace } from "../Game/Terrain/GroundPace";
 import { isInActiveConversationStore } from "../../Stores/StreamableCollectionStore";
 import { isBasicActive } from "../../Stores/BasicModeStore";
@@ -58,6 +65,14 @@ import { computeTileSnapTarget, getFeetTile } from "./TileSnap";
 import type { Seat } from "./Seat";
 import { findSeatOfCharacter, findSeatUnderFeet, getSeats, isSeatTaken } from "./Seat";
 import { findActionableObject } from "./ActionableObjects";
+
+const LANDING_FOOTPRINT_SAMPLES = [-31, -16, 0, 16, 31];
+/** A landing aims this far ahead of the plane: it glides down forward instead of sinking straight down. */
+const LANDING_GLIDE_AHEAD = 192;
+/** Ground speed of the approach (px/s). */
+const LANDING_APPROACH_SPEED = 180;
+/** How long a hint of the airplane key stays (ms). */
+const AIRPLANE_PROMPT_MS = 15_000;
 
 /** The object the avatar can act on is searched again at least this often while it stands still. */
 const ACTION_SEARCH_KEPT_MS = 250;
@@ -89,10 +104,37 @@ export class Player extends Character {
     private seatEntityId: string | undefined;
     private ignoredSeatEntityId: string | undefined;
     private swimming = false;
+    private airVehicleActive = false;
+    private readonly flight = new AirplaneFlight();
+    private clearAirVehicleOnLanding = false;
+    /**
+     * The pilot asked to get out (V in flight): the landing ends on foot. Landing by itself, when the arrows are let
+     * go, the plane stays parked on the ground until V.
+     */
+    private exitOnLanding = false;
+    private landingRequested = false;
+    private airSteering = false;
+    private landingTarget: LandingPoint | undefined;
+    /** Where the glide towards `target` started: the altitude falls with the distance left, to 0 on the point. */
+    private landingApproach: { target: LandingPoint; distance: number; altitude: number } | undefined;
+    private landingClearance: ((point: LandingPoint) => boolean) | undefined;
+    private nextLandingCheck = 0;
+    private sharedFlightLevel: number | undefined;
+    private nextVehiclePublication = 0;
+    private lastVehicleStructure: string | undefined;
+    private lastLegacyVehicle: string | undefined;
+    private landVehicleMode = VehicleMode.Off;
+    private currentVehicleMedium = VehicleMedium.Land;
+    private publishedMediumStates = new Map<string, string>();
     private diveTarget: ReturnType<typeof findDiveTarget>;
     private readonly divePrompt: InteractionPrompt;
     private readonly sitPrompt: InteractionPrompt;
     private readonly actionPrompt: InteractionPrompt;
+    /** How to come down: land while flying, get off once the plane stands on the ground. */
+    private readonly landPrompt: InteractionPrompt;
+    private readonly leavePrompt: InteractionPrompt;
+    /** Which of them was last shown, and until when: each one shows once per take-off or landing, for a moment. */
+    private airplanePrompt: { prompt: InteractionPrompt; until: number } | undefined;
     private actionObject: ReturnType<typeof findActionableObject>;
     private ignoredActionObjectId: string | undefined;
 
@@ -113,6 +155,12 @@ export class Player extends Character {
         this.destinationMarker = new WalkDestinationMarker(Scene);
         this.runSmokeTrail = new RunSmokeTrail(Scene);
         this.divePrompt = new InteractionPrompt(Scene, "water-dive", () => get(LL).trigger.swim());
+        this.landPrompt = new InteractionPrompt(Scene, "airplane-land", () =>
+            get(LL).trigger.landAirplane({ key: airVehicleKey() }),
+        );
+        this.leavePrompt = new InteractionPrompt(Scene, "airplane-leave", () =>
+            get(LL).trigger.leaveAirplane({ key: airVehicleKey() }),
+        );
         this.sitPrompt = new InteractionPrompt(Scene, "seat-sit", () => get(LL).trigger.sit());
         this.actionPrompt = new InteractionPrompt(Scene, "avatar-object-action", () =>
             get(LL).trigger.avatarAction({
@@ -220,7 +268,22 @@ export class Player extends Character {
         if ((state === "active" || state === "ending") && role === "follower") {
             [x, y] = this.computeFollowMovement();
         }
-        if (this.pathToFollow) {
+        if (this.pathToFollow && this.airVehicleActive) {
+            const target = this.pathToFollow[this.pathToFollow.length - 1];
+            const feet = this.getFeet();
+            const dx = (target?.x ?? feet.x) - feet.x;
+            const dy = (target?.y ?? feet.y) - feet.y;
+            const distance = Math.hypot(dx, dy);
+            this.getBody().setDirectControl(false);
+            if (distance < 6) this.finishFollowingPath();
+            const approach = Math.min(1, distance / 96);
+            this.inputStep(
+                activeUserInputEvents,
+                distance > 0 ? (dx / distance) * approach : 0,
+                distance > 0 ? (dy / distance) * approach : 0,
+                delta,
+            );
+        } else if (this.pathToFollow) {
             this.followPath(delta);
         } else {
             this.inputStep(activeUserInputEvents, x, y, delta);
@@ -262,10 +325,214 @@ export class Player extends Character {
         this.scene.coffeeManager?.onLocalAction(action);
     }
 
+    public chooseVehicle(medium: VehicleMedium, vehicle: Vehicle): void {
+        if (medium === VehicleMedium.Air && vehicle === Vehicle.None && this.airVehicleActive) {
+            if (!this.landAirVehicle()) return;
+            if (this.airVehicleActive) {
+                this.clearAirVehicleOnLanding = true;
+                return;
+            }
+        }
+        localUserStore.setVehicleForMedium(medium, vehicle);
+        this.refreshVehicles();
+    }
+
+    public toggleAirVehicle(): void {
+        if (this.airVehicleActive) {
+            if (this.landingRequested && this.exitOnLanding) {
+                this.flight.cancelLanding();
+                this.landingRequested = false;
+                this.landingTarget = undefined;
+                this.clearAirVehicleOnLanding = false;
+                this.exitOnLanding = false;
+                return;
+            }
+            this.landAirVehicle();
+            return;
+        }
+        if (
+            localUserStore.getVehicleForMedium(VehicleMedium.Air) === Vehicle.None ||
+            this.isSlidingToSeat ||
+            get(followStateStore) !== "off" ||
+            !isHumanAvatar(this.sprites.keys())
+        )
+            return;
+        this.setAvatarAction(AvatarAction.Idle);
+        this.standUp();
+        this.finishFollowingPath(true);
+        const elevation = this.getFloorZ();
+        if (elevation > 0) {
+            this.setPosition(this.x, this.y + elevation);
+            this.setFloorZ(0);
+        }
+        this.flight.reset(elevation);
+        this.landingRequested = false;
+        this.airSteering = false;
+        this.airVehicleActive = true;
+        this.swimming = false;
+        this.refreshVehicles();
+    }
+
+    private landAirVehicle(): boolean {
+        if (this.flight.altitude === 0) {
+            if (!this.canLandHere()) return false;
+            this.finishAirFlight();
+        } else {
+            this.landingRequested = true;
+            this.exitOnLanding = true;
+            this.nextLandingCheck = 0;
+        }
+        return true;
+    }
+
+    private finishAirFlight(): void {
+        this.airVehicleActive = false;
+        this.exitOnLanding = false;
+        this.airplanePrompt?.prompt.hide();
+        this.airplanePrompt = undefined;
+        this.flight.reset();
+        this.landingRequested = false;
+        this.landingTarget = undefined;
+        this.airSteering = false;
+        if (this.clearAirVehicleOnLanding) localUserStore.setVehicleForMedium(VehicleMedium.Air, Vehicle.None);
+        this.clearAirVehicleOnLanding = false;
+        this.refreshVehicles();
+        this.shareFlightLevel();
+    }
+
+    private shareFlightLevel(): void {
+        const z = this.getFloorZ();
+        if (this.sharedFlightLevel === z) return;
+        this.sharedFlightLevel = z;
+        this.scene.getGameMapFrontWrapper().setPosition?.(this.x, this.y, z);
+        this.scene.getPlayerVariablesManager()?.setVariableFromApp(FLOOR_Z_VARIABLE, z, {
+            public: true,
+            persist: false,
+            scope: "room",
+        });
+    }
+
+    private landingZoneClearance(): (point: LandingPoint) => boolean {
+        const map = this.scene.getGameMapFrontWrapper();
+        const tile = map.getTileDimensions();
+        const grid = map.getCollisionGrid({ emitMapChangedEvent: false });
+        const obstacles = map.getLandingObstacles();
+        const outdoor = this.scene.getOutdoorGrid();
+        return (point) => {
+            if (obstacles.blocksPoint(point)) return false;
+            // Both edges of the 64 px footprint, and every tile in between (16 px apart at most).
+            for (const dy of LANDING_FOOTPRINT_SAMPLES) {
+                for (const dx of LANDING_FOOTPRINT_SAMPLES) {
+                    const x = point.x + dx;
+                    const y = point.y + dy;
+                    if (grid[Math.floor(y / tile.height)]?.[Math.floor(x / tile.width)] !== 0) return false;
+                    if (outdoor && !outdoor.isOutdoorAt(x, y)) return false;
+                    // No altitude: the ground (AreaPosition), where the plane is about to land.
+                    if (!this.scene.isPositionAllowedForCurrentUser({ x, y })) return false;
+                }
+            }
+            return true;
+        };
+    }
+
+    /** The point a landing aims at: ahead of the plane in the way it flies, under it when it hovers. */
+    private glideOrigin(feet: LandingPoint): LandingPoint {
+        const { x, y } = this.flight.speed;
+        const length = Math.hypot(x, y);
+        if (length < 1) return feet;
+        return { x: feet.x + (x / length) * LANDING_GLIDE_AHEAD, y: feet.y + (y / length) * LANDING_GLIDE_AHEAD };
+    }
+
+    /**
+     * The hint of the airplane key, discreet: to land on taking off, to get off once landed. Each shows once when the
+     * plane changes state and goes away by itself after a moment.
+     */
+    private updateAirplanePrompts(): void {
+        const now = this.scene.time.now;
+        const wanted = this.flight.altitude === 0 ? this.leavePrompt : this.exitOnLanding ? undefined : this.landPrompt;
+        if (wanted !== this.airplanePrompt?.prompt) {
+            this.airplanePrompt?.prompt.hide();
+            this.airplanePrompt = wanted && { prompt: wanted, until: now + AIRPLANE_PROMPT_MS };
+            wanted?.show(() => this.toggleAirVehicle());
+        } else if (this.airplanePrompt && now >= this.airplanePrompt.until) {
+            this.airplanePrompt.prompt.hide();
+        }
+    }
+
+    /** Landed by itself: the plane stays on the ground, propeller at rest, until V or the arrows take off again. */
+    private parkAirplane(): void {
+        this.flight.reset();
+        this.landingRequested = false;
+        this.landingTarget = undefined;
+        this.landingApproach = undefined;
+        this.airSteering = false;
+        this.setFlightAltitude(0);
+        this.shareFlightLevel();
+    }
+
+    private canLandHere(): boolean {
+        return this.landingZoneClearance()(this.getFeet());
+    }
+
+    private steerAirplane(x: number, y: number): LandingPoint {
+        const steering = x !== 0 || y !== 0;
+        if (steering && !this.airSteering) {
+            this.landingRequested = false;
+            this.landingTarget = undefined;
+            this.flight.landing = false;
+            this.clearAirVehicleOnLanding = false;
+            this.exitOnLanding = false;
+        } else if (!steering && this.airSteering && this.flight.altitude > 0) {
+            this.landingRequested = true;
+            this.nextLandingCheck = 0;
+        }
+        this.airSteering = steering;
+        if (!this.landingRequested) {
+            this.flight.glideAltitude = undefined;
+            return { x, y };
+        }
+        const feet = this.getFeet();
+        const now = this.scene.time.now;
+        if (now >= this.nextLandingCheck) {
+            this.nextLandingCheck = now + 500;
+            this.landingClearance = this.landingZoneClearance();
+            if (!this.landingTarget || !this.landingClearance(this.landingTarget)) {
+                // The clear ground nearest to where the plane is heading: right ahead over open ground, the
+                // nearest way out over a building.
+                this.landingTarget = findLandingZone(
+                    this.glideOrigin(feet),
+                    this.scene.getGameMapFrontWrapper().getTileDimensions(),
+                    this.landingClearance,
+                );
+            }
+        }
+        const target = this.landingTarget;
+        if (!target) {
+            // No clear ground in reach: hold the altitude and look again.
+            this.flight.landing = false;
+            this.flight.glideAltitude = undefined;
+            return { x: 0, y: 0 };
+        }
+        const dx = target.x - feet.x;
+        const dy = target.y - feet.y;
+        const distance = Math.hypot(dx, dy);
+        if (this.landingApproach?.target !== target) {
+            this.landingApproach = { target, distance: Math.max(distance, 1), altitude: this.flight.altitude };
+        }
+        const approach = this.landingApproach;
+        this.flight.glideAltitude = approach.altitude * Math.min(1, distance / approach.distance);
+        this.flight.landing = distance < 4 && (this.landingClearance?.(feet) ?? false);
+        const speed = Math.min(LANDING_APPROACH_SPEED, Math.max(40, distance * 3));
+        return distance > 0 ? { x: (dx / distance) * speed, y: (dy / distance) * speed } : { x: 0, y: 0 };
+    }
+
+    public refreshVehicles(): void {
+        this.updateCanoe();
+        this.scene.markDirty();
+    }
+
     public equipVehicle(mode: VehicleMode): void {
-        const vehicle = localUserStore.getVehicle();
-        // A canoe is not ridden on the ground: it is boarded by itself on the water (updateCanoe).
-        if (vehicle === Vehicle.Canoe && mode !== VehicleMode.Off) return;
+        const vehicle = localUserStore.getVehicleForMedium(VehicleMedium.Land);
         if (mode !== VehicleMode.Off) {
             if (
                 vehicle === Vehicle.None ||
@@ -279,33 +546,52 @@ export class Player extends Character {
             this.setAvatarAction(AvatarAction.Idle);
             this.standUp();
         }
-        this.setVehicle({ vehicle, mode, ...localUserStore.getVehicleColors() });
+        this.landVehicleMode = mode;
+        if (this.currentVehicleMedium !== undefined && this.currentVehicleMedium !== VehicleMedium.Land) return;
+        this.setVehicle({ vehicle, mode, ...localUserStore.getVehicleColors(vehicle) });
     }
 
-    /**
-     * With a canoe chosen: the avatar is in it over the water of the relief deep enough to swim, and out of it
-     * everywhere else. Not in a pool (one swims there), on a raised floor, while following someone, nor for a costume
-     * that is not human.
-     */
+    /** Selects the vehicle for the current medium, keeping the land mode while an automatic vehicle takes over. */
     protected updateCanoe(): void {
-        if (localUserStore.getVehicle() !== Vehicle.Canoe) return;
-        const afloat =
+        if (this.airVehicleActive && get(followStateStore) !== "off") {
+            this.scene.connection?.emitFollowAbort();
+            followStateStore.set("off");
+        }
+        if (!isHumanAvatar(this.sprites.keys())) this.airVehicleActive = false;
+        const mediumId = activeVehicleMedium({
+            deepWater: this.isOverDeepTerrainWater(),
+            airborne: this.airVehicleActive,
+        });
+        const medium = vehicleMedia.find((entry) => entry.id === mediumId);
+        if (!medium) return;
+        const vehicle = localUserStore.getVehicleForMedium(mediumId);
+        if (mediumId === VehicleMedium.Land && vehicle === Vehicle.None) this.landVehicleMode = VehicleMode.Off;
+        const allowed =
             !this.swimming &&
             !this.isSlidingToSeat &&
             get(followStateStore) === "off" &&
-            isHumanAvatar(this.sprites.keys()) &&
-            this.isOverDeepTerrainWater();
-        const mode = afloat ? VehicleMode.Always : VehicleMode.Off;
-        if (mode === this.vehicleMode) return;
-        if (afloat) {
+            isHumanAvatar(this.sprites.keys());
+        const mode =
+            !allowed || vehicle === Vehicle.None
+                ? VehicleMode.Off
+                : medium.automatic
+                  ? VehicleMode.Always
+                  : (this.landVehicleMode ?? VehicleMode.Off);
+        this.currentVehicleMedium = mediumId;
+        if (medium.automatic && mode !== VehicleMode.Off && this.vehicleMode === VehicleMode.Off) {
             this.setAvatarAction(AvatarAction.Idle);
             this.standUp();
         }
-        this.setVehicle({ vehicle: Vehicle.Canoe, mode, ...localUserStore.getVehicleColors() });
+        this.setVehicle({
+            vehicle,
+            mode,
+            ...localUserStore.getVehicleColors(vehicle),
+            ...(vehicle === Vehicle.Airplane ? { altitude: this.flight.altitude } : {}),
+        });
     }
 
     private vehicleStateForTrail(): { vehicle: Vehicle; mode: VehicleMode } {
-        return { vehicle: localUserStore.getVehicle(), mode: this.vehicleMode };
+        return { vehicle: this.vehicle, mode: this.vehicleMode };
     }
 
     /** The speed of the avatar in its canoe: the one of a walker, faster when paddling hard. */
@@ -315,18 +601,50 @@ export class Player extends Character {
 
     public override setVehicle(value: unknown): void {
         const state = readVehicleState(value);
-        if (state.mode === this.vehicleMode && state.mode === VehicleMode.Off) return;
         super.setVehicle(state);
-        this.scene.getPlayerVariablesManager()?.setVariableFromApp(VEHICLE_VARIABLE, state, {
-            public: true,
-            persist: false,
-            scope: "room",
-        });
+        const manager = this.scene.getPlayerVariablesManager();
+        if (!manager) return;
+        const preferences = localUserStore.getVehiclePreferences();
+        const { altitude, ...baseState } = state;
+        const structure = JSON.stringify({ ...baseState, preferences });
+        const now = this.scene.time?.now ?? 0;
+        if (structure === this.lastVehicleStructure && now < this.nextVehiclePublication) return;
+        this.lastVehicleStructure = structure;
+        this.nextVehiclePublication = now + 100;
+        this.publishedMediumStates ??= new Map<string, string>();
+        for (const medium of vehicleMedia) {
+            const selected = preferences[medium.id];
+            const active = medium.id === (this.currentVehicleMedium ?? VehicleMedium.Land);
+            const mediumState = {
+                ...baseState,
+                vehicle: selected,
+                mode: active ? state.mode : VehicleMode.Off,
+                ...(selected === Vehicle.Airplane ? { altitude: active ? Math.round(altitude ?? 0) : 0 } : {}),
+            };
+            const serialized = JSON.stringify(mediumState);
+            if (this.publishedMediumStates.get(medium.variable) !== serialized) {
+                manager.setVariableFromApp(medium.variable, mediumState, {
+                    public: true,
+                    persist: false,
+                    scope: "room",
+                });
+                this.publishedMediumStates.set(medium.variable, serialized);
+            }
+        }
+        const legacyState = {
+            ...baseState,
+            ...(state.vehicle === Vehicle.Airplane ? { altitude: Math.round(altitude ?? 0) } : {}),
+        };
+        const serialized = JSON.stringify(legacyState);
+        if (serialized !== this.lastLegacyVehicle) {
+            manager.setVariableFromApp(VEHICLE_VARIABLE, legacyState, { public: true, persist: false, scope: "room" });
+            this.lastLegacyVehicle = serialized;
+        }
     }
 
     protected override getPathWalkingSpeed(): number {
         return this.vehicleMode !== VehicleMode.Off && !this.swimming && !this.isSlidingToSeat
-            ? WOKA_SPEED * vehicleSpeedFactor(localUserStore.getVehicle())
+            ? WOKA_SPEED * vehicleSpeedFactor(this.vehicle)
             : super.getPathWalkingSpeed();
     }
 
@@ -352,6 +670,10 @@ export class Player extends Character {
         | undefined;
 
     private updateObjectAction(): void {
+        if (this.isFlying()) {
+            this.actionPrompt.hide();
+            return;
+        }
         const body = this.getBody();
         const feet = { x: this.x, y: this.y + body.offset.y + body.height / 2 };
         const floor = this.getFloorZ();
@@ -606,8 +928,8 @@ export class Player extends Character {
 
     private deduceSpeed(speedUp: boolean, followMode: boolean): number {
         if (this.vehicleMode !== VehicleMode.Off && !followMode && !this.swimming) {
-            if (localUserStore.getVehicle() === Vehicle.Canoe) return this.canoeSpeed(speedUp);
-            return WOKA_SPEED * vehicleSpeedFactor(localUserStore.getVehicle()) * this.soilPace();
+            if (this.vehicle === Vehicle.Canoe) return this.canoeSpeed(speedUp);
+            return WOKA_SPEED * vehicleSpeedFactor(this.vehicle) * (this.isFlying() ? 1 : this.soilPace());
         }
         const speed = this.pathWalkingSpeed
             ? this.pathWalkingSpeed
@@ -649,6 +971,11 @@ export class Player extends Character {
      * walking onto the edge: it stops swimming once no part of its body touches the water any more.
      */
     private updateSwimming(): void {
+        if (this.airVehicleActive) {
+            this.swimming = false;
+            this.divePrompt.hide();
+            return;
+        }
         // The water of the floor the avatar stands on (none on a stair).
         const water = getWaterRectangles(this.scene, this.getFloorZ());
         const body = this.getBody();
@@ -727,17 +1054,35 @@ export class Player extends Character {
         const moveAmount = speed * 20;
         x = x * moveAmount;
         y = y * moveAmount;
+        if (this.airVehicleActive) {
+            const wanted = this.steerAirplane(x, y);
+            const flight = this.flight.step(wanted, delta);
+            x = flight.x;
+            y = flight.y;
+            this.setFlightAltitude(flight.altitude);
+            this.shareFlightLevel();
+            this.updateAirplanePrompts();
+            if (flight.landed) {
+                if (this.canLandHere()) {
+                    if (this.exitOnLanding || this.clearAirVehicleOnLanding) this.finishAirFlight();
+                    else this.parkAirplane();
+                } else {
+                    this.flight.cancelLanding();
+                    this.setFlightAltitude(this.flight.altitude);
+                    this.landingTarget = undefined;
+                    this.nextLandingCheck = 0;
+                }
+            }
+        }
         // What the keys ask for, before the water has its say: the avatar keeps facing where it is steered.
         const steeredX = x;
         const steeredY = y;
         // In a call the current carries nobody: it would take one out of the bubble of the conversation.
-        if (!followMode && !this.isSeated() && !get(isInActiveConversationStore)) {
+        if (!followMode && !this.isInAirplane() && !this.isSeated() && !get(isInActiveConversationStore)) {
             // The current of the water of the relief carries the avatar, on top of what it does by itself.
             const push = this.waterCurrentPush(WOKA_SPEED * 20);
             // A canoe holds against the current better than a swimmer.
-            const carried = isCanoeAfloat({ vehicle: localUserStore.getVehicle(), mode: this.vehicleMode })
-                ? CANOE_CURRENT_SHARE
-                : 1;
+            const carried = isCanoeAfloat(this.getVehicleState()) ? CANOE_CURRENT_SHARE : 1;
             x += push.x * carried;
             y += push.y * carried;
         }
@@ -774,7 +1119,11 @@ export class Player extends Character {
             }
             this.moveBy(x, y, running, steered);
             // Dust behind a runner or a ride of the ground, none behind a canoe.
-            if ((running || this.isRidingVehicle()) && !isCanoeAfloat(this.vehicleStateForTrail())) {
+            if (
+                (running || this.isRidingVehicle()) &&
+                !this.isFlying() &&
+                !isCanoeAfloat(this.vehicleStateForTrail())
+            ) {
                 const body = this.getBody();
                 this.runSmokeTrail.emit(this.x, this.y + body.offset.y + body.height / 2, x, y, this.depth - 1);
             }
@@ -785,7 +1134,7 @@ export class Player extends Character {
             }
             this.stop();
             emit();
-            this.snapToTileCenter();
+            if (!this.airVehicleActive) this.snapToTileCenter();
         }
 
         // Update state
@@ -968,7 +1317,7 @@ export class Player extends Character {
         const oldY = this.y;
         passStatusToOnline();
         super.moveToPathPosition(x, y);
-        if ((this.isRunningPath() || this.isRidingVehicle()) && (x !== oldX || y !== oldY)) {
+        if (!this.isInAirplane() && (this.isRunningPath() || this.isRidingVehicle()) && (x !== oldX || y !== oldY)) {
             if (this.isRunningPath()) this.playAnimation(this._lastDirection, true, RUN_ANIMATION_SPEED);
             const body = this.getBody();
             this.runSmokeTrail.emit(
@@ -1069,4 +1418,10 @@ export class Player extends Character {
         this.actionPrompt.hide();
         super.destroy();
     }
+}
+
+/** The key of the airplane, as the shortcuts settings name it (V unless changed). */
+function airVehicleKey(): string {
+    const binding = get(shortcutsStore).toggleAirVehicle;
+    return binding ? bindingKeys(binding, get(LL).menu.shortcuts.keyNames.shift()).join("+") : "V";
 }

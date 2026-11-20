@@ -63,7 +63,7 @@ vi.mock("../../../../src/front/Stores/MenuStore", () => ({}));
 vi.mock("../../../../src/front/Stores/FollowStore", () => ({}));
 vi.mock("../../../../src/front/Stores/EmoteStore", () => ({}));
 vi.mock("../../../../src/front/Connection/LocalUserStore", () => ({
-    localUserStore: { getLocalUser: () => ({ uuid: "self-uuid" }), getVehicle: vi.fn(() => Vehicle.None) },
+    localUserStore: { getLocalUser: () => ({ uuid: "self-uuid" }), getVehicleForMedium: vi.fn(() => Vehicle.None) },
 }));
 vi.mock("../../../../src/front/Chat/Stores/ChatStore", () => ({}));
 vi.mock("../../../../src/front/Components/PopUp/SayPopUp.svelte", () => ({ default: vi.fn() }));
@@ -75,7 +75,11 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
     const activatablesManager = mock<ActivatablesManager>();
     let scene: ReturnType<typeof mock<GameScene>>;
     let handler: GameSceneUserInputHandler;
-    let currentPlayer: { sitOnSeat: ReturnType<typeof vi.fn>; stayStandingHere: ReturnType<typeof vi.fn> };
+    let currentPlayer: {
+        toggleAirVehicle: ReturnType<typeof vi.fn>;
+        sitOnSeat: ReturnType<typeof vi.fn>;
+        stayStandingHere: ReturnType<typeof vi.fn>;
+    };
     const chair: Seat = {
         id: "chair:0",
         entityId: "chair",
@@ -84,6 +88,19 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
         depth: 0,
         trigger: "auto",
     };
+
+    it("toggles the airplane with V, once per press, and keeps typing and the editor alone", () => {
+        handler.handleKeyDownEvent(new KeyboardEvent("keydown", { code: "KeyV", key: "v" }));
+        expect(currentPlayer.toggleAirVehicle).toHaveBeenCalledTimes(1);
+        handler.handleKeyDownEvent(new KeyboardEvent("keydown", { code: "KeyV", key: "v", repeat: true }));
+        const field = document.createElement("input");
+        const typing = new KeyboardEvent("keydown", { code: "KeyV", key: "v" });
+        field.dispatchEvent(typing);
+        handler.handleKeyDownEvent(typing);
+        mapEditorModeStore.set(true);
+        handler.handleKeyDownEvent(new KeyboardEvent("keydown", { code: "KeyV", key: "v" }));
+        expect(currentPlayer.toggleAirVehicle).toHaveBeenCalledTimes(1);
+    });
 
     function pointer(button = 0, detail = 2): ReturnType<typeof mock<Phaser.Input.Pointer>> {
         const result = mock<Phaser.Input.Pointer>({
@@ -129,7 +146,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             mock<GameMapFrontWrapper>({ getTileDimensions: () => ({ width: 32, height: 32 }) }),
         );
         scene.moveTo.mockResolvedValue({ x: 480, y: 640, cancelled: false });
-        currentPlayer = { sitOnSeat: vi.fn(), stayStandingHere: vi.fn() };
+        currentPlayer = { toggleAirVehicle: vi.fn(), sitOnSeat: vi.fn(), stayStandingHere: vi.fn() };
         Object.defineProperty(scene, "CurrentPlayer", { configurable: true, value: currentPlayer });
         vi.mocked(findSeatAtPoint).mockReturnValue(undefined);
         handler = new GameSceneUserInputHandler(scene);
@@ -525,7 +542,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
         });
 
         it("offers a selected scooter only on the own human avatar and equips it permanently", () => {
-            vi.spyOn(localUserStore, "getVehicle").mockReturnValue(Vehicle.Skateboard);
+            vi.spyOn(localUserStore, "getVehicleForMedium").mockReturnValue(Vehicle.Skateboard);
             const equipVehicle = vi.fn();
             const self = Object.assign(Object.create(Player.prototype) as unknown as Player, {
                 playerName: "Me",
@@ -540,7 +557,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             Object.assign(self, { sprites: new Map([["duck", mock<Phaser.GameObjects.Sprite>()]]) });
             handler.handlePointerUpEvent(pointer(0, 1), [self]);
             expect(get(wokaMenuStore)?.actions.some(({ testId }) => testId === "avatar-vehicle")).toBe(false);
-            vi.spyOn(localUserStore, "getVehicle").mockReturnValue(Vehicle.None);
+            vi.spyOn(localUserStore, "getVehicleForMedium").mockReturnValue(Vehicle.None);
         });
 
         it("opens a lone woka directly, without a choice", () => {

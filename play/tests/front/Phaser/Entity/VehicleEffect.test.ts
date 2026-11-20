@@ -30,6 +30,7 @@ describe("skateboard movement and lifetime", () => {
             const sprite = mock<Phaser.GameObjects.Sprite>();
             sprite.setVisible.mockReturnValue(sprite);
             sprite.setFrame.mockReturnValue(sprite);
+            sprite.setY.mockReturnValue(sprite);
             sprite.setAngle.mockReturnValue(sprite);
             sprite.setTint.mockReturnValue(sprite);
             return sprite;
@@ -78,6 +79,7 @@ describe("electric unicycle", () => {
             const sprite = mock<Phaser.GameObjects.Sprite>();
             sprite.setVisible.mockReturnValue(sprite);
             sprite.setFrame.mockReturnValue(sprite);
+            sprite.setY.mockReturnValue(sprite);
             sprite.setAngle.mockReturnValue(sprite);
             sprite.setTint.mockReturnValue(sprite);
             return sprite;

@@ -42,7 +42,7 @@ describe("SoundPreview", () => {
 
     it("has an example for every family that has a typical sound", () => {
         expect(Object.keys(SOUND_PREVIEWS).sort()).toEqual(
-            ["doors", "footsteps", "jungle", "nerf", "notifications", "skateboard", "weather"].sort(),
+            ["airplane", "doors", "footsteps", "jungle", "nerf", "notifications", "skateboard", "weather"].sort(),
         );
         for (const { url, baseVolume } of Object.values(SOUND_PREVIEWS)) {
             expect(url).toMatch(/^\/resources\/.+\.(ogg|mp3|wav)$/);

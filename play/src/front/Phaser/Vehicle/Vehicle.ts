@@ -4,13 +4,95 @@ export enum Vehicle {
     ElectricUnicycle = "electricUnicycle",
     /** A boat, not a ride of the ground: boarded by itself over the water of the relief deep enough to swim. */
     Canoe = "canoe",
+    Airplane = "airplane",
 }
 
 export const VEHICLE_PREFERENCE_KEY = "avatarVehicle";
 export const VEHICLE_VARIABLE = "_avatarVehicle";
+export enum VehicleMedium {
+    Land = "land",
+    Water = "water",
+    Air = "air",
+}
+
+export interface VehicleMediumContext {
+    deepWater: boolean;
+    airborne?: boolean;
+}
+
+/** Ordered by priority: a medium still applies when its chosen vehicle is None. */
+export const vehicleMedia = [
+    {
+        id: VehicleMedium.Air,
+        vehicles: [Vehicle.None, Vehicle.Airplane],
+        preferenceKey: "avatarAirVehicle",
+        variable: "_avatarAirVehicle",
+        automatic: true,
+        isActive: (context: VehicleMediumContext): boolean => context.airborne === true,
+    },
+    {
+        id: VehicleMedium.Water,
+        vehicles: [Vehicle.None, Vehicle.Canoe],
+        preferenceKey: "avatarWaterVehicle",
+        variable: "_avatarWaterVehicle",
+        automatic: true,
+        isActive: (context: VehicleMediumContext): boolean => !context.airborne && context.deepWater,
+    },
+    {
+        id: VehicleMedium.Land,
+        vehicles: [Vehicle.None, Vehicle.Skateboard, Vehicle.ElectricUnicycle],
+        preferenceKey: "avatarLandVehicle",
+        variable: "_avatarLandVehicle",
+        automatic: false,
+        isActive: (context: VehicleMediumContext): boolean => !context.airborne && !context.deepWater,
+    },
+];
+
+export type VehiclePreferences = Record<VehicleMedium, Vehicle>;
+
+export function readMediumVehicle(medium: VehicleMedium, value: unknown): Vehicle {
+    const vehicle = readVehicle(value);
+    return vehicleMedia.find((entry) => entry.id === medium)?.vehicles.includes(vehicle) ? vehicle : Vehicle.None;
+}
+
+export function migrateVehiclePreferences(legacy: unknown): VehiclePreferences {
+    const vehicle = legacy === null ? Vehicle.Skateboard : readVehicle(legacy);
+    return {
+        [VehicleMedium.Air]: readMediumVehicle(VehicleMedium.Air, vehicle),
+        [VehicleMedium.Land]: readMediumVehicle(VehicleMedium.Land, vehicle),
+        [VehicleMedium.Water]: readMediumVehicle(VehicleMedium.Water, vehicle),
+    };
+}
+
+export function activeVehicleMedium(context: VehicleMediumContext): VehicleMedium {
+    return vehicleMedia.find((entry) => entry.isActive(context))?.id ?? VehicleMedium.Land;
+}
+
+/** Medium-aware peers use their active state; old clients still publish only the legacy variable. */
+export function sharedVehicleState(variables: ReadonlyMap<string, unknown> | undefined): VehicleState {
+    let inactiveState: VehicleState | undefined;
+    for (const medium of vehicleMedia) {
+        if (!variables?.has(medium.variable)) continue;
+        const state = readVehicleState(variables.get(medium.variable));
+        if (readMediumVehicle(medium.id, state.vehicle) !== state.vehicle) continue;
+        if (state.mode !== VehicleMode.Off) return state;
+        inactiveState = state;
+    }
+    return inactiveState ?? readVehicleState(variables?.get(VEHICLE_VARIABLE));
+}
+
 export const SKATEBOARD_TEXTURE = "avatar-skateboard";
 export const ELECTRIC_UNICYCLE_TEXTURE = "avatar-electric-unicycle";
 export const CANOE_TEXTURE = "avatar-canoe";
+export const AIRPLANE_ALTITUDE = 1024;
+/** Reserved sky level keeps floor-bound areas and conversations away from airborne players. */
+export const AIRPLANE_AREA_LEVEL = 2000;
+/**
+ * How high a plane at cruise altitude is drawn above its shadow (px). Its depth already puts it over every roof: the
+ * drawing only has to show it flies, with its shadow close under it.
+ */
+export const AIRPLANE_VISUAL_LIFT = 40;
+export const AIRPLANE_RENDER_DEPTH = 1_100_000;
 export const DEFAULT_VEHICLE_COLOR = "#39404f";
 export const VEHICLE_SPEED_FACTOR = 3.75;
 /** Faster than the skateboard; the physics steps follow the fastest vehicle (vehiclePhysicsFps). */
@@ -40,29 +122,53 @@ export interface VehicleColors {
     wheelsColor: string;
 }
 
-export function readVehicleColors(value: unknown): VehicleColors {
+/** The colours of the vehicles nobody painted. */
+const DEFAULT_VEHICLE_COLORS: VehicleColors = {
+    color: DEFAULT_VEHICLE_COLOR,
+    edgeColor: "#d7aa6b",
+    wheelsColor: "#b6383b",
+};
+/** The airplane's own drawing: red fuselage, yellow wings, grey-blue canopy. In them it is shown as drawn. */
+export const AIRPLANE_DEFAULT_COLORS: VehicleColors = {
+    color: "#ad2522",
+    edgeColor: "#f7cb17",
+    wheelsColor: "#616e72",
+};
+
+/** Each vehicle has its own colours; these are the ones it starts with. */
+export function defaultVehicleColors(vehicle?: Vehicle): VehicleColors {
+    return { ...(vehicle === Vehicle.Airplane ? AIRPLANE_DEFAULT_COLORS : DEFAULT_VEHICLE_COLORS) };
+}
+
+export function readVehicleColors(value: unknown, vehicle?: Vehicle): VehicleColors {
     const fields = typeof value === "object" && value !== null ? value : {};
+    const defaults = defaultVehicleColors(vehicle);
     return {
-        color: "color" in fields ? readVehicleColor(fields.color) : DEFAULT_VEHICLE_COLOR,
-        edgeColor: "edgeColor" in fields ? readVehicleColor(fields.edgeColor) : "#d7aa6b",
-        wheelsColor: "wheelsColor" in fields ? readVehicleColor(fields.wheelsColor) : "#b6383b",
+        color: "color" in fields ? readVehicleColor(fields.color, defaults.color) : defaults.color,
+        edgeColor: "edgeColor" in fields ? readVehicleColor(fields.edgeColor, defaults.edgeColor) : defaults.edgeColor,
+        wheelsColor:
+            "wheelsColor" in fields ? readVehicleColor(fields.wheelsColor, defaults.wheelsColor) : defaults.wheelsColor,
     };
 }
 
 export interface VehicleState extends VehicleColors {
     vehicle: Vehicle;
     mode: VehicleMode;
+    altitude?: number;
     color: string;
 }
 
 export function readVehicle(value: unknown): Vehicle {
-    return value === Vehicle.Skateboard || value === Vehicle.ElectricUnicycle || value === Vehicle.Canoe
+    return value === Vehicle.Skateboard ||
+        value === Vehicle.ElectricUnicycle ||
+        value === Vehicle.Canoe ||
+        value === Vehicle.Airplane
         ? value
         : Vehicle.None;
 }
 
-export function readVehicleColor(value: unknown): string {
-    return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : DEFAULT_VEHICLE_COLOR;
+export function readVehicleColor(value: unknown, fallback = DEFAULT_VEHICLE_COLOR): string {
+    return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : fallback;
 }
 
 /** This state is public and can also come from map scripts. */
@@ -78,7 +184,15 @@ export function readVehicleState(value: unknown): VehicleState {
     return {
         vehicle,
         mode: vehicle === Vehicle.None ? VehicleMode.Off : mode,
-        ...readVehicleColors(value),
+        ...readVehicleColors(value, vehicle),
+        ...(vehicle === Vehicle.Airplane
+            ? {
+                  altitude:
+                      "altitude" in value && typeof value.altitude === "number" && Number.isFinite(value.altitude)
+                          ? Math.max(0, Math.min(AIRPLANE_ALTITUDE, value.altitude))
+                          : AIRPLANE_ALTITUDE,
+              }
+            : {}),
     };
 }
 

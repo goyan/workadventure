@@ -1,9 +1,16 @@
+import { writable } from "svelte/store";
 import { z } from "zod";
 import {
     Vehicle,
+    VehicleMedium,
+    vehicleMedia,
+    migrateVehiclePreferences,
+    readMediumVehicle,
+    type VehiclePreferences,
     VEHICLE_PREFERENCE_KEY,
     readVehicle,
     readVehicleColors,
+    defaultVehicleColors,
     type VehicleColors,
 } from "@wa/front/Phaser/Vehicle/Vehicle";
 import type { Emoji } from "@wa/front/Stores/Utils/emojiSchema";
@@ -122,6 +129,8 @@ interface PlayerVariable {
     isPublic: boolean;
 }
 
+export const vehiclePreferencesStore = writable<VehiclePreferences | undefined>(undefined);
+
 class LocalUserStore {
     private jwt: JwtAuthToken | undefined;
     private name: string | undefined;
@@ -238,12 +247,27 @@ class LocalUserStore {
         return areCharacterTexturesValid(value) ? value : null;
     }
 
-    public getVehicleColors(): VehicleColors {
-        return readVehicleColors(this.readJsonObject(`${VEHICLE_PREFERENCE_KEY}Colors`));
+    /**
+     * The colours of one vehicle. They used to be one set for all: the vehicles of the ground and the water keep it
+     * until they get their own; the airplane, which came after, starts with its drawing.
+     */
+    public getVehicleColors(vehicle: Vehicle): VehicleColors {
+        const own = this.vehicleColorsByVehicle()[vehicle];
+        if (own !== undefined) return readVehicleColors(own, vehicle);
+        const former = vehicle === Vehicle.Airplane ? null : this.readJsonObject(`${VEHICLE_PREFERENCE_KEY}Colors`);
+        return former === null ? defaultVehicleColors(vehicle) : readVehicleColors(former, vehicle);
     }
 
-    public setVehicleColors(value: unknown): void {
-        localStorage.setItem(`${VEHICLE_PREFERENCE_KEY}Colors`, JSON.stringify(readVehicleColors(value)));
+    public setVehicleColors(vehicle: Vehicle, value: unknown): void {
+        localStorage.setItem(
+            `${VEHICLE_PREFERENCE_KEY}ColorsByVehicle`,
+            JSON.stringify({ ...this.vehicleColorsByVehicle(), [vehicle]: readVehicleColors(value, vehicle) }),
+        );
+    }
+
+    private vehicleColorsByVehicle(): Record<string, unknown> {
+        const all = this.readJsonObject(`${VEHICLE_PREFERENCE_KEY}ColorsByVehicle`);
+        return typeof all === "object" && all !== null && !Array.isArray(all) ? { ...all } : {};
     }
 
     private readJsonObject(key: string): unknown {
@@ -254,13 +278,45 @@ class LocalUserStore {
         }
     }
 
+    public getVehiclePreferences(): VehiclePreferences {
+        const preferences = migrateVehiclePreferences(localStorage.getItem(VEHICLE_PREFERENCE_KEY));
+        for (const medium of vehicleMedia) {
+            const saved = localStorage.getItem(medium.preferenceKey);
+            if (saved !== null) preferences[medium.id] = readMediumVehicle(medium.id, saved);
+        }
+        return preferences;
+    }
+
+    public getVehicleForMedium(medium: VehicleMedium): Vehicle {
+        return this.getVehiclePreferences()[medium];
+    }
+
+    public setVehicleForMedium(mediumId: VehicleMedium, value: unknown): void {
+        // Materialize both legacy choices before overwriting the compatibility key.
+        const preferences = this.getVehiclePreferences();
+        preferences[mediumId] = readMediumVehicle(mediumId, value);
+        for (const medium of vehicleMedia) {
+            localStorage.setItem(medium.preferenceKey, preferences[medium.id]);
+        }
+        localStorage.setItem(VEHICLE_PREFERENCE_KEY, preferences[mediumId]);
+        vehiclePreferencesStore.set(preferences);
+    }
+
     public getVehicle(): Vehicle {
         const saved = localStorage.getItem(VEHICLE_PREFERENCE_KEY);
         return saved === null ? Vehicle.Skateboard : readVehicle(saved);
     }
 
     public setVehicle(value: unknown): void {
-        localStorage.setItem(VEHICLE_PREFERENCE_KEY, readVehicle(value));
+        const vehicle = readVehicle(value);
+        this.setVehicleForMedium(
+            vehicle === Vehicle.Canoe
+                ? VehicleMedium.Water
+                : vehicle === Vehicle.Airplane
+                  ? VehicleMedium.Air
+                  : VehicleMedium.Land,
+            vehicle,
+        );
     }
 
     public setSwimwearColor(value: unknown): void {

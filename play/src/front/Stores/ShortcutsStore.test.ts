@@ -20,6 +20,7 @@ describe("ShortcutsStore", () => {
 
     it("matches the default shortcuts, modifiers included", () => {
         expect(findShortcutAction(keyDown("KeyC", "c"))).toBe("openChat");
+        expect(findShortcutAction(keyDown("KeyV", "v"))).toBe("toggleAirVehicle");
         expect(findShortcutAction(keyDown("KeyD", "d", { ctrlKey: true }))).toBe("walkMyDesk");
         expect(findShortcutAction(keyDown("KeyD", "d", { metaKey: true }))).toBe("walkMyDesk");
         expect(findShortcutAction(keyDown("KeyD", "d"))).toBeUndefined();

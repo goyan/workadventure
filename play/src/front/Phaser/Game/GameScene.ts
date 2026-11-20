@@ -47,8 +47,10 @@ import {
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
 import Debug from "debug";
 import { asError } from "catch-unknown";
+import { AirplaneSounds, AIRPLANE_SOUND } from "@wa/front/Phaser/Vehicle/AirplaneSounds";
 import { SkateboardSounds, SKATEBOARD_SOUNDS } from "@wa/front/Phaser/Vehicle/SkateboardSounds";
-import { Vehicle, VEHICLE_VARIABLE } from "@wa/front/Phaser/Vehicle/Vehicle";
+import { Vehicle } from "@wa/front/Phaser/Vehicle/Vehicle";
+import { AIRPLANE_IMAGE_URL, AIRPLANE_SOURCE_TEXTURE } from "@wa/front/Phaser/Vehicle/AirplaneArtwork";
 import { textMessageStore } from "@wa/front/Stores/TypeMessageStore/TextMessageStore";
 import { connectionManager } from "@wa/front/Connection/ConnectionManager";
 import { urlManager } from "@wa/front/Url/UrlManager";
@@ -575,6 +577,7 @@ export class GameScene extends DirtyScene {
     private upperDoors: UpperDoors | undefined;
     private doorLockIcons: DoorLockIcons | undefined;
     private footstepSounds: FootstepSounds | undefined;
+    private airplaneSounds: AirplaneSounds | undefined;
     private skateboardSounds: SkateboardSounds | undefined;
     private entitiesCollectionsManager!: EntitiesCollectionsManager;
     private pathfindingManager!: PathfindingManager;
@@ -784,6 +787,7 @@ export class GameScene extends DirtyScene {
 
     //hook preload scene
     preload(): void {
+        this.load.image(AIRPLANE_SOURCE_TEXTURE, AIRPLANE_IMAGE_URL);
         //initialize frame event of scripting API
         this.listenToIframeEvents();
 
@@ -814,6 +818,7 @@ export class GameScene extends DirtyScene {
         for (const { key, url } of [
             ...FOOTSTEP_SOUNDS,
             ...SKATEBOARD_SOUNDS,
+            AIRPLANE_SOUND,
             ...WEATHER_SOUNDS.filter((sound) => sound.key === "audio-weather-thunder"),
         ]) {
             this.load.audio(key, url);
@@ -1753,6 +1758,7 @@ export class GameScene extends DirtyScene {
         this.seasonalThemeManager?.destroy();
         this.seasonalThemeManager = undefined;
         this.skateboardSounds?.destroy();
+        this.airplaneSounds?.destroy();
         this.nightManager = undefined;
         this._knockManager?.destroy();
         this._knockManager = undefined;
@@ -2175,13 +2181,15 @@ export class GameScene extends DirtyScene {
                 })),
         ];
         this.footstepSounds.update(characters, listener);
+        this.airplaneSounds ??= new AirplaneSounds(this.sound);
+        this.airplaneSounds.update(this.CurrentPlayer.isInAirplane(), this.mapEditorModeManager?.isActive() ?? false);
         this.skateboardSounds ??= new SkateboardSounds(this.sound);
         this.skateboardSounds.update(
             {
                 x: listener.x,
                 y: listener.y,
                 // An electric unicycle rolls in silence: the rolling sound is the skateboard's.
-                riding: this.CurrentPlayer.isRidingVehicle() && localUserStore.getVehicle() === Vehicle.Skateboard,
+                riding: this.CurrentPlayer.isRidingVehicle() && this.CurrentPlayer.vehicle === Vehicle.Skateboard,
                 moving: this.CurrentPlayer.isVehicleMoving(),
                 indoor:
                     (this.gameMapFrontWrapper
@@ -2623,7 +2631,7 @@ export class GameScene extends DirtyScene {
         if (update.updated.availabilityStatus) {
             character.setAvailabilityStatus(update.player.availabilityStatus);
         }
-        character.setVehicle(update.player.variables.get(VEHICLE_VARIABLE));
+        character.setVehicles(update.player.variables);
         character.setNerfEquipped(update.player.variables.get(NERF_EQUIPPED_VARIABLE));
         character.setNerfHearts(update.player.variables.get(NERF_HEARTS_VARIABLE));
         character.setTorchEquipped(update.player.variables.get(TORCH_EQUIPPED_VARIABLE));
@@ -3735,6 +3743,7 @@ export class GameScene extends DirtyScene {
                 this.gameSwitches = new GameSwitches(this);
                 this.weatherManager?.destroy();
                 this.skateboardSounds?.destroy();
+                this.airplaneSounds?.destroy();
                 this.outdoorTracker = new OutdoorTracker(
                     () =>
                         Array.from(this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(), (entity) =>
@@ -6436,9 +6445,7 @@ ${escapedMessage}
         player.setListeningMusic(this.listeningUserUuids.has(player.userUuid));
         this.MapPlayersByKey.set(player.userId, player);
         player.updatePosition(addPlayerData.position);
-        player.setVehicle(
-            this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(VEHICLE_VARIABLE),
-        );
+        player.setVehicles(this.remotePlayersRepository.getPlayers().get(player.userId)?.variables);
         player.setNerfEquipped(
             this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(NERF_EQUIPPED_VARIABLE),
         );

@@ -27,7 +27,7 @@ import { nerfEquippedStore } from "@wa/front/Stores/NerfStore";
 import { torchEquippedStore } from "@wa/front/Stores/TorchStore";
 import { fishingContestSetupStore, fishingContestStore, rodEquippedStore } from "@wa/front/Stores/FishingStore";
 import { characterPickerStore, type CharacterPickerCandidate } from "@wa/front/Stores/CharacterPickerStore";
-import { Vehicle, VehicleMode } from "@wa/front/Phaser/Vehicle/Vehicle";
+import { Vehicle, VehicleMode, VehicleMedium } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { isHumanAvatar } from "@wa/front/Phaser/Entity/MusicHeadphonesEffect";
 import { AvatarAction } from "@wa/front/Phaser/Entity/AvatarAction";
 import { Swimwear } from "@wa/front/Phaser/Entity/Swimwear";
@@ -494,7 +494,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         }
         // A costume such as the duck has no swimwear poses nor skateboard pose.
         const human = isHumanAvatar(player.sprites.keys());
-        const vehicle = localUserStore.getVehicle();
+        const vehicle = localUserStore.getVehicleForMedium(VehicleMedium.Land);
         // A canoe is boarded by itself on the water: nothing to mount from the wheel.
         if (vehicle !== Vehicle.None && vehicle !== Vehicle.Canoe && human) {
             const equipped = player.vehicleMode === VehicleMode.Always;
@@ -746,6 +746,9 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             return event;
         }
 
+        // In the sky, nothing on the ground is in reach: no rod, nerf, seat, door nor object until landing.
+        if (event.code === "Space" && this.isFlying()) return event;
+
         // The fishing rod takes the space key only when nothing else asks for it: a prompt (seat, door, animal) wins.
         if (
             event.code === "Space" &&
@@ -774,6 +777,15 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             case "toggleMapEditor": {
                 if (get(mapManagerActivated) == false) return event;
                 mapEditorModeStore.switchMode(!get(mapEditorModeStore));
+                break;
+            }
+            case "toggleAirVehicle": {
+                const typing =
+                    event.target instanceof HTMLElement &&
+                    (event.target.isContentEditable || event.target.matches("input, textarea, select"));
+                if (!event.repeat && !typing && !get(mapEditorModeStore)) {
+                    this.gameScene.CurrentPlayer?.toggleAirVehicle();
+                }
                 break;
             }
             case "rotatePlayer": {
@@ -921,11 +933,16 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         this.gameScene.CurrentPlayer?.handlePressSpacePlayerTextCallback();
     }
 
+    private isFlying(): boolean {
+        // Optional call: a scene without a full player (tests, loading) is on the ground.
+        return this.gameScene.CurrentPlayer?.isFlying?.() ?? false;
+    }
+
     public addSpaceEventListener(callback: () => void): void {
         const previous = this.spaceListeners.get(callback);
         if (previous) this.gameScene.input.keyboard?.removeListener("keyup-SPACE", previous);
         const listener = (): void => {
-            if (this.rodSpacePressed) return;
+            if (this.rodSpacePressed || this.isFlying()) return;
             if (!this.nerfSpacePressed && !this.gameScene.nerfManager?.isEquipped) callback();
         };
         this.spaceListeners.set(callback, listener);

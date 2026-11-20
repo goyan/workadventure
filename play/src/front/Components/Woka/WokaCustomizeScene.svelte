@@ -13,7 +13,14 @@
     import SwordIcon from "@wa/front/Components/Icons/SwordIcon.svelte";
     import ShuffleIcon from "@wa/front/Components/Icons/ShuffleIcon.svelte";
     import Button from "@wa/front/Components/UI/Button.svelte";
-    import { Vehicle, type VehicleColors } from "@wa/front/Phaser/Vehicle/Vehicle";
+    import {
+        Vehicle,
+        VehicleMedium,
+        vehicleMedia,
+        readVehicleColors,
+        type VehiclePreferences,
+        type VehicleColors,
+    } from "@wa/front/Phaser/Vehicle/Vehicle";
     import { Swimwear } from "@wa/front/Phaser/Entity/Swimwear";
     import { localUserStore } from "@wa/front/Connection/LocalUserStore";
     import WokaPreview from "./WokaPreview.svelte";
@@ -27,8 +34,8 @@
             texturesId: string[],
             swimwear: Swimwear,
             swimwearColor?: string,
-            vehicle?: Vehicle,
-            vehicleColors?: VehicleColors,
+            vehiclePreferences?: VehiclePreferences,
+            vehicleColors?: Record<string, VehicleColors>,
         ) => void;
     }
 
@@ -49,8 +56,19 @@
     let assetsDirection: number = $state(0);
     let showBath = $state(false);
     let showVehicle = $state(false);
-    let selectedVehicle = $state(localUserStore.getVehicle());
-    let selectedVehicleColors = $state(localUserStore.getVehicleColors());
+    let selectedVehicleMedium = $state(VehicleMedium.Land);
+    let selectedVehiclePreferences = $state(localUserStore.getVehiclePreferences());
+    let selectedVehicle = $derived(selectedVehiclePreferences[selectedVehicleMedium]);
+    let mediumVehicles = $derived(vehicleMedia.find((medium) => medium.id === selectedVehicleMedium)?.vehicles ?? []);
+    // Each vehicle keeps its own colours: painting the airplane leaves the unicycle as it was.
+    let vehicleColors = $state(
+        Object.fromEntries(
+            Object.values(Vehicle)
+                .filter((vehicle) => vehicle !== Vehicle.None)
+                .map((vehicle) => [vehicle, localUserStore.getVehicleColors(vehicle)]),
+        ),
+    );
+    let selectedVehicleColors = $derived(vehicleColors[selectedVehicle] ?? readVehicleColors(null, selectedVehicle));
     let selectedSwimwear = $state(localUserStore.getSwimwear() ?? Swimwear.Auto);
     let selectedSwimwearColor = $state(localUserStore.getSwimwearColor());
     const swimwearStyles = Object.values(Swimwear);
@@ -141,8 +159,8 @@
                 textureIds,
                 selectedSwimwear,
                 selectedSwimwearColor,
-                selectedVehicle,
-                selectedVehicleColors,
+                selectedVehiclePreferences,
+                vehicleColors,
             );
         } catch (err) {
             console.error("Error saving textures:", err);
@@ -221,9 +239,10 @@
         if (!wokaData) return;
         if (showVehicle && event.key.startsWith("Arrow")) {
             event.preventDefault();
-            const vehicles = Object.values(Vehicle);
+            const vehicles = mediumVehicles;
             const step = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
-            selectedVehicle = vehicles[(vehicles.indexOf(selectedVehicle) + step + vehicles.length) % vehicles.length];
+            selectedVehiclePreferences[selectedVehicleMedium] =
+                vehicles[(vehicles.indexOf(selectedVehicle) + step + vehicles.length) % vehicles.length];
             return;
         }
         if (showBath && event.key.startsWith("Arrow")) {
@@ -417,13 +436,26 @@
                     <div class="rounded-lg flex flex-col flex-1 min-h-0 min-w-0">
                         {#if showVehicle}
                             <h3 class="text-lg font-semibold">{$LL.woka.vehicle.title()}</h3>
+                            <div class="flex gap-2" role="group" aria-label={$LL.woka.vehicle.title()}>
+                                {#each vehicleMedia as medium (medium.id)}
+                                    <button
+                                        type="button"
+                                        class="rounded p-2 hover:bg-white/10"
+                                        aria-pressed={selectedVehicleMedium === medium.id}
+                                        onclick={() => (selectedVehicleMedium = medium.id)}
+                                        data-testid={"woka-vehicle-medium-" + medium.id}
+                                    >
+                                        {$LL.woka.vehicle.media[medium.id]()}
+                                    </button>
+                                {/each}
+                            </div>
                             <p class="text-sm text-white/70">
                                 {selectedVehicle === Vehicle.Canoe
                                     ? $LL.woka.vehicle.canoeHint()
                                     : $LL.woka.vehicle.hint()}
                             </p>
                             <div class="grid grid-cols-2 gap-3 py-4" role="group" aria-label={$LL.woka.vehicle.title()}>
-                                {#each Object.values(Vehicle) as vehicle (vehicle)}
+                                {#each mediumVehicles as vehicle (vehicle)}
                                     <button
                                         type="button"
                                         class="relative rounded-lg border-2 border-solid p-3 flex flex-col items-center gap-2 min-w-0 {selectedVehicle ===
@@ -431,7 +463,7 @@
                                             ? 'bg-white/20 border-white'
                                             : 'bg-white/5 hover:bg-white/10 border-white/20'}"
                                         aria-pressed={selectedVehicle === vehicle}
-                                        onclick={() => (selectedVehicle = vehicle)}
+                                        onclick={() => (selectedVehiclePreferences[selectedVehicleMedium] = vehicle)}
                                         data-testid={`woka-vehicle-${vehicle}`}
                                     >
                                         {#if selectedVehicle === vehicle}
@@ -444,7 +476,7 @@
                                                 {getTextureUrl}
                                                 canvasSize={90}
                                                 {vehicle}
-                                                vehicleColors={selectedVehicleColors}
+                                                vehicleColors={vehicleColors[vehicle]}
                                                 direction={assetsDirection}
                                             />
                                         </div>
@@ -458,13 +490,15 @@
                                         <span
                                             >{selectedVehicle === Vehicle.ElectricUnicycle
                                                 ? $LL.woka.vehicle.shellColor()
-                                                : selectedVehicle === Vehicle.Canoe
-                                                  ? $LL.woka.vehicle.hullColor()
-                                                  : $LL.woka.vehicle.centerColor()}</span
+                                                : selectedVehicle === Vehicle.Airplane
+                                                  ? $LL.woka.vehicle.fuselageColor()
+                                                  : selectedVehicle === Vehicle.Canoe
+                                                    ? $LL.woka.vehicle.hullColor()
+                                                    : $LL.woka.vehicle.centerColor()}</span
                                         >
                                         <input
                                             type="color"
-                                            bind:value={selectedVehicleColors.color}
+                                            bind:value={vehicleColors[selectedVehicle].color}
                                             data-testid="woka-vehicle-color"
                                         />
                                     </label>
@@ -472,13 +506,15 @@
                                         <span
                                             >{selectedVehicle === Vehicle.ElectricUnicycle
                                                 ? $LL.woka.vehicle.sideColor()
-                                                : selectedVehicle === Vehicle.Canoe
-                                                  ? $LL.woka.vehicle.rimColor()
-                                                  : $LL.woka.vehicle.edgeColor()}</span
+                                                : selectedVehicle === Vehicle.Airplane
+                                                  ? $LL.woka.vehicle.wingsColor()
+                                                  : selectedVehicle === Vehicle.Canoe
+                                                    ? $LL.woka.vehicle.rimColor()
+                                                    : $LL.woka.vehicle.edgeColor()}</span
                                         >
                                         <input
                                             type="color"
-                                            bind:value={selectedVehicleColors.edgeColor}
+                                            bind:value={vehicleColors[selectedVehicle].edgeColor}
                                             data-testid="woka-vehicle-edge-color"
                                         />
                                     </label>
@@ -486,13 +522,15 @@
                                         <span
                                             >{selectedVehicle === Vehicle.ElectricUnicycle
                                                 ? $LL.woka.vehicle.pedalsColor()
-                                                : selectedVehicle === Vehicle.Canoe
-                                                  ? $LL.woka.vehicle.paddleColor()
-                                                  : $LL.woka.vehicle.wheelsColor()}</span
+                                                : selectedVehicle === Vehicle.Airplane
+                                                  ? $LL.woka.vehicle.canopyColor()
+                                                  : selectedVehicle === Vehicle.Canoe
+                                                    ? $LL.woka.vehicle.paddleColor()
+                                                    : $LL.woka.vehicle.wheelsColor()}</span
                                         >
                                         <input
                                             type="color"
-                                            bind:value={selectedVehicleColors.wheelsColor}
+                                            bind:value={vehicleColors[selectedVehicle].wheelsColor}
                                             data-testid="woka-vehicle-wheels-color"
                                         />
                                     </label>

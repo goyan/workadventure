@@ -16,6 +16,7 @@ describe("PixelIcons", () => {
     it("has an icon for each action of the wheel and each family of sound effects", () => {
         expect(Object.keys(PIXEL_ICONS).sort()).toEqual(
             [
+                "airplane",
                 "bell",
                 "coffee",
                 "comet",

@@ -220,3 +220,7 @@ export { default as IconPumpkinScary } from "~icons/tabler/pumpkin-scary";
 export { default as IconFlower } from "~icons/tabler/flower";
 export { default as IconWand } from "~icons/tabler/wand";
 export { default as IconWandOff } from "~icons/tabler/wand-off";
+
+export { default as IconRoad } from "~icons/tabler/road";
+export { default as IconBeach } from "~icons/tabler/beach";
+export { default as IconPlane } from "~icons/tabler/plane";
