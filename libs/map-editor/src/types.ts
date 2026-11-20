@@ -958,7 +958,10 @@ export const DEFAULT_WATER_SETTINGS = {
     absorption: 5,
     current: 1,
     maxSurface: 18,
+    indoorDrain: 300,
 } as const;
+/** The fastest the floors of the rooms of a map may drain, in mm an hour. */
+export const MAX_WATER_INDOOR_DRAIN = 10000;
 /** The strongest current a map may set: twice the usual one. */
 export const MAX_WATER_CURRENT = 2;
 export const MAX_WATER_SPEED = 1000;
@@ -990,6 +993,12 @@ export const WaterSettings = z.object({
         .min(DEFAULT_WATER_SETTINGS.maxSurface)
         .max(MAX_WATER_MAX_SURFACE)
         .default(DEFAULT_WATER_SETTINGS.maxSurface),
+    /**
+     * Water the floors of the rooms (what the walls close, doors closed) drain, in mm an hour of the time of the map:
+     * 300 by default, a slow seep: a flooded room is dry in about two minutes at the usual speed; drains placed on
+     * the floor (sinks) take it faster. 0 keeps the water inside.
+     */
+    indoorDrain: z.number().min(0).max(MAX_WATER_INDOOR_DRAIN).default(DEFAULT_WATER_SETTINGS.indoorDrain),
 });
 export type WaterSettings = z.infer<typeof WaterSettings>;
 

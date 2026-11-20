@@ -123,6 +123,57 @@ export interface WaterWallSides {
     south: ReadonlySet<string>;
 }
 
+/**
+ * The cells of a grid that are indoors: those the water cannot reach from the edge of the grid without crossing one
+ * of `walls` (the walls of the map with their doors closed: landWallsOf). A building the edge of the grid cuts is
+ * outdoors: its rooms are not closed inside the grid.
+ */
+export function indoorCells(bounds: WaterGridBounds, walls: WaterWallSides | undefined): Uint8Array {
+    const { x, y, width, height } = bounds;
+    const size = width * height;
+    const indoor = new Uint8Array(size);
+    if (!walls || (walls.east.size === 0 && walls.south.size === 0) || size === 0) return indoor;
+    // For each cell, its east (1) and south (2) sides that a wall closes.
+    const closed = new Uint8Array(size);
+    for (const [sides, bit] of [
+        [walls.east, 1],
+        [walls.south, 2],
+    ] as const) {
+        for (const key of sides) {
+            const cell = cellOf(key);
+            const column = cell.x - x;
+            const row = cell.y - y;
+            if (column >= 0 && row >= 0 && column < width && row < height) closed[row * width + column] |= bit;
+        }
+    }
+    const reached = new Uint8Array(size);
+    const queue = new Int32Array(size);
+    let tail = 0;
+    const visit = (index: number): void => {
+        if (reached[index]) return;
+        reached[index] = 1;
+        queue[tail++] = index;
+    };
+    for (let column = 0; column < width; column++) {
+        visit(column);
+        visit((height - 1) * width + column);
+    }
+    for (let row = 0; row < height; row++) {
+        visit(row * width);
+        visit(row * width + width - 1);
+    }
+    for (let head = 0; head < tail; head++) {
+        const index = queue[head];
+        const column = index % width;
+        if (column + 1 < width && !(closed[index] & 1)) visit(index + 1);
+        if (column > 0 && !(closed[index - 1] & 1)) visit(index - 1);
+        if (index + width < size && !(closed[index] & 2)) visit(index + width);
+        if (index >= width && !(closed[index - width] & 2)) visit(index - width);
+    }
+    for (let index = 0; index < size; index++) indoor[index] = reached[index] ? 0 : 1;
+    return indoor;
+}
+
 /** The most moves the water makes around a sink in one step. */
 export const MAX_FLOW_STEPS = 16;
 /** How far a cell exchanges water with another of its stretch, in cells, over long distances. */
@@ -229,6 +280,11 @@ export interface WaterStepInput {
     /** Water the flat ground drinks from each wet cell that is not dug. */
     absorptionPx: number;
     /**
+     * Water the floor of a room takes away from each wet cell that is indoors and not dug (see indoorCells): the
+     * drains of the buildings, counted with the sinks. None when absent.
+     */
+    indoorDrainPx?: number;
+    /**
      * Sources (positive) and sinks (negative), each at a cell of the map. `radius` is the disc, in cells, a source
      * pours over (its cell only when absent) or a sink takes from (a tile and a half when absent). `level` is the
      * altitude of the water, in pixels, a source stops pouring at and a sink stops taking at: at each step it gives
@@ -273,6 +329,8 @@ export class WaterGrid {
     /** The share of the absorption of the map the soil of each cell drinks (see soilDrinks). */
     private readonly drinks: Float32Array;
     private readonly blocked: Uint8Array;
+    /** The cells indoors (see indoorCells): the floor of a room drains its water. */
+    private readonly indoor: Uint8Array;
     /**
      * For each cell, the sides the water cannot cross (a wall between two cells, or a blocked neighbour): a bit for
      * each side, in the order east, west, south, north.
@@ -302,6 +360,8 @@ export class WaterGrid {
         bounds: WaterGridBounds | undefined,
         blocked?: (cellX: number, cellY: number) => boolean,
         walls?: WaterWallSides,
+        /** The walls that close the rooms (doors closed): what they close is indoors. No room when absent. */
+        rooms?: WaterWallSides,
     ) {
         this.bounds = bounds ?? { x: 0, y: 0, width: 0, height: 0 };
         const size = this.bounds.width * this.bounds.height;
@@ -324,6 +384,7 @@ export class WaterGrid {
             }
         }
         this.spill = spillLevels(this.ground, this.bounds.width, this.bounds.height);
+        this.indoor = indoorCells(this.bounds, rooms);
         this.drinks = new Float32Array(size);
         for (let row = 0; row < this.bounds.height; row++) {
             for (let column = 0; column < this.bounds.width; column++) {
@@ -513,8 +574,9 @@ export class WaterGrid {
         const rain = amount(input.rainPx);
         const evaporation = amount(input.evaporationPx);
         const absorption = amount(input.absorptionPx);
+        const indoorDrain = amount(input.indoorDrainPx ?? 0);
         const depth = this.depth;
-        if (rain > 0 || evaporation > 0 || absorption > 0) {
+        if (rain > 0 || evaporation > 0 || absorption > 0 || indoorDrain > 0) {
             for (let index = 0; index < depth.length; index++) {
                 if (this.blocked[index]) continue;
                 // In a hollow: dug under the ground of the map, or under the rim of a crater on a mount.
@@ -535,6 +597,13 @@ export class WaterGrid {
                     const taken = Math.min(depth[index], absorption * this.drinks[index]);
                     depth[index] -= taken;
                     tally.absorptionPx += taken;
+                    tally.moved = true;
+                }
+                // The floor of a room drains, never a pool dug in it.
+                if (indoorDrain > 0 && this.indoor[index] && !dug && depth[index] > 0) {
+                    const taken = Math.min(depth[index], indoorDrain);
+                    depth[index] -= taken;
+                    tally.sinksPx += taken;
                     tally.moved = true;
                 }
             }
