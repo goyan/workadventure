@@ -2,6 +2,7 @@ import {
     DEFAULT_LIFE_SETTINGS,
     DEFAULT_MAX_DEPTH_TILES,
     DEFAULT_MEADOW_SETTINGS,
+    DEFAULT_WATER_PACE,
     DEFAULT_WATER_SETTINGS,
     DEFAULT_WAVE_SETTINGS,
 } from "@workadventure/map-editor";
@@ -20,6 +21,8 @@ export function readTerrainMapSettings(): {
     indoorDrain: number;
     inertia: boolean;
     waves: WaveSettings;
+    precision: number;
+    updates: number;
     life: LifeSettings;
     meadow: MeadowSettings;
 } {
@@ -35,6 +38,8 @@ export function readTerrainMapSettings(): {
         indoorDrain: wam?.settings?.water?.indoorDrain ?? DEFAULT_WATER_SETTINGS.indoorDrain,
         inertia: wam?.settings?.water?.inertia ?? false,
         waves: { ...DEFAULT_WAVE_SETTINGS, ...wam?.settings?.water?.waves },
+        precision: wam?.settings?.water?.precision ?? DEFAULT_WATER_PACE.precision,
+        updates: wam?.settings?.water?.updates ?? DEFAULT_WATER_PACE.updates,
         life: { ...DEFAULT_LIFE_SETTINGS, ...wam?.settings?.life },
         meadow: { ...DEFAULT_MEADOW_SETTINGS, ...wam?.settings?.meadow },
     };

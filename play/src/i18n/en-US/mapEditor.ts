@@ -713,7 +713,7 @@ const mapEditor: BaseTranslation = {
         mapSettings: "Map settings",
         realistic: "Realistic",
         realisticHint:
-            "Sets every setting of the water back to its physical value: speed 1, water with inertia, waves as the ground and the depth make them, water height not capped (256 px), runoff 10, evaporation 0.2 mm/h, absorption 5 mm/h, drainage 300 mm/h.",
+            "Sets every setting of the water back to its physical value: speed 1, water with inertia, waves as the ground and the depth make them, 5 tellings a second, water height not capped (256 px), runoff 10, evaporation 0.2 mm/h, absorption 5 mm/h, drainage 300 mm/h.",
         maxDepth: "Maximum depth and height (tiles)",
         runoff: "Runoff (ground feeding a hollow)",
         evaporation: "Evaporation in dry weather",
@@ -741,6 +741,12 @@ const mapEditor: BaseTranslation = {
         current: "Strength of the current (0: avatars are not carried)",
         maxSurface: "Highest water over the ground",
         inertia: "Water with inertia (on trial)",
+        precision: "Fineness of the computation of the water",
+        precisionHint:
+            "The most moves of the water in a step (10 steps a second). At 3, a wave runs at 5.5 m/s at most and a torrent at 8 m/s; at 8, 15 and 22 m/s. In reality a wave runs at 7.7 m/s in 6 m of water. Each move more costs the server as much computation.",
+        updates: "Tellings of the water to the players",
+        updatesHint:
+            "How many times a second the players receive the water while it moves. At 1, a wave fades from a place to the next; at 5 or 10, it is seen running. Measured during a tsunami: about 45 KB a telling and a player, 450 KB/s at 10; next to nothing on calm water. Under a downpour, a drain or after a comet: 5 at least.",
         waves: {
             roughness: "Friction of the ground",
             roughnessHint:

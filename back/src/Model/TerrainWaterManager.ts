@@ -16,6 +16,7 @@ import {
     startImpactWave,
     ratesOf,
     stepInputOf,
+    stepsBetweenUpdates,
     TERRAIN_CELL,
     TILE_PX,
     WATER_MESSAGE_MS,
@@ -42,8 +43,14 @@ import type { RainTimelineService } from "./Services/RainTimelineService";
 
 /** The room is told the water once a second (every tenth step), what changed only. */
 const STEPS_PER_MESSAGE = WATER_MESSAGE_MS / WATER_STEP_MS;
-/** A whole state is sent again this often, so a browser that lost its place finds it again. */
-const MESSAGES_PER_FULL_STATE = 30;
+/** A whole state is sent again this often (half a minute), so a browser that lost its place finds it again. */
+const STEPS_PER_FULL_STATE = 300;
+/**
+ * A cell whose water changed by less than this many eighths of a pixel (a quarter of a pixel) since the room was
+ * last told is not told again: a lake that barely ripples costs next to no network (measured: three to four times
+ * less on a calm lake). Never for a cell that dries or gets wet, and the whole state puts everything right.
+ */
+const UNTOLD_EIGHTHS = 2;
 /** While the wave of an impact runs, the room is told five times a second: a wave seen once a second would jump. */
 const WAVE_STEPS_PER_MESSAGE = 2;
 /** After an impact on a water with inertia, the room is told that often for this long (half a minute). */
@@ -101,7 +108,8 @@ export class TerrainWaterManager {
     private seq = 0;
     /** Counts the changes of the water (a step that moved it, a new grid): what lives in it reads it again then. */
     private version = 0;
-    private messagesSinceFull = 0;
+    /** The step the room was last told a whole state at. */
+    private fullAtStep = -Infinity;
     private changedSinceSave = false;
 
     constructor(
@@ -235,7 +243,9 @@ export class TerrainWaterManager {
             this.sums.absorptionPx += tally.absorptionPx;
             this.sums.lostPx += tally.lostPx;
         }
-        if (this.steps % STEPS_PER_MESSAGE === 0 || (waving && this.steps % WAVE_STEPS_PER_MESSAGE === 0)) {
+        // As often as the map asks while the water moves, and at least five times a second under a wave.
+        const between = stepsBetweenUpdates(settings?.water?.updates);
+        if (this.steps % between === 0 || (waving && this.steps % Math.min(between, WAVE_STEPS_PER_MESSAGE) === 0)) {
             this.tell(grid);
         }
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
@@ -399,14 +409,26 @@ export class TerrainWaterManager {
         const anyRate = Object.values(rates).some((rate) => rate > 0);
         const bytes = grid.writeDepths();
         const previous = this.sentBytes;
-        const full = !previous || previous.length !== bytes.length || this.messagesSinceFull >= MESSAGES_PER_FULL_STATE;
-        let changed = full;
+        // A whole state when the room knows none (or another grid), and again every half minute.
+        const full =
+            !previous || previous.length !== bytes.length || this.steps - this.fullAtStep >= STEPS_PER_FULL_STATE;
         let payload = bytes;
-        if (!full) {
-            payload = new Uint8Array(bytes.length);
-            for (let index = 0; index < bytes.length; index++) {
-                payload[index] = bytes[index] ^ previous[index];
-                if (payload[index] !== 0) changed = true;
+        let changed = !previous || previous.length !== bytes.length;
+        if (previous && previous.length === bytes.length) {
+            // What barely changed since the room was told is not told again; a whole state tells it as it is.
+            const told = full ? Uint8Array.from(bytes) : bytes;
+            for (let index = 0; index < bytes.length; index += 2) {
+                const now = bytes[index] | (bytes[index + 1] << 8);
+                const before = previous[index] | (previous[index + 1] << 8);
+                if (now === before) continue;
+                if (now !== 0 && before !== 0 && Math.abs(now - before) < UNTOLD_EIGHTHS) {
+                    told[index] = previous[index];
+                    told[index + 1] = previous[index + 1];
+                } else changed = true;
+            }
+            if (!full) {
+                payload = new Uint8Array(bytes.length);
+                for (let index = 0; index < bytes.length; index++) payload[index] = bytes[index] ^ previous[index];
             }
         }
         // Still water: nothing to say, but for the rates going back to nothing.
@@ -415,7 +437,7 @@ export class TerrainWaterManager {
         if (previous === undefined && !anyRate && grid.totalPx() === 0) return;
         this.sentBytes = bytes;
         this.sentRates = anyRate;
-        this.messagesSinceFull = full ? 0 : this.messagesSinceFull + 1;
+        if (full) this.fullAtStep = this.steps;
         this.seq++;
         this.room.sendSubMessageToRoom({
             message: {

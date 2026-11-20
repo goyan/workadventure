@@ -269,3 +269,43 @@ describe("TerrainWater.settled", () => {
         expect(water.settled().seconds).toBe(Infinity);
     });
 });
+
+describe("TerrainWater glide", () => {
+    const one = (depth: number): Uint8Array => Uint8Array.from([(depth * 8) & 255, (depth * 8) >> 8]);
+    const state = (seq: number, depth: number) => ({
+        x: 0,
+        y: 0,
+        width: 1,
+        height: 1,
+        seq,
+        full: true,
+        depths: one(depth),
+    });
+
+    it("glides to a state for as long as the server took to send it: a second, or less when told more often", () => {
+        const slow = new TerrainWater();
+        slow.receive(state(1, 0), 0);
+        slow.receive(state(2, 10), 1000);
+        // A second apart: half way after half a second.
+        expect(slow.depthAt(8, 8, 1500)).toBeCloseTo(5, 5);
+        const fast = new TerrainWater();
+        fast.receive(state(1, 0), 0);
+        fast.receive(state(2, 10), 200);
+        // A fifth of a second apart: half way after a tenth, there after a fifth.
+        expect(fast.depthAt(8, 8, 300)).toBeCloseTo(5, 5);
+        expect(fast.depthAt(8, 8, 400)).toBe(10);
+    });
+
+    it("is drawn five times a second while it glides, however often the server tells it", () => {
+        const water = new TerrainWater();
+        water.receive(state(1, 0), 0);
+        water.receive(state(2, 10), 100);
+        const key = water.drawKey(110);
+        // Another state in the same fifth of a second: no drawing of its own.
+        water.receive(state(3, 12), 150);
+        expect(water.drawKey(160)).toBe(key);
+        expect(water.drawKey(210)).not.toBe(key);
+        // Once at rest, drawn a last time and no more.
+        expect(water.drawKey(5000)).toBe(water.drawKey(6000));
+    });
+});

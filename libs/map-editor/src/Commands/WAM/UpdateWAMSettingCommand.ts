@@ -20,6 +20,7 @@ import {
     MegaphoneSettings,
     PrefabOverride,
     RecordingSettings,
+    WATER_PACE_BOUNDS,
     WAVE_BOUNDS,
     Weather,
     WeatherLocation,
@@ -147,6 +148,8 @@ export class UpdateWAMSettingCommand extends Command {
                     waveDamping,
                     waveBreaking,
                     waveMomentum,
+                    precision,
+                    updates,
                 } = message.updateWaterSettingMessage;
                 const within = (value: number, min: number, max: number, fallback: number): number =>
                     Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
@@ -179,6 +182,13 @@ export class UpdateWAMSettingCommand extends Command {
                               momentum: wave("momentum"),
                           }
                         : undefined;
+                // How finely the water is computed and how often it is told: whole numbers within their bounds, as
+                // the map had them when the client says nothing; nothing kept for a map that never set one.
+                const keptWater = this.wam.settings.water;
+                const paced = (key: keyof typeof WATER_PACE_BOUNDS, sent: number | undefined): number | undefined => {
+                    if (sent === undefined || !Number.isFinite(sent)) return keptWater?.[key];
+                    return Math.round(within(sent, WATER_PACE_BOUNDS[key][0], WATER_PACE_BOUNDS[key][1], sent));
+                };
                 this.wam.settings.water = {
                     runoff: within(runoff, 0, 100, DEFAULT_WATER_SETTINGS.runoff),
                     evaporation: within(evaporation, 0, 10, DEFAULT_WATER_SETTINGS.evaporation),
@@ -201,6 +211,10 @@ export class UpdateWAMSettingCommand extends Command {
                     // An older client says nothing of the inertia: the map keeps the water it had.
                     ...((inertia ?? this.wam.settings.water?.inertia) ? { inertia: true } : {}),
                     ...(waves ? { waves } : {}),
+                    ...(paced("precision", precision) === undefined
+                        ? {}
+                        : { precision: paced("precision", precision) }),
+                    ...(paced("updates", updates) === undefined ? {} : { updates: paced("updates", updates) }),
                 };
                 break;
             }

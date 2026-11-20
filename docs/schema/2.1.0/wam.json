@@ -1979,6 +1979,16 @@
                 "inertia": {
                   "type": "boolean"
                 },
+                "precision": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 8
+                },
+                "updates": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10
+                },
                 "waves": {
                   "type": "object",
                   "properties": {

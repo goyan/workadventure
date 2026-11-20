@@ -462,6 +462,10 @@ message UpdateWaterSettingMessage {
   optional double waveDamping = 10;
   optional double waveBreaking = 11;
   optional double waveMomentum = 12;
+  // The most moves of the water with inertia in a step, and how many times a second the room is told the water
+  // while it moves (WaterSettings.precision, .updates). Absent from older clients: kept.
+  optional int32 precision = 13;
+  optional int32 updates = 14;
 }
 
 // Map-wide weather, validated against WeatherType before it is stored.

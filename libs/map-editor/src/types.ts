@@ -973,6 +973,14 @@ export const WAVE_BOUNDS = {
     momentum: [0, 1],
 } as const satisfies Record<keyof typeof DEFAULT_WAVE_SETTINGS, readonly [number, number]>;
 /**
+ * How finely the water of a map is computed and how often its players are told, on a map that says nothing: up to
+ * three moves of the water with inertia a step, and the room told once a second while it moves.
+ */
+export const DEFAULT_WATER_PACE = { precision: 3, updates: 1 } as const;
+/** The bounds of each of them. */
+export const WATER_PACE_BOUNDS = { precision: [1, 8], updates: [1, 10] } as const;
+
+/**
  * The water of a map as in reality (the "Realistic" button of the relief tool): it goes at its real pace, has
  * inertia and makes its waves as the ground and its depth make them, and no flood is cut short. The damping is the
  * only figure that is not physical (0 in reality): the least that keeps the computation calm.
@@ -987,6 +995,8 @@ export const REALISTIC_WATER_SETTINGS = {
     indoorDrain: 300,
     inertia: true,
     waves: DEFAULT_WAVE_SETTINGS,
+    precision: DEFAULT_WATER_PACE.precision,
+    updates: 5,
 } as const;
 /** The fastest the floors of the rooms of a map may drain, in mm an hour. */
 export const MAX_WATER_INDOOR_DRAIN = 10000;
@@ -1044,6 +1054,16 @@ export const WaterSettings = z.object({
      * - `momentum`: the share of its momentum the water carries along (0: each passage keeps its own flow only;
      *   1: a wave throws itself up a shore, and runs back).
      */
+    /**
+     * How finely the water with inertia is computed: the most moves it makes in a step (3 when absent). More
+     * moves let a deep water carry its waves faster and a torrent run faster, for as many times the computation.
+     */
+    precision: z.number().int().min(WATER_PACE_BOUNDS.precision[0]).max(WATER_PACE_BOUNDS.precision[1]).optional(),
+    /**
+     * How many times a second the players are told the water while it moves (once when absent). More often, a
+     * wave is seen running instead of fading from a place to the next, for as much more network.
+     */
+    updates: z.number().int().min(WATER_PACE_BOUNDS.updates[0]).max(WATER_PACE_BOUNDS.updates[1]).optional(),
     waves: z
         .object({
             roughness: z.number().min(WAVE_BOUNDS.roughness[0]).max(WAVE_BOUNDS.roughness[1]),

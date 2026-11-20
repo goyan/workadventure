@@ -1,5 +1,6 @@
 import {
     DEFAULT_SINK_RADIUS_TILES,
+    DEFAULT_WATER_PACE,
     DEFAULT_WATER_SETTINGS,
     DEFAULT_WAVE_SETTINGS,
     TERRAIN_CELL,
@@ -17,6 +18,16 @@ export const WATER_STEP_MS = 100;
 
 /** The room is told the water this often (what changed only): the browsers glide from one state to the next. */
 export const WATER_MESSAGE_MS = 1000;
+
+/**
+ * How many steps of the water there are between two tellings of the room, on a map that asks for `updates` a
+ * second (once a second when it says nothing, never more often than every step).
+ */
+export function stepsBetweenUpdates(updates: number | undefined): number {
+    const asked =
+        updates !== undefined && Number.isFinite(updates) && updates >= 1 ? updates : DEFAULT_WATER_PACE.updates;
+    return Math.max(1, Math.round(1000 / WATER_STEP_MS / asked));
+}
 
 /** A source (positive flow) or a sink (negative) of the map, at the cell where its water comes out. */
 export interface WaterObject {
@@ -91,7 +102,12 @@ export function stepInputOf(
         flowSteps: Math.max(1, Math.min(MAX_FLOW_STEPS, Math.round(figure(settings.speed, 1) / SPEED_PER_FLOW_STEP))),
         // The water with inertia, on a map that chose it: it needs the real time of the step, whatever the speed.
         ...(settings.inertia
-            ? { inertia: true, seconds: figure(seconds), waves: { ...DEFAULT_WAVE_SETTINGS, ...settings.waves } }
+            ? {
+                  inertia: true,
+                  seconds: figure(seconds),
+                  waves: { ...DEFAULT_WAVE_SETTINGS, ...settings.waves },
+                  moves: settings.precision ?? DEFAULT_WATER_PACE.precision,
+              }
             : {}),
         flows: objects
             .filter((object) => Number.isFinite(object.litresPerMinute) && hours > 0)

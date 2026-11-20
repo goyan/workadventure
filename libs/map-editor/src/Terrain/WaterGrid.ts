@@ -262,11 +262,13 @@ export function steadyFlowSpeed(
 }
 
 /**
- * The most moves of the water with inertia in a step. Deeper than what they bear (about 100 px of water), a wave
- * runs no faster than in that depth: one deep hole would otherwise make every step of the whole map twice as
- * long (measured on a map with a pit of 300 px).
+ * The most moves of the water with inertia in a step, on a map that says nothing, and the most a map may ask for.
+ * Deeper than what its moves bear (about 100 px of water for three), a wave runs no faster than in that depth, and
+ * no water crosses more than half a cell in a move: one deep hole or one torrent would otherwise make every step of
+ * the whole map longer (measured on a map with a pit of 300 px and a source of 50 m³/s).
  */
-const MAX_INERTIA_MOVES = 3;
+const USUAL_INERTIA_MOVES = 3;
+const MOST_INERTIA_MOVES = 8;
 
 /** The cells a water grid covers, in cells of the relief. */
 export interface WaterGridBounds {
@@ -385,6 +387,8 @@ export interface WaterStepInput {
     seconds?: number;
     /** How the water with inertia makes its waves (WaterSettings.waves): the usual ones when absent. */
     waves?: WaveSettings;
+    /** The most moves the water with inertia makes in this step (WaterSettings.precision): three when absent. */
+    moves?: number;
 }
 
 /** What came in and went out during one step, in pixels of water over one cell (CELL_LITRES_PER_PX litres each). */
@@ -787,7 +791,7 @@ export class WaterGrid {
             }
         }
         if (input.inertia) {
-            if (this.flowWithInertia(tally, input.seconds, input.waves)) tally.moved = true;
+            if (this.flowWithInertia(tally, input.seconds, input.waves, input.moves)) tally.moved = true;
         } else {
             // A map that went back to the water that creeps: its water forgets the way it was going.
             if (this.flowEast.length > 0) this.forgetFlows();
@@ -1263,7 +1267,12 @@ export class WaterGrid {
      * computation bears. The walls and the edge of the grid are those of `flow`; the waves are never cut at the
      * highest level the map sets, only at the highest a map may set. Returns whether any moved.
      */
-    private flowWithInertia(tally: WaterTally, seconds: number | undefined, waves: WaveSettings | undefined): boolean {
+    private flowWithInertia(
+        tally: WaterTally,
+        seconds: number | undefined,
+        waves: WaveSettings | undefined,
+        asked?: number,
+    ): boolean {
         const { width, height } = this.bounds;
         const size = width * height;
         if (this.flowEast.length !== size) {
@@ -1282,11 +1291,15 @@ export class WaterGrid {
         const breaking = figure(waves?.breaking, DEFAULT_WAVE_SETTINGS.breaking) * BREAKING_GAIN;
         const carried = Math.min(1, figure(waves?.momentum, DEFAULT_WAVE_SETTINGS.momentum));
         const step = seconds !== undefined && Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds, 1) : 0.1;
+        const most =
+            asked !== undefined && Number.isFinite(asked) && asked >= 1
+                ? Math.min(MOST_INERTIA_MOVES, Math.round(asked))
+                : USUAL_INERTIA_MOVES;
         let deepest = 0;
         for (let index = 0; index < size; index++) if (this.depth[index] > deepest) deepest = this.depth[index];
         if (deepest <= DRY_PX) return false;
         const moves = Math.min(
-            MAX_INERTIA_MOVES,
+            most,
             Math.max(1, Math.ceil((Math.sqrt(GRAVITY * deepest) * step) / WAVE_CELLS_PER_MOVE)),
         );
         const dt = step / moves;

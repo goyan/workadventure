@@ -724,7 +724,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         mapSettings: "Réglages de la carte",
         realistic: "Réaliste",
         realisticHint:
-            "Remet tous les réglages de l'eau sur leurs valeurs physiques : vitesse 1, eau à inertie, vagues selon le sol et la profondeur, hauteur d'eau non plafonnée (256 px), ruissellement 10, évaporation 0,2 mm/h, absorption 5 mm/h, vidange 300 mm/h.",
+            "Remet tous les réglages de l'eau sur leurs valeurs physiques : vitesse 1, eau à inertie, vagues selon le sol et la profondeur, 5 envois par seconde, hauteur d'eau non plafonnée (256 px), ruissellement 10, évaporation 0,2 mm/h, absorption 5 mm/h, vidange 300 mm/h.",
         maxDepth: "Profondeur et hauteur maximales (cases)",
         runoff: "Ruissellement (terrain qui alimente un creux)",
         evaporation: "Évaporation par temps sec",
@@ -752,6 +752,12 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         current: "Force du courant (0 : les avatars ne sont pas emportés)",
         maxSurface: "Hauteur maximale de l'eau au-dessus du sol",
         inertia: "Eau à inertie (à l'essai)",
+        precision: "Finesse du calcul de l'eau",
+        precisionHint:
+            "Nombre maximal de mouvements de l'eau par pas (10 pas par seconde). À 3, une vague court au plus à 5,5 m/s et un torrent à 8 m/s ; à 8, 15 et 22 m/s. En réel : une vague court à 7,7 m/s sous 6 m d'eau. Chaque mouvement de plus coûte autant de calcul au serveur.",
+        updates: "Envois de l'eau aux joueurs",
+        updatesHint:
+            "Nombre de fois par seconde où les joueurs reçoivent l'eau quand elle bouge. À 1, une vague se fond d'un endroit au suivant ; à 5 ou 10, on la voit courir. Mesuré pendant un tsunami : environ 45 Ko par envoi et par joueur, soit 450 Ko/s à 10 ; presque rien sur une eau calme. Sous une averse, un drain ou après une comète : au moins 5.",
         waves: {
             roughness: "Frottement du sol",
             roughnessHint:

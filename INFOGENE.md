@@ -2489,6 +2489,30 @@ Coût mesuré avec ces vagues (conteneur Linux sur Mac) : 30 à 33 ms par pas su
 l'eau, quelle que soit sa profondeur ; 22 ms sur la carte d'équipe locale rejouée (100 000 cellules sous l'eau,
 4 ms sans inertie).
 
+
+### Cadence : finesse du calcul et envois aux joueurs (réglables par carte)
+
+Trois cadences se cachent derrière « la fréquence de l'eau » : le calcul (10 pas par seconde, 1 à 3 mouvements
+par pas sous inertie), l'envoi aux joueurs (une fois par seconde, cinq sous une averse, un drain ou après une
+comète) et l'affichage (un fondu d'un état vers le suivant). Le joueur ne voit que la plus lente.
+
+- **Finesse du calcul** (`settings.water.precision`, 1 à 8, 3 par défaut, `UpdateWaterSettingMessage.precision`
+  champ 13) : le plus de mouvements de l'eau à inertie par pas. À 3, une vague court au plus à 5,5 m/s et un
+  torrent à 8 m/s ; à 8, 15 et 22 m/s. Chaque mouvement de plus coûte autant de calcul.
+- **Envois aux joueurs** (`settings.water.updates`, 1 à 10 par seconde, 1 par défaut, champ 14,
+  `stepsBetweenUpdates`) : quand l'eau bouge. Le bouton « Réaliste » le met à 5.
+- **Fondu calé sur l'intervalle réel** (`TerrainWater.glideMs`) : il durait toujours une seconde, même quand les
+  états arrivaient cinq fois par seconde ; l'eau affichée traînait derrière. L'eau reste dessinée cinq fois par
+  seconde au plus pendant un fondu.
+- **Ce qui a à peine changé n'est pas renvoyé** : une cellule dont l'eau a bougé de moins d'un quart de pixel depuis
+  le dernier envoi garde la valeur que la salle connaît (jamais une cellule qui s'assèche ou se mouille) ; un état
+  complet, toutes les trente secondes, remet tout d'aplomb.
+
+Mesuré hors jeu (grille de 480 × 320) : une carte au repos coûte 0,3 Ko par envoi (les cellules inchangées ne
+pèsent rien) ; un lac calme avec une source, 7 Ko/s à 5 envois par seconde, 2 Ko/s avec la bande d'un quart de
+pixel ; un tsunami, 45 à 63 Ko par envoi, soit 258 Ko/s à 5 envois et 450 Ko/s à 10, par joueur. N'envoyer que la
+zone qui change n'apporterait donc rien, et un autre encodage 25 % au mieux pendant un tsunami : non faits.
+
 ## Vie aquatique (poissons et dauphins)
 
 Conception et plan dans le dépôt d'infra, `docs/superpowers/{specs,plans}/2026-11-18-vie-aquatique*`.
