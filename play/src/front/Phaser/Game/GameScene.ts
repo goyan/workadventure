@@ -416,6 +416,7 @@ import { FishingManager } from "./Fishing/FishingManager";
 import { MeteorView } from "./Catastrophe/MeteorView";
 import { FireView } from "./Fire/FireView";
 import { TreeFireState } from "./Fire/TreeFireState";
+import { TreeFireView } from "./Fire/TreeFireView";
 import { DownpourView } from "./Catastrophe/DownpourView";
 import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
 import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
@@ -603,6 +604,7 @@ export class GameScene extends DirtyScene {
     private terrainWaterSubscription: Subscription | undefined;
     private meteorView: MeteorView | undefined;
     private fireView: FireView | undefined;
+    private treeFireView: TreeFireView | undefined;
     private downpourView: DownpourView | undefined;
     private catastropheSubscription: Subscription | undefined;
     /** The animals of the water of the relief, as the server tells them. */
@@ -1763,6 +1765,8 @@ export class GameScene extends DirtyScene {
         this.meteorView = undefined;
         this.fireView?.destroy();
         this.fireView = undefined;
+        this.treeFireView?.destroy();
+        this.treeFireView = undefined;
         this.downpourView?.destroy();
         this.downpourView = undefined;
         rodEquippedStore.set(false);
@@ -2291,6 +2295,7 @@ export class GameScene extends DirtyScene {
             this._fishingManager?.update(time);
             this.meteorView?.update(time);
             this.fireView?.update(time);
+            this.treeFireView?.update(time);
             this.downpourView?.update(time);
             this.nightManager?.update(time);
             this.lampManager?.update(time);
@@ -4171,6 +4176,16 @@ export class GameScene extends DirtyScene {
             this.meadow,
             () => this.shownWeather(),
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+        );
+        // The flames in the trees on fire, and the embers that fly from them (after FireView: it draws their frames).
+        this.treeFireView?.destroy();
+        this.treeFireView = new TreeFireView(
+            this,
+            this.treeFire,
+            (id) => this.gameMapFrontWrapper?.getEntitiesManager()?.getEntities().get(id),
+            () => this.shownWeather(),
+            () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+            () => !get(mapEditorModeStore),
         );
         this.downpourView?.destroy();
         const downpourView = new DownpourView(
