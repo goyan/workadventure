@@ -20,6 +20,7 @@ export * from "./EntitySound";
 export * from "./EntityStates";
 export * from "./Terrain/Scale";
 export * from "./Terrain/Meadow";
+export * from "./Terrain/Bridges";
 export * from "./Terrain/SnowLine";
 export * from "./Terrain/Soils";
 export * from "./Terrain/TerrainGrid";
