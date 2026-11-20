@@ -77,6 +77,11 @@ export class TreeFireState {
         return this.flying;
     }
 
+    /** Every tree the fire marked: burning or charred. */
+    public marked(): string[] {
+        return [...this.trees.keys()];
+    }
+
     public clear(): string[] {
         const touched = [...this.trees.keys()];
         this.trees.clear();

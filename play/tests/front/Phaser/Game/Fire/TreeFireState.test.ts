@@ -67,4 +67,22 @@ describe("TreeFireState", () => {
         expect(state.isBurning()).toBe(false);
         expect(state.embers(1)).toEqual([]);
     });
+
+    it("lists the trees the fire marked, burning or charred", () => {
+        const state = new TreeFireState();
+        expect(state.marked()).toEqual([]);
+        state.receive(
+            {
+                trees: [
+                    { id: "oak", fire: 255, damage: 6 },
+                    { id: "pine", fire: 0, damage: 16 },
+                    { id: "elm", fire: 0, damage: 0 },
+                ],
+                whole: false,
+                embers: [],
+            },
+            0,
+        );
+        expect(state.marked().sort()).toEqual(["oak", "pine"]);
+    });
 });

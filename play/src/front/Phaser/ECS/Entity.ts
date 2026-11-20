@@ -190,7 +190,11 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
             snowyTree ??
             (seasonalPath && this.scene.textures.exists(seasonalPath) ? seasonalPath : this.prefab.imagePath);
         // A tree the fire took is its own image of the season, charred as far as it burnt: no snow settles on it.
-        const charred = isSwayingTree(this.prefab.id) ? (scene.getTreeFire?.().degreeOf(this.entityId) ?? 0) : 0;
+        // Not while the map is edited: the trees then show their plain image, as the rest of the weather is hidden.
+        const charred =
+            isSwayingTree(this.prefab.id) && !get(mapEditorModeStore)
+                ? (scene.getTreeFire?.().degreeOf(this.entityId) ?? 0)
+                : 0;
         const unsnowed =
             seasonalPath && this.scene.textures.exists(seasonalPath) ? seasonalPath : this.prefab.imagePath;
         this.setTexture((charred > 0 ? charredTreeTexture(this.scene, unsnowed, charred) : undefined) ?? shown);

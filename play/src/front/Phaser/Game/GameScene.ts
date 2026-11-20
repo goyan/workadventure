@@ -3032,8 +3032,14 @@ export class GameScene extends DirtyScene {
 
     /** The server said how the trees burn: the ones it named show the image of their state. */
     private receiveTreeFire(message: TreeFireMessage): void {
+        this.showTreeFireImages(this.treeFire.receive(message, this.time.now));
+    }
+
+    /** These trees pick their image again: charred as far as they burnt, or plain. */
+    private showTreeFireImages(ids: readonly string[]): void {
+        if (ids.length === 0) return;
         const entities = this.gameMapFrontWrapper?.getEntitiesManager()?.getEntities();
-        for (const id of this.treeFire.receive(message, this.time.now)) entities?.get(id)?.showPrefabTexture();
+        for (const id of ids) entities?.get(id)?.showPrefabTexture();
         this.markDirty();
     }
 
@@ -4450,6 +4456,8 @@ export class GameScene extends DirtyScene {
                 this.mapSnowShown = shown;
             }),
         );
+        // While the map is edited the charred trees show their plain image: drawn again when the editor opens or closes.
+        this.unsubscribers.push(mapEditorModeStore.subscribe(() => this.showTreeFireImages(this.treeFire.marked())));
 
         this.unsubscribers.push(
             userIsJitsiDominantSpeakerStore.subscribe((dominantSpeaker) => {
