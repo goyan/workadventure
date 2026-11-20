@@ -89,6 +89,8 @@ const DRY_PX = 0.01;
  * the edge of stability: a checkerboard of wet and dry cells flips at each step and never fades. A fifth damps it.
  */
 const FLOW_SHARE = 0.2;
+/** The water that creeps moves this many times a second (WATER_STEP_MS, in WaterInputs). */
+const STEPS_PER_SECOND = 10;
 /**
  * How far around its foot a sink takes water first when it says nothing, in cells (a tile and a half): it empties
  * what is next to it, then draws down the water joined to it (its basin) when it asks for more.
@@ -209,6 +211,33 @@ const THIN_FRICTION = 1;
  * with this friction (measured: a small basin never calms down); at a third it calms down.
  */
 const WAVE_CELLS_PER_MOVE = 0.35;
+/** How wide a cell of the relief is, in metres. */
+export const CELL_METRES = Math.sqrt(CELL_AREA_M2);
+
+/** How fast a wave runs in water that deep (pixels), in cells a second. */
+export function waveSpeed(depthPx: number): number {
+    return Number.isFinite(depthPx) && depthPx > 0 ? Math.sqrt(GRAVITY * depthPx) : 0;
+}
+
+/** No water is told faster than this, in cells a second (about 16 m/s): beyond it, it falls rather than runs. */
+export const FASTEST_FLOW_CELLS = 30;
+
+/**
+ * How fast the water runs, in cells a second, where its surface goes down `slopePx` pixels a cell under `depthPx`
+ * pixels of water: with inertia, the speed at which the friction holds back what the slope gives (the flow of a
+ * passage once it is steady); without, what a share of the difference of level a step carries. What a browser
+ * shows of the water, which it only knows by its depths.
+ */
+export function steadyFlowSpeed(slopePx: number, depthPx: number, inertia: boolean): number {
+    if (!Number.isFinite(slopePx) || !Number.isFinite(depthPx) || depthPx <= DRY_PX) return 0;
+    const slope = Math.abs(slopePx);
+    if (slope === 0) return 0;
+    const speed = inertia
+        ? (GRAVITY * slope) / (FLOW_FRICTION + THIN_FRICTION / depthPx)
+        : (FLOW_SHARE * slope * STEPS_PER_SECOND) / depthPx;
+    return Math.min(speed, FASTEST_FLOW_CELLS);
+}
+
 /** The most moves of the water with inertia in a step: enough for the deepest water a map holds. */
 const MAX_INERTIA_MOVES = 8;
 

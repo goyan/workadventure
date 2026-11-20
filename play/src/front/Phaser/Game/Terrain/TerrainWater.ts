@@ -15,6 +15,20 @@ export interface WaterState {
     depths: Uint8Array;
 }
 
+/** The last state of the water and the one before it, over the grid the server simulates. */
+export interface SettledWater {
+    /** The rectangle of the grid, in cells of the relief. */
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    /** Pixels of water over each cell, row by row: now, and one state earlier. */
+    depths: Float32Array;
+    before: Float32Array;
+    /** The seconds between the two states; Infinity when there is only one. */
+    seconds: number;
+}
+
 /** A film of water thinner than this is not drawn: what a flood leaves behind would speckle the ground. */
 const SHOWN_PX = 0.5;
 /**
@@ -39,6 +53,10 @@ export class TerrainWater {
     private from = new Float32Array(0);
     private to = new Float32Array(0);
     private at = -Infinity;
+    /** The state before the last one, and the time between the two (ms): how fast the water rises and falls. */
+    private before = new Float32Array(0);
+    private betweenMs = Infinity;
+    private receivedAt = -Infinity;
     private wet = false;
     private changes = 0;
     private bridges: ReadonlySet<string> = new Set();
@@ -90,6 +108,8 @@ export class TerrainWater {
             if (to[index] > 0) wet = true;
         }
         if (sameGrid && this.bytes) {
+            this.before = this.to;
+            this.betweenMs = Math.max(100, now - this.receivedAt);
             // From where the water is shown now.
             const shown = new Float32Array(cells);
             const share = this.share(now);
@@ -102,7 +122,10 @@ export class TerrainWater {
             // The first state, or another grid (the relief was edited): shown at once.
             this.from = to;
             this.at = -Infinity;
+            this.before = to;
+            this.betweenMs = Infinity;
         }
+        this.receivedAt = now;
         this.to = to;
         this.grid = { x: state.x, y: state.y, width: state.width, height: state.height };
         this.bytes = bytes;
@@ -130,6 +153,20 @@ export class TerrainWater {
         const row = Math.floor(y / TERRAIN_CELL) - this.grid.y;
         if (column < 0 || row < 0 || column >= this.grid.width || row >= this.grid.height) return 0;
         return this.to[row * this.grid.width + column];
+    }
+
+    /**
+     * The last state the server sent, cell by cell, with the one before it and the seconds between the two: what
+     * the water holds and how fast it rises or falls (the view of the flows of the water). The arrays are those of
+     * this object: read, never written.
+     */
+    public settled(): SettledWater {
+        return {
+            ...this.grid,
+            depths: this.to,
+            before: this.before,
+            seconds: this.betweenMs / 1000,
+        };
     }
 
     /**
