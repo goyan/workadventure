@@ -118,7 +118,7 @@ const menu: DeepPartial<Translation["menu"]> = {
             christmas: "Noël",
             none: "Aucun",
             hintAuto: "Automne de septembre à novembre, Noël du 1er décembre au 6 janvier.",
-            hintAutumn: "Feuilles au sol et feuilles qui tombent, dehors.",
+            hintAutumn: "Feuilles qui tombent des arbres et feuilles à leur pied, dehors.",
             hintChristmas: "Noël : la neige remplace le sol extérieur et la météo de la carte.",
             hintNone: "Aucun décor saisonnier.",
         },

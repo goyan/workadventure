@@ -2828,8 +2828,8 @@ n'est pas reçue, Auto n'affiche rien (`Seasonal/SeasonalTheme.ts`). `SeasonalTh
   haut, les sols posés dehors sont givrés, et chaque joueur laisse des empreintes (une tous les 16 px en marche, une
   trace en course, fondu en 45 s, 400 au plus). Les arbres saisonniers prennent leur image d'hiver, sans neige ajoutée.
 - **Automne** (`Autumn/`) : la météo de la carte est gardée ; l'herbe prend la texture d'automne d'Amine, les arbres
-  leur image d'automne ; feuilles au sol venues des arbres (voir ci-dessous), feuilles qui tombent (couche de la
-  boucle météo, même par temps clair), tas de feuilles au pied des objets là où le sol porte des feuilles (arbres
+  leur image d'automne ; feuilles au sol venues des arbres (voir ci-dessous), feuilles qui tombent du feuillage
+  (`Nature/TreeLeafFall.ts`), tas de feuilles au pied des objets là où le sol porte des feuilles (arbres
   compris), feuilles soulevées par les pas au même endroit (3-4 feuilles de 5×3 px tous les 24 px en marche, 5-6 tous
   les 16 px en course, 120 au plus). Palette `#c8642a`, `#d9a23b`, `#9b3d23`, `#7a5a2e` ; aucune image ajoutée.
 
@@ -2857,7 +2857,9 @@ relues sur leur sol, et la couche n'est redessinée que si l'une d'elles est att
 (`LeafScatterLayer.refreshGround`). Rien de loin (`seenFromFar`). Front seul.
 
 Empreintes et feuilles soulevées sont calculées par chaque navigateur depuis les positions déjà reçues : rien sur le
-réseau. « Afficher la météo » coupé retire aussi ce qui tombe (flocons de Noël, feuilles) ; le reste suit le thème.
+réseau. « Afficher la météo » coupé retire aussi les flocons de Noël ; le reste suit le thème. Plus aucune feuille ne
+tombe du ciel (2026-11-20 : la boucle météo en semait partout dehors, mer et lacs compris, sans rapport avec les
+arbres, `leafParticles` retiré) : en automne, toutes les feuilles viennent des arbres.
 Sans thème, la neige de la carte tient sur l'herbe pour tout le monde (elle était réservée à « Suivre la saison et la
 météo »).
 

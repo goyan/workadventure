@@ -26,7 +26,6 @@ import {
     fogPatches,
     fogStrength,
     keepOutdoorParticles,
-    leafParticles,
     lastStrike,
     lightningBolt,
     outdoorCells,
@@ -256,9 +255,6 @@ export class WeatherManager {
             theme === SeasonalTheme.Autumn,
         );
         const showWeather = enabled && weather !== WeatherType.Clear;
-        // Autumn leaves fall on top of the map weather, even on a clear day, but not while it snows.
-        const showLeaves =
-            enabled && theme === SeasonalTheme.Autumn && weather !== WeatherType.Snow && !seenFromFar(this.scene);
         // Clouds of a clear sky, still fading out over the first minutes of a bad weather; none at night, nor in the
         // Christmas snow.
         const cloudiness = theme === SeasonalTheme.Christmas ? 0 : (settings?.cloudiness ?? 0);
@@ -266,7 +262,7 @@ export class WeatherManager {
         // The grey veil of an overcast sky only by day: at night it would light the night veil up.
         const veilAlpha = overcastVeil(cloudiness, 1 - sunlight.night);
         const showClouds = enabled && this.cloudsShown && cloudiness > 0;
-        if (!showWeather && !showLeaves && !showClouds) {
+        if (!showWeather && !showClouds) {
             if (this.visible) {
                 this.graphics.clear().setVisible(false);
                 this.blocks.hide();
@@ -280,16 +276,15 @@ export class WeatherManager {
             this.drawn = undefined;
             return;
         }
-        // Keep weather light on the CPU, including when the avatar is idle: rain and snow 30 times a second, the slow
-        // falling leaves 15 times, a fog alone 5 times (each drawing makes the whole map drawn again).
+        // Keep weather light on the CPU, including when the avatar is idle: rain and snow 30 times a second, a fog alone
+        // 5 times (each drawing makes the whole map drawn again).
         const falling = showWeather && weather !== WeatherType.Fog;
-        const fogOnly = showWeather && weather === WeatherType.Fog && !showLeaves;
-        // Clouds cross a screen in about 30 s: 15 images a second for them to glide (rain and storm already draw 30).
-        const cloudsOnly = showClouds && !showLeaves;
+        const fogOnly = showWeather && weather === WeatherType.Fog;
         const camera = this.scene.cameras.main.worldView;
         const screen = { x: camera.x, y: camera.y, width: camera.width, height: camera.height };
         // A scroll that has used half of the drawn margin draws again at once, whatever the pace.
         const nearEdge = this.drawn !== undefined && !wellInside(this.drawn, screen, DRAW_MARGIN / 2);
+        // Clouds cross a screen in about 30 s: 15 images a second for them to glide (rain and storm already draw 30).
         if (!nearEdge && now - this.lastFrameAt < 1000 / (falling ? 30 : fogOnly ? 5 : 15)) return;
         this.lastFrameAt = now;
         const view = paddedView(screen, DRAW_MARGIN);
@@ -302,7 +297,7 @@ export class WeatherManager {
                 : 1;
         const shadowOffset = showClouds && sunlight.shadows > 0 ? cloudShadowOffset(sun) : undefined;
         const avatarRoom = this.options.avatarRoom?.();
-        if ((fogOnly || cloudsOnly) && this.reducedMotion) {
+        if ((fogOnly || showClouds) && this.reducedMotion) {
             // Nothing moves: draw again only when the camera, the fog or clouds, the sun or the night changed.
             const key = [
                 view.x,
@@ -470,17 +465,6 @@ export class WeatherManager {
                 zoom,
                 paint,
             );
-        }
-        if (showLeaves) {
-            const leaves = leafParticles(epoch, view).map((leaf) => ({
-                ...leaf,
-                x: Math.round(leaf.x),
-                y: Math.round(leaf.y),
-            }));
-            for (const leaf of keepOutdoorParticles(leaves, isOutdoor)) {
-                this.graphics.fillStyle(leaf.color, 0.95);
-                this.graphics.fillRect(leaf.x, leaf.y, leaf.vertical ? 3 : 4, leaf.vertical ? 4 : 3);
-            }
         }
         if (paint) this.blocks.end();
         // Only the fog passes over the buildings seen from far.

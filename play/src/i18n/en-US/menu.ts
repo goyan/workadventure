@@ -117,7 +117,7 @@ const menu: BaseTranslation = {
             christmas: "Christmas",
             none: "None",
             hintAuto: "Autumn from September to November, Christmas from December 1st to January 6th.",
-            hintAutumn: "Leaves on the ground and falling leaves, outdoors.",
+            hintAutumn: "Leaves falling from the trees and lying at their feet, outdoors.",
             hintChristmas: "Christmas: snow replaces the outdoor ground and the map weather.",
             hintNone: "No seasonal decor.",
         },

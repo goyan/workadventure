@@ -2,7 +2,7 @@ import { WeatherType } from "@workadventure/map-editor";
 import type { AutoWeatherSettings } from "@workadventure/map-editor";
 import { snowPossibleAt } from "../Nature/SeasonClock";
 import { SeasonalTheme } from "../Seasonal/SeasonalTheme";
-import { hash01, leafColor } from "../Autumn/LeafPalette";
+import { hash01 } from "../Autumn/LeafPalette";
 import { autoWeatherAt, slotStart } from "./WeatherSchedule";
 
 export interface WeatherView {
@@ -60,35 +60,6 @@ export function weatherParticles(weather: WeatherType, epoch: number, view: Weat
                 x: col * cellSize + seed * cellSize + Math.sin(time + seed * 20) * 5,
                 y: row * cellSize + ((seed * cellSize + time * speed) % cellSize),
                 length: 2,
-            };
-        }
-    }
-    return particles;
-}
-
-export interface LeafParticle {
-    x: number;
-    y: number;
-    color: number;
-    /** 3×4 instead of 4×3: the leaf turns as it sways. */
-    vertical: boolean;
-}
-
-/** Leaves fall slower than snow, sway, and drift with a light wind; about three times fewer than snowflakes. */
-export function leafParticles(epoch: number, view: WeatherView): LeafParticle[] {
-    const snowCell = Math.max(64, Math.ceil(Math.sqrt((view.width * view.height) / 350)));
-    const cellSize = Math.round(snowCell * Math.sqrt(3));
-    const time = epoch / 1000;
-    const particles: LeafParticle[] = [];
-    for (let row = Math.floor(view.y / cellSize) - 1; row <= Math.ceil((view.y + view.height) / cellSize); row++) {
-        for (let col = Math.floor(view.x / cellSize) - 1; col <= Math.ceil((view.x + view.width) / cellSize); col++) {
-            const seed = hash01(col, row);
-            const sway = (time * 2 * Math.PI) / 3 + seed * 20;
-            particles[particles.length] = {
-                x: col * cellSize + ((seed * cellSize + time * 6) % cellSize) + Math.sin(sway) * 8,
-                y: row * cellSize + ((hash01(col, row, 1) * cellSize + time * 12) % cellSize),
-                color: leafColor(hash01(col, row, 2)),
-                vertical: Math.cos(sway) > 0,
             };
         }
     }
