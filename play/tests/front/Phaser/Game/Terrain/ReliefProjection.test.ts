@@ -147,6 +147,19 @@ describe("a column of the relief drawn in 3/4", () => {
         expect(rgb(out, 90)).toEqual(FLOOR);
     });
 
+    it("draws a slope falling 2.5 px a pixel as one face, cerned once: no stripes from the rounding", () => {
+        const out = paint(
+            samples((y) => (y < 20 ? 0 : Math.min(60, (y - 20) * 1.5)), 100),
+            160,
+            0,
+        );
+        let rims = 0;
+        for (let row = 0; row < 160; row++)
+            if (rgb(out, row).every((channel, index) => channel === RIM_OUTLINE[index])) rims++;
+        expect(rims).toBe(1);
+        for (let row = 21; row <= 100; row++) expect(isWall(rgb(out, row)), `row ${row}`).toBe(true);
+    });
+
     it("draws a gentle slope as ground, stretched, without a face", () => {
         // The drawing falls 1.8 px for a pixel of ground: never more than 2 rows at once.
         const out = paint(

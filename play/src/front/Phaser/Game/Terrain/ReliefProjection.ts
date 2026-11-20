@@ -121,13 +121,17 @@ export function paintColumn(
 ): void {
     const index = (row: number): number => (row * stride + column) * 4;
     let previous: number | undefined;
+    let previousDrawn = 0;
     let previousDrop = 0;
     let onFace = false;
     for (let sampleIndex = 0; sampleIndex < count; sampleIndex++) {
         const sample = samples[sampleIndex];
-        const at = Math.round(sample.groundY + sample.drop) - firstRow;
+        const drawn = sample.groundY + sample.drop;
+        const at = Math.round(drawn) - firstRow;
         const jump = previous === undefined ? 0 : at - previous;
-        if (previous !== undefined && jump > FACE_JUMP_PX) {
+        // A face where the drawing falls more than FACE_JUMP_PX exactly (as groundPointAt sees it), not after the
+        // rounding: a slope near the threshold would else alternate face and ground, a stripe each time.
+        if (previous !== undefined && drawn - previousDrawn > FACE_JUMP_PX) {
             for (let k = 1; k < jump; k++) {
                 const row = previous + k;
                 if (row < 0 || row >= rows) continue;
@@ -140,8 +144,8 @@ export function paintColumn(
                 put(out, index(at), wallShade(sample.wallRamp, sample.drop, column, at + firstRow));
             onFace = true;
         } else {
-            // A gentle slope: the ground stretched over the row it skips.
-            const from = previous !== undefined && jump === FACE_JUMP_PX ? at - 1 : at;
+            // A gentle slope: the ground stretched over the rows it skips.
+            const from = previous !== undefined && jump > 1 ? previous + 1 : at;
             for (let row = from; row <= at; row++) {
                 if (row >= 0 && row < rows && (!sample.plain || out[index(row) + 3] > 0)) {
                     put(out, index(row), sample.color);
@@ -150,6 +154,7 @@ export function paintColumn(
             onFace = false;
         }
         previous = at;
+        previousDrawn = drawn;
         previousDrop = sample.drop;
     }
 }
