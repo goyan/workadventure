@@ -126,9 +126,13 @@ export class TerrainView {
         const camera = this.scene.cameras.main.worldView;
         const screen = { x: camera.x, y: camera.y, width: camera.width, height: camera.height };
         const key = `${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}`;
-        if (key === this.lastKey && this.drawn && wellInside(this.drawn, screen, DRAW_MARGIN / 5)) return;
+        const inside = this.drawn !== undefined && wellInside(this.drawn, screen, DRAW_MARGIN / 5);
+        if (key === this.lastKey && inside) return;
         this.lastKey = key;
-        this.drawn = paddedView(screen, DRAW_MARGIN);
+        // What was drawn reaches beyond the screen: while a scroll stays inside it, the same part of the map is
+        // drawn again (the water alone changed), so the relief read for it is kept. Reading the relief again at
+        // every drawing made the game stutter whenever the avatar walked.
+        if (!inside || !this.drawn) this.drawn = paddedView(screen, DRAW_MARGIN);
         this.draw(this.drawn, now);
         this.visible = true;
         this.scene.markDirty();
