@@ -8,6 +8,7 @@ import type {
     SayMessage,
     TerrainWaterMessage,
     MeadowMessage,
+    TreeFireMessage,
     FireConditionsMessage,
     AquaticLifeMessage,
     FishingMessage,
@@ -97,6 +98,8 @@ export interface RoomJoinedMessageInterface {
     aquaticLife?: AquaticLifeMessage;
     /** The meadow of the map (its whole state) as the server computes it; absent where nothing ever grew. */
     meadow?: MeadowMessage;
+    /** The trees that burn or are charred, as the server computes them; absent when every tree is green. */
+    treeFire?: TreeFireMessage;
     /** The conditions the fire of the room goes by when it was joined. */
     fireConditions?: FireConditionsMessage;
     /** The fishing lines of the room when it was joined; absent when nobody ever fished there. */

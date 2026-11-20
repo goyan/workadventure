@@ -52,6 +52,7 @@ import type {
     ModifyTerrainMessage,
     TerrainWaterMessage,
     MeadowMessage,
+    TreeFireMessage,
     FireConditionsMessage,
     SetFireConditionsMessage,
     AquaticLifeMessage,
@@ -251,6 +252,8 @@ export class RoomConnection implements RoomConnection {
     public readonly terrainWaterMessageStream = this._terrainWaterMessageStream.asObservable();
     private readonly _meadowMessageStream = new Subject<MeadowMessage>();
     public readonly meadowMessageStream = this._meadowMessageStream.asObservable();
+    private readonly _treeFireMessageStream = new Subject<TreeFireMessage>();
+    public readonly treeFireMessageStream = this._treeFireMessageStream.asObservable();
     /** The conditions the fire of the room goes by, whenever they change. */
     private readonly _fireConditionsMessageStream = new Subject<FireConditionsMessage>();
     public readonly fireConditionsMessageStream = this._fireConditionsMessageStream.asObservable();
@@ -490,6 +493,10 @@ export class RoomConnection implements RoomConnection {
                                     this._terrainWaterMessageStream.next(subMessage.terrainWaterMessage);
                                     break;
                                 }
+                                case "treeFireMessage": {
+                                    this._treeFireMessageStream.next(subMessage.treeFireMessage);
+                                    break;
+                                }
                                 case "meadowMessage": {
                                     this._meadowMessageStream.next(subMessage.meadowMessage);
                                     break;
@@ -717,6 +724,7 @@ export class RoomConnection implements RoomConnection {
                         terrainWater: roomJoinedMessage.terrainWater,
                         aquaticLife: roomJoinedMessage.aquaticLife,
                         meadow: roomJoinedMessage.meadow,
+                        treeFire: roomJoinedMessage.treeFire,
                         fireConditions: roomJoinedMessage.fireConditions,
                         fishing: roomJoinedMessage.fishing,
                         applications: applications,
@@ -2485,6 +2493,7 @@ export class RoomConnection implements RoomConnection {
         this._entityStateMessageStream.complete();
         this._terrainWaterMessageStream.complete();
         this._meadowMessageStream.complete();
+        this._treeFireMessageStream.complete();
         this._fireConditionsMessageStream.complete();
         this._aquaticLifeMessageStream.complete();
         this._fishingMessageStream.complete();
