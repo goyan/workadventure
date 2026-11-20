@@ -3743,7 +3743,7 @@ export class GameScene extends DirtyScene {
                 this.gameSwitches = new GameSwitches(this);
                 this.weatherManager?.destroy();
                 this.skateboardSounds?.destroy();
-        this.airplaneSounds?.destroy();
+                this.airplaneSounds?.destroy();
                 this.outdoorTracker = new OutdoorTracker(
                     () =>
                         Array.from(this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(), (entity) =>
