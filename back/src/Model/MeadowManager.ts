@@ -8,7 +8,7 @@ import {
     lifeFireOf,
     Meadow,
     MEADOW_STEP_SECONDS,
-    minutesOfDayIn,
+    isDaylightAt,
     pavedTilesOf,
     rainRateAt,
     seasonAt,
@@ -30,9 +30,6 @@ const STEPS_PER_MESSAGE = 5;
 const STEPS_PER_SAVE = 30;
 /** No meadow on a map larger than this, in tiles: it would be read at every step. */
 const MAX_MEADOW_TILES = 1_000_000;
-/** The grass grows by day: between these minutes of the day at the place of the map. */
-const DAY_FROM = 7 * 60;
-const DAY_TO = 19 * 60;
 
 /**
  * Keeps the meadow of a room (Meadow): the moisture of its soil and its grass, tile by tile over the whole map,
@@ -233,13 +230,13 @@ export class MeadowManager {
             return;
         }
         this.cleared = false;
-        const minutes = minutesOfDayIn(date, settings?.weatherLocation?.timezone);
         const grid = this.water();
         const weather = this.fireWeather();
         meadow.step({
             seconds: MEADOW_STEP_SECONDS,
             rainMmPerHour: this.rainRate,
-            daylight: minutes >= DAY_FROM && minutes < DAY_TO,
+            // Day from sunrise to sunset at the place of the map, as the game draws its day and night.
+            daylight: isDaylightAt(date, settings?.weatherLocation),
             season: seasonAt(date),
             growSeconds: set.growMinutes * 60,
             thirstSeconds: set.thirstMinutes * 60,

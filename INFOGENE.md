@@ -2220,7 +2220,8 @@ l'**humidité du sol** de chaque case monte sous la pluie de la carte et sous l'
 quatre voisines, **descend les pentes**, et se perd à l'allure de chaque sol (argile 30 min, prairie 15, terre 10,
 sable 2, gravier 1, rocher rien) ; l'**herbe** pousse seule sur un sol fertile (terre et sol d'origine, prairie plus
 vite, argile moitié moins ; jamais sur sable, rocher, gravier) quand il est humide sans être détrempé (25 à 90 %),
-sans eau dessus, de jour (7 h à 19 h au lieu de la carte), en saison (pleine au printemps et en été, 40 % en automne,
+sans eau dessus, de jour (du lever au coucher du soleil au lieu de la carte, Paris sans lieu, comme le cycle jour/nuit du jeu :
+`Weather/SunPosition.ts` de la bibliothèque, `isDaylightAt` ; de 7 h à 19 h avant le 2026-11-20), en saison (pleine au printemps et en été, 40 % en automne,
 rien en hiver), et **moins vite en altitude** (rien au-delà de 192 px, 6 cases) ; un pré plein en 10 minutes de
 bonnes conditions ; elle meurt de soif en 20 minutes sur un sol sec, noyée en 1 minute sous l'eau. Dehors seulement
 (ce que les murs de l'outil Carte ferment n'a pas de pré), jamais sur un sol posé par l'outil Carte. Résultat : un
