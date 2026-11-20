@@ -1,104 +1,78 @@
-/** How long the arms of the whirl of a drain take to turn once, in milliseconds. */
-export const DRAIN_TURN_MS = 1500;
-export const DRAIN_ARMS = 5;
-const POINTS_PER_ARM = 16;
-/** How far an arm winds around the middle from the rim, in turns. */
-const WINDING_TURNS = 1.1;
-/** How close to the middle an arm and a streak of water end, in shares of the radius: the eye is beyond. */
-const EYE = 0.08;
-
-/**
- * The arms of foam of the whirl over a drain, seen from above: each a line of points from the rim to the eye, in
- * shares of the radius of the disc (-1 to 1). They turn together, once every `DRAIN_TURN_MS`; still for who asked
- * for less motion.
- */
-export function drainSwirl(elapsedMs: number, reduced: boolean): { x: number; y: number }[][] {
-    const turned = reduced ? 0 : ((elapsedMs % DRAIN_TURN_MS) / DRAIN_TURN_MS) * Math.PI * 2;
-    const arms: { x: number; y: number }[][] = [];
-    for (let arm = 0; arm < DRAIN_ARMS; arm++) {
-        const from = turned + (arm / DRAIN_ARMS) * Math.PI * 2;
-        const points: { x: number; y: number }[] = [];
-        for (let step = 0; step < POINTS_PER_ARM; step++) {
-            const along = step / (POINTS_PER_ARM - 1);
-            const radius = 1 - along * (1 - EYE);
-            const angle = from + along * WINDING_TURNS * Math.PI * 2;
-            points.push({ x: Math.cos(angle) * radius, y: Math.sin(angle) * radius });
-        }
-        arms.push(points);
-    }
-    return arms;
-}
-
-/** How long a streak of water takes from the rim of a drain to its eye, in milliseconds. */
-const STREAK_FALL_MS = 1800;
-/** The golden ratio and angle: streaks set apart by them never line up, in time nor around the disc. */
+/** How long the water at the rim of a drain takes to turn once around it, in milliseconds. */
+export const DRAIN_TURN_MS = 2400;
+/** How many times faster the water turns next to the eye than at the rim. */
+const EYE_SPEED = 4;
+/** How close to the middle the water is drawn, in shares of the radius: the eye is beyond. */
+const EYE = 0.1;
+/** The golden ratio and angle: strands set apart by them never line up, around the disc nor across it. */
 const GOLDEN_SHARE = 0.6180339887498949;
 const GOLDEN_TURN = 2.399963229728653;
-/** How much of its fall a streak leaves behind it as a tail. */
-const STREAK_TAIL = 0.05;
-/** How far a streak turns around the middle on its way in: slowly at the rim, ever faster as it falls. */
-const STREAK_RIM_TURNS = 0.4;
-const STREAK_EYE_TURNS = 1.8;
+const POINTS_PER_STRAND = 10;
 
-function streakAt(start: number, fall: number): { x: number; y: number } {
-    const radius = 1 - fall * (1 - EYE);
-    const angle = start + (STREAK_RIM_TURNS * fall + STREAK_EYE_TURNS * fall * fall) * Math.PI * 2;
-    return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
+/** A wisp of water turning in a drain: a curved line, a tone from 0 (deep blue) to 3 (white foam), and its looks. */
+export interface DrainStrand {
+    /** From its outer end to its inner end, in shares of the radius of the disc (-1 to 1). */
+    points: { x: number; y: number }[];
+    tone: number;
+    alpha: number;
+    /** How wide it is drawn, in shares of the radius. */
+    width: number;
+}
+
+/** A share from 0 to 1 that only depends on a strand and on which of its traits is asked. */
+function traitOf(index: number, trait: number): number {
+    return (index * GOLDEN_SHARE * (trait + 1) + trait * 0.37) % 1;
 }
 
 /**
- * The water that turns around a drain and falls into it: `count` short streaks, each where it is `elapsedMs` after
- * the drain opened, with the place it just left (its tail) and how bright it is. In shares of the radius of the
- * disc. A streak is born at the rim, turns faster and faster as it nears the eye, fades there and is born again at
- * the rim. Always the same for the same time; still for who asked for less motion.
+ * The water of a drain seen from above, like a whirlpool: `count` wisps that curl around the eye, each a piece of a
+ * spiral falling inwards. They are spread over the whole disc, the outer ones long, wide and faint, the inner ones
+ * short, thin and bright. Each turns around the middle at the pace of where it is: once every `DRAIN_TURN_MS` at
+ * the rim, `EYE_SPEED` times faster next to the eye. Always the same for the same time; still for who asked for less
+ * motion.
  */
-export function drainStreaks(
-    elapsedMs: number,
-    count: number,
-    reduced: boolean,
-): { x: number; y: number; tailX: number; tailY: number; alpha: number }[] {
-    const time = reduced ? 0 : elapsedMs / STREAK_FALL_MS;
-    const streaks: { x: number; y: number; tailX: number; tailY: number; alpha: number }[] = [];
+export function drainStrands(elapsedMs: number, count: number, reduced: boolean): DrainStrand[] {
+    const strands: DrainStrand[] = [];
     for (let index = 0; index < count; index++) {
-        const fall = (time + index * GOLDEN_SHARE) % 1;
-        const start = index * GOLDEN_TURN;
-        const head = streakAt(start, fall);
-        const tail = streakAt(start, Math.max(0, fall - STREAK_TAIL));
-        streaks.push({
-            x: head.x,
-            y: head.y,
-            tailX: tail.x,
-            tailY: tail.y,
-            alpha: Math.min(1, fall * 8) * Math.min(1, (1 - fall) * 5),
+        // Where the strand begins, from the eye to the rim, and how far it falls and turns along its length.
+        const outer = EYE + 0.12 + (1 - EYE - 0.12) * traitOf(index, 0);
+        const inner = Math.max(EYE, outer * (0.45 + 0.3 * traitOf(index, 1)));
+        const winds = (0.22 + 0.4 * traitOf(index, 2)) * Math.PI * 2;
+        const middle = (outer + inner) / 2;
+        const pace = 1 + (EYE_SPEED - 1) * (1 - middle);
+        const turned = reduced ? 0 : (elapsedMs / DRAIN_TURN_MS) * Math.PI * 2 * pace;
+        const from = index * GOLDEN_TURN + turned;
+        const points: { x: number; y: number }[] = [];
+        for (let step = 0; step < POINTS_PER_STRAND; step++) {
+            const along = step / (POINTS_PER_STRAND - 1);
+            const radius = outer + (inner - outer) * along;
+            const angle = from + winds * along;
+            points.push({ x: Math.cos(angle) * radius, y: Math.sin(angle) * radius });
+        }
+        strands.push({
+            points,
+            tone: Math.min(3, Math.floor(traitOf(index, 3) * 4)),
+            // Soft at the rim: the whirl has no edge, it fades into the water around.
+            alpha: (0.35 + 0.5 * traitOf(index, 4)) * Math.min(1, (1.02 - outer) * 3.5),
+            width: 0.025 + 0.07 * middle,
         });
     }
-    return streaks;
+    return strands;
 }
 
 /**
  * The funnel of a drain seen from above: discs laid one over the other from the rim to the eye, each a share of
- * the radius and how dark it is. The water looks deeper and deeper towards the middle.
+ * the radius and how dark it is. Hardly anything at the rim, so that the whirl has no edge, and the water looks
+ * deeper and deeper towards the middle.
  */
 export function drainRings(): { radius: number; alpha: number }[] {
     return [
-        { radius: 1, alpha: 0.14 },
-        { radius: 0.78, alpha: 0.2 },
-        { radius: 0.56, alpha: 0.28 },
-        { radius: 0.36, alpha: 0.38 },
-        { radius: 0.18, alpha: 0.55 },
+        { radius: 1, alpha: 0.05 },
+        { radius: 0.86, alpha: 0.09 },
+        { radius: 0.7, alpha: 0.14 },
+        { radius: 0.54, alpha: 0.2 },
+        { radius: 0.38, alpha: 0.3 },
+        { radius: 0.24, alpha: 0.45 },
+        { radius: 0.13, alpha: 0.7 },
     ];
-}
-
-/**
- * The ragged rim of foam of a drain: how far from the middle the rim is at each of `points` points evenly spaced
- * around it, in shares of the radius. It ripples with the time; still for who asked for less motion.
- */
-export function drainRim(elapsedMs: number, points: number, reduced: boolean): number[] {
-    const phase = reduced ? 0 : elapsedMs / 400;
-    const rim: number[] = [];
-    for (let point = 0; point < points; point++) {
-        const around = (point / points) * Math.PI * 2;
-        rim.push(1 + 0.035 * Math.sin(around * 7 + phase) + 0.02 * Math.sin(around * 13 - phase * 1.7));
-    }
-    return rim;
 }
