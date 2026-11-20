@@ -2400,6 +2400,36 @@ fois plus en pagayant fort (touche de course) ; le courant l'emporte moitié moi
 terre, dans une piscine (on y nage), sur un palier, en suivi, ni pour un costume qui n'est pas humain ; la roue
 d'actions ne propose rien pour lui. Dessiné en code (`Vehicle/CanoeArtwork.ts`), comme les autres véhicules.
 
+**Altitude de l'avion.** L'avion d'Amine (PR #379) décolle seul en avançant jusqu'à l'altitude de croisière
+(`AIRPLANE_ALTITUDE`, 1024) et survole tout sans collision. Le pilote règle maintenant l'altitude :
+**ESPACE maintenu monte**, **CTRL maintenu descend**, en douceur (pleine vitesse 480 par seconde en 0,4 s, autant pour
+s'arrêter), entre 64 (`AIRPLANE_MIN_FLIGHT_ALTITUDE`) et 2048 (`AIRPLANE_MAX_ALTITUDE`) ; relâchée, l'altitude tient
+(`AirplaneFlight.cruise`). Le sol ne s'atteint que par un atterrissage, sur un terrain dégagé comme tout atterrissage :
+V, ou CTRL tenu au plancher de 64 (l'avion se pose et reste garé). Dès que le pilote a pris l'altitude en main pendant
+un vol, lâcher les flèches tient l'altitude au lieu d'atterrir (changement voulu du comportement de la #379) ; ESPACE
+annule un atterrissage commencé seul, pas celui demandé par V. Chaque vol repart à la croisière.
+- **ESPACE** (`spaceClimbs`, `Vehicle/AirplaneAltitudeKeys.ts`) : en vol, il monte toujours (rien du sol n'est à portée,
+  comme avant). Au sol dans l'avion garé, il décolle seulement si rien d'autre ne le demande : une invite (siège,
+  porte, animal…), un objet sélectionné à côté, le Nerf ou la canne en main gardent la priorité. L'indice de l'avion
+  lui-même (« [V] pour descendre ») ne compte pas. Décidé à l'appui de la touche (`GameSceneUserInputHandler`), lu à
+  chaque image tant qu'elle est tenue (`UserInputEvent.Climb`) ; le relâchement n'active rien.
+- **CTRL** (`UserInputEvent.Descend`) : en vol seulement, hors éditeur, pas dans un champ de saisie, rien quand les
+  entrées sont coupées. En vol, les déplacements tenus avec CTRL continuent de diriger (le filtre `ctrlKey` de
+  `getEventListForGameTick` les laisse passer) et Ctrl + Z, Q, S, D, A, W ou une flèche ne déclenchent pas le
+  raccourci du navigateur quand il peut être empêché. Limites : Chrome ne laisse pas empêcher Ctrl + W (ferme
+  l'onglet), Linux quitte parfois sur Ctrl + Q, et macOS garde Ctrl + flèche pour changer de bureau (la page ne la
+  reçoit pas). Au sol, CTRL reste un modificateur comme avant.
+- **Rendu** : vu de dessus, l'avion grossit en montant, autour de son centre, de 1 au sol à 1,5 à la croisière et 2 à
+  2048, par seizièmes (`airplaneScale` : une image de pixel art agrandie à chaque image scintille ; filtre au plus
+  proche du jeu, pas de flou). Le pilote, le cockpit et les feux suivent la même échelle ; le nom monte au-dessus des
+  ailes. L'avion est dessiné au-dessus de son ombre de 40 px à la croisière, 80 au plus haut (`airplaneLift`).
+  L'ombre d'Amine reste telle quelle (plus petite et plus pâle en montant, au sol sous l'avion). Profondeur
+  inchangée : au-dessus des toits et du voile de nuit (`AIRPLANE_RENDER_DEPTH`).
+- **Partage** : l'altitude voyage déjà dans la variable de véhicule (`_avatarAirVehicle`, `_avatarVehicle`), bornée
+  de 0 à 2048 et refusée si elle n'est pas un nombre fini (`readVehicleState`) ; chacun en déduit la taille, donc rien
+  de géant ni de NaN. Envoyée au plus toutes les 200 ms tant qu'elle seule change, et lissée par chaque navigateur.
+  Aucun changement du protocole ni du `back`. Un client d'avant la borne à 1024 et la dessine sans agrandir.
+
 **`back` calcule** (`TerrainWaterManager`) : dix pas par seconde, avec la pluie sur les cellules creusées (et le
 ruissellement), l'évaporation des cellules mouillées par temps sec seulement, l'eau bue par le sol plat, les sources
 et les puits (`WaterInputs.ts`). Une fois par seconde il annonce à la salle ce qui a changé (deux octets par cellule,

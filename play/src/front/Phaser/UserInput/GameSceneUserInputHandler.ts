@@ -43,6 +43,7 @@ import {
 import { cameraDetachedStore } from "@wa/front/Stores/CameraStore";
 import { isKeyFromInteractiveElement } from "@wa/front/Utils/isKeyFromInteractiveElement";
 import { findShortcutAction } from "@wa/front/Stores/ShortcutsStore";
+import { spaceClimbs } from "../Vehicle/AirplaneAltitudeKeys";
 import { MapDragPointerCapture } from "./MapDragPointerCapture";
 import { MapDragGesture } from "./MapDragGesture";
 import { MapPanShortcut } from "./MapPanShortcut";
@@ -54,6 +55,25 @@ import GameObject = Phaser.GameObjects.GameObject;
 // burst of tiny deltas. The zoom formula is tuned for the wheel, so a pinch needs a gain to feel as fast as a few notches.
 // 6 is close to the pinch gain used by d3-zoom and most map/design tools.
 const PINCH_ZOOM_RATE_MULTIPLIER = 6;
+/** The keys a pilot may hold with control (coming down): moves, and space to climb back. */
+const FLIGHT_KEYS = new Set([
+    "KeyW",
+    "KeyA",
+    "KeyS",
+    "KeyD",
+    "KeyZ",
+    "KeyQ",
+    "ArrowUp",
+    "ArrowDown",
+    "ArrowLeft",
+    "ArrowRight",
+]);
+
+/** A field or an editable element, where the keys type text. */
+function isTypingTarget(event: KeyboardEvent): boolean {
+    const target = event.target;
+    return target instanceof HTMLElement && (target.isContentEditable || target.matches("input, textarea, select"));
+}
 // Under this |deltaY|, a ctrlKey wheel event is a pinch. A Ctrl+notched-wheel keeps the normal rate.
 const PINCH_MAX_DELTA_Y = 50;
 
@@ -88,6 +108,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     private nerfSpacePressed = false;
     /** The space key went down for the fishing rod: its release casts, and nothing else. */
     private rodSpacePressed = false;
+    /** The space key held now climbs the airplane (or took it off): it is the airplane's until it goes up. */
+    private climbSpacePressed = false;
     private readonly spaceListeners = new Map<() => void, () => void>();
 
     constructor(gameScene: GameScene) {
@@ -745,6 +767,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         if (event.code === "Space" && !event.repeat) {
             this.nerfSpacePressed = false;
             this.rodSpacePressed = false;
+            this.climbSpacePressed = this.spaceClimbsNow(event);
         }
         const hasExecutedCommand = this.gameScene.getMapEditorModeManager()?.handleKeyDownEvent(event);
         if (hasExecutedCommand) {
@@ -752,7 +775,15 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         }
 
         // In the sky, nothing on the ground is in reach: no rod, nerf, seat, door nor object until landing.
-        if (event.code === "Space" && this.isFlying()) return event;
+        // Space climbs instead (see Player.pilotAltitude), and takes off from the ground when nothing else asks for it.
+        if (event.code === "Space" && (this.isFlying() || this.climbSpacePressed)) {
+            if (this.climbSpacePressed) event.preventDefault();
+            return event;
+        }
+        // In flight the control key comes down: keep the browser shortcuts it can stop from the keys held with it.
+        if (event.ctrlKey && this.isAltitudeKeysActive() && FLIGHT_KEYS.has(event.code) && !isTypingTarget(event)) {
+            event.preventDefault();
+        }
 
         // The fishing rod takes the space key only when nothing else asks for it: a prompt (seat, door, animal) wins.
         if (
@@ -894,6 +925,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             }
             // SPACE
             case " ": {
+                // A press that climbed: nothing of the ground answers it.
+                if (this.climbSpacePressed) break;
                 if (this.rodSpacePressed) {
                     this.gameScene.fishingManager?.releaseKey();
                     break;
@@ -938,6 +971,38 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         this.gameScene.CurrentPlayer?.handlePressSpacePlayerTextCallback();
     }
 
+    /** In flight: the control key comes down (see UserInputManager.getEventListForGameTick). */
+    public isAltitudeKeysActive(): boolean {
+        return this.isFlying() && !get(mapEditorModeStore);
+    }
+
+    public isClimbPressed(): boolean {
+        return this.climbSpacePressed;
+    }
+
+    /** Whether this press of space climbs or takes off (see spaceClimbs), decided once when the key goes down. */
+    private spaceClimbsNow(event: KeyboardEvent): boolean {
+        if (get(mapEditorModeStore) || event.ctrlKey || event.altKey || event.metaKey) return false;
+        if (isKeyFromInteractiveElement(event)) return false;
+        // Optional calls: a scene without a full player (tests, loading) has no airplane.
+        const player = this.gameScene.CurrentPlayer;
+        const inAirplane = player?.isInAirplane?.() ?? false;
+        const flying = this.isFlying();
+        if (!inAirplane || flying) return spaceClimbs({ inAirplane, flying, spaceAskedFor: false, toolInHand: false });
+        // The airplane's own hint answers space too: it does not keep the plane on the ground.
+        const ownPrompt = player?.isAirplanePromptShown?.() ? 1 : 0;
+        const activatableManager = this.gameScene.getActivatablesManager();
+        const activatable = activatableManager.getSelectedActivatableObject();
+        return spaceClimbs({
+            inAirplane,
+            flying,
+            spaceAskedFor:
+                this.spaceListeners.size > ownPrompt ||
+                Boolean(activatable?.isActivatable() && activatableManager.isSelectingByDistanceEnabled()),
+            toolInHand: Boolean(this.gameScene.nerfManager?.isEquipped || this.gameScene.fishingManager?.isEquipped),
+        });
+    }
+
     private isFlying(): boolean {
         // Optional call: a scene without a full player (tests, loading) is on the ground.
         return this.gameScene.CurrentPlayer?.isFlying?.() ?? false;
@@ -947,7 +1012,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         const previous = this.spaceListeners.get(callback);
         if (previous) this.gameScene.input.keyboard?.removeListener("keyup-SPACE", previous);
         const listener = (): void => {
-            if (this.rodSpacePressed || this.isFlying()) return;
+            if (this.rodSpacePressed || this.isFlying() || this.climbSpacePressed) return;
             if (!this.nerfSpacePressed && !this.gameScene.nerfManager?.isEquipped) callback();
         };
         this.spaceListeners.set(callback, listener);

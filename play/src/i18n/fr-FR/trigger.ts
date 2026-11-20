@@ -11,7 +11,7 @@ const trigger: DeepPartial<Translation["trigger"]> = {
     sit: "[ESPACE] pour s’asseoir 🪑",
     avatarAction: "[ESPACE] pour {action}",
     swim: "[ESPACE] pour nager 🏊",
-    landAirplane: "[{key}] pour atterrir ✈️",
+    landAirplane: "[{key}] pour atterrir · [ESPACE] monter · [CTRL] descendre ✈️",
     leaveAirplane: "[{key}] pour descendre de l’avion ✈️",
     jungleTame: "[ESPACE] pour apprivoiser cet animal 🐾",
     jungleRelease: "[ESPACE] pour relâcher votre compagnon 🐾",

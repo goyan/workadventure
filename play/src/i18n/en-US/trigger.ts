@@ -10,7 +10,7 @@ const trigger: BaseTranslation = {
     sit: "[SPACE] to sit down 🪑",
     avatarAction: "[SPACE] to {action}",
     swim: "[SPACE] to swim 🏊",
-    landAirplane: "[{key}] to land ✈️",
+    landAirplane: "[{key}] to land · [SPACE] climb · [CTRL] descend ✈️",
     leaveAirplane: "[{key}] to get off the plane ✈️",
     jungleTame: "[SPACE] to tame this animal 🐾",
     jungleRelease: "[SPACE] to let your companion go 🐾",

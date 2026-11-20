@@ -79,7 +79,7 @@ export class VehicleEffect {
         moving: boolean,
         time: number,
         motion?: { x: number; y: number },
-        flight?: { lift: number; altitude: number; groundDepth: number },
+        flight?: { lift: number; altitude: number; groundDepth: number; scale?: number },
     ): void {
         const dx = motion?.x || (this.lastPosition ? this.container.x - this.lastPosition.x : 0);
         const dy = motion?.y || (this.lastPosition ? this.container.y - this.lastPosition.y : 0);
@@ -87,6 +87,8 @@ export class VehicleEffect {
         // How high the plane is drawn (whole pixels), and its altitude from 0 (ground) to 1 (cruise).
         const lift = flight?.lift ?? 0;
         const altitude = flight?.altitude ?? 0;
+        // The airplane is drawn bigger as it climbs, around its centre (0, VEHICLE_FEET_Y - lift).
+        const scale = flight?.scale ?? 1;
         this.shadowShown = active && lift > 0;
         // Higher, the shadow is smaller and paler.
         this.shadow
@@ -127,6 +129,7 @@ export class VehicleEffect {
             this.container.bringToTop(this.front);
             this.front
                 .setY(VEHICLE_FEET_Y - lift)
+                .setScale(scale)
                 .setFrame(airplaneFrontFrame(this.heading))
                 .setVisible(true);
             const tips = airplaneWingTips(this.heading);
@@ -138,13 +141,15 @@ export class VehicleEffect {
                 // Frame pixels to the container: the 64 px frame is centred on (0, VEHICLE_FEET_Y - lift).
                 light
                     .setPosition(
-                        tip.x - AIRPLANE_FRAME_SIZE / 2 + 0.5,
-                        VEHICLE_FEET_Y - lift - AIRPLANE_FRAME_SIZE / 2 + tip.y + 0.5,
+                        (tip.x - AIRPLANE_FRAME_SIZE / 2 + 0.5) * scale,
+                        VEHICLE_FEET_Y - lift + (tip.y - AIRPLANE_FRAME_SIZE / 2 + 0.5) * scale,
                     )
+                    .setScale(scale)
                     .setVisible(flashing);
             }
         }
         for (const [index, sprite] of this.sprites.entries()) {
+            if (this.vehicle === Vehicle.Airplane) sprite.setScale(scale);
             sprite
                 .setY(VEHICLE_FEET_Y - lift)
                 .setFrame(frame)

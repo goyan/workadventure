@@ -702,6 +702,95 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
         });
     });
 
+    describe("the space and control keys in the airplane", () => {
+        const key = (type: "keydown" | "keyup", init: KeyboardEventInit): KeyboardEvent =>
+            new KeyboardEvent(type, { cancelable: true, ...init });
+        const space = (type: "keydown" | "keyup"): KeyboardEvent => key(type, { code: "Space", key: " " });
+        const textCallback = vi.fn();
+
+        function inAirplane(flying: boolean, ownPrompt = false): void {
+            Object.assign(scene.CurrentPlayer, {
+                isInAirplane: () => true,
+                isFlying: () => flying,
+                isAirplanePromptShown: () => ownPrompt,
+                handlePressSpacePlayerTextCallback: textCallback,
+            });
+        }
+
+        afterEach(() => {
+            activatablesManager.getSelectedActivatableObject.mockReset();
+            activatablesManager.isSelectingByDistanceEnabled.mockReset();
+        });
+
+        it("climbs with space in flight, and nothing of the ground answers the press", () => {
+            inAirplane(true);
+            const down = handler.handleKeyDownEvent(space("keydown"));
+            expect(handler.isClimbPressed()).toBe(true);
+            expect(down.defaultPrevented).toBe(true);
+            handler.handleKeyUpEvent(space("keyup"));
+            expect(textCallback).not.toHaveBeenCalled();
+        });
+
+        it("takes off with space on the ground, even with the airplane's own hint shown", () => {
+            inAirplane(false, true);
+            handler.addSpaceEventListener(vi.fn());
+            handler.handleKeyDownEvent(space("keydown"));
+            expect(handler.isClimbPressed()).toBe(true);
+            handler.handleKeyUpEvent(space("keyup"));
+            expect(textCallback).not.toHaveBeenCalled();
+        });
+
+        it("leaves space to another prompt or to an object next to the avatar on the ground", () => {
+            inAirplane(false);
+            const prompt = vi.fn();
+            handler.addSpaceEventListener(prompt);
+            handler.handleKeyDownEvent(space("keydown"));
+            expect(handler.isClimbPressed()).toBe(false);
+            handler.removeSpaceEventListener(prompt);
+
+            activatablesManager.getSelectedActivatableObject.mockReturnValue(
+                mock<ActivatableInterface>({ isActivatable: () => true }),
+            );
+            activatablesManager.isSelectingByDistanceEnabled.mockReturnValue(true);
+            handler.handleKeyDownEvent(space("keydown"));
+            expect(handler.isClimbPressed()).toBe(false);
+        });
+
+        it("leaves space alone on foot, in the map editor and in a field", () => {
+            Object.assign(scene.CurrentPlayer, { isInAirplane: () => false, isFlying: () => false });
+            handler.handleKeyDownEvent(space("keydown"));
+            expect(handler.isClimbPressed()).toBe(false);
+
+            inAirplane(true);
+            mapEditorModeStore.set(true);
+            handler.handleKeyDownEvent(space("keydown"));
+            expect(handler.isClimbPressed()).toBe(false);
+            mapEditorModeStore.set(false);
+
+            const field = document.createElement("input");
+            document.body.appendChild(field);
+            const typing = space("keydown");
+            field.dispatchEvent(typing);
+            handler.handleKeyDownEvent(typing);
+            expect(handler.isClimbPressed()).toBe(false);
+            field.remove();
+        });
+
+        it("takes control for the descent in flight only, out of the editor", () => {
+            inAirplane(true);
+            expect(handler.isAltitudeKeysActive()).toBe(true);
+            const save = handler.handleKeyDownEvent(key("keydown", { code: "KeyS", key: "s", ctrlKey: true }));
+            expect(save.defaultPrevented).toBe(true);
+            mapEditorModeStore.set(true);
+            expect(handler.isAltitudeKeysActive()).toBe(false);
+            mapEditorModeStore.set(false);
+            inAirplane(false);
+            expect(handler.isAltitudeKeysActive()).toBe(false);
+            const ground = handler.handleKeyDownEvent(key("keydown", { code: "KeyS", key: "s", ctrlKey: true }));
+            expect(ground.defaultPrevented).toBe(false);
+        });
+    });
+
     describe("an armed catastrophe", () => {
         const launch = vi.fn();
 
