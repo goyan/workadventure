@@ -960,6 +960,34 @@ export const DEFAULT_WATER_SETTINGS = {
     maxSurface: 18,
     indoorDrain: 300,
 } as const;
+/**
+ * How the water with inertia makes its waves, on a map that says nothing: the friction of the ground as its soils
+ * give it, a slight damping, waves that break and water that carries its momentum.
+ */
+export const DEFAULT_WAVE_SETTINGS = { roughness: 1, damping: 0.02, breaking: 1, momentum: 1 } as const;
+/** The bounds of each of them. */
+export const WAVE_BOUNDS = {
+    roughness: [0, 10],
+    damping: [0, 1],
+    breaking: [0, 5],
+    momentum: [0, 1],
+} as const satisfies Record<keyof typeof DEFAULT_WAVE_SETTINGS, readonly [number, number]>;
+/**
+ * The water of a map as in reality (the "Realistic" button of the relief tool): it goes at its real pace, has
+ * inertia and makes its waves as the ground and its depth make them, and no flood is cut short. The damping is the
+ * only figure that is not physical (0 in reality): the least that keeps the computation calm.
+ */
+export const REALISTIC_WATER_SETTINGS = {
+    runoff: 10,
+    evaporation: 0.2,
+    speed: 1,
+    absorption: 5,
+    current: 1,
+    maxSurface: 256,
+    indoorDrain: 300,
+    inertia: true,
+    waves: DEFAULT_WAVE_SETTINGS,
+} as const;
 /** The fastest the floors of the rooms of a map may drain, in mm an hour. */
 export const MAX_WATER_INDOOR_DRAIN = 10000;
 /** The strongest current a map may set: twice the usual one. */
@@ -1004,7 +1032,28 @@ export const WaterSettings = z.object({
      * levels as fast as its depth allows. Absent or false: the water creeps from cell to cell.
      */
     inertia: z.boolean().optional(),
+    /**
+     * How the water with inertia makes its waves (absent: DEFAULT_WAVE_SETTINGS):
+     * - `roughness`: how many times the friction of the ground its soils give (Manning). It grows with the speed
+     *   of the water and falls with its depth: next to nothing under a swell at sea, strong under a sheet of water
+     *   that runs on land. 0: no such friction.
+     * - `damping`: the share of its flow the water loses a second whatever its depth and its speed: what calms a
+     *   lake that was stirred.
+     * - `breaking`: how hard a wave whose front is steep for the water it runs in loses its flow (0: waves never
+     *   break).
+     * - `momentum`: the share of its momentum the water carries along (0: each passage keeps its own flow only;
+     *   1: a wave throws itself up a shore, and runs back).
+     */
+    waves: z
+        .object({
+            roughness: z.number().min(WAVE_BOUNDS.roughness[0]).max(WAVE_BOUNDS.roughness[1]),
+            damping: z.number().min(WAVE_BOUNDS.damping[0]).max(WAVE_BOUNDS.damping[1]),
+            breaking: z.number().min(WAVE_BOUNDS.breaking[0]).max(WAVE_BOUNDS.breaking[1]),
+            momentum: z.number().min(WAVE_BOUNDS.momentum[0]).max(WAVE_BOUNDS.momentum[1]),
+        })
+        .optional(),
 });
+export type WaveSettings = NonNullable<z.infer<typeof WaterSettings>["waves"]>;
 export type WaterSettings = z.infer<typeof WaterSettings>;
 
 /**

@@ -1,6 +1,7 @@
 import { gunzipSync, gzipSync } from "node:zlib";
 import {
     advanceImpactWave,
+    strikeWater,
     CELL_AREA_M2,
     CELL_LITRES_PER_PX,
     DEFAULT_WATER_SETTINGS,
@@ -45,6 +46,8 @@ const STEPS_PER_MESSAGE = WATER_MESSAGE_MS / WATER_STEP_MS;
 const MESSAGES_PER_FULL_STATE = 30;
 /** While the wave of an impact runs, the room is told five times a second: a wave seen once a second would jump. */
 const WAVE_STEPS_PER_MESSAGE = 2;
+/** After an impact on a water with inertia, the room is told that often for this long (half a minute). */
+const IMPACT_STIRRED_STEPS = 300;
 /** The water is saved every half minute while it changes. */
 const STEPS_PER_SAVE = 300;
 
@@ -81,6 +84,8 @@ export class TerrainWaterManager {
     private toldAtStep = 0;
     /** The waves of the impacts still running. */
     private waves: ImpactWave[] = [];
+    /** The step until which the room is told often: the real wave of an impact on a water with inertia. */
+    private stirredUntilStep = 0;
     /** The downpours falling on the map now, asked at each step: none until the catastrophes of the room say. */
     private downpours: () => readonly Downpour[] = () => [];
     /** The drains open on the map now, asked at each step: none until the catastrophes of the room say. */
@@ -215,7 +220,7 @@ export class TerrainWaterManager {
         // Both each step: a downpour goes on raining while the wave of a meteor runs.
         const raining = this.pourDownpours(grid);
         const draining = this.takeDrains(grid);
-        const waving = this.waves.length > 0 || raining || draining;
+        const waving = this.waves.length > 0 || raining || draining || this.steps < this.stirredUntilStep;
         if (this.waves.length > 0) this.advanceWaves(grid);
         const pouring = this.rainRate > 0 || this.objects.some((object) => object.litresPerMinute > 0);
         if (this.moving || pouring) {
@@ -314,17 +319,29 @@ export class TerrainWaterManager {
 
     /**
      * A meteor lands at a point of the map (pixels), its crater `radiusTiles` wide: its water is thrown out, and a wave carries it to
-     * the shores, step after step. The room is told at once. Nothing on a map without water.
+     * the shores, step after step. On a map whose water has inertia the water is thrown up in a rim around the
+     * crater and makes its own wave. The room is told at once. Nothing on a map without water.
      */
     public strike(x: number, y: number, radiusTiles: number): void {
         const grid = this.grid;
         if (!grid) return;
-        const started = startImpactWave(
-            grid,
-            Math.floor(x / TERRAIN_CELL),
-            Math.floor(y / TERRAIN_CELL),
-            meteorShape(radiusTiles),
-        );
+        const shape = meteorShape(radiusTiles);
+        const cellX = Math.floor(x / TERRAIN_CELL);
+        const cellY = Math.floor(y / TERRAIN_CELL);
+        if (this.room.getWam()?.settings?.water?.inertia === true) {
+            // A water with inertia makes its own wave: the impact only throws the water of the crater around it.
+            const struck = strikeWater(grid, cellX, cellY, shape);
+            if (!struck) return;
+            this.sums.sourcesPx += struck.addedPx;
+            this.sums.lostPx += struck.lostPx;
+            this.stirredUntilStep = this.steps + IMPACT_STIRRED_STEPS;
+            this.moving = true;
+            this.version++;
+            this.changedSinceSave = true;
+            this.tell(grid);
+            return;
+        }
+        const started = startImpactWave(grid, cellX, cellY, shape);
         if (!started) return;
         this.waves.push(started.wave);
         this.sums.sourcesPx += started.addedPx;

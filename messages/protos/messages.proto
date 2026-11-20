@@ -457,6 +457,11 @@ message UpdateWaterSettingMessage {
   optional double indoorDrain = 7;
   // Whether the water has inertia (flows kept from a step to the next). Absent from older clients: kept.
   optional bool inertia = 8;
+  // How the water with inertia makes its waves (WaterSettings.waves). Absent from older clients: kept.
+  optional double waveRoughness = 9;
+  optional double waveDamping = 10;
+  optional double waveBreaking = 11;
+  optional double waveMomentum = 12;
 }
 
 // Map-wide weather, validated against WeatherType before it is stored.

@@ -57,3 +57,24 @@ export function soilPace(code: number, waterPx: number, moisture = 0): number {
     if (name === "clay" && (waterPx >= MUD_WATER_PX || moisture >= MUD_MOISTURE)) return MUD_PACE;
     return 1;
 }
+
+/**
+ * How rough the ground of a soil is under running water: the n of Manning (s/m^(1/3)), as the tables of hydraulics
+ * give it for natural beds. The rougher, the more the ground holds back the water that runs fast or thin over it.
+ */
+const ROUGHNESS: Record<SoilName, number> = {
+    earth: 0.03,
+    meadow: 0.045,
+    clay: 0.022,
+    sand: 0.025,
+    rock: 0.04,
+    gravel: 0.03,
+};
+/** The roughness of a cell that was not painted: bare earth. */
+export const DEFAULT_SOIL_ROUGHNESS = 0.03;
+
+/** The roughness (Manning's n) of the soil kept as this number. */
+export function soilRoughness(code: number): number {
+    const name = soilName(code);
+    return name ? ROUGHNESS[name] : DEFAULT_SOIL_ROUGHNESS;
+}

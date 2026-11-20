@@ -75,6 +75,11 @@ export class MeteorView {
         private readonly scene: Phaser.Scene & { markDirty(): void },
         private readonly isWet: (x: number, y: number) => boolean,
         private readonly reducedMotion: () => boolean,
+        /**
+         * Whether the water of the map makes its own waves (the water with inertia): the circles drawn for the
+         * wave of a comet would then run next to the real one, so none is drawn.
+         */
+        private readonly realWaves: () => boolean = () => false,
     ) {
         this.graphics = scene.add.graphics().setDepth(DEPTH_NIGHT_INDEX + 2);
     }
@@ -114,7 +119,10 @@ export class MeteorView {
             const frame = meteorFrame(sinceLaunch, METEOR_FALL_MS, reduced);
             // The circles of the wave run on the water long after the burst: none on dry ground, none in reduced motion.
             const sinceImpact = sinceLaunch - METEOR_FALL_MS;
-            const circles = meteor.wet && !meteor.burning && !reduced ? waveCircles(sinceImpact, meteor.shape) : [];
+            const circles =
+                meteor.wet && !meteor.burning && !reduced && !this.realWaves()
+                    ? waveCircles(sinceImpact, meteor.shape)
+                    : [];
             // What a fireball leaves after its burst: sparks flying out, and steam where it fell into water.
             const sparks =
                 meteor.burning && !reduced ? fireballSparks(sinceImpact, meteor.craterPx, meteor.sparks) : [];

@@ -2431,6 +2431,61 @@ l'eau, 10 à 80 px d'eau) : 14 ms par pas, contre 2,5 ms.
 - **Météore brûlant et drain** : ils retirent de l'eau comme avant ; le trou se referme par une vraie vague au lieu
   de se combler sans bruit.
 
+### Vagues : frottement du sol, déferlement, élan (réglables par carte)
+
+Ce qui suit remplace le frottement uniforme de 20 % par seconde décrit plus haut, et les effets connus qui en
+dépendaient (crue moins étalée, comète à deux ondes).
+
+Le premier jet freinait l'eau de la même façon partout (20 % de son débit par seconde) : mesuré hors jeu, une
+vague perdait 80 % de sa hauteur en 200 cellules et n'atteignait jamais la rive. Ce qui retient l'eau dépend
+maintenant de l'endroit où elle court, par quatre réglages de la carte (`settings.water.waves`, curseurs du
+panneau Relief quand l'inertie est activée, `UpdateWaterSettingMessage.waveRoughness`, `waveDamping`,
+`waveBreaking`, `waveMomentum`, champs 9 à 12, facultatifs) :
+
+- **Frottement du sol** (`roughness`, × 0 à 10, 1 par défaut) : frottement de Manning. La part de débit perdue par
+  seconde vaut le carré de la rugosité du sol × la vitesse de l'eau / sa profondeur à la puissance 4/3 : presque
+  rien sous une houle au large, fort sous une lame d'eau rapide sur la terre. La rugosité vient du sol peint sur
+  chaque case (`soilRoughness` : argile 0,022, sable 0,025, terre, gravier et case non peinte 0,03, rocher 0,04,
+  prairie 0,045).
+- **Amorti** (`damping`, 0 à 1 par seconde, 0,02 par défaut) : perte de débit uniforme, ce qui calme un lac dérangé.
+  Plus haut, les vagues s'éteignent avant la rive.
+- **Déferlement** (`breaking`, × 0 à 5, 1 par défaut) : un front dont la surface tombe de plus d'un dixième de
+  l'eau qui passe perd son débit en proportion ; une houle douce n'est pas touchée.
+- **Élan emporté** (`momentum`, 0 à 1, 1 par défaut) : l'eau emporte sa vitesse avec elle (terme d'advection,
+  pris en amont). Mesuré : fronts plus nets, lac dérangé bien plus calme (crête de 31 px au lieu de 39 dans un
+  bassin de 30 px), mais vagues qui grossissent moins en approchant du rivage et montent moins loin qu'à 0.
+
+**Terre émergée et cuvettes.** Le déferlement et l'élan emporté n'agissent que dans les cuvettes du relief (lac,
+étang, mer : cases dont le sol est sous leur niveau de débordement, `WaterGrid.hollow`). Sur la terre émergée, le
+front d'une crue est une lame qui avance, pas une vague qui casse : seul le frottement du sol la retient. Mesuré
+sur le tsunami d'une comète de 24 cases dans un lac de 120 cellules de rayon : avec ces deux termes aussi sur la
+terre, 46 cellules d'inondation ; sans, 165 cellules (90 m), sous 28 à 34 px d'eau sur les 60 premières, masse
+conservée, rien de perdu.
+
+**Comète sous inertie : impact physique seul.** Sur une carte à inertie, la comète ne pose plus son onde anneau
+par anneau (`ImpactWave`) : l'eau du cratère et celle qu'elle apporte sont jetées en bourrelet autour du cratère
+(jusqu'à une fois et demie son rayon, au-dessus du niveau des crues s'il le faut, `strikeWater`), et l'eau fait
+elle-même la vague. Les cercles dessinés par le navigateur ne le sont plus (ils suivaient l'onde d'avant), et la
+salle reçoit l'eau cinq fois par seconde pendant trente secondes après l'impact. Sans inertie, rien ne change.
+
+**Bouton « Réaliste »** (panneau Relief, en tête des réglages de la carte) : remet tous les réglages de l'eau sur
+leurs valeurs physiques (`REALISTIC_WATER_SETTINGS` : vitesse 1, inertie activée, vagues par défaut, hauteur d'eau
+à 256 px, ruissellement 10, évaporation 0,2 mm/h, absorption 5 mm/h, vidange 300 mm/h). Seul l'amorti (0,02) n'est
+pas physique : 0 en réel, c'est le minimum qui garde le calcul calme. Chaque réglage dit sa valeur réelle dans sa
+description.
+
+Sous inertie, une vague n'est plus coupée à la hauteur maximale de l'eau de la carte (18 px par défaut) mais à la
+plus haute qu'une carte puisse régler (256 px) ; sources et pluie restent limitées par le réglage. L'eau ne
+franchit jamais plus d'une demi-cellule par mouvement : un torrent ne dicte pas le nombre de mouvements de toute la
+carte (mesuré : une source de 50 m³/s sur un mont doublait le coût de chaque pas). Les deux tests du premier jet qui exigeaient un
+lac calme en 90 s ont été assouplis exprès : une eau profonde clapote maintenant plusieurs minutes.
+
+Une eau plus profonde qu'environ 100 px porte ses vagues à la vitesse de cette profondeur, pas plus vite : trois
+mouvements par pas au plus (mesuré : un seul trou de 300 px doublait le coût de chaque pas de toute la carte).
+
+Coût mesuré avec ces vagues (conteneur Linux sur Mac) : 30 à 33 ms par pas sur une grille de 600 × 600 sous
+l'eau, quelle que soit sa profondeur ; 22 ms sur la carte d'équipe locale rejouée (100 000 cellules sous l'eau,
+4 ms sans inertie).
 
 ## Vie aquatique (poissons et dauphins)
 

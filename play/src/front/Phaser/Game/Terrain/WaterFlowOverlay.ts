@@ -1,5 +1,5 @@
 import { TERRAIN_CELL } from "@workadventure/map-editor";
-import type { TerrainData } from "@workadventure/map-editor";
+import type { TerrainData, WaveSettings } from "@workadventure/map-editor";
 import { DEPTH_INGAME_TEXT_INDEX } from "../DepthIndexes";
 import type { SettledWater } from "./TerrainWater";
 import { flowOverBlock, flowSpeedColor } from "./WaterFlowField";
@@ -11,6 +11,8 @@ export interface WaterFlowOverlayOptions {
     water: { settled(): SettledWater; relief(): TerrainData | undefined; version(): number; hasAnything(): boolean };
     /** Whether the water of the map has inertia: how fast it runs down a slope depends on it. */
     inertia: () => boolean;
+    /** How that water makes its waves, when the map says: the friction that holds it back. */
+    waves?: () => WaveSettings | undefined;
     /** Whether the overlay is asked for. */
     shown: () => boolean;
 }
@@ -83,6 +85,7 @@ export class WaterFlowOverlay {
         const water = this.options.water.settled();
         const terrain = this.options.water.relief();
         const inertia = this.options.inertia();
+        const waves = this.options.waves?.();
         const camera = this.scene.cameras.main;
         const view = camera.worldView;
         const zoom = camera.zoom > 0 ? camera.zoom : 1;
@@ -102,7 +105,7 @@ export class WaterFlowOverlay {
         const seconds = now / 1000;
         for (let cellY = firstY; cellY < lastY; cellY += size) {
             for (let cellX = firstX; cellX < lastX; cellX += size) {
-                const flow = flowOverBlock(water, terrain, cellX, cellY, size, inertia);
+                const flow = flowOverBlock(water, terrain, cellX, cellY, size, inertia, waves);
                 if (flow.depth <= 0) continue;
                 const left = cellX * TERRAIN_CELL;
                 const top = cellY * TERRAIN_CELL;

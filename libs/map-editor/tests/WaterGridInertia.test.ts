@@ -72,7 +72,8 @@ describe("WaterGrid with inertia", () => {
         const inside = inBasin(20, 6);
         fill(grid, (x, y) => (inside(x, y) ? (x < 12 ? 30 : 10) : 0));
         const before = grid.totalPx();
-        for (let step = 0; step < 900; step++) grid.step(inertia);
+        // Three minutes: the ground hardly holds back deep water, a stirred lake rocks for a while.
+        for (let step = 0; step < 1800; step++) grid.step(inertia);
         expect(grid.totalPx()).toBeCloseTo(before, 0);
         expect(gap(grid, 20, 4)).toBeLessThan(1);
         // All of it still in the basin: the water never climbed over its rim.
@@ -112,15 +113,19 @@ describe("WaterGrid with inertia", () => {
         const before = grid.totalPx();
         let highest = 0;
         let lost = 0;
-        for (let step = 0; step < 900; step++) {
+        let early = 0;
+        for (let step = 0; step < 1800; step++) {
             lost += grid.step(inertia).lostPx;
             for (let x = 2; x < 62; x++) highest = Math.max(highest, grid.depthAt(x, 3));
+            if (step === 299) early = gap(grid, 60, 3);
         }
         // A wave thrown back by the end of the basin stands over the water it started with, never over the rim.
         expect(highest).toBeLessThan(256);
         expect(lost).toBe(0);
         expect(grid.totalPx()).toBeCloseTo(before, -1);
-        expect(gap(grid, 60, 3)).toBeLessThan(1);
+        // Deep water rocks long: after three minutes it is far calmer than after half a minute, not yet still.
+        expect(gap(grid, 60, 3)).toBeLessThan(early / 4);
+        expect(gap(grid, 60, 3)).toBeLessThan(10);
     });
 
     it("spreads a sheet of water on flat ground, and counts what leaves by the edge of the grid", () => {

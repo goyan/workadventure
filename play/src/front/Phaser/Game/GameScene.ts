@@ -3811,6 +3811,7 @@ export class GameScene extends DirtyScene {
                 this.waterFlowOverlay = new WaterFlowOverlay(this, {
                     water: this.terrainWater,
                     inertia: () => this.getGameMap().getWamFile()?.getWam().settings?.water?.inertia === true,
+                    waves: () => this.getGameMap().getWamFile()?.getWam().settings?.water?.waves,
                     shown: () => get(waterFlowOverlayStore) && !isBasicActive(),
                 });
                 // The fish and the dolphins of that water.
@@ -4253,6 +4254,7 @@ export class GameScene extends DirtyScene {
             this,
             (x, y) => this.terrainWater.depthAt(x, y, this.time.now) >= METEOR_WET_DEPTH_PX,
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+            () => this.getGameMap().getWamFile()?.getWam().settings?.water?.inertia === true,
         );
         this.meteorView = meteorView;
         // The flames of the tiles on fire, laid by the wind of the scene.
