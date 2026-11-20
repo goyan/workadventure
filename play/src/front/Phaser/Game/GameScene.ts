@@ -34,6 +34,8 @@ import {
     GameMap,
     GameMapProperties,
     GRAZING_COVER,
+    type LifeFire,
+    lifeFireOf,
     listeningZoneJamKey,
     type Season,
     seasonAt,
@@ -2996,6 +2998,31 @@ export class GameScene extends DirtyScene {
     /** The meadow of the map, for what reads its grass and the moisture of its soil. */
     public getMeadow(): MeadowState {
         return this.meadow;
+    }
+
+    /** The fire of the map as its walking animals see it, rebuilt four times a second at most while it burns. */
+    private lifeFire: { at: number; fire: LifeFire } | undefined;
+
+    /**
+     * The fire of the map as the animals that walk on it see it: the grass that burns and the trees on fire, by
+     * their foot. Undefined while nothing burns: nothing is then looked at.
+     */
+    public getLifeFire(): LifeFire | undefined {
+        const burning = this.treeFire.burning();
+        if (burning.length === 0 && !this.meadow.isBurning()) {
+            this.lifeFire = undefined;
+            return undefined;
+        }
+        const now = this.time.now;
+        if (this.lifeFire && now - this.lifeFire.at < 250) return this.lifeFire.fire;
+        const entities = this.gameMapFrontWrapper?.getEntitiesManager()?.getEntities();
+        const trees: { x: number; y: number }[] = [];
+        for (const { id } of burning) {
+            const tree = entities?.get(id);
+            if (tree) trees.push({ x: tree.x + tree.displayWidth / 2, y: tree.y + tree.displayHeight });
+        }
+        this.lifeFire = { at: now, fire: lifeFireOf(this.meadow, () => trees) };
+        return this.lifeFire.fire;
     }
 
     /** The fire of the trees of the map as the server tells it, for the trees that pick their image by it. */

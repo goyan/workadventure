@@ -1,3 +1,4 @@
+import type { LifeFire } from "@workadventure/map-editor";
 import * as Phaser from "phaser";
 import type { Unsubscriber } from "svelte/store";
 import { DEFAULT_LIFE_SETTINGS } from "@workadventure/map-editor";
@@ -19,7 +20,7 @@ import { drinkStance } from "./WanderDrink";
 import { RADIUS_TILES, WanderSchedule } from "./WanderSchedule";
 import type { Point, Shore, WanderDirection, WanderMap, WanderPose } from "./WanderSchedule";
 import { blockWetTiles, changedTiles, shoresOf, wetTilesOf } from "./WanderWater";
-import { FEAR_CALM_PX, FEAR_RADIUS_PX, fleeTarget, isBrave, nearestThreat, straightRunIsClear } from "./WanderFear";
+import { fearedPoint, fleeTarget, isBrave, straightRunIsClear } from "./WanderFear";
 import type { WetTiles } from "./WanderWater";
 import {
     WANDER_FRAME_SIZE,
@@ -599,6 +600,8 @@ export class WanderingCharactersManager {
         let changed = false;
         // Where the avatars stand, read once per frame and only when a wild animal is shown.
         let threats: Point[] | undefined;
+        // The fire of the map, when something burns: every animal on its own walk runs from it.
+        const fire = this.isEditorMode ? undefined : this.scene.getLifeFire();
         for (const [id, character] of this.characters) {
             const sheet = this.sheets.get(character.sheetPath);
             const columns = typeof sheet === "object" ? sheet.columns : WANDER_WALK_COLUMNS;
@@ -623,17 +626,17 @@ export class WanderingCharactersManager {
                     // Only a character on its own walk flees.
                     character.fleeing = false;
                 }
-                const fearful =
-                    !character.entity &&
-                    !lead &&
-                    character.hasPose &&
-                    sprite.visible &&
-                    !this.isEditorMode &&
-                    !isBrave(id, now);
+                const onItsWalk = !lead && character.hasPose && sprite.visible && !this.isEditorMode;
+                // The wild ones fear the avatars, unless brave today; a pet put on the map does not.
+                const fearful = onItsWalk && !character.entity && !isBrave(id, now);
                 if (fearful) {
                     threats ??= this.scene.avatarFeetOnGround();
                 }
-                if (fearful && threats && this.runFromAvatars(character, sprite, threats, frameMs)) {
+                if (
+                    onItsWalk &&
+                    (fearful || fire || character.scaredTo) &&
+                    this.runFromThreats(character, sprite, fearful ? threats : undefined, fire, frameMs)
+                ) {
                     changed = true;
                 } else if (
                     pose &&
@@ -723,20 +726,24 @@ export class WanderingCharactersManager {
     }
 
     /**
-     * A wild animal near an avatar runs away from it, on the ground it may walk (outdoors: never into a building), and
-     * keeps away until every avatar is far enough. Once calm, it runs back to its walk, or appears on it when a wall
-     * stands on the straight way back.
-     * @returns whether it is running from an avatar this frame (the caller then leaves its walk aside)
+     * An animal near a fire, or a wild one near an avatar, runs away from it, on the ground it may walk (outdoors
+     * for a wild one: never into a building; never onto a ground that burns), and keeps away until the fire and every
+     * avatar are far enough. Once calm, it runs back to its walk, or appears on it when a wall stands on the straight
+     * way back.
+     * @param threats the avatars it fears; undefined for an animal that does not fear them
+     * @returns whether it is running away this frame (the caller then leaves its walk aside)
      */
-    private runFromAvatars(
+    private runFromThreats(
         character: WanderingCharacter,
         sprite: Phaser.GameObjects.Sprite,
-        threats: readonly Point[],
+        threats: readonly Point[] | undefined,
+        fire: LifeFire | undefined,
         frameMs: number,
     ): boolean {
         const feet = { x: sprite.x, y: sprite.y };
-        const threat = nearestThreat(feet, threats, character.scaredTo ? FEAR_CALM_PX : FEAR_RADIUS_PX);
+        const threat = fearedPoint(feet, threats, fire, character.scaredTo !== undefined);
         const walkable = (x: number, y: number): boolean =>
+            fire?.burning(x, y) !== true &&
             character.map.isWalkable({
                 x: Math.floor(x / this.tileDimensions.width),
                 y: Math.floor(y / this.tileDimensions.height),

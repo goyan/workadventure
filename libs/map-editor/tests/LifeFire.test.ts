@@ -133,6 +133,14 @@ describe("the fire the animals see", () => {
         expect(fireOn([]).near(168, 168)).toBeUndefined();
     });
 
+    it("looks as far as it is asked to", () => {
+        const fire = fireOn([[7, 5]]);
+        // 200 px west of the middle of the tile: out of the usual reach, within one of 224 px.
+        expect(fire.near(40, 176)).toBeUndefined();
+        expect(fire.near(40, 176, 224)).toEqual({ x: 240, y: 176 });
+        expect(fire.near(10, 176, 224)).toBeUndefined();
+    });
+
     it("is a burning tree too, when it is nearer", () => {
         const fire = fireOn([[7, 5]], [{ x: 150, y: 168 }]);
         expect(fire.near(168, 168)).toEqual({ x: 150, y: 168 });

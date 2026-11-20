@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { lifeFireOf } from "@workadventure/map-editor";
 import {
     BRAVE_SHARE,
     FEAR_RUN_PX,
+    fearedPoint,
+    FIRE_CALM_PX,
     fleeTarget,
     isBrave,
     nearestThreat,
@@ -61,5 +64,38 @@ describe("WanderFear", () => {
         const outdoors = (x: number): boolean => x < 50 || x > 80;
         expect(straightRunIsClear({ x: 0, y: 0 }, { x: 40, y: 0 }, outdoors)).toBe(true);
         expect(straightRunIsClear({ x: 0, y: 0 }, { x: 120, y: 0 }, outdoors)).toBe(false);
+    });
+
+    describe("the fire", () => {
+        // A fire on the tile 7,5: its middle is at (240, 176).
+        const fire = lifeFireOf({ fireAt: (x, y) => (x === 7 && y === 5 ? 1 : 0) });
+        const flames = { x: 240, y: 176 };
+
+        it("is feared from five tiles, before an avatar that stands nearer", () => {
+            const feet = { x: 100, y: 176 };
+            expect(fearedPoint(feet, [{ x: 60, y: 176 }], fire, false)).toEqual(flames);
+            // 161 px from it: only the avatar.
+            expect(fearedPoint({ x: 79, y: 176 }, [{ x: 60, y: 176 }], fire, false)).toEqual({ x: 60, y: 176 });
+            expect(fearedPoint({ x: 79, y: 176 }, [], fire, false)).toBeUndefined();
+        });
+
+        it("is feared by an animal that does not fear the avatars: no avatar is given for it", () => {
+            expect(fearedPoint({ x: 100, y: 176 }, undefined, fire, false)).toEqual(flames);
+            expect(fearedPoint({ x: 100, y: 176 }, undefined, undefined, false)).toBeUndefined();
+        });
+
+        it("keeps a frightened animal away until it is seven tiles from it", () => {
+            expect(FIRE_CALM_PX).toBe(224);
+            expect(fearedPoint({ x: 240 - 220, y: 176 }, undefined, fire, true)).toEqual(flames);
+            expect(fearedPoint({ x: 240 - 220, y: 176 }, undefined, fire, false)).toBeUndefined();
+            expect(fearedPoint({ x: 240 - 225, y: 176 }, undefined, fire, true)).toBeUndefined();
+        });
+
+        it("leaves the fear of the avatars as it was without a fire", () => {
+            const avatars = [{ x: 90, y: 0 }];
+            expect(fearedPoint({ x: 0, y: 0 }, avatars, undefined, false)).toEqual({ x: 90, y: 0 });
+            expect(fearedPoint({ x: 0, y: 0 }, [{ x: 120, y: 0 }], undefined, false)).toBeUndefined();
+            expect(fearedPoint({ x: 0, y: 0 }, [{ x: 120, y: 0 }], undefined, true)).toEqual({ x: 120, y: 0 });
+        });
     });
 });

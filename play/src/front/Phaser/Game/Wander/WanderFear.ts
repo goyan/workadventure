@@ -1,3 +1,5 @@
+import { FIRE_FEAR_PX } from "@workadventure/map-editor";
+import type { LifeFire } from "@workadventure/map-editor";
 import type { Point } from "./WanderSchedule";
 
 /** A wild animal runs from an avatar that comes this close (three tiles), in map pixels. */
@@ -45,6 +47,25 @@ export function nearestThreat(animal: Point, threats: readonly Point[], radiusPx
         }
     }
     return nearest;
+}
+
+/** An animal frightened by a fire stays away until the fire is this far: seven tiles, in map pixels. */
+export const FIRE_CALM_PX = 224;
+
+/**
+ * What a walking animal runs from: the fire first (the nearest thing that burns, five tiles away or less), whatever
+ * else is near, then the closest avatar for an animal that fears them (`avatars` undefined for one that does not: a
+ * brave one, a pet put on the map). `scared`: it is already running, and calms down only further away.
+ */
+export function fearedPoint(
+    feet: Point,
+    avatars: readonly Point[] | undefined,
+    fire: LifeFire | undefined,
+    scared: boolean,
+): Point | undefined {
+    const flames = fire?.near(feet.x, feet.y, scared ? FIRE_CALM_PX : FIRE_FEAR_PX);
+    if (flames) return flames;
+    return avatars ? nearestThreat(feet, avatars, scared ? FEAR_CALM_PX : FEAR_RADIUS_PX) : undefined;
 }
 
 /**

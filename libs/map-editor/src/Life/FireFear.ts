@@ -9,8 +9,11 @@ export const FIRE_FEAR_PX = 5 * TILE_PX;
  * that land look at it.
  */
 export interface LifeFire {
-    /** The nearest thing on fire within FIRE_FEAR_PX of a point, in map pixels; undefined when nothing burns there. */
-    near(x: number, y: number): { x: number; y: number } | undefined;
+    /**
+     * The nearest thing on fire within `reachPx` of a point (FIRE_FEAR_PX when absent), in map pixels; undefined
+     * when nothing burns there.
+     */
+    near(x: number, y: number, reachPx?: number): { x: number; y: number } | undefined;
     /** Whether the ground burns at this point. */
     burning(x: number, y: number): boolean;
 }
@@ -23,11 +26,11 @@ export function lifeFireOf(
     ground: { fireAt(tileX: number, tileY: number): number },
     trees: () => readonly { x: number; y: number }[] = () => [],
 ): LifeFire {
-    const reach = Math.ceil(FIRE_FEAR_PX / TILE_PX);
     return {
-        near(x, y) {
+        near(x, y, reachPx = FIRE_FEAR_PX) {
+            const reach = Math.ceil(reachPx / TILE_PX);
             let best: { x: number; y: number } | undefined;
-            let least = FIRE_FEAR_PX;
+            let least = reachPx;
             const tileX = Math.floor(x / TILE_PX);
             const tileY = Math.floor(y / TILE_PX);
             for (let dy = -reach; dy <= reach; dy++) {
