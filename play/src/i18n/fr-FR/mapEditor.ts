@@ -748,7 +748,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         current: "Force du courant (0 : les avatars ne sont pas emportés)",
         maxSurface: "Hauteur maximale de l'eau au-dessus du sol",
+        inertia: "Eau à inertie (à l'essai)",
         real: {
+            inertia:
+                "L'eau garde son élan d'un instant à l'autre : des vagues courent, un lac dérangé se remet à niveau en une minute environ au lieu de s'étaler lentement. Coupé : l'eau avance de proche en proche, comme avant.",
             maxDepth: "En réel : une case fait environ 1,10 m. Mare : 1 case ; étang : 2 à 3 ; lac : 4 et plus.",
             runoff: "En réel : le terrain qui alimente une mare fait 5 à 20 fois sa surface ; 0 pour un bassin maçonné.",
             evaporation: "En réel : 0,05 mm/h en hiver, 0,1 à 0,3 mm/h en été (3 à 6 mm par jour).",

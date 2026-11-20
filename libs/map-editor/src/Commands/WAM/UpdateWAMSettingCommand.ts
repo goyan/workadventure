@@ -132,7 +132,7 @@ export class UpdateWAMSettingCommand extends Command {
                 break;
             }
             case "updateWaterSettingMessage": {
-                const { runoff, evaporation, speed, absorption, current, maxSurface, indoorDrain } =
+                const { runoff, evaporation, speed, absorption, current, maxSurface, indoorDrain, inertia } =
                     message.updateWaterSettingMessage;
                 const within = (value: number, min: number, max: number, fallback: number): number =>
                     Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
@@ -161,6 +161,8 @@ export class UpdateWAMSettingCommand extends Command {
                         indoorDrain === undefined
                             ? keptIndoorDrain
                             : within(indoorDrain, 0, MAX_WATER_INDOOR_DRAIN, keptIndoorDrain),
+                    // An older client says nothing of the inertia: the map keeps the water it had.
+                    ...((inertia ?? this.wam.settings.water?.inertia) ? { inertia: true } : {}),
                 };
                 break;
             }

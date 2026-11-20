@@ -17,6 +17,7 @@ export function readTerrainMapSettings(): {
     current: number;
     maxSurface: number;
     indoorDrain: number;
+    inertia: boolean;
     life: LifeSettings;
     meadow: MeadowSettings;
 } {
@@ -30,6 +31,7 @@ export function readTerrainMapSettings(): {
         current: wam?.settings?.water?.current ?? DEFAULT_WATER_SETTINGS.current,
         maxSurface: wam?.settings?.water?.maxSurface ?? DEFAULT_WATER_SETTINGS.maxSurface,
         indoorDrain: wam?.settings?.water?.indoorDrain ?? DEFAULT_WATER_SETTINGS.indoorDrain,
+        inertia: wam?.settings?.water?.inertia ?? false,
         life: { ...DEFAULT_LIFE_SETTINGS, ...wam?.settings?.life },
         meadow: { ...DEFAULT_MEADOW_SETTINGS, ...wam?.settings?.meadow },
     };

@@ -45,6 +45,7 @@
     let current = $state(saved.current);
     let maxSurface = $state(saved.maxSurface);
     let indoorDrain = $state(saved.indoorDrain);
+    let inertia = $state(saved.inertia);
 
     let diameterTiles = $state($terrainBrushStore.diameterTiles);
     let forceAuto = $state($terrainBrushStore.forcePx === undefined);
@@ -68,7 +69,16 @@
     function saveWater(): void {
         executeUpdateWAMSettings({
             $case: "updateWaterSettingMessage",
-            updateWaterSettingMessage: { runoff, evaporation, speed, absorption, current, maxSurface, indoorDrain },
+            updateWaterSettingMessage: {
+                runoff,
+                evaporation,
+                speed,
+                absorption,
+                current,
+                maxSurface,
+                indoorDrain,
+                inertia,
+            },
         }).catch((error: unknown) => console.error("The pace of the water could not be saved", error));
     }
 
@@ -377,6 +387,16 @@
             buttonShape="square"
         />
         <p class="retro-hint m-0">{$LL.mapEditor.terrain.real.maxSurface()}</p>
+    </div>
+    <div data-testid="terrain-inertia">
+        <InputSwitch
+            id="terrain-inertia"
+            bind:value={inertia}
+            label={$LL.mapEditor.terrain.inertia()}
+            labelPosition="right"
+            onchange={saveWater}
+        />
+        <p class="retro-hint m-0">{$LL.mapEditor.terrain.real.inertia()}</p>
     </div>
     <p class="retro-hint m-0">{$LL.mapEditor.terrain.paceHint()}</p>
 

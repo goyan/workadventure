@@ -14,6 +14,7 @@ const { executeUpdateTerrain, executeUpdateWAMSettings, mapSettings } = vi.hoist
         current: 1,
         maxSurface: 18,
         indoorDrain: 300,
+        inertia: false,
         meadow: { enabled: true, growMinutes: 10, thirstMinutes: 20, moistureHold: 1 },
         life: {
             enabled: false,
@@ -106,6 +107,7 @@ describe("TerrainEditor real values", () => {
             ["terrain-current", "current"],
             ["terrain-max-surface", "maxSurface"],
             ["terrain-indoor-drain", "indoorDrain"],
+            ["terrain-inertia", "inertia"],
         ]) {
             expect(byTestId(id).textContent).toContain(`mapEditor.terrain.real.${key}`);
         }
@@ -128,6 +130,22 @@ describe("TerrainEditor", () => {
         expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
             $case: "updateMeadowSettingMessage",
             updateMeadowSettingMessage: { enabled: true, growMinutes: 25, thirstMinutes: 20, moistureHold: 1 },
+        });
+    });
+
+    it("turns the inertia of the water of the map on and off", () => {
+        render();
+        byTestId("terrain-inertia").querySelector("input")?.click();
+        flushSync();
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: expect.objectContaining({ inertia: true }),
+        });
+        byTestId("terrain-inertia").querySelector("input")?.click();
+        flushSync();
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: expect.objectContaining({ inertia: false }),
         });
     });
 
@@ -178,6 +196,7 @@ describe("TerrainEditor", () => {
                 current: 1,
                 maxSurface: 18,
                 indoorDrain: 300,
+                inertia: false,
             },
         });
         setRange("terrain-evaporation", 1);
@@ -191,6 +210,7 @@ describe("TerrainEditor", () => {
                 current: 1,
                 maxSurface: 18,
                 indoorDrain: 300,
+                inertia: false,
             },
         });
         setRange("terrain-speed", 300);
@@ -204,6 +224,7 @@ describe("TerrainEditor", () => {
                 current: 1,
                 maxSurface: 18,
                 indoorDrain: 300,
+                inertia: false,
             },
         });
         setRange("terrain-absorption", 20);
@@ -217,6 +238,7 @@ describe("TerrainEditor", () => {
                 current: 1,
                 maxSurface: 18,
                 indoorDrain: 300,
+                inertia: false,
             },
         });
     });
@@ -237,6 +259,7 @@ describe("TerrainEditor", () => {
                 current: 1,
                 maxSurface: 120,
                 indoorDrain: 300,
+                inertia: false,
             },
         });
     });
@@ -257,6 +280,7 @@ describe("TerrainEditor", () => {
                 current: 0,
                 maxSurface: 18,
                 indoorDrain: 300,
+                inertia: false,
             },
         });
     });
@@ -277,6 +301,7 @@ describe("TerrainEditor", () => {
                 current: 1,
                 maxSurface: 18,
                 indoorDrain: 0,
+                inertia: false,
             },
         });
     });
