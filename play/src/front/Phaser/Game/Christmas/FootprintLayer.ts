@@ -18,13 +18,25 @@ export class FootprintLayer {
     /** The time of the last fade, used when the layer alpha changes between two updates. */
     private now = 0;
 
-    constructor(private readonly scene: Phaser.Scene) {
-        this.createTexture(STEP_TEXTURE, 6, 4, (context) => {
+    private readonly stepTexture: string;
+    private readonly trailTexture: string;
+
+    /** `color`: the colour of the prints, blue grey in the snow by default. */
+    constructor(
+        private readonly scene: Phaser.Scene,
+        private readonly color = PRINT_COLOR,
+    ) {
+        const suffix = color === PRINT_COLOR ? "" : `-${color}`;
+        this.stepTexture = `${STEP_TEXTURE}${suffix}`;
+        this.trailTexture = `${TRAIL_TEXTURE}${suffix}`;
+        this.createTexture(this.stepTexture, 6, 4, (context) => {
             context.beginPath();
             context.ellipse(3, 2, 3, 2, 0, 0, Math.PI * 2);
             context.fill();
         });
-        this.createTexture(TRAIL_TEXTURE, 1, TRAIL_WIDTH_PX, (context) => context.fillRect(0, 0, 1, TRAIL_WIDTH_PX));
+        this.createTexture(this.trailTexture, 1, TRAIL_WIDTH_PX, (context) =>
+            context.fillRect(0, 0, 1, TRAIL_WIDTH_PX),
+        );
     }
 
     /** Number of footprints on the map. */
@@ -37,9 +49,9 @@ export class FootprintLayer {
         for (const mark of marks) {
             const image =
                 mark.kind === "step"
-                    ? this.scene.add.image(mark.x, mark.y, STEP_TEXTURE).setRotation(mark.angle)
+                    ? this.scene.add.image(mark.x, mark.y, this.stepTexture).setRotation(mark.angle)
                     : this.scene.add
-                          .image(mark.x1, mark.y1, TRAIL_TEXTURE)
+                          .image(mark.x1, mark.y1, this.trailTexture)
                           .setOrigin(0, 0.5)
                           .setDisplaySize(Math.hypot(mark.x2 - mark.x1, mark.y2 - mark.y1), TRAIL_WIDTH_PX)
                           .setRotation(Math.atan2(mark.y2 - mark.y1, mark.x2 - mark.x1));
@@ -87,7 +99,7 @@ export class FootprintLayer {
         const canvas = this.scene.textures.createCanvas(key, width, height);
         const context = canvas?.getContext();
         if (!canvas || !context) return;
-        context.fillStyle = PRINT_COLOR;
+        context.fillStyle = this.color;
         paint(context);
         canvas.refresh();
     }

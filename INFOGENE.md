@@ -840,6 +840,11 @@ npm run pretty        # corrige le formatage
 - **Ne jamais committer de secret** : ce dépôt est **public**.
 - Écrire du code (et ses commentaires) en anglais, comme le reste de WorkAdventure ; messages de commit en français.
 - Les écouteurs d'événements doivent être nommés et retirés (règle de lint `listeners/*`).
+- **Imports dans `play/` : alias `@wa/...`, jamais de chemin relatif qui remonte** (`../`). `@wa/*` pointe sur
+  `play/src/*` (`play/tsconfig.json`, Vite, Vitest) : `import { gameManager } from "@wa/front/Phaser/Game/GameManager"`,
+  pas `"../../../Phaser/Game/GameManager"`. Vaut pour tout fichier créé ou modifié, tests compris
+  (`@wa/front/...` au lieu de `../../../../../src/front/...`). Seul un fichier voisin du même dossier s'importe en
+  `./`. Le code amont encore en relatif est converti quand on le touche.
 - Ne pas modifier les fichiers de `.github/workflows/` sans en parler : le workflow `build-play` publie l'image de la prod.
 - Un comportement visuel (zoom, interaction, interface) n'est « terminé » que quand quelqu'un l'a **vu fonctionner en beta**.
 - Pousser sur `infogene` déploie ce code **sur notre serveur** : les droits d'écriture sont réservés aux personnes de confiance.
@@ -3791,6 +3796,19 @@ dessiné `z` pixels plus au nord, dans la bande de profondeur de son altitude (`
   à chaque endroit celle que son maître y avait ; invite « apprivoiser / relâcher » seulement à moins de 6 px
   d'altitude d'écart (`SAME_FLOOR_PX`, comme les bulles), rien en vol.
 
+**Un compagnon ne vole pas.** Quand son maître décolle en avion, le compagnon s'arrête où il est, au sol, et se
+repose (`JungleCompanionFollower.poseAt(…, flying)` : ni piste ni saut pendant le vol). Quand le maître s'est posé,
+le compagnon demande un chemin au sol jusqu'à lui (celui des animaux promeneurs, escaliers et ponts compris,
+`seekWayBack`), le parcourt quelle que soit la distance, puis suit comme avant ; sans chemin (une île, un toit) il
+attend sur place et redemande toutes les 2 s (`WAY_BACK_RETRY_MS`). Vaut pour les promeneurs apprivoisés
+(`JungleCompanions`) et, à l'écran, pour les lions et tigres apprivoisés du serveur (`LandCompanions` ; le serveur
+gardait déjà l'animal à sa dernière place au sol, `leadTamed`). Le vol du maître est lu sur le joueur
+(`Character.isFlying`, déjà partagé) : aucun protocole. Le compagnon d'origine de WorkAdventure reste aussi au sol
+pendant le vol (`Companion.setTarget`) ; à l'atterrissage il marche droit vers son joueur s'il est près, et se
+retrouve à côté de lui s'il est loin (règle des téléportations, inchangée). Limite : un joueur qui n'a pas vu où un
+compagnon a été laissé (maître sorti de sa vue pendant le vol) ne le voit pas jusqu'à l'atterrissage, puis au pied
+du maître ; un lion du serveur est alors montré là où le serveur le garde.
+
 **Limites (lot 1).** Les animaux du serveur (antilopes, lions, tigres de la vie de la terre, apprivoisés compris)
 restent au sol, avec le pont « à plat » d'avant : lot 2, avec protocole. Sur un étage ou un pont, un animal ne fuit
 ni les avatars ni le feu, et n'est pas vu par les capteurs de présence ; il ne s'assoit que sur les sièges du sol.
@@ -3920,3 +3938,46 @@ sur toute la carte, un voile et des gouttes sur toute la vue. En mouvement rédu
 une carte ; pas de son ; l'averse des autres suit leur pointeur avec le retard du réseau. `play` et `back` se
 déploient ensemble.
 
+
+## Sol en shader, météo personnelle et gel de l'eau
+
+**Sol.** Les sols du relief, l'herbe, la neige des hauteurs, l'ombrage du relief, la paille, les cendres, la lueur
+du feu et l'eau sont dessinés par deux shaders (`Terrain/GroundSplat.ts`) au lieu de couches empilées. Une seule
+petite texture de données (un pixel par case, cinq paquets RVB : six sols ; herbe, neige, eau ; creusé, surélevé,
+cendre ; paille, feu, dehors) est envoyée à la carte graphique ; les textures des sols ne sont jamais redessinées.
+Les sols se mélangent par leur hauteur (la luminosité de leur texture), leurs bords sont courbés par un bruit fixé à
+la carte puis coupés net au pixel (pixel art, aucun fondu) ; les poids sont lissés 1-2-1 avant l'envoi pour que les
+bords ne suivent pas l'escalier des cases. L'herbe pousse en touffes (seuil sur la texture et un bruit), les cendres
+s'effacent par plaques. L'eau a sa couleur de sa profondeur, une surface animée en continu, une écume de rive et le
+sol mouillé autour. Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
+(`TexturedGround`). Textures : `resources/terrain/ground-*.png` (générées, 4 tons nets ; `ground-ice.png` dans le
+style des patinoires).
+
+**Météo personnelle.** Le bandeau météo devient une pastille : la ville du serveur (globe) avec l'icône du temps et
+une flèche du vent ; un clic ouvre le bulletin. Un joueur qui suit un lieu du monde sur son horloge (mode « monde »,
+`worldCityStore`, nommé d'après la ville la plus proche) voit aussi sa ville (ordinateur), et le jeu dessine pour lui
+seul la météo de ce lieu (`ChosenPlaceWeather`, route `real-weather` du pusher) ; les autres gardent celle du
+serveur.
+
+**Gel.** À partir de la température du lieu affiché (`Weather/Frost.ts`), pour ce joueur seul, rien n'est envoyé :
+givre au sol sous 0 °C ; l'eau gèle des hauts-fonds vers le fond entre 0 et -15 °C (toute gelée au-delà), en glace de
+patinoire ; le sol se mouille sous la pluie et sèche en cinq minutes ; tout avance en deux minutes environ, rien ne
+saute. La neige au sol reste celle d'avant : seulement quand il neige. **Dehors seulement** : `OutdoorGrid` (ce qui
+est fermé par des murs) ne gèle jamais. Sur l'eau gelée on patine (logique des patinoires), on n'y nage plus et le
+courant ne porte plus ; les poissons s'y figent, l'écume et les tourbillons s'arrêtent. Les **piscines** dehors
+gèlent comme des hauts-fonds et deviennent des patinoires, sauf si leur **eau chaude** est allumée : nouvelle clé
+d'état d'objet `hot` (`ENTITY_STATE_KEYS`, défaut « non », `entityStateDefault`), commandée par un interrupteur
+(« Il agit sur : l'eau chaude des piscines », cibles choisies pour une piscine dehors) ; chauffée, elle fume dans le
+froid et ne gèle jamais.
+
+**Piscines codées.** Une piscine est peinte au sol avec l'outil **Relief**, mode **Piscine** : ses cases gardent un sol
+de piscine (codes 7 à 14, `libs/map-editor/src/Terrain/Pools.ts`), un par style. Jusqu'à 8 styles par carte, dans
+`settings.pools` (message `UpdatePoolSettingMessage`) : couleur de l'eau, couleur de la margelle, profondeur, 0 à 2
+échelles, eau chaude. Le shader de l'eau les dessine (`poolColor`) : margelle par érosion de la forme
+(`poolAround`), carrelage vu à travers l'eau, couleur selon la profondeur. On y nage (`WaterZones.paintedPoolRectangles`,
+la profondeur du style), les échelles se posent sur le bord haut (`Terrain/PoolLadders.ts`). Les anciennes
+piscines-images (objets avec eau) sont redessinées de la même façon, image cachée (`Terrain/ImagePools.ts` ;
+`?classicPools` ou `localStorage.classicPools = "1"` pour revoir l'image), et retirées du catalogue ; « Convertir en
+piscine modifiable » dans l'éditeur d'objets la remplace par une piscine peinte (`MapEditor/PoolConversion.ts`).
+**Gel** : une piscine gèle en surface comme une eau calme de 32 px, quelle que soit sa profondeur
+(`POOL_ICE_DEPTH_PX`), soit vers -8 °C ; jamais dedans (`OutdoorGrid`) ni chauffée.

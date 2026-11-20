@@ -1,3 +1,4 @@
+import { validPoolStyles } from "../../Terrain/Pools";
 import type { UpdateWAMSettingsMessage } from "@workadventure/messages";
 import type { WAMFileFormat, WAMSettings } from "../../types";
 import {
@@ -12,11 +13,13 @@ import {
     DEFAULT_WAVE_SETTINGS,
     LAND_LIFE_BOUNDS,
     LIFE_BOUNDS,
+    MAX_POOL_LADDERS,
     MAX_WATER_CURRENT,
     MAX_WATER_INDOOR_DRAIN,
     MAX_WATER_MAX_SURFACE,
     MAX_WATER_SPEED,
     MEADOW_BOUNDS,
+    POOL_LADDER_CELL,
     MegaphoneSettings,
     precipitationWeather,
     PrefabOverride,
@@ -192,6 +195,18 @@ export class UpdateWAMSettingCommand extends Command {
                     ...((inertia ?? this.wam.settings.water?.inertia) ? { inertia: true } : {}),
                     ...(waves ? { waves } : {}),
                 };
+                break;
+            }
+            case "updatePoolSettingMessage": {
+                const pools = validPoolStyles(message.updatePoolSettingMessage.pools);
+                this.wam.settings.pools = pools.length > 0 ? pools : undefined;
+                break;
+            }
+            case "updatePoolLaddersSettingMessage": {
+                const cells = [
+                    ...new Set(message.updatePoolLaddersSettingMessage.cells.filter((cell) => POOL_LADDER_CELL.test(cell))),
+                ].slice(0, MAX_POOL_LADDERS);
+                this.wam.settings.poolLadders = cells.length > 0 ? cells : undefined;
                 break;
             }
             case "updateMeadowSettingMessage": {

@@ -147,6 +147,19 @@ describe("WAM Setting", () => {
         ).toBeUndefined();
     });
 
+    it("stores the hand ladders of the pools, once each, and drops a cell that is not one", async () => {
+        const wam: WAMFileFormat = { ...defaultWamFile, settings: {} };
+        const send = (cells: string[]): Promise<void> =>
+            new UpdateWAMSettingCommand(wam, {
+                message: { $case: "updatePoolLaddersSettingMessage", updatePoolLaddersSettingMessage: { cells } },
+            }).execute();
+        await send(["3,4", "3,4", "-2,7", "nope"]);
+        expect(wam.settings?.poolLadders).toEqual(["3,4", "-2,7"]);
+        expect(WamSchema.parse(wam).settings?.poolLadders).toEqual(["3,4", "-2,7"]);
+        await send([]);
+        expect(wam.settings?.poolLadders).toBeUndefined();
+    });
+
     it("accepts fog as map weather", () => {
         expect(WamSchema.parse({ ...defaultWamFile, settings: { weather: "fog" } }).settings?.weather).toBe("fog");
     });

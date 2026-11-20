@@ -3,6 +3,22 @@ import { writable } from "svelte/store";
 import { mockDeep } from "vitest-mock-extended";
 
 vi.mock("../../../../../src/front/Stores/MapEditorStore", () => ({ mapEditorModeStore: writable(false) }));
+const frostPrints = vi.hoisted(() => ({ created: 0, destroyed: 0, frost: [] as number[] }));
+vi.mock("@wa/front/Phaser/Game/Weather/FrostPrints", () => ({
+    FrostPrints: class {
+        constructor() {
+            frostPrints.created++;
+        }
+        update(_time: number, _walkers: unknown[], frost: number) {
+            frostPrints.frost.push(frost);
+            return false;
+        }
+        setVisible() {}
+        destroy() {
+            frostPrints.destroyed++;
+        }
+    },
+}));
 
 const { mapEditorModeStore } = await import("../../../../../src/front/Stores/MapEditorStore");
 const { seasonalThemeModeStore } = await import("../../../../../src/front/Stores/SeasonalThemeStore");
@@ -37,6 +53,7 @@ function setup(
         version?: () => number;
         entities?: () => { visible: boolean; texture?: { key: string }; getPrefab?: () => { seasonal?: unknown } }[];
         mapSnowCoverage?: () => number;
+        frost?: () => number;
     } = {},
 ) {
     markDirty = vi.fn();
@@ -47,6 +64,7 @@ function setup(
         markDirty,
         serverDate: options.serverDate ?? (() => new Date("2026-07-14T12:00:00Z")),
         mapSnowCoverage: options.mapSnowCoverage,
+        frost: options.frost,
         createDecor: (theme) => {
             events.push(`${theme}:create`);
             const decor = fakeDecor(theme);
@@ -67,6 +85,7 @@ function decorOf(theme: Theme): ReturnType<typeof fakeDecor> {
 
 beforeEach(() => {
     events.length = 0;
+    Object.assign(frostPrints, { created: 0, destroyed: 0, frost: [] });
     decors = [];
     mapEditorModeStore.set(false);
     seasonalThemeModeStore.set(SeasonalThemeMode.Auto);
@@ -295,6 +314,23 @@ describe("SeasonalThemeManager", () => {
             manager = undefined;
             expect(decorOf(SeasonalTheme.Christmas).destroy).toHaveBeenCalledTimes(1);
             expect(decorOf(SeasonalTheme.Autumn).destroy).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe("footprints on the frost", () => {
+        it("leaves footprints on the frosted ground, as strong as the frost, gone when it thaws", () => {
+            let frost = 0.64;
+            setup({ frost: () => frost }).update(0, walking);
+            expect(frostPrints.created).toBe(1);
+            expect(frostPrints.frost).toEqual([0.6]);
+            frost = 0;
+            manager?.update(16, walking);
+            expect(frostPrints.destroyed).toBe(1);
+        });
+
+        it("leaves none of its own under the snow, which leaves its footprints", () => {
+            setup({ frost: () => 1, mapSnowCoverage: () => 0.5 }).update(0, walking);
+            expect(frostPrints.created).toBe(0);
         });
     });
 });

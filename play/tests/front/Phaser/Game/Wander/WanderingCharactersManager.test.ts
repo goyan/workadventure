@@ -181,6 +181,7 @@ function makeScene(
         getLifeFire: () => (burning.size > 0 ? fire : undefined),
         getTerrainWater: () => ({
             version: () => water.version,
+            relief: () => undefined,
             coveredArea: () => ({ x: 0, y: 0, width: 320, height: 320 }),
             walkerSettledDepthAt: (x: number, y: number) =>
                 water.depths[`${Math.floor(x / 16)},${Math.floor(y / 16)}`] ?? 0,

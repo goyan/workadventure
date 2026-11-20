@@ -1,5 +1,5 @@
 import {
-    ENTITY_STATE_DEFAULT,
+    entityStateDefault,
     SWITCH_MAX_TARGETS,
     isAutomaticSwitch,
     isEntityStateKey,
@@ -145,7 +145,7 @@ export class EntityStateManager {
             }
             if (!entities[entityId]) {
                 // The object was deleted while the room was closed: its state must not come back on anything.
-                this.save(entityId, key, ENTITY_STATE_DEFAULT);
+                this.save(entityId, key, entityStateDefault(key));
                 continue;
             }
             this.set(entityId, key, value);
@@ -153,12 +153,12 @@ export class EntityStateManager {
     }
 
     private get(entityId: string, key: EntityStateKey): EntityStateValue {
-        return this.states.get(entityId)?.get(key) ?? ENTITY_STATE_DEFAULT;
+        return this.states.get(entityId)?.get(key) ?? entityStateDefault(key);
     }
 
     private set(entityId: string, key: EntityStateKey, value: EntityStateValue): void {
         const states = this.states.get(entityId) ?? new Map<EntityStateKey, EntityStateValue>();
-        if (value === ENTITY_STATE_DEFAULT) {
+        if (value === entityStateDefault(key)) {
             states.delete(key);
         } else {
             states.set(key, value);
@@ -191,7 +191,7 @@ export class EntityStateManager {
             .saveVariable(
                 this.hashKey(),
                 `${entityId}${FIELD_DELIMITER}${key}`,
-                value === ENTITY_STATE_DEFAULT ? "" : value,
+                value === entityStateDefault(key) ? "" : value,
             )
             .catch((error) => console.error("Could not save the state of an entity of the map", error));
     }
