@@ -514,7 +514,7 @@ describe("the blocks of the relief seen in 3/4", () => {
             expect(tiles.redraws()).toBeGreaterThan(drawn);
         });
 
-        it("draws a thin flood on flat ground as the foam of a shore, not as deep water", () => {
+        it("draws a thin flood on flat ground as clear water edged with foam, not as deep water", () => {
             const flat = withSoils(
                 undefined,
                 new Map(
@@ -536,8 +536,9 @@ describe("the blocks of the relief seen in 3/4", () => {
             settle();
             const block = painted.get("relief-block:1,1");
             if (!block) throw new Error("no block");
-            expect(count(block, [[0xd6, 0xec, 0xf6]])).toBeGreaterThan(20_000);
-            expect(count(block, RAMPS.water)).toBe(0);
+            // Clear water, with a line of foam 1 px wide where it ends (the edges of the block here).
+            expect(count(block, [RAMPS.water[3]])).toBeGreaterThan(20_000);
+            expect(count(block, [[0xd6, 0xec, 0xf6]])).toBeLessThan(2_000);
         });
 
         it("lets the bottom show through the water while the relief is edited", () => {

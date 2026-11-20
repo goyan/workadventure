@@ -27,10 +27,12 @@ describe("the colour of a point of water in pixel art", () => {
         expect(rampsFor(Season.Summer).water).not.toEqual(rampsFor(Season.Autumn).water);
     });
 
-    it("draws a pale foam at the shore, frozen in winter", () => {
-        expect(waterColor(2, 3, 7, Season.Autumn, undefined, false)).toEqual([0xd6, 0xec, 0xf6]);
-        expect(waterColor(4, 3, 7, Season.Winter, undefined, false)).toEqual([0xe3, 0xf0, 0xf7]);
-        expect(waterColor(4, 3, 7, Season.Autumn, undefined, false)).not.toEqual([0xe3, 0xf0, 0xf7]);
+    it("draws a line of foam 1 px wide at the edge of the water, of ice in winter, and clear water behind it", () => {
+        expect(waterColor(20, 3, 7, Season.Autumn, undefined, false, true)).toEqual([0xd6, 0xec, 0xf6]);
+        expect(waterColor(20, 3, 7, Season.Winter, undefined, false, true)).toEqual([0xe3, 0xf0, 0xf7]);
+        // Shallow water off the edge: the clearest shade of the water, not foam.
+        expect(waterColor(2, 3, 7, Season.Autumn, undefined, false, false)).toEqual(rampsFor(Season.Autumn).water[3]);
+        expect(waterColor(4, 3, 7, Season.Winter, undefined, false, false)).not.toEqual([0xe3, 0xf0, 0xf7]);
     });
 
     it("lets the bottom show through, one pixel in two, while the relief is edited", () => {

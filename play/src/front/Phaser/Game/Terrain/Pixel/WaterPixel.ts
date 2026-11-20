@@ -16,7 +16,7 @@ const SEE_THROUGH_SHARE = 0.45;
 
 /**
  * The colour of a point of water (map pixels) in pixel art: a shade of the water of the season, darker deeper down,
- * a slow ripple of noise; the pale foam of the shore where it is thin, frozen in winter. While the relief is edited
+ * a slow ripple of noise, the clearest shade where it is thin; a line of foam 1 px wide at its edge, of ice in winter. While the relief is edited
  * (`seeThrough`), one pixel in two of the dither shows the ground under it (`ground`), so what is dug there shows.
  */
 export function waterColor(
@@ -26,10 +26,13 @@ export function waterColor(
     season: Season | undefined,
     ground: Rgb | undefined,
     seeThrough: boolean,
+    /** At the edge of the water (a neighbour is dry): the line of foam, of ice in winter. */
+    edge = false,
 ): Rgb {
     if (seeThrough && ground && bayer(x, y) < SEE_THROUGH_SHARE) return ground;
-    if (season === Season.Winter && depth < ICE_PX) return SHORE_ICE;
-    if (depth < SHORE_PX) return SHORE_FOAM;
+    if (edge) return season === Season.Winter ? SHORE_ICE : SHORE_FOAM;
+    // Shallow water off the edge: the clearest shade of the water.
+    if (depth < SHORE_PX) return rampsFor(season).water[3];
     const ripple = (valueNoise(x / 10, y / 5) - 0.5) * 0.1;
     return shadeAt(rampsFor(season).water, 0.85 - Math.min(1, depth / DARKEST_DEPTH) * 0.8 + ripple, x, y);
 }

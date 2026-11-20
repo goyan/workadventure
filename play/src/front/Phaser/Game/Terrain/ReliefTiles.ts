@@ -142,6 +142,7 @@ export class ReliefTiles {
     /** The ground of a block seen from above, a pixel a pixel of the map: reused, nothing allocated. */
     private readonly pointHeights = new Float32Array(POINT_COLUMNS * POINT_ROWS);
     private readonly pointMaterials = new Uint8Array(POINT_COLUMNS * POINT_ROWS);
+    private readonly pointWaters = new Float32Array(POINT_COLUMNS * POINT_ROWS);
     /** Undefined where nothing covers the ground (transparent). */
     private readonly pointColors: (PaletteRgb | undefined)[] = new Array<PaletteRgb | undefined>(
         POINT_COLUMNS * POINT_ROWS,
@@ -502,6 +503,8 @@ export class ReliefTiles {
         const originX = left - 1;
         const originY = top - MAX_DROP - 1;
         const heights = this.pointHeights;
+        // The water of each point (as the blocks draw it), to find its edge: a point of water next to a dry one.
+        const waters = this.pointWaters;
         const materials = this.pointMaterials;
         const cellHeights = this.heights;
         const firstRow = Math.max(0, firstY - originY - 1);
@@ -527,6 +530,7 @@ export class ReliefTiles {
                 const upper = cellHeights[at] * (1 - tx) + cellHeights[at + 1] * tx;
                 const lower = cellHeights[at + width] * (1 - tx) + cellHeights[at + width + 1] * tx;
                 heights[index] = upper * (1 - ty) + lower * ty;
+                if (wet) waters[index] = bilinear(this.gridWater, x, y);
                 const cellX = Math.floor(x / TERRAIN_CELL - 0.5);
                 if (cellX !== region) {
                     region = cellX;
@@ -629,7 +633,7 @@ export class ReliefTiles {
             for (let y = firstY; y < endY; y++) {
                 const index = (y - originY) * POINT_COLUMNS + column + 1;
                 const ground = heights[index];
-                const water = wet ? bilinear(this.gridWater, x + 0.5, y + 0.5) : 0;
+                const water = wet ? waters[index] : 0;
                 const sample = samples[count++];
                 const here = materials[index];
                 sample.groundY = y;
@@ -638,7 +642,12 @@ export class ReliefTiles {
                     // The water as its signature knows it (WATER_STEP_PX): a block is drawn again only when it shows.
                     const depth = Math.max(WATER_SEEN_PX, Math.floor(water / WATER_STEP_PX) * WATER_STEP_PX);
                     sample.drop = Math.min(MAX_DROP, Math.max(0, -(ground + depth)) * scale);
-                    sample.color = waterColor(depth, x, y, season, colors[index], this.seeThrough);
+                    const edge =
+                        waters[index - 1] < WATER_SEEN_PX ||
+                        waters[index + 1] < WATER_SEEN_PX ||
+                        waters[index - POINT_COLUMNS] < WATER_SEEN_PX ||
+                        waters[index + POINT_COLUMNS] < WATER_SEEN_PX;
+                    sample.color = waterColor(depth, x, y, season, colors[index], this.seeThrough, edge);
                     sample.plain = false;
                 } else {
                     sample.drop = Math.min(MAX_DROP, Math.max(0, -ground) * scale);
