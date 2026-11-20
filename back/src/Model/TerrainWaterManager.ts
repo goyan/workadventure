@@ -6,7 +6,7 @@ import {
     DEFAULT_WATER_SETTINGS,
     DOWNPOUR_PX_PER_SECOND,
     DRAIN_PX_PER_SECOND,
-    drainSquare,
+    DRAIN_RIM_PX_PER_SECOND,
     gridBoundsOf,
     landWallsOf,
     LITRES_PER_M3,
@@ -273,18 +273,23 @@ export class TerrainWaterManager {
     }
 
     /**
-     * The drains take the water of their squares during a step: counted with the sinks. True when water went, so that
+     * The drains take the water of their discs during a step: counted with the sinks. True when water went, so that
      * the room sees it fall as often as under a wave.
      */
     private takeDrains(grid: WaterGrid): boolean {
         const open = this.drains();
         if (open.length === 0) return false;
-        const px = (DRAIN_PX_PER_SECOND * WATER_STEP_MS) / 1000;
+        const centrePx = (DRAIN_PX_PER_SECOND * WATER_STEP_MS) / 1000;
+        const rimPx = (DRAIN_RIM_PX_PER_SECOND * WATER_STEP_MS) / 1000;
         let taken = 0;
         for (const drain of open) {
-            const { left, top, side } = drainSquare(drain.x, drain.y);
-            const cells = side / TERRAIN_CELL;
-            taken += grid.drainOn(left / TERRAIN_CELL, top / TERRAIN_CELL, cells, cells, px);
+            taken += grid.drainDisc(
+                Math.floor(drain.x / TERRAIN_CELL),
+                Math.floor(drain.y / TERRAIN_CELL),
+                (drain.radiusTiles * TILE_PX) / TERRAIN_CELL,
+                centrePx,
+                rimPx,
+            );
         }
         if (taken > 0) {
             this.sums.sinksPx += taken;

@@ -560,22 +560,29 @@ export class WaterGrid {
     }
 
     /**
-     * A drain takes water from the cells of a rectangle (its top left cell, and how many cells wide and high): up to
-     * `px` from each, nothing from a wall, and only from the cells of the grid. Returns what was taken.
+     * A drain takes water from the cells of the disc of `radiusCells` cells around a cell: up to `centrePx` from the
+     * one in its middle, down to `rimPx` from those at its rim, evenly in between. Nothing from a wall, and only from
+     * the cells of the grid: a disc that goes past its edge, or whose middle lies outside, takes what it covers.
+     * Returns what was taken.
      */
-    public drainOn(cellX: number, cellY: number, cellsWide: number, cellsHigh: number, px: number): number {
-        if (!Number.isFinite(px) || px <= 0) return 0;
+    public drainDisc(cellX: number, cellY: number, radiusCells: number, centrePx: number, rimPx: number): number {
+        if (!Number.isFinite(centrePx) || !Number.isFinite(rimPx) || !Number.isFinite(radiusCells)) return 0;
+        if (radiusCells < 0 || (centrePx <= 0 && rimPx <= 0)) return 0;
         const { x, y, width, height } = this.bounds;
-        const fromRow = Math.max(0, cellY - y);
-        const toRow = Math.min(height - 1, cellY + cellsHigh - 1 - y);
-        const fromColumn = Math.max(0, cellX - x);
-        const toColumn = Math.min(width - 1, cellX + cellsWide - 1 - x);
+        const reach = Math.ceil(radiusCells);
+        const fromRow = Math.max(0, cellY - reach - y);
+        const toRow = Math.min(height - 1, cellY + reach - y);
+        const fromColumn = Math.max(0, cellX - reach - x);
+        const toColumn = Math.min(width - 1, cellX + reach - x);
         let taken = 0;
         for (let row = fromRow; row <= toRow; row++) {
             for (let column = fromColumn; column <= toColumn; column++) {
+                const away = Math.hypot(column + x - cellX, row + y - cellY);
+                if (away > radiusCells) continue;
                 const index = row * width + column;
                 if (this.blocked[index]) continue;
-                const goes = Math.min(px, this.depth[index]);
+                const share = radiusCells > 0 ? away / radiusCells : 0;
+                const goes = Math.min(Math.max(0, centrePx + (rimPx - centrePx) * share), this.depth[index]);
                 this.depth[index] -= goes;
                 taken += goes;
             }

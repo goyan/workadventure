@@ -5,6 +5,7 @@ import {
     DOWNPOURS_PER_ROOM,
     DRAIN_LASTS_MS,
     DRAINS_PER_ROOM,
+    drainTiles,
     FIRE_PATCHES_PER_SECOND,
     fireTiles,
     METEOR_FALL_MS,
@@ -23,7 +24,7 @@ import type { GameRoom } from "./GameRoom";
  * A downpour is the other kind: it rains hard on a disc of the map (or on all of it) for as long as its player keeps
  * telling where, a second more at most. One for each player; the water and the meadow read those that are falling.
  *
- * A drain is its opposite: the water is taken hard from a square of the map for as long as its player keeps telling
+ * A drain is its opposite: the water is taken hard from a disc of the map for as long as its player keeps telling
  * where. One for each player too; the water reads those that are open.
  */
 interface LiveDownpour extends Downpour {
@@ -127,7 +128,7 @@ export class CatastropheManager {
      * A player drains the water around a point of the map (pixels): the drain of that player opens, or moves there
      * and goes on. The room is told each time. False when it is refused.
      */
-    public drain(userId: number, x: number, y: number): boolean {
+    public drain(userId: number, x: number, y: number, radiusTiles: number = 0): boolean {
         if (this.stopped) return false;
         const size = this.mapSize();
         if (!size || !Number.isFinite(x) || !Number.isFinite(y)) return false;
@@ -136,7 +137,14 @@ export class CatastropheManager {
         this.forgetClosed(now);
         const open = this.draining.get(userId);
         if (open ? now - open.toldAt < DOWNPOUR_MIN_REPORT_MS : this.draining.size >= DRAINS_PER_ROOM) return false;
-        const drain: LiveDrain = { id: open?.id ?? this.nextId++, x, y, until: now + DRAIN_LASTS_MS, toldAt: now };
+        const drain: LiveDrain = {
+            id: open?.id ?? this.nextId++,
+            x,
+            y,
+            radiusTiles: drainTiles(radiusTiles),
+            until: now + DRAIN_LASTS_MS,
+            toldAt: now,
+        };
         this.draining.set(userId, drain);
         this.room.sendSubMessageToRoom({
             message: {
@@ -147,7 +155,7 @@ export class CatastropheManager {
                     x,
                     y,
                     impactInMs: DRAIN_LASTS_MS,
-                    radiusTiles: 0,
+                    radiusTiles: drain.radiusTiles,
                     wholeMap: false,
                 },
             },
@@ -211,7 +219,7 @@ export class CatastropheManager {
     ): boolean {
         if (kind === CatastropheKind.CATASTROPHE_DOWNPOUR) return this.rain(userId, x, y, radiusTiles, wholeMap);
         if (kind === CatastropheKind.CATASTROPHE_FIRE) return this.fire(userId, x, y, radiusTiles);
-        if (kind === CatastropheKind.CATASTROPHE_DRAIN) return this.drain(userId, x, y);
+        if (kind === CatastropheKind.CATASTROPHE_DRAIN) return this.drain(userId, x, y, radiusTiles);
         return this.launch(kind, x, y, radiusTiles);
     }
 
