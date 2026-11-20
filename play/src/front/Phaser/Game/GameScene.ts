@@ -332,6 +332,7 @@ import type { RaisedCharacter } from "./Floors/UpperDoors";
 import { wallBarriers } from "./MapEditor/MapLayer/MapLayerBarriers";
 import { readMapLayerEntityStates } from "./MapEditor/MapLayer/MapLayerSync";
 import { autumnProgress } from "./Nature/TreeLeafFall";
+import { isGroundUnderWater } from "./Water/WaterZones";
 import { mapSnowCoverage } from "./Weather/SnowCover";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
 import { gameManager } from "./GameManager";
@@ -3999,6 +4000,7 @@ export class GameScene extends DirtyScene {
                         this.getSeasonalTheme() === SeasonalTheme.Christmas ? 1 : this.getMapSnowCoverage(),
                     enabled: () => !get(mapEditorModeStore) && get(weatherEffectsEnabledStore) && !isBasicActive(),
                     isOutdoor: (x, y) => this.getOutdoorGrid()?.isOutdoorAt(x, y) ?? true,
+                    isWet: (x, y) => isGroundUnderWater(this, this.terrainWater, x, y),
                     view: () => this.cameras.main.worldView,
                 });
                 this.seasonalThemeManager?.destroy();
@@ -4009,6 +4011,16 @@ export class GameScene extends DirtyScene {
                     markDirty: () => this.markDirty(),
                     serverDate: () => this.nightManager?.serverDate(),
                     mapSnowCoverage: () => this.getMapSnowCoverage(),
+                    leafConditions: () => {
+                        const weather = this.shownWeather();
+                        return {
+                            windSpeed: weather?.windSpeed,
+                            windFrom: weather?.windFrom,
+                            progress: autumnProgress(this.nightManager?.serverDate() ?? new Date(Number.NaN)),
+                        };
+                    },
+                    isWet: (x, y) => isGroundUnderWater(this, this.terrainWater, x, y),
+                    waterVersion: () => this.terrainWater.version(),
                 });
                 // Same: one event subscription and one timer at a time.
                 this._knockManager?.destroy();

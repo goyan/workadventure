@@ -7,7 +7,7 @@ import type { WalkerSample } from "../Christmas/FootprintTrail";
 import type { AlphaMask, SnowEntity } from "../Christmas/SnowCaps";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { basicActiveStore } from "../../../Stores/BasicModeStore";
-import type { SeasonalDecor, SeasonalDecorDeps } from "./SeasonalDecor";
+import type { LeafConditions, SeasonalDecor, SeasonalDecorDeps } from "./SeasonalDecor";
 import { activeSeasonalTheme, SeasonalTheme, SeasonalThemeMode } from "./SeasonalTheme";
 import { readFrameAlpha } from "./readFrameAlpha";
 
@@ -37,6 +37,12 @@ export interface SeasonalThemeDeps {
     readPixels?: (entity: SnowEntity) => AlphaMask | undefined;
     /** How much the map snow covers the ground, 0 to 1; 0 when the map snow is not shown. */
     mapSnowCoverage?: () => number;
+    /** The wind of the map and the date, for the leaves of autumn. */
+    leafConditions?: () => LeafConditions;
+    /** Whether a point is under water: nothing seasonal lies there. */
+    isWet?: (x: number, y: number) => boolean;
+    /** Changes when the water does. */
+    waterVersion?: () => number;
 }
 
 interface ActiveDecor {
@@ -211,6 +217,9 @@ export class SeasonalThemeManager {
         const deps: SeasonalDecorDeps = {
             isOutdoor: (x, y) => this.deps.outdoorGrid()?.isOutdoorAt(x, y) ?? false,
             readPixels: this.deps.readPixels ?? readFrameAlpha(this.scene),
+            leafConditions: this.deps.leafConditions,
+            isWet: this.deps.isWet,
+            waterVersion: this.deps.waterVersion,
         };
         return theme === SeasonalTheme.Christmas
             ? new ChristmasDecor(this.scene, deps)

@@ -2828,10 +2828,33 @@ n'est pas reçue, Auto n'affiche rien (`Seasonal/SeasonalTheme.ts`). `SeasonalTh
   haut, les sols posés dehors sont givrés, et chaque joueur laisse des empreintes (une tous les 16 px en marche, une
   trace en course, fondu en 45 s, 400 au plus). Les arbres saisonniers prennent leur image d'hiver, sans neige ajoutée.
 - **Automne** (`Autumn/`) : la météo de la carte est gardée ; l'herbe prend la texture d'automne d'Amine, les arbres
-  leur image d'automne ; feuilles éparses (une par carré de 48 px, placement fixe), feuilles qui tombent (couche de la
-  boucle météo, même par temps clair), tas de feuilles au pied des objets dehors (arbres compris), feuilles soulevées
-  par les pas (3-4 feuilles de 5×3 px tous les 24 px en marche, 5-6 tous les 16 px en course, 120 au plus). Palette `#c8642a`, `#d9a23b`,
-  `#9b3d23`, `#7a5a2e` ; aucune image ajoutée.
+  leur image d'automne ; feuilles au sol venues des arbres (voir ci-dessous), feuilles qui tombent (couche de la
+  boucle météo, même par temps clair), tas de feuilles au pied des objets là où le sol porte des feuilles (arbres
+  compris), feuilles soulevées par les pas au même endroit (3-4 feuilles de 5×3 px tous les 24 px en marche, 5-6 tous
+  les 16 px en course, 120 au plus). Palette `#c8642a`, `#d9a23b`, `#9b3d23`, `#7a5a2e` ; aucune image ajoutée.
+
+**Feuilles au sol venues des arbres** (`Autumn/LeafDensity.ts`, pur ; avant : une feuille par carré de 48 px partout
+dehors, lacs, océan et piscines compris, signalé par l'utilisateur). Seuls les arbres qui se balancent et perdent leurs
+feuilles en sont la source (`keepsLeavesInAutumn` de `Nature/TreeLeafFall.ts`, même règle que les feuilles qui
+tombent : un arbre dont l'image d'automne est celle d'été n'en perd pas, soit les sapins sombres et clairs, cyprès,
+saules, palmiers, arbres nus et la famille `winter-auto-`). Écart connu : les « Sapin enneigé » et le « Palmier
+enneigé » (`snow-evergreen-`) ont une image d'automne propre et perdent donc des feuilles, comme avant pour celles qui
+tombent. Autour du pied de
+chaque arbre, un ovale de feuilles le plus dense au pied (90 % des carrés de 16 px en fin d'automne, un quart de cela
+le 1er septembre) qui s'éclaircit jusqu'à son bord : 72 px de rayon (ou les trois quarts de la largeur de l'arbre) en
+fin d'automne, la moitié au début ; chaque palier de vent l'allonge de 75 % sous le vent et le raccourcit de 12 % au
+vent (tempête : quatre fois plus loin sous le vent). Le vent est celui de la carte (vent réel du lieu, brise de
+10 km/h du nord-ouest sinon), arrondi à 16 directions et 5 paliers (0 sous 5 km/h, 1 dès 5, 2 dès 15, 3 dès 30, 4 dès
+50) pour que les feuilles ne bougent pas à chaque variation du vent réel ; l'avancée de l'automne par trentièmes. Les
+arbres se cumulent. Rien sur l'eau du relief à partir de 2 px (dernier état du serveur, le même pour tous), ni dans
+les piscines du sol, ni sur le tapis d'un arbre de rive (`isGroundUnderWater` de `Water/WaterZones.ts`) ; pas de
+feuilles flottantes. Tas de feuilles dès 15 % de densité au pied de l'objet, feuilles soulevées dès 10 %. Coût : la
+densité de la zone dessinée est calculée en un passage où chaque arbre ne visite que les carrés qu'il atteint
+(`leafDensityField`), seulement quand la vue sort de sa marge, que les arbres, le vent arrondi ou l'avancée de
+l'automne changent ; mesuré hors jeu : 5 à 10 ms pour 400 arbres sur une zone de 1 650 × 930 à 6 000 × 3 400 px (sans
+le dessin). Quand l'eau du relief change (chaque seconde), au plus toutes les 5 s, seules les feuilles déjà tirées sont
+relues sur leur sol, et la couche n'est redessinée que si l'une d'elles est atteinte ou quittée par l'eau
+(`LeafScatterLayer.refreshGround`). Rien de loin (`seenFromFar`). Front seul.
 
 Empreintes et feuilles soulevées sont calculées par chaque navigateur depuis les positions déjà reçues : rien sur le
 réseau. « Afficher la météo » coupé retire aussi ce qui tombe (flocons de Noël, feuilles) ; le reste suit le thème.
