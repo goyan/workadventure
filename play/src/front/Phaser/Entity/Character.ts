@@ -433,7 +433,8 @@ export abstract class Character extends Container implements OutlineableInterfac
      */
     protected waterCurrentPush(walkSpeed: number): CurrentVector {
         const water = this.floorZ < 2 && !isBasicActive() ? this.scene?.getTerrainWater?.() : undefined;
-        if (!water) return { x: 0, y: 0 };
+        // The current runs under the deck of a bridge, not over it.
+        if (!water || water.isBridgeAt(this.x, this.y + BODY_CENTER_OFFSET_Y)) return { x: 0, y: 0 };
         const strength =
             this.scene.getGameMap().getWamFile()?.getWam().settings?.water?.current ?? DEFAULT_WATER_SETTINGS.current;
         return currentPush(water, this.x, this.y + BODY_CENTER_OFFSET_Y, this.scene.time.now, strength, walkSpeed);

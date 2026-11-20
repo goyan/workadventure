@@ -471,7 +471,7 @@ export class WanderingCharactersManager {
             dryGrid.length,
             this.tileDimensions.width,
             water.coveredArea(),
-            (x, y) => water.settledDepthAt(x, y),
+            (x, y) => water.walkerSettledDepthAt(x, y),
             this.wet,
         );
         const changes = changedTiles(this.wet, wet);

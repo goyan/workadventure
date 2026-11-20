@@ -4,6 +4,8 @@ import {
     WALL_THICKNESS,
     facadePrefabName,
     floorPrefabName,
+    bridgePrefabName,
+    MAP_LAYER_BRIDGE_COLLECTION,
     jointPrefabName,
     lintelPrefabName,
     MAP_LAYER_FLOOR_COLLECTION,
@@ -168,6 +170,18 @@ export function computePlacements(model: MapLayerModel): MapLayerPlacement[] {
         const shaded = model.hasWall("h", floor.x, floor.y - 1) && !model.getDoorOn("h", floor.x, floor.y - 1);
         const name = floorPrefabName(floor.family, shaded ? "ombre" : "uni");
         placements.push(placement(MAP_LAYER_FLOOR_COLLECTION, name, floor.x * size, floor.y * size));
+    }
+
+    for (const bridge of model.getBridges()) {
+        // The piece draws a rail on each side where the bridge does not go on.
+        const mask =
+            (model.hasBridge(bridge.x, bridge.y - 1) ? 1 : 0) |
+            (model.hasBridge(bridge.x + 1, bridge.y) ? 2 : 0) |
+            (model.hasBridge(bridge.x, bridge.y + 1) ? 4 : 0) |
+            (model.hasBridge(bridge.x - 1, bridge.y) ? 8 : 0);
+        placements.push(
+            placement(MAP_LAYER_BRIDGE_COLLECTION, bridgePrefabName(mask), bridge.x * size, bridge.y * size),
+        );
     }
 
     for (const door of model.getDoors()) {

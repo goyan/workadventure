@@ -7,6 +7,8 @@ import {
     landPlacesOf,
     landTreesOf,
     landWallsOf,
+    bridgeTilesOf,
+    dryOnBridges,
     lifeCensus,
     LIFE_RANGES,
     LifeHistory,
@@ -360,7 +362,9 @@ export class AquaticLifeManager {
         const walls = landWallsOf(this.room.getWam());
         // The trees the lions and the tigers live around.
         const trees = landTreesOf(this.room.getWam());
-        const key = `${size.width}x${size.height}|${walls.signature}|${trees.map((tree) => `${tree.x},${tree.y}`).join(";")}`;
+        // The bridges of the map: what walks crosses the water on their decks.
+        const bridges = bridgeTilesOf(this.room.getWam());
+        const key = `${size.width}x${size.height}|${walls.signature}|${trees.map((tree) => `${tree.x},${tree.y}`).join(";")}|${[...bridges].sort().join(";")}`;
         const version = grid ? this.water.waterVersion() : -1;
         const stale = version !== this.landVersion && this.steps - this.landStep >= STEPS_PER_LAND;
         if (this.land && key === this.landKey && !stale) return;
@@ -368,7 +372,7 @@ export class AquaticLifeManager {
             width: size.width,
             height: size.height,
             walls,
-            depthAt: grid ? (cellX, cellY) => grid.depthAt(cellX, cellY) : () => 0,
+            depthAt: grid ? dryOnBridges((cellX, cellY) => grid.depthAt(cellX, cellY), bridges) : () => 0,
             trees,
         });
         this.landKey = key;

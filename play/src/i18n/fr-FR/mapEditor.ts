@@ -778,6 +778,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Pinceau de sol",
             floorRectangle: "Rectangle de sol",
             floorFill: "Remplir un sol",
+            bridge: "Pont",
             door: "Porte",
             window: "Fenêtre",
             height: "Hauteur",
@@ -792,6 +793,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Maintenez le bouton et peignez les dalles de sol.",
             floorRectangle: "Glissez un rectangle pour le remplir de sol.",
             floorFill: "Cliquez dans une pièce fermée pour la remplir.",
+            bridge: "Maintenez le bouton et peignez le tablier d’un pont, case par case. Tout ce qui marche le traverse à sec ; l’eau coule dessous.",
             door: "Cliquez sur un mur pour transformer deux de ses segments en porte. Elle s’ouvre quand quelqu’un s’approche.",
             window: "Cliquez ou glissez le long d’un mur horizontal pour y poser des fenêtres. On voit à travers. Glissez une fenêtre posée pour la déplacer.",
             height: "Cliquez sur un mur, une porte ou une fenêtre (ou glissez le long d’un mur) pour le sélectionner, puis choisissez sa hauteur.",
@@ -886,6 +888,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             doorsUnavailable: "Cette salle n’a pas de catalogue de portes : les portes ne sont pas disponibles.",
             windowInvalid: "Une fenêtre se pose sur un mur horizontal libre (ni porte ni fenêtre). Cliquez sur un mur.",
             windowsUnavailable: "Cette salle n’a pas de catalogue de fenêtres : les fenêtres ne sont pas disponibles.",
+            bridgesUnavailable: "Cette salle n’a pas de catalogue de ponts : les ponts ne sont pas disponibles.",
             slabOnGround: "Choisissez d’abord un niveau au-dessus du sol : le sol se dessine avec les modes de sol.",
             stairNoArrival:
                 "Escalier posé, mais il ne mène encore nulle part : posez des dalles du niveau d’arrivée sur les cases orange.",

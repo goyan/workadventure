@@ -1,4 +1,4 @@
-import { reliefCells, TERRAIN_CELL, WATER_MESSAGE_MS } from "@workadventure/map-editor";
+import { reliefCells, TERRAIN_CELL, TILE_PX, WATER_MESSAGE_MS } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 
 /** A state of the water as the server sends it, its bytes already unzipped (TerrainWaterMessage). */
@@ -41,6 +41,7 @@ export class TerrainWater {
     private at = -Infinity;
     private wet = false;
     private changes = 0;
+    private bridges: ReadonlySet<string> = new Set();
 
     /** The relief of the map, as it is now (drawn with the water). */
     public setTerrain(terrain: TerrainData | undefined): void {
@@ -129,6 +130,26 @@ export class TerrainWater {
         const row = Math.floor(y / TERRAIN_CELL) - this.grid.y;
         if (column < 0 || row < 0 || column >= this.grid.width || row >= this.grid.height) return 0;
         return this.to[row * this.grid.width + column];
+    }
+
+    /**
+     * The tiles that carry the deck of a bridge ("x,y" in tiles, see bridgeTilesOf): what walks reads no water
+     * there. What reads the water again at each version (the wandering animals) is told when they change.
+     */
+    public setBridges(tiles: ReadonlySet<string>): void {
+        if (tiles.size === this.bridges.size && [...tiles].every((tile) => this.bridges.has(tile))) return;
+        this.bridges = tiles;
+        this.changes++;
+    }
+
+    /** Whether a point of the map (map pixels) is on the deck of a bridge. */
+    public isBridgeAt(x: number, y: number): boolean {
+        return this.bridges.size > 0 && this.bridges.has(`${Math.floor(x / TILE_PX)},${Math.floor(y / TILE_PX)}`);
+    }
+
+    /** The water of the last state as what walks sees it: none on the deck of a bridge. */
+    public walkerSettledDepthAt(x: number, y: number): number {
+        return this.isBridgeAt(x, y) ? 0 : this.settledDepthAt(x, y);
     }
 
     /** The part of the map the grid of the water covers, in map pixels. */

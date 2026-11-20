@@ -14,12 +14,14 @@ import type { EntitiesCollectionsManager } from "../../../../src/front/Phaser/Ga
 import { MapLayerEditorTool } from "../../../../src/front/Phaser/Game/MapEditor/Tools/MapLayerEditorTool";
 import { MAP_LAYER_FLOOR_SLAB_COLLECTION } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 import {
+    MAP_LAYER_BRIDGE_COLLECTION,
     MAP_LAYER_DOOR_COLLECTION,
     MAP_LAYER_FLOOR_COLLECTION,
     MAP_LAYER_WALL_COLLECTION,
     MAP_LAYER_WINDOW_COLLECTION,
 } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 import {
+    mapLayerBridgesAvailableStore,
     mapLayerCatalogAvailableStore,
     mapLayerDoorHeightStore,
     mapLayerDoorHeightsAvailableStore,
@@ -60,6 +62,7 @@ describe("MapLayerEditorTool gestures", () => {
     let input: ReturnType<typeof mock<Phaser.Input.InputPlugin>>;
     let modeManager: ReturnType<typeof mock<MapEditorModeManager>>;
     let collectionsManager: ReturnType<typeof mock<EntitiesCollectionsManager>>;
+    let bridgesInCatalog = true;
     let doorsInCatalog: boolean;
     let glazedDoorsInCatalog: boolean;
     let shortStairsInCatalog: boolean;
@@ -169,6 +172,7 @@ describe("MapLayerEditorTool gestures", () => {
         );
         scene.getGameMap.mockReturnValue(gameMap);
 
+        bridgesInCatalog = true;
         doorsInCatalog = true;
         glazedDoorsInCatalog = true;
         shortStairsInCatalog = true;
@@ -185,6 +189,9 @@ describe("MapLayerEditorTool gestures", () => {
                 );
             }
             if (collectionName === MAP_LAYER_WINDOW_COLLECTION && !windowsInCatalog) return Promise.resolve(undefined);
+            if (collectionName === MAP_LAYER_BRIDGE_COLLECTION) {
+                return Promise.resolve(bridgesInCatalog ? prefab(collectionName, prefabId) : undefined);
+            }
             if (
                 collectionName === MAP_LAYER_FLOOR_COLLECTION ||
                 collectionName === MAP_LAYER_WALL_COLLECTION ||
@@ -313,6 +320,35 @@ describe("MapLayerEditorTool gestures", () => {
         up(40, 40);
         expect(modeManager.executeCommands.mock.calls).toHaveLength(0);
         expect(get(mapLayerStatusStore)).toBe("doorsUnavailable");
+    });
+
+    it("paints a bridge along the tiles of a drag, each piece told by its neighbours", async () => {
+        await activate();
+        mapLayerModeStore.set("bridge");
+        down(40, 40);
+        move(80, 40);
+        move(110, 40);
+        up(110, 40);
+        await settle();
+        expect(createdNames()).toEqual(["pont-bois-10", "pont-bois-2", "pont-bois-8"]);
+    });
+
+    it("goes back to the wall mode when the room has no bridge catalog", async () => {
+        bridgesInCatalog = false;
+        mapLayerModeStore.set("bridge");
+        await activate();
+        expect(get(mapLayerBridgesAvailableStore)).toBe(false);
+        expect(get(mapLayerModeStore)).toBe("wall");
+    });
+
+    it("explains a click in the bridge mode when bridges are unavailable", async () => {
+        bridgesInCatalog = false;
+        await activate();
+        mapLayerModeStore.set("bridge");
+        down(40, 40);
+        up(40, 40);
+        expect(modeManager.executeCommands.mock.calls).toHaveLength(0);
+        expect(get(mapLayerStatusStore)).toBe("bridgesUnavailable");
     });
 
     it("sets windows along a horizontal wall", async () => {

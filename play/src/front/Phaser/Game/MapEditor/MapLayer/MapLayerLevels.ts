@@ -1,4 +1,5 @@
 import {
+    MAP_LAYER_BRIDGE_COLLECTION,
     MAP_LAYER_FLOOR_COLLECTION,
     MAP_LAYER_UPPER_COLLECTIONS,
     MAP_LAYER_UPPER_SUFFIX,
@@ -80,7 +81,11 @@ export function levelItems(entities: Iterable<LevelPlaced>, level: number): Plac
 export function levelPlacements(placements: readonly MapLayerPlacement[], level: number): LevelPlacement[] {
     if (level === 0) return placements.map((item) => ({ ...item, elevation: 0 }));
     return placements
-        .filter((item) => item.collectionName !== MAP_LAYER_FLOOR_COLLECTION)
+        .filter(
+            (item) =>
+                item.collectionName !== MAP_LAYER_FLOOR_COLLECTION &&
+                item.collectionName !== MAP_LAYER_BRIDGE_COLLECTION,
+        )
         .map((item) => {
             const upper = upperPrefabOf(item.collectionName, item.prefabId);
             return { ...item, ...upper, y: item.y - level, elevation: level };

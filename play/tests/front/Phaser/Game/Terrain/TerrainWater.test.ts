@@ -140,3 +140,39 @@ describe("swimming in the water of the relief", () => {
         expect(isDeepTerrainWater(undefined, { x: 0, y: 0 }, 0)).toBe(false);
     });
 });
+
+describe("the bridges over the water of the relief", () => {
+    const flooded = (): TerrainWater => {
+        const water = new TerrainWater();
+        water.setTerrain(pit);
+        water.receive(full(1, { "0,0": 40, "1,0": 40, "2,0": 40 }), 0);
+        return water;
+    };
+
+    it("what walks reads no water on the tile of a bridge, and the water beside it", () => {
+        const water = flooded();
+        // The tile (0, 0) holds the cells (0, 0) and (1, 0); the cell (2, 0) is on the tile (1, 0).
+        water.setBridges(new Set(["0,0"]));
+        expect(water.isBridgeAt(20, 5)).toBe(true);
+        expect(water.isBridgeAt(40, 5)).toBe(false);
+        expect(water.walkerSettledDepthAt(20, 5)).toBe(0);
+        expect(water.walkerSettledDepthAt(40, 5)).toBe(40);
+        // The water itself is still there under the deck: it is drawn, and the fish swim in it.
+        expect(water.settledDepthAt(20, 5)).toBe(40);
+        expect(isDeepTerrainWater(water, { x: 20, y: 5 }, 10_000)).toBe(false);
+        expect(isDeepTerrainWater(water, { x: 40, y: 5 }, 10_000)).toBe(true);
+    });
+
+    it("the water is back as soon as the bridge is taken away, and what reads it is told", () => {
+        const water = flooded();
+        water.setBridges(new Set(["0,0"]));
+        const version = water.version();
+        water.setBridges(new Set());
+        expect(water.version()).not.toBe(version);
+        expect(isDeepTerrainWater(water, { x: 20, y: 5 }, 10_000)).toBe(true);
+        // The same bridges told again change nothing.
+        const same = water.version();
+        water.setBridges(new Set());
+        expect(water.version()).toBe(same);
+    });
+});

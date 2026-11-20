@@ -3423,6 +3423,43 @@ avec 8 px apportés par cellule du cratère). Pas de son. Rien n'a été vu à l
 cette section : widget, viseur, chute, éclair et gerbe ne sont validés que par les tests ; l'effet sur l'eau en jeu
 n'est pas vu.
 
+## Ponts de l'outil Carte
+
+Un pont est un **tablier posé case par case** par un éditeur de la carte. Tout ce qui marche le traverse à sec :
+antilopes, lions et tigres (simulés par le serveur), animaux promeneurs (jungle, chiens, chats, canards) et avatars.
+L'eau coule dessous sans changement.
+
+**Dans l'éditeur.** Outil Carte, groupe « Plateformes », mode **« Pont »** : maintenir le bouton et peindre les
+cases. La gomme de l'outil efface un pont avant le sol de la même case. Au sol seulement. Le mode est grisé (avec une
+explication au survol) tant que le catalogue de la salle n'a pas les pièces.
+
+**Dans la carte.** Aucun changement de format ni de protocole : un pont est fait d'entités ordinaires de la collection
+**`Carte Ponts`** (catalogue privé publié par le repo d'infra, `tools/build_bridge_prefabs.py`). Seize pièces
+`pont-bois-<m>` : `m` est le masque des voisines qui sont du pont aussi (1 nord, 2 est, 4 sud, 8 ouest) ; chaque bord
+sans voisine porte une lisse. L'outil recalcule les pièces voisines à chaque case peinte ou effacée
+(`MapLayerModel.setBridge`, `computePlacements`). Les pièces sont dessinées à la profondeur fixe 0,8
+(`MAP_LAYER_BRIDGE_DEPTH`) : au-dessus de l'eau du relief (0,65) et de son écume (0,66), qui cachent un sol de l'outil
+Carte, et sous les objets de sol et les personnages. **Ne jamais renommer un identifiant publié.**
+
+**La règle, lue partout** (`libs/map-editor/src/Terrain/Bridges.ts`) : `bridgeTilesOf(wam)` donne les cases de pont ;
+sur une case de pont, la hauteur d'eau vue par ce qui marche est 0 (`dryOnBridges`).
+
+- Serveur, vie de la terre (`AquaticLifeManager.readLand`) : les deux rives deviennent une seule terre, relue quand
+  un pont est posé ou retiré. Troupeaux et meutes se mêlent, les lions traversent pour chasser.
+- Serveur, pré : rien ne pousse sous un tablier (`pavedTilesOf`).
+- Navigateur (`TerrainWater.setBridges`, relu deux fois par seconde au plus par `GameScene.refreshBridges`) : sur un
+  pont, pas de nage, pas de courant, le canoë se range ; une case de pont n'est jamais « mouillée » pour les animaux
+  promeneurs.
+- Eau, poissons, averse, drain, météore, dessin de l'eau : inchangés, le pont n'existe pas pour eux.
+
+**À savoir.** Un pont est toujours à sec, même sous une crue. On y entre et on en sort par n'importe quel bord (pas
+de collision). On peut pêcher depuis un pont. Un lion ou un tigre peut prendre un poisson qui passe sous le tablier
+(pour lui la case est à sec). Le pont ne brûle pas et un météore ne le casse pas. Une seule matière : le bois. Pas de
+pièce d'angle rentrant : dans un coude, la lisse s'arrête au bord de la case.
+
+**Limites.** Un navigateur resté sur une version d'avant voit les pièces sous l'eau et y nage ; un pont posé sur une
+carte dont `back` est plus ancien ne réunit pas les terres. `play` et `back` se déploient ensemble.
+
 
 ## Catastrophes : le météore brûlant
 

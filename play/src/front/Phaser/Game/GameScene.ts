@@ -42,6 +42,7 @@ import {
     type WAMFileFormat,
     WAMSettingsUtils,
     WeatherType,
+    bridgeTilesOf,
 } from "@workadventure/map-editor";
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
 import Debug from "debug";
@@ -599,6 +600,8 @@ export class GameScene extends DirtyScene {
     private weatherManager: WeatherManager | undefined;
     /** The water of the hollows of the relief, as the server keeps it. */
     private readonly terrainWater = new TerrainWater();
+    /** When the bridges of the map were last read, in ms of the game. */
+    private bridgesReadAt = -Infinity;
     /** The grass and the moisture of the soil of the map, as the server tells them. */
     private readonly meadow = new MeadowState();
     private meadowSubscription: Subscription | undefined;
@@ -1904,6 +1907,16 @@ export class GameScene extends DirtyScene {
         return this.floorSpike?.floorZoneAt(elevation, x, y);
     }
 
+    /**
+     * The bridges of the map are read again twice a second at most: an editor lays or erases one, and what walks
+     * (the avatars, the wandering animals) crosses the water there, or no longer.
+     */
+    private refreshBridges(time: number): void {
+        if (time - this.bridgesReadAt < 500) return;
+        this.bridgesReadAt = time;
+        this.terrainWater.setBridges(bridgeTilesOf(this.getGameMap().getWamFile()?.getWam()));
+    }
+
     /** The floor tiles of the map layer laid on the ground. */
     private *mapLayerGroundFloors(): Generator<Entity> {
         for (const entity of this.gameMapFrontWrapper.getEntitiesManager().getEntities().values()) {
@@ -2300,6 +2313,7 @@ export class GameScene extends DirtyScene {
             this.mapEditorModeManager.update(time, delta);
         }
         if (this.hasJoinedRoom) {
+            this.refreshBridges(time);
             this.updateDoors(time);
             this._nerfManager?.update(time);
             // Before the night veil: it is pierced with the lights the torches have just drawn.

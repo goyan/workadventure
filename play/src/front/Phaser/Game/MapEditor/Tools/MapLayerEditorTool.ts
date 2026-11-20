@@ -12,6 +12,7 @@ import {
     mapLayerGlazedDoorHeightsAvailableStore,
     mapLayerGlazedDoorsAvailableStore,
     mapLayerDoorsAvailableStore,
+    mapLayerBridgesAvailableStore,
     mapLayerHeightRequestStore,
     mapLayerHeightSelectionStore,
     mapLayerFloorFamilyStore,
@@ -46,6 +47,8 @@ import { MapDragPointerCapture } from "../../../UserInput/MapDragPointerCapture"
 import {
     MAP_LAYER_DOOR_COLLECTION,
     MAP_LAYER_FLOOR_COLLECTION,
+    MAP_LAYER_BRIDGE_COLLECTION,
+    bridgePrefabName,
     MAP_LAYER_FLOOR_FAMILIES,
     MAP_LAYER_TILE_SIZE,
     MAP_LAYER_WALL_HEIGHTS,
@@ -71,6 +74,7 @@ import type { MapLayerModel } from "../MapLayer/MapLayerModel";
 import {
     applyDoorPlan,
     applyFloor,
+    applyBridge,
     applyRoom,
     applyWalls,
     applyWindows,
@@ -315,6 +319,7 @@ export class MapLayerEditorTool extends MapEditorTool {
         mapLayerCatalogAvailableStore.set(undefined);
         // The doors of the previous room must not stay available while this room's catalogs are checked.
         mapLayerDoorsAvailableStore.set(false);
+        mapLayerBridgesAvailableStore.set(false);
         mapLayerGlazedDoorsAvailableStore.set(false);
         mapLayerWindowsAvailableStore.set(false);
         mapLayerWallHeightsAvailableStore.set([1]);
@@ -364,6 +369,13 @@ export class MapLayerEditorTool extends MapEditorTool {
         );
         mapLayerShortStairsAvailableStore.set(shortStair !== undefined);
         if (slab === undefined && isFloorMode(get(mapLayerModeStore))) mapLayerModeStore.set("wall");
+        // The bridges are optional too: without their catalog the mode is disabled.
+        const bridge = await manager.getEntityPrefab(
+            MAP_LAYER_BRIDGE_COLLECTION,
+            mapLayerPrefabId(MAP_LAYER_BRIDGE_COLLECTION, bridgePrefabName(0)),
+        );
+        mapLayerBridgesAvailableStore.set(bridge !== undefined);
+        if (bridge === undefined && get(mapLayerModeStore) === "bridge") mapLayerModeStore.set("wall");
         // The doors are optional: a room whose catalogs do not have them keeps the floors and the walls.
         const door = await manager.getEntityPrefab(
             MAP_LAYER_DOOR_COLLECTION,
@@ -569,13 +581,18 @@ export class MapLayerEditorTool extends MapEditorTool {
         return this.canDraw() && !this.gesture && !this.placedModeUnavailable();
     }
 
-    /** The door or window mode in a room whose catalogs do not have them: a click draws nothing. */
+    /** The door, window or bridge mode in a room whose catalogs do not have them: a click draws nothing. */
     private placedModeUnavailable(): boolean {
+        return this.unavailableStatus() !== undefined;
+    }
+
+    /** What to tell about the mode when the catalogs of the room do not have its pieces. */
+    private unavailableStatus(): "doorsUnavailable" | "windowsUnavailable" | "bridgesUnavailable" | undefined {
         const mode = get(mapLayerModeStore);
-        return (
-            (mode === "door" && !get(mapLayerDoorsAvailableStore)) ||
-            (mode === "window" && !get(mapLayerWindowsAvailableStore))
-        );
+        if (mode === "door" && !get(mapLayerDoorsAvailableStore)) return "doorsUnavailable";
+        if (mode === "window" && !get(mapLayerWindowsAvailableStore)) return "windowsUnavailable";
+        if (mode === "bridge" && !get(mapLayerBridgesAvailableStore)) return "bridgesUnavailable";
+        return undefined;
     }
 
     private handlePointerDown(pointer: Phaser.Input.Pointer): void {
@@ -589,8 +606,9 @@ export class MapLayerEditorTool extends MapEditorTool {
         ) {
             return;
         }
-        if (this.placedModeUnavailable()) {
-            mapLayerStatusStore.set(get(mapLayerModeStore) === "door" ? "doorsUnavailable" : "windowsUnavailable");
+        const unavailable = this.unavailableStatus();
+        if (unavailable) {
+            mapLayerStatusStore.set(unavailable);
             return;
         }
         mapLayerStatusStore.set(undefined);
@@ -770,6 +788,8 @@ export class MapLayerEditorTool extends MapEditorTool {
                 return (model, bounds) => applyRoom(model, startCell, endCell, tint, family, bounds, wallHeight);
             case "floorBrush":
                 return (model, bounds) => applyFloor(model, path, family, bounds);
+            case "bridge":
+                return (model, bounds) => applyBridge(model, path, bounds);
             case "floorRectangle":
                 return (model, bounds) => applyFloor(model, rectangleCells(startCell, endCell), family, bounds);
             case "floorFill":
@@ -1085,6 +1105,7 @@ export class MapLayerEditorTool extends MapEditorTool {
             case "window":
                 rect = { x: target.wall.x * size, y: target.wall.y * size, width: size, height: size };
                 break;
+            case "bridge":
             case "floor":
                 rect = { x: target.cell.x * size, y: target.cell.y * size, width: size, height: size };
                 break;

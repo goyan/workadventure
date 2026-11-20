@@ -52,7 +52,7 @@ const EMPTY: ReadonlySet<number> = new Set();
 
 /** Height of the wall a piece belongs to, as told by its own name. */
 function pieceHeight(piece: MapLayerPiece): WallHeight {
-    return piece.kind === "floor" ? 1 : piece.height;
+    return piece.kind === "floor" || piece.kind === "bridge" ? 1 : piece.height;
 }
 
 /**
@@ -65,7 +65,7 @@ export function wallTargetAlpha(
     state: { editorOpen: boolean; playerRoom: number | undefined },
     carrierHeight: WallHeight = pieceHeight(piece),
 ): number {
-    if (piece.kind === "floor") return 1;
+    if (piece.kind === "floor" || piece.kind === "bridge") return 1;
     if (state.editorOpen) return WALL_EDIT_ALPHA;
     if (state.playerRoom === undefined || carrierHeight < 2) return 1;
     return rooms.has(state.playerRoom) ? WALL_ROOM_ALPHA : 1;
@@ -141,7 +141,7 @@ function carrierHeightOf(piece: MapLayerPiece, wall: FadableWall, model: MapLaye
  * (not one drawn above their head). Whether a wall stands between them is not told here.
  */
 export function wallHidesPlayer(piece: MapLayerPiece, x: number, y: number, player: { x: number; y: number }): boolean {
-    if (piece.kind === "floor") return false;
+    if (piece.kind === "floor" || piece.kind === "bridge") return false;
     if (player.y <= y || player.y >= hidingFoot(piece, y) - WALL_FOOTPRINT) return false;
     const { width, height } = mapLayerPieceSize(piece);
     if (!isHorizontalWallPiece(piece)) {
@@ -162,7 +162,7 @@ function horizontalSegmentsOf(
     x: number,
     y: number,
 ): { line: number; columns: number[] } | undefined {
-    if (!isHorizontalWallPiece(piece) || piece.kind === "floor") return undefined;
+    if (!isHorizontalWallPiece(piece) || piece.kind === "floor" || piece.kind === "bridge") return undefined;
     const size = MAP_LAYER_TILE_SIZE;
     const line = (y + wallRise(piece.height)) / size;
     switch (piece.kind) {
@@ -283,7 +283,12 @@ export class WallFade {
         if (this.lastEditorOpen !== false) return [];
         const faded: Rect[] = [];
         for (const entry of this.entries.values()) {
-            if (entry.piece.kind === "floor" || entry.carrierHeight < 2 || !isHorizontalWallPiece(entry.piece))
+            if (
+                entry.piece.kind === "floor" ||
+                entry.piece.kind === "bridge" ||
+                entry.carrierHeight < 2 ||
+                !isHorizontalWallPiece(entry.piece)
+            )
                 continue;
             if (entry.opacity >= 1 - 1e-6 && entry.target >= 1) continue;
             faded.push({ x: entry.x, y: entry.y, ...mapLayerPieceSize(entry.piece) });
@@ -351,7 +356,13 @@ export class WallFade {
                 }
             }
             for (const entry of this.entries.values()) {
-                if (entry.piece.kind !== "floor" && !editorOpen && playerRoom !== undefined && grid) {
+                if (
+                    entry.piece.kind !== "floor" &&
+                    entry.piece.kind !== "bridge" &&
+                    !editorOpen &&
+                    playerRoom !== undefined &&
+                    grid
+                ) {
                     entry.rooms ??= roomsBehind(entry.piece, entry.rect, grid);
                 }
                 // A high wall the player walks behind fades wherever they are; otherwise the rule of the room applies.
