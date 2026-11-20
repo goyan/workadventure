@@ -1,3 +1,4 @@
+import type { Season } from "@workadventure/map-editor";
 import { get, type Unsubscriber, derived } from "svelte/store";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { seasonalThemeModeStore } from "../../../Stores/SeasonalThemeStore";
@@ -8,7 +9,7 @@ import type { AlphaMask, SnowEntity } from "../Christmas/SnowCaps";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { basicActiveStore } from "../../../Stores/BasicModeStore";
 import type { SeasonalDecor, SeasonalDecorDeps } from "./SeasonalDecor";
-import { activeSeasonalTheme, SeasonalTheme, SeasonalThemeMode } from "./SeasonalTheme";
+import { activeSeasonalTheme, forcedTreeSeason, SeasonalTheme, SeasonalThemeMode } from "./SeasonalTheme";
 import { readFrameAlpha } from "./readFrameAlpha";
 
 /** The calendar is checked again every minute, so the theme changes at midnight without a reload. */
@@ -91,6 +92,14 @@ export class SeasonalThemeManager {
     /** How much snow lies on the ground outdoors (0 to 1): all of it under the Christmas theme, else the map snow. */
     groundSnow(): number {
         return this.theme === SeasonalTheme.Christmas ? 1 : this.snowAlpha();
+    }
+
+    /**
+     * The season the ground is drawn in: the one of the theme shown (autumn, winter), else the one of the calendar.
+     * One source for the ground, as the seasonal trees.
+     */
+    groundSeason(calendar: Season | undefined): Season | undefined {
+        return forcedTreeSeason(this.theme) ?? calendar;
     }
 
     activeTheme(): SeasonalTheme | undefined {

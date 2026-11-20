@@ -71,9 +71,16 @@ function fixture(
         season: options.season ?? (() => undefined),
         snowShown: () => 0,
     });
-    /** Updates until every block around the view is drawn. */
+    // Updates until every block around the view is drawn: a block is drawn over several images, as many as the machine
+    // needs (more under the load of the whole suite).
+    let clock = 0;
     const settle = () => {
-        for (let frame = 0; frame < 100; frame++) tiles.update(frame);
+        let quiet = 0;
+        for (let frame = 0; frame < 5000 && quiet < 3; frame++) {
+            const before = tiles.redraws();
+            tiles.update(clock++);
+            quiet = tiles.isDrawing() || tiles.redraws() !== before ? 0 : quiet + 1;
+        }
     };
     return { tiles, worldView, images, settle, painted, setTerrain, scene };
 }

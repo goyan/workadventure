@@ -189,7 +189,7 @@ export class TerrainEditorTool extends MapEditorTool {
         this.unsubscribeContours = terrainContoursStore.subscribe(() => this.drawContours());
         this.waterMarks = new WaterMarksView(this.scene, () => this.scene.getGameMap().getWamFile()?.getWam());
         // The bottom of the lakes shows through their water while the relief is edited.
-        this.scene.getTerrainView()?.setSeeThrough(true);
+        this.scene.getReliefTiles()?.setSeeThrough(true);
         mapEditorVisibilityStore.set(true);
     }
 
@@ -215,7 +215,7 @@ export class TerrainEditorTool extends MapEditorTool {
         this.contours?.destroy();
         this.contours = undefined;
         terrainHoverHeightStore.set(undefined);
-        this.scene.getTerrainView()?.setSeeThrough(false);
+        this.scene.getReliefTiles()?.setSeeThrough(false);
         terrainBlockedStore.set(false);
         this.scene.input.topOnly = false;
         this.scene.markDirty();

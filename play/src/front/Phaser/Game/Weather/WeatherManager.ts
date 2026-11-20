@@ -70,7 +70,6 @@ import {
     SkyDrift,
 } from "./Clouds";
 import type { CloudPalette } from "./Clouds";
-import { SnowGround } from "./SnowGround";
 import { createBlockSurface } from "./BlockSurface";
 import { screenScale, seenFromFar } from "./ScreenScale";
 import type { BlockCanvasArea, BlockSurface } from "./BlockSurface";
@@ -146,7 +145,6 @@ export class WeatherManager {
     private lastFrameAt = -Infinity;
     private visible = false;
     private readonly sounds: WeatherSounds;
-    private readonly snowGround: SnowGround;
     // The settings, kept up to date by their stores rather than read at every image.
     private readonly unsubscribers: Unsubscriber[];
     private editing = false;
@@ -197,7 +195,6 @@ export class WeatherManager {
     ) {
         this.reducedMotion = options.reducedMotion ?? REDUCED_MOTION;
         this.sounds = new WeatherSounds(scene.sound);
-        this.snowGround = new SnowGround(scene);
         this.unsubscribers = [
             mapEditorModeStore.subscribe((editing) => (this.editing = editing)),
             unlessBasic(weatherEffectsEnabledStore).subscribe((shown) => (this.weatherShown = shown)),
@@ -238,14 +235,6 @@ export class WeatherManager {
         this.drawPuddles(this.weatherShown && !this.editing && theme !== SeasonalTheme.Christmas ? wetness : 0);
         this.sounds.update(weather, serverDate, this.editing, night, rain);
         const enabled = this.weatherShown && !this.editing;
-        // The snow of the map is the Christmas decor fading in (SeasonalThemeManager): this ground stays grass.
-        this.snowGround.update(
-            now,
-            serverDate,
-            // The Christmas theme draws its own snow ground over the whole outside: the seasonal ground steps aside.
-            !this.editing && theme !== SeasonalTheme.Christmas,
-            theme === SeasonalTheme.Autumn,
-        );
         const showWeather = enabled && weather !== WeatherType.Clear;
         // Autumn leaves fall on top of the map weather, even on a clear day, but not while it snows.
         const showLeaves =
@@ -792,7 +781,6 @@ export class WeatherManager {
     public destroy(): void {
         for (const unsubscribe of this.unsubscribers) unsubscribe();
         this.sounds.destroy();
-        this.snowGround.destroy();
         this.graphics.destroy();
         this.puddleGraphics.destroy();
         this.blocks.destroy();

@@ -128,6 +128,8 @@ export class ReliefTiles {
     private hidden = false;
     /** In 3/4 (the game), or flat (the map editor, to dig and place where one aims). */
     private projected = true;
+    /** While the relief is edited: the water fainter, so what is dug under it shows. */
+    private seeThrough = false;
     private reliefKept: TerrainData | undefined;
     private readonly reliefSignatures = new Map<string, string>();
     private waterKey = "";
@@ -163,6 +165,11 @@ export class ReliefTiles {
         private readonly inputs: ReliefInputs,
     ) {}
 
+    /** Whether a block is being drawn, a step an image (its drawing not shown yet). */
+    public isDrawing(): boolean {
+        return this.job !== undefined;
+    }
+
     /** Blocks drawn so far: none while the view only scrolls or zooms. */
     public redraws(): number {
         return this.schedule.redraws;
@@ -177,6 +184,13 @@ export class ReliefTiles {
      * In 3/4 in the game, flat while the map is edited (drawn at its place, its water fainter so that what is dug
      * under it shows): every block is drawn again in the other way.
      */
+    public setSeeThrough(seeThrough: boolean): void {
+        if (seeThrough === this.seeThrough) return;
+        this.seeThrough = seeThrough;
+        this.schedule.forget();
+        this.scene.markDirty();
+    }
+
     public setProjected(projected: boolean): void {
         if (projected === this.projected) return;
         this.projected = projected;
@@ -229,7 +243,7 @@ export class ReliefTiles {
             this.coverKey = coverKey;
             this.coverSignatures.clear();
         }
-        const shared = `${this.inputs.season() ?? ""}|${snow}|${this.projected ? "3/4" : "flat"}`;
+        const shared = `${this.inputs.season() ?? ""}|${snow}|${this.projected ? "3/4" : "flat"}|${this.seeThrough}`;
         const signatures = new Map<string, string>();
         for (const key of around) {
             let relief = this.reliefSignatures.get(key);
@@ -582,7 +596,7 @@ export class ReliefTiles {
                     sample.color = this.waterOver(
                         colors[index] ?? BARE_UNDER_WATER,
                         water,
-                        this.projected ? 1 : SEE_THROUGH,
+                        this.seeThrough ? SEE_THROUGH : 1,
                         this.waterColors[count - 1],
                     );
                     sample.plain = false;

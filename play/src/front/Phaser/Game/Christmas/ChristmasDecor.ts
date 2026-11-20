@@ -3,28 +3,28 @@ import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { FootprintLayer } from "./FootprintLayer";
 import { FootprintTrail, type WalkerSample } from "./FootprintTrail";
 import { SnowCaps, type SnowEntity } from "./SnowCaps";
-import { SnowGround } from "./SnowGround";
 
 /** Fading footprints only need a redraw now and then. */
 const FADE_REDRAW_MS = 100;
 
-/** Christmas outdoors: snowy ground, snow on top of objects, and footprints. */
+/**
+ * Winter outdoors (the theme once called Christmas): snow on top of objects and footprints. The snow on the ground is
+ * drawn by the terrain (ReliefTiles), in the season of the theme.
+ */
 export class ChristmasDecor implements SeasonalDecor {
-    private readonly ground: SnowGround;
     private readonly caps: SnowCaps;
     private readonly prints: FootprintLayer;
     private readonly trail: FootprintTrail;
     private lastFadeRedraw = -Infinity;
 
     constructor(scene: Phaser.Scene, deps: SeasonalDecorDeps) {
-        this.ground = new SnowGround(scene);
         this.caps = new SnowCaps(scene, deps.readPixels);
         this.prints = new FootprintLayer(scene);
         this.trail = new FootprintTrail(deps.isOutdoor);
     }
 
-    redrawGround(grid: OutdoorGrid): void {
-        this.ground.draw(grid);
+    redrawGround(_grid: OutdoorGrid): void {
+        // The snowy ground is the terrain's (ReliefTiles).
     }
 
     rebuildObjects(entities: Iterable<SnowEntity>, grid: OutdoorGrid): void {
@@ -48,19 +48,16 @@ export class ChristmasDecor implements SeasonalDecor {
     }
 
     setVisible(visible: boolean): void {
-        this.ground.setVisible(visible);
         this.caps.setVisible(visible);
         this.prints.setVisible(visible);
     }
 
     setAlpha(alpha: number): void {
-        this.ground.setAlpha(alpha);
         this.caps.setAlpha(alpha);
         this.prints.setAlpha(alpha);
     }
 
     destroy(): void {
-        this.ground.destroy();
         this.caps.destroy();
         this.prints.destroy();
     }

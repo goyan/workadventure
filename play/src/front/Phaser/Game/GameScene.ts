@@ -390,7 +390,7 @@ import { playJungleSound } from "./Jungle/JungleCries";
 import { isLandKind } from "./Life/LandSprites";
 import { LifeSpeciesStats, withoutSpeciesCounts } from "./Life/LifeSpeciesStats";
 import { LifeStats } from "./Life/LifeStats";
-import { TerrainView } from "./Terrain/TerrainView";
+import { MapGroundLayout, GRASS_NAME, mapTileIsGrass } from "./Terrain/MapGroundLayout";
 import { ReliefTiles } from "./Terrain/ReliefTiles";
 import { projectionShown } from "./Terrain/ReliefProjection";
 import { CharacterDrops } from "./Terrain/CharacterDrops";
@@ -638,7 +638,7 @@ export class GameScene extends DirtyScene {
     private readonly aquaticLifeStats = new LifeStats();
     private readonly aquaticLifeSpecies = new LifeSpeciesStats();
     private aquaticLifeSubscription: Subscription | undefined;
-    private terrainView: TerrainView | undefined;
+    private mapGroundLayout: MapGroundLayout | undefined;
     /** The relief seen in 3/4: the dug ground drawn lower, its faces, its water. */
     private reliefTiles: ReliefTiles | undefined;
     /** The characters drawn lower in the hollows of the relief, while the image is drawn. */
@@ -1736,8 +1736,7 @@ export class GameScene extends DirtyScene {
         this.gameSwitches?.destroy();
         this.gameSwitches = undefined;
         this.weatherManager?.destroy();
-        this.terrainView?.destroy();
-        this.terrainView = undefined;
+        this.mapGroundLayout = undefined;
         this.reliefTiles?.destroy();
         this.reliefTiles = undefined;
         this.characterDrops?.destroy();
@@ -2383,9 +2382,10 @@ export class GameScene extends DirtyScene {
             );
             // The relief is drawn in 3/4 out of the editor; flat in it, to dig and place where one aims.
             const projected = projectionShown({ editorOpen: get(mapEditorModeStore), basic: isBasicActive() });
-            this.reliefTiles?.setHidden(!projected);
-            this.terrainView?.setProjected(projected && this.reliefTiles !== undefined);
-            this.terrainView?.update(time);
+            // Nothing of it in the basic mode; flat while the map is edited.
+            this.mapGroundLayout?.refresh(time);
+            this.reliefTiles?.setHidden(isBasicActive());
+            this.reliefTiles?.setProjected(!get(mapEditorModeStore));
             this.reliefTiles?.update(time);
             // Every character drawn as low as the ground (or the water) under it, in a hollow.
             if (this.reliefTiles) {
@@ -3113,10 +3113,6 @@ export class GameScene extends DirtyScene {
         return this.reliefTiles;
     }
 
-    public getTerrainView(): TerrainView | undefined {
-        return this.terrainView;
-    }
-
     /** Whether a point of the map (pixels) is in or near an open drain: the current carries no avatar there. */
     public isDrainCalm(x: number, y: number): boolean {
         return this.drainView?.calms(x, y) ?? false;
@@ -3828,18 +3824,28 @@ export class GameScene extends DirtyScene {
                     raisedCover: () => this.raisedWeatherCover(),
                     seasonalTheme: () => this.getSeasonalTheme(),
                 });
-                // The relief of the ground and the water of its hollows.
-                this.terrainView?.destroy();
-                this.terrainView = new TerrainView(this, this.terrainWater, undefined, this.meadow, () =>
-                    this.getGroundSeason(),
+                // The ground outdoors in pixel art, its relief and the water of its hollows: the soils, the meadow, the
+                // grass tiles of the map and the snow of the winter, in the season of the theme.
+                const exterior = PropertyUtils.findStringProperty(
+                    "exteriorTexture",
+                    this.getGameMap().getMap().properties,
                 );
+                const exteriorIsGrass = GRASS_NAME.test(exterior ?? "");
+                this.mapGroundLayout = new MapGroundLayout({
+                    grid: () => this.getOutdoorGrid(),
+                    gridVersion: () => this.getOutdoorVersion(),
+                    wam: () => this.getGameMap().getWamFile()?.getWam(),
+                    isGrassTile: (x, y) => mapTileIsGrass(this.Map, exteriorIsGrass, x, y),
+                });
                 this.reliefTiles?.destroy();
                 this.reliefTiles = new ReliefTiles(this, {
                     relief: () => this.terrainWater.relief(),
                     water: this.terrainWater,
                     meadow: this.meadow,
-                    season: () => this.getGroundSeason(),
+                    season: () =>
+                        this.seasonalThemeManager?.groundSeason(this.getGroundSeason()) ?? this.getGroundSeason(),
                     snowShown: () => this.seasonalThemeManager?.groundSnow() ?? 0,
+                    layout: this.mapGroundLayout,
                 });
                 this.characterDrops?.destroy();
                 this.characterDrops = new CharacterDrops(this, () => [

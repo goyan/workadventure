@@ -1,3 +1,4 @@
+import { Season } from "@workadventure/map-editor";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { writable } from "svelte/store";
 import { mockDeep } from "vitest-mock-extended";
@@ -208,6 +209,20 @@ describe("SeasonalThemeManager", () => {
             seasonalThemeModeStore.set(SeasonalThemeMode.Christmas);
             setup().update(0, walking);
             expect(manager?.groundSnow()).toBe(1);
+        });
+
+        it("gives the season of the ground: the one of the chosen theme, else the one of the calendar", () => {
+            seasonalThemeModeStore.set(SeasonalThemeMode.None);
+            setup({ serverDate: october }).update(0, walking);
+            expect(manager?.groundSeason(Season.Spring)).toBe(Season.Spring);
+            manager?.destroy();
+            seasonalThemeModeStore.set(SeasonalThemeMode.Autumn);
+            setup().update(0, walking);
+            expect(manager?.groundSeason(Season.Spring)).toBe(Season.Autumn);
+            manager?.destroy();
+            seasonalThemeModeStore.set(SeasonalThemeMode.Christmas);
+            setup().update(0, walking);
+            expect(manager?.groundSeason(Season.Spring)).toBe(Season.Winter);
         });
 
         it("fades the Christmas decor in with the map snow", () => {

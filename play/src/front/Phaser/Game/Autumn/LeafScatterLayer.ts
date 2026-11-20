@@ -3,8 +3,8 @@ import type { WeatherView } from "../Weather/WeatherFrame";
 import { seenFromFar } from "../Weather/ScreenScale";
 import { scatteredLeavesInView } from "./LeafScatter";
 
-/** Above the floors (0.5) and the seasonal grass (0.2), below objects and avatars. */
-const LEAF_SCATTER_DEPTH = DEPTH_TILE_INDEX + 0.65;
+/** Above the floors (0.5) and the ground of the terrain (its blocks, 0.66), below objects and avatars. */
+const LEAF_SCATTER_DEPTH = DEPTH_TILE_INDEX + 0.67;
 
 /**
  * Scattered leaves around the camera: a map-sized image would exceed the texture size, so only the view and a margin

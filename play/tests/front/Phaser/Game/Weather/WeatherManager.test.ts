@@ -67,13 +67,6 @@ vi.mock("../../../../../src/front/Phaser/Game/Weather/BlockSurface", () => {
         }),
     };
 });
-const ground = vi.hoisted(() => ({ update: vi.fn(), destroy: vi.fn() }));
-vi.mock("../../../../../src/front/Phaser/Game/Weather/SnowGround", () => ({
-    SnowGround: class {
-        public update = ground.update;
-        public destroy = ground.destroy;
-    },
-}));
 vi.mock("../../../../../src/front/Stores/MapEditorStore", () => ({ mapEditorModeStore: writable(false) }));
 vi.mock("../../../../../src/front/Phaser/Game/Weather/WeatherSounds", () => ({
     WeatherSounds: class {
@@ -102,8 +95,6 @@ afterEach(() => {
     sounds.update.mockClear();
     manager?.destroy();
     manager = undefined;
-    ground.update.mockClear();
-    ground.destroy.mockClear();
     weatherEffectsEnabledStore.set(true);
     cloudsShownStore.set(true);
     cloudsHeightStore.set(0);
@@ -164,7 +155,6 @@ describe("weather rendering lifecycle", () => {
         manager = undefined;
         // The weather and the puddles each have their graphics.
         expect(graphics.destroy.mock.calls).toHaveLength(2);
-        expect(ground.destroy).toHaveBeenCalledOnce();
     });
 
     it("draws nothing and asks no redraw while no outside is in view", () => {
@@ -246,7 +236,6 @@ describe("weather rendering lifecycle", () => {
         manager.update(120, new Date(dry));
         expect(sounds.update.mock.lastCall?.[0]).toBe(autoWeatherAt(new Date(dry)));
         expect(sounds.update.mock.lastCall?.[0]).not.toBe(WeatherType.Snow);
-        expect(ground.update.mock.lastCall?.[2]).toBe(true);
     });
 
     it("hands the map's automatic settings to the schedule and the sounds", () => {
@@ -266,32 +255,19 @@ describe("weather rendering lifecycle", () => {
         weatherEffectsEnabledStore.set(false);
         manager.update(1, new Date(1));
         expect(graphics.setVisible.mock.lastCall).toEqual([false]);
-        expect(ground.update.mock.lastCall?.[2]).toBe(true);
         weatherEffectsEnabledStore.set(true);
         manager.update(2, new Date(2));
         expect(graphics.setVisible.mock.lastCall).toEqual([true]);
         mapEditorModeStore.set(true);
         manager.update(3, new Date(3));
         expect(graphics.setVisible.mock.lastCall).toEqual([false]);
-        expect(ground.update.mock.lastCall?.[2]).toBe(false);
     });
 
-    it("draws green grass without a theme and never snow: the map snow is the Christmas decor", () => {
-        const { scene, wam } = fixture();
-        wam.settings = { weather: WeatherType.Snow, weatherStartedAt: 123 };
-        manager = new WeatherManager(scene);
-        const date = new Date(456);
-        manager.update(0, date);
-        expect(ground.update).toHaveBeenLastCalledWith(0, date, true, false);
-    });
-
-    it("passes the autumn ground for the autumn theme", () => {
+    it("keeps the rain sounds for the autumn theme", () => {
         const { scene, wam } = fixture();
         wam.settings = { weather: WeatherType.Rain };
         manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Autumn });
         manager.update(0, new Date(0));
-        expect(ground.update.mock.lastCall?.[2]).toBe(true);
-        expect(ground.update.mock.lastCall?.[3]).toBe(true);
         expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Rain);
     });
 
@@ -302,14 +278,6 @@ describe("weather rendering lifecycle", () => {
         manager.update(0, new Date(0));
         expect(graphics.fillRect.mock.calls).toContainEqual([expect.any(Number), expect.any(Number), 2, 2]);
         expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Snow);
-    });
-
-    it("hides the seasonal ground while the christmas theme draws its own snow ground", () => {
-        const { scene, wam } = fixture();
-        wam.settings = { weather: WeatherType.Clear };
-        manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Christmas });
-        manager.update(0, new Date(0));
-        expect(ground.update.mock.lastCall?.[2]).toBe(false);
     });
 
     describe("storm", () => {
