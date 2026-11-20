@@ -308,6 +308,7 @@ import { jungleEnabledStore } from "../../Stores/JungleStore";
 import { isEffectShown } from "../../Stores/EffectsStore";
 import { fireConditionsStore } from "../../Stores/FireConditionsStore";
 import { isBasicActive } from "../../Stores/BasicModeStore";
+import { waterFlowOverlayStore } from "../../Stores/VisualisationStore";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -392,6 +393,7 @@ import { LifeSpeciesStats, withoutSpeciesCounts } from "./Life/LifeSpeciesStats"
 import { LifeStats } from "./Life/LifeStats";
 import { TerrainView } from "./Terrain/TerrainView";
 import { WaterFlowView } from "./Terrain/WaterFlowView";
+import { WaterFlowOverlay } from "./Terrain/WaterFlowOverlay";
 import { gunzip } from "./Terrain/WaterStateCodec";
 import { MeadowState } from "./Terrain/MeadowState";
 import { entityOutdoorRect, OutdoorTracker } from "./Outdoor/OutdoorTracker";
@@ -636,6 +638,7 @@ export class GameScene extends DirtyScene {
     private aquaticLifeSubscription: Subscription | undefined;
     private terrainView: TerrainView | undefined;
     private waterFlowView: WaterFlowView | undefined;
+    private waterFlowOverlay: WaterFlowOverlay | undefined;
     private terrainWaterQueue: Promise<void> = Promise.resolve();
     private skyShadowManager: SkyShadowManager | undefined;
     private skyWindowLightManager: SkyWindowLightManager | undefined;
@@ -1732,6 +1735,8 @@ export class GameScene extends DirtyScene {
         this.terrainView = undefined;
         this.waterFlowView?.destroy();
         this.waterFlowView = undefined;
+        this.waterFlowOverlay?.destroy();
+        this.waterFlowOverlay = undefined;
         this.aquaticLifeView?.destroy();
         this.aquaticLifeView = undefined;
         this.gullLifeView?.destroy();
@@ -2367,6 +2372,7 @@ export class GameScene extends DirtyScene {
             pointerAltitudeStore.set(pointerAltitude(terrain, pointer && { x: pointer.worldX, y: pointer.worldY }));
             this.terrainView?.update(time);
             this.waterFlowView?.update(time);
+            this.waterFlowOverlay?.update(time);
             this.aquaticLifeView?.update(time);
             this.gullLifeView?.update(time);
             this.landCompanions?.update(time);
@@ -3799,6 +3805,13 @@ export class GameScene extends DirtyScene {
                     water: this.terrainWater,
                     wam: () => this.getGameMap().getWamFile()?.getWam(),
                     view: () => this.cameras.main.worldView,
+                });
+                // The flows of that water drawn over the map, for whoever asked (apps menu, "Visualisation").
+                this.waterFlowOverlay?.destroy();
+                this.waterFlowOverlay = new WaterFlowOverlay(this, {
+                    water: this.terrainWater,
+                    inertia: () => this.getGameMap().getWamFile()?.getWam().settings?.water?.inertia === true,
+                    shown: () => get(waterFlowOverlayStore) && !isBasicActive(),
                 });
                 // The fish and the dolphins of that water.
                 this.aquaticLifeView?.destroy();

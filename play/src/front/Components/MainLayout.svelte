@@ -88,6 +88,7 @@
     import FishingContestPanel from "./Fishing/FishingContestPanel.svelte";
     import WeatherForecastBanner from "./Weather/WeatherForecastBanner.svelte";
     import CatastrophePanel from "./Catastrophe/CatastrophePanel.svelte";
+    import VisualisationPanel from "./Visualisation/VisualisationPanel.svelte";
     import CoffeeCards from "./Coffee/CoffeeCards.svelte";
     import HelpPopUpBlocked from "./HelpSettings/HelpPopUpBlocked.svelte";
     import Notification from "./UI/Notification.svelte";
@@ -549,6 +550,8 @@
                 <!-- The disaster picker (apps menu, "Disaster"): arms a catastrophe for the next click on the map. -->
                 {#if !$basicActiveStore}
                     <CatastrophePanel />
+                    <!-- What to draw over the map (apps menu, "Visualisation"): the flows of the water. -->
+                    <VisualisationPanel />
                 {/if}
                 <JamDrawer listening={$listeningSpaceName !== undefined || $joinedJamStore !== undefined} />
             </div>
