@@ -116,7 +116,7 @@ const menu: BaseTranslation = {
             autumn: "Autumn",
             christmas: "Winter",
             none: "None",
-            hintAuto: "Autumn from September to November, winter from December 1st to January 6th.",
+            hintAuto: "Autumn from September to November, winter from December to February.",
             hintAutumn: "Leaves on the ground and falling leaves, outdoors.",
             hintChristmas: "Winter: snow replaces the outdoor ground and the map weather.",
             hintNone: "No seasonal decor.",

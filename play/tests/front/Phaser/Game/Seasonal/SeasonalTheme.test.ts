@@ -15,8 +15,10 @@ describe("activeSeasonalTheme", () => {
         ["2026-08-31T22:00:00Z", SeasonalTheme.Autumn],
         ["2026-11-30T22:59:59Z", SeasonalTheme.Autumn],
         ["2026-11-30T23:00:00Z", SeasonalTheme.Christmas],
-        ["2027-01-06T22:59:59Z", SeasonalTheme.Christmas],
-        ["2027-01-06T23:00:00Z", undefined],
+        ["2027-01-06T23:00:00Z", SeasonalTheme.Christmas],
+        // Winter, the season: December to February, Paris time.
+        ["2027-02-28T22:59:59Z", SeasonalTheme.Christmas],
+        ["2027-02-28T23:00:00Z", undefined],
     ])("auto at %s, Paris time", (iso, theme) => {
         expect(activeSeasonalTheme(SeasonalThemeMode.Auto, new Date(iso))).toBe(theme);
     });

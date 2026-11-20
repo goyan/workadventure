@@ -13,22 +13,21 @@ export enum SeasonalTheme {
     Christmas = "christmas",
 }
 
-const parisMonthDay = new Intl.DateTimeFormat("en", { timeZone: "Europe/Paris", month: "numeric", day: "numeric" });
+const parisMonth = new Intl.DateTimeFormat("en", { timeZone: "Europe/Paris", month: "numeric" });
 
 /**
  * Auto follows the Paris calendar, like the seasonal trees, so the whole team switches at the same time: autumn from
- * September 1st to November 30th, Christmas from December 1st to January 6th included. Without the server time yet,
+ * September 1st to November 30th, winter (the theme once called Christmas) from December 1st to the end of February. Without the server time yet,
  * auto shows nothing rather than switching right after loading.
  */
 export function activeSeasonalTheme(mode: SeasonalThemeMode, serverDate: Date | undefined): SeasonalTheme | undefined {
     if (mode === SeasonalThemeMode.Autumn) return SeasonalTheme.Autumn;
     if (mode === SeasonalThemeMode.Christmas) return SeasonalTheme.Christmas;
     if (mode === SeasonalThemeMode.None || !serverDate || !Number.isFinite(serverDate.getTime())) return undefined;
-    const parts = parisMonthDay.formatToParts(serverDate);
+    const parts = parisMonth.formatToParts(serverDate);
     const month = Number(parts.find((part) => part.type === "month")?.value);
-    const day = Number(parts.find((part) => part.type === "day")?.value);
     if (month >= 9 && month <= 11) return SeasonalTheme.Autumn;
-    if (month === 12 || (month === 1 && day <= 6)) return SeasonalTheme.Christmas;
+    if (month === 12 || month <= 2) return SeasonalTheme.Christmas;
     return undefined;
 }
 

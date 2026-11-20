@@ -2726,7 +2726,7 @@ après le dernier changement de mur ou de porte (`Outdoor/OutdoorTracker.ts`). A
 2026-11-20 ; valeur `christmas` gardée dans le navigateur et le code), Aucun. Réglage perso
 (`seasonalTheme` dans le navigateur), appliqué sans recharger. Il remplace « Thème de Noël » (repris une fois :
 Toujours → Noël, Jamais → Aucun) et « Sol extérieur » (effacé). Auto suit le calendrier de Paris, revérifié chaque
-minute : automne du 1er septembre au 30 novembre, hiver du 1er décembre au 6 janvier ; tant que l'heure du serveur
+minute : automne du 1er septembre au 30 novembre, hiver du 1er décembre à la fin de février (jusqu'au 6 janvier avant le 2026-11-20) ; tant que l'heure du serveur
 n'est pas reçue, Auto n'affiche rien (`Seasonal/SeasonalTheme.ts`). `SeasonalThemeManager` crée le décor du thème
 (`SeasonalDecor`), le masque pendant l'édition et le reconstruit quand un mur ou un objet change.
 
