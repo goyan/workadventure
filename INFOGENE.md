@@ -2437,8 +2437,21 @@ l'hiver ou de la carte (`SeasonalThemeManager.groundSnow`). **Limites (lot 1)** 
 le fond est peint aux matières du relief, pas avec les tuiles de la carte ; la
 zone cliquable d'un avatar dans un trou reste à sa place ; les éclaboussures de la nage partent de sa place.
 
+**Les monts** (lot D) : un sol élevé est dessiné plus haut de la moitié de sa hauteur (128 px au plus,
+`ReliefProjection.shiftAt`, décalage signé : positif dans un trou, négatif sur un mont) et cache le sol derrière lui.
+Un bloc lit 8 rangées de cases au sud (un mont du bloc du sud y monte) et 4 colonnes à l'ouest, une seule fenêtre pour
+le dessin et ses signatures (`ReliefTileSchedule.blockCellWindow`). Son **flanc sud** est son sol à l'ombre, en roche
+là où c'est une falaise (le dessin y saute de 6 px et plus par pixel de sol, `CLIFF_JUMP_PX`), cerné d'un liseré sombre
+à son pied ; la **silhouette** de ce qui cache le sol derrière lui (sommet d'un mont, bord sud d'un trou) est cernée
+aussi (`SILHOUETTE_GAP_PX`). **Ombre portée** au sud-est : un point est à l'ombre quand le relief au nord-ouest s'élève
+au-dessus d'un rayon de pente 1,6 (`Pixel/GroundPixel.ts` `shadowHorizon`, horizon cumulé le long des diagonales du
+bloc), direction fixe ; aussi sous le bord nord-ouest d'un trou. Neige au sommet au-dessus de la ligne de neige.
+Avatars, poissons, reflets, bouchon et traces montent avec le mont ; un clic sur le mont donne le mont ; rien ne monte
+sur un palier, un pont ni dans l'éditeur. **Limites** : un avatar, un objet ou un animal derrière un mont est dessiné
+par-dessus lui (lot 2 du relief) ; une ombre qui viendrait de plus de 64 px hors du bloc s'arrête au bord de sa fenêtre.
+
 **Limites.** L'eau traverse encore les murs (elle devra passer par les portes seulement : `back` ne connaît pas les
-murs). Pas de mode Rivière tracée. Relief négatif seulement, au sol et dehors. Animaux et compagnons ignorent l'eau.
+murs). Pas de mode Rivière tracée. Relief au sol et dehors seulement. Animaux et compagnons ignorent l'eau.
 Pas de courant qui pousse l'avatar. Un geste immense part en plusieurs commandes (autant d'annulations). Les valeurs
 par défaut du rythme sont à doser avec le tableau de bord. `play`, `back` et `map-storage` se déploient ensemble.
 
