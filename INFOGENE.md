@@ -3763,6 +3763,9 @@ bâtiment : il reste toujours affiché, même quand l'avatar est dans une pièce
 par-dessus la pièce où se trouve l'avatar. Un avatar qui passe dessous se voit à travers les dalles autour de lui.
 Un avatar qui marche sur un étage en plein air est dehors comme au sol : pas de voile sombre sur le paysage, les
 étages des bâtiments restent affichés (`aboveLevelShows` : `openAir`, `coversRoom` ; `FloorSpike.fade`).
+Dans l'éditeur, un étage en plein air reste affiché quel que soit l'étage édité (les étages d'un bâtiment, eux, sont
+cachés sauf celui qu'on édite) : à 60 % d'opacité quand il est au-dessus de l'étage édité, pour viser son bord en
+posant une rampe au sol et voir ce qu'on peint dessous (`editorLevelAlpha`, `EDITOR_OPEN_AIR_ABOVE_ALPHA`).
 
 **Les animaux.** `libs/map-editor/src/Terrain/Bridges.ts`, `bridgesOf(wam)` : un pont est fait des escaliers et
 rampes **posés au sol** et des dalles de l'étage que chacun atteint, de proche en proche. Un étage qu'aucun escalier

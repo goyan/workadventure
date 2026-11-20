@@ -5,9 +5,10 @@ import type { GameScene } from "../../../../../src/front/Phaser/Game/GameScene";
 import type { TileBarriers } from "../../../../../src/front/Utils/TileBarriers";
 import { FloorSpike } from "../../../../../src/front/Phaser/Game/Floors/FloorSpike";
 import type { FloorEntity } from "../../../../../src/front/Phaser/Game/Floors/FloorSpike";
+import { EDITOR_OPEN_AIR_ABOVE_ALPHA } from "../../../../../src/front/Phaser/Game/Floors/LevelFocus";
 
 describe("construction floor rendering", () => {
-    it("hides other slabs and furniture, then restores the game view", () => {
+    it("keeps the floors in the open air in view, seen through above the one edited, then restores the game view", () => {
         const scene = mock<GameScene>();
         const events = new Phaser.Events.EventEmitter();
         scene.events = events;
@@ -68,11 +69,12 @@ describe("construction floor rendering", () => {
         try {
             events.emit(Phaser.Scenes.Events.POST_UPDATE, 0, 1000);
             expect(lowerAlpha).toHaveBeenLastCalledWith(1);
-            expect(upperAlpha).toHaveBeenLastCalledWith(0);
-            expect(furnitureAlpha).toHaveBeenLastCalledWith(0);
+            // No room under these slabs: floors in the open air, kept in view, seen through above the one edited.
+            expect(upperAlpha).toHaveBeenLastCalledWith(EDITOR_OPEN_AIR_ABOVE_ALPHA);
+            expect(furnitureAlpha).toHaveBeenLastCalledWith(EDITOR_OPEN_AIR_ABOVE_ALPHA);
             editor = { open: true, level: 104 };
             events.emit(Phaser.Scenes.Events.POST_UPDATE, 1000, 1000);
-            expect(lowerAlpha).toHaveBeenLastCalledWith(0);
+            expect(lowerAlpha).toHaveBeenLastCalledWith(1);
             expect(upperAlpha).toHaveBeenLastCalledWith(1);
             expect(furnitureAlpha).toHaveBeenLastCalledWith(1);
             editor = { open: false, level: 104 };

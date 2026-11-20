@@ -535,7 +535,7 @@ export class FloorSpike {
         for (const level of this.levels) {
             let target = 1;
             if (editor.open) {
-                target = editorLevelAlpha(level.elevation, editor.level);
+                target = editorLevelAlpha(level.elevation, editor.level, level.roomsUnder.size === 0);
             } else if (viewed !== undefined) {
                 target = level.elevation > viewed ? 0 : 1;
             } else if (levelLook(level.elevation, current) === "above") {
