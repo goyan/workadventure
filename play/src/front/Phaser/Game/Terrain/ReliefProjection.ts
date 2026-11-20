@@ -209,6 +209,11 @@ export function paintColumn(
     out: Uint8ClampedArray,
     stride: number,
     column: number,
+    /**
+     * Pixels of the map for a row drawn: 1 for a sharp block; coarser (ReliefTileSchedule.texelFor), the samples are
+     * `texel` px apart, their `groundY` and their `drop` counted in rows.
+     */
+    texel = 1,
 ): void {
     const index = (row: number): number => (row * stride + column) * 4;
     if (rowGround.length < rows + 1) {
@@ -247,13 +252,13 @@ export function paintColumn(
                 let color: Rgb;
                 if (flank) {
                     color = steep
-                        ? wallShade(sample.wallRamp, -drop, column, row + firstRow)
+                        ? wallShade(sample.wallRamp, -drop * texel, column, row + firstRow)
                         : shadeAt(sample.flankRamp, FLANK_SHADE, column, row + firstRow);
                     flankRows++;
                 } else {
                     // The rim of a hollow: where its face starts, under flat ground or at the foot of a flank.
                     const rim = wasFlank || (k === 1 && !onFace);
-                    color = rim ? RIM_OUTLINE : wallShade(sample.wallRamp, drop, column, row + firstRow);
+                    color = rim ? RIM_OUTLINE : wallShade(sample.wallRamp, drop * texel, column, row + firstRow);
                 }
                 wasFlank = flank;
                 showGround(row, sample.groundY);
@@ -263,7 +268,7 @@ export function paintColumn(
             if (sample.drop > 0 || previousDrop >= 0) {
                 // The face of a hollow (or a flank going on down into one): its foot is part of it.
                 if (at >= 0 && at < rows)
-                    put(out, index(at), wallShade(sample.wallRamp, sample.drop, column, at + firstRow));
+                    put(out, index(at), wallShade(sample.wallRamp, sample.drop * texel, column, at + firstRow));
             } else if (goesOn) {
                 // The flank goes on: this sample is part of it.
                 if (at >= 0 && at < rows)
@@ -271,7 +276,7 @@ export function paintColumn(
                         out,
                         index(at),
                         steep
-                            ? wallShade(sample.wallRamp, -sample.drop, column, at + firstRow)
+                            ? wallShade(sample.wallRamp, -sample.drop * texel, column, at + firstRow)
                             : shadeAt(sample.flankRamp, FLANK_SHADE, column, at + firstRow),
                     );
             } else {
@@ -298,7 +303,7 @@ export function paintColumn(
     for (let row = 0; row < rows; row++) {
         if (!rowOver[row + 1]) continue;
         const above = rowGround[row];
-        if (!(rowGround[row + 1] - above > SILHOUETTE_GAP_PX)) continue;
+        if (!((rowGround[row + 1] - above) * texel > SILHOUETTE_GAP_PX)) continue;
         if (out[index(row) + 3] > 0) put(out, index(row), RIM_OUTLINE);
     }
 }

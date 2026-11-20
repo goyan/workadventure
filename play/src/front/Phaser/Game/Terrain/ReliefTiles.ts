@@ -1,6 +1,7 @@
 import * as Phaser from "phaser";
 import { heightAt, TERRAIN_CELL, TERRAIN_CHUNK, TILE_PX } from "@workadventure/map-editor";
-import type { Season, TerrainData } from "@workadventure/map-editor";
+import { Season } from "@workadventure/map-editor";
+import type { TerrainData } from "@workadventure/map-editor";
 import { refreshCanvasTexture } from "../CanvasTextureRefresh";
 import type { MeadowState } from "./MeadowState";
 import {
@@ -25,7 +26,7 @@ import { bayer, RAMPS, rampsFor } from "./Pixel/PixelPalette";
 import type { Material, Ramp, Rgb as PaletteRgb } from "./Pixel/PixelPalette";
 import { groundPointAt, MAX_DROP, MAX_RISE, paintColumn, RELIEF_TEXEL, shiftOfHeight } from "./ReliefProjection";
 import type { ColumnSample } from "./ReliefProjection";
-import { blockCellWindow, ReliefTileSchedule, reliefSignature } from "./ReliefTileSchedule";
+import { blockCellWindow, COARSE_TEXEL, ReliefTileSchedule, reliefSignature, texelFor } from "./ReliefTileSchedule";
 import { waterColor } from "./Pixel/WaterPixel";
 import type { TerrainWater } from "./TerrainWater";
 
@@ -34,9 +35,12 @@ export const RELIEF_TILES_DEPTH = 0.655;
 /** Map pixels across a block: one chunk of the relief. */
 const BLOCK_PX = TERRAIN_CHUNK * TERRAIN_CELL;
 const BLOCK_TEXELS = BLOCK_PX / RELIEF_TEXEL;
-/** The ground of a block seen from above: 1 px more all around than the block, MAX_DROP px north and MAX_RISE south. */
+/**
+ * The ground of a block seen from above, at its sharpest (a point a pixel of the map; coarser, fewer points: see
+ * BlockDraw): 1 point more all around than the block, MAX_DROP px north and MAX_RISE south of it, and one row more each
+ * way for the deepest face and the highest top.
+ */
 const POINT_COLUMNS = BLOCK_PX + 2;
-// One row more each way than the deepest face and the highest top (firstY, endY), and one for the neighbours of a point.
 const POINT_ROWS = MAX_DROP + BLOCK_PX + MAX_RISE + 4;
 const MATERIALS: readonly Material[] = [
     "grass",
@@ -61,8 +65,10 @@ const COVER_INDEX = Object.fromEntries(COVERS.map((cover, index) => [cover, inde
 const NONE_INDEX = COVER_INDEX.none;
 /** From this much grass of the meadow (0 to 255), the grass is dense: the flowers of the season grow there. */
 const DENSE_GRASS = 160;
-/** The time an image spends drawing a block (ms): the rest of the block waits for the next image. */
+/** The time an image spends drawing blocks (ms): the rest waits for the next image. */
 const DRAW_BUDGET_MS = 6;
+/** The most blocks taken up in one image (cheap ones: coarse, or with nothing to draw). */
+const PICKS_AN_IMAGE = 16;
 /** The rows (or columns) of a block drawn between two looks at the time. */
 const ROWS_A_STEP = 16;
 /** The thresholds of the dither (bayer), row by row. */
@@ -79,6 +85,8 @@ const WALL_RAMPS = Object.fromEntries(
         ) as unknown as Ramp,
     ]),
 ) as Record<Material, Ramp>;
+/** The shades of the face of a drop, by what covers its rim (as stored: COVERS). */
+const WALL_RAMP_OF: readonly Ramp[] = COVERS.map((cover) => (cover === "none" ? RAMPS.wall : WALL_RAMPS[cover]));
 /** The cells a block is drawn from (blockCellWindow). */
 const GRID_WIDTH = blockCellWindow(0, 0).width;
 const GRID_HEIGHT = blockCellWindow(0, 0).height;
@@ -89,27 +97,37 @@ const WATER_STEP_PX = 2;
 
 /** A block being drawn: what its passes share (ReliefTiles.prepareDraw). */
 interface BlockDraw {
-    block: Block;
     left: number;
     top: number;
+    /** Pixels of the map for a point drawn (texelFor): 1 sharp, 2 or 4 coarser. */
+    texel: number;
+    /** Points across and down the block drawn. */
+    size: number;
+    /** Points across and down the ground seen from above (a point more all around, the rows north and south). */
+    columns: number;
+    rows: number;
     /** The first cell of its window (blockCellWindow). */
     gridX: number;
     gridY: number;
     wet: boolean;
     projected: boolean;
-    /** The rows of the ground drawn, on the map. */
-    firstY: number;
-    endY: number;
     /** The point of the map of the first point of the ground seen from above. */
     originX: number;
     originY: number;
     /** The rows of the ground seen from above worked out. */
     firstRow: number;
     endRow: number;
+    /** The rows of the ground that can be drawn in the block. */
+    sampleFirst: number;
+    sampleEnd: number;
     shaded: boolean;
     cellInputs: CellInputs;
     season: Season | undefined;
+    /** Whether the season sows flowers in the dense grass. */
+    flowers: boolean;
     ramps: Record<Material | "wall" | "water", Ramp>;
+    /** The shades of the flank of a mount, by what covers it (as stored: COVERS). */
+    flankRamps: readonly Ramp[];
     /** The textures of the materials met in this block only (a table is 1 MB). */
     textures: (Float32Array | undefined)[];
 }
@@ -125,6 +143,11 @@ export interface ReliefInputs {
     snowLineSeason?(): Season | undefined;
     /** The layout of the map, to draw the flat ground too: absent, only the dug ground and its water are drawn. */
     layout?: GroundLayout;
+    /**
+     * Pixels of the screen for a pixel of the map (the zoom of the camera): far out, the blocks are drawn no finer than
+     * the screen shows them (texelFor). Absent: always sharp.
+     */
+    screenScale?(): number;
 }
 
 /** What the flat ground needs to know of the map: its rooms, the floors of the Carte tool, its grass tiles. */
@@ -141,6 +164,8 @@ interface Block {
     image: Phaser.GameObjects.Image;
     /** Whether it was last drawn in 3/4: hidden while the relief is shown the other way, until it is drawn again. */
     projected: boolean;
+    /** Pixels of the map for a point of its drawing (texelFor). */
+    texel: number;
 }
 
 /**
@@ -193,6 +218,8 @@ export class ReliefTiles {
         }),
     );
     private readonly levels = new Uint8Array(GRID_WIDTH * GRID_HEIGHT);
+    /** The pixels of the block being drawn (RGBA), shown once it is whole. */
+    private readonly out = new Uint8ClampedArray(BLOCK_TEXELS * BLOCK_TEXELS * 4);
 
     constructor(
         private readonly scene: Phaser.Scene & { markDirty(): void },
@@ -320,7 +347,7 @@ export class ReliefTiles {
             reads++;
         }
         const shared = `${this.inputs.season() ?? ""}|${snow}|${this.projected ? "3/4" : "flat"}|${this.seeThrough}`;
-        const signatures = new Map<string, string>();
+        const bases = new Map<string, string>();
         for (const key of around) {
             let relief = this.reliefSignatures.get(key);
             if (relief === undefined) {
@@ -335,38 +362,78 @@ export class ReliefTiles {
             }
             // Without the layout of the map, only the dug ground and its water are drawn.
             if (!layout && relief === "" && water === "") {
-                signatures.set(key, "");
+                bases.set(key, "");
                 continue;
             }
             const cover = this.coverSignatures.get(key);
             // Not read yet (its turn comes in a next image): not drawn yet.
             if (cover === undefined) {
-                signatures.set(key, "");
+                bases.set(key, "");
                 continue;
             }
             // With it: nothing to draw where nothing covers the ground, nothing is dug and no water lies.
-            signatures.set(
+            bases.set(
                 key,
                 relief === "" && water === "" && cover === "" ? "" : `${relief}|${water}|${cover}|${shared}`,
             );
         }
-        // One block drawn at a time, spread over images: DRAW_BUDGET_MS of it an image.
-        if (!this.job) {
-            for (const key of this.schedule.toRedraw(around, signatures, undefined, new Set(visible))) {
-                if (signatures.get(key) === "") this.drop(key);
-                else this.job = { key, steps: this.drawSteps(key, terrain, now) };
+        // Blocks are drawn one after the other, DRAW_BUDGET_MS an image: one that takes longer goes on in the next
+        // images; cheap ones (coarse, or with nothing left to draw) follow one another in the same image.
+        const needed = texelFor(this.inputs.screenScale?.() ?? 1);
+        const start = performance.now();
+        let picks = 0;
+        for (;;) {
+            if (
+                !this.job &&
+                (picks++ >= PICKS_AN_IMAGE || !this.pick(around, visibleKeys, bases, needed, terrain, now))
+            ) {
+                break;
             }
-        }
-        if (this.job) {
-            const start = performance.now();
-            while (performance.now() - start < DRAW_BUDGET_MS) {
-                if (this.job.steps.next().done) {
-                    this.job = undefined;
-                    break;
-                }
-            }
+            if (this.job?.steps.next().done) this.job = undefined;
+            if (performance.now() - start >= DRAW_BUDGET_MS) break;
         }
         for (const key of this.schedule.evict(new Set(around))) this.drop(key);
+    }
+
+    /**
+     * Takes up the next block to draw (or to drop, where nothing is left to draw), the ones of the view first. A block of
+     * the view never drawn yet is drawn coarse first (COARSE_TEXEL: the view is filled at once), then as sharp as the
+     * screen shows it (`needed`); one drawn sharper than needed is kept as it is. False when nothing is left to do.
+     */
+    private pick(
+        around: readonly string[],
+        visible: ReadonlySet<string>,
+        bases: ReadonlyMap<string, string>,
+        needed: number,
+        terrain: TerrainData | undefined,
+        now: number,
+    ): boolean {
+        const signatures = new Map<string, string>();
+        const fresh: string[] = [];
+        const shown: string[] = [];
+        const rest: string[] = [];
+        for (const key of around) {
+            const base = bases.get(key) ?? "";
+            const drawn = this.blocks.get(key)?.texel;
+            signatures.set(
+                key,
+                base === "" ? "" : `${base}|t${drawn !== undefined && drawn <= needed ? drawn : needed}`,
+            );
+            if (!visible.has(key)) rest.push(key);
+            else if (drawn === undefined && base !== "") fresh.push(key);
+            else shown.push(key);
+        }
+        const [key] = this.schedule.toRedraw([...fresh, ...shown, ...rest], signatures);
+        if (key === undefined) return false;
+        const base = bases.get(key) ?? "";
+        if (base === "") {
+            this.drop(key);
+            return true;
+        }
+        const texel = !this.blocks.has(key) && visible.has(key) && needed < COARSE_TEXEL ? COARSE_TEXEL : needed;
+        this.schedule.mark(key, `${base}|t${texel}`);
+        this.job = { key, steps: this.drawSteps(key, terrain, now, texel) };
+        return true;
     }
 
     public destroy(): void {
@@ -447,32 +514,55 @@ export class ReliefTiles {
         this.scene.markDirty();
     }
 
-    private block(key: string, left: number, top: number): Block | undefined {
-        const kept = this.blocks.get(key);
-        if (kept) return kept;
-        const texture = this.scene.textures.createCanvas(`relief-block:${key}`, BLOCK_TEXELS, BLOCK_TEXELS);
-        if (!texture) return undefined;
-        // Pixel art: each pixel of the block is a pixel of the map, never smoothed.
-        texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
-        const image = this.scene.add
-            .image(left, top, texture.key)
-            .setOrigin(0, 0)
-            .setDisplaySize(BLOCK_PX, BLOCK_PX)
-            .setDepth(RELIEF_TILES_DEPTH)
-            .setVisible(!this.hidden);
-        const block = { texture, image, projected: this.projected };
-        this.blocks.set(key, block);
-        return block;
+    /**
+     * Shows the block just drawn (`out`), on a surface of the size of its drawing: another one than before when it is
+     * drawn finer or coarser. Until then the block keeps showing what it showed.
+     */
+    private show(key: string, draw: BlockDraw): void {
+        let block = this.blocks.get(key);
+        if (block && block.texel !== draw.texel) {
+            block.image.destroy();
+            block.texture.destroy();
+            this.blocks.delete(key);
+            block = undefined;
+        }
+        if (!block) {
+            const name = draw.texel === 1 ? `relief-block:${key}` : `relief-block:${key}@${draw.texel}`;
+            const texture = this.scene.textures.createCanvas(name, draw.size, draw.size);
+            if (!texture) return;
+            // Pixel art: each point of the block is drawn as it is, never smoothed.
+            texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+            const image = this.scene.add
+                .image(draw.left, draw.top, texture.key)
+                .setOrigin(0, 0)
+                .setDisplaySize(BLOCK_PX, BLOCK_PX)
+                .setDepth(RELIEF_TILES_DEPTH);
+            block = { texture, image, projected: draw.projected, texel: draw.texel };
+            this.blocks.set(key, block);
+        }
+        const context = block.texture.getContext();
+        const pixels = context.createImageData(draw.size, draw.size);
+        pixels.data.set(this.out.subarray(0, draw.size * draw.size * 4));
+        context.putImageData(pixels, 0, 0);
+        refreshCanvasTexture(block.texture);
+        block.projected = draw.projected;
+        // Drawn the other way than the relief is shown now (the editor opened meanwhile): hidden until drawn again.
+        block.image.setVisible(!this.hidden && block.projected === this.projected);
+        this.scene.markDirty();
     }
 
     /**
      * Draws a block, a step at a time: it yields every ROWS_A_STEP rows (or columns) so that update can spread a block
      * over several images. The block shows its new drawing once the last step is done.
      */
-    private *drawSteps(key: string, terrain: TerrainData | undefined, now: number): Generator<void, void, void> {
+    private *drawSteps(
+        key: string,
+        terrain: TerrainData | undefined,
+        now: number,
+        texel: number,
+    ): Generator<void, void, void> {
         // The loops run in plain methods, a slice at a time: inside a generator they would run several times slower.
-        const draw = this.prepareDraw(key, terrain, now);
-        if (!draw) return;
+        const draw = this.prepareDraw(key, terrain, now, texel);
         for (let row = draw.firstRow; row < draw.endRow; row += ROWS_A_STEP) {
             this.groundRows(draw, row, Math.min(row + ROWS_A_STEP, draw.endRow));
             yield;
@@ -483,35 +573,27 @@ export class ReliefTiles {
                 yield;
             }
         }
-        const colorsEnd = Math.min(POINT_ROWS - 1, draw.endRow - 1);
+        const colorsEnd = Math.min(draw.rows - 1, draw.endRow - 1);
         for (let row = Math.max(1, draw.firstRow + 1); row < colorsEnd; row += ROWS_A_STEP) {
             this.colorRows(draw, row, Math.min(row + ROWS_A_STEP, colorsEnd));
             yield;
         }
-        const context = draw.block.texture.getContext();
-        const pixels = context.createImageData(BLOCK_TEXELS, BLOCK_TEXELS);
-        for (let column = 0; column < BLOCK_TEXELS; column += ROWS_A_STEP) {
-            this.projectColumns(draw, pixels.data, column, Math.min(column + ROWS_A_STEP, BLOCK_TEXELS));
+        for (let column = 0; column < draw.size; column += ROWS_A_STEP) {
+            this.projectColumns(draw, column, Math.min(column + ROWS_A_STEP, draw.size));
             yield;
         }
-        context.putImageData(pixels, 0, 0);
-        refreshCanvasTexture(draw.block.texture);
-        draw.block.projected = this.projected;
-        draw.block.image.setVisible(!this.hidden);
-        this.scene.markDirty();
+        this.show(key, draw);
     }
 
     /**
      * What drawing a block needs to know before its passes: the heights and the water of its cells, read once (one more
      * cell around for the interpolation between centres: reading the relief map at every pixel would cost far too
-     * much), and the rows of the ground that can be drawn in it.
+     * much), and the rows of the ground that can be drawn in it. `texel`: pixels of the map for a point drawn.
      */
-    private prepareDraw(key: string, terrain: TerrainData | undefined, now: number): BlockDraw | undefined {
+    private prepareDraw(key: string, terrain: TerrainData | undefined, now: number, texel: number): BlockDraw {
         const [blockX, blockY] = key.split(",").map(Number);
         const left = blockX * BLOCK_PX;
         const top = blockY * BLOCK_PX;
-        const block = this.block(key, left, top);
-        if (!block) return undefined;
         const { x: gridX, y: gridY } = blockCellWindow(blockX, blockY);
         for (let row = 0; row < GRID_HEIGHT; row++) {
             for (let column = 0; column < GRID_WIDTH; column++) {
@@ -544,32 +626,46 @@ export class ReliefTiles {
             mostRise > 0
                 ? top + BLOCK_PX + Math.ceil(mostRise) + 1
                 : Math.min(top + BLOCK_PX, top + BLOCK_PX - Math.floor(leastDrop) + 1);
-        // The ground seen from above, 1 px more all around than what is drawn (so a border on the edge of a block gets
-        // its line on both blocks) and MAX_DROP px north of the block.
-        const originX = left - 1;
-        const originY = top - MAX_DROP - 1;
+        // The ground seen from above, a point every `texel` px: 1 point more all around than what is drawn (so a border
+        // on the edge of a block gets its line on both blocks), from MAX_DROP px north of the block (and one row more,
+        // for the neighbours of the first row drawn).
+        const size = BLOCK_PX / texel;
+        const columns = size + 2;
+        const rows = (MAX_DROP + BLOCK_PX + MAX_RISE) / texel + 4;
+        const originX = left - texel;
+        const originY = top - MAX_DROP - 2 * texel;
+        const first = Math.floor((firstY - originY) / texel);
+        const end = Math.ceil((endY - originY) / texel);
         // What covers each cell, read once.
         this.cellMaterials.fill(UNKNOWN_MATERIAL);
+        this.out.fill(0, 0, size * size * 4);
         const season = this.inputs.season();
+        const ramps = rampsFor(season);
         return {
-            block,
             left,
             top,
+            texel,
+            size,
+            columns,
+            rows,
             gridX,
             gridY,
             wet,
             projected,
-            firstY,
-            endY,
             originX,
             originY,
-            firstRow: Math.max(0, firstY - originY - 1),
-            endRow: Math.min(POINT_ROWS, endY - originY + 1),
+            firstRow: Math.max(0, first - 1),
+            endRow: Math.min(rows, end + 1),
+            sampleFirst: Math.max(1, first),
+            sampleEnd: Math.min(rows - 1, end),
             // The shadows of the relief: only where the window has one (a flat window casts none).
             shaded: highest > lowest,
             cellInputs: this.cellInputs(terrain, now),
             season,
-            ramps: rampsFor(season),
+            flowers: season === Season.Spring || season === Season.Summer,
+            ramps,
+            // The flank of a mount: its own ground in the shade (grass where nothing covers it).
+            flankRamps: COVERS.map((cover) => (cover === "none" ? ramps.grass : ramps[cover])),
             textures: [],
         };
     }
@@ -601,17 +697,19 @@ export class ReliefTiles {
         return COVERS[known];
     }
 
-    /** 1. The ground seen from above, one pixel a pixel of the map: heights, water, materials of the rows given. */
+    /** 1. The ground seen from above: the heights, the water and the materials of the points of the rows given. */
     private groundRows(draw: BlockDraw, fromRow: number, toRow: number): void {
-        const { originX, originY, gridX, gridY, wet } = draw;
+        const { originX, originY, gridX, gridY, wet, texel, columns } = draw;
         const heights = this.pointHeights;
         // The water of each point (as the blocks draw it), to find its edge: a point of water next to a dry one.
         const waters = this.pointWaters;
         const materials = this.pointMaterials;
         const cellHeights = this.heights;
+        const cellWaters = this.gridWater;
         const cell = (cellX: number, cellY: number): Cover => this.coverOfCell(draw, cellX, cellY);
         for (let row = fromRow; row < toRow; row++) {
-            const y = originY + row + 0.5;
+            // The middle of the point.
+            const y = originY + (row + 0.5) * texel;
             // The heights between the centres of the cells, worked out along the row (the bilinear of `bilinear`).
             const fy = Math.min(GRID_HEIGHT - 1.001, Math.max(0, y / TERRAIN_CELL - 0.5 - gridY));
             const heightRow = Math.floor(fy);
@@ -621,17 +719,22 @@ export class ReliefTiles {
             const cellY = Math.floor(y / TERRAIN_CELL - 0.5);
             let region = Number.NaN;
             let uniform = -1;
-            for (let column = 0; column < POINT_COLUMNS; column++) {
-                const x = originX + column + 0.5;
-                const index = row * POINT_COLUMNS + column;
+            for (let column = 0; column < columns; column++) {
+                const x = originX + (column + 0.5) * texel;
+                const index = row * columns + column;
                 const fx = Math.min(GRID_WIDTH - 1.001, Math.max(0, x / TERRAIN_CELL - 0.5 - gridX));
                 const heightColumn = Math.floor(fx);
                 const tx = fx - heightColumn;
                 const at = heightRow * GRID_WIDTH + heightColumn;
-                const upper = cellHeights[at] * (1 - tx) + cellHeights[at + 1] * tx;
-                const lower = cellHeights[at + GRID_WIDTH] * (1 - tx) + cellHeights[at + GRID_WIDTH + 1] * tx;
-                heights[index] = upper * (1 - ty) + lower * ty;
-                if (wet) waters[index] = this.bilinear(draw, this.gridWater, x, y);
+                const below = at + GRID_WIDTH;
+                heights[index] =
+                    (cellHeights[at] * (1 - tx) + cellHeights[at + 1] * tx) * (1 - ty) +
+                    (cellHeights[below] * (1 - tx) + cellHeights[below + 1] * tx) * ty;
+                if (wet) {
+                    waters[index] =
+                        (cellWaters[at] * (1 - tx) + cellWaters[at + 1] * tx) * (1 - ty) +
+                        (cellWaters[below] * (1 - tx) + cellWaters[below + 1] * tx) * ty;
+                }
                 const cellX = Math.floor(x / TERRAIN_CELL - 0.5);
                 if (cellX !== region) {
                     region = cellX;
@@ -654,19 +757,20 @@ export class ReliefTiles {
      * of each (the first row, the first column).
      */
     private horizonRows(draw: BlockDraw, fromRow: number, toRow: number): void {
-        const { originX, originY, firstRow } = draw;
+        const { originX, originY, firstRow, texel, columns } = draw;
         const heights = this.pointHeights;
         const horizons = this.pointHorizons;
+        const step = SHADOW_RISE_A_STEP * texel;
         const heightOf = (pointX: number, pointY: number): number => this.bilinear(draw, this.heights, pointX, pointY);
         for (let row = fromRow; row < toRow; row++) {
-            const y = originY + row + 0.5;
-            for (let column = 0; column < POINT_COLUMNS; column++) {
-                const index = row * POINT_COLUMNS + column;
+            const y = originY + (row + 0.5) * texel;
+            for (let column = 0; column < columns; column++) {
+                const index = row * columns + column;
                 if (row === firstRow || column === 0) {
-                    horizons[index] = shadowHorizon(heightOf, originX + column + 0.5, y);
+                    horizons[index] = shadowHorizon(heightOf, originX + (column + 0.5) * texel, y, texel);
                 } else {
-                    const corner = index - POINT_COLUMNS - 1;
-                    horizons[index] = Math.max(heights[corner], horizons[corner]) - SHADOW_RISE_A_STEP;
+                    const corner = index - columns - 1;
+                    horizons[index] = Math.max(heights[corner], horizons[corner]) - step;
                 }
             }
         }
@@ -674,18 +778,19 @@ export class ReliefTiles {
 
     /** 2. The colours of the rows given: texture, light of the slope, shadow, depth, level lines, borders. */
     private colorRows(draw: BlockDraw, fromRow: number, toRow: number): void {
-        const { originX, originY, shaded, season, ramps, textures } = draw;
+        const { originX, originY, shaded, season, flowers, ramps, textures, texel, columns } = draw;
         const heights = this.pointHeights;
         const horizons = this.pointHorizons;
         const materials = this.pointMaterials;
         const colors = this.pointColors;
         const meadow = this.inputs.meadow;
         for (let row = fromRow; row < toRow; row++) {
-            const y = originY + row;
+            const y = originY + row * texel;
             const textureRow = textureIndex(0, y);
-            const bayerRow = BAYER_ROWS[y & 3];
-            for (let column = 1; column < POINT_COLUMNS - 1; column++) {
-                const index = row * POINT_COLUMNS + column;
+            // The dither goes by points drawn, not by pixels of the map: coarse, it stays a dither.
+            const bayerRow = BAYER_ROWS[(y / texel) & 3];
+            for (let column = 1; column < columns - 1; column++) {
+                const index = row * columns + column;
                 const here = materials[index];
                 // Nothing covers it: transparent, the tiles of the map show.
                 if (here === NONE_INDEX) {
@@ -695,8 +800,8 @@ export class ReliefTiles {
                 const material = COVERS[here] as Material;
                 const west = materials[index - 1];
                 const east = materials[index + 1];
-                const north = materials[index - POINT_COLUMNS];
-                const south = materials[index + POINT_COLUMNS];
+                const north = materials[index - columns];
+                const south = materials[index + columns];
                 // Inside a material (most of the ground): no line to look for.
                 const outline =
                     west === here && east === here && north === here && south === here
@@ -705,12 +810,11 @@ export class ReliefTiles {
                           outlineOf(material, COVERS[east]) ??
                           outlineOf(material, COVERS[north]) ??
                           outlineOf(material, COVERS[south]));
+                // The rise of the ground for a pixel of the map, east and south.
                 const rise =
-                    heights[index + 1] -
-                    heights[index - 1] +
-                    heights[index + POINT_COLUMNS] -
-                    heights[index - POINT_COLUMNS];
-                const x = originX + column;
+                    (heights[index + 1] - heights[index - 1] + heights[index + columns] - heights[index - columns]) /
+                    texel;
+                const x = originX + column * texel;
                 // In the shadow of a mount (or of the north-west rim of a hollow): darker.
                 const light =
                     shaded && horizons[index] > heights[index] ? shadowedLight(lightOfRise(rise)) : lightOfRise(rise);
@@ -718,11 +822,12 @@ export class ReliefTiles {
                     heights[index],
                     heights[index - 1],
                     heights[index + 1],
-                    heights[index - POINT_COLUMNS],
-                    heights[index + POINT_COLUMNS],
+                    heights[index - columns],
+                    heights[index + columns],
                 );
                 // Dense grass of the meadow: where the flowers of the season grow.
                 const dense =
+                    flowers &&
                     material === "grass" &&
                     meadow !== undefined &&
                     meadow.grassAt(Math.floor(x / TILE_PX), Math.floor(y / TILE_PX)) >= DENSE_GRASS;
@@ -743,58 +848,79 @@ export class ReliefTiles {
                             light,
                             heights[index],
                         ) - contourShade(contour);
-                    const shade = Math.round(value * 3 + bayerRow[x & 3] - 0.5);
+                    const shade = Math.round(value * 3 + bayerRow[(x / texel) & 3] - 0.5);
                     const ramp = seasonPatch(material, season, x, y) ?? ramps[material];
                     colors[index] = ramp[shade < 0 ? 0 : shade > 3 ? 3 : shade];
                 } else {
-                    colors[index] = groundColor(material, x, y, light, heights[index], outline, contour, season, dense);
+                    colors[index] = groundColor(
+                        material,
+                        x / texel,
+                        y / texel,
+                        light,
+                        heights[index],
+                        outline,
+                        contour,
+                        season,
+                        dense,
+                    );
                 }
             }
         }
     }
 
     /** 3. The columns given, projected in 3/4, from MAX_DROP px north of the block to MAX_RISE south of it. */
-    private projectColumns(draw: BlockDraw, out: Uint8ClampedArray, fromColumn: number, toColumn: number): void {
-        const { left, top, firstY, endY, originY, wet, projected, season, ramps } = draw;
+    private projectColumns(draw: BlockDraw, fromColumn: number, toColumn: number): void {
+        const { left, top, originY, wet, projected, season, flankRamps, texel, columns, size } = draw;
+        const { sampleFirst, sampleEnd } = draw;
         const heights = this.pointHeights;
         const waters = this.pointWaters;
         const materials = this.pointMaterials;
         const colors = this.pointColors;
         const samples = this.samples;
-        const shiftOf = (ground: number): number => (projected ? shiftOfHeight(ground) : 0);
+        const withLayout = this.inputs.layout !== undefined;
+        const seeThrough = this.seeThrough;
+        // Rows drawn and drops are counted in points drawn (paintColumn).
+        const firstGround = originY / texel;
         for (let column = fromColumn; column < toColumn; column++) {
-            const x = left + column;
+            const pointX = left / texel + column;
             let count = 0;
-            for (let y = firstY; y < endY; y++) {
-                const index = (y - originY) * POINT_COLUMNS + column + 1;
+            for (let row = sampleFirst; row < sampleEnd; row++) {
+                const index = row * columns + column + 1;
                 const ground = heights[index];
                 const water = wet ? waters[index] : 0;
                 const sample = samples[count++];
                 const here = materials[index];
-                sample.groundY = y;
-                sample.wallRamp = here === NONE_INDEX ? RAMPS.wall : WALL_RAMPS[COVERS[here] as Material];
-                // The flank of a mount: its own ground in the shade (grass where nothing covers it).
-                sample.flankRamp = here === NONE_INDEX ? ramps.grass : ramps[COVERS[here] as Material];
+                sample.groundY = firstGround + row;
+                sample.wallRamp = WALL_RAMP_OF[here];
+                sample.flankRamp = flankRamps[here];
                 if (water >= WATER_SEEN_PX) {
                     // The water as its signature knows it (WATER_STEP_PX): a block is drawn again only when it shows.
                     const depth = Math.max(WATER_SEEN_PX, Math.floor(water / WATER_STEP_PX) * WATER_STEP_PX);
-                    sample.drop = shiftOf(ground + depth);
+                    sample.drop = (projected ? shiftOfHeight(ground + depth) : 0) / texel;
                     const edge =
                         waters[index - 1] < WATER_SEEN_PX ||
                         waters[index + 1] < WATER_SEEN_PX ||
-                        waters[index - POINT_COLUMNS] < WATER_SEEN_PX ||
-                        waters[index + POINT_COLUMNS] < WATER_SEEN_PX;
-                    sample.color = waterColor(depth, x, y, season, colors[index], this.seeThrough, edge);
+                        waters[index - columns] < WATER_SEEN_PX ||
+                        waters[index + columns] < WATER_SEEN_PX;
+                    sample.color = waterColor(
+                        depth,
+                        pointX,
+                        firstGround + row,
+                        season,
+                        colors[index],
+                        seeThrough,
+                        edge,
+                    );
                     sample.plain = false;
                 } else {
-                    sample.drop = shiftOf(ground);
+                    sample.drop = (projected ? shiftOfHeight(ground) : 0) / texel;
                     sample.color = colors[index];
                     // Left to the map (unless it hides what is drawn behind it): what nothing covers; without the layout
                     // of the map (the 3/4 relief only), the flat ground.
-                    sample.plain = this.inputs.layout ? here === NONE_INDEX : Math.abs(ground) < 0.5;
+                    sample.plain = withLayout ? here === NONE_INDEX : Math.abs(ground) < 0.5;
                 }
             }
-            paintColumn(samples, count, BLOCK_TEXELS, top, out, BLOCK_TEXELS, column);
+            paintColumn(samples, count, size, top / texel, this.out, size, column, texel);
         }
     }
 }

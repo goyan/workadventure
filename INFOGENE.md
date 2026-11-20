@@ -2452,6 +2452,15 @@ sur un palier, un pont ni dans l'éditeur. **Limites** : un avatar, un objet ou 
 par-dessus lui (lot 2 du relief). Un clic sur le flanc sud d'un mont donne le mont (son bord quand le flanc est une
 falaise), pas le sol à son pied. Courbes de niveau sur les monts comme dans les trous ; neige aux teintes écartées.
 
+**Chargement du terrain** : un bloc de la vue jamais dessiné est d'abord dessiné **grossier** (un point sur 4 dans
+chaque sens, 16 fois moins cher : `ReliefTileSchedule.COARSE_TEXEL`), puis **net** ; la vue est remplie en quelques
+images, puis affinée, les blocs visibles d'abord. Très dézoomé, un bloc n'est pas dessiné plus fin que l'écran ne le
+montre (`texelFor` : un point pour 1, 2 ou 4 px de carte selon le zoom de la caméra) ; il est redessiné plus fin quand
+on zoome, jamais plus grossier quand on dézoome. Plusieurs blocs peu chers par image, dans la limite de 6 ms
+(`DRAW_BUDGET_MS`). Mesuré le 2026-11-21 dans Chromium sur la carte d'équipe locale (72 blocs visibles, zoom 1) : vue
+remplie en 12 images, tout net en 155 images, 7,6 ms par bloc net (75 ms avant : les boucles tournaient dans le
+générateur et les courbes de niveau allouaient un tableau par point).
+
 **Limites.** L'eau traverse encore les murs (elle devra passer par les portes seulement : `back` ne connaît pas les
 murs). Pas de mode Rivière tracée. Relief au sol et dehors seulement. Animaux et compagnons ignorent l'eau.
 Pas de courant qui pousse l'avatar. Un geste immense part en plusieurs commandes (autant d'annulations). Les valeurs

@@ -246,17 +246,18 @@ export function contourShade(contour: number): number {
  * depth and the height of a hollow or a mount at a glance, even a gentle one, under the snow and at night.
  */
 export function contourOf(height: number, west: number, east: number, north: number, south: number): -1 | 0 | 1 {
-    // Tiles below (negative) or above (positive) the ground level.
-    const levelOf = (value: number): number =>
-        value < 0 ? -Math.floor(-value / TILE_DEPTH_PX) : Math.floor(value / TILE_DEPTH_PX);
-    const level = levelOf(height);
-    let lower = false;
-    for (const neighbour of [west, east, north, south]) {
-        const other = levelOf(neighbour);
-        if (other > level) return -1;
-        if (other < level) lower = true;
-    }
-    return lower ? 1 : 0;
+    const level = tileLevel(height);
+    const westLevel = tileLevel(west);
+    const eastLevel = tileLevel(east);
+    const northLevel = tileLevel(north);
+    const southLevel = tileLevel(south);
+    if (westLevel > level || eastLevel > level || northLevel > level || southLevel > level) return -1;
+    return westLevel < level || eastLevel < level || northLevel < level || southLevel < level ? 1 : 0;
+}
+
+/** Tiles below (negative) or above (positive) the ground level. */
+function tileLevel(value: number): number {
+    return value < 0 ? -Math.floor(-value / TILE_DEPTH_PX) : Math.floor(value / TILE_DEPTH_PX);
 }
 
 /** The shadow of a mount: cast along a ray rising this steeply (px of height a px of the map) from the north-west. */
@@ -278,9 +279,15 @@ export const SHADOW_RISE_A_STEP = SHADOW_SLOPE * Math.SQRT2;
  * lower: a block works the horizons out along the diagonals and calls this on their first points only (the first
  * row, the first column).
  */
-export function shadowHorizon(heightAt: (x: number, y: number) => number, x: number, y: number): number {
+export function shadowHorizon(
+    heightAt: (x: number, y: number) => number,
+    x: number,
+    y: number,
+    /** The step of the ray (px): the texel of a block drawn coarser. */
+    step = 1,
+): number {
     let horizon = Number.NEGATIVE_INFINITY;
-    for (let d = 1; d <= SHADOW_REACH_PX; d++) {
+    for (let d = step; d <= SHADOW_REACH_PX; d += step) {
         const over = heightAt(x - d, y - d) - SHADOW_RISE_A_STEP * d;
         if (over > horizon) horizon = over;
     }

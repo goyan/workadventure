@@ -19,7 +19,12 @@ function dugEverywhere(): TerrainData {
 function fixture(
     terrain: TerrainData | undefined = dugEverywhere(),
     meadow?: MeadowState,
-    options: { layout?: GroundLayout; season?: () => Season | undefined; snowLineSeason?: Season } = {},
+    options: {
+        layout?: GroundLayout;
+        season?: () => Season | undefined;
+        snowLineSeason?: Season;
+        screenScale?: () => number;
+    } = {},
 ) {
     const worldView = { x: 300, y: 300, width: 600, height: 400 };
     const images: { visible: boolean }[] = [];
@@ -35,7 +40,10 @@ function fixture(
                 object.visible = visible;
                 return object;
             },
-            destroy: vi.fn(),
+            // A destroyed image shows no more.
+            destroy: () => {
+                object.visible = false;
+            },
         };
         images.push(object);
         return object;
@@ -72,6 +80,7 @@ function fixture(
         season: options.season ?? (() => undefined),
         snowShown: () => 0,
         snowLineSeason: () => options.snowLineSeason,
+        screenScale: options.screenScale,
     });
     // Updates until every block around the view is drawn: a block is drawn over several images, as many as the machine
     // needs (more under the load of the whole suite).
@@ -106,7 +115,7 @@ describe("the blocks of the relief seen in 3/4", () => {
         expect(tiles.redraws()).toBe(drawn);
     });
 
-    it("draws at most one block an image when many come into view at once", () => {
+    it("draws only a few blocks an image when many come into view at once: what fits in the time of an image", () => {
         const { tiles, worldView, settle } = fixture();
         settle();
         // Zoomed far out: many blocks come into view.
@@ -114,7 +123,7 @@ describe("the blocks of the relief seen in 3/4", () => {
         for (let frame = 0; frame < 5; frame++) {
             const before = tiles.redraws();
             tiles.update(300 + frame);
-            expect(tiles.redraws() - before).toBeLessThanOrEqual(1);
+            expect(tiles.redraws() - before).toBeLessThanOrEqual(16);
         }
     });
 
@@ -266,12 +275,15 @@ describe("the blocks of the relief seen in 3/4", () => {
             const bytes = new Uint8Array(64 * 64 * 2);
             for (let y = 28; y < 32; y++) for (let x = 16; x < 32; x++) bytes[(y * 64 + x) * 2] = 160;
             water.receive({ x: 0, y: 0, width: 64, height: 64, seq: 1, full: true, depths: bytes }, 0);
+            // Until every block around the view is drawn, coarse then sharp.
             let total = 0;
-            for (let frame = 0; frame < 400; frame++) {
+            let quiet = 0;
+            for (let frame = 0; frame < 5000 && quiet < 3; frame++) {
+                const before = tiles.redraws();
                 const start = performance.now();
                 tiles.update(frame);
                 total += performance.now() - start;
-                if (frame > 3 && !tiles.isDrawing()) break;
+                quiet = tiles.isDrawing() || tiles.redraws() !== before ? 0 : quiet + 1;
             }
             return total;
         };
@@ -371,6 +383,72 @@ describe("the blocks of the relief seen in 3/4", () => {
                 ? "line"
                 : "other";
 
+    describe("a view filled at once, then sharpened", () => {
+        // The view (x 300 to 900, y 300 to 700) shows the blocks 1 to 3 across, 1 and 2 down.
+        const VISIBLE = ["1,1", "2,1", "3,1", "1,2", "2,2", "3,2"];
+        const createdIn = (scene: { textures: { createCanvas: { mock: { calls: unknown[][] } } } }) =>
+            scene.textures.createCanvas.mock.calls.map(([key]) => String(key));
+
+        it("draws every block of the view coarse first (a point in four each way), then each of them sharp", () => {
+            const { scene, settle, painted } = fixture(floorWithSand(24));
+            settle();
+            const created = createdIn(scene);
+            const firstSharp = created.findIndex((key) => VISIBLE.some((block) => key === `relief-block:${block}`));
+            expect(firstSharp).toBeGreaterThan(0);
+            for (const block of VISIBLE) {
+                const coarse = created.indexOf(`relief-block:${block}@4`);
+                expect(coarse, block).toBeGreaterThanOrEqual(0);
+                expect(coarse, block).toBeLessThan(firstSharp);
+                expect(painted.get(`relief-block:${block}`)?.length, block).toBe(256 * 256 * 4);
+            }
+            expect(painted.get("relief-block:1,1@4")?.length).toBe(64 * 64 * 4);
+        });
+
+        it("shows the same ground coarse as sharp: its materials at their place, as light", () => {
+            const { settle, painted } = fixture(floorWithSand(24));
+            settle();
+            const coarse = painted.get("relief-block:1,1@4");
+            const sharp = painted.get("relief-block:1,1");
+            if (!coarse || !sharp) throw new Error("no block");
+            const coarseAt = (column: number, row: number): Rgb => {
+                const at = (row * 64 + column) * 4;
+                return [coarse[at], coarse[at + 1], coarse[at + 2]];
+            };
+            // Sand from x 384 on: the column 128 of the sharp block, 32 of the coarse one.
+            for (let row = 20; row < 60; row += 7) {
+                expect(kindOf(coarseAt(10, row)), `row ${row}`).toBe("grass");
+                expect(kindOf(coarseAt(50, row)), `row ${row}`).toBe("sand");
+            }
+            const mean = (pixels: Uint8ClampedArray) => {
+                let total = 0;
+                for (let at = 0; at < pixels.length; at += 4) total += pixels[at] + pixels[at + 1] + pixels[at + 2];
+                return total / (pixels.length / 4);
+            };
+            expect(Math.abs(mean(coarse) - mean(sharp))).toBeLessThan(mean(sharp) * 0.05);
+        });
+
+        it("draws no finer than the screen shows far out, sharpens when one zooms in, never coarsens", () => {
+            let scale = 0.2;
+            const { scene, settle, tiles } = fixture(floorWithSand(24), undefined, { screenScale: () => scale });
+            settle();
+            // A pixel of the screen is 5 px of the map: a point in four each way is all that shows.
+            expect(createdIn(scene).length).toBeGreaterThan(0);
+            expect(createdIn(scene).every((key) => key.endsWith("@4"))).toBe(true);
+            scale = 0.4;
+            settle();
+            for (const block of VISIBLE) expect(createdIn(scene), block).toContain(`relief-block:${block}@2`);
+            expect(createdIn(scene).some((key) => !key.includes("@"))).toBe(false);
+            scale = 1;
+            settle();
+            for (const block of VISIBLE) expect(createdIn(scene), block).toContain(`relief-block:${block}`);
+            // Zoomed out again: the sharp blocks are kept as they are.
+            const drawn = tiles.redraws();
+            scale = 0.2;
+            settle();
+            expect(tiles.redraws()).toBe(drawn);
+        });
+    });
+
     it("draws the floor in pixel art: shades of its materials, an irregular border, a dark line on the grass side", () => {
         const { settle, painted } = fixture(floorWithSand(24));
         settle();
@@ -442,7 +520,7 @@ describe("the blocks of the relief seen in 3/4", () => {
         });
         const start = performance.now();
         tiles.update(0);
-        expect(tiles.redraws()).toBe(1);
+        expect(tiles.redraws()).toBeGreaterThanOrEqual(1);
         expect(performance.now() - start).toBeLessThan(80);
     });
 
@@ -587,9 +665,11 @@ describe("the blocks of the relief seen in 3/4", () => {
             settle();
             expect(images.some((image) => image.visible)).toBe(true);
             tiles.setProjected(false);
+            const before = tiles.redraws();
             tiles.update(10_000);
-            // Not one block left in the old way: they would not match the clicks nor the avatars.
-            expect(images.filter((image) => image.visible).length).toBeLessThanOrEqual(1);
+            // Not one block left in the old way (they would not match the clicks nor the avatars): only the ones drawn
+            // again since show.
+            expect(images.filter((image) => image.visible).length).toBeLessThanOrEqual(tiles.redraws() - before);
             settle();
             expect(images.some((image) => image.visible)).toBe(true);
         });

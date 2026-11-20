@@ -28,6 +28,21 @@ export function blockCellWindow(
     };
 }
 
+/**
+ * Pixels of the map for a point of a block drawn (its texel), given how many pixels of the screen a pixel of the map
+ * takes: a point drawn is a pixel of the screen at most, a block is drawn no finer than the screen shows it. Far out,
+ * a block costs 4 or 16 times less to draw, and looks the same.
+ */
+export function texelFor(screenScale: number): 1 | 2 | 4 {
+    return screenScale > 0.5 ? 1 : screenScale > 0.25 ? 2 : 4;
+}
+
+/**
+ * The texel a block of the view is first drawn with, whatever the zoom: 16 times cheaper than a sharp one, so the view
+ * is filled at once; each block is then drawn again as sharp as the screen shows it.
+ */
+export const COARSE_TEXEL = 4;
+
 /** The most blocks drawn in one image of the game; the others wait for the next one. */
 export const BLOCKS_AN_IMAGE = 1;
 /** The most blocks kept drawn. */
@@ -85,6 +100,11 @@ export class ReliefTileSchedule {
         for (const key of chosen) this.drawn.set(key, signatures.get(key) ?? "");
         this.redraws += chosen.length;
         return chosen;
+    }
+
+    /** A block chosen by toRedraw is drawn from this signature in fact (coarser than asked: it stays to draw again). */
+    public mark(key: string, signature: string): void {
+        this.drawn.set(key, signature);
     }
 
     /** Forgets the blocks seen least lately beyond `max`, never the ones in `keep`; returns them. */

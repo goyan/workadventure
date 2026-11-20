@@ -312,6 +312,30 @@ describe("a column of the relief drawn in 3/4", () => {
         expect(rims).toBe(1);
     });
 
+    it("draws a coarse column (a sample every 4 px) as the sharp one, four times smaller and as dark", () => {
+        // Dug 128 px deep (drawn 64 px lower) from y 80 to 399.
+        const sharp = paint(samples(dug(80, 399, 64), 480), 560, 0);
+        const coarseSamples: ColumnSample[] = Array.from({ length: 120 }, (_, row) => {
+            const drop = dug(80, 399, 64)(row * 4);
+            return {
+                groundY: row,
+                drop: drop / 4,
+                color: drop > 0 ? FLOOR : FLAT,
+                wallRamp: WALL,
+                flankRamp: GRASS,
+                plain: drop === 0,
+            };
+        });
+        const coarse = new Uint8ClampedArray(140 * 4);
+        paintColumn(coarseSamples, coarseSamples.length, 140, 0, coarse, 1, 0, 4);
+        // The face: the rows 80 to 143 sharp, 20 to 35 coarse; then the floor.
+        expect(isRim(rgb(coarse, 20))).toBe(true);
+        for (let row = 21; row <= 35; row++) expect(isWall(rgb(coarse, row)), `row ${row}`).toBe(true);
+        expect(rgb(coarse, 40)).toEqual(FLOOR);
+        // As dark, to the grain of the dither on 15 rows (21 % lighter if the drop were not counted in pixels).
+        expect(Math.abs(light(coarse, 21, 35) - light(sharp, 81, 143))).toBeLessThan(light(sharp, 81, 143) * 0.1);
+    });
+
     it("draws in a block the face of a drop that starts north of it", () => {
         // The block starts at the row 30; the hollow starts 8 px north of it, its face reaches into the block.
         const out = paint(samples(dug(22, 79, 32), 100), 60, 30);

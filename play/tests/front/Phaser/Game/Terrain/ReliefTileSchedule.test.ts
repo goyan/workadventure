@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { cellKey, withHeights } from "@workadventure/map-editor";
-import { ReliefTileSchedule, reliefSignature } from "../../../../../src/front/Phaser/Game/Terrain/ReliefTileSchedule";
+import {
+    ReliefTileSchedule,
+    reliefSignature,
+    texelFor,
+} from "../../../../../src/front/Phaser/Game/Terrain/ReliefTileSchedule";
 
 const signatures = (keys: string[], value = "a") => new Map(keys.map((key) => [key, value]));
 
@@ -37,6 +41,17 @@ describe("the blocks of the relief to draw", () => {
         expect(changed(cellKey(-9, 3))).toBe(true);
         expect(changed(cellKey(3, 25))).toBe(false);
         expect(changed(cellKey(-10, 3))).toBe(false);
+    });
+
+    it("draws a block no finer than the screen shows: a point of the ground a pixel of the screen at most", () => {
+        // Pixels of the screen for a pixel of the map → pixels of the map for a point drawn.
+        expect(texelFor(2)).toBe(1);
+        expect(texelFor(1)).toBe(1);
+        expect(texelFor(0.6)).toBe(1);
+        expect(texelFor(0.5)).toBe(2);
+        expect(texelFor(0.3)).toBe(2);
+        expect(texelFor(0.25)).toBe(4);
+        expect(texelFor(0.05)).toBe(4);
     });
 
     it("reads the cells all around a block that its drawing reads, the edge of a hollow next to it included", () => {

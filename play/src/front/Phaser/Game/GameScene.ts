@@ -3895,6 +3895,8 @@ export class GameScene extends DirtyScene {
                     snowShown: () => this.seasonalThemeManager?.groundSnow() ?? 0,
                     layout: this.mapGroundLayout,
                     snowLineSeason: () => this.getGroundSeason(),
+                    // Far out, the blocks are drawn no finer than the screen shows them.
+                    screenScale: () => this.cameras.main.zoom,
                 });
                 this.waterGlints?.destroy();
                 this.waterGlints = new WaterGlints(this, {
