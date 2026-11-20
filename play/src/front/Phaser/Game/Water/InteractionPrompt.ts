@@ -15,6 +15,10 @@ export class InteractionPrompt {
         private readonly message: () => string,
     ) {}
 
+    public get isShown(): boolean {
+        return this.shown;
+    }
+
     public show(action: () => void): void {
         if (this.shown) return;
         this.shown = true;

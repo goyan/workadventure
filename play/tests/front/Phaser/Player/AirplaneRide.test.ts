@@ -5,8 +5,10 @@ import { AirplaneFlight } from "@wa/front/Phaser/Vehicle/AirplaneFlight";
 import { Player } from "@wa/front/Phaser/Player/Player";
 import { localUserStore } from "@wa/front/Connection/LocalUserStore";
 import { followStateStore } from "@wa/front/Stores/FollowStore";
+import { ActiveEventList, UserInputEvent } from "@wa/front/Phaser/UserInput/UserInputManager";
 import {
     AIRPLANE_DEFAULT_COLORS,
+    AIRPLANE_MIN_FLIGHT_ALTITUDE,
     readVehicleState,
     Vehicle,
     VehicleMedium,
@@ -162,5 +164,71 @@ describe("airplane flight", () => {
         Object.assign(player, { sprites: new Map([["duck", mock<Phaser.GameObjects.Sprite>()]]) });
         player.toggleAirVehicle();
         expect(player.isFlying()).toBe(false);
+    });
+});
+
+describe("the altitude in the pilot's hands", () => {
+    type Piloted = {
+        flight: AirplaneFlight;
+        landingRequested: boolean;
+        exitOnLanding: boolean;
+        airSteering: boolean;
+        pilotAltitude(events: ActiveEventList): -1 | 0 | 1;
+        steerAirplane(x: number, y: number): { x: number; y: number };
+    };
+    const keys = (...held: UserInputEvent[]): ActiveEventList => {
+        const events = new ActiveEventList();
+        for (const event of held) events.set(event, true);
+        return events;
+    };
+    function flying(): Piloted {
+        const { player } = pilot();
+        player.toggleAirVehicle();
+        const state = player as unknown as Piloted;
+        state.flight.altitude = 500;
+        return state;
+    }
+
+    it("lands by itself when the arrows are let go, until the pilot took the altitude in hand", () => {
+        const untouched = flying();
+        untouched.steerAirplane(300, 0);
+        untouched.steerAirplane(0, 0);
+        expect(untouched.landingRequested).toBe(true);
+
+        const held = flying();
+        held.steerAirplane(300, 0);
+        expect(held.pilotAltitude(keys(UserInputEvent.Climb))).toBe(1);
+        held.steerAirplane(0, 0);
+        expect(held.landingRequested).toBe(false);
+    });
+
+    it("cancels a landing the plane began by itself when climbing, not one the airplane key asked for", () => {
+        const state = flying();
+        state.landingRequested = true;
+        state.pilotAltitude(keys(UserInputEvent.Climb));
+        expect(state.landingRequested).toBe(false);
+
+        state.landingRequested = true;
+        state.exitOnLanding = true;
+        state.pilotAltitude(keys(UserInputEvent.Climb));
+        expect(state.landingRequested).toBe(true);
+    });
+
+    it("lands, on clear ground as any landing, once come down to the lowest flight level", () => {
+        const state = flying();
+        expect(state.pilotAltitude(keys(UserInputEvent.Descend))).toBe(-1);
+        expect(state.landingRequested).toBe(false);
+        state.flight.altitude = AIRPLANE_MIN_FLIGHT_ALTITUDE;
+        state.pilotAltitude(keys(UserInputEvent.Descend));
+        expect(state.landingRequested).toBe(true);
+        // The plane stays parked once landed: the pilot did not ask to get off.
+        expect(state.exitOnLanding).toBeFalsy();
+    });
+
+    it("does nothing with the descent key on the ground", () => {
+        const state = flying();
+        state.flight.altitude = 0;
+        expect(state.pilotAltitude(keys(UserInputEvent.Descend))).toBe(0);
+        expect(state.landingRequested).toBe(false);
     });
 });
