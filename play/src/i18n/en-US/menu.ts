@@ -105,6 +105,12 @@ const menu: BaseTranslation = {
             title: "Ambiance",
             description: "What you see on the map. Nothing changes for others.",
         },
+        mapLighting: {
+            title: "Map lighting",
+            energySaving: "Energy saving",
+            energySavingHint:
+                "Lamps placed outdoors go out by day while the sky gives light enough, and come back at dusk or under a heavy storm, for every player.",
+        },
         mapWeather: {
             title: "Map weather",
             description:

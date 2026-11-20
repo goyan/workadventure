@@ -106,6 +106,12 @@ const menu: DeepPartial<Translation["menu"]> = {
             title: "Ambiance",
             description: "Ce que vous voyez sur la carte. Rien ne change pour les autres.",
         },
+        mapLighting: {
+            title: "Éclairage de la carte",
+            energySaving: "Économie d’énergie",
+            energySavingHint:
+                "Les lampes posées dehors s’éteignent le jour quand le ciel éclaire assez, et se rallument à la tombée du jour ou sous un gros orage, pour tous les joueurs.",
+        },
         mapWeather: {
             title: "Météo de la carte",
             description:

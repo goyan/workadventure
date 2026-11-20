@@ -26,7 +26,19 @@ export enum UserInputEvent {
     Interact,
     Follow,
     VehicleSprint,
+    /** In the airplane: climb (space, see GameSceneUserInputHandler.isClimbPressed) or come down (control). */
+    Climb,
+    Descend,
 }
+
+/** In flight the control key comes down: the moves held with it still steer (see getEventListForGameTick). */
+const EVENTS_HELD_WITH_CONTROL_IN_FLIGHT = new Set([
+    UserInputEvent.MoveUp,
+    UserInputEvent.MoveDown,
+    UserInputEvent.MoveLeft,
+    UserInputEvent.MoveRight,
+    UserInputEvent.Descend,
+]);
 
 // The reason why the controls are disabled
 // The MessageEventSource type means the controls where disabled by the scripting API in the related iframe
@@ -149,6 +161,10 @@ export class UserInputManager {
                 event: UserInputEvent.Follow,
                 keyInstance: this.scene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.F, false),
             },
+            {
+                event: UserInputEvent.Descend,
+                keyInstance: this.scene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL, false),
+            },
         ];
     }
 
@@ -211,6 +227,8 @@ export class UserInputManager {
             this.tripleTapVehicle.reset();
             return eventsMap;
         }
+        // In flight, the control key is the one to come down: it does not stop the moves held with it.
+        const flying = this.userInputHandler.isAltitudeKeysActive?.() ?? false;
         this.keysCode.forEach((d) => {
             if (d.keyInstance?.isDown) {
                 // Fix mac keyboard issue
@@ -220,7 +238,8 @@ export class UserInputManager {
                     d.keyInstance.originalEvent.target instanceof HTMLTextAreaElement ||
                     d.keyInstance.originalEvent.target instanceof HTMLSelectElement ||
                     d.keyInstance.originalEvent.metaKey ||
-                    d.keyInstance.originalEvent.ctrlKey
+                    (d.keyInstance.originalEvent.ctrlKey &&
+                        !(flying && EVENTS_HELD_WITH_CONTROL_IN_FLIGHT.has(d.event)))
                 ) {
                     d.keyInstance.reset();
                     return;
@@ -229,6 +248,10 @@ export class UserInputManager {
                 eventsMap.set(d.event, true);
             }
         });
+        // The space key climbs only for a press the handler gave to the airplane (a prompt or a tool may have it).
+        if (eventsMap.get(UserInputEvent.Interact) && this.userInputHandler.isClimbPressed?.()) {
+            eventsMap.set(UserInputEvent.Climb, true);
+        }
         if (this.doubleTapSprint.update((event) => eventsMap.get(event), performance.now())) {
             eventsMap.set(UserInputEvent.SpeedUp, true);
         }

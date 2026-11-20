@@ -220,6 +220,12 @@ export class UpdateWAMSettingCommand extends Command {
                 };
                 break;
             }
+            case "updateLightingSettingMessage": {
+                this.wam.settings.lighting = {
+                    energySaving: message.updateLightingSettingMessage.energySaving === true,
+                };
+                break;
+            }
             case "updateLifeSettingMessage": {
                 const sent = message.updateLifeSettingMessage;
                 const kept = this.wam.settings.life;

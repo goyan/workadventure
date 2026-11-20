@@ -11,6 +11,7 @@ import { lightBounceStrengthNow, lightSecondBounceNow, lightSoftEdgeVersion } fr
 import type { LightObstacleReader } from "./LightObstacleReader";
 import { coneOfLitPolygon, litPolygon, type LightCone, type Point } from "./RgbLampGeometry";
 import { obstacleSegments } from "./RgbLampObstacles";
+import { ENERGY_SAVING_FADE_MS } from "./EnergySaving";
 import { RgbLampPower } from "./RgbLampPower";
 import { isTurning, rgbLampBeamDirection } from "./RgbLampRotation";
 import { rgbLampColour, rgbLampLight, rgbLampSettingsOf, type RgbLampSettings } from "./RgbLampSettings";
@@ -63,6 +64,11 @@ export interface RgbLampsOptions {
     reducedMotion?: boolean;
     /** Whether a switch left the lamp on (see EntityStatesManager); every lamp is on when absent. */
     isOn?: (entityId: string) => boolean;
+    /**
+     * Whether the energy saving of the map puts the lamp out now (see EnergySaving), whatever its switch says; no lamp
+     * is when absent. It writes nothing in the state of the switch: the lamp comes back as its switch left it.
+     */
+    isSaved?: (lamp: Entity) => boolean;
     /** The clock the fade of a lamp switched on or off follows: the one of the computer when absent. */
     fadeNow?: () => number;
 }
@@ -95,8 +101,11 @@ export class RgbLamps {
     private readonly reducedMotion: boolean;
     private readonly now: () => number;
     private readonly isOn: (entityId: string) => boolean;
+    private readonly isSaved: (lamp: Entity) => boolean;
     private readonly fadeNow: () => number;
     private readonly power: RgbLampPower;
+    // The energy saving fades its lamps slower than a switch does.
+    private readonly saving: RgbLampPower;
     // Asked for the time only once a lamp turns: a map without one sends nothing to the server.
     private serverClock: ServerNightClock | undefined;
 
@@ -112,8 +121,10 @@ export class RgbLamps {
         this.obstacles = new LightObstaclesByLevel(scene, () => this.tileSize());
         this.reducedMotion = options.reducedMotion ?? false;
         this.isOn = options.isOn ?? ((): boolean => true);
+        this.isSaved = options.isSaved ?? ((): boolean => false);
         this.fadeNow = options.fadeNow ?? Date.now;
         this.power = new RgbLampPower(() => this.reducedMotion);
+        this.saving = new RgbLampPower(() => this.reducedMotion, ENERGY_SAVING_FADE_MS);
         // The clock of the server, so that a computer whose clock is wrong turns its lamps with the others; the
         // computer's clock until the server answered (the beams jump once, then).
         this.now =
@@ -138,6 +149,7 @@ export class RgbLamps {
                 lamp.bounceVisuals.forEach((visual) => visual.destroy());
                 this.lamps.delete(id);
                 this.power.forget(id);
+                this.saving.forget(id);
                 removed = true;
             }
         }
@@ -187,10 +199,10 @@ export class RgbLamps {
         let changed = false;
         for (const [id, lamp] of this.lamps) {
             const { entity } = lamp;
-            // A lamp a switch put out gives no light, and nothing through the night veil. In the map editor every
-            // lamp is out (its glow would hide what is being built), or shines when the editor shows the game lighting,
-            // so that it can be set.
-            const power = editorOpen ? (lightsInEditor ? 1 : 0) : this.power.level(id, this.isOn(id), this.fadeNow());
+            // A lamp a switch put out gives no light, and nothing through the night veil; nor one the energy saving
+            // puts out by day. In the map editor every lamp is out (its glow would hide what is being built), or shines
+            // when the editor shows the game lighting, so that it can be set.
+            const power = editorOpen ? (lightsInEditor ? 1 : 0) : this.levelOf(id, entity);
             const shown = entity.visible && power > 0;
             if (power === 0) {
                 if (lamp.light || lamp.visible) {
@@ -242,6 +254,15 @@ export class RgbLamps {
             // The scene is only drawn when something changed.
             this.scene.markDirty();
         }
+    }
+
+    /** How much of its light a lamp gives out of the editor: its switch, then the energy saving, each with its fade. */
+    private levelOf(id: string, entity: Entity): number {
+        const now = this.fadeNow();
+        // Both are asked at every image, so that each follows its own fade.
+        const switched = this.power.level(id, this.isOn(id), now);
+        const saved = this.saving.level(id, !this.isSaved(entity), now);
+        return switched * saved;
     }
 
     /** The segments that stop a light, the lamp itself apart. */

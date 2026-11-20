@@ -7,6 +7,7 @@ import {
     CANOE_SPEED_FACTOR,
     CANOE_SPRINT_FACTOR,
     isCanoeAfloat,
+    AIRPLANE_MIN_FLIGHT_ALTITUDE,
     Vehicle,
     VehicleMedium,
     vehicleMedia,
@@ -55,6 +56,7 @@ import {
 } from "@wa/front/Phaser/Entity/Swimwear";
 import { NERF_KNOCKBACK_MS, NERF_KNOCKBACK_PX } from "../Game/Nerf/NerfBlink";
 import { AirplaneFlight } from "../Vehicle/AirplaneFlight";
+import { altitudeCommand } from "../Vehicle/AirplaneAltitudeKeys";
 import { findLandingZone, type LandingPoint } from "../Vehicle/AirplaneLanding";
 import { FLOOR_Z_VARIABLE } from "../Game/Floors/FloorProtocol";
 import { groundPace } from "../Game/Terrain/GroundPace";
@@ -71,6 +73,11 @@ const LANDING_FOOTPRINT_SAMPLES = [-31, -16, 0, 16, 31];
 const LANDING_GLIDE_AHEAD = 192;
 /** Ground speed of the approach (px/s). */
 const LANDING_APPROACH_SPEED = 180;
+/**
+ * How often a climbing or descending plane tells its altitude to the others at most (ms): they ease towards it.
+ * Any other change of the vehicle is told at once.
+ */
+const ALTITUDE_PUBLICATION_MS = 200;
 /** How long a hint of the airplane key stays (ms). */
 const AIRPLANE_PROMPT_MS = 15_000;
 
@@ -114,6 +121,11 @@ export class Player extends Character {
     private exitOnLanding = false;
     private landingRequested = false;
     private airSteering = false;
+    /**
+     * The pilot climbed or came down with the keys during this flight: letting the arrows go then holds the altitude
+     * instead of landing, and the plane lands by the airplane key or by coming down to the lowest flight level.
+     */
+    private pilotHoldsAltitude = false;
     private landingTarget: LandingPoint | undefined;
     /** Where the glide towards `target` started: the altitude falls with the distance left, to 0 on the point. */
     private landingApproach: { target: LandingPoint; distance: number; altitude: number } | undefined;
@@ -368,6 +380,7 @@ export class Player extends Character {
         this.flight.reset(elevation);
         this.landingRequested = false;
         this.airSteering = false;
+        this.pilotHoldsAltitude = false;
         this.airVehicleActive = true;
         this.swimming = false;
         this.refreshVehicles();
@@ -394,6 +407,7 @@ export class Player extends Character {
         this.landingRequested = false;
         this.landingTarget = undefined;
         this.airSteering = false;
+        this.pilotHoldsAltitude = false;
         if (this.clearAirVehicleOnLanding) localUserStore.setVehicleForMedium(VehicleMedium.Air, Vehicle.None);
         this.clearAirVehicleOnLanding = false;
         this.refreshVehicles();
@@ -466,8 +480,40 @@ export class Player extends Character {
         this.landingTarget = undefined;
         this.landingApproach = undefined;
         this.airSteering = false;
+        this.pilotHoldsAltitude = false;
         this.setFlightAltitude(0);
         this.shareFlightLevel();
+    }
+
+    /**
+     * The climb (space) or descent (control) the pilot asks for. Taking the altitude in hand cancels a landing the
+     * plane began by itself, not one the airplane key asked for. Coming down to the lowest flight level and holding
+     * the key lands, on clear ground as any landing: the keys never set the plane down anywhere.
+     */
+    private pilotAltitude(activeEvents: ActiveEventList): -1 | 0 | 1 {
+        const climb = altitudeCommand(
+            activeEvents.get(UserInputEvent.Climb),
+            activeEvents.get(UserInputEvent.Descend) && this.flight.altitude > 0,
+        );
+        if (climb === 0) return 0;
+        this.pilotHoldsAltitude = true;
+        if (climb > 0 && this.landingRequested && !this.exitOnLanding && !this.clearAirVehicleOnLanding) {
+            this.landingRequested = false;
+            this.landingTarget = undefined;
+            this.landingApproach = undefined;
+            this.flight.landing = false;
+            this.flight.glideAltitude = undefined;
+        }
+        if (climb < 0 && !this.landingRequested && this.flight.altitude <= AIRPLANE_MIN_FLIGHT_ALTITUDE) {
+            this.landingRequested = true;
+            this.nextLandingCheck = 0;
+        }
+        return climb;
+    }
+
+    /** Whether the hint of the airplane key is shown: its prompt answers the space key too (see InteractionPrompt). */
+    public isAirplanePromptShown(): boolean {
+        return this.airplanePrompt?.prompt.isShown ?? false;
     }
 
     private canLandHere(): boolean {
@@ -482,7 +528,7 @@ export class Player extends Character {
             this.flight.landing = false;
             this.clearAirVehicleOnLanding = false;
             this.exitOnLanding = false;
-        } else if (!steering && this.airSteering && this.flight.altitude > 0) {
+        } else if (!steering && this.airSteering && this.flight.altitude > 0 && !this.pilotHoldsAltitude) {
             this.landingRequested = true;
             this.nextLandingCheck = 0;
         }
@@ -610,7 +656,7 @@ export class Player extends Character {
         const now = this.scene.time?.now ?? 0;
         if (structure === this.lastVehicleStructure && now < this.nextVehiclePublication) return;
         this.lastVehicleStructure = structure;
-        this.nextVehiclePublication = now + 100;
+        this.nextVehiclePublication = now + ALTITUDE_PUBLICATION_MS;
         this.publishedMediumStates ??= new Map<string, string>();
         for (const medium of vehicleMedia) {
             const selected = preferences[medium.id];
@@ -1055,8 +1101,9 @@ export class Player extends Character {
         x = x * moveAmount;
         y = y * moveAmount;
         if (this.airVehicleActive) {
+            const climb = this.pilotAltitude(activeEvents);
             const wanted = this.steerAirplane(x, y);
-            const flight = this.flight.step(wanted, delta);
+            const flight = this.flight.step(wanted, delta, climb);
             x = flight.x;
             y = flight.y;
             this.setFlightAltitude(flight.altitude);

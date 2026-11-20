@@ -53,6 +53,7 @@ import { mapRoomAreas, raisedFloorZone } from "./RoomZones";
 import { StreamSpectrum } from "./StreamSpectrum";
 import { LampZoneLights, type RoomAmbience } from "./LampZoneLights";
 import { RgbLamps } from "./RgbLamps";
+import { EnergySavingClock, isLampSaved } from "./EnergySaving";
 import { syntheticSpectrum } from "./SyntheticBeat";
 import { createLamp, PALETTE, type LampKind, type LampVisual } from "./LampVisuals";
 
@@ -156,6 +157,9 @@ export class LampManager {
     private readonly frames = new Map<string, LampFrame>();
     // The RGB lamps live their own life (see RgbLamps): a steady light with shadows, that no music moves.
     private readonly rgbLamps: RgbLamps;
+    // The energy saving of the map: whether the daylight puts its lamps outdoors out, worked out once per image.
+    private readonly energySaving: EnergySavingClock;
+    private energySavingNow = false;
     private demoSignal: LampSignalSource | undefined;
     private demo: { bpm: number } | undefined;
     private readonly systemReducedMotion: boolean;
@@ -214,7 +218,10 @@ export class LampManager {
             reducedMotion: this.systemReducedMotion,
             // The switches of the map: a lamp one of them put out gives no light.
             isOn: (entityId) => this.entityStates?.isOn(entityId) ?? true,
+            // The energy saving of the map: a lamp outdoors gives no light by day either.
+            isSaved: (lamp) => this.isSavedNow(lamp),
         });
+        this.energySaving = new EnergySavingClock((at) => scene.mapDaylightAt(at));
         this.unsubscribers = [
             entityStatesManagerStore.subscribe((states) => (this.entityStates = states)),
             unlessBasic(lampEffectsEnabledStore).subscribe((enabled) => {
@@ -618,6 +625,23 @@ export class LampManager {
         }
     }
 
+    /**
+     * Whether the energy saving puts the lamps outdoors out now: the map asks for it and its daylight is enough, at the
+     * time of the server (no lamp is put out until the server told it).
+     */
+    private energySavingAt(): boolean {
+        if (this.scene.getGameMap().getWamFile()?.getWam().settings?.lighting?.energySaving !== true) return false;
+        const serverDate = this.scene.getServerDate();
+        return serverDate !== undefined && this.energySaving.savingAt(serverDate.getTime());
+    }
+
+    /** Whether the energy saving puts this lamp out now: by day, standing outdoors on the ground of the map. */
+    private isSavedNow(lamp: Entity): boolean {
+        if (!this.energySavingNow) return false;
+        const grid = this.scene.getOutdoorGrid();
+        return isLampSaved(this.energySavingNow, grid && ((x, y) => grid.isOutdoorAt(x, y)), lamp);
+    }
+
     public update(now: number): void {
         if (this.lastReconcileAt === undefined || now - this.lastReconcileAt >= RECONCILE_INTERVAL_MS) {
             this.lastReconcileAt = now;
@@ -625,6 +649,7 @@ export class LampManager {
             this.dropUnusedMusic();
         }
         this.frames.clear();
+        this.energySavingNow = this.energySavingAt();
         // Before anything that returns early: an RGB lamp shines without music, and with the light effects turned off
         // (it is a steady light, not an effect); a turning one then stands still at its direction.
         this.rgbLamps.update(this.editorOpen, this.effectsEnabled, this.lightsInEditor);
