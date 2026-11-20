@@ -127,20 +127,6 @@ describe("what covers a cell of the flat ground", () => {
         expect(cellMaterial(flat({ moistureAt: () => 0.6 }), 3, 3)).toBe("mud");
         expect(cellMaterial(flat({ moistureAt: () => 0.59 }), 3, 3)).toBe("clay");
     });
-
-    it("an irregular border between the grass and the bare ground too", () => {
-        const cell = (cellX: number): Cover => (cellX >= 24 ? "grass" : "none");
-        const switches = new Set<number>();
-        for (let y = 0; y < 320; y += 20) {
-            for (let x = 360; x < 410; x++) {
-                if (pickMaterial(cell, x, y) === "grass") {
-                    switches.add(x);
-                    break;
-                }
-            }
-        }
-        expect(switches.size).toBeGreaterThanOrEqual(3);
-    });
 });
 
 describe("the snow of the heights", () => {
@@ -151,5 +137,16 @@ describe("the snow of the heights", () => {
         expect(cellMaterial(inputs(Season.Winter), 1, 1)).toBe("snow");
         expect(cellMaterial(inputs(Season.Autumn), 1, 1)).toBe("snow");
         expect(cellMaterial(inputs(Season.Summer), 1, 1)).toBe("grass");
+    });
+});
+
+describe("the border of what nothing covers", () => {
+    it("follows the edges of the cells exactly: no grass over a floor of the Carte tool, no hole in the grass", () => {
+        // A floor of the Carte tool from the cell 24 (x 384) on, grass west of it.
+        const cell = (cellX: number): Cover => (cellX >= 24 ? "none" : "grass");
+        for (let y = 0; y < 320; y += 7) {
+            for (let x = 360; x < 384; x++) expect(pickMaterial(cell, x + 0.5, y + 0.5), `${x},${y}`).toBe("grass");
+            for (let x = 384; x < 410; x++) expect(pickMaterial(cell, x + 0.5, y + 0.5), `${x},${y}`).toBe("none");
+        }
     });
 });

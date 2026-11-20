@@ -130,8 +130,13 @@ export function pickMaterial(cell: (cellX: number, cellY: number) => Cover, x: n
         }
     }
     if (second === undefined) return first;
+    // What nothing covers (a room, a floor of the Carte tool, a tile of the map) is a square of tiles: its border
+    // follows the edges of the cells exactly, neither shaken into it nor out of it.
+    const own = cell(Math.floor(x / TERRAIN_CELL), Math.floor(y / TERRAIN_CELL));
+    if (own === "none") return "none";
     const share = firstWeight / (firstWeight + secondWeight) + (valueNoise(x / 3.5, y / 3.5) - 0.5) * 0.35;
-    return share > 0.5 ? first : second;
+    const picked = share > 0.5 ? first : second;
+    return picked === "none" ? own : picked;
 }
 
 /** The order of the materials, darkest first: the darker of two materials that meet carries the line. */
