@@ -187,6 +187,30 @@ describe("TerrainWaterManager", () => {
         expect(manager.getGrid()?.maxSurface()).toBe(120);
     });
 
+    it("a drain empties the square under it step after step, counted with the sinks, and the room sees it often", () => {
+        const { manager, sent, steps } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        fillWithWater(manager);
+        // The tile of the point is (7, 7): the square is the tiles 5 to 9, the cells 10 to 19.
+        manager.setDrains(() => [{ id: 1, x: 240, y: 240 }]);
+        sent.length = 0;
+        steps(1);
+        // A step of a tenth of a second at 256 px a second: up to 25.6 px gone from each cell of the square.
+        expect(manager.getGrid()?.depthAt(15, 15)).toBeLessThan(2);
+        expect(manager.getGrid()?.depthAt(28, 28)).toBeGreaterThan(7.5);
+        steps(9);
+        expect(manager.getGrid()?.depthAt(15, 15)).toBeLessThan(1);
+        expect(sent.length).toBeGreaterThanOrEqual(5);
+        expect(sent.at(-1)?.stats?.sinks).toBeGreaterThan(0);
+    });
+
+    it("a drain on a map without water does nothing", () => {
+        const { manager, steps } = createHarness({ wam: wamWith(undefined) });
+        manager.mapChanged();
+        manager.setDrains(() => [{ id: 1, x: 240, y: 240 }]);
+        expect(() => steps(3)).not.toThrow();
+    });
+
     it("a downpour fills the cells under it step after step, counted with the rain, and the room sees it often", () => {
         const { manager, sent, steps } = createHarness({ wam: wamWith(wideLake) });
         manager.mapChanged();

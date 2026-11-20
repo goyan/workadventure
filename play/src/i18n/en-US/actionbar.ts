@@ -90,6 +90,8 @@ const actionbar = {
         wholeMap: "Whole map",
         downpourSizeLabel: "Size of the downpour: radius of the disc it rains on, in tiles",
         downpourArmedHelp: "Hold the click on the map · Esc to cancel",
+        drain: "Drain",
+        drainSize: "5 × 5 tiles",
         tabs: { catastrophes: "Disasters", weather: "Weather" },
         weather: {
             manual: "Manual",

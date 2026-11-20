@@ -20,6 +20,8 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 wholeMap: label("Whole map"),
                 downpourSizeLabel: label("Size of the downpour"),
                 downpourArmedHelp: label("Hold the click on the map · Esc to cancel"),
+                drain: label("Drain"),
+                drainSize: label("5 × 5 tiles"),
             },
         },
     });
@@ -132,6 +134,18 @@ describe("CatastrophePanel", () => {
         target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-tab-catastrophes"]')?.click();
         flushSync();
         expect(tile()).not.toBeNull();
+    });
+
+    it("arms the drain, whose square has one size: no slider, and the help of a held click", () => {
+        render();
+        const drain = target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-drain"]');
+        drain?.click();
+        flushSync();
+        expect(drain?.getAttribute("aria-pressed")).toBe("true");
+        expect(get(armedCatastropheStore)).toBe("drain");
+        expect(target.querySelector('input[type="range"]')).toBeNull();
+        expect(target.querySelector('[data-testid="catastrophe-drain-size"]')?.textContent).toBe("5 × 5 tiles");
+        expect(target.textContent).toContain("Hold the click on the map");
     });
 
     it("arms the fire, and chooses the size of its patch from 1 to 8 tiles", () => {

@@ -32,6 +32,7 @@ export * from "./Catastrophe/Meteor";
 export * from "./Catastrophe/FirePatch";
 export * from "./Catastrophe/ImpactWave";
 export * from "./Catastrophe/Downpour";
+export * from "./Catastrophe/Drain";
 export * from "./Life/WaterBodies";
 export * from "./Life/LandPlaces";
 export * from "./Terrain/LandTrees";

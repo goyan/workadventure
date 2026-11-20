@@ -369,6 +369,7 @@ export class GameRoom implements BrothersFinder {
             terrainWater.strike.bind(terrainWater),
         );
         terrainWater.setDownpours(() => catastrophes.downpours());
+        terrainWater.setDrains(() => catastrophes.drains());
         gameRoom.catastrophes = catastrophes;
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => catastrophes.stop());

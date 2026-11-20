@@ -5,6 +5,8 @@ import {
     CELL_LITRES_PER_PX,
     DEFAULT_WATER_SETTINGS,
     DOWNPOUR_PX_PER_SECOND,
+    DRAIN_PX_PER_SECOND,
+    drainSquare,
     gridBoundsOf,
     landWallsOf,
     LITRES_PER_M3,
@@ -24,6 +26,7 @@ import {
 } from "@workadventure/map-editor";
 import type {
     Downpour,
+    Drain,
     ImpactWave,
     TerrainData,
     WaterGridBounds,
@@ -80,6 +83,8 @@ export class TerrainWaterManager {
     private waves: ImpactWave[] = [];
     /** The downpours falling on the map now, asked at each step: none until the catastrophes of the room say. */
     private downpours: () => readonly Downpour[] = () => [];
+    /** The drains open on the map now, asked at each step: none until the catastrophes of the room say. */
+    private drains: () => readonly Drain[] = () => [];
     private sums: Sums = noSums();
     /** Whether the last step moved any water: a grid at rest with nothing coming in is not stepped. */
     private moving = true;
@@ -209,7 +214,8 @@ export class TerrainWaterManager {
         this.steps++;
         // Both each step: a downpour goes on raining while the wave of a meteor runs.
         const raining = this.pourDownpours(grid);
-        const waving = this.waves.length > 0 || raining;
+        const draining = this.takeDrains(grid);
+        const waving = this.waves.length > 0 || raining || draining;
         if (this.waves.length > 0) this.advanceWaves(grid);
         const pouring = this.rainRate > 0 || this.objects.some((object) => object.litresPerMinute > 0);
         if (this.moving || pouring) {
@@ -259,6 +265,34 @@ export class TerrainWaterManager {
             this.changedSinceSave = true;
         }
         return laid > 0;
+    }
+
+    /** The catastrophes of the room say which drains are open. */
+    public setDrains(drains: () => readonly Drain[]): void {
+        this.drains = drains;
+    }
+
+    /**
+     * The drains take the water of their squares during a step: counted with the sinks. True when water went, so that
+     * the room sees it fall as often as under a wave.
+     */
+    private takeDrains(grid: WaterGrid): boolean {
+        const open = this.drains();
+        if (open.length === 0) return false;
+        const px = (DRAIN_PX_PER_SECOND * WATER_STEP_MS) / 1000;
+        let taken = 0;
+        for (const drain of open) {
+            const { left, top, side } = drainSquare(drain.x, drain.y);
+            const cells = side / TERRAIN_CELL;
+            taken += grid.drainOn(left / TERRAIN_CELL, top / TERRAIN_CELL, cells, cells, px);
+        }
+        if (taken > 0) {
+            this.sums.sinksPx += taken;
+            this.moving = true;
+            this.version++;
+            this.changedSinceSave = true;
+        }
+        return taken > 0;
     }
 
     /** The waves of the impacts move on; one that ended is forgotten, and what it lost is counted. */

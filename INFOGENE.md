@@ -3414,6 +3414,35 @@ avec 8 px apportés par cellule du cratère). Pas de son. Rien n'a été vu à l
 cette section : widget, viseur, chute, éclair et gerbe ne sont validés que par les tests ; l'effet sur l'eau en jeu
 n'est pas vu.
 
+## Catastrophes : le drain
+
+Quatrième catastrophe du widget : l'inverse de l'averse. Elle **retire l'eau, fort, d'un carré de 5 × 5 cases** sous
+le pointeur.
+
+**En jeu.** La tuile « Drain » s'arme comme l'averse (viseur, Échap annule). Tant que le **clic gauche est maintenu**
+sur la carte (ou le doigt posé), l'eau du carré centré sur la case du pointeur est aspirée, et le carré suit le
+pointeur case par case ; relâcher arrête. Pendant ce temps le glisser ne déplace pas la carte. Pas de réglage de
+taille : le widget rappelle « 5 × 5 cases ».
+
+**Le serveur décide.** Le navigateur redit où est le pointeur toutes les 200 ms (`LaunchCatastropheMessage`, genre
+`CATASTROPHE_DRAIN` = 3 ; `radiusTiles` et `wholeMap` ne servent pas). `CatastropheManager.drain` tient **un drain par
+joueur**, qui dure 1 s après son dernier message, 8 drains à la fois par salle, messages plus rapprochés que 100 ms
+ignorés, point dans la carte. Chaque message accepté est annoncé à la salle (`CatastropheMessage`, même `id` tant que
+le drain dure). Le drain et l'averse d'un même joueur vivent chacun leur vie.
+
+**Ce qu'il fait.** À chaque pas de l'eau (10 par seconde), chaque cellule du carré (`drainSquare`, 10 × 10 cellules
+de 16 px) perd de l'eau (`WaterGrid.drainOn`, **256 px par seconde**, soixante-quatre fois ce qu'apporte une averse, rien d'un
+mur, seulement les cellules de la grille), comptée avec les **puits** du bilan ; la salle reçoit l'eau cinq fois par
+seconde tant qu'un drain prend de l'eau. Le carré est vide en moins d'une seconde ; ensuite il prend ce qui coule
+depuis les cellules voisines, une cellule par pas : la surface penche vers lui, et le courant y emporte les avatars.
+
+**Ce que tout le monde voit** (`Catastrophe/DrainView.ts`, règle pure dans `DrainSwirl.ts`) : le carré assombri, son
+contour, et un tourbillon à trois bras qui fait un tour par seconde. En mouvement réduit le tourbillon est immobile.
+
+**Limites.** L'humidité du sol ne change pas ; les poissons du carré mis à sec meurent après 5 s (règle de la vie
+aquatique) ; pas de son ; tout joueur peut vider un lac ; un navigateur resté sur une version d'avant dessine un
+météore à la place. `play` et `back` se déploient ensemble.
+
 ## Catastrophes : l'averse
 
 Deuxième catastrophe du widget (bouton « Catastrophe » du menu des applications) : une **grosse pluie sous le

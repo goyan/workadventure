@@ -829,6 +829,8 @@ enum CatastropheKind {
   CATASTROPHE_DOWNPOUR = 1;
   // A patch of fire set on the grass under the pointer of a player: what follows is the fire of the meadow.
   CATASTROPHE_FIRE = 2;
+  // A drain: the water is taken hard from a square under the pointer of a player, for as long as they keep telling.
+  CATASTROPHE_DRAIN = 3;
 }
 
 // Browser to server: a player sets the conditions the fire of the room goes by (heat, humidity of the air, wind) by
