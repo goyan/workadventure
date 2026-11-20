@@ -18,6 +18,7 @@ describe("PixelIcons", () => {
             [
                 "bell",
                 "coffee",
+                "comet",
                 "dance",
                 "door",
                 "downpour",
