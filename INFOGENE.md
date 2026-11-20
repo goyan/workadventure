@@ -2381,6 +2381,27 @@ pixel par cellule, sous les objets et les avatars, redessiné seulement quand le
 (16 px), comme dans une piscine, sans invite ; en dessous on marche. Un avatar sur un palier ne nage pas. Les flaques
 de la pluie ne se posent pas sur le relief ; les éclaboussures deviennent des ronds sur l'eau.
 
+**Relief vu de trois quarts** (conception et plan dans le dépôt d'infra,
+`docs/superpowers/{specs,plans}/2026-11-20-relief-3-4*`). Hors de l'éditeur, le sol creusé est dessiné **plus bas de
+la moitié de sa profondeur**, comme les étages sont dessinés plus haut de leur altitude : un trou de 8 cases (256 px)
+a une paroi de 128 px. Là où le sol descend en allant vers le sud, on voit sa paroi (roche teintée par le sol du bord,
+claire à l'arête, sombre au pied, strates) ; le bord sud cache le fond derrière lui ; l'eau est dessinée au niveau de
+sa surface. La position vraie reste au sol (serveur, collisions, bulles, eau de `back` inchangés) : seul le dessin
+bouge. `Terrain/ReliefProjection.ts` (pur : `dropAt`, `groundPointAt` de l'écran vers le sol, `paintColumn`),
+`Terrain/ReliefTiles.ts` (une image par bloc de relief de 16 × 16 cellules, un texel pour 2 px, au-dessus du relief
+plat à 0,66), `Terrain/ReliefTileSchedule.ts` (un bloc n'est redessiné que si son relief, celui des 8 rangées au
+nord, son eau, la prairie, la saison ou la neige changent ; jamais en marchant ni en zoomant ; 2 blocs par image au
+plus, les visibles d'abord ; 64 blocs gardés ; environ 3 ms par bloc). `TerrainView` ne dessine alors plus
+l'assombrissement des creux ni l'eau. **Avatars** : chacun, le sien et ceux des autres, est dessiné plus bas de la
+profondeur du sol (ou de la surface de l'eau où il nage) sous lui (`Terrain/AvatarDrop.ts`), seulement le temps du
+dessin (`Terrain/CharacterDrops.ts`, comme les arbres au vent) ; son nom suit (`Character.setGroundDrop`) ; rien sur
+un palier. **Clic** et altitude sous le pointeur passent par `groundPointAt` : un clic sur une paroi mène à son pied.
+**Éditeur ouvert** : tout redevient plat, pour creuser et poser là où l'on vise. Neige du fond : celle du thème de
+Noël ou de la carte (`SeasonalThemeManager.groundSnow`). **Limites (lot 1)** : objets, arbres, animaux, compagnons,
+écume et tourbillons de l'eau restent dessinés à leur place (un arbre au fond d'un trou flotte au niveau du bord) ;
+le fond est peint aux couleurs du relief, pas avec les tuiles de la carte ; paille et feu non dessinés au fond ; la
+zone cliquable d'un avatar dans un trou reste à sa place ; les éclaboussures de la nage partent de sa place.
+
 **Limites.** L'eau traverse encore les murs (elle devra passer par les portes seulement : `back` ne connaît pas les
 murs). Pas de mode Rivière tracée. Relief négatif seulement, au sol et dehors. Animaux et compagnons ignorent l'eau.
 Pas de courant qui pousse l'avatar. Un geste immense part en plusieurs commandes (autant d'annulations). Les valeurs
