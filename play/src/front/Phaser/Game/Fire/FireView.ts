@@ -38,9 +38,9 @@ const EMBER_COLOR = "#ffb347";
 const GLOW_RADIUS_PX = 72;
 const GLOW_ALPHA = 0.16;
 /** The drawn frames of the flames, a soft disc for their glow, another for their smoke: drawn once for the game. */
-const FLAMES_TEXTURE = "fire-flames";
-const GLOW_TEXTURE = "fire-glow";
-const SMOKE_TEXTURE = "fire-smoke";
+export const FLAMES_TEXTURE = "fire-flames";
+export const GLOW_TEXTURE = "fire-glow";
+export const SMOKE_TEXTURE = "fire-smoke";
 const SOFT_DISC_PX = 64;
 
 /**

@@ -6,6 +6,7 @@ import { MAX_ANIMALS, MAX_ANTELOPES, MAX_DOLPHINS, MAX_LAND_ANIMALS } from "./Li
 import { GROUP_REACH_PX, leaderOf, leadersOf, PRIDE_SHARE_PX } from "./Groups";
 import { spawnGulls, stepGulls } from "./Gulls";
 import type { GullContext } from "./Gulls";
+import type { LifeFire } from "./FireFear";
 import { cellAt, levelOf, swim, WANDER_REACH_CELLS } from "./Swim";
 import { isPredator, SPECIES, SPECIES_IDS } from "./Species";
 import type { Species, SpeciesId } from "./Species";
@@ -327,6 +328,7 @@ export function stepPopulation(
     threats: readonly { x: number; y: number }[] = [],
     bySpecies: SpeciesTallies = {},
     land?: Places,
+    fire?: LifeFire,
 ): LifeTally {
     const tally = emptyLifeTally();
     const of = (species: SpeciesId): SpeciesTally => (bySpecies[species] ??= emptySpeciesTally());
@@ -344,6 +346,7 @@ export function stepPopulation(
                   dtMs,
                   random,
                   threats,
+                  fire,
                   maxSpeed,
                   times: timesOf("gull", settings),
                   lionHuntIntervalMs: timesOf("lion", settings).huntIntervalMs,
@@ -433,6 +436,16 @@ export function stepPopulation(
                     frightened.set(animal, hunter);
                 }
             }
+        }
+    }
+
+    // The fire before all: an animal of the land runs from it whatever else is near, fed or not. The water does not
+    // burn, and the gulls have their own step.
+    if (fire) {
+        for (const animal of animals) {
+            if (dead.has(animal) || SPECIES[animal.kind].habitat !== "land") continue;
+            const flames = fire.near(animal.x, animal.y);
+            if (flames) frightened.set(animal, flames);
         }
     }
 
@@ -823,7 +836,9 @@ export function stepPopulation(
     }
 
     for (const [animal, threat] of frightened) {
-        flee(animal, threat, where(animal), maxSpeed, random);
+        const onLand = fire !== undefined && SPECIES[animal.kind].habitat === "land";
+        // With nowhere to run that does not burn, it stays where it is.
+        if (flee(animal, threat, where(animal), maxSpeed, random, onLand ? fire : undefined)) still.add(animal);
     }
     for (const animal of animals) {
         if (dead.has(animal)) continue;
@@ -842,16 +857,21 @@ export function stepPopulation(
 
     const before = population.animals.length;
     if (settings.enabled) spawn(population, bodies, settings, dtMs, now, random);
-    if (land && settings.landEnabled === true) spawnOnLand(population, land, settings, dtMs, now, random);
+    if (land && settings.landEnabled === true) spawnOnLand(population, land, settings, dtMs, now, random, fire);
     if (gullContext) spawnGulls(gullContext);
     tally.arrivals = population.animals.length - before;
     for (const arrived of population.animals.slice(before)) of(arrived.kind).arrivals++;
     return tally;
 }
 
+/** How far around it an animal whose own ground burns looks for one that does not, in cells. */
+const FIRE_WAY_OUT_CELLS = 12;
+
 /**
  * Gives a frightened animal somewhere to swim to, away from the avatar: straight away when the water allows, else
- * the cell of its water furthest from the avatar among a few around it.
+ * the cell of its water furthest from the avatar among a few around it. With a `fire`, never to a ground that burns:
+ * when none of the places looked at is safe, it stays where it is (true is returned), unless its own ground burns:
+ * it then runs to the nearest that does not, through the flames.
  */
 function flee(
     animal: Animal,
@@ -859,11 +879,13 @@ function flee(
     bodies: Places,
     maxSpeed: number,
     random: () => number,
-): void {
+    fire?: LifeFire,
+): boolean {
     const minDepth = levelOf(animal);
     const cellX = cellAt(animal.x);
     const cellY = cellAt(animal.y);
     const body = bodies.bodyAt(cellX, cellY);
+    const safe = (x: number, y: number): boolean => fire?.burning(x, y) !== true;
     animal.speed = maxSpeed * SPECIES[animal.kind].speedFactor;
     let dx = animal.x - threat.x;
     let dy = animal.y - threat.y;
@@ -879,10 +901,15 @@ function flee(
     }
     const x = animal.x + dx * FLEE_REACH_PX;
     const y = animal.y + dy * FLEE_REACH_PX;
-    if (body !== 0 && bodies.bodyAt(cellAt(x), cellAt(y)) === body && bodies.passable(cellAt(x), cellAt(y), minDepth)) {
+    if (
+        body !== 0 &&
+        bodies.bodyAt(cellAt(x), cellAt(y)) === body &&
+        bodies.passable(cellAt(x), cellAt(y), minDepth) &&
+        safe(x, y)
+    ) {
         animal.targetX = x;
         animal.targetY = y;
-        return;
+        return false;
     }
     let best: { x: number; y: number; far: number } | undefined;
     for (let draw = 0; draw < FLEE_DRAWS; draw++) {
@@ -890,13 +917,42 @@ function flee(
         if (!cell) break;
         const middleX = cell.cellX * TERRAIN_CELL + TERRAIN_CELL / 2;
         const middleY = cell.cellY * TERRAIN_CELL + TERRAIN_CELL / 2;
+        if (!safe(middleX, middleY)) continue;
         const distanceToThreat = Math.hypot(middleX - threat.x, middleY - threat.y);
         if (!best || distanceToThreat > best.far) best = { x: middleX, y: middleY, far: distanceToThreat };
     }
     if (best) {
         animal.targetX = best.x;
         animal.targetY = best.y;
+        return false;
     }
+    if (!fire) return false;
+    if (safe(animal.x, animal.y)) {
+        animal.targetX = animal.targetY = undefined;
+        return true;
+    }
+    // Its own ground burns: the nearest cell of its land that does not, ring after ring.
+    for (let ring = 1; ring <= FIRE_WAY_OUT_CELLS; ring++) {
+        let out: { x: number; y: number; far: number } | undefined;
+        for (let cy = cellY - ring; cy <= cellY + ring; cy++) {
+            for (let cx = cellX - ring; cx <= cellX + ring; cx++) {
+                if (Math.max(Math.abs(cx - cellX), Math.abs(cy - cellY)) !== ring) continue;
+                if (bodies.bodyAt(cx, cy) !== body || !bodies.passable(cx, cy, minDepth)) continue;
+                const middleX = cx * TERRAIN_CELL + TERRAIN_CELL / 2;
+                const middleY = cy * TERRAIN_CELL + TERRAIN_CELL / 2;
+                if (!safe(middleX, middleY)) continue;
+                const away = Math.hypot(middleX - animal.x, middleY - animal.y);
+                if (!out || away < out.far) out = { x: middleX, y: middleY, far: away };
+            }
+        }
+        if (out) {
+            animal.targetX = out.x;
+            animal.targetY = out.y;
+            return false;
+        }
+    }
+    animal.targetX = animal.targetY = undefined;
+    return true;
 }
 
 /** A newborn, or an animal that comes by itself: a predator has just eaten, and waits before its first hunt. */
@@ -1023,6 +1079,7 @@ function spawnOnLand(
     dtMs: number,
     now: number,
     random: () => number,
+    fire?: LifeFire,
 ): void {
     const inBody = new Map<SpeciesId, Map<number, number>>();
     const ofSpecies = new Map<SpeciesId, number>();
@@ -1053,6 +1110,8 @@ function spawnOnLand(
                 ? (land.randomCell(body, near, COUPLE_REACH_CELLS, level, random) ?? near)
                 : land.anyCell(body, level, random);
             if (!cell) continue;
+            // No one comes to a ground on fire.
+            if (fire?.burning(middle(cell.cellX), middle(cell.cellY))) continue;
             near ??= cell;
             population.animals.push({
                 ...newAnimal(population, species, sex, middle(cell.cellX), middle(cell.cellY), now, settings, random),

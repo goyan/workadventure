@@ -976,6 +976,35 @@ message EntityStateMessage {
   string value = 3;
 }
 
+// The fire of the trees of the map (TreeFire in libs/map-editor), as the server alone computes it. Sent with the
+// step of the meadow, only when it has something to say.
+message TreeFireMessage {
+  // The trees whose state changed; every tree that burns or is charred when `whole`.
+  repeated TreeFireStateMessage trees = 1;
+  // True for a player who joins the room and after a reset: the trees not named are green.
+  bool whole = 2;
+  // The embers that left at this step: each starts a fire where it falls.
+  repeated FireEmberMessage embers = 3;
+}
+
+message TreeFireStateMessage {
+  // The id of the object of the map.
+  string id = 1;
+  // Its fire, from 0 (none) to 255 (at its height).
+  uint32 fire = 2;
+  // What burnt of it, from 0 (green) to 16 (charred).
+  uint32 damage = 3;
+}
+
+// An ember on its way, in map pixels: where it left, where it falls, and how long it flies.
+message FireEmberMessage {
+  sint32 fromX = 1;
+  sint32 fromY = 2;
+  sint32 toX = 3;
+  sint32 toY = 4;
+  uint32 flightMs = 5;
+}
+
 // The meadow of the map (Meadow in libs/map-editor): the grass and the moisture of the soil of each tile, as the
 // server alone computes them, so that every player sees the same meadow. The whole state, sent when it changed.
 message MeadowMessage {
@@ -1745,6 +1774,7 @@ message SubMessage {
     MeadowMessage meadowMessage = 41;
     CatastropheMessage catastropheMessage = 42;
     FireConditionsMessage fireConditionsMessage = 47;
+    TreeFireMessage treeFireMessage = 48;
   }
 }
 
@@ -1853,6 +1883,8 @@ message RoomJoinedMessage {
   optional MeadowMessage meadow = 31;
   // The conditions the fire of the room goes by, for a player who joins it.
   optional FireConditionsMessage fireConditions = 35;
+  // The trees that burn or are charred (all of them), for a player who joins the room. Absent when every tree is green.
+  optional TreeFireMessage treeFire = 36;
 }
 
 message WebRtcStartMessage {
@@ -2424,6 +2456,7 @@ message SubToPusherRoomMessage {
     MeadowMessage meadowMessage = 21;
     CatastropheMessage catastropheMessage = 22;
     FireConditionsMessage fireConditionsMessage = 27;
+    TreeFireMessage treeFireMessage = 28;
   }
 }
 

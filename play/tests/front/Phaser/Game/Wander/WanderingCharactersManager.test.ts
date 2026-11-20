@@ -1,3 +1,4 @@
+import { lifeFireOf } from "@workadventure/map-editor";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { writable } from "svelte/store";
 import { isBrave } from "../../../../../src/front/Phaser/Game/Wander/WanderFear";
@@ -137,6 +138,9 @@ function makeScene(
     const markDirty = vi.fn();
     // The feet of the avatars on the ground: the wild animals run from them.
     const avatars: { x: number; y: number }[] = [];
+    // The tiles of the map on fire ("x,y"): every walking animal runs from them.
+    const burning = new Set<string>();
+    const fire = lifeFireOf({ fireAt: (x, y) => (burning.has(`${x},${y}`) ? 1 : 0) });
     let reconcile: () => void = () => {};
     let update: () => void = () => {};
     let loadError: (file: { key: string }) => void = () => {};
@@ -148,6 +152,7 @@ function makeScene(
             getWallBarriers: () => ({ equals: () => true, blocksMove: () => false }),
         }),
         avatarFeetOnGround: () => avatars,
+        getLifeFire: () => (burning.size > 0 ? fire : undefined),
         getTerrainWater: () => ({
             version: () => water.version,
             coveredArea: () => ({ x: 0, y: 0, width: 320, height: 320 }),
@@ -191,6 +196,7 @@ function makeScene(
     const manager = new WanderingCharactersManager(scene);
     return {
         avatars,
+        burning,
         manager,
         sprite,
         addSprite,
@@ -360,6 +366,81 @@ describe("WanderingCharactersManager", () => {
             // Away from the avatar, at a run: 192 px/s for 50 ms.
             expect(manager.freeCharacterPose(LION.id)?.x).toBeCloseTo(start.x + 9.6, 5);
             expect(manager.freeCharacterPose(LION.id)?.moving).toBe(true);
+            clock.mockRestore();
+        });
+
+        it("a wild animal runs from a fire five tiles away or less, even a brave one", () => {
+            // A day on which this lion does not fear the avatars.
+            const day = Array.from({ length: 60 }, (_, offset) => offset).find((offset) =>
+                isBrave(LION.id, (100 + offset) * DAY_MS),
+            );
+            if (day === undefined) throw new Error("The lion is never brave");
+            const now = (100 + day) * DAY_MS;
+            const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+            const scene = makeScene([], undefined, { withDuck: false });
+            manager = scene.manager;
+            manager.setFreeCharacters([LION], manager.getWanderMap());
+            scene.update();
+            const start = manager.freeCharacterPose(LION.id);
+            if (!start) throw new Error("The lion is not shown");
+            // The tile on its west burns.
+            const tileX = Math.floor(start.x / 32) - 1;
+            const tileY = Math.floor(start.y / 32);
+            scene.burning.add(`${tileX},${tileY}`);
+            clock.mockReturnValue(now + 50);
+            scene.update();
+            const after = manager.freeCharacterPose(LION.id);
+            if (!after) throw new Error("The lion is not shown");
+            // Away from the middle of the burning tile, at a run: 192 px/s for 50 ms.
+            const from = { x: (tileX + 0.5) * 32, y: (tileY + 0.5) * 32 };
+            const away =
+                Math.hypot(after.x - from.x, after.y - from.y) - Math.hypot(start.x - from.x, start.y - from.y);
+            expect(away).toBeCloseTo(9.6, 5);
+            expect(after.moving).toBe(true);
+            clock.mockRestore();
+        });
+
+        it("never runs onto a ground that burns", () => {
+            const now = 100 * DAY_MS;
+            const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+            const scene = makeScene([], undefined, { withDuck: false });
+            manager = scene.manager;
+            manager.setFreeCharacters([LION], manager.getWanderMap());
+            scene.update();
+            const start = manager.freeCharacterPose(LION.id);
+            if (!start) throw new Error("The lion is not shown");
+            const tileX = Math.floor(start.x / 32);
+            const tileY = Math.floor(start.y / 32);
+            // A fire on its west, and a wall of fire two tiles on its east, where the straight way out leads.
+            scene.burning.add(`${tileX - 1},${tileY}`);
+            for (let row = tileY - 1; row <= tileY + 1; row++) scene.burning.add(`${tileX + 2},${row}`);
+            for (let frame = 1; frame <= 20; frame++) {
+                clock.mockReturnValue(now + frame * 50);
+                scene.update();
+                const pose = manager.freeCharacterPose(LION.id);
+                if (!pose) throw new Error("The lion is not shown");
+                expect(scene.burning.has(`${Math.floor(pose.x / 32)},${Math.floor(pose.y / 32)}`)).toBe(false);
+            }
+            clock.mockRestore();
+        });
+
+        it("an animal put on the map runs from a fire too", () => {
+            const clock = vi.spyOn(Date, "now").mockReturnValue(100 * DAY_MS);
+            const scene = makeScene();
+            manager = scene.manager;
+            scene.reconcile();
+            scene.update();
+            const start = { x: scene.sprite.x, y: scene.sprite.y };
+            const tileX = Math.floor(start.x / 32) - 1;
+            const tileY = Math.floor(start.y / 32);
+            scene.burning.add(`${tileX},${tileY}`);
+            clock.mockReturnValue(100 * DAY_MS + 50);
+            scene.update();
+            const from = { x: (tileX + 0.5) * 32, y: (tileY + 0.5) * 32 };
+            const away =
+                Math.hypot(scene.sprite.x - from.x, scene.sprite.y - from.y) -
+                Math.hypot(start.x - from.x, start.y - from.y);
+            expect(away).toBeCloseTo(9.6, 5);
             clock.mockRestore();
         });
 

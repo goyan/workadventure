@@ -1,10 +1,34 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Season } from "@workadventure/map-editor";
 import { Entity } from "@wa/front/Phaser/ECS/Entity";
+import { mapEditorModeStore } from "@wa/front/Stores/MapEditorStore";
 
 vi.mock("@wa/front/Phaser/Game/GameScene", () => ({ GameScene: class {} }));
 
 describe("seasonal entity texture", () => {
+    afterEach(() => mapEditorModeStore.set(false));
+
+    it("shows a tree the fire took charred as far as it burnt, and plain while the map is edited", () => {
+        const setTexture = vi.fn();
+        const entity = Object.assign(Object.create(Entity.prototype) as Entity, {
+            entityId: "oak",
+            prefab: { id: "Nature:tree-oak:Down", imagePath: "oak.png" },
+            scene: {
+                textures: { exists: () => true },
+                // Burnt to the second of the four degrees.
+                getTreeFire: () => ({ degreeOf: (id: string) => (id === "oak" ? 2 : 0) }),
+            },
+            setTexture,
+        }) as unknown as Entity;
+        entity.showPrefabTexture();
+        expect(setTexture).toHaveBeenLastCalledWith("tree-char:oak.png:2");
+        mapEditorModeStore.set(true);
+        entity.showPrefabTexture();
+        expect(setTexture).toHaveBeenLastCalledWith("oak.png");
+        mapEditorModeStore.set(false);
+        entity.showPrefabTexture();
+        expect(setTexture).toHaveBeenLastCalledWith("tree-char:oak.png:2");
+    });
     it("checks shelter at the trunk rather than the transparent margin over a neighbouring room", () => {
         const setTexture = vi.fn();
         const isOutdoorAt = vi.fn((_x: number, y: number): boolean => y < 1970);

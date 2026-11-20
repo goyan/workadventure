@@ -246,6 +246,19 @@ export class PusherRoom {
                             }
                             break;
                         }
+                        case "treeFireMessage": {
+                            // The fire of the trees of the map is the same for every player of the room
+                            const treeFireMessage = message.message.treeFireMessage;
+                            for (const listener of this.listeners) {
+                                listener.emitInBatch({
+                                    message: {
+                                        $case: "treeFireMessage",
+                                        treeFireMessage: treeFireMessage,
+                                    },
+                                });
+                            }
+                            break;
+                        }
                         case "meadowMessage": {
                             // The meadow of the map is the same for every player of the room
                             const meadowMessage = message.message.meadowMessage;

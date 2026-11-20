@@ -39,6 +39,7 @@ import type {
     TerrainWaterMessage,
     FireConditionsMessage,
     MeadowMessage,
+    TreeFireMessage,
     SetFireConditionsMessage,
     AquaticLifeMessage,
     CatastropheKind,
@@ -434,6 +435,8 @@ export class GameRoom implements BrothersFinder {
                 };
             },
         );
+        // The animals of the map run from the fire of its grass and of its trees.
+        aquaticLife.followFire(() => meadow.lifeFire());
         gameRoom.meadow = meadow;
         // A downpour also soaks the ground of the meadow.
         catastrophes.soakWith(meadow.soak.bind(meadow));
@@ -1247,6 +1250,11 @@ export class GameRoom implements BrothersFinder {
     /** The meadow of the map (its whole state), sent to a user who joins the room. */
     public getMeadow(): MeadowMessage | undefined {
         return this.meadow?.snapshot();
+    }
+
+    /** The trees that burn or are charred, sent to a user who joins the room. */
+    public getTreeFire(): TreeFireMessage | undefined {
+        return this.meadow?.treeSnapshot();
     }
 
     /** The conditions the fire of the room goes by, sent to a user who joins the room. */

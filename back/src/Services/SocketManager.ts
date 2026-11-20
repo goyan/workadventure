@@ -251,6 +251,7 @@ export class SocketManager {
             aquaticLife: room.getAquaticLife(),
             fishing: room.getFishing(),
             meadow: room.getMeadow(),
+            treeFire: room.getTreeFire(),
             fireConditions: room.getFireConditions(),
         };
 

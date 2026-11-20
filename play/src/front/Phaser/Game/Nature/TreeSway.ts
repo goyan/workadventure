@@ -1,29 +1,16 @@
 import * as Phaser from "phaser";
+import { isTreePrefab } from "@workadventure/map-editor";
 import { distinguishable } from "../Weather/ScreenScale";
 import { POSE_PAD, treePose } from "./TreePoses";
 
 export { swayAmplitude, swayFrequency, treeSwayAngle } from "./TreePoses";
 
-/** The families of the nature catalogue that are all trees, snowy and seasonal ones included. */
-const SWAYING_TREE_PREFIXES = [
-    "Nature:tree-",
-    "Nature:seasonal-",
-    "Nature:snow-tree-",
-    "Nature:snow-evergreen-",
-    "Nature:winter-auto-",
-];
-/** The trees of the first nature set (oaks, palms, bare trees): its other objects are stumps, rocks, bushes, grass. */
-const SWAYING_NATURE_SET = new Set(["nature-1", "nature-2", "nature-3", "nature-4", "nature-5", "nature-6"]);
-
 /**
  * Trees of the nature catalogue: the ones that sway in the wind, and whose snow and leaves follow the season. A tree
- * replaced by its snowy image in winter is the same object: it keeps swaying.
+ * replaced by its snowy image in winter is the same object: it keeps swaying. The list is the server's (the trees
+ * that burn): one for both.
  */
-export function isSwayingTree(prefabId: string): boolean {
-    if (SWAYING_TREE_PREFIXES.some((prefix) => prefabId.startsWith(prefix))) return true;
-    const family = /^Nature:(nature-\d+):/.exec(prefabId)?.[1];
-    return family !== undefined && SWAYING_NATURE_SET.has(family);
-}
+export const isSwayingTree = isTreePrefab;
 
 /** A placed tree as the swaying needs it (an `Entity` fits). */
 export interface SwayingObject {

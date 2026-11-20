@@ -1,7 +1,9 @@
 import { gunzipSync, gzipSync } from "node:zlib";
 import {
+    burnableTreesOf,
     DEFAULT_MEADOW_SETTINGS,
     landWallsOf,
+    lifeFireOf,
     Meadow,
     MEADOW_STEP_SECONDS,
     minutesOfDayIn,
@@ -10,10 +12,11 @@ import {
     seasonAt,
     TERRAIN_CELL,
     TILE_PX,
+    TreeFire,
     WeatherType,
 } from "@workadventure/map-editor";
-import type { Downpour, TerrainData, WaterGrid } from "@workadventure/map-editor";
-import type { MeadowMessage } from "@workadventure/messages";
+import type { Downpour, Ember, LifeFire, TerrainData, ToldTree, WaterGrid } from "@workadventure/map-editor";
+import type { MeadowMessage, TreeFireMessage } from "@workadventure/messages";
 import type { VariablesRepositoryInterface } from "../Services/Repository/VariablesRepositoryInterface";
 import type { GameRoom } from "./GameRoom";
 import type { RainTimelineService } from "./Services/RainTimelineService";
@@ -40,6 +43,17 @@ const DAY_TO = 19 * 60;
  */
 export class MeadowManager {
     private meadow: Meadow | undefined;
+    /** The fire of the trees of the map, on the meadow of the moment (it is made again when the map changes). */
+    private readonly trees = new TreeFire([], {
+        fireAt: (tileX, tileY) => this.meadow?.fireAt(tileX, tileY) ?? 0,
+        drynessAt: (tileX, tileY) => this.meadow?.drynessAt(tileX, tileY) ?? 0,
+        growsAt: (tileX, tileY) => this.meadow?.growsAt(tileX, tileY) ?? false,
+        soakedAt: (tileX, tileY) => this.meadow?.soakedAt(tileX, tileY) ?? false,
+        ignite: (tileX, tileY, radius) => this.meadow?.ignite(tileX, tileY, radius) ?? 0,
+    });
+    private treesSignature: string | undefined;
+    /** The trees saved before a restart, until the trees of the map are read. */
+    private savedTrees: unknown;
     private readTerrain: TerrainData | undefined | null = null;
     private readSignature: string | undefined;
     /** The state saved before a restart, until the first meadow takes it. */
@@ -111,6 +125,10 @@ export class MeadowManager {
                 // Absent from a meadow saved before it could burn.
                 ...(fields.ash ? { ash: new Uint8Array(gunzipSync(Buffer.from(fields.ash, "base64"))) } : {}),
             };
+            // Absent from a meadow saved before its trees could burn.
+            if (fields.trees) {
+                this.savedTrees = JSON.parse(gunzipSync(Buffer.from(fields.trees, "base64")).toString("utf8"));
+            }
         } catch (error) {
             console.error("Could not restore the meadow of the map", error);
         }
@@ -141,7 +159,11 @@ export class MeadowManager {
         const walls = landWallsOf(wam);
         const paved = pavedTilesOf(wam);
         const signature = `${width}x${height}|${walls.signature}|${[...paved].sort().join(";")}`;
-        if (this.meadow && this.readTerrain === wam?.terrain && this.readSignature === signature) return;
+        if (this.meadow && this.readTerrain === wam?.terrain && this.readSignature === signature) {
+            // The ground is the same; a tree may have been planted, moved or removed.
+            this.readTrees();
+            return;
+        }
         this.readTerrain = wam?.terrain;
         this.readSignature = signature;
         const before = this.meadow;
@@ -151,10 +173,25 @@ export class MeadowManager {
             this.meadow.read(this.saved.grass, this.saved.moisture, this.saved.dryness, this.saved.ash);
         }
         this.saved = undefined;
+        this.readTrees();
         if (!this.timer) {
             this.timer = setInterval(() => this.tick(), MEADOW_STEP_SECONDS * 1000);
             // The meadow of a room must never keep the process alive.
             this.timer.unref?.();
+        }
+    }
+
+    /** The trees of the map as it is now: each keeps its state by its id; the state saved before a restart is taken once. */
+    private readTrees(): void {
+        const trees = burnableTreesOf(this.room.getWam());
+        const signature = trees.map((tree) => `${tree.id}@${tree.x},${tree.y}`).join(";");
+        if (signature !== this.treesSignature) {
+            this.treesSignature = signature;
+            this.trees.setTrees(trees);
+        }
+        if (this.savedTrees !== undefined) {
+            this.trees.read(this.savedTrees);
+            this.savedTrees = undefined;
         }
     }
 
@@ -187,6 +224,7 @@ export class MeadowManager {
             if (!this.cleared) {
                 this.cleared = true;
                 meadow.clear();
+                this.tellTrees(this.trees.clear(), []);
                 this.tell(meadow);
                 this.save();
             }
@@ -222,8 +260,19 @@ export class MeadowManager {
                 : () => 0,
         });
         for (const grazer of this.grazers()) meadow.graze(grazer.x, grazer.y, MEADOW_STEP_SECONDS);
+        // The trees after the ground they stand on: what they set on fire is told with this step.
+        const trees = this.trees.step({
+            seconds: MEADOW_STEP_SECONDS,
+            rainMmPerHour: this.rainRate,
+            windFrom: weather.windFrom,
+            windSpeed: weather.windSpeed,
+            growSeconds: set.growMinutes * 60,
+            groundBurning: meadow.burning() > 0,
+            random: this.random,
+        });
+        this.tellTrees(trees.changed, trees.embers);
         // A fire is seen running: the room is told at every step while one burns, and once more when it is out.
-        const burning = meadow.burning() > 0;
+        const burning = meadow.burning() > 0 || this.trees.burning() > 0;
         if (this.steps % STEPS_PER_MESSAGE === 0 || burning || this.wasBurning) this.tell(meadow);
         this.wasBurning = burning;
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
@@ -236,7 +285,10 @@ export class MeadowManager {
     public ignite(x: number, y: number, radiusTiles: number): number {
         const settings = this.room.getWam()?.settings;
         if (!this.meadow || !{ ...DEFAULT_MEADOW_SETTINGS, ...settings?.meadow }.enabled) return 0;
-        const lit = this.meadow.ignite(Math.floor(x / TILE_PX), Math.floor(y / TILE_PX), radiusTiles);
+        // The trees whose foot is in the patch take with the grass under them.
+        const lit =
+            this.meadow.ignite(Math.floor(x / TILE_PX), Math.floor(y / TILE_PX), radiusTiles) +
+            this.trees.ignite(x, y, Math.max(0, radiusTiles) * TILE_PX);
         if (lit > 0) this.wasBurning = true;
         return lit;
     }
@@ -273,6 +325,50 @@ export class MeadowManager {
             fire: gzipSync(this.sentFire),
             ash: gzipSync(this.sentAsh),
         };
+    }
+
+    /** Every tree that burns or is charred, for a player who joins the room. Undefined when every tree is green. */
+    public treeSnapshot(): TreeFireMessage | undefined {
+        const trees = this.trees.damaged();
+        return trees.length > 0 ? { trees, whole: true, embers: [] } : undefined;
+    }
+
+    /** The trees on fire (map pixels): what the animals of the map run from. */
+    public treeFires(): { x: number; y: number; fire: number }[] {
+        return this.trees.fires();
+    }
+
+    /**
+     * The fire of the map as its animals see it (the grass and the trees that burn), for the life of the room: they
+     * run from it. Undefined while nothing burns, so that nothing is looked at.
+     */
+    public lifeFire(): LifeFire | undefined {
+        const trees = this.trees.fires();
+        if (trees.length === 0 && (this.meadow?.burning() ?? 0) === 0) return undefined;
+        const meadow = this.meadow;
+        return lifeFireOf({ fireAt: (tileX, tileY) => meadow?.fireAt(tileX, tileY) ?? 0 }, () => trees);
+    }
+
+    /** Tells the room the trees whose state changed and the embers that left, when there is anything to tell. */
+    private tellTrees(changed: readonly ToldTree[], embers: readonly Ember[]): void {
+        if (changed.length === 0 && embers.length === 0) return;
+        if (changed.length > 0) this.changedSinceSave = true;
+        this.room.sendSubMessageToRoom({
+            message: {
+                $case: "treeFireMessage",
+                treeFireMessage: {
+                    trees: changed.map((tree) => ({ id: tree.id, fire: tree.fire, damage: tree.damage })),
+                    whole: false,
+                    embers: embers.map((ember) => ({
+                        fromX: Math.round(ember.fromX),
+                        fromY: Math.round(ember.fromY),
+                        toX: Math.round(ember.toX),
+                        toY: Math.round(ember.toY),
+                        flightMs: Math.round(ember.flightSeconds * 1000),
+                    })),
+                },
+            },
+        });
     }
 
     private tell(meadow: Meadow): void {
@@ -324,6 +420,7 @@ export class MeadowManager {
             ["moisture", Buffer.from(gzipSync(this.meadow.writeMoisture())).toString("base64")],
             ["dryness", Buffer.from(gzipSync(this.meadow.writeDryness())).toString("base64")],
             ["ash", Buffer.from(gzipSync(this.meadow.writeAsh())).toString("base64")],
+            ["trees", Buffer.from(gzipSync(JSON.stringify(this.trees.write()))).toString("base64")],
             ["size", `${this.meadow.width}x${this.meadow.height}`],
         ];
         for (const [field, value] of fields) {

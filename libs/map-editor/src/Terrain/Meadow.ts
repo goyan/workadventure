@@ -104,6 +104,20 @@ export function altitudeGrowth(heightPx: number): number {
     return Math.min(1, Math.max(0, 1 - Math.max(0, heightPx) / GRASS_LINE_PX));
 }
 
+/**
+ * How much the wind helps a fire towards a neighbour: `along` is how much the way to that neighbour follows the wind
+ * (1 straight downwind, -1 straight against it), `speed` the wind in km/h. 1 without wind, all around: a fire has no
+ * back then. The wind holds the flanks and the back as much as it drives the head.
+ */
+export function fireWindPush(along: number, speed: number): number {
+    const calm = 1 / (1 + speed / FLANK_WIND_KMH);
+    const head = Math.min(FIRE_WIND_BOUNDS[1], 1 + speed / FIRE_WIND_KMH);
+    return along >= 0
+        ? // Straight downwind far more than aslant: the head is narrow.
+          calm + (head - calm) * along ** 3
+        : calm * (1 + BACK_HOLD * (1 - calm) * along);
+}
+
 /** What one step of the meadow reads of the world around it. */
 export interface MeadowStepInput {
     seconds: number;
@@ -236,6 +250,20 @@ export class Meadow {
     public ashAt(tileX: number, tileY: number): number {
         const index = this.indexOf(tileX, tileY);
         return index === undefined ? 0 : this.ash[index];
+    }
+
+    /** Whether a tile is outdoors on a soil that grows grass: where a tree can burn. */
+    public growsAt(tileX: number, tileY: number): boolean {
+        const index = this.indexOf(tileX, tileY);
+        return index !== undefined && this.outdoor[index] === 1 && this.fertility[index] > 0;
+    }
+
+    /** Whether a tile is too wet for a fire: water lying on it, or a sodden soil. */
+    public soakedAt(tileX: number, tileY: number): boolean {
+        const index = this.indexOf(tileX, tileY);
+        return (
+            index !== undefined && (this.water[index] >= SOAKED_WATER_PX || this.moisture[index] >= FIRE_MAX_MOISTURE)
+        );
     }
 
     /** How many tiles are on fire. */
@@ -497,14 +525,7 @@ export class Meadow {
                     const along = (dx * windX + dy * windY) / (corner ? Math.SQRT2 : 1);
                     // The wind holds the flanks and the back of a fire as much as it drives its head: a fire in
                     // the wind is long and narrow (four times as long as wide at 30 km/h, seven at 50).
-                    const calm = 1 / (1 + speed / FLANK_WIND_KMH);
-                    const head = Math.min(FIRE_WIND_BOUNDS[1], 1 + speed / FIRE_WIND_KMH);
-                    // Without wind a fire has no back: it spreads alike all around.
-                    const wind =
-                        along >= 0
-                            ? // Straight downwind far more than aslant: the head is narrow.
-                              calm + (head - calm) * along ** 3
-                            : calm * (1 + BACK_HOLD * (1 - calm) * along);
+                    const wind = fireWindPush(along, speed);
                     const chance =
                         FIRE_SPREAD_CHANCE *
                         pace *

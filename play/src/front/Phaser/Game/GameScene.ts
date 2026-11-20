@@ -21,6 +21,7 @@ import {
     type SendUserMessage,
     type TerrainWaterMessage,
     type MeadowMessage,
+    type TreeFireMessage,
     type FireConditionsMessage,
     type AquaticLifeMessage,
 } from "@workadventure/messages";
@@ -33,6 +34,8 @@ import {
     GameMap,
     GameMapProperties,
     GRAZING_COVER,
+    type LifeFire,
+    lifeFireOf,
     listeningZoneJamKey,
     type Season,
     seasonAt,
@@ -416,6 +419,8 @@ import { TORCH_EQUIPPED_VARIABLE, TORCH_INTENSITY_VARIABLE } from "./Torch/Torch
 import { FishingManager } from "./Fishing/FishingManager";
 import { MeteorView } from "./Catastrophe/MeteorView";
 import { FireView } from "./Fire/FireView";
+import { TreeFireState } from "./Fire/TreeFireState";
+import { TreeFireView } from "./Fire/TreeFireView";
 import { DownpourView } from "./Catastrophe/DownpourView";
 import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
 import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
@@ -596,11 +601,14 @@ export class GameScene extends DirtyScene {
     /** The grass and the moisture of the soil of the map, as the server tells them. */
     private readonly meadow = new MeadowState();
     private meadowSubscription: Subscription | undefined;
+    private readonly treeFire = new TreeFireState();
+    private treeFireSubscription: Subscription | undefined;
     private fireConditionsSubscription: Subscription | undefined;
     private meadowQueue: Promise<void> = Promise.resolve();
     private terrainWaterSubscription: Subscription | undefined;
     private meteorView: MeteorView | undefined;
     private fireView: FireView | undefined;
+    private treeFireView: TreeFireView | undefined;
     private downpourView: DownpourView | undefined;
     private catastropheSubscription: Subscription | undefined;
     /** The animals of the water of the relief, as the server tells them. */
@@ -1631,6 +1639,8 @@ export class GameScene extends DirtyScene {
         this.terrainWaterSubscription = undefined;
         this.meadowSubscription?.unsubscribe();
         this.meadowSubscription = undefined;
+        this.treeFireSubscription?.unsubscribe();
+        this.treeFireSubscription = undefined;
         this.fireConditionsSubscription?.unsubscribe();
         this.fireConditionsSubscription = undefined;
         this.receiveFireConditions(undefined);
@@ -1759,6 +1769,8 @@ export class GameScene extends DirtyScene {
         this.meteorView = undefined;
         this.fireView?.destroy();
         this.fireView = undefined;
+        this.treeFireView?.destroy();
+        this.treeFireView = undefined;
         this.downpourView?.destroy();
         this.downpourView = undefined;
         rodEquippedStore.set(false);
@@ -2291,6 +2303,7 @@ export class GameScene extends DirtyScene {
             this._fishingManager?.update(time);
             this.meteorView?.update(time);
             this.fireView?.update(time);
+            this.treeFireView?.update(time);
             this.downpourView?.update(time);
             this.nightManager?.update(time);
             this.lampManager?.update(time);
@@ -2987,6 +3000,49 @@ export class GameScene extends DirtyScene {
     /** The meadow of the map, for what reads its grass and the moisture of its soil. */
     public getMeadow(): MeadowState {
         return this.meadow;
+    }
+
+    /** The fire of the map as its walking animals see it, rebuilt four times a second at most while it burns. */
+    private lifeFire: { at: number; fire: LifeFire } | undefined;
+
+    /**
+     * The fire of the map as the animals that walk on it see it: the grass that burns and the trees on fire, by
+     * their foot. Undefined while nothing burns: nothing is then looked at.
+     */
+    public getLifeFire(): LifeFire | undefined {
+        const burning = this.treeFire.burning();
+        if (burning.length === 0 && !this.meadow.isBurning()) {
+            this.lifeFire = undefined;
+            return undefined;
+        }
+        const now = this.time.now;
+        if (this.lifeFire && now - this.lifeFire.at < 250) return this.lifeFire.fire;
+        const entities = this.gameMapFrontWrapper?.getEntitiesManager()?.getEntities();
+        const trees: { x: number; y: number }[] = [];
+        for (const { id } of burning) {
+            const tree = entities?.get(id);
+            if (tree) trees.push({ x: tree.x + tree.displayWidth / 2, y: tree.y + tree.displayHeight });
+        }
+        this.lifeFire = { at: now, fire: lifeFireOf(this.meadow, () => trees) };
+        return this.lifeFire.fire;
+    }
+
+    /** The fire of the trees of the map as the server tells it, for the trees that pick their image by it. */
+    public getTreeFire(): TreeFireState {
+        return this.treeFire;
+    }
+
+    /** The server said how the trees burn: the ones it named show the image of their state. */
+    private receiveTreeFire(message: TreeFireMessage): void {
+        this.showTreeFireImages(this.treeFire.receive(message, this.time.now));
+    }
+
+    /** These trees pick their image again: charred as far as they burnt, or plain. */
+    private showTreeFireImages(ids: readonly string[]): void {
+        if (ids.length === 0) return;
+        const entities = this.gameMapFrontWrapper?.getEntitiesManager()?.getEntities();
+        for (const id of ids) entities?.get(id)?.showPrefabTexture();
+        this.markDirty();
     }
 
     /** The drawing of the relief, for the editor to show the bottom through the water while it is edited. */
@@ -4074,6 +4130,15 @@ export class GameScene extends DirtyScene {
         this.meadowSubscription = this.connection.meadowMessageStream.subscribe((message) => {
             this.receiveMeadow(message);
         });
+        // The fire of the trees: the ones that burn or are charred now, then every change.
+        for (const id of this.treeFire.clear()) {
+            this.gameMapFrontWrapper?.getEntitiesManager()?.getEntities().get(id)?.showPrefabTexture();
+        }
+        if (room.treeFire) this.receiveTreeFire(room.treeFire);
+        this.treeFireSubscription?.unsubscribe();
+        this.treeFireSubscription = this.connection.treeFireMessageStream.subscribe((message) => {
+            this.receiveTreeFire(message);
+        });
         // The life of that water: the animals of the room now, then all of them every second.
         this.receiveAquaticLife(room.aquaticLife ?? { animals: [], species: [] });
         this.aquaticLifeSubscription?.unsubscribe();
@@ -4151,6 +4216,16 @@ export class GameScene extends DirtyScene {
             this.meadow,
             () => this.shownWeather(),
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+        );
+        // The flames in the trees on fire, and the embers that fly from them (after FireView: it draws their frames).
+        this.treeFireView?.destroy();
+        this.treeFireView = new TreeFireView(
+            this,
+            this.treeFire,
+            (id) => this.gameMapFrontWrapper?.getEntitiesManager()?.getEntities().get(id),
+            () => this.shownWeather(),
+            () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+            () => !get(mapEditorModeStore),
         );
         this.downpourView?.destroy();
         const downpourView = new DownpourView(
@@ -4384,6 +4459,8 @@ export class GameScene extends DirtyScene {
                 this.mapSnowShown = shown;
             }),
         );
+        // While the map is edited the charred trees show their plain image: drawn again when the editor opens or closes.
+        this.unsubscribers.push(mapEditorModeStore.subscribe(() => this.showTreeFireImages(this.treeFire.marked())));
 
         this.unsubscribers.push(
             userIsJitsiDominantSpeakerStore.subscribe((dominantSpeaker) => {

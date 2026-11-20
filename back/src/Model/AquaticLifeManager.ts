@@ -26,6 +26,7 @@ import {
 } from "@workadventure/map-editor";
 import type {
     LifeCensus,
+    LifeFire,
     LifeSample,
     LifeTally,
     Places,
@@ -439,6 +440,7 @@ export class AquaticLifeManager {
             this.avatars(),
             this.bySpecies,
             this.land,
+            this.fire?.(),
         );
         this.totals.arrivals += tally.arrivals;
         this.totals.births += tally.births;
@@ -472,6 +474,14 @@ export class AquaticLifeManager {
             if (SPECIES[animal.kind].habitat === "land") positions.push({ x: animal.x, y: animal.y });
         }
         return positions;
+    }
+
+    /** The fire of the map as the animals see it, when the map has one to give; undefined while nothing burns. */
+    private fire: (() => LifeFire | undefined) | undefined;
+
+    /** The animals of the land run from this fire, and the gulls do not land beside it. */
+    public followFire(fire: () => LifeFire | undefined): void {
+        this.fire = fire;
     }
 
     /** Where the animals that graze are, in map pixels: the free antelopes eat the grass of the meadow under them. */
