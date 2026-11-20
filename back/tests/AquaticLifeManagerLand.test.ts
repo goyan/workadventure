@@ -10,10 +10,24 @@ const ANTELOPE = 2;
 function harness({
     life = {},
     withWater = false,
+    withRiver = false,
     sizeKnown = true,
     saved = {},
-}: { life?: Partial<LifeSettings>; withWater?: boolean; sizeKnown?: boolean; saved?: Record<string, string> } = {}) {
+}: {
+    life?: Partial<LifeSettings>;
+    withWater?: boolean;
+    withRiver?: boolean;
+    sizeKnown?: boolean;
+    saved?: Record<string, string>;
+} = {}) {
     let grid: WaterGrid | undefined;
+    if (withRiver) {
+        // A deep river two tiles wide from the top of the map to its bottom, four tiles from its west edge.
+        grid = new WaterGrid(undefined, { x: 8, y: 0, width: 4, height: 40 });
+        const bytes = new Uint8Array(320);
+        for (let index = 0; index < 160; index++) bytes[index * 2] = 160;
+        grid.readDepths(bytes);
+    }
     if (withWater) {
         // A pond of 10 × 10 cells of deep water in the corner of the map.
         grid = new WaterGrid(undefined, { x: 0, y: 0, width: 10, height: 10 });
@@ -162,6 +176,33 @@ describe("AquaticLifeManager, the life of the land", () => {
         manager.mapChanged();
         steps(2);
         expect(capOf()).toBeLessThan(15);
+        manager.stop();
+    });
+
+    it("a bridge over a river makes one land of its two banks, until it is taken away", () => {
+        const { manager, steps, wam } = harness({ withRiver: true });
+        steps(2);
+        const capOf = (): number | undefined =>
+            manager.snapshot()?.species.find((entry) => entry.species === ANTELOPE)?.cap;
+        // The west bank (80 tiles) is too small for antelopes: only the east one (480 tiles) counts.
+        expect(capOf()).toBe(12);
+        for (const x of [4, 5]) {
+            wam.entities[`bridge${x}`] = {
+                x: x * 32,
+                y: 320,
+                prefabRef: { collectionName: "Carte Ponts", id: "Carte Ponts:pont-bois-10:Default:Down" },
+                properties: [],
+            };
+        }
+        manager.mapChanged();
+        steps(2);
+        // Both banks and the deck: 562 tiles of one land.
+        expect(capOf()).toBe(14);
+        delete wam.entities.bridge4;
+        delete wam.entities.bridge5;
+        manager.mapChanged();
+        steps(2);
+        expect(capOf()).toBe(12);
         manager.stop();
     });
 
