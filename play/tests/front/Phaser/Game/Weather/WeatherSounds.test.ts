@@ -82,10 +82,19 @@ describe("weather audio", () => {
         const { sounds, audio, rain } = fixture();
         sounds.update(WeatherType.Clear, undefined, false);
         expect(rain.src).toContain("/sunny.mp3");
-        sounds.update(WeatherType.Snow, undefined, false);
+        // A rain that falls mostly as snow has the hush of the snow, as quiet whatever its rate.
+        sounds.update(WeatherType.Rain, undefined, false, false, 1, 1);
         expect(rain.src).toContain("/snow.mp3");
+        const hush = rain.volume;
+        sounds.update(WeatherType.Rain, undefined, false, false, 0.2, 0.8);
+        expect(rain.volume).toBe(hush);
         sounds.update(WeatherType.Rain, undefined, false);
         expect(rain.src).toContain("/rain.mp3");
+        const loud = rain.volume;
+        // A sleet still sounds like rain, quieter by its share of snow.
+        sounds.update(WeatherType.Rain, undefined, false, false, undefined, 0.4);
+        expect(rain.src).toContain("/rain.mp3");
+        expect(rain.volume).toBeLessThan(loud);
         expect(rain.removeAttribute.mock.calls).toHaveLength(2);
         const count = audio.add.mock.calls.length;
         sounds.update(WeatherType.Storm, undefined, false);

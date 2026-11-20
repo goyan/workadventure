@@ -1183,7 +1183,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 stormy: "Agitée",
                 include: "Temps possibles",
                 stormHint: "l'après-midi, surtout l'été",
-                snowHint: "de novembre à mars",
                 fogHint: "le matin",
                 now: "{season} · Maintenant : {weather} jusqu'à {time}",
                 then: "puis {weather} à {time}",
@@ -1195,7 +1194,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 autumn: "Automne",
             },
             fixed: {
-                snowHint: "Hors novembre–mars, elle tombe en pluie.",
+                rainHint:
+                    "Par temps froid elle tombe en neige : selon la température et l'humidité de la carte (météo réelle, ou réglées dans Catastrophe → Météo).",
                 fogHint: "Toute la journée.",
             },
             previewHint: "Aperçu pour vous seul. Sauvegarder l'applique à tout le monde.",

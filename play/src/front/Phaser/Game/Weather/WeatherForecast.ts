@@ -1,4 +1,4 @@
-import { WeatherType } from "@workadventure/map-editor";
+import { snowShare, WeatherType } from "@workadventure/map-editor";
 import { realWeatherAt } from "../../../../common/RealWeather";
 import type { RealForecastState } from "./RealWeather";
 import type { MapSnowSettings } from "./SnowCover";
@@ -23,6 +23,14 @@ export interface ForecastCell {
     windFrom?: number;
 }
 
+/**
+ * What a weather is called once the air it falls through is known: a rain of which at least half falls as snow
+ * (snowShare) is a snow. Only a name, for the banner: the map has no snow weather, and a storm stays a storm.
+ */
+export function namedPrecipitation<T extends WeatherType | undefined>(weather: T, snow: number): T | WeatherType.Snow {
+    return weather === WeatherType.Rain && snow >= 0.5 ? WeatherType.Snow : weather;
+}
+
 function withClouds(cell: ForecastCell, cloudiness: number): ForecastCell {
     return cloudiness > 0 ? { ...cell, cloudiness } : cell;
 }
@@ -39,8 +47,9 @@ function withWind(cell: ForecastCell, windSpeed: number | undefined, windFrom: n
 /**
  * The weather the map will show at each of `hours` from `epoch`, as the game draws it: the real timeline (blank past
  * its end, nothing before the first answer), the seasonal schedule in Automatic or while the real weather is unavailable
- * (the same fallback as the sky), the fixed weather otherwise. A snow out of season is drawn as rain, as in the sky;
- * a Cloudy map is a clear sky with clouds. The temperature and the wind (speed and direction) are the real ones of the
+ * (the same fallback as the sky), the fixed weather otherwise. A real rain forecast in air cold enough is named a snow
+ * (namedPrecipitation: from the temperature and the humidity of its quarter hour); a Cloudy map is a clear sky with
+ * clouds. The temperature and the wind (speed and direction) are the real ones of the
  * place whenever its timeline is known, even under a weather of the schedule or a fixed one.
  */
 export function weatherForecast(
@@ -61,7 +70,12 @@ export function weatherForecast(
             const then = realWeatherAt(real.slots, at);
             const cell = {
                 at,
-                weather: then ? weatherAtTime(then.weather, new Date(at)) : undefined,
+                weather: then
+                    ? namedPrecipitation(
+                          weatherAtTime(then.weather, new Date(at)),
+                          snowShare(then.temperature ?? Number.NaN, then.humidity ?? Number.NaN),
+                      )
+                    : undefined,
                 temperature: then?.temperature ?? undefined,
             };
             return withClouds(cell, then?.cloudiness ?? 0);

@@ -166,9 +166,13 @@ describe("weather rendering lifecycle", () => {
         expect(scene.markDirty.mock.calls).toHaveLength(1);
         manager.update(40, new Date(40));
         expect(scene.markDirty.mock.calls).toHaveLength(2);
+        // A map saved with a snow rains like any rain: no flake without the cold.
+        const drops = graphics.lineTo.mock.calls.length;
         wam.settings = { weather: WeatherType.Snow };
         manager.update(80, new Date(80));
-        expect(graphics.fillRect.mock.calls).toContainEqual([expect.any(Number), expect.any(Number), 2, 2]);
+        expect(graphics.lineTo.mock.calls.length).toBeGreaterThan(drops);
+        expect(graphics.fillRect.mock.calls).not.toContainEqual([expect.any(Number), expect.any(Number), 2, 2]);
+        expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Rain);
         wam.settings = { weather: WeatherType.Clear };
         manager.update(90, new Date(90));
         expect(graphics.setVisible.mock.lastCall).toEqual([false]);
@@ -177,6 +181,43 @@ describe("weather rendering lifecycle", () => {
         // The weather and the puddles each have their graphics.
         expect(graphics.destroy.mock.calls).toHaveLength(2);
         expect(ground.destroy).toHaveBeenCalledOnce();
+    });
+
+    it("lets the rain fall as flakes in the cold of the room, as both in a sleet, and tells the sounds", () => {
+        const flake = [expect.any(Number), expect.any(Number), 2, 2];
+        const drawn = (snow: number | undefined, weather = WeatherType.Rain) => {
+            const { scene, graphics, wam } = fixture();
+            wam.settings = { weather };
+            manager?.destroy();
+            manager = new WeatherManager(scene, snow === undefined ? {} : { snowShare: () => snow });
+            manager.update(0, new Date(0));
+            return {
+                drops: graphics.lineTo.mock.calls.length,
+                flakes: graphics.fillRect.mock.calls.filter(([, , width, height]) => width === 2 && height === 2)
+                    .length,
+                graphics,
+            };
+        };
+        const rain = drawn(undefined);
+        expect(rain.drops).toBeGreaterThan(0);
+        expect(rain.flakes).toBe(0);
+        expect(sounds.update.mock.lastCall?.[5]).toBe(0);
+        const snow = drawn(1);
+        expect(snow.drops).toBe(0);
+        expect(snow.flakes).toBeGreaterThan(0);
+        expect(snow.graphics.fillRect.mock.calls).toContainEqual(flake);
+        // The weather stays a rain: only its form changed.
+        expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Rain);
+        expect(sounds.update.mock.lastCall?.[5]).toBe(1);
+        const sleet = drawn(0.5);
+        expect(sleet.drops).toBeGreaterThan(0);
+        expect(sleet.drops).toBeLessThan(rain.drops);
+        expect(sleet.flakes).toBeGreaterThan(0);
+        expect(sleet.flakes).toBeLessThan(snow.flakes);
+        // Nothing falls from a clear sky or a fog, however cold.
+        expect(drawn(1, WeatherType.Clear).flakes).toBe(0);
+        expect(sounds.update.mock.lastCall?.[5]).toBe(0);
+        expect(drawn(1, WeatherType.Fog).flakes).toBe(0);
     });
 
     it("draws nothing and asks no redraw while no outside is in view", () => {
@@ -217,13 +258,13 @@ describe("weather rendering lifecycle", () => {
     it("changes graphics and sounds together at the shared server boundary", () => {
         const { scene, graphics, wam } = fixture();
         wam.settings = { weather: WeatherType.Automatic };
-        // Find, on the real schedule, a rainy slot, a later snowy one, then the first dry slot after that.
+        // Find, on the real schedule, a rainy slot, then the first slot without rain after it.
         const slot = 30 * 60 * 1000;
         let t = Date.parse("2026-01-05T00:00:00Z");
         const next = (weather: (typeof WeatherType)[keyof typeof WeatherType] | "dry"): number => {
             while (
                 weather === "dry"
-                    ? autoWeatherAt(new Date(t)) === WeatherType.Snow
+                    ? autoWeatherAt(new Date(t)) === WeatherType.Rain
                     : autoWeatherAt(new Date(t)) !== weather
             ) {
                 t += slot;
@@ -232,7 +273,6 @@ describe("weather rendering lifecycle", () => {
             return t;
         };
         const rainy = next(WeatherType.Rain);
-        const snowy = next(WeatherType.Snow);
         const dry = next("dry");
         expect(slotStart(new Date(dry)).getTime()).toBe(dry);
         manager = new WeatherManager(scene);
@@ -241,12 +281,9 @@ describe("weather rendering lifecycle", () => {
         manager.update(40, new Date(rainy));
         expect(graphics.lineTo.mock.calls.length).toBeGreaterThan(0);
         expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Rain);
-        manager.update(80, new Date(snowy));
-        expect(graphics.fillRect.mock.calls).toContainEqual([expect.any(Number), expect.any(Number), 2, 2]);
-        expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Snow);
         manager.update(120, new Date(dry));
         expect(sounds.update.mock.lastCall?.[0]).toBe(autoWeatherAt(new Date(dry)));
-        expect(sounds.update.mock.lastCall?.[0]).not.toBe(WeatherType.Snow);
+        expect(sounds.update.mock.lastCall?.[0]).not.toBe(WeatherType.Rain);
         expect(ground.update.mock.lastCall?.[2]).toBe(true);
     });
 
@@ -277,7 +314,7 @@ describe("weather rendering lifecycle", () => {
         expect(ground.update.mock.lastCall?.[2]).toBe(false);
     });
 
-    it("draws green grass without a theme and never snow: the map snow is the Christmas decor", () => {
+    it("draws green grass without a theme, also on a map saved with a snow", () => {
         const { scene, wam } = fixture();
         wam.settings = { weather: WeatherType.Snow, weatherStartedAt: 123 };
         manager = new WeatherManager(scene);
@@ -602,10 +639,10 @@ describe("weather rendering lifecycle", () => {
             expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Fog);
         });
 
-        it("draws the snow of the map in autumn, with no leaf falling from the sky", () => {
+        it("draws the flakes of a cold rain in autumn, with no leaf falling from the sky", () => {
             const { scene, graphics, wam } = fixture();
-            wam.settings = { weather: WeatherType.Snow };
-            manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Autumn });
+            wam.settings = { weather: WeatherType.Rain };
+            manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Autumn, snowShare: () => 1 });
             manager.update(0, new Date("2026-01-12T12:00:00Z"));
             const leaves = graphics.fillRect.mock.calls.filter(
                 ([, , width, height]) => (width === 4 && height === 3) || (width === 3 && height === 4),

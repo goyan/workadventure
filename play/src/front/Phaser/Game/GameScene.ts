@@ -39,6 +39,7 @@ import {
     listeningZoneJamKey,
     type Season,
     seasonAt,
+    snowShareOf,
     type WAMFileFormat,
     WAMSettingsUtils,
     WeatherType,
@@ -293,7 +294,6 @@ import type { TileBarriers } from "../../Utils/TileBarriers";
 import { nerfEquippedStore } from "../../Stores/NerfStore";
 import { torchEquippedStore } from "../../Stores/TorchStore";
 import { rodEquippedStore } from "../../Stores/FishingStore";
-import { mapSnowShownStore } from "../../Stores/SeasonalThemeStore";
 import { aquaticLifeShownStore, cloudsShownStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
 import { skyShadowCategoriesStore } from "../../Stores/SkyLightStore";
 import type { SkyShadowCategories } from "../../Stores/SkyLightStore";
@@ -561,7 +561,6 @@ export class GameScene extends DirtyScene {
     private localVolumeStoreUnsubscriber: Unsubscriber | undefined;
     private unsubscribers: Unsubscriber[] = [];
     /** Whether the map snow shows for this person (trees, Christmas decor): read once per change, not at every image. */
-    private mapSnowShown = true;
     private storesSubscribed = false;
     private entityPermissions: EntityPermissions | undefined;
     private entityPermissionsDeferred: Deferred<EntityPermissions> = new Deferred();
@@ -2373,7 +2372,7 @@ export class GameScene extends DirtyScene {
             this.seasonalThemeManager?.update(time, () => this.seasonalWalkers());
             this.gameMapFrontWrapper
                 .getEntitiesManager()
-                .updateSeason(time, serverDate, forcedTreeSeason(this.getSeasonalTheme()), this.mapSnowShown);
+                .updateSeason(time, serverDate, forcedTreeSeason(this.getSeasonalTheme()));
             this.weatherManager?.update(
                 time,
                 serverDate,
@@ -3142,11 +3141,13 @@ export class GameScene extends DirtyScene {
         return shownWeatherSettings(this.getGameMap().getWamFile()?.getWam().settings, this.nightManager?.serverDate());
     }
 
-    /** How much the map snow covers the ground for this person, 0 to 1: drawn as the snow decor fading in. */
-    public getMapSnowCoverage(): number {
-        const serverDate = this.nightManager?.serverDate();
-        const settings = shownWeatherSettings(this.getGameMap().getWamFile()?.getWam().settings, serverDate);
-        return mapSnowCoverage(this.mapSnowShown, settings, serverDate);
+    /**
+     * The share of the precipitation of the map that falls as snow, 0 to 1: from the temperature and the humidity the
+     * room goes by (the real ones of a map in real weather, or set by hand for everyone), as the server last told
+     * them. Rain until then, and on a map whose conditions are the mild ones of a weather that is not the real one.
+     */
+    public getSnowShare(): number {
+        return snowShareOf(get(fireConditionsStore));
     }
 
     public getGameMap(): GameMap {
@@ -3832,6 +3833,7 @@ export class GameScene extends DirtyScene {
                             : undefined;
                     },
                     seasonalTheme: () => this.getSeasonalTheme(),
+                    snowShare: () => this.getSnowShare(),
                 });
                 // The relief of the ground and the water of its hollows.
                 this.terrainView?.destroy();
@@ -4017,7 +4019,7 @@ export class GameScene extends DirtyScene {
                     autumnProgress: () => autumnProgress(this.nightManager?.serverDate() ?? new Date(Number.NaN)),
                     windSpeed: () => this.shownWeather()?.windSpeed,
                     windFrom: () => this.shownWeather()?.windFrom,
-                    snowCoverage: () => this.getMapSnowCoverage(),
+                    snowCoverage: () => mapSnowCoverage(),
                     enabled: () => !get(mapEditorModeStore) && get(weatherEffectsEnabledStore) && !isBasicActive(),
                     isOutdoor: (x, y) => this.getOutdoorGrid()?.isOutdoorAt(x, y) ?? true,
                     isWet: (x, y) => isGroundUnderWater(this, this.terrainWater, x, y),
@@ -4030,7 +4032,6 @@ export class GameScene extends DirtyScene {
                     entities: () => this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(),
                     markDirty: () => this.markDirty(),
                     serverDate: () => this.nightManager?.serverDate(),
-                    mapSnowCoverage: () => this.getMapSnowCoverage(),
                     leafConditions: () => {
                         const weather = this.shownWeather();
                         return {
@@ -4558,11 +4559,6 @@ export class GameScene extends DirtyScene {
             },
         ];
 
-        this.unsubscribers.push(
-            mapSnowShownStore.subscribe((shown) => {
-                this.mapSnowShown = shown;
-            }),
-        );
         // While the map is edited the charred trees show their plain image: drawn again when the editor opens or closes.
         this.unsubscribers.push(mapEditorModeStore.subscribe(() => this.showTreeFireImages(this.treeFire.marked())));
 

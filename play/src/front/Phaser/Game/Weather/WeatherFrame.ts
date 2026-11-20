@@ -1,6 +1,5 @@
-import { WeatherType } from "@workadventure/map-editor";
+import { precipitationWeather, WeatherType } from "@workadventure/map-editor";
 import type { AutoWeatherSettings } from "@workadventure/map-editor";
-import { snowPossibleAt } from "../Nature/SeasonClock";
 import { hash01 } from "../Autumn/LeafPalette";
 import { autoWeatherAt, slotStart } from "./WeatherSchedule";
 
@@ -42,22 +41,40 @@ export interface WeatherParticle {
     length: number;
 }
 
+/** A flake falls this many map pixels a second: far slower than a drop, so the wind carries it further sideways. */
+const FLAKE_SPEED = 18;
+/** Sideways pixels a flake is carried for one pixel down, for a rain leaning by 1 (see rainLean). */
+const FLAKE_DRIFT = 3;
+
 /**
- * The snowflakes, a field fixed to world coordinates, so camera movement never drags them along. The rain and the
- * storm have their own drops (Rain.ts); no other weather falls.
+ * How many of the flakes show, 0 to 1, for a precipitation of this intensity (0 to 1, rainIntensity) of which `snow`
+ * (0 to 1, snowShare) falls as snow: none in a rain, some among the drops of a sleet, a thick fall for a heavy
+ * precipitation in the cold.
  */
-export function weatherParticles(weather: WeatherType, epoch: number, view: WeatherView): WeatherParticle[] {
-    if (weather !== WeatherType.Snow) return [];
+export function snowfall(intensity: number, snow: number): number {
+    if (!(snow > 0) || !(intensity > 0)) return 0;
+    return Math.min(1, snow * (0.3 + 0.7 * intensity));
+}
+
+/**
+ * The snowflakes of a precipitation falling as snow, a field fixed to world coordinates, so camera movement never
+ * drags them along: `amount` (0 to 1, snowfall) says which of them show, always the same ones first; `lean` carries
+ * them with the wind as it leans the rain (rainLean). The drops of the rain are apart (Rain.ts).
+ */
+export function snowflakes(epoch: number, view: WeatherView, amount: number, lean = 0): WeatherParticle[] {
+    if (!(amount > 0)) return [];
     const cellSize = Math.max(64, Math.ceil(Math.sqrt((view.width * view.height) / 350)));
-    const speed = 18;
     const time = epoch / 1000;
     const particles: WeatherParticle[] = [];
     for (let row = Math.floor(view.y / cellSize) - 1; row <= Math.ceil((view.y + view.height) / cellSize); row++) {
         for (let col = Math.floor(view.x / cellSize) - 1; col <= Math.ceil((view.x + view.width) / cellSize); col++) {
+            // Which flakes show is drawn apart from where they are: a light fall is not a corner of a thick one.
+            if (hash01(col, row, 83) >= amount) continue;
             const seed = Math.abs(Math.sin(col * 127.1 + row * 311.7) * 43758.5453) % 1;
+            const fallen = (seed * cellSize + time * FLAKE_SPEED) % cellSize;
             particles[particles.length] = {
-                x: col * cellSize + seed * cellSize + Math.sin(time + seed * 20) * 5,
-                y: row * cellSize + ((seed * cellSize + time * speed) % cellSize),
+                x: col * cellSize + seed * cellSize + Math.sin(time + seed * 20) * 5 + lean * FLAKE_DRIFT * fallen,
+                y: row * cellSize + fallen,
                 length: 2,
             };
         }
@@ -151,11 +168,8 @@ export function weatherAtTime(
 ): WeatherType {
     // A cloudy sky is a clear one: its clouds are drawn apart (cloudiness), never as rain.
     if (configured === WeatherType.Cloudy) return WeatherType.Clear;
-    if (configured === WeatherType.Snow) {
-        if (!serverDate || !Number.isFinite(serverDate.getTime())) return WeatherType.Clear;
-        return snowPossibleAt(serverDate) ? WeatherType.Snow : WeatherType.Rain;
-    }
-    if (configured !== WeatherType.Automatic) return configured;
+    // A map saved with a snow: a rain, which the cold alone turns to snow (snowShare).
+    if (configured !== WeatherType.Automatic) return precipitationWeather(configured);
     if (!serverDate || !Number.isFinite(serverDate.getTime())) return WeatherType.Clear;
     return autoWeatherAt(serverDate, auto);
 }

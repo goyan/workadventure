@@ -37,13 +37,18 @@ export class WeatherSounds {
         });
     }
 
-    /** `rain`: how hard a rain falls, 0 to 1 (rainIntensity), which sets how loud it is. */
+    /**
+     * `rain`: how hard a rain falls, 0 to 1 (rainIntensity), which sets how loud it is. `snow`: the share of it that
+     * falls as snow (snowShare): flakes make no noise, so the rain is quieter by as much, and a fall that is mostly
+     * snow has the hush of the snow.
+     */
     public update(
         weather: WeatherType,
         serverDate: Date | undefined,
         editing: boolean,
         night = false,
         rain = USUAL_RAIN,
+        snow = 0,
     ): void {
         if (isBasicActive()) {
             this.silence();
@@ -57,12 +62,13 @@ export class WeatherSounds {
             return;
         }
         if (this.sound.locked) return;
+        const snowy = weather === WeatherType.Rain && snow >= 0.5;
         const key =
             weather === WeatherType.Clear || weather === WeatherType.Fog
                 ? night
                     ? "audio-weather-night"
                     : "audio-weather-sunny"
-                : weather === WeatherType.Snow
+                : snowy
                   ? "audio-weather-snow"
                   : night
                     ? "audio-weather-night-rain"
@@ -80,7 +86,12 @@ export class WeatherSounds {
             this.ambient.preload = "none";
         }
         this.ambient.volume =
-            volume * (weather === WeatherType.Storm ? 0.22 : weather === WeatherType.Rain ? rainLoudness(rain) : 0.14);
+            volume *
+            (weather === WeatherType.Storm
+                ? 0.22
+                : weather === WeatherType.Rain && !snowy
+                  ? rainLoudness(rain * (1 - snow))
+                  : 0.14);
         if (this.ambient.paused && !this.playPending) {
             this.playPending = true;
             this.ambient

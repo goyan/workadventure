@@ -1,6 +1,7 @@
 import { WeatherType } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
 import { slotsFromOpenMeteo } from "../../../../../src/common/RealWeather";
+import { nowCellWithConditions } from "../../../../../src/front/Phaser/Game/Weather/ManualConditions";
 import { weatherForecast } from "../../../../../src/front/Phaser/Game/Weather/WeatherForecast";
 import { autoWeatherAt, cloudinessAt } from "../../../../../src/front/Phaser/Game/Weather/WeatherSchedule";
 import { OPEN_METEO_ASKED_AT, OPEN_METEO_PARIS } from "../../../../common/OpenMeteoFixture";
@@ -53,13 +54,13 @@ describe("weatherForecast", () => {
     });
 
     it("keeps a fixed weather, clear for a map without weather", () => {
-        expect(weatherForecast({ weather: WeatherType.Snow }, NOW, paris).map((cell) => cell.temperature)).toEqual([
+        expect(weatherForecast({ weather: WeatherType.Storm }, NOW, paris).map((cell) => cell.temperature)).toEqual([
             8.2, 9.4, 10,
         ]);
-        expect(weatherForecast({ weather: WeatherType.Snow }, NOW, paris).map((cell) => cell.weather)).toEqual([
-            WeatherType.Snow,
-            WeatherType.Snow,
-            WeatherType.Snow,
+        expect(weatherForecast({ weather: WeatherType.Storm }, NOW, paris).map((cell) => cell.weather)).toEqual([
+            WeatherType.Storm,
+            WeatherType.Storm,
+            WeatherType.Storm,
         ]);
         expect(weatherForecast(undefined, NOW, paris).map((cell) => cell.weather)).toEqual([
             WeatherType.Clear,
@@ -68,23 +69,66 @@ describe("weatherForecast", () => {
         ]);
     });
 
-    it("draws a snow as rain out of the snow season of Paris, as the sky does", () => {
+    it("names a real rain a snow when the air of its quarter hour makes it fall as snow, whatever the season", () => {
         const july = Date.UTC(2026, 6, 14, 12);
-        const snowing = {
+        const falling = (
+            temperature: number,
+            humidity?: number,
+            weather: WeatherType.Rain | WeatherType.Storm = WeatherType.Rain,
+        ) => ({
             status: "known" as const,
             slots: Array.from({ length: 24 }, (_, index) => ({
                 at: july + (index - 1) * 15 * 60 * 1000,
-                weather: WeatherType.Snow as const,
-                temperature: 1,
+                weather,
+                temperature,
+                ...(humidity === undefined ? {} : { humidity }),
             })),
-        };
-        expect(weatherForecast({ weather: WeatherType.Snow }, july, paris)[0].weather).toBe(WeatherType.Rain);
-        expect(weatherForecast({ weather: WeatherType.Real }, july, snowing)[0]).toEqual({
-            at: july,
-            weather: WeatherType.Rain,
-            temperature: 1,
         });
-        expect(weatherForecast({ weather: WeatherType.Snow }, NOW, paris)[0].weather).toBe(WeatherType.Snow);
+        const real = { weather: WeatherType.Real };
+        expect(weatherForecast(real, july, falling(-1, 85))[0]).toEqual({
+            at: july,
+            weather: WeatherType.Snow,
+            temperature: -1,
+        });
+        // 2 °C: a snow in dry air (wet bulb -2.3 °C), a rain in damp air (1.45 °C).
+        expect(weatherForecast(real, july, falling(2, 40)).map((cell) => cell.weather)).toEqual([
+            WeatherType.Snow,
+            WeatherType.Snow,
+            WeatherType.Snow,
+        ]);
+        expect(weatherForecast(real, july, falling(2, 95))[0].weather).toBe(WeatherType.Rain);
+        expect(weatherForecast(real, july, falling(12, 80))[0].weather).toBe(WeatherType.Rain);
+        // Without the humidity the form is not known: a rain. A storm stays a storm.
+        expect(weatherForecast(real, july, falling(-1))[0].weather).toBe(WeatherType.Rain);
+        expect(weatherForecast(real, july, falling(-1, 85, WeatherType.Storm))[0].weather).toBe(WeatherType.Storm);
+        // A map saved with a fixed snow is a rain; an older pusher answering a snow too.
+        expect(weatherForecast({ weather: WeatherType.Snow }, july, paris)[0].weather).toBe(WeatherType.Rain);
+        expect(weatherForecast({ weather: WeatherType.Snow }, NOW, paris)[0].weather).toBe(WeatherType.Rain);
+        const older = {
+            status: "known" as const,
+            slots: [{ at: july, weather: WeatherType.Snow as const, temperature: 9 }],
+        };
+        expect(weatherForecast(real, july, older)[0].weather).toBe(WeatherType.Rain);
+    });
+
+    it("names the rain of now by the conditions of the room: what the sky draws", () => {
+        const cell = { at: NOW, weather: WeatherType.Rain, temperature: 8 };
+        const thresholds = { thresholdTemperature: 30, thresholdHumidity: 30, thresholdWindSpeed: 30 };
+        const cold = { manual: true, temperature: -3, humidity: 70, windSpeed: 0, windFrom: 0, ...thresholds };
+        const mild = { manual: false, temperature: 20, humidity: 60, windSpeed: 10, windFrom: 315, ...thresholds };
+        expect(nowCellWithConditions(cell, cold).cell.weather).toBe(WeatherType.Snow);
+        expect(nowCellWithConditions(cell, { ...cold, manual: false }).cell.weather).toBe(WeatherType.Snow);
+        expect(nowCellWithConditions(cell, mild).cell.weather).toBe(WeatherType.Rain);
+        // A forecast that named it a snow gives way to the room: mild conditions, or none told yet, are a rain.
+        const forecastSnow = { ...cell, weather: WeatherType.Snow };
+        expect(nowCellWithConditions(forecastSnow, mild).cell.weather).toBe(WeatherType.Rain);
+        expect(nowCellWithConditions(forecastSnow, undefined).cell.weather).toBe(WeatherType.Rain);
+        expect(nowCellWithConditions({ ...cell, weather: WeatherType.Storm }, cold).cell.weather).toBe(
+            WeatherType.Storm,
+        );
+        expect(nowCellWithConditions({ ...cell, weather: WeatherType.Clear }, cold).cell.weather).toBe(
+            WeatherType.Clear,
+        );
     });
 
     it("gives the clouds of each hour: real quarter hours, the automatic chain, the Cloudy tile", () => {
