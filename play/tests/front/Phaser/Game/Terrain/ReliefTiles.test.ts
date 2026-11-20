@@ -230,30 +230,6 @@ describe("the blocks of the relief seen in 3/4", () => {
         expect(tiles.redraws()).toBeGreaterThan(drawn);
     });
 
-    it("draws a block of a hollow as deep as a map allows in under 25 ms (median)", () => {
-        const deepest = withHeights(
-            undefined,
-            new Map(
-                Array.from({ length: 96 * 96 }, (_, index): [string, number] => [
-                    cellKey(index % 96, Math.floor(index / 96)),
-                    -256,
-                ]),
-            ),
-        );
-        const { tiles } = fixture(deepest);
-        const times: number[] = [];
-        for (let frame = 0; frame < 12; frame++) {
-            const before = tiles.redraws();
-            const start = performance.now();
-            tiles.update(frame);
-            if (tiles.redraws() > before) times.push(performance.now() - start);
-        }
-        expect(times.length).toBeGreaterThanOrEqual(5);
-        // The median: a pause of the garbage collector or of the machine does not make a block slow.
-        const sorted = times.slice(1).sort((a, b) => a - b);
-        expect(sorted[Math.floor(sorted.length / 2)]).toBeLessThan(25);
-    });
-
     it("draws its first block without freezing: the textures are worked out as they are used", async () => {
         // A fresh copy of the modules: no texture worked out yet.
         vi.resetModules();
@@ -299,5 +275,31 @@ describe("the blocks of the relief seen in 3/4", () => {
         told(210, 255);
         settle();
         expect(tiles.redraws()).toBeGreaterThan(drawn);
+    });
+
+    it("spreads the drawing of a block over several images: an image spends a few ms on it, not a whole block", () => {
+        const deepest = withHeights(
+            undefined,
+            new Map(
+                Array.from({ length: 96 * 96 }, (_, index): [string, number] => [
+                    cellKey(index % 96, Math.floor(index / 96)),
+                    -256,
+                ]),
+            ),
+        );
+        const { tiles, painted } = fixture(deepest);
+        const times: number[] = [];
+        let lastFinished = 0;
+        for (let frame = 0; frame < 120; frame++) {
+            const before = painted.size;
+            const start = performance.now();
+            tiles.update(frame);
+            times.push(performance.now() - start);
+            if (painted.size > before) lastFinished = frame;
+        }
+        // Blocks were drawn, whole; only the images that worked on them are looked at.
+        expect(painted.size).toBeGreaterThanOrEqual(4);
+        const sorted = times.slice(1, lastFinished + 1).sort((a, b) => a - b);
+        expect(sorted[Math.floor(sorted.length / 2)]).toBeLessThan(10);
     });
 });

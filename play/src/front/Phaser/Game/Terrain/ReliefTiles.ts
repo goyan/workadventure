@@ -45,6 +45,10 @@ const MATERIALS: readonly Material[] = [
     "snow",
 ];
 const UNKNOWN_MATERIAL = 255;
+/** The time an image spends drawing a block (ms): the rest of the block waits for the next image. */
+const DRAW_BUDGET_MS = 6;
+/** The rows (or columns) of a block drawn between two looks at the time. */
+const ROWS_A_STEP = 16;
 /** The thresholds of the dither (bayer), row by row. */
 const BAYER_ROWS = [0, 1, 2, 3].map((row) => [0, 1, 2, 3].map((column) => bayer(column, row)));
 const MATERIAL_INDEX = Object.fromEntries(MATERIALS.map((material, index) => [material, index])) as Record<
@@ -71,18 +75,12 @@ const WATER_SEEN_PX = 0.5;
 
 type Rgb = [number, number, number];
 
-function rgb(color: number): Rgb {
-    return [(color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff];
-}
-
-function over(under: Rgb, color: number, alpha: number): Rgb {
-    if (alpha <= 0) return under;
-    const [red, green, blue] = rgb(color);
-    return [
-        under[0] * (1 - alpha) + red * alpha,
-        under[1] * (1 - alpha) + green * alpha,
-        under[2] * (1 - alpha) + blue * alpha,
-    ];
+/** Lays a colour over another, in place. */
+function blend(under: Rgb, color: number, alpha: number): void {
+    if (alpha <= 0) return;
+    under[0] = under[0] * (1 - alpha) + ((color >> 16) & 0xff) * alpha;
+    under[1] = under[1] * (1 - alpha) + ((color >> 8) & 0xff) * alpha;
+    under[2] = under[2] * (1 - alpha) + (color & 0xff) * alpha;
 }
 
 export interface ReliefInputs {
@@ -112,6 +110,8 @@ export class ReliefTiles {
     private readonly reliefSignatures = new Map<string, string>();
     private waterKey = "";
     private meadowVersion = -1;
+    /** The block being drawn, a step an image. */
+    private job: { key: string; steps: Generator<void, void, void> } | undefined;
     private readonly meadowSignatures = new Map<string, string>();
     private readonly waterSignatures = new Map<string, string>();
     private readonly heights = new Float32Array(GRID_WIDTH * GRID_HEIGHT);
@@ -130,6 +130,8 @@ export class ReliefTiles {
         plain: true,
     }));
     private readonly levels = new Uint8Array(GRID_WIDTH * GRID_HEIGHT);
+    /** The colour of the water of each sample of a column: reused. */
+    private readonly waterColors: Rgb[] = Array.from({ length: this.samples.length }, (): Rgb => [0, 0, 0]);
 
     constructor(
         private readonly scene: Phaser.Scene & { markDirty(): void },
@@ -214,9 +216,21 @@ export class ReliefTiles {
             }
             signatures.set(key, `${relief}|${water}|${meadow}|${shared}`);
         }
-        for (const key of this.schedule.toRedraw(around, signatures, undefined, new Set(visible))) {
-            if (signatures.get(key) === "") this.drop(key);
-            else this.draw(key, terrain, now);
+        // One block drawn at a time, spread over images: DRAW_BUDGET_MS of it an image.
+        if (!this.job) {
+            for (const key of this.schedule.toRedraw(around, signatures, undefined, new Set(visible))) {
+                if (signatures.get(key) === "") this.drop(key);
+                else this.job = { key, steps: this.drawSteps(key, terrain, now) };
+            }
+        }
+        if (this.job) {
+            const start = performance.now();
+            while (performance.now() - start < DRAW_BUDGET_MS) {
+                if (this.job.steps.next().done) {
+                    this.job = undefined;
+                    break;
+                }
+            }
         }
         for (const key of this.schedule.evict(new Set(around))) this.drop(key);
     }
@@ -272,6 +286,8 @@ export class ReliefTiles {
     }
 
     private drop(key: string): void {
+        // A block left half drawn is not drawn on.
+        if (this.job?.key === key) this.job = undefined;
         const block = this.blocks.get(key);
         if (!block) return;
         block.image.destroy();
@@ -298,7 +314,11 @@ export class ReliefTiles {
         return block;
     }
 
-    private draw(key: string, terrain: TerrainData, now: number): void {
+    /**
+     * Draws a block, a step at a time: it yields every ROWS_A_STEP rows (or columns) so that update can spread a block
+     * over several images. The block shows its new drawing once the last step is done.
+     */
+    private *drawSteps(key: string, terrain: TerrainData, now: number): Generator<void, void, void> {
         const [blockX, blockY] = key.split(",").map(Number);
         const left = blockX * BLOCK_PX;
         const top = blockY * BLOCK_PX;
@@ -398,6 +418,7 @@ export class ReliefTiles {
                 }
                 materials[index] = uniform >= 0 ? uniform : MATERIAL_INDEX[pickMaterial(cell, x, y)];
             }
+            if ((row - firstRow) % ROWS_A_STEP === ROWS_A_STEP - 1) yield;
         }
         // 2. Its colours: texture, light of the slope, depth, and the line of a border.
         const colors = this.pointColors;
@@ -457,6 +478,7 @@ export class ReliefTiles {
                     colors[index] = groundColor(material, x, y, light, heights[index], outline, contour);
                 }
             }
+            if (row % ROWS_A_STEP === 0) yield;
         }
         // 3. Projected in 3/4, column by column, from MAX_DROP px north of the block.
         const context = block.texture.getContext();
@@ -474,7 +496,7 @@ export class ReliefTiles {
                 sample.wallRamp = WALL_RAMPS[MATERIALS[materials[index]]];
                 if (water >= WATER_SEEN_PX) {
                     sample.drop = Math.min(MAX_DROP, Math.max(0, -(ground + water)) * DROP_SCALE);
-                    sample.color = this.waterOver([colors[index][0], colors[index][1], colors[index][2]], water);
+                    sample.color = this.waterOver(colors[index], water, this.waterColors[count - 1]);
                     sample.plain = false;
                 } else {
                     sample.drop = Math.min(MAX_DROP, Math.max(0, -ground) * DROP_SCALE);
@@ -483,6 +505,7 @@ export class ReliefTiles {
                 }
             }
             paintColumn(samples, count, BLOCK_TEXELS, top, pixels.data, BLOCK_TEXELS, column);
+            if (column % ROWS_A_STEP === ROWS_A_STEP - 1) yield;
         }
         context.putImageData(pixels, 0, 0);
         refreshCanvasTexture(block.texture);
@@ -490,11 +513,17 @@ export class ReliefTiles {
         this.scene.markDirty();
     }
 
-    /** The water over a ground: light blue, darker with its depth, a pale shore where it is thin. */
-    private waterOver(ground: Rgb, depth: number): Rgb {
-        let water = over(ground, SHALLOW_WATER.color, SHALLOW_WATER.alpha);
-        water = over(water, DEEP_WATER_COLOR, deepWaterAlpha(depth));
-        if (depth < SHORE_PX) water = over(water, SHORE_WATER.color, SHORE_WATER.alpha);
-        return water;
+    /**
+     * The water over a ground: light blue, darker with its depth, a pale shore where it is thin. Written into `into`
+     * (a colour kept for the sample): nothing allocated for each pixel under water.
+     */
+    private waterOver(ground: PaletteRgb, depth: number, into: Rgb): Rgb {
+        into[0] = ground[0];
+        into[1] = ground[1];
+        into[2] = ground[2];
+        blend(into, SHALLOW_WATER.color, SHALLOW_WATER.alpha);
+        blend(into, DEEP_WATER_COLOR, deepWaterAlpha(depth));
+        if (depth < SHORE_PX) blend(into, SHORE_WATER.color, SHORE_WATER.alpha);
+        return into;
     }
 }
