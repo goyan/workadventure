@@ -30,7 +30,7 @@ function ramp(...shades: [string, string, string, string]): Ramp {
 const ASH = ramp("#1c1916", "#2b2621", "#3d362f", "#524940");
 
 /** The shades of each material and of the face of a drop: the ones of the mock-ups, to tune in the game. */
-export const RAMPS: Record<Material | "wall", Ramp> = {
+export const RAMPS: Record<Material | "wall" | "water", Ramp> = {
     grass: ramp("#3b6431", "#4f833c", "#69a046", "#89bd58"),
     meadow: ramp("#5a5a2e", "#74743c", "#90904c", "#aeab62"),
     earth: ramp("#4e3524", "#6a4a32", "#865f42", "#a27a57"),
@@ -46,22 +46,31 @@ export const RAMPS: Record<Material | "wall", Ramp> = {
     wall: ramp("#463b33", "#5e5146", "#7a6a5a", "#9c8a74"),
     // Wet clay, where the walk slows down (reflections of water: GroundPixel).
     mud: ramp("#2f2018", "#45301f", "#5c4129", "#735437"),
+    // The water of the relief, from the deep to the shallow (WaterPixel); its shades change with the season.
+    water: ramp("#244f78", "#2f6596", "#3f7fb3", "#5b9bcc"),
 };
 
 /** What changes with the season (the mock-ups of the seasons): the grass, and the sand of the summer. */
-const SEASON_RAMPS: Record<Season, Partial<Record<Material, Ramp>>> = {
+const SEASON_RAMPS: Record<Season, Partial<Record<Material | "water", Ramp>>> = {
     [Season.Spring]: { grass: ramp("#3f7032", "#55923d", "#72b34b", "#98d065") },
     [Season.Summer]: {
         grass: ramp("#4a6a2c", "#64883a", "#86a849", "#b3c36a"),
         sand: ramp("#b39860", "#d4b97c", "#ead39c", "#f7e9c0"),
+        water: ramp("#1f5c7c", "#2a7598", "#3b93b4", "#5fb5cf"),
     },
-    [Season.Autumn]: { grass: ramp("#4a5a2a", "#647036", "#848a45", "#a8a35a") },
-    [Season.Winter]: { grass: ramp("#4f6a48", "#6b8460", "#8aa07c", "#a9ba9a") },
+    [Season.Autumn]: {
+        grass: ramp("#4a5a2a", "#647036", "#848a45", "#a8a35a"),
+        water: ramp("#1f4466", "#295a84", "#38709c", "#5288b8"),
+    },
+    [Season.Winter]: {
+        grass: ramp("#4f6a48", "#6b8460", "#8aa07c", "#a9ba9a"),
+        water: ramp("#2c5677", "#3b6e93", "#5288ad", "#8db5d0"),
+    },
 };
-const seasonRamps = new Map<Season, Record<Material | "wall", Ramp>>();
+const seasonRamps = new Map<Season, Record<Material | "wall" | "water", Ramp>>();
 
 /** The shades of the materials in a season; without a season, RAMPS. */
-export function rampsFor(season: Season | undefined): Record<Material | "wall", Ramp> {
+export function rampsFor(season: Season | undefined): Record<Material | "wall" | "water", Ramp> {
     if (season === undefined) return RAMPS;
     let ramps = seasonRamps.get(season);
     if (!ramps) {
