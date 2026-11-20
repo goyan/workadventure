@@ -251,3 +251,46 @@ export function isContour(height: number, west: number, east: number, north: num
     const levelOf = (neighbour: number): number => Math.floor(Math.max(0, -neighbour) / TILE_DEPTH_PX);
     return levelOf(west) < level || levelOf(east) < level || levelOf(north) < level || levelOf(south) < level;
 }
+
+/** The shadow of a mount: cast along a ray rising this steeply (px of height a px of the map) from the north-west. */
+export const SHADOW_SLOPE = 1.6;
+/** The farthest the ray of a shadow is followed from the edge of a block (px of the map, along each axis). */
+export const SHADOW_REACH_PX = 64;
+/** How much darker a point in the shadow is, as a share of its ramp. */
+export const SHADOW_SHADE = 0.3;
+/** How much the ray of a shadow rises for a pixel of the map along the diagonal (√2 px away). */
+export const SHADOW_RISE_A_STEP = SHADOW_SLOPE * Math.SQRT2;
+
+/**
+ * The horizon of a point towards the north-west: the highest the ground there rises over a ray of slope SHADOW_SLOPE
+ * from it, `heightAt(x − d, y − d) − SHADOW_RISE_A_STEP × d` for d from 1 to SHADOW_REACH_PX; the point is in the
+ * shadow where its horizon is higher than its ground. A point's horizon is also its south-east neighbour's, one step
+ * lower: a block works the horizons out along the diagonals and calls this on their first points only.
+ */
+export function shadowHorizon(heightAt: (x: number, y: number) => number, x: number, y: number): number {
+    let horizon = Number.NEGATIVE_INFINITY;
+    for (let d = 1; d <= SHADOW_REACH_PX; d++) {
+        const over = heightAt(x - d, y - d) - SHADOW_RISE_A_STEP * d;
+        if (over > horizon) horizon = over;
+    }
+    return horizon;
+}
+
+/**
+ * Whether a point of the ground is in the shadow of the relief: the ground north-west of it (the fixed direction of
+ * the light, as slopeLight) rises over a ray of slope SHADOW_SLOPE, within SHADOW_REACH_PX. `highest` is the highest
+ * ground around: the ray stops where nothing can rise over it any more.
+ */
+export function castShadow(heightAt: (x: number, y: number) => number, x: number, y: number, highest: number): boolean {
+    const here = heightAt(x, y);
+    for (let d = 1; d <= SHADOW_REACH_PX; d++) {
+        if (highest - here <= SHADOW_RISE_A_STEP * d) return false;
+        if (heightAt(x - d, y - d) - here > SHADOW_RISE_A_STEP * d) return true;
+    }
+    return false;
+}
+
+/** The light of a point (see slopeLight) in the shadow: SHADOW_SHADE darker once it is shared into its value. */
+export function shadowedLight(light: number): number {
+    return light - SHADOW_SHADE / LIGHT_SHARE;
+}

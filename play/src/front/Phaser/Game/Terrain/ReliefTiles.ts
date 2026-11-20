@@ -7,8 +7,11 @@ import {
     contourShade,
     groundColor,
     groundValue,
+    shadowHorizon,
+    SHADOW_RISE_A_STEP,
     isContour,
     lightOfRise,
+    shadowedLight,
     seasonPatch,
     sprinkleAt,
     textureIndex,
@@ -143,6 +146,8 @@ export class ReliefTiles {
     private readonly pointHeights = new Float32Array(POINT_COLUMNS * POINT_ROWS);
     private readonly pointMaterials = new Uint8Array(POINT_COLUMNS * POINT_ROWS);
     private readonly pointWaters = new Float32Array(POINT_COLUMNS * POINT_ROWS);
+    /** The horizon of each point towards the north-west (shadowHorizon), for the shadows of the relief. */
+    private readonly pointHorizons = new Float32Array(POINT_COLUMNS * POINT_ROWS);
     /** Undefined where nothing covers the ground (transparent). */
     private readonly pointColors: (PaletteRgb | undefined)[] = new Array<PaletteRgb | undefined>(
         POINT_COLUMNS * POINT_ROWS,
@@ -556,6 +561,27 @@ export class ReliefTiles {
         const season = this.inputs.season();
         const ramps = rampsFor(season);
         const meadow = this.inputs.meadow;
+        // The shadows of the relief: only where the window has one (a flat window casts none). The horizon of a point
+        // is that of its north-west neighbour, one step lower, or the ground of that neighbour: worked out along the
+        // diagonals, the ray followed only from the first points of each (the first row, the first column).
+        const shaded = highest > lowest;
+        const horizons = this.pointHorizons;
+        if (shaded) {
+            const heightOf = (pointX: number, pointY: number): number => bilinear(this.heights, pointX, pointY);
+            for (let row = firstRow; row < endRow; row++) {
+                const y = originY + row + 0.5;
+                for (let column = 0; column < POINT_COLUMNS; column++) {
+                    const index = row * POINT_COLUMNS + column;
+                    if (row === firstRow || column === 0) {
+                        horizons[index] = shadowHorizon(heightOf, originX + column + 0.5, y);
+                    } else {
+                        const corner = index - POINT_COLUMNS - 1;
+                        horizons[index] = Math.max(heights[corner], horizons[corner]) - SHADOW_RISE_A_STEP;
+                    }
+                }
+                if ((row - firstRow) % ROWS_A_STEP === ROWS_A_STEP - 1) yield;
+            }
+        }
         // The textures of the materials met in this block only (a table is 1 MB).
         const textures: (Float32Array | undefined)[] = [];
         for (let row = Math.max(1, firstRow + 1); row < Math.min(POINT_ROWS - 1, endRow - 1); row++) {
@@ -589,7 +615,9 @@ export class ReliefTiles {
                     heights[index + POINT_COLUMNS] -
                     heights[index - POINT_COLUMNS];
                 const x = originX + column;
-                const light = lightOfRise(rise);
+                // In the shadow of a mount (or of the north-west rim of a hollow): darker.
+                const light =
+                    shaded && horizons[index] > heights[index] ? shadowedLight(lightOfRise(rise)) : lightOfRise(rise);
                 const contour = isContour(
                     heights[index],
                     heights[index - 1],

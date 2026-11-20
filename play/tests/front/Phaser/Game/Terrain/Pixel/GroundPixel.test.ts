@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Season } from "@workadventure/map-editor";
 import {
+    castShadow,
     groundColor,
     isContour,
     lightOfRise,
@@ -174,5 +175,21 @@ describe("the patches of the seasons", () => {
         expect(pierced).toBeGreaterThan(0);
         expect(pierced).toBeLessThan(160 * 160 * 0.2);
         expect(shades((x, y) => groundColor("snow", x, y, 0, 0, undefined, false, Season.Autumn), grass)).toBe(0);
+    });
+});
+
+describe("the shadow cast by a mount", () => {
+    // A mount 128 px high over x and y from 100 to 200, flat ground around it.
+    const mount = (x: number, y: number): number => (x >= 100 && x <= 200 && y >= 100 && y <= 200 ? 128 : 0);
+
+    it("falls south-east of it, not north-west, nor beyond its reach", () => {
+        expect(castShadow(mount, 220, 220, 128)).toBe(true);
+        expect(castShadow(mount, 80, 80, 128)).toBe(false);
+        expect(castShadow(mount, 280, 280, 128)).toBe(false);
+    });
+
+    it("never on flat ground, nor on the top of the mount", () => {
+        expect(castShadow(() => 0, 50, 50, 0)).toBe(false);
+        expect(castShadow(mount, 150, 150, 128)).toBe(false);
     });
 });

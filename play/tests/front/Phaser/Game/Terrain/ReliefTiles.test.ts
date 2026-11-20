@@ -190,6 +190,62 @@ describe("the blocks of the relief seen in 3/4", () => {
         }
     });
 
+    /**
+     * Sand on the cells 10 to 40, dug 8 px (drawn: without the layout of the map, flat ground is left to its tiles), a
+     * mount `height` px high on the cells 20 to 27 (x and y 320 to 447).
+     */
+    function mountOnSand(height: number): TerrainData {
+        const sand = new Map<string, number>();
+        const changes = new Map<string, number>();
+        for (let x = 10; x <= 40; x++)
+            for (let y = 10; y <= 40; y++) {
+                sand.set(cellKey(x, y), 4);
+                changes.set(cellKey(x, y), -8);
+            }
+        for (let x = 20; x <= 27; x++) for (let y = 20; y <= 27; y++) changes.set(cellKey(x, y), height);
+        return withHeights(withSoils(undefined, sand), changes);
+    }
+    const lightness = (block: Uint8ClampedArray, left: number, top: number): number => {
+        let total = 0;
+        for (let row = top; row < top + 8; row++)
+            for (let column = left; column < left + 8; column++) {
+                const at = (row * 256 + column) * 4;
+                total += block[at] + block[at + 1] + block[at + 2];
+            }
+        return total / 64;
+    };
+
+    it("casts the shadow of a mount on the ground south-east of it", () => {
+        const { settle, painted } = fixture(mountOnSand(128));
+        settle();
+        const block = painted.get("relief-block:1,1");
+        if (!block) throw new Error("no block");
+        // South-east of the mount (x and y 460 to 467) against north-west of it (300 to 307), both flat sand, drawn
+        // 4 px lower.
+        expect(lightness(block, 204, 208)).toBeLessThan(lightness(block, 44, 48) * 0.9);
+    });
+
+    it("draws a block with a mount, its shadow and a lake at its foot about as fast as a block dug as deep", () => {
+        const timeOf = (terrain: TerrainData): number => {
+            const { tiles, water } = fixture(terrain);
+            // 20 px of water on the cells x 16 to 31, y 28 to 31: at the foot of the mount (or the hollow).
+            const bytes = new Uint8Array(64 * 64 * 2);
+            for (let y = 28; y < 32; y++) for (let x = 16; x < 32; x++) bytes[(y * 64 + x) * 2] = 160;
+            water.receive({ x: 0, y: 0, width: 64, height: 64, seq: 1, full: true, depths: bytes }, 0);
+            let total = 0;
+            for (let frame = 0; frame < 400; frame++) {
+                const start = performance.now();
+                tiles.update(frame);
+                total += performance.now() - start;
+                if (frame > 3 && !tiles.isDrawing()) break;
+            }
+            return total;
+        };
+        const dug = timeOf(mountOnSand(-128));
+        const raised = timeOf(mountOnSand(128));
+        expect(raised).toBeLessThan(dug * 1.5 + 10);
+    });
+
     /** A flat floor dug 64 px deep over 64 × 64 cells, sand from the cell `sandFrom` on (x = 16 × sandFrom). */
     function floorWithSand(sandFrom: number): TerrainData {
         const cells = Array.from({ length: 64 * 64 }, (_, index): [string, number] => [
