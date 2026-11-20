@@ -854,8 +854,13 @@ export class MapLayerEditorTool extends MapEditorTool {
         this.scene.input.setDefaultCursor(cursor);
     }
 
-    /** In the window mode, a hand over a placed window (it can be dragged), a closed hand while it is moved. */
+    /** A hand over a placed window or stair (it can be dragged), a closed hand while it is moved. */
     private wantedCursor(): string {
+        if (get(mapLayerModeStore) === "stair") {
+            // A placed stair can be grabbed and moved too.
+            if (this.gesture) return this.floorEditing?.hasStairAt(this.gesture.startWorld) ? "grabbing" : "";
+            return this.hover && this.floorEditing?.hasStairAt(this.hover) ? "grab" : "";
+        }
         if (get(mapLayerModeStore) !== "window" || !get(mapLayerWindowsAvailableStore)) return "";
         if (this.gesture) return this.gesture.movedWindow ? "grabbing" : "";
         if (!this.hover) return "";
