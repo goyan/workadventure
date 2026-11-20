@@ -10,6 +10,7 @@ import {
     FLAME_MIN_HEIGHT_PX,
     flameOf,
     flameOutline,
+    flameMass,
     flamePose,
     glowShare,
     spreadTiles,
@@ -197,6 +198,25 @@ describe("smokeOf", () => {
         const calm = smokeOf({ ...still, intensity: 1, seconds: 5 });
         expect(calm).toHaveLength(1);
         expect(calm).toEqual(smokeOf({ ...still, intensity: 1, seconds: 9 }));
+    });
+});
+
+describe("flameMass", () => {
+    // Each tile had its flame of the same size: a fire looked like candles in rows.
+    it("makes the flames of a fire join into a big one: the more tiles burn around a tile, the bigger its flame", () => {
+        // Alone, or with nothing known around: the flame of one tile.
+        expect(flameMass(1)).toBe(1);
+        expect(flameMass(0)).toBe(1);
+        expect(flameMass(Number.NaN)).toBe(1);
+        // In the heart of a fire, every tile around burning (two tiles each way: 25): two and a half times as big.
+        expect(flameMass(25)).toBeCloseTo(2.5, 9);
+        expect(flameMass(60)).toBeCloseTo(2.5, 9);
+        // On the edge of a front (about a third of the tiles around): between the two, and it only grows.
+        expect(flameMass(9)).toBeGreaterThan(1.4);
+        expect(flameMass(9)).toBeLessThan(2);
+        for (let burning = 2; burning <= 25; burning++) {
+            expect(flameMass(burning)).toBeGreaterThan(flameMass(burning - 1));
+        }
     });
 });
 

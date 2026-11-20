@@ -204,6 +204,21 @@ export function smokeOf(
     return puffs;
 }
 
+/** In the heart of a fire a flame is this many times as big as the flame of a tile burning alone. */
+const FLAME_MASS_MAX = 2.5;
+
+/**
+ * How many times bigger the flame of a tile is drawn when `burning` tiles burn around it, itself counted (two tiles
+ * each way: 25 at most): the flames of neighbouring tiles join into one big fire, tall in its heart and lower on its
+ * edges, instead of standing side by side like candles.
+ */
+export function flameMass(burning: number): number {
+    if (!Number.isFinite(burning) || burning <= 1) return 1;
+    const full = (2 * GLOW_NEIGHBOUR_REACH + 1) ** 2;
+    const share = Math.min(1, (burning - 1) / (full - 1));
+    return 1 + (FLAME_MASS_MAX - 1) * share ** 0.6;
+}
+
 /**
  * The share of its smoke a tile on fire keeps when `burning` tiles burn around it, itself counted: the puffs of
  * neighbours add up, and a front would be a grey wall. A third at least: a big fire still smokes a lot.

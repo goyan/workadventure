@@ -12,6 +12,7 @@ import {
     FLAME_FRAME_WIDTH_PX,
     FLAME_FRAMES,
     FLAME_MAX_HEIGHT_PX,
+    flameMass,
     flameOutline,
     flamePose,
     GLOW_NEIGHBOUR_REACH,
@@ -117,18 +118,20 @@ export class FireView {
             const footX = (tile.x + 0.5) * TILE_PX;
             const footY = (tile.y + FOOT_IN_TILE) * TILE_PX;
             const pose = flamePose(input, style.loop);
+            const around = this.burningAround(tile.x, tile.y);
+            // The flames of neighbouring tiles join into one fire: big in its heart, lower on its edges.
+            const size = scale * flameMass(around);
             // At the depth of its foot: what stands lower on the map is drawn over it.
             const flame = this.flameAt(index)
                 .setTexture(style.texture, style.frameOf(pose.frame, input.seed))
                 .setPosition(footX, footY)
-                .setScale(pose.scaleX * scale, pose.scaleY * scale)
+                .setScale(pose.scaleX * size, pose.scaleY * size)
                 .setRotation(pose.rotation)
                 .setVisible(true);
             placeAtDepth(flame, footY);
             const glow = GLOW_RADIUS_PX * (0.5 + 0.5 * input.intensity) * scale;
-            const around = this.burningAround(tile.x, tile.y);
             this.glowAt(index)
-                .setPosition(footX, footY - FLAME_MAX_HEIGHT_PX * pose.scaleY * scale * 0.4)
+                .setPosition(footX, footY - FLAME_MAX_HEIGHT_PX * pose.scaleY * size * 0.4)
                 .setDisplaySize(glow * 2, glow * 2)
                 .setAlpha(input.intensity * glowShare(around))
                 .setVisible(true);
