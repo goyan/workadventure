@@ -679,7 +679,7 @@ const mapEditor: BaseTranslation = {
         soilErase: "Ground of the map (wipe)",
         pools: {
             title: "Pools",
-            hint: "Paint a pool with the brush, in any shape: round, in an L, joined to another. Each pool has its own colours, depth and hot water.",
+            hint: "Drag to draw a pool: a rectangle or an ellipse, or the brush for a free shape. Click a pool to select it: change its style or delete it. Each style has its colours, depth, ladders and hot water.",
             pool: "Pool {number}",
             add: "+ New pool",
             water: "Water",
@@ -687,6 +687,15 @@ const mapEditor: BaseTranslation = {
             depth: "Depth: {depth} px",
             ladders: "Ladders",
             hot: "Hot water (never freezes, steams in the cold)",
+            tool: "Tool",
+            tools: {
+                rectangle: "Rectangle",
+                ellipse: "Ellipse",
+                brush: "Brush",
+                eraser: "Eraser",
+            },
+            selected: "Selected pool: {cells} cells. Pick a style to repaint it.",
+            delete: "Delete",
         },
         hoverSoil: "Soil under the pointer: {soil}",
         meadow: {

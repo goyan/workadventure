@@ -19,6 +19,8 @@
         soilName,
         TILE_PX,
     } from "@workadventure/map-editor";
+    import { POOL_TOOLS } from "@wa/front/Phaser/Game/Terrain/PoolShapes";
+    import { commitSoils } from "@wa/front/Phaser/Game/Terrain/TerrainStroke";
     import { LL } from "../../../i18n/i18n-svelte";
     import { executeUpdateTerrain, executeUpdateWAMSettings } from "../../Phaser/Game/MapEditor/Commands/Facades";
     import { readTerrainMapSettings } from "../../Phaser/Game/Terrain/TerrainMapSettings";
@@ -29,6 +31,7 @@
         terrainHoverHeightStore,
         terrainHoverMeadowStore,
         terrainHoverSoilStore,
+        selectedPoolStore,
     } from "../../Stores/TerrainEditorStore";
     import { SOIL_TINTS } from "../../Phaser/Game/Terrain/TerrainShading";
     import InputSwitch from "../Input/InputSwitch.svelte";
@@ -92,6 +95,25 @@
             savePools();
         }
         terrainBrushStore.update((brush) => ({ ...brush, soil: poolSoilCode(style) }));
+        const selected = $selectedPoolStore;
+        if (selected && selected.style !== style) {
+            paintSelectedPool(poolSoilCode(style));
+            selectedPoolStore.set({ ...selected, style });
+        }
+    }
+
+    /** The pool picked on the map painted whole with this soil: another style, or 0 to remove it. */
+    function paintSelectedPool(code: number): void {
+        const selected = $selectedPoolStore;
+        if (!selected) return;
+        commitSoils(new Map(selected.cells.map((key) => [key, code])), (soils) =>
+            executeUpdateTerrain(new Map(), undefined, soils),
+        ).catch((error: unknown) => console.error("The pool could not be changed", error));
+    }
+
+    function deleteSelectedPool(): void {
+        paintSelectedPool(0);
+        selectedPoolStore.set(undefined);
     }
 
     function setPool(style: number, change: Partial<(typeof pools)[number]>): void {
@@ -248,6 +270,37 @@
     {:else if $terrainBrushStore.mode === "pool"}
         <span class="retro-title mt-2">{$LL.mapEditor.terrain.pools.title()}</span>
         <p class="retro-hint m-0">{$LL.mapEditor.terrain.pools.hint()}</p>
+        <div class="grid grid-cols-4 gap-1" role="radiogroup" aria-label={$LL.mapEditor.terrain.pools.tool()}>
+            {#each POOL_TOOLS as tool (tool)}
+                <button
+                    type="button"
+                    role="radio"
+                    class="btn btn-sm {($terrainBrushStore.poolTool ?? 'rectangle') === tool
+                        ? 'btn-secondary'
+                        : 'btn-light btn-ghost'}"
+                    aria-checked={($terrainBrushStore.poolTool ?? "rectangle") === tool}
+                    data-testid="terrain-pool-tool-{tool}"
+                    onclick={() => terrainBrushStore.update((brush) => ({ ...brush, poolTool: tool }))}
+                >
+                    {$LL.mapEditor.terrain.pools.tools[tool]()}
+                </button>
+            {/each}
+        </div>
+        {#if $selectedPoolStore}
+            <div class="flex items-center justify-between gap-2" data-testid="terrain-pool-selected">
+                <span class="text-sm text-white">
+                    {$LL.mapEditor.terrain.pools.selected({ cells: $selectedPoolStore.cells.length })}
+                </span>
+                <button
+                    type="button"
+                    class="btn btn-sm btn-danger"
+                    data-testid="terrain-pool-delete"
+                    onclick={deleteSelectedPool}
+                >
+                    {$LL.mapEditor.terrain.pools.delete()}
+                </button>
+            </div>
+        {/if}
         <div class="grid grid-cols-2 gap-2" role="radiogroup" aria-label={$LL.mapEditor.terrain.pools.title()}>
             {#each pools.length > 0 ? pools : [DEFAULT_POOL_STYLE] as pool, index (index)}
                 <button

@@ -690,7 +690,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         soilErase: "Sol d'origine (effacer)",
         pools: {
             title: "Piscines",
-            hint: "Peignez une piscine au pinceau, de la forme voulue : ronde, en L, reliée à une autre. Chaque piscine a ses couleurs, sa profondeur et son eau chaude.",
+            hint: "Tracez une piscine en glissant : rectangle ou ellipse, ou au pinceau pour une forme libre. Un clic sur une piscine la sélectionne : changez son style ou supprimez-la. Chaque style a ses couleurs, sa profondeur, ses échelles et son eau chaude.",
             pool: "Piscine {number}",
             add: "+ Nouvelle piscine",
             water: "Eau",
@@ -698,6 +698,15 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             depth: "Profondeur : {depth} px",
             ladders: "Échelles",
             hot: "Eau chaude (ne gèle jamais, fume dans le froid)",
+            tool: "Outil",
+            tools: {
+                rectangle: "Rectangle",
+                ellipse: "Ellipse",
+                brush: "Pinceau",
+                eraser: "Gomme",
+            },
+            selected: "Piscine sélectionnée : {cells} cases. Choisissez un style pour la repeindre.",
+            delete: "Supprimer",
         },
         hoverSoil: "Sol sous le curseur : {soil}",
         meadow: {

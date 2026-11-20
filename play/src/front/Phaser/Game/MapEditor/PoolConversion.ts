@@ -1,4 +1,5 @@
 import { cellKey, DEFAULT_POOL_STYLE, MAX_POOL_STYLES, poolSoilCode, TERRAIN_CELL } from "@workadventure/map-editor";
+import type { PoolStyle } from "@workadventure/map-editor";
 import { readTerrainMapSettings } from "@wa/front/Phaser/Game/Terrain/TerrainMapSettings";
 import { terrainBrushStore } from "@wa/front/Stores/TerrainEditorStore";
 import { executeUpdateTerrain, executeUpdateWAMSettings } from "./Commands/Facades";
@@ -14,20 +15,30 @@ export interface ImagePoolPlaced {
 /**
  * Turns a pool placed as an image into a pool painted with the relief tool, that is edited on the map like any other
  * (its shape with the brush, its colours, depth, ladders and hot water): a new style of pool (the default one, as it
- * was drawn) and the cells under its image painted with it. The brush is left on that style. False when the map has
+ * was drawn, shared with the pools converted before) and the cells under its image painted with it. The brush is left on that style. False when the map has
  * no style left (MAX_POOL_STYLES): nothing is changed then. The caller removes the object.
  */
 export async function paintImagePool(pool: ImagePoolPlaced): Promise<boolean> {
     const pools = readTerrainMapSettings().pools;
-    if (pools.length >= MAX_POOL_STYLES) return false;
-    const style = pools.length;
-    await executeUpdateWAMSettings({
-        $case: "updatePoolSettingMessage",
-        updatePoolSettingMessage: { pools: [...pools, { ...DEFAULT_POOL_STYLE }] },
-    });
+    // The pools converted share the default style while the map has it unchanged: the styles are few.
+    const same = pools.findIndex((style) => isDefaultPoolStyle(style));
+    if (same < 0 && pools.length >= MAX_POOL_STYLES) return false;
+    const style = same >= 0 ? same : pools.length;
+    if (same < 0) {
+        await executeUpdateWAMSettings({
+            $case: "updatePoolSettingMessage",
+            updatePoolSettingMessage: { pools: [...pools, { ...DEFAULT_POOL_STYLE }] },
+        });
+    }
     await executeUpdateTerrain(new Map(), undefined, imagePoolSoils(pool, poolSoilCode(style)));
     terrainBrushStore.update((brush) => ({ ...brush, soil: poolSoilCode(style) }));
     return true;
+}
+
+function isDefaultPoolStyle(style: PoolStyle): boolean {
+    return (Object.keys(DEFAULT_POOL_STYLE) as (keyof PoolStyle)[]).every(
+        (key) => style[key] === DEFAULT_POOL_STYLE[key],
+    );
 }
 
 /** The cells whose centre is under the image of the pool, painted with this soil (a style of pool). */
