@@ -14,6 +14,7 @@ import {
     glowShare,
     spreadTiles,
     smokeFarScale,
+    smokeShare,
     smokeOf,
     tileSeed,
 } from "../../../../../src/front/Phaser/Game/Fire/FlameShape";
@@ -161,7 +162,20 @@ describe("smokeOf", () => {
         const lowest = puffs.reduce((low, puff) => (puff.y > low.y ? puff : low));
         expect(highest.y).toBeLessThan(-120);
         expect(highest.radius).toBeGreaterThan(lowest.radius);
-        expect(highest.alpha).toBeLessThan(lowest.alpha);
+    });
+
+    // Smoke at the foot of the flames veiled them: it shows above them, thickens as it rises, then thins out.
+    it("leaves the flames clear: no smoke to speak of at their height, the thickest well above them", () => {
+        const samples = [];
+        for (let ms = 0; ms < 8000; ms += 100) samples.push(...smokeOf({ ...burning, seconds: ms / 1000 }));
+        const low = samples.filter((puff) => puff.y > -FLAME_MAX_HEIGHT_PX);
+        const high = samples.filter((puff) => puff.y < -FLAME_MAX_HEIGHT_PX * 1.5);
+        expect(low.length).toBeGreaterThan(0);
+        expect(Math.max(...low.map((puff) => puff.alpha))).toBeLessThan(0.3);
+        expect(Math.max(...high.map((puff) => puff.alpha))).toBeGreaterThan(0.45);
+        // At the very top it has thinned out.
+        const top = samples.filter((puff) => puff.y < -200);
+        expect(Math.max(...top.map((puff) => puff.alpha))).toBeLessThan(0.2);
     });
 
     it("smokes from a low fire on, not from one just lit", () => {
@@ -183,6 +197,18 @@ describe("smokeOf", () => {
         const calm = smokeOf({ ...still, intensity: 1, seconds: 5 });
         expect(calm).toHaveLength(1);
         expect(calm).toEqual(smokeOf({ ...still, intensity: 1, seconds: 9 }));
+    });
+});
+
+describe("smokeShare", () => {
+    it("shares the smoke between the tiles of a front, so that a big fire is not a grey wall", () => {
+        expect(smokeShare(1)).toBe(1);
+        expect(smokeShare(4)).toBe(1);
+        expect(smokeShare(9)).toBeCloseTo(2 / 3, 9);
+        expect(smokeShare(25)).toBeCloseTo(0.4, 9);
+        // Never less than a third: a big fire still smokes a lot.
+        expect(smokeShare(100)).toBeCloseTo(1 / 3, 9);
+        expect(smokeShare(0)).toBe(1);
     });
 });
 

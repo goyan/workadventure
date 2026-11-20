@@ -192,15 +192,25 @@ export function smokeOf(
     const puffs: { x: number; y: number; radius: number; alpha: number }[] = [];
     for (let puff = 0; puff < SMOKE_PUFFS; puff++) {
         const phase = (input.seconds * 0.14 + input.seed * 1.7 + puff / SMOKE_PUFFS) % 1;
-        const rise = 36 + phase * smoke.rise;
+        const rise = 44 + phase * smoke.rise;
         puffs.push({
             x: to.x * carried * phase * 150 + Math.sin(phase * 5 + input.seed * 9) * 6,
             y: -rise + to.y * carried * phase * 50,
             radius: smoke.from + phase * (smoke.to - smoke.from),
-            alpha: thick * (1 - phase) ** 0.7,
+            // Thin as it leaves the flames (they stay clear), thick above them, then thinning out.
+            alpha: thick * Math.min(1, phase * 4) * (1 - phase) ** 0.9 * 1.25,
         });
     }
     return puffs;
+}
+
+/**
+ * The share of its smoke a tile on fire keeps when `burning` tiles burn around it, itself counted: the puffs of
+ * neighbours add up, and a front would be a grey wall. A third at least: a big fire still smokes a lot.
+ */
+export function smokeShare(burning: number): number {
+    if (!Number.isFinite(burning) || burning <= 4) return 1;
+    return Math.max(1 / 3, 2 / Math.sqrt(burning));
 }
 
 /**

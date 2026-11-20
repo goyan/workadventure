@@ -18,6 +18,7 @@ import {
     glowShare,
     smokeFarScale,
     smokeOf,
+    smokeShare,
     spreadTiles,
     tileSeed,
 } from "./FlameShape";
@@ -125,16 +126,18 @@ export class FireView {
                 .setVisible(true);
             placeAtDepth(flame, footY);
             const glow = GLOW_RADIUS_PX * (0.5 + 0.5 * input.intensity) * scale;
+            const around = this.burningAround(tile.x, tile.y);
             this.glowAt(index)
                 .setPosition(footX, footY - FLAME_MAX_HEIGHT_PX * pose.scaleY * scale * 0.4)
                 .setDisplaySize(glow * 2, glow * 2)
-                .setAlpha(input.intensity * glowShare(this.burningAround(tile.x, tile.y)))
+                .setAlpha(input.intensity * glowShare(around))
                 .setVisible(true);
+            const share = smokeShare(around);
             for (const puff of smokeOf(input)) {
                 this.puffAt(puffs++)
                     .setPosition(footX + puff.x * smokeScale, footY + puff.y * smokeScale)
                     .setDisplaySize(puff.radius * 2 * smokeScale, puff.radius * 2 * smokeScale)
-                    .setAlpha(puff.alpha)
+                    .setAlpha(puff.alpha * share)
                     .setVisible(true);
             }
         });
