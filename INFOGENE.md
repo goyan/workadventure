@@ -2982,10 +2982,11 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   pile des étages de la carte, l'étage courant en blanc après « ▶ » (`FloorLevelsStore.ts`). Éditeur ouvert ou carte
   sans palier : rien de tout cela.
 - **Escaliers courts** (`-v2`) : nouveaux escaliers posés par le mode Escalier quand le catalogue de la salle les a
-  (`mapLayerShortStairsAvailableStore`, les anciens sinon) : **une case au sol** vers le nord, l'est et l'ouest
-  (`stairRun(…, short)`), la longueur habituelle vers le sud (l'avatar y descend l'écran : il faut une longueur
-  supérieure à la hauteur). Dessin éclairé d'en haut, nez de marche, rampes sur un flanc vide (profils est et ouest).
-  Les escaliers déjà posés gardent nom, longueur et dessin.
+  (`mapLayerShortStairsAvailableStore`, les anciens sinon) : **une case au sol** vers le nord (`stairRun(…, short)`),
+  la longueur habituelle vers le sud (l'avatar y descend l'écran : il faut une longueur supérieure à la hauteur).
+  Dessin éclairé d'en haut, nez de marche. **Vers l'est et l'ouest, l'éditeur pose les anciens escaliers**
+  (`newStairIsShort`) : sur une case, vu de profil, un escalier n'est que quelques piliers raides. Les escaliers déjà
+  posés (dont les `-v2` est et ouest d'une case) gardent nom, longueur et dessin.
 - **Éditeur** (`MapLayerFloorEditing.ts`, `FloorOperations.ts`) :
   - « Niveau » : choisi à la main ; pipette par Alt+clic, Cmd+clic ou le bouton « Prendre le niveau sous le
     pointeur » ; le nom du niveau suit le pointeur (un même point de l'écran est une case de chaque niveau).
