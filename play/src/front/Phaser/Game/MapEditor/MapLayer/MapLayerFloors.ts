@@ -116,6 +116,15 @@ export function parseFloorPiece(collectionName: string, prefabId: string): Floor
 }
 
 /**
+ * Whether the editor places a new stair short (-v2), when the catalog of the room has those: going north or south only
+ * (going south it keeps its length, with the new drawing). Going east or west it keeps its length: on one tile, a stair
+ * seen from the side is a few steep pillars.
+ */
+export function newStairIsShort(direction: StairDirection, shortStairsInCatalog: boolean): boolean {
+    return shortStairsInCatalog && (direction === "n" || direction === "s");
+}
+
+/**
  * Length of a stair on the ground, in tiles: one per tile it goes up (rounded up). Going south, the avatar goes down the screen by
  * its run and up by its rise: one more tile keeps it going down.
  */

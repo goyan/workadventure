@@ -4,7 +4,7 @@ import { asError } from "catch-unknown";
 import { get } from "svelte/store";
 import { v4 as uuidv4 } from "uuid";
 import type { WAMEntityData } from "@workadventure/map-editor";
-import { SLAB_GLASS_FAMILY } from "../MapLayer/MapLayerFloors";
+import { SLAB_GLASS_FAMILY, newStairIsShort } from "../MapLayer/MapLayerFloors";
 import { FLOOR_PREVIEW_DEPTH } from "../MapLayer/FloorDepth";
 import { mapEditorPlacementLevelStore } from "../../../../Stores/MapEditorStore";
 import {
@@ -195,13 +195,13 @@ export class MapLayerFloorEditing {
         const target = stairTarget(reachable, get(mapLayerBuiltLevelsStore), get(mapLayerStairTargetStore));
         const rise = target === undefined ? undefined : stairRiseBetween(level, target);
         if (rise === undefined) return undefined;
+        const direction = get(mapLayerStairDirectionStore);
         return {
-            direction: get(mapLayerStairDirectionStore),
+            direction,
             width: get(mapLayerStairWidthStore),
             rise,
             open: get(mapLayerStairOpenStore),
-            // New stairs are short, when the catalog of the room has them.
-            ...(get(mapLayerShortStairsAvailableStore) ? { short: true } : {}),
+            ...(newStairIsShort(direction, get(mapLayerShortStairsAvailableStore)) ? { short: true } : {}),
         };
     }
 
