@@ -70,8 +70,10 @@ export class FishingView {
 
         const tips = new Map<number, { x: number; y: number }>();
         for (const holder of holders) {
-            const hand = rodHand(holder.x, holder.y, holder.direction, holder.seated);
-            const tip = rodTip(holder.x, holder.y, holder.direction, holder.seated);
+            // The player is drawn lower at the bottom of a hollow (3/4): its rod with it.
+            const lower = this.dropAt(holder.x, holder.y);
+            const hand = rodHand(holder.x, holder.y + lower, holder.direction, holder.seated);
+            const tip = rodTip(holder.x, holder.y + lower, holder.direction, holder.seated);
             tips.set(holder.userId, tip);
             graphics.lineStyle(2, ROD_COLOUR, 1);
             graphics.lineBetween(hand.x, hand.y, tip.x, tip.y);

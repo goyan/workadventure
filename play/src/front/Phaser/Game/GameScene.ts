@@ -3888,6 +3888,8 @@ export class GameScene extends DirtyScene {
                 this.waterGlints = new WaterGlints(this, {
                     waterAt: (x, y) => this.terrainWater.depthAt(x, y, this.time.now),
                     dropAt: (x, y) => this.surfaceDropAt(x, y),
+                    season: () =>
+                        this.seasonalThemeManager?.groundSeason(this.getGroundSeason()) ?? this.getGroundSeason(),
                     reducedMotion: () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
                     shown: () => !isBasicActive(),
                 });
