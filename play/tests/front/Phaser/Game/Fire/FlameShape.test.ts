@@ -297,8 +297,19 @@ describe("glowShare", () => {
         expect(glowShare(1)).toBe(1);
         expect(glowShare(3)).toBe(1);
         expect(glowShare(6)).toBe(0.5);
-        // The whole square around it on fire: about an eighth each, so the front does not whiten.
-        expect(glowShare(25)).toBeCloseTo(0.12, 5);
+        expect(glowShare(9)).toBeCloseTo(1 / 3, 9);
         expect(glowShare(0)).toBe(1);
+    });
+
+    // The flames of a thick fire are drawn bigger and cover one another: their glows, added up, whitened its heart
+    // and the flames were lost in it.
+    it("dims the glow further in the heart of a thick fire, where the big flames already cover one another", () => {
+        // The whole square around it on fire: about a twenty-third each (an eighth before).
+        expect(glowShare(25)).toBeCloseTo(0.0432, 5);
+        expect(glowShare(16)).toBeCloseTo((3 / 16) * (9 / 16), 9);
+        // It only goes down as the fire thickens.
+        for (let burning = 2; burning <= 25; burning++) {
+            expect(glowShare(burning)).toBeLessThanOrEqual(glowShare(burning - 1));
+        }
     });
 });

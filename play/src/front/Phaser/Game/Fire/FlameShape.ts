@@ -265,6 +265,8 @@ export function spreadTiles<T extends { x: number; y: number }>(
 
 /** Tiles on fire around a flame, itself counted, up to which it keeps its whole glow. */
 export const GLOW_FULL_NEIGHBOURS = 3;
+/** From this many tiles on fire around a tile, its glow gives way faster still: a thick fire. */
+const GLOW_DENSE_FROM = 9;
 /** The glow of a flame is shared with the tiles on fire this far around it (a square of 5 tiles). */
 export const GLOW_NEIGHBOUR_REACH = 2;
 
@@ -274,5 +276,8 @@ export const GLOW_NEIGHBOUR_REACH = 2;
  * it all; in a thick fire each gives its share, and the front glows about as much as a few flames together.
  */
 export function glowShare(burning: number): number {
-    return Math.min(1, GLOW_FULL_NEIGHBOURS / Math.max(1, burning));
+    const tiles = Math.max(1, burning);
+    // Past a small fire the flames are drawn bigger and cover one another (see flameMass): their glows give way
+    // faster, or the heart of the fire is one white patch.
+    return Math.min(1, GLOW_FULL_NEIGHBOURS / tiles) * Math.min(1, GLOW_DENSE_FROM / tiles);
 }
