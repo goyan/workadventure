@@ -4,7 +4,7 @@ import type { Season, TerrainData } from "@workadventure/map-editor";
 import { refreshCanvasTexture } from "../CanvasTextureRefresh";
 import { ASH_COLOR, ashAlpha, GRASS_COLOR, grassAlpha, mottledCover } from "./MeadowState";
 import type { MeadowState } from "./MeadowState";
-import { DROP_SCALE, MAX_DROP, paintColumn, RELIEF_TEXEL } from "./ReliefProjection";
+import { DROP_SCALE, groundPointAt, MAX_DROP, paintColumn, RELIEF_TEXEL } from "./ReliefProjection";
 import type { ColumnSample } from "./ReliefProjection";
 import { ReliefTileSchedule, reliefSignature } from "./ReliefTileSchedule";
 import {
@@ -106,6 +106,11 @@ export class ReliefTiles {
     /** Whether the relief is drawn in 3/4 now (a map with relief, the editor closed). */
     public isActive(): boolean {
         return !this.hidden && this.inputs.relief() !== undefined;
+    }
+
+    /** The point of the ground drawn under a point of the map on the screen (groundPointAt); itself when flat. */
+    public groundPointAt(point: { x: number; y: number }): { x: number; y: number } {
+        return this.isActive() ? groundPointAt(this.inputs.relief(), point) : { x: point.x, y: point.y };
     }
 
     public setHidden(hidden: boolean): void {

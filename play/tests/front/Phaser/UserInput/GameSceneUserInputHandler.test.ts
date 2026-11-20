@@ -178,6 +178,16 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
         expect(camera.getWorldPoint.mock.calls).toEqual([[120, 160]]);
     });
 
+    it("walks to the ground drawn under the click, down in a hollow of the relief seen in 3/4", () => {
+        // The click lands on the floor of a hollow drawn 64 px lower than its place.
+        scene.getReliefTiles.mockReturnValue({
+            groundPointAt: (point: { x: number; y: number }) => ({ x: point.x, y: point.y - 64 }),
+        } as never);
+        handler.handlePointerUpEvent(pointer(2, 1), []);
+
+        expect(scene.moveTo.mock.calls).toEqual([[{ x: 480, y: 576 }, true, undefined]]);
+    });
+
     it("keeps the exact point for right-click navigation even when tile snapping is enabled", () => {
         tileSnap.enabled = true;
         handler.handlePointerUpEvent(pointer(2, 1), []);

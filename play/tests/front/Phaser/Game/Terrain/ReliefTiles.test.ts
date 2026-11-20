@@ -102,4 +102,21 @@ describe("the blocks of the relief seen in 3/4", () => {
         expect(tiles.redraws()).toBeGreaterThan(drawn);
         expect(images.filter((image) => image.visible).length).toBeGreaterThan(0);
     });
+
+    it("finds the ground drawn under a point while it is drawn in 3/4, and the point itself in the editor", () => {
+        // Dug 64 px deep from the cell 0 on: drawn 32 px lower.
+        const deep = withHeights(
+            undefined,
+            new Map(
+                Array.from({ length: 64 * 64 }, (_, index): [string, number] => [
+                    cellKey(index % 64, Math.floor(index / 64)),
+                    -64,
+                ]),
+            ),
+        );
+        const { tiles } = fixture(deep);
+        expect(tiles.groundPointAt({ x: 300, y: 300 + 32 }).y).toBeCloseTo(300, 0);
+        tiles.setHidden(true);
+        expect(tiles.groundPointAt({ x: 300, y: 332 })).toEqual({ x: 300, y: 332 });
+    });
 });

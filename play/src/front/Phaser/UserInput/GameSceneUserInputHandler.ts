@@ -238,7 +238,9 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             }
         }
         const cameraManager = this.gameScene.getCameraManager();
-        const worldPoint = cameraManager.getCamera().getWorldPoint(pointer.x, pointer.y);
+        const clicked = cameraManager.getCamera().getWorldPoint(pointer.x, pointer.y);
+        // In a hollow of the relief seen in 3/4, the ground is drawn lower than its place: aim at the ground drawn there.
+        const worldPoint = this.gameScene.getReliefTiles()?.groundPointAt(clicked) ?? clicked;
         if (
             isDoubleClick &&
             (worldPoint.x < 0 ||

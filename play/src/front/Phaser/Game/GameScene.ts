@@ -2375,7 +2375,11 @@ export class GameScene extends DirtyScene {
             // And the ground under the pointer, while it is over the game.
             const pointer = this.input.isOver ? this.input.activePointer : undefined;
             pointer?.updateWorldPoint(this.cameras.main);
-            pointerAltitudeStore.set(pointerAltitude(terrain, pointer && { x: pointer.worldX, y: pointer.worldY }));
+            // The ground drawn under the pointer: down in a hollow when the relief is seen in 3/4.
+            const pointed = pointer && { x: pointer.worldX, y: pointer.worldY };
+            pointerAltitudeStore.set(
+                pointerAltitude(terrain, pointed && (this.reliefTiles?.groundPointAt(pointed) ?? pointed)),
+            );
             // The relief is drawn in 3/4 out of the editor; flat in it, to dig and place where one aims.
             const editorOpen = get(mapEditorModeStore);
             this.reliefTiles?.setHidden(editorOpen);
