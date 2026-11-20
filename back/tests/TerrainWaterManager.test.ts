@@ -387,6 +387,24 @@ describe("TerrainWaterManager", () => {
         expect(sent[0].stats?.stock).toBeGreaterThan(0);
     });
 
+    it("fills nothing with a rain that falls as snow in the cold of the room, and half as much with a mix", () => {
+        const rainOf = (air: { temperature: number; humidity: number } | undefined): number => {
+            const { manager, sent, steps } = createHarness({ wam: wamWith(lake, WeatherType.Rain) });
+            manager.fallThrough(() => air);
+            manager.mapChanged();
+            steps(10);
+            manager.stop();
+            return sent[0]?.stats?.rainRate ?? 0;
+        };
+        expect(rainOf(undefined)).toBe(2);
+        expect(rainOf({ temperature: 20, humidity: 60 })).toBe(2);
+        expect(rainOf({ temperature: -2, humidity: 80 })).toBe(0);
+        // 1.2 °C in saturated air: a wet bulb of about 1 °C, half rain, half snow.
+        const mixed = rainOf({ temperature: 1.2, humidity: 99 });
+        expect(mixed).toBeGreaterThan(0.8);
+        expect(mixed).toBeLessThan(1.2);
+    });
+
     // A relief edited under the water keeps it where it was.
     it("keeps the water where it was when the relief changes, and tells the room the whole state again", () => {
         const { manager, wam, sent, steps } = createHarness();
