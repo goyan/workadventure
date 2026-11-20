@@ -33,11 +33,19 @@ const STILL_BELOW_PX_PER_S = 8;
 /** The way is read that far ahead of the companion, so that a small wobble of the master does not turn the group. */
 const HEADING_LOOKAHEAD_PX = 16;
 
+/** A copy of a place, with its altitude only when it is over the ground (see Point). */
+function placeOf(point: Point): Point {
+    return (point.z ?? 0) > 0 ? { x: point.x, y: point.y, z: point.z } : { x: point.x, y: point.y };
+}
+
 /**
  * A companion walking behind its master: its place on the way goes through the positions its master went through, so
  * it goes around the walls they went around, and stops two tiles behind them (measured along that way). The companion
  * stands at its place of the group around that point (see COMPANION_SLOTS), turned with the way. Every client computes
  * it from the position of the master it sees.
+ *
+ * The places are where the feet are on the ground, with the altitude of a master on a raised floor or a stair (see
+ * Point): the companion climbs the stairs its master climbed, and stands on the floor they stand on.
  */
 export class JungleCompanionFollower {
     /** Its place on the way of the master. */
@@ -55,7 +63,7 @@ export class JungleCompanionFollower {
     private stoppedAt: number;
 
     constructor(start: Point, nowMs: number) {
-        this.position = { x: start.x, y: start.y };
+        this.position = placeOf(start);
         this.shown = { x: start.x, y: start.y };
         this.lastMs = nowMs;
         this.stoppedAt = nowMs;
@@ -71,7 +79,7 @@ export class JungleCompanionFollower {
         this.lastMs = nowMs;
         const place = COMPANION_SLOTS[slot] ?? COMPANION_SLOTS[0];
         if (Math.hypot(master.x - this.position.x, master.y - this.position.y) > COMPANION_TELEPORT_PX) {
-            this.position = { x: master.x, y: master.y };
+            this.position = placeOf(master);
             this.trail = [];
             this.offset = this.placeOffset(place);
             this.shown = { x: this.position.x + this.offset.x, y: this.position.y + this.offset.y };
@@ -106,17 +114,23 @@ export class JungleCompanionFollower {
         if (Math.abs(dx) >= Math.abs(dy)) this.direction = dx < 0 ? "left" : "right";
         else this.direction = dy < 0 ? "up" : "down";
         this.stoppedAt = nowMs;
-        return { x: this.shown.x, y: this.shown.y, direction: this.direction, moving: true, pausedMs: 0 };
+        return this.raised({ x: this.shown.x, y: this.shown.y, direction: this.direction, moving: true, pausedMs: 0 });
+    }
+
+    /** The pose at the altitude of its place on the way: the one its master had there. */
+    private raised(pose: WanderPose): WanderPose {
+        if ((this.position.z ?? 0) > 0) pose.z = this.position.z;
+        return pose;
     }
 
     private still(nowMs: number): WanderPose {
-        return {
+        return this.raised({
             x: this.shown.x,
             y: this.shown.y,
             direction: this.direction,
             moving: false,
             pausedMs: nowMs - this.stoppedAt,
-        };
+        });
     }
 
     /** From the place on the way to the place in the group, turned with the way. */
@@ -142,7 +156,7 @@ export class JungleCompanionFollower {
     private record(master: Point): void {
         const last = this.trail.at(-1) ?? this.position;
         if (Math.hypot(master.x - last.x, master.y - last.y) < TRAIL_SPACING_PX) return;
-        this.trail.push({ x: master.x, y: master.y });
+        this.trail.push(placeOf(master));
         // A very long way (bounded by the teleport anyway): its oldest part is cut, straight to the next point.
         if (this.trail.length > MAX_TRAIL_POINTS) this.trail.shift();
     }
@@ -164,15 +178,17 @@ export class JungleCompanionFollower {
             const next = this.trail[0];
             const length = Math.hypot(next.x - this.position.x, next.y - this.position.y);
             if (length <= left) {
-                this.position = { x: next.x, y: next.y };
+                this.position = placeOf(next);
                 this.trail.shift();
                 left -= length;
                 continue;
             }
-            this.position = {
+            const z = (this.position.z ?? 0) + (((next.z ?? 0) - (this.position.z ?? 0)) * left) / length;
+            this.position = placeOf({
                 x: this.position.x + ((next.x - this.position.x) * left) / length,
                 y: this.position.y + ((next.y - this.position.y) * left) / length,
-            };
+                z,
+            });
             left = 0;
         }
     }

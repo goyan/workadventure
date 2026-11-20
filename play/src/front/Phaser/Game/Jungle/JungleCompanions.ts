@@ -19,6 +19,8 @@ export const COMPANION_PROMPT_PX = 48;
  * message takes, shorter than anyone would notice.
  */
 export const COMPANION_HOLD_MS = 3_000;
+/** Closer than this in altitude, a player and an animal stand on the same floor (as for the bubbles, see FloorLevel). */
+export const SAME_FLOOR_PX = 6;
 /** The companions are announced again at once to a player who arrives, at most that often. */
 const ARRIVAL_ANNOUNCE_MS = 1_000;
 
@@ -43,8 +45,17 @@ export interface JungleCompanionWorld {
     playerInWater(userId: number): boolean;
     /** The jungle animals of the map now (see JungleManager). */
     animals(): readonly JungleAnimal[];
-    /** Where an animal is shown, undefined while it is not. */
+    /**
+     * Where an animal is shown on the screen, undefined while it is not; with `z`, the altitude of the floor or the
+     * stair it stands on (it is drawn that much further north than its feet are on the ground).
+     */
     animalPose(id: string): Point | undefined;
+    /**
+     * The altitude of the floor a player this client sees stands on (0: the ground); undefined when they stand on
+     * none (flying). With it, an animal is tamed and released from its own floor only, and a companion goes up
+     * the stairs behind its master; without it, everything is on the ground (see playerOnGround).
+     */
+    playerFloorZ?(userId: number): number | undefined;
     editorOpen(): boolean;
     /** Whether the local player stands on the ground, where the animals are (not on a raised floor over them). */
     playerOnGround?(): boolean;
@@ -190,7 +201,6 @@ export class JungleCompanions {
 
     private tame(animal: string): void {
         if (this.local.has(animal) || !this.hasRoom() || this.world.editorOpen()) return;
-        if (this.world.playerOnGround?.() === false) return;
         // The action may be called late (a prompt of a former frame): the animal must still be within reach and free.
         if (!this.withinReach(animal) || this.others.claims(this.nowMs).some((claim) => claim.animal === animal))
             return;
@@ -209,7 +219,24 @@ export class JungleCompanions {
         const feet = localId === undefined ? undefined : this.world.playerFeet(localId);
         const pose = this.world.animalPose(animal);
         if (!feet || !pose || !this.world.animals().some((candidate) => candidate.id === animal)) return false;
-        return Math.hypot(pose.x - feet.x, pose.y - feet.y) <= COMPANION_PROMPT_PX;
+        return this.onFloorOfPlayer(pose) && Math.hypot(pose.x - feet.x, pose.y - feet.y) <= COMPANION_PROMPT_PX;
+    }
+
+    /**
+     * Whether an animal shown there stands on the floor of the local player: next to each other on the screen, two
+     * floors apart, they are out of reach.
+     */
+    private onFloorOfPlayer(pose: Point): boolean {
+        if (!this.world.playerFloorZ) return this.world.playerOnGround?.() !== false;
+        const localId = this.world.localUserId();
+        const z = localId === undefined ? undefined : this.world.playerFloorZ(localId);
+        return z !== undefined && Math.abs((pose.z ?? 0) - z) < SAME_FLOOR_PX;
+    }
+
+    /** Where a player stands: their feet on the ground, with the altitude of their floor (see Point). */
+    private placeOfPlayer(feet: Point, userId: number): Point {
+        const z = this.world.playerFloorZ?.(userId) ?? 0;
+        return z > 0 ? { x: feet.x, y: feet.y + z, z } : feet;
     }
 
     private release(animal: string): void {
@@ -253,7 +280,13 @@ export class JungleCompanions {
         }
         for (const [animal, { owner }] of owners) {
             if (this.led.has(animal)) continue;
-            const start = this.world.animalPose(animal) ?? animals.get(animal)?.nest ?? { x: 0, y: 0 };
+            // From where it is shown, as a place on the ground (see Point).
+            const shown = this.world.animalPose(animal);
+            const start = shown
+                ? (shown.z ?? 0) > 0
+                    ? { x: shown.x, y: shown.y + (shown.z ?? 0), z: shown.z }
+                    : shown
+                : (animals.get(animal)?.nest ?? { x: 0, y: 0 });
             let follower: JungleCompanionFollower | undefined = new JungleCompanionFollower(start, this.nowMs);
             const entry: { owner: number; sheetPath: string | undefined; slot: number; lead: WanderLead | undefined } =
                 { owner, sheetPath: animals.get(animal)?.sheetPath, slot: slots.get(animal) ?? 0, lead: undefined };
@@ -267,8 +300,9 @@ export class JungleCompanions {
                         follower = undefined;
                         return undefined;
                     }
-                    follower ??= new JungleCompanionFollower(feet, nowMs);
-                    return follower.poseAt(nowMs, feet, !this.world.playerInWater(owner), entry.slot);
+                    const master = this.placeOfPlayer(feet, owner);
+                    follower ??= new JungleCompanionFollower(master, nowMs);
+                    return follower.poseAt(nowMs, master, !this.world.playerInWater(owner), entry.slot);
                 },
             };
             this.world.setLead(animal, entry.lead);
@@ -278,7 +312,7 @@ export class JungleCompanions {
     private updatePrompt(owners: Map<string, JungleCompanionClaim>, animals: Map<string, JungleAnimal>): void {
         const localId = this.world.localUserId();
         const feet = localId === undefined ? undefined : this.world.playerFeet(localId);
-        if (!feet || this.world.editorOpen() || this.world.playerOnGround?.() === false) {
+        if (!feet || this.world.editorOpen()) {
             this.hidePrompt();
             return;
         }
@@ -291,7 +325,7 @@ export class JungleCompanions {
             const kind = this.local.has(animal) ? "release" : !owners.has(animal) && canTame ? "tame" : undefined;
             if (!kind) continue;
             const pose = this.world.animalPose(animal);
-            if (!pose) continue;
+            if (!pose || !this.onFloorOfPlayer(pose)) continue;
             const distance = Math.hypot(pose.x - feet.x, pose.y - feet.y);
             if (distance <= COMPANION_PROMPT_PX && distance < best) {
                 best = distance;

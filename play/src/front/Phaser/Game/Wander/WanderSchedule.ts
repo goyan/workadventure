@@ -1,6 +1,10 @@
 import { mulberry32, wanderSeed } from "./WanderRandom";
 
-export type Point = { x: number; y: number };
+/**
+ * A place of the map, in pixels: where the feet are on the ground, and with `z` how high over it they stand on a
+ * raised floor or a stair (absent on the ground). On the screen, what stands at `z` is drawn `z` further north.
+ */
+export type Point = { x: number; y: number; z?: number };
 export type WanderDirection = "down" | "left" | "right" | "up";
 
 export interface WanderPose {
@@ -15,6 +19,8 @@ export interface WanderPose {
     pausedMs: number;
     /** Set while the character drinks at the water it is turned to (`direction`). */
     drinking?: true;
+    /** How high over the ground it stands, on a raised floor or a stair: absent on the ground (see Point). */
+    z?: number;
 }
 
 /** Where a character can drink (pixels, the centre of a dry tile by the water), and which way the water is. */
@@ -25,8 +31,16 @@ export interface Shore extends Point {
 export interface WanderMap {
     /** Tile coordinates. Must return false outside the grid. */
     isWalkable(tile: Point): boolean;
-    /** Pixel coordinates. Resolves to [] when the destination is unreachable. */
+    /**
+     * Pixel coordinates. Resolves to [] when the destination is unreachable. On a map with raised floors the points
+     * may stand on one (see Point): the walk then goes up and down the stairs.
+     */
     findPath(from: Point, to: Point): Promise<Point[]>;
+    /**
+     * The altitudes of the raised floors a character can stand on over a tile (tile coordinates), lowest first.
+     * Without it, or without any, the characters stay on the ground. The same on every client.
+     */
+    levelsAt?(tile: Point): number[];
     /** Where the feet of a character sitting on each seat of the map are (pixels). The same on every client. */
     seats?(): Point[];
     /** Where the characters can drink now. The same on every client. */
@@ -70,6 +84,13 @@ export function isDrinkLeg(entityId: string, leg: number, intervalMs: number): b
     const interval = Math.max(LEG_MS, intervalMs);
     const start = leg * LEG_MS + (wanderSeed(entityId, 0, 2000) % interval);
     return Math.floor(start / interval) !== Math.floor((start - LEG_MS) / interval);
+}
+
+/** A destination as a point of a walk: where it is, and how high (see Point). */
+function placeOf(destination: Destination): Point {
+    const place: Point = { x: destination.x, y: destination.y };
+    if ((destination.z ?? 0) > 0) place.z = destination.z;
+    return place;
 }
 
 interface Leg {
@@ -193,13 +214,19 @@ export class WanderSchedule {
             const dx = Math.floor(random() * (2 * this.radiusTiles + 1)) - this.radiusTiles;
             const dy = Math.floor(random() * (2 * this.radiusTiles + 1)) - this.radiusTiles;
             const tile = { x: nestTile.x + dx, y: nestTile.y + dy };
-            if (!this.safeIsWalkable(tile)) {
+            // Where it can stand over that tile: the ground, the raised floors. With one choice only (always, on a
+            // map without floors) nothing more is drawn: the walks of such a map are what they always were.
+            const raised = this.safeLevelsAt(tile);
+            const levels = this.safeIsWalkable(tile) ? [0, ...raised] : raised;
+            if (levels.length === 0) {
                 continue;
             }
-            if (dx === 0 && dy === 0) {
+            const z = levels.length === 1 ? levels[0] : levels[Math.floor(random() * levels.length)];
+            if (dx === 0 && dy === 0 && Math.abs(z - (nest.z ?? 0)) < 2) {
                 return nest;
             }
-            const centre = { x: tile.x * TILE_SIZE + TILE_SIZE / 2, y: tile.y * TILE_SIZE + TILE_SIZE / 2 };
+            const centre: Point = { x: tile.x * TILE_SIZE + TILE_SIZE / 2, y: tile.y * TILE_SIZE + TILE_SIZE / 2 };
+            if (z > 0) centre.z = z;
             // Attempts are sequential on purpose: the first valid one wins.
             // eslint-disable-next-line no-await-in-loop
             const path = await this.safeFindPath(nest, centre);
@@ -283,20 +310,20 @@ export class WanderSchedule {
         // Off a seat first (to the spot next to it), and onto a seat last (from the spot next to it).
         const start: Point = startDestination.approach ?? startDestination;
         const end: Point = endDestination.approach ?? endDestination;
-        const points: Point[] = [{ x: startDestination.x, y: startDestination.y }];
+        const points: Point[] = [placeOf(startDestination)];
         if (startDestination.approach) points.push(startDestination.approach);
-        if (start.x !== end.x || start.y !== end.y) {
+        if (start.x !== end.x || start.y !== end.y || (start.z ?? 0) !== (end.z ?? 0)) {
             const path = await this.safeFindPath(start, end);
             if (path.length > 0) {
                 points.push(...path);
                 const last = points[points.length - 1];
-                if (last.x !== end.x || last.y !== end.y) {
+                if (last.x !== end.x || last.y !== end.y || (last.z ?? 0) !== (end.z ?? 0)) {
                     // Make sure the leg ends exactly where the next one starts.
                     points.push(end);
                 }
             }
         }
-        if (endDestination.approach) points.push({ x: endDestination.x, y: endDestination.y });
+        if (endDestination.approach) points.push(placeOf(endDestination));
         const distances = [0];
         for (let i = 1; i < points.length; i++) {
             distances.push(distances[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y));
@@ -334,6 +361,7 @@ export class WanderSchedule {
                 pausedMs: LEG_MS + elapsedMs,
             };
             if (leg.drink) still.drinking = true;
+            if ((points[0].z ?? 0) > 0) still.z = points[0].z;
             return still;
         }
         const from = points[segment];
@@ -349,6 +377,9 @@ export class WanderSchedule {
         }
         const pausedMs = moving ? 0 : Math.max(0, elapsedMs - (total / leg.speed) * 1000);
         const pose: WanderPose = { x: from.x + dx * ratio, y: from.y + dy * ratio, direction, moving, pausedMs };
+        // On a stair or a ramp its altitude goes from the one of an end to the one of the other.
+        const z = (from.z ?? 0) + ((to.z ?? 0) - (from.z ?? 0)) * ratio;
+        if (z > 0) pose.z = z;
         if (!moving && leg.drink) {
             // Arrived at the shore: turned to the water, whichever way it came.
             pose.direction = leg.drink;
@@ -363,6 +394,15 @@ export class WanderSchedule {
         } catch (e) {
             console.warn("Wander: isWalkable failed", e);
             return false;
+        }
+    }
+
+    private safeLevelsAt(tile: Point): number[] {
+        try {
+            return this.map.levelsAt?.(tile) ?? [];
+        } catch (e) {
+            console.warn("Wander: levelsAt failed", e);
+            return [];
         }
     }
 

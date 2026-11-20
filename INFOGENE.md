@@ -3678,18 +3678,68 @@ du sol n'atteint n'est pas un pont (un toit, l'étage d'un bâtiment sans accès
   `AquaticLifeManager.readLand`) : les deux rives sont une seule terre pour antilopes, lions et tigres, relue quand
   un pont change. Le serveur lit les noms et les places des pièces ; un test du front vérifie qu'il lit un pont là
   où l'éditeur le pose.
-- Navigateur : ces cases ne sont jamais « mouillées » pour les animaux promeneurs (`TerrainWater.setBridges`, relu
-  deux fois par seconde). Un animal au-dessus d'un pont est dessiné à la hauteur du tablier (une part de cette
-  hauteur le long d'une rampe), par-dessus les dalles (`Bridges.elevationAt`, `LandLifeView`,
-  `WanderingCharactersManager`).
+- Navigateur, animaux du serveur (antilopes, lions, tigres) : un animal au-dessus d'un pont est dessiné à la hauteur
+  du tablier (une part de cette hauteur le long d'une rampe), par-dessus les dalles (`Bridges.elevationAt`,
+  `LandLifeView`).
+- Navigateur, animaux promeneurs (canards, chiens, chats, jungle) et compagnons : ils marchent vraiment sur le
+  tablier, par ses rampes, comme sur tout palier (voir « Animaux sur les étages, les escaliers et les ponts »).
 - Avatar : rien de particulier, il marche sur les dalles comme sur tout palier (ni nage ni courant en hauteur) ;
   au sol sous le tablier, il nage comme ailleurs.
 
 **Limites.** Les animaux du serveur vivent à plat : un animal qui arrive par la berge sous le tablier monte dessus
 d'un coup, et un lion peut prendre un poisson qui passe dessous. Pas de recherche de chemin : un animal ne traverse
-que si sa ligne droite suit le pont. Un animal apprivoisé qui suit son maître sur un pont est dessiné sous les dalles.
+que si sa ligne droite suit le pont (animaux du serveur). Un lion ou un tigre du serveur apprivoisé qui suit son
+maître sur un pont est dessiné sous les dalles.
 Les dalles d'un palier ne reçoivent ni pluie ni nuages. Pas de garde-corps propre au pont (ceux des paliers). Bois
 seul. L'herbe pousse sous un tablier.
+
+## Animaux sur les étages, les escaliers et les ponts (lot 1 : promeneurs et compagnons)
+
+Conception d'ensemble (toutes les familles d'animaux, lots suivants) dans le dépôt d'infra :
+`docs/superpowers/specs/2026-11-20-animaux-altitude-design.md`.
+
+**Pour qui joue.** Les animaux qui se promènent tout seuls (canards, chiens, chats posés sur la carte, lions et
+tigres de la jungle) montent et descendent les escaliers et les rampes, marchent sur les dalles des paliers et
+traversent une rivière par un pont. Un animal apprivoisé suit son maître à l'étage. On apprivoise et on relâche un
+animal depuis son propre étage seulement. Le compagnon d'origine de WorkAdventure (celui du profil) n'est plus
+dessiné sous les dalles quand son joueur est à l'étage. Sur une carte sans palier, rien ne change : mêmes promenades.
+
+**Modèle.** Un point d'une promenade (`Point` de `Wander/WanderSchedule.ts`) est l'endroit où sont les pieds **sur le
+sol** (`x`, `y`) et, avec `z`, la hauteur à laquelle ils se tiennent (absent au sol). À l'écran, ce qui est à `z` est
+dessiné `z` pixels plus au nord, dans la bande de profondeur de son altitude (`floorDepth`), comme un avatar.
+
+- `MapEditor/MapLayer/FloorPath.ts` : le parcours case par case et par les escaliers des avatars (double-clic) est
+  sorti en `floorRoute` ; `floorPath` s'en sert, les animaux aussi.
+- `Wander/WanderFloors.ts` (`wanderFloorsOf`) : les étages vus par les animaux. `levelsAt(case)` : les altitudes où
+  l'on peut se tenir (une dalle, pas sous un escalier de l'étage, pas sur un meuble ni dans une piscine de
+  l'étage) ; `route(de, vers)` : les points à suivre, pied puis tête de chaque escalier, à 12 cases au plus autour
+  des deux bouts. Ne dépend que de la carte : tous les navigateurs trouvent le même chemin.
+- `WanderSchedule` : une destination tirée au sort tombe sur le sol ou sur un des étages au-dessus de sa case
+  (tirage supplémentaire seulement quand il y a plusieurs choix : sur une carte sans palier, la suite des tirages est
+  celle d'avant) ; l'altitude est interpolée le long du trajet (un escalier monte de son pied à sa tête).
+- `WanderingCharactersManager` : lit le modèle des paliers déjà lu pour les avatars (`FloorSpike.walkContext()`),
+  et refait les promenades quand il change. Trajet : celui du sol d'abord, comme avant ; s'il n'y en a pas (une
+  rivière) ou si un bout est en hauteur, celui des étages. Les cases du sol sous un escalier posé au sol sont
+  fermées ; l'eau sous un tablier redevient de l'eau (le tablier se prend par ses rampes) ; un objet posé en hauteur
+  n'arrête plus les animaux du sol, il occupe sa case de son étage ; les murs d'un étage arrêtent. Le nid d'un animal
+  posé sur un palier est sur ce palier.
+- Affichage : un animal sur un étage se montre et s'estompe avec cet étage comme un joueur (`floorOccupants`,
+  branché sur `FloorSpike`) ; plus bas que l'avatar, il est sous le voile des étages du dessous (par sa profondeur).
+- Portes : au sol il ouvre les portes du sol, sur un étage celles de cet étage (`forEachRaisedDoorOpener`,
+  `UpperDoors`).
+- Jungle (`outdoorWanderMap`) : un étage au-dessus du dehors est en plein air (le tablier d'un pont), les lions et
+  tigres y passent ; jamais l'étage d'un bâtiment.
+- Compagnons (`JungleCompanionFollower`, `JungleCompanions`) : la piste du maître garde son altitude, le compagnon a
+  à chaque endroit celle que son maître y avait ; invite « apprivoiser / relâcher » seulement à moins de 6 px
+  d'altitude d'écart (`SAME_FLOOR_PX`, comme les bulles), rien en vol.
+
+**Limites (lot 1).** Les animaux du serveur (antilopes, lions, tigres de la vie de la terre, apprivoisés compris)
+restent au sol, avec le pont « à plat » d'avant : lot 2, avec protocole. Sur un étage ou un pont, un animal ne fuit
+ni les avatars ni le feu, et n'est pas vu par les capteurs de présence ; il ne s'assoit que sur les sièges du sol.
+Un escalier de deux cases de large se prend par sa file du pied. Un animal passe sous un escalier à flanc vide
+seulement par le contour (les cases sous l'escalier lui sont fermées). Les places de côté d'un groupe de compagnons
+peuvent dépasser du bord d'un palier. Le chemin par les étages avance case par case (pas de diagonale). Pas d'ombre
+vérifiée sur un tablier. Rien de cela n'a été vu à l'écran par un agent.
 
 ## Catastrophes : le météore brûlant
 

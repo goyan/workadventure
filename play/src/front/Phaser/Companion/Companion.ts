@@ -21,6 +21,7 @@ import {
     segmentCrossesWater,
 } from "../Game/Water/WaterZones";
 import { placeAtDepth } from "../Game/DepthSort";
+import { floorDepth } from "../Game/MapEditor/MapLayer/FloorDepth";
 import { companionColumns, companionStillFrame, companionWalkFrames } from "./CompanionSheet";
 
 import Sprite = Phaser.GameObjects.Sprite;
@@ -75,7 +76,8 @@ export class Companion extends Container {
 
     constructor(
         scene: Phaser.Scene,
-        private readonly owner: { x: number; y: number },
+        /** Its player: where they are drawn, and with `getFloorZ` the raised floor they stand on. */
+        private readonly owner: { x: number; y: number; getFloorZ?(): number; isFlying?(): boolean },
         texturePromise: CancelablePromise<string>,
     ) {
         super(scene, owner.x, owner.y + COMPANION_Y_OFFSET);
@@ -244,7 +246,10 @@ export class Companion extends Container {
             this.direction = this.target.direction;
         }
 
-        placeAtDepth(this, this.exactY);
+        // On a raised floor with its player (it follows where they are drawn): among what stands on that floor,
+        // instead of under its slabs.
+        const floorZ = this.owner.isFlying?.() ? 0 : (this.owner.getFloorZ?.() ?? 0);
+        placeAtDepth(this, floorDepth(floorZ, this.exactY));
         this.playAnimation(this.direction, this.animationType, time);
     }
 
