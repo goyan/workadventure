@@ -1,25 +1,16 @@
 import * as Phaser from "phaser";
-import { heightAt, SOILS, soilAt, TERRAIN_CELL, TERRAIN_CHUNK, TILE_PX } from "@workadventure/map-editor";
+import { heightAt, TERRAIN_CELL, TERRAIN_CHUNK } from "@workadventure/map-editor";
 import type { Season, TerrainData } from "@workadventure/map-editor";
 import { refreshCanvasTexture } from "../CanvasTextureRefresh";
-import { ASH_COLOR, ashAlpha, GRASS_COLOR, grassAlpha, mottledCover } from "./MeadowState";
 import type { MeadowState } from "./MeadowState";
+import { groundColor, groundValue, lightOfRise, textureIndex, textureTable, TEXTURE_MASK } from "./Pixel/GroundPixel";
+import { cellMaterial, outlineOf, pickMaterial } from "./Pixel/MaterialField";
+import { bayer, RAMPS } from "./Pixel/PixelPalette";
+import type { Material, Ramp, Rgb as PaletteRgb } from "./Pixel/PixelPalette";
 import { DROP_SCALE, groundPointAt, MAX_DROP, paintColumn, RELIEF_TEXEL } from "./ReliefProjection";
 import type { ColumnSample } from "./ReliefProjection";
-import { RAMPS } from "./Pixel/PixelPalette";
 import { ReliefTileSchedule, reliefSignature } from "./ReliefTileSchedule";
-import {
-    DEEP_WATER_COLOR,
-    deepWaterAlpha,
-    groundAlpha,
-    SHALLOW_WATER,
-    SHORE_PX,
-    SHORE_WATER,
-    slopeAlpha,
-    slopeShade,
-    SNOW_COLOR,
-    SOIL_TINTS,
-} from "./TerrainShading";
+import { DEEP_WATER_COLOR, deepWaterAlpha, SHALLOW_WATER, SHORE_PX, SHORE_WATER } from "./TerrainShading";
 import type { TerrainWater } from "./TerrainWater";
 
 /** Over the relief of the ground (0.65), under the objects and the avatars. */
@@ -27,11 +18,41 @@ const RELIEF_TILES_DEPTH = 0.66;
 /** Map pixels across a block: one chunk of the relief. */
 const BLOCK_PX = TERRAIN_CHUNK * TERRAIN_CELL;
 const BLOCK_TEXELS = BLOCK_PX / RELIEF_TEXEL;
-/** The ground of the map under the relief, where nothing else is painted: a meadow green. */
-const GROUND_BASE = 0x7f9a55;
-/** The rock of the faces of the drops, a little of the soil of their rim mixed in. */
-const WALL_ROCK = 0x8f7f69;
+/** The ground of a block seen from above: 1 px more all around than the block, and MAX_DROP px north of it. */
+const POINT_COLUMNS = BLOCK_PX + 2;
+const POINT_ROWS = MAX_DROP + BLOCK_PX + 2;
+const MATERIALS: readonly Material[] = [
+    "grass",
+    "earth",
+    "meadow",
+    "clay",
+    "sand",
+    "rock",
+    "gravel",
+    "straw",
+    "ash",
+    "ember",
+    "snow",
+];
+const UNKNOWN_MATERIAL = 255;
+/** The thresholds of the dither (bayer), row by row. */
+const BAYER_ROWS = [0, 1, 2, 3].map((row) => [0, 1, 2, 3].map((column) => bayer(column, row)));
+const MATERIAL_INDEX = Object.fromEntries(MATERIALS.map((material, index) => [material, index])) as Record<
+    Material,
+    number
+>;
+/** The rock of the faces of the drops, a little of the material of their rim mixed in. */
 const WALL_SOIL_SHARE = 0.3;
+const WALL_RAMPS = Object.fromEntries(
+    MATERIALS.map((material) => [
+        material,
+        RAMPS.wall.map((shade, index) =>
+            shade.map((channel, at) =>
+                Math.round(channel * (1 - WALL_SOIL_SHARE) + RAMPS[material][index][at] * WALL_SOIL_SHARE),
+            ),
+        ) as unknown as Ramp,
+    ]),
+) as Record<Material, Ramp>;
 /** The cells a block is drawn from: its own, the rows north of it its faces come from, one more all around. */
 const GRID_WIDTH = TERRAIN_CHUNK + 2;
 const GRID_HEIGHT = TERRAIN_CHUNK + MAX_DROP / TERRAIN_CELL + 2;
@@ -83,12 +104,16 @@ export class ReliefTiles {
     private readonly waterSignatures = new Map<string, string>();
     private readonly heights = new Float32Array(GRID_WIDTH * GRID_HEIGHT);
     private readonly gridWater = new Uint8Array(GRID_WIDTH * GRID_HEIGHT);
-    private readonly cellColorCache: ({ ground: Rgb; wall: Rgb } | undefined)[] = new Array(GRID_WIDTH * GRID_HEIGHT);
+    private readonly cellMaterials = new Uint8Array(GRID_WIDTH * GRID_HEIGHT);
+    /** The ground of a block seen from above, a pixel a pixel of the map: reused, nothing allocated. */
+    private readonly pointHeights = new Float32Array(POINT_COLUMNS * POINT_ROWS);
+    private readonly pointMaterials = new Uint8Array(POINT_COLUMNS * POINT_ROWS);
+    private readonly pointColors: PaletteRgb[] = new Array<PaletteRgb>(POINT_COLUMNS * POINT_ROWS).fill(RAMPS.grass[0]);
     /** One sample a texel of a column, from MAX_DROP north of the block to its bottom: reused, nothing allocated. */
     private readonly samples: ColumnSample[] = Array.from({ length: (MAX_DROP + BLOCK_PX) / RELIEF_TEXEL + 1 }, () => ({
         groundY: 0,
         drop: 0,
-        color: [0, 0, 0] as Rgb,
+        color: RAMPS.grass[0],
         wallRamp: RAMPS.wall,
         plain: true,
     }));
@@ -218,7 +243,8 @@ export class ReliefTiles {
         if (kept) return kept;
         const texture = this.scene.textures.createCanvas(`relief-block:${key}`, BLOCK_TEXELS, BLOCK_TEXELS);
         if (!texture) return undefined;
-        texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
+        // Pixel art: each pixel of the block is a pixel of the map, never smoothed.
+        texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
         const image = this.scene.add
             .image(left, top, texture.key)
             .setOrigin(0, 0)
@@ -237,7 +263,7 @@ export class ReliefTiles {
         const block = this.block(key, left, top);
         if (!block) return;
         // The heights and the water of the cells the block is drawn from, read once (one more cell around for the
-        // interpolation between centres): reading the relief map at every texel made a block cost 25 ms.
+        // interpolation between centres): reading the relief map at every pixel would cost far too much.
         const gridX = blockX * TERRAIN_CHUNK - 1;
         const gridY = blockY * TERRAIN_CHUNK - MAX_DROP / TERRAIN_CELL - 1;
         const width = GRID_WIDTH;
@@ -248,7 +274,19 @@ export class ReliefTiles {
             }
         }
         const wet = this.inputs.water.levelsOver(gridX, gridY, width, height, now, this.gridWater);
-        this.cellColorCache.fill(undefined);
+        // Only the rows of the ground that can be drawn in the block are worked out: a point is drawn lower by its drop,
+        // between the least and the most of the block (no least under water, whose surface is drawn higher). One more
+        // row each way, for the face of a drop that comes from the row before or goes on past the block.
+        let lowest = 0;
+        let highest = Number.NEGATIVE_INFINITY;
+        for (const value of this.heights) {
+            if (value < lowest) lowest = value;
+            if (value > highest) highest = value;
+        }
+        const mostDrop = Math.min(MAX_DROP, Math.max(0, -lowest) * DROP_SCALE);
+        const leastDrop = wet ? 0 : Math.min(MAX_DROP, Math.max(0, -highest) * DROP_SCALE);
+        const firstY = top - Math.ceil(mostDrop) - 1;
+        const endY = Math.min(top + BLOCK_PX, top + BLOCK_PX - Math.floor(leastDrop) + 1);
         const bilinear = (values: ArrayLike<number>, x: number, y: number): number => {
             const fx = Math.min(width - 1.001, Math.max(0, x / TERRAIN_CELL - 0.5 - gridX));
             const fy = Math.min(height - 1.001, Math.max(0, y / TERRAIN_CELL - 0.5 - gridY));
@@ -261,73 +299,134 @@ export class ReliefTiles {
             const lower = values[index + width] * (1 - tx) + values[index + width + 1] * tx;
             return upper * (1 - ty) + lower * ty;
         };
+        // What covers each cell, read once.
+        this.cellMaterials.fill(UNKNOWN_MATERIAL);
+        const cellInputs = { terrain, meadow: this.inputs.meadow, snowShown: this.inputs.snowShown() };
+        const cell = (cellX: number, cellY: number): Material => {
+            const column = Math.min(width - 1, Math.max(0, cellX - gridX));
+            const row = Math.min(height - 1, Math.max(0, cellY - gridY));
+            const index = row * width + column;
+            let known = this.cellMaterials[index];
+            if (known === UNKNOWN_MATERIAL) {
+                known = MATERIAL_INDEX[cellMaterial(cellInputs, gridX + column, gridY + row)];
+                this.cellMaterials[index] = known;
+            }
+            return MATERIALS[known];
+        };
+        // 1. The ground seen from above, one pixel a pixel of the map, 1 px more all around than what is drawn (so a
+        // border on the edge of a block gets its line on both blocks) and MAX_DROP px north of the block.
+        const originX = left - 1;
+        const originY = top - MAX_DROP - 1;
+        const heights = this.pointHeights;
+        const materials = this.pointMaterials;
+        const cellHeights = this.heights;
+        const firstRow = Math.max(0, firstY - originY - 1);
+        const endRow = Math.min(POINT_ROWS, endY - originY + 1);
+        for (let row = firstRow; row < endRow; row++) {
+            const y = originY + row + 0.5;
+            // The heights between the centres of the cells, worked out along the row (the bilinear of `bilinear`).
+            const fy = Math.min(height - 1.001, Math.max(0, y / TERRAIN_CELL - 0.5 - gridY));
+            const heightRow = Math.floor(fy);
+            const ty = fy - heightRow;
+            // The four cells around the points of this row, between their centres: one material all around is the
+            // material of every point there, only a border needs pickMaterial.
+            const cellY = Math.floor(y / TERRAIN_CELL - 0.5);
+            let region = Number.NaN;
+            let uniform = -1;
+            for (let column = 0; column < POINT_COLUMNS; column++) {
+                const x = originX + column + 0.5;
+                const index = row * POINT_COLUMNS + column;
+                const fx = Math.min(width - 1.001, Math.max(0, x / TERRAIN_CELL - 0.5 - gridX));
+                const heightColumn = Math.floor(fx);
+                const tx = fx - heightColumn;
+                const at = heightRow * width + heightColumn;
+                const upper = cellHeights[at] * (1 - tx) + cellHeights[at + 1] * tx;
+                const lower = cellHeights[at + width] * (1 - tx) + cellHeights[at + width + 1] * tx;
+                heights[index] = upper * (1 - ty) + lower * ty;
+                const cellX = Math.floor(x / TERRAIN_CELL - 0.5);
+                if (cellX !== region) {
+                    region = cellX;
+                    const material = cell(cellX, cellY);
+                    uniform =
+                        material === cell(cellX + 1, cellY) &&
+                        material === cell(cellX, cellY + 1) &&
+                        material === cell(cellX + 1, cellY + 1)
+                            ? MATERIAL_INDEX[material]
+                            : -1;
+                }
+                materials[index] = uniform >= 0 ? uniform : MATERIAL_INDEX[pickMaterial(cell, x, y)];
+            }
+        }
+        // 2. Its colours: texture, light of the slope, depth, and the line of a border.
+        const colors = this.pointColors;
+        const textures = MATERIALS.map((material) => textureTable(material));
+        for (let row = Math.max(1, firstRow + 1); row < Math.min(POINT_ROWS - 1, endRow - 1); row++) {
+            const y = originY + row;
+            const textureRow = textureIndex(0, y);
+            const bayerRow = BAYER_ROWS[y & 3];
+            for (let column = 1; column < POINT_COLUMNS - 1; column++) {
+                const index = row * POINT_COLUMNS + column;
+                const here = materials[index];
+                const material = MATERIALS[here];
+                const west = materials[index - 1];
+                const east = materials[index + 1];
+                const north = materials[index - POINT_COLUMNS];
+                const south = materials[index + POINT_COLUMNS];
+                // Inside a material (most of the ground): no line to look for.
+                const outline =
+                    west === here && east === here && north === here && south === here
+                        ? undefined
+                        : (outlineOf(material, MATERIALS[west]) ??
+                          outlineOf(material, MATERIALS[east]) ??
+                          outlineOf(material, MATERIALS[north]) ??
+                          outlineOf(material, MATERIALS[south]));
+                const rise =
+                    heights[index + 1] -
+                    heights[index - 1] +
+                    heights[index + POINT_COLUMNS] -
+                    heights[index - POINT_COLUMNS];
+                const x = originX + column;
+                const light = lightOfRise(rise);
+                if (outline === undefined && material !== "ember") {
+                    // The common case of groundColor, without its calls: texture, light, depth, then the dither.
+                    const value = groundValue(textures[here][textureRow + (x & TEXTURE_MASK)], light, heights[index]);
+                    const shade = Math.round(value * 3 + bayerRow[x & 3] - 0.5);
+                    colors[index] = RAMPS[material][shade < 0 ? 0 : shade > 3 ? 3 : shade];
+                } else {
+                    colors[index] = groundColor(material, x, y, light, heights[index], outline);
+                }
+            }
+        }
+        // 3. Projected in 3/4, column by column, from MAX_DROP px north of the block.
         const context = block.texture.getContext();
         const pixels = context.createImageData(BLOCK_TEXELS, BLOCK_TEXELS);
         const samples = this.samples;
         for (let column = 0; column < BLOCK_TEXELS; column++) {
-            const x = left + column * RELIEF_TEXEL + RELIEF_TEXEL / 2;
-            const cellX = Math.floor(x / TERRAIN_CELL);
+            const x = left + column;
             let count = 0;
-            // From a texel further north than the deepest drop: drawn 128 px lower, it still reaches the first row.
-            for (let y = top - MAX_DROP - RELIEF_TEXEL / 2; y < top + BLOCK_PX; y += RELIEF_TEXEL) {
-                const cellY = Math.floor(y / TERRAIN_CELL);
-                const cellIndex = (cellY - gridY) * width + (cellX - gridX);
-                let color = this.cellColorCache[cellIndex];
-                if (!color) {
-                    color = this.cellColors(terrain, cellX, cellY, this.heights[cellIndex]);
-                    this.cellColorCache[cellIndex] = color;
-                }
-                const ground = bilinear(this.heights, x, y);
-                const water = wet ? bilinear(this.gridWater, x, y) : 0;
+            for (let y = firstY; y < endY; y++) {
+                const index = (y - originY) * POINT_COLUMNS + column + 1;
+                const ground = heights[index];
+                const water = wet ? bilinear(this.gridWater, x + 0.5, y + 0.5) : 0;
                 const sample = samples[count++];
                 sample.groundY = y;
-                sample.wallRamp = RAMPS.wall;
+                sample.wallRamp = WALL_RAMPS[MATERIALS[materials[index]]];
                 if (water >= WATER_SEEN_PX) {
                     sample.drop = Math.min(MAX_DROP, Math.max(0, -(ground + water)) * DROP_SCALE);
-                    sample.color = this.waterOver(color.ground, water);
+                    sample.color = this.waterOver([colors[index][0], colors[index][1], colors[index][2]], water);
                     sample.plain = false;
                 } else {
                     sample.drop = Math.min(MAX_DROP, Math.max(0, -ground) * DROP_SCALE);
-                    sample.color = color.ground;
+                    sample.color = colors[index];
                     sample.plain = ground > -0.5;
                 }
             }
-            paintColumn(samples, count, BLOCK_TEXELS, top / RELIEF_TEXEL, pixels.data, BLOCK_TEXELS, column);
+            paintColumn(samples, count, BLOCK_TEXELS, top, pixels.data, BLOCK_TEXELS, column);
         }
         context.putImageData(pixels, 0, 0);
         refreshCanvasTexture(block.texture);
         block.image.setVisible(!this.hidden);
         this.scene.markDirty();
-    }
-
-    /** The colours of a cell: its ground (soil, grass, ash, snow, depth, slope) and the face of a drop at its rim. */
-    private cellColors(
-        terrain: TerrainData,
-        cellX: number,
-        cellY: number,
-        cellHeight: number,
-    ): { ground: Rgb; wall: Rgb } {
-        let ground = over(rgb(GROUND_BASE), SNOW_COLOR, this.inputs.snowShown());
-        const soil = soilAt(terrain, cellX, cellY);
-        const tint = soil ? SOIL_TINTS[SOILS[soil - 1]] : undefined;
-        if (tint) ground = over(ground, tint.color, tint.alpha);
-        const meadow = this.inputs.meadow;
-        if (meadow?.hasGrass()) {
-            const cellsATile = TILE_PX / TERRAIN_CELL;
-            const tileX = Math.floor(cellX / cellsATile);
-            const tileY = Math.floor(cellY / cellsATile);
-            const cover = meadow.grassAt(tileX, tileY);
-            if (cover > 0) ground = over(ground, GRASS_COLOR, grassAlpha(mottledCover(cover, cellX, cellY)));
-            const ash = meadow.ashAt(tileX, tileY);
-            if (ash > 0) ground = over(ground, ASH_COLOR, ashAlpha(ash));
-        }
-        ground = over(ground, 0x000000, groundAlpha(cellHeight) * 0.6);
-        const shade = slopeShade(terrain, cellX, cellY);
-        ground = over(ground, shade > 0 ? 0xffffff : 0x000000, slopeAlpha(shade));
-        const wall = tint
-            ? over(rgb(WALL_ROCK), tint.color, WALL_SOIL_SHARE)
-            : over(rgb(WALL_ROCK), GROUND_BASE, WALL_SOIL_SHARE * 0.5);
-        return { ground, wall };
     }
 
     /** The water over a ground: light blue, darker with its depth, a pale shore where it is thin. */

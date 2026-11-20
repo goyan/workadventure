@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { cellKey, withHeights } from "@workadventure/map-editor";
+import { cellKey, withHeights, withSoils } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 import { ReliefTiles } from "../../../../../src/front/Phaser/Game/Terrain/ReliefTiles";
 import { TerrainWater } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
+import { RAMPS } from "../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
+import type { Rgb } from "../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
 
 /** Hollows dug all over a large part of the map: every block of 256 px holds some. */
 function dugEverywhere(): TerrainData {
@@ -50,8 +52,13 @@ function fixture(terrain: TerrainData = dugEverywhere()) {
     };
     const water = new TerrainWater();
     water.setTerrain(terrain);
+    let current = terrain;
+    const setTerrain = (next: TerrainData) => {
+        current = next;
+        water.setTerrain(next);
+    };
     const tiles = new ReliefTiles(scene as never, {
-        relief: () => terrain,
+        relief: () => current,
         water,
         season: () => undefined,
         snowShown: () => 0,
@@ -60,7 +67,7 @@ function fixture(terrain: TerrainData = dugEverywhere()) {
     const settle = () => {
         for (let frame = 0; frame < 100; frame++) tiles.update(frame);
     };
-    return { tiles, worldView, images, settle, painted };
+    return { tiles, worldView, images, settle, painted, setTerrain, scene };
 }
 
 describe("the blocks of the relief seen in 3/4", () => {
@@ -76,7 +83,7 @@ describe("the blocks of the relief seen in 3/4", () => {
         expect(tiles.redraws()).toBe(drawn);
     });
 
-    it("draws at most two blocks an image when many come into view at once", () => {
+    it("draws at most one block an image when many come into view at once", () => {
         const { tiles, worldView, settle } = fixture();
         settle();
         // Zoomed far out: many blocks come into view.
@@ -84,7 +91,7 @@ describe("the blocks of the relief seen in 3/4", () => {
         for (let frame = 0; frame < 5; frame++) {
             const before = tiles.redraws();
             tiles.update(300 + frame);
-            expect(tiles.redraws() - before).toBeLessThanOrEqual(2);
+            expect(tiles.redraws() - before).toBeLessThanOrEqual(1);
         }
     });
 
@@ -139,5 +146,109 @@ describe("the blocks of the relief seen in 3/4", () => {
         expect(block).toBeDefined();
         const firstRow = Array.from({ length: 128 }, (_, column) => block?.[column * 4 + 3]);
         expect(firstRow.every((alpha) => alpha === 255)).toBe(true);
+    });
+
+    /** A flat floor dug 64 px deep over 64 × 64 cells, sand from the cell `sandFrom` on (x = 16 × sandFrom). */
+    function floorWithSand(sandFrom: number): TerrainData {
+        const cells = Array.from({ length: 64 * 64 }, (_, index): [string, number] => [
+            cellKey(index % 64, Math.floor(index / 64)),
+            -64,
+        ]);
+        const sand = cells
+            .filter(([key]) => Number(key.split(",")[0]) >= sandFrom)
+            .map(([key]): [string, number] => [key, 4]);
+        return withSoils(withHeights(undefined, new Map(cells)), new Map(sand));
+    }
+    const GRASS_LINE: Rgb = [0x22, 0x36, 0x1c];
+    const same = (a: readonly number[], b: readonly number[]) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+    const pixelOf = (block: Uint8ClampedArray, column: number, row: number): Rgb => {
+        const at = (row * 256 + column) * 4;
+        return [block[at], block[at + 1], block[at + 2]];
+    };
+    const kindOf = (color: Rgb): "grass" | "sand" | "line" | "other" =>
+        RAMPS.grass.some((shade) => same(shade, color))
+            ? "grass"
+            : RAMPS.sand.some((shade) => same(shade, color))
+              ? "sand"
+              : same(GRASS_LINE, color)
+                ? "line"
+                : "other";
+
+    it("draws the floor in pixel art: shades of its materials, an irregular border, a dark line on the grass side", () => {
+        const { settle, painted } = fixture(floorWithSand(24));
+        settle();
+        const block = painted.get("relief-block:1,1");
+        expect(block).toBeDefined();
+        if (!block) return;
+        const switches = new Set<number>();
+        let lined = 0;
+        // Rows 64 to 95 show the floor (drawn 32 px lower); the border is near x 384, the column 128 of the block.
+        for (let row = 64; row < 96; row++) {
+            let first: number | undefined;
+            for (let column = 100; column < 160; column++) {
+                const kind = kindOf(pixelOf(block, column, row));
+                expect(kind, `column ${column} row ${row}`).not.toBe("other");
+                if (first === undefined && kind === "sand") first = column;
+            }
+            expect(first).toBeDefined();
+            switches.add(first ?? 0);
+            if (kindOf(pixelOf(block, (first ?? 1) - 1, row)) === "line") lined++;
+        }
+        expect(switches.size).toBeGreaterThanOrEqual(3);
+        expect(lined).toBeGreaterThan(16);
+    });
+
+    it("draws the line of a border that falls on the edge of a block on both blocks alike", () => {
+        // Sand from x 512 on: the border runs along the edge between the blocks 1,1 and 2,1.
+        const { settle, painted } = fixture(floorWithSand(32));
+        settle();
+        const west = painted.get("relief-block:1,1");
+        const east = painted.get("relief-block:2,1");
+        expect(west && east).toBeTruthy();
+        if (!west || !east) return;
+        let crossings = 0;
+        for (let row = 40; row < 256; row++) {
+            const last = kindOf(pixelOf(west, 255, row));
+            const first = kindOf(pixelOf(east, 0, row));
+            // Grass right before the edge and sand right after it: the grass pixel carries the line.
+            if (first === "sand" && last !== "sand") {
+                crossings++;
+                expect(last, `row ${row}`).toBe("line");
+            }
+        }
+        expect(crossings).toBeGreaterThan(0);
+    });
+
+    it("draws a block again when the soil painted in it changes", () => {
+        const { tiles, settle, setTerrain } = fixture(floorWithSand(24));
+        settle();
+        const drawn = tiles.redraws();
+        setTerrain(withSoils(floorWithSand(24), new Map([[cellKey(18, 18), 5]])));
+        settle();
+        expect(tiles.redraws()).toBeGreaterThan(drawn);
+    });
+
+    it("draws a block of a hollow as deep as a map allows in under 25 ms (median)", () => {
+        const deepest = withHeights(
+            undefined,
+            new Map(
+                Array.from({ length: 96 * 96 }, (_, index): [string, number] => [
+                    cellKey(index % 96, Math.floor(index / 96)),
+                    -256,
+                ]),
+            ),
+        );
+        const { tiles } = fixture(deepest);
+        const times: number[] = [];
+        for (let frame = 0; frame < 12; frame++) {
+            const before = tiles.redraws();
+            const start = performance.now();
+            tiles.update(frame);
+            if (tiles.redraws() > before) times.push(performance.now() - start);
+        }
+        expect(times.length).toBeGreaterThanOrEqual(5);
+        // The median: a pause of the garbage collector or of the machine does not make a block slow.
+        const sorted = times.slice(1).sort((a, b) => a - b);
+        expect(sorted[Math.floor(sorted.length / 2)]).toBeLessThan(25);
     });
 });

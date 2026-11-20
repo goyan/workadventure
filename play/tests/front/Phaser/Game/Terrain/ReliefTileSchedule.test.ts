@@ -8,7 +8,9 @@ describe("the blocks of the relief to draw", () => {
     it("draws nothing again when the view only scrolls or zooms", () => {
         const schedule = new ReliefTileSchedule();
         const keys = ["0,0", "1,0"];
-        expect(schedule.toRedraw(keys, signatures(keys))).toEqual(keys);
+        // One block an image: the first, then the second.
+        expect(schedule.toRedraw(keys, signatures(keys))).toEqual(["0,0"]);
+        expect(schedule.toRedraw(keys, signatures(keys))).toEqual(["1,0"]);
         const done = schedule.redraws;
         // Scrolled: another order, a block more out of the budget's reach is not new.
         expect(schedule.toRedraw(["1,0", "0,0"], signatures(keys))).toEqual([]);

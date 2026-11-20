@@ -1,15 +1,15 @@
-import { heightAt, TERRAIN_CHUNK } from "@workadventure/map-editor";
+import { heightAt, soilAt, TERRAIN_CHUNK } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 
 /** Rows of cells north of a block read to draw it: the highest face of a drop (128 px drawn, 8 cells) reaches it. */
 export const NORTH_ROWS = 8;
 /** The most blocks drawn in one image of the game; the others wait for the next one. */
-export const BLOCKS_AN_IMAGE = 2;
+export const BLOCKS_AN_IMAGE = 1;
 /** The most blocks kept drawn. */
 export const KEPT_BLOCKS = 64;
 
 /**
- * The heights a block of the relief is drawn from (its cells, the NORTH_ROWS rows north of it, one more all around), as a short text:
+ * The heights and soils a block of the relief is drawn from (its cells, the NORTH_ROWS rows north of it, one more all around), as a short text:
  * the same relief gives the same text. Empty when none of them is dug.
  */
 export function reliefSignature(terrain: TerrainData | undefined, blockX: number, blockY: number): string {
@@ -25,6 +25,8 @@ export function reliefSignature(terrain: TerrainData | undefined, blockX: number
             const height = heightAt(terrain, x, y);
             if (height < 0) dug = true;
             hash = (Math.imul(hash, 31) + height + 1000) | 0;
+            // The soil painted there: its texture is drawn.
+            hash = (Math.imul(hash, 31) + soilAt(terrain, x, y)) | 0;
         }
     }
     return dug ? hash.toString(36) : "";

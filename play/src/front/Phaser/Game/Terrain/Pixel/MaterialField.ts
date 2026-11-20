@@ -53,11 +53,17 @@ export function pickMaterial(cell: (cellX: number, cellY: number) => Material, x
     const cy = Math.floor(fy);
     const tx = fx - cx;
     const ty = fy - cy;
+    // Inside a material, nothing to weigh (most of the ground).
+    const northWest = cell(cx, cy);
+    const northEast = cell(cx + 1, cy);
+    const southWest = cell(cx, cy + 1);
+    const southEast = cell(cx + 1, cy + 1);
+    if (northWest === northEast && northWest === southWest && northWest === southEast) return northWest;
     const corners: [Material, number][] = [
-        [cell(cx, cy), (1 - tx) * (1 - ty)],
-        [cell(cx + 1, cy), tx * (1 - ty)],
-        [cell(cx, cy + 1), (1 - tx) * ty],
-        [cell(cx + 1, cy + 1), tx * ty],
+        [northWest, (1 - tx) * (1 - ty)],
+        [northEast, tx * (1 - ty)],
+        [southWest, (1 - tx) * ty],
+        [southEast, tx * ty],
     ];
     let first: Material = corners[0][0];
     let firstWeight = 0;

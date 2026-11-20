@@ -78,6 +78,45 @@ function texture(material: Material, x: number, y: number): number {
 }
 
 /**
+ * The textures, worked out once for a square of TEXTURE_PERIOD px and repeated beyond: a texture costs a lookup, not a
+ * noise, at each pixel. The square is wider than a block of the relief (256 px), so two blocks never look alike.
+ */
+const TEXTURE_PERIOD = 512;
+/** TEXTURE_PERIOD is a power of 2: `x & TEXTURE_MASK` is x modulo it, negative x included. */
+export const TEXTURE_MASK = TEXTURE_PERIOD - 1;
+const textures: Partial<Record<Material, Float32Array>> = {};
+
+/** The texture of a material over a square of TEXTURE_PERIOD px (row by row), worked out at its first use. */
+export function textureTable(material: Material): Float32Array {
+    let table = textures[material];
+    if (!table) {
+        table = new Float32Array(TEXTURE_PERIOD * TEXTURE_PERIOD);
+        for (let row = 0; row < TEXTURE_PERIOD; row++) {
+            for (let column = 0; column < TEXTURE_PERIOD; column++) {
+                table[row * TEXTURE_PERIOD + column] = texture(material, column, row);
+            }
+        }
+        textures[material] = table;
+    }
+    return table;
+}
+
+/** Where a point of the map (whole pixels) falls in a texture table. */
+export function textureIndex(x: number, y: number): number {
+    return (y & TEXTURE_MASK) * TEXTURE_PERIOD + (x & TEXTURE_MASK);
+}
+
+/** How much darker the ground is at a depth (height < 0), as a share of its ramp. */
+export function depthShade(height: number): number {
+    return Math.min(DEEPEST_SHADE, SHADE_A_TILE * Math.floor(Math.max(0, -height) / TILE_DEPTH_PX));
+}
+
+/** The value of the ramp a lit, deep point takes: its texture, its light, its depth (see groundColor). */
+export function groundValue(textureValue: number, light: number, height: number): number {
+    return textureValue + light * LIGHT_SHARE - depthShade(height);
+}
+
+/**
  * The colour of a point of the ground (map pixels) in pixel art: the texture of its material, lit by its slope
  * (`light`, see slopeLight), darker deeper down (`height` < 0), a shade of the ramp of the material picked by the
  * dither; the line of a border (see outlineOf) instead where it carries one.
@@ -98,8 +137,7 @@ export function groundColor(
         if (glow > 0.98) return HOT_EMBER;
         if (glow > 0.94) return EMBER;
     }
-    const depth = Math.min(DEEPEST_SHADE, SHADE_A_TILE * Math.floor(Math.max(0, -height) / TILE_DEPTH_PX));
-    return shadeAt(ramp, texture(material, x, y) + light * LIGHT_SHARE - depth, x, y);
+    return shadeAt(ramp, groundValue(textureTable(material)[textureIndex(x, y)], light, height), x, y);
 }
 
 /**
@@ -107,6 +145,10 @@ export function groundColor(
  * ground that rises towards the south-east faces it.
  */
 export function slopeLight(height: (x: number, y: number) => number, x: number, y: number): number {
-    const rise = height(x + 1, y) - height(x - 1, y) + height(x, y + 1) - height(x, y - 1);
+    return lightOfRise(height(x + 1, y) - height(x - 1, y) + height(x, y + 1) - height(x, y - 1));
+}
+
+/** slopeLight from the rise already summed: east minus west plus south minus north, 1 px apart. */
+export function lightOfRise(rise: number): number {
     return Math.max(-1, Math.min(1, rise * 0.07));
 }
