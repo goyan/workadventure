@@ -157,7 +157,10 @@
 
     function inviteUserToMeeting() {
         if (chatUser == undefined || chatUser.uuid == undefined) return;
-        connection?.emitMeetingInvitationRequest(chatUser.uuid);
+        // Through the invite manager: the call rings, with its limits, and the caller hears when nobody answers.
+        gameManager
+            .getCurrentGameScene()
+            .inviteManager?.requestMeetingInvitation(chatUser.uuid, undefined, chatUser.username);
     }
 
     /** Reactive on `$isMatrixChatEnabledStore` so the connection appears when Matrix chat connects. */

@@ -26,6 +26,7 @@ import { FLOOR_OBJECT_DEPTH } from "../../ECS/EntityLayerDepth";
 import type { GameScene } from "../GameScene";
 import { entityStatesManagerStore } from "../../../Stores/EntityStatesStore";
 import type { EntityStatesManager } from "../EntityStates/EntityStatesManager";
+import { unlessBasic } from "../../../Stores/BasicModeStore";
 import { SpotifyMusicSignal } from "./SpotifyMusicSignal";
 import {
     jamOfSpaces,
@@ -216,7 +217,7 @@ export class LampManager {
         });
         this.unsubscribers = [
             entityStatesManagerStore.subscribe((states) => (this.entityStates = states)),
-            lampEffectsEnabledStore.subscribe((enabled) => {
+            unlessBasic(lampEffectsEnabledStore).subscribe((enabled) => {
                 this.effectsEnabled = enabled;
                 this.watchJukeboxMusic();
                 this.scene.markDirty();

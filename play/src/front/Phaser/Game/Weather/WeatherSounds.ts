@@ -1,9 +1,10 @@
 import type * as Phaser from "phaser";
 import { WeatherType } from "@workadventure/map-editor";
-import { get } from "svelte/store";
+import { get, type Unsubscriber } from "svelte/store";
 import Debug from "debug";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { weatherVolumeStore } from "../../../Stores/SoundEffectsStore";
+import { basicActiveStore, isBasicActive } from "../../../Stores/BasicModeStore";
 import { lastStrike } from "./WeatherFrame";
 import { rainLoudness, USUAL_RAIN } from "./Rain";
 
@@ -27,7 +28,14 @@ export class WeatherSounds {
     private thunder: WeatherSound | undefined;
     private lastStormCycle: number | undefined;
 
-    constructor(private readonly sound: Phaser.Sound.BaseSoundManager) {}
+    /** Basique silences the weather at once, before the next update (which may come seconds later). */
+    private readonly unsubscribeBasic: Unsubscriber;
+
+    constructor(private readonly sound: Phaser.Sound.BaseSoundManager) {
+        this.unsubscribeBasic = basicActiveStore.subscribe((basic) => {
+            if (basic) this.silence();
+        });
+    }
 
     /** `rain`: how hard a rain falls, 0 to 1 (rainIntensity), which sets how loud it is. */
     public update(
@@ -37,6 +45,10 @@ export class WeatherSounds {
         night = false,
         rain = USUAL_RAIN,
     ): void {
+        if (isBasicActive()) {
+            this.silence();
+            return;
+        }
         const volume = editing || localUserStore.getBlockAudio() ? 0 : get(weatherVolumeStore);
         if (volume === 0) {
             this.ambient?.pause();
@@ -96,6 +108,14 @@ export class WeatherSounds {
         }
     }
 
+    /** No sound at all, and none that a click could play again: the ambience is let go, not only paused. */
+    private silence(): void {
+        this.releaseAmbient();
+        this.ambientKey = undefined;
+        this.thunder?.stop();
+        this.lastStormCycle = undefined;
+    }
+
     private releaseAmbient(): void {
         this.ambient?.pause();
         this.ambient?.removeAttribute("src");
@@ -105,6 +125,7 @@ export class WeatherSounds {
     }
 
     public destroy(): void {
+        this.unsubscribeBasic();
         this.releaseAmbient();
         this.thunder?.destroy();
     }

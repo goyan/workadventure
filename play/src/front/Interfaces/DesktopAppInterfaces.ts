@@ -39,6 +39,8 @@ export enum DesktopVisualSetting {
     Quality = "graphicsQuality",
     Metrics = "graphicsMonitoring",
     Animations = "animations",
+    /** Opens the settings of WorkAdventure: the desktop keeps only a few quick settings. */
+    OpenSettings = "openSettings",
 }
 
 export enum DesktopSoundsSetting {
@@ -56,6 +58,7 @@ export type DesktopEnvironmentRequest =
           value: boolean;
       }
     | { setting: DesktopVisualSetting.Quality; value: GraphicsPreset }
+    | { setting: DesktopVisualSetting.OpenSettings; value: true }
     | { setting: DesktopSoundsSetting.Preview; value: DesktopSoundSetting }
     | { setting: DesktopAppearanceSetting.Appearance; value: DesktopAppearance }
     | { setting: "weather"; value: WeatherType }
@@ -93,6 +96,8 @@ export interface DesktopLightControl {
 
 export interface DesktopEnvironmentState {
     graphicsQuality: GraphicsQuality;
+    /** This WorkAdventure opens its settings at the request of the desktop (DesktopVisualSetting.OpenSettings). */
+    canOpenSettings: boolean;
     graphicsMonitoring: boolean;
     graphicsStats?: PerfStats;
     animations: boolean;

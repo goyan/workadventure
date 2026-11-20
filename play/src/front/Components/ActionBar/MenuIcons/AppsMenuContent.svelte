@@ -26,6 +26,7 @@
     import { showRecordingList } from "../../../Stores/RecordingStore";
     import { weatherBannerStore } from "../../../Stores/WeatherBannerStore";
     import { catastrophePanelStore } from "../../../Stores/CatastropheStore";
+    import { basicActiveStore } from "../../../Stores/BasicModeStore";
     import PixelIcon from "../../ActionsMenu/PixelIcon.svelte";
     import RecordingIcon from "../../Icons/RecordingIcon.svelte";
     import AdditionalMenuItems from "./AdditionalMenuItems.svelte";
@@ -153,7 +154,7 @@
 <ActionBarButton
     onclick={toggleCatastrophePanel}
     label={$LL.actionbar.catastrophe.label()}
-    state={$catastrophePanelStore ? "active" : "normal"}
+    state={$basicActiveStore ? "disabled" : $catastrophePanelStore ? "active" : "normal"}
     dataTestId="catastrophePanelButton"
 >
     <PixelIcon name="meteor" size={20} />

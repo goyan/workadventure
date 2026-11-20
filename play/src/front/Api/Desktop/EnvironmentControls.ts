@@ -19,7 +19,7 @@ import { cloudsShownStore, cloudsHeightStore, weatherEffectsEnabledStore } from 
 import { migrateChristmasMode, SeasonalThemeMode } from "../../Phaser/Game/Seasonal/SeasonalTheme";
 import { seasonalThemeModeStore } from "../../Stores/SeasonalThemeStore";
 import { gameSceneStore } from "../../Stores/GameSceneStore";
-import { mapEditorActivated } from "../../Stores/MenuStore";
+import { handleOpenMenuEvent, mapEditorActivated, SubMenusInterface } from "../../Stores/MenuStore";
 import {
     DesktopAppearanceSetting,
     DesktopLightSetting,
@@ -76,6 +76,7 @@ export const desktopEnvironmentRequestSchema = z.discriminatedUnion("setting", [
         value: z.enum([GraphicsQuality.Low, GraphicsQuality.Medium, GraphicsQuality.High, GraphicsQuality.Ultra]),
     }),
     z.object({ setting: z.literal(DesktopVisualSetting.Metrics), value: z.boolean() }),
+    z.object({ setting: z.literal(DesktopVisualSetting.OpenSettings), value: z.literal(true) }),
     z.object({ setting: z.literal(DesktopVisualSetting.Animations), value: z.boolean() }),
     z.object({ setting: z.literal(DesktopVisualSetting.Jungle), value: z.boolean() }),
     z.object({ setting: z.literal(DesktopSoundsSetting.Preview), value: z.nativeEnum(DesktopSoundSetting) }),
@@ -129,6 +130,7 @@ export function readDesktopEnvironment(busy = false, error = ""): DesktopEnviron
     if (!scene) return null;
     return {
         graphicsQuality: get(graphicsQualityStore),
+        canOpenSettings: true,
         graphicsMonitoring: get(desktopGraphicsMetricsRequestedStore),
         graphicsStats: get(perfStatsStore),
         animations: !get(tileAnimationsDisabledStore),
@@ -187,6 +189,9 @@ export async function applyDesktopEnvironment(input: DesktopEnvironmentRequest):
             return;
         case DesktopVisualSetting.Animations:
             setTileAnimationsDisabled(!request.value);
+            return;
+        case DesktopVisualSetting.OpenSettings:
+            handleOpenMenuEvent(SubMenusInterface.settings);
             return;
         case DesktopVisualSetting.Jungle:
             jungleEnabledStore.set(request.value);
