@@ -4,6 +4,7 @@ import {
     CELL_LITRES_PER_PX,
     gridBoundsOf,
     heldFlow,
+    indoorCells,
     MAX_WATER_SURFACE_PX,
     WATER_GRID_MARGIN,
     WaterGrid,
@@ -910,5 +911,70 @@ describe("the highest water of a map", () => {
         expect(grid.maxSurface()).toBe(256);
         grid.setMaxSurface(Number.NaN);
         expect(grid.maxSurface()).toBe(MAX_WATER_SURFACE_PX);
+    });
+});
+
+describe("the floors of the rooms", () => {
+    // A room of 4 × 4 cells, from (1,1) to (4,4), in a flat yard of 30 × 30 cells.
+    const bounds = { x: -10, y: -10, width: 30, height: 30 };
+    const room = (doorway: boolean): { east: Set<string>; south: Set<string> } => {
+        const east = new Set<string>();
+        const south = new Set<string>();
+        for (let i = 1; i <= 4; i++) {
+            east.add(cellKey(0, i));
+            // The doorway: a gap in the east wall, the water goes through it.
+            if (!doorway || i !== 2) east.add(cellKey(4, i));
+            south.add(cellKey(i, 0));
+            south.add(cellKey(i, 4));
+        }
+        return { east, south };
+    };
+    const inside = (x: number, y: number): boolean => x >= 1 && x <= 4 && y >= 1 && y <= 4;
+
+    it("finds the cells the walls close, none of a room left open", () => {
+        const closed = indoorCells(bounds, room(false));
+        const open = indoorCells(bounds, room(true));
+        for (let y = -10; y < 20; y++) {
+            for (let x = -10; x < 20; x++) {
+                const index = (y + 10) * bounds.width + x + 10;
+                expect(closed[index]).toBe(inside(x, y) ? 1 : 0);
+                expect(open[index]).toBe(0);
+            }
+        }
+        expect(indoorCells(bounds, undefined).every((cell) => cell === 0)).toBe(true);
+    });
+
+    it("drains the water a flood brought into a room through its door, and leaves the yard to its flood", () => {
+        // The water goes through the door; the room, its door closed, is indoors.
+        const grid = new WaterGrid(undefined, bounds, undefined, room(true), room(false));
+        grid.rainOn(0, 0, undefined, 10);
+        const drained = { ...nothing, indoorDrainPx: 1 };
+        let sinks = 0;
+        for (let step = 0; step < 40; step++) sinks += grid.step(drained).sinksPx;
+        // The room is dry; only its threshold stays wet while the flood of the yard comes in through the door.
+        for (let y = 1; y <= 4; y++) for (let x = 1; x <= 3; x++) expect(grid.depthAt(x, y)).toBeLessThan(0.5);
+        expect(grid.depthAt(4, 2)).toBeLessThan(grid.depthAt(6, 2) / 2);
+        // The yard far from the door keeps its flood.
+        expect(grid.depthAt(-6, -6)).toBeGreaterThan(5);
+        // What the floors took is counted with the sinks.
+        expect(sinks).toBeGreaterThan(16 * 10 - 1);
+    });
+
+    it("keeps the water in a room when the map drains nothing", () => {
+        const grid = new WaterGrid(undefined, bounds, undefined, room(false), room(false));
+        grid.rainOn(0, 0, undefined, 10);
+        run(grid, 40, { ...nothing, indoorDrainPx: 0 });
+        expect(grid.depthAt(2, 2)).toBeCloseTo(10, 0);
+        run(grid, 40);
+        expect(grid.depthAt(2, 2)).toBeCloseTo(10, 0);
+    });
+
+    it("never drains a pool dug in the floor of a room", () => {
+        const pool = terrainOf([[2, 2, -16]]);
+        const grid = new WaterGrid(pool, bounds, undefined, room(false), room(false));
+        grid.rainOn(0, 0, undefined, 10);
+        run(grid, 40, { ...nothing, indoorDrainPx: 1 });
+        expect(grid.depthAt(2, 2)).toBeGreaterThan(10);
+        expect(grid.depthAt(4, 4)).toBeLessThan(0.5);
     });
 });

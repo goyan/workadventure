@@ -1969,6 +1969,12 @@
                   "minimum": 18,
                   "maximum": 256,
                   "default": 18
+                },
+                "indoorDrain": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 10000,
+                  "default": 300
                 }
               },
               "additionalProperties": false

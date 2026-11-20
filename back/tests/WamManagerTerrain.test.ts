@@ -50,6 +50,7 @@ describe("WamManager relief", () => {
             absorption: 5,
             current: 1,
             maxSurface: 18,
+            indoorDrain: 300,
         });
     });
 

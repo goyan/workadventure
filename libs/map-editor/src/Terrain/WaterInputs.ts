@@ -83,6 +83,8 @@ export function stepInputOf(
         rainPx: rain * hours * PX_PER_MM * (1 + figure(settings.runoff)),
         evaporationPx: rain > 0 ? 0 : figure(settings.evaporation) * hours * PX_PER_MM,
         absorptionPx: figure(settings.absorption) * hours * PX_PER_MM,
+        // A map saved before the drains of the rooms has none in its settings: the usual ones. 0 drains nothing.
+        indoorDrainPx: figure(settings.indoorDrain ?? DEFAULT_WATER_SETTINGS.indoorDrain) * hours * PX_PER_MM,
         // A map that goes faster than reality gives its water more moves a step towards its sinks: a quarter of
         // its speed.
         flowSteps: Math.max(1, Math.min(MAX_FLOW_STEPS, Math.round(figure(settings.speed, 1) / SPEED_PER_FLOW_STEP))),
