@@ -3,7 +3,7 @@ import type { WeatherView } from "../Weather/WeatherFrame";
 import { seenFromFar } from "../Weather/ScreenScale";
 import { scatteredLeavesInView } from "./LeafScatter";
 
-/** Above the floors (0.5) and the seasonal grass (0.6), below objects and avatars. */
+/** Above the floors (0.5) and the seasonal grass (0.2), below objects and avatars. */
 const LEAF_SCATTER_DEPTH = DEPTH_TILE_INDEX + 0.65;
 
 /**

@@ -20,7 +20,7 @@ export interface LaidPicture {
 
 /**
  * Depth of the shadows: on the ground, over the map tiles (0), the floors of the map layer (0.5) and the grass of the
- * map (SnowGround, 0.6), under everything sorted by its y (walls, objects, trees, avatars and their names): what throws
+ * map (SnowGround, 0.2), under everything sorted by its y (walls, objects, trees, avatars and their names): what throws
  * a shadow is drawn over it.
  */
 const SKY_SHADOW_DEPTH = 0.7;

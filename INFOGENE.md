@@ -2388,18 +2388,30 @@ a une paroi de 128 px. Là où le sol descend en allant vers le sud, on voit sa 
 claire à l'arête, sombre au pied, strates) ; le bord sud cache le fond derrière lui ; l'eau est dessinée au niveau de
 sa surface. La position vraie reste au sol (serveur, collisions, bulles, eau de `back` inchangés) : seul le dessin
 bouge. `Terrain/ReliefProjection.ts` (pur : `dropAt`, `groundPointAt` de l'écran vers le sol, `paintColumn`),
-`Terrain/ReliefTiles.ts` (une image par bloc de relief de 16 × 16 cellules, un texel pour 2 px, au-dessus du relief
-plat à 0,66), `Terrain/ReliefTileSchedule.ts` (un bloc n'est redessiné que si son relief, celui des 8 rangées au
-nord, son eau, la prairie, la saison ou la neige changent ; jamais en marchant ni en zoomant ; 2 blocs par image au
-plus, les visibles d'abord ; 64 blocs gardés ; environ 3 ms par bloc). `TerrainView` ne dessine alors plus
+`Terrain/ReliefTiles.ts` (une image par bloc de relief de 16 × 16 cellules, au-dessus du relief plat à 0,66),
+`Terrain/ReliefTileSchedule.ts` (un bloc n'est redessiné que si son relief, ses sols peints, celui des 8 rangées au
+nord, son eau, la prairie, la saison ou la neige changent ; jamais en marchant ni en zoomant ; 1 bloc par image au
+plus, les visibles d'abord ; 64 blocs gardés ; 13 à 20 ms par bloc mesurés dans le conteneur de dev).
+
+**En pixel art net** (conception `docs/superpowers/specs/2026-11-20-terrain-pixel-art-design.md` du dépôt d'infra,
+lot A) : un pixel du bloc pour un pixel de la carte, jamais lissé. Chaque point du sol prend une **matière**
+(`Terrain/Pixel/MaterialField.ts` : neige, braise, cendre, paille, herbe de la prairie, puis sol peint, herbe sinon),
+avec une frontière nette et irrégulière entre deux matières et un liseré d'1 px (sombre côté herbe et côté de la
+matière la plus sombre, clair côté neige) ; sa **couleur** (`Pixel/GroundPixel.ts`) vient de la texture de la
+matière (tables de 512 px), de la lumière de la pente (nord-ouest) et de la profondeur, réduite à une rampe de
+4 teintes par une trame 4 × 4 (`Pixel/PixelPalette.ts`, `Pixel/PixelNoise.ts`). Une **paroi** commence là où le
+dessin tombe de plus de 2 px pour un pixel de sol (`FACE_JUMP_PX`) : tout ce qui tombe dessus prend sa couleur (plus
+de rayures), le haut d'une paroi est cerné de sombre (`RIM_OUTLINE`) ; plus doux, le sol est étiré. Sur un **pont**,
+un avatar reste au niveau du tablier et un clic vise le tablier. Le sol plat, l'eau et les saisons suivront (lots B
+et C). `TerrainView` ne dessine alors plus
 l'assombrissement des creux ni l'eau. **Avatars** : chacun, le sien et ceux des autres, est dessiné plus bas de la
 profondeur du sol (ou de la surface de l'eau où il nage) sous lui (`Terrain/AvatarDrop.ts`), seulement le temps du
 dessin (`Terrain/CharacterDrops.ts`, comme les arbres au vent) ; son nom suit (`Character.setGroundDrop`) ; rien sur
 un palier. **Clic** et altitude sous le pointeur passent par `groundPointAt` : un clic sur une paroi mène à son pied.
 **Éditeur ouvert** : tout redevient plat, pour creuser et poser là où l'on vise. Neige du fond : celle du thème de
-Noël ou de la carte (`SeasonalThemeManager.groundSnow`). **Limites (lot 1)** : objets, arbres, animaux, compagnons,
+l'hiver ou de la carte (`SeasonalThemeManager.groundSnow`). **Limites (lot 1)** : objets, arbres, animaux, compagnons,
 écume et tourbillons de l'eau restent dessinés à leur place (un arbre au fond d'un trou flotte au niveau du bord) ;
-le fond est peint aux couleurs du relief, pas avec les tuiles de la carte ; paille et feu non dessinés au fond ; la
+le fond est peint aux matières du relief, pas avec les tuiles de la carte ; la
 zone cliquable d'un avatar dans un trou reste à sa place ; les éclaboussures de la nage partent de sa place.
 
 **Limites.** L'eau traverse encore les murs (elle devra passer par les portes seulement : `back` ne connaît pas les

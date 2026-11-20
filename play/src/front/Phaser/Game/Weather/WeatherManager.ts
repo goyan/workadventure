@@ -118,7 +118,7 @@ const STORM_CLOUDS = { color: 0x2b3240, alpha: 0.75, cloudiness: 1 };
 const MIN_RAIN_COVER = 0.6;
 const OVERCAST_COLOR = 0x8a94a3;
 const RAIN_COLOR = 0xcfe3f5;
-/** Over the grass of the seasons (0.6), under the objects and the avatars. */
+/** Over the grass of the seasons (0.2), under the objects and the avatars. */
 const PUDDLE_DEPTH = 0.7;
 const PUDDLE_COLOR = 0x4f7ba6;
 const PUDDLE_EDGE_COLOR = 0x26384d;

@@ -44,7 +44,7 @@ import {
 import type { MeadowState } from "./MeadowState";
 import type { TerrainWater } from "./TerrainWater";
 
-/** Over the grass of the seasons (0.6), under the puddles (0.7), the objects and the avatars. */
+/** Over the grass of the seasons (0.2), under the puddles (0.7), the objects and the avatars. */
 const TERRAIN_DEPTH = 0.65;
 /** Relief drawn beyond each edge of the screen, in a share of its size: a scroll rarely asks for a new drawing. */
 const DRAW_MARGIN = 0.25;
