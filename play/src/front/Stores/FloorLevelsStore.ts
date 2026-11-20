@@ -3,6 +3,8 @@ import type { Readable } from "svelte/store";
 import { LL } from "../../i18n/i18n-svelte";
 import type { TranslationFunctions } from "../../i18n/i18n-types";
 import { floorLevelTiles } from "../Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
+import { mapEditorPlacementLevelStore } from "./MapEditorStore";
+import { mapLayerLevelStore } from "./MapLayerStore";
 
 export interface FloorLevelStack {
     /** The floors of the map, the highest first, the ground last. */
@@ -15,6 +17,12 @@ export interface FloorLevelStack {
     altitude?: number;
     /** The altitude of the ground under the pointer (see pointerAltitude), told with the one of the avatar. */
     pointerAltitude?: number;
+}
+
+/** The level the map editor works on: the one chosen in its panel, and in "auto" the one under the pointer. */
+export interface EditorFloorLevel {
+    choice: "auto" | number;
+    level: number;
 }
 
 /** The raised floors that have slabs on the map, the floor of the avatar, and whether the map editor is open. */
@@ -40,24 +48,26 @@ export function floorLevelName(ll: TranslationFunctions, elevation: number, buil
 }
 
 /**
- * The stack shown under the clock: none on a map without raised floors nor relief, nor while the map editor is open.
- * On a map with a relief it tells the altitude of the avatar, and the one of the ground under the pointer.
+ * The stack shown under the clock: none on a map without raised floors nor relief. On a map with a relief it tells the
+ * altitude of the avatar, and the one of the ground under the pointer. While the map editor is open (`editor`), it
+ * shows the level the editor works on instead of the floor of the avatar and of the display ceiling of the game.
  */
 export function floorLevelStack(
     built: readonly number[],
     current: number,
-    hidden: boolean,
+    editor: EditorFloorLevel | undefined,
     name: (elevation: number) => string,
     viewed?: number,
     altitude?: number,
     pointerAltitude?: number,
 ): FloorLevelStack | undefined {
-    if (hidden || (built.length === 0 && altitude === undefined)) return undefined;
-    const levels = [...new Set([0, ...built])].sort((a, b) => b - a);
+    if (built.length === 0 && altitude === undefined) return undefined;
+    const chosen = editor === undefined || editor.choice === "auto" ? undefined : editor.choice;
+    const levels = [...new Set([0, ...built, ...(chosen === undefined ? [] : [chosen])])].sort((a, b) => b - a);
     return {
         levels: levels.map((elevation) => ({ elevation, name: name(elevation) })),
-        current,
-        viewed,
+        current: editor === undefined ? current : (chosen ?? editor.level),
+        viewed: editor === undefined ? viewed : chosen,
         ...(altitude === undefined ? {} : { altitude }),
         ...(altitude === undefined || pointerAltitude === undefined ? {} : { pointerAltitude }),
     };
@@ -77,12 +87,14 @@ export const floorLevelsStore: Readable<FloorLevelStack | undefined> = derived(
         floorLevelViewedStore,
         avatarAltitudeStore,
         pointerAltitudeStore,
+        mapEditorPlacementLevelStore,
+        mapLayerLevelStore,
     ],
-    ([built, current, hidden, ll, viewed, altitude, pointer]) =>
+    ([built, current, hidden, ll, viewed, altitude, pointer, choice, level]) =>
         floorLevelStack(
             built,
             current,
-            hidden,
+            hidden ? { choice, level } : undefined,
             (elevation) => floorLevelName(ll, elevation, built),
             viewed,
             altitude,
