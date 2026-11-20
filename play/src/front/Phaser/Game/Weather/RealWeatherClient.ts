@@ -9,7 +9,7 @@ import { ABSOLUTE_PUSHER_URL } from "../../../Enum/ComputedConst";
 import { nightDateStore } from "../../../Stores/NightStore";
 import { REAL_WEATHER_POLL_MS, RealWeatherForecast, roundedCoordinate } from "../../../../common/RealWeather";
 import type { MapPlace } from "../../../../common/RealWeather";
-import { realWeatherStateAt, withRealWeather, withWeatherPreview } from "./RealWeather";
+import { realWeatherStateAt, withRealWeather, withRealWind, withWeatherPreview } from "./RealWeather";
 import type { RealForecastState, RealWeatherState, WeatherPreview } from "./RealWeather";
 import type { MapSnowSettings } from "./SnowCover";
 import { weatherForecast } from "./WeatherForecast";
@@ -130,7 +130,7 @@ let memo:
 /**
  * The map weather settings as they are shown to this person at `date` (the game clock): the weather being tried in the
  * settings panel if any, then a map set to "real" gets the weather of its place at that date (withRealWeather). Only
- * such a map makes this browser ask.
+ * such a map, or one that has a place of its own (for its wind), makes this browser ask.
  */
 export function shownWeatherSettings(
     settings: MapSnowSettings | undefined,
@@ -152,12 +152,12 @@ function mapWeatherSettings(
     const tried = withWeatherPreview(settings, preview);
     if (tried?.weather === WeatherType.Cloudy) {
         // The Cloudy tile is a clear sky with clouds, at once like the other fixed tiles.
-        return { ...tried, weather: WeatherType.Clear, cloudiness: AUTO_CLOUDINESS };
+        return withPlaceWind({ ...tried, weather: WeatherType.Clear, cloudiness: AUTO_CLOUDINESS }, date);
     }
     if (tried?.weather === WeatherType.Automatic) {
-        return date ? { ...tried, cloudiness: cloudinessAt(date, tried.weatherAuto) } : tried;
+        return withPlaceWind(date ? { ...tried, cloudiness: cloudinessAt(date, tried.weatherAuto) } : tried, date);
     }
-    if (tried?.weather !== WeatherType.Real) return tried;
+    if (tried?.weather !== WeatherType.Real) return withPlaceWind(tried, date);
     follow(tried.weatherLocation);
     const second = date === undefined ? undefined : Math.floor(date.getTime() / 1000);
     if (
@@ -191,6 +191,33 @@ function mapWeatherSettings(
         shown,
     };
     return shown;
+}
+
+// The fixed weather last shown with the wind of its place: the same object while neither it nor the wind changed.
+let windMemo:
+    | { settings: MapSnowSettings; windFrom: number | undefined; windSpeed: number | undefined; shown: MapSnowSettings }
+    | undefined;
+
+/**
+ * A weather that is not the real one, with the real wind of the place of the map when the map has a place: its
+ * clouds, its trees and its rain go the way the banner says the wind blows. Such a map makes this browser follow
+ * its place, as a map in Real does; a map without a place keeps the usual drift and asks nothing.
+ */
+function withPlaceWind(settings: MapSnowSettings | undefined, date: Date | undefined): MapSnowSettings | undefined {
+    if (!settings?.weatherLocation) return settings;
+    follow(settings.weatherLocation);
+    const windy = withRealWind(settings, realWeatherStateAt(knownFor(settings.weatherLocation), date));
+    if (!windy || windy === settings) return settings;
+    if (
+        windMemo &&
+        windMemo.settings === settings &&
+        windMemo.windFrom === windy.windFrom &&
+        windMemo.windSpeed === windy.windSpeed
+    ) {
+        return windMemo.shown;
+    }
+    windMemo = { settings, windFrom: windy.windFrom, windSpeed: windy.windSpeed, shown: windy };
+    return windy;
 }
 
 /**
