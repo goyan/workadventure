@@ -29,13 +29,15 @@ import { wallBarriers } from "../MapEditor/MapLayer/MapLayerBarriers";
 import { getAreaMapEditors, hasMeetingProperty } from "../../../Rules/MeetingRules";
 import { extensionModuleStore } from "../../../Stores/GameSceneStore";
 import type { Entity } from "../../ECS/Entity";
+import { AIRPLANE_AREA_LEVEL } from "../../Vehicle/Vehicle";
 import { DEPTH_OVERLAY_INDEX } from "../DepthIndexes";
 import type { ITiledPlace } from "../GameMapPropertiesListener";
 import type { GameScene } from "../GameScene";
 import type { Player } from "../../Player/Player";
 import { RectangleObstacles } from "../../../Utils/RectangleObstacles";
 import { sameGrids } from "../Wander/WanderCollisions";
-import { getTileCollisionGrid } from "../../../Utils/EntityHitbox";
+import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRectangles";
+import { getSolidRectangles, getTileCollisionGrid } from "../../../Utils/EntityHitbox";
 import { EntitiesManager } from "./EntitiesManager";
 import { AreasManager } from "./AreasManager";
 import { EntityCollisionRectangles } from "./EntityCollisionRectangles";
@@ -88,6 +90,14 @@ export type PropertyChangeCallback = (
 
 /** Why an object cannot be placed somewhere (see getPlacementBlocker). */
 export type PlacementBlocker = "outOfMap" | "obstacle" | "player" | "permission";
+
+/** The tile key of a player in the sky (see AIRPLANE_AREA_LEVEL): no tile of the map. */
+const AIRBORNE_KEY = -1;
+
+/** A flying player is above every floor of the map: no ground area, tile or dynamic area applies to it. */
+function isAirborne(position: AreaPosition | undefined): boolean {
+    return (position?.z ?? 0) >= AIRPLANE_AREA_LEVEL;
+}
 
 export class GameMapFrontWrapper {
     private scene: GameScene;
@@ -861,7 +871,8 @@ export class GameMapFrontWrapper {
 
         const xMap = Math.floor(x / (map.tilewidth ?? this.gameMap.getDefaultTileSize()));
         const yMap = Math.floor(y / (map.tileheight ?? this.gameMap.getDefaultTileSize()));
-        const key = xMap + yMap * map.width;
+        // In the sky, the player is on no tile: leaving the ground drops every tile property (focus, zoom, sounds…).
+        const key = isAirborne(this.position) ? AIRBORNE_KEY : xMap + yMap * map.width;
 
         if (key === this.key) {
             return;
@@ -1695,6 +1706,7 @@ export class GameMapFrontWrapper {
      */
     private getProperties(key: number): Map<string, string | boolean | number> {
         const properties = new Map<string, string | boolean | number>();
+        if (key === AIRBORNE_KEY) return properties;
         // NOTE: WE DO NOT WANT AREAS TO BE THE PART OF THE OLD PROPERTIES CHANGE SYSTEM
         // CHECK FOR AREAS PROPERTIES
         //if (this.position) {
@@ -1776,8 +1788,8 @@ export class GameMapFrontWrapper {
     }
 
     private triggerLayersChange(): void {
-        const layersByOldKey = this.oldKey === undefined ? [] : this.gameMap.getLayersByKey(this.oldKey);
-        const layersByNewKey = this.key === undefined ? [] : this.gameMap.getLayersByKey(this.key);
+        const layersByOldKey = this.layersAt(this.oldKey);
+        const layersByNewKey = this.layersAt(this.key);
 
         const enterLayers = new Set(layersByNewKey);
         const leaveLayers = new Set(layersByOldKey);
@@ -1805,11 +1817,12 @@ export class GameMapFrontWrapper {
     }
 
     private triggerDynamicAreasChange(
-        oldPosition: { x: number; y: number } | undefined,
-        position: { x: number; y: number } | undefined,
+        oldPosition: AreaPosition | undefined,
+        position: AreaPosition | undefined,
     ): boolean {
-        const areasByOldPosition = oldPosition ? this.getDynamicAreasOnPosition(oldPosition) : [];
-        const areasByNewPosition = position ? this.getDynamicAreasOnPosition(position) : [];
+        const areasByOldPosition =
+            oldPosition && !isAirborne(oldPosition) ? this.getDynamicAreasOnPosition(oldPosition) : [];
+        const areasByNewPosition = position && !isAirborne(position) ? this.getDynamicAreasOnPosition(position) : [];
 
         const enterAreas = new Set(areasByNewPosition);
         const leaveAreas = new Set(areasByOldPosition);
@@ -1883,10 +1896,12 @@ export class GameMapFrontWrapper {
     }
 
     public getCurrentLayers(): Array<ITiledMapLayer> {
-        if (this.key === undefined) {
-            return [];
-        }
-        return this.gameMap.getLayersByKey(this.key);
+        return this.layersAt(this.key);
+    }
+
+    /** The tile layers drawn on a tile: none out of the map, nor in the sky (getLayersByKey would read data[-1]). */
+    private layersAt(key: number | undefined): Array<ITiledMapLayer> {
+        return key === undefined || key === AIRBORNE_KEY ? [] : this.gameMap.getLayersByKey(key);
     }
 
     public getStartPositionNames(): string[] {
@@ -1960,6 +1975,23 @@ export class GameMapFrontWrapper {
      * The pixel hitboxes a computed walk of the player must go around: objects, water (unless it swims) and partial
      * Tiled collisions. The walls of the map layer are left to the barriers (see getWallBarriers).
      */
+    /** Landing checks all ground rectangles, including obstacles already below the aircraft. */
+    public getLandingObstacles(): RectangleObstacles {
+        const tile = this.getTileDimensions().width;
+        const rectangles = Array.from(this.entitiesManager.getEntities().values())
+            .filter((entity) => entity.getElevation() < 2)
+            .flatMap((entity) => {
+                const position = { x: entity.x, y: entity.y };
+                return getPrefabCollisionRectangles(position, getSolidRectangles(position, entity.getPrefab(), tile));
+            });
+        return new RectangleObstacles([...(this.tiledTileCollisions?.getPathObstacles() ?? []), ...rectangles], {
+            offsetX: -32,
+            offsetY: -32,
+            width: 64,
+            height: 64,
+        });
+    }
+
     public getPathObstacles(player: Player): RectangleObstacles {
         const body = player.body;
         if (!(body instanceof Phaser.Physics.Arcade.Body)) {

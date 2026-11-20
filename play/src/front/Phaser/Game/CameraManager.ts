@@ -452,7 +452,15 @@ export class CameraManager extends EventEmitter {
     public startFollowPlayer(player: Player | RemotePlayer, duration = 0): void {
         this.playerToFollow = player;
 
-        this.animateToFocus(player, duration, () => {});
+        const visualTarget = {
+            get x(): number {
+                return player.x;
+            },
+            get y(): number {
+                return player.visualY ?? player.y;
+            },
+        };
+        this.animateToFocus(visualTarget, duration, () => {});
         return;
     }
 

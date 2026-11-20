@@ -6,6 +6,7 @@ const KEYS = [
     "environmentVolume",
     "soundEffectsVolumeBaseline",
     "skateboardVolume",
+    "airplaneVolume",
     "weatherVolume",
     "doorVolume",
     "nerfVolume",
@@ -95,6 +96,16 @@ describe("personal sound effect volumes", () => {
         vi.resetModules();
         const restored = await load();
         expect(get(restored.weatherVolumeStore)).toBe(0.8);
+    });
+
+    it("starts the airplane engine at 4%, apart from the other families, and keeps its own setting", async () => {
+        const first = await load();
+        expect(get(first.airplaneVolumeStore)).toBe(0.04);
+        first.airplaneVolumeStore.set(0.3);
+        expect(get(first.skateboardVolumeStore)).toBe(0.15);
+        vi.resetModules();
+        const restored = await load();
+        expect(get(restored.airplaneVolumeStore)).toBe(0.3);
     });
 
     it("reduces the previous saved volumes once", async () => {

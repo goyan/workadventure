@@ -3,6 +3,13 @@ import type { Translation } from "../i18n-types";
 
 const woka: DeepPartial<Translation["woka"]> = {
     vehicle: {
+        myVehicle: "Mes véhicules",
+        airHint: "Air : appuyez sur {key} pour activer ou désactiver votre avion.",
+        landingBlocked: "Atterrissage impossible ici. Déplacez-vous vers un endroit dégagé.",
+        airplane: "Avion",
+        media: { air: "Air", land: "Terre", water: "Eau" },
+        quickHint:
+            "Le canoë s’équipe automatiquement dans l’eau profonde du relief. Équipez votre véhicule terrestre depuis la roue d’actions.",
         centerColor: "Centre",
         edgeColor: "Bordure",
         wheelsColor: "Roues",
@@ -19,10 +26,13 @@ const woka: DeepPartial<Translation["woka"]> = {
         dismount: "Descendre",
         canoe: "Canoë",
         hullColor: "Coque",
+        fuselageColor: "Fuselage",
+        wingsColor: "Ailes",
+        canopyColor: "Verrière",
         rimColor: "Bord",
         paddleColor: "Pagaie",
         canoeHint:
-            "Le canoë se met à l’eau tout seul : là où vous nageriez dans l’eau du relief, vous pagayez, à la vitesse de la marche, et le courant vous emporte moitié moins. À terre, vous marchez.",
+            "Le canoë se met à l’eau tout seul : là où vous nageriez dans l’eau du relief, vous pagayez, à la vitesse de la marche, et le courant vous emporte moitié moins. À terre, votre choix de véhicule terrestre s’applique.",
     },
     customWoka: {
         color: "Couleur",

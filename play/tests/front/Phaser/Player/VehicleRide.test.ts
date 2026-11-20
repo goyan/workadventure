@@ -40,7 +40,7 @@ beforeEach(() => {
     localStorage.clear();
     followStateStore.set("off");
     localUserStore.setVehicle(Vehicle.Skateboard);
-    localUserStore.setVehicleColors({ color: "#3258dd" });
+    localUserStore.setVehicleColors(Vehicle.Skateboard, { color: "#3258dd" });
 });
 afterEach(() => {
     followStateStore.set("off");

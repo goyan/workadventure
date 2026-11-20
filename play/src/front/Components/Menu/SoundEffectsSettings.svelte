@@ -6,6 +6,7 @@
     import PixelIcon from "../ActionsMenu/PixelIcon.svelte";
     import type { PixelIconName } from "../ActionsMenu/PixelIcons";
     import {
+        airplaneVolumeStore,
         doorVolumeStore,
         footstepVolumeStore,
         jungleVolumeStore,
@@ -26,6 +27,7 @@
 
     // What the player chose: a slider does not move when a silent zone cuts the sounds.
     const footstepSetting = footstepVolumeStore.setting;
+    const airplaneSetting = airplaneVolumeStore.setting;
     const skateboardSetting = skateboardVolumeStore.setting;
     const weatherSetting = weatherVolumeStore.setting;
     const doorSetting = doorVolumeStore.setting;
@@ -65,6 +67,14 @@
                     store: skateboardVolumeStore.setting,
                     value: $skateboardSetting,
                     family: "skateboard",
+                },
+                {
+                    id: "airplane-volume",
+                    label: $LL.menu.settings.soundEffects.airplane(),
+                    icon: "airplane",
+                    store: airplaneVolumeStore.setting,
+                    value: $airplaneSetting,
+                    family: "airplane",
                 },
             ],
         },

@@ -46,6 +46,7 @@ function createVolumeStore(key: string, defaultVolume: number, formerKey?: strin
 // One volume per family of sounds (Settings > Sounds). "environmentVolume" was the single slider of the last
 // five: they start from it.
 export const footstepVolumeStore = createVolumeStore("footstepVolume", DEFAULT_VOLUME);
+export const airplaneVolumeStore = createVolumeStore("airplaneVolume", 0.04);
 export const skateboardVolumeStore = createVolumeStore("skateboardVolume", DEFAULT_VOLUME, "footstepVolume");
 export const weatherVolumeStore = createVolumeStore("weatherVolume", DEFAULT_VOLUME, "environmentVolume");
 export const doorVolumeStore = createVolumeStore("doorVolume", DEFAULT_VOLUME, "environmentVolume");

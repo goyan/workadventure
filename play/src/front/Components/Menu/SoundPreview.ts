@@ -7,6 +7,7 @@ import { JUNGLE_MAX_VOLUME, JUNGLE_SOUNDS } from "../../Phaser/Game/Jungle/Jungl
 export type PreviewedSoundFamily =
     | "footsteps"
     | "skateboard"
+    | "airplane"
     | "weather"
     | "doors"
     | "nerf"
@@ -23,6 +24,7 @@ export const SOUND_PREVIEWS: Record<
 > = {
     footsteps: { url: "/resources/objects/footsteps/wood-0.ogg", baseVolume: FOOTSTEP_MAX_VOLUME },
     skateboard: { url: "/resources/vehicles/skate.mp3", baseVolume: 1, durationMs: 1500, startAt: 0.18 },
+    airplane: { url: "/resources/vehicles/small_plane.mp3", baseVolume: 1, durationMs: 3000 },
     // WeatherSounds plays the rain at 14 % of the weather volume.
     weather: { url: "/resources/objects/weather/rain.mp3", baseVolume: 0.14, durationMs: 3000 },
     doors: { url: DOOR_SOUND_URLS.open, baseVolume: DOOR_MAX_VOLUME },

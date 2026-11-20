@@ -8,7 +8,7 @@
     import { connectionManager } from "@wa/front/Connection/ConnectionManager";
     import { selectCharacterSceneVisibleStore } from "@wa/front/Stores/SelectCharacterStore";
     import { localUserStore } from "@wa/front/Connection/LocalUserStore";
-    import type { Vehicle } from "@wa/front/Phaser/Vehicle/Vehicle";
+    import { readVehicle, vehicleMedia, type VehiclePreferences } from "@wa/front/Phaser/Vehicle/Vehicle";
     import type { Swimwear } from "@wa/front/Phaser/Entity/Swimwear";
     import WokaSelectScene from "./WokaSelectScene.svelte";
     import WokaCustomizeScene from "./WokaCustomizeScene.svelte";
@@ -20,8 +20,8 @@
         texturesId: string[],
         swimwear?: Swimwear,
         swimwearColor?: string,
-        vehicle?: Vehicle,
-        vehicleColors?: VehicleColors,
+        vehiclePreferences?: VehiclePreferences,
+        vehicleColors?: Record<string, VehicleColors>,
     ): Promise<void> {
         error = null; // Reset error message
         try {
@@ -37,9 +37,13 @@
                 localUserStore.setSwimwear(swimwear);
                 localUserStore.setSwimwearColor(swimwearColor);
             }
-            if (vehicle !== undefined) {
-                localUserStore.setVehicle(vehicle);
-                localUserStore.setVehicleColors(vehicleColors);
+            if (vehiclePreferences !== undefined) {
+                for (const medium of vehicleMedia) {
+                    localUserStore.setVehicleForMedium(medium.id, vehiclePreferences[medium.id]);
+                }
+                for (const [vehicle, colors] of Object.entries(vehicleColors ?? {})) {
+                    localUserStore.setVehicleColors(readVehicle(vehicle), colors);
+                }
             }
             selectCharacterSceneVisibleStore.set(false);
             gameManager.tryToStopScene(SelectCharacterSceneName);

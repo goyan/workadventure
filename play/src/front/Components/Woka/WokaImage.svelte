@@ -2,6 +2,7 @@
     import { onMount, onDestroy } from "svelte";
     import type { VehicleColors } from "@wa/front/Phaser/Vehicle/Vehicle";
     import { Vehicle, readVehicleColors } from "@wa/front/Phaser/Vehicle/Vehicle";
+    import { loadAirplaneArtwork } from "@wa/front/Phaser/Vehicle/AirplaneArtwork";
     import { createVehicleSheet, drawVehiclePreview } from "@wa/front/Phaser/Vehicle/VehicleAssets";
     import {
         drawSwimwearFrame,
@@ -35,15 +36,30 @@
         swimwear,
         swimwearColor,
         vehicle,
-        vehicleColors = readVehicleColors(null),
+        vehicleColors,
     }: Props = $props();
 
     let vehicleCanvas: HTMLCanvasElement | undefined;
     $effect(() => {
         if (vehicle === undefined || vehicle === Vehicle.None) return;
-        vehicleCanvas = createVehicleSheet(vehicleColors, vehicle);
-        scheduleDraw();
+        const selected = vehicle;
+        // Read every colour now: read later, in the airplane's promise, they would not redraw the preview.
+        const colors = { ...(vehicleColors ?? readVehicleColors(null, selected)) };
+        let active = true;
+        if (selected === Vehicle.Airplane) {
+            loadAirplaneArtwork()
+                .then(() => {
+                    if (!active) return;
+                    vehicleCanvas = createVehicleSheet(colors, selected);
+                    scheduleDraw();
+                })
+                .catch((error: unknown) => console.error("Could not preview airplane", error));
+        } else {
+            vehicleCanvas = createVehicleSheet(colors, selected);
+            scheduleDraw();
+        }
         return () => {
+            active = false;
             vehicleCanvas = undefined;
         };
     });
@@ -113,7 +129,7 @@
             const layers = bodyPartOrder.flatMap((part) =>
                 images[part] ? [{ image: images[part], head: ["hair", "hat", "eyes"].includes(part) }] : [],
             );
-            drawVehiclePreview(ctx, vehicleCanvas, layers, direction, canvasSize);
+            drawVehiclePreview(ctx, vehicleCanvas, layers, direction, canvasSize, vehicle);
             return;
         }
         const imageFrame = swimwear === undefined ? frame : 1;

@@ -56,6 +56,7 @@ export interface FloorAvatar {
     y: number;
     setPosition(x: number, y: number): unknown;
     setFloorZ(z: number): void;
+    isFlying?(): boolean;
 }
 
 /** The point read for the avatar, under its centre: between its feet. */
@@ -360,6 +361,14 @@ export class FloorSpike {
     private readonly step = (_time: number, delta: number): void => {
         const avatar = this.avatar();
         if (!avatar) return;
+        if (avatar.isFlying?.()) {
+            this.state = { elevation: 0 };
+            this.prev = undefined;
+            this.restoring = undefined;
+            this.shared = -1;
+            this.hints.update([], []);
+            return;
+        }
         const p = { x: avatar.x, y: avatar.y + FEET_OFFSET_Y };
         if (this.origin === undefined) {
             this.mapAge -= delta;

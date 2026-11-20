@@ -34,7 +34,18 @@ import type { CurrentVector } from "@wa/front/Phaser/Game/Terrain/WaterCurrent";
 import { moveAnimationType, skateLean, stepLean } from "@wa/front/Phaser/Game/Ice/SkatePose";
 import { findActionableObject } from "@wa/front/Phaser/Player/ActionableObjects";
 import { VehicleEffect } from "@wa/front/Phaser/Vehicle/VehicleEffect";
-import { Vehicle, VehicleMode, isCanoeAfloat, readVehicleState } from "@wa/front/Phaser/Vehicle/Vehicle";
+import {
+    Vehicle,
+    VehicleMode,
+    AIRPLANE_ALTITUDE,
+    AIRPLANE_AREA_LEVEL,
+    AIRPLANE_RENDER_DEPTH,
+    AIRPLANE_VISUAL_LIFT,
+    isCanoeAfloat,
+    readVehicleState,
+    sharedVehicleState,
+    type VehicleState,
+} from "@wa/front/Phaser/Vehicle/Vehicle";
 import { NerfGunEffect } from "@wa/front/Phaser/Game/Nerf/NerfGunEffect";
 import { NerfHeartsEffect } from "@wa/front/Phaser/Game/Nerf/NerfHeartsEffect";
 import { TorchFlameEffect } from "@wa/front/Phaser/Game/Torch/TorchFlameEffect";
@@ -47,7 +58,7 @@ import { NERF_BLINK_ALPHA, NERF_BLINK_TINT, nerfBlinkTinted } from "@wa/front/Ph
 import { cardinalVehicleHeading, vehicleHeading } from "@wa/front/Phaser/Vehicle/VehicleFrames";
 import { isBasicActive } from "@wa/front/Stores/BasicModeStore";
 import { normalizeUserName } from "../../Connection/LocalUserUtils";
-import { floorDepth } from "../Game/MapEditor/MapLayer/FloorDepth";
+import { floorDepth, GROUND_DEPTH_SCALE } from "../Game/MapEditor/MapLayer/FloorDepth";
 import { lazyLoadPlayerCharacterTextures } from "./PlayerTexturesLoadingManager";
 import { SpeechBubble } from "./SpeechBubble";
 import { SpeechDomElement } from "./SpeechDomElement";
@@ -153,12 +164,23 @@ export abstract class Character extends Container implements OutlineableInterfac
     private vehicleMoving = false;
     private ridingVehicle = false;
     private vehicleEffect: VehicleEffect | undefined;
+    private airplanePoseApplied = false;
+    private displayedFlightAltitude = 0;
+    private previousFlightDisplayTime: number | undefined;
     private avatarAction = AvatarAction.Idle;
     private avatarActionEffect: AvatarActionEffect | undefined;
     private depthCache: { x: number; y: number; depth: number } | undefined;
     /** The current lean of a skater, in radians: towards the foot it glides on. */
     private skateLean = 0;
     private readonly syncDisplayPositionWithPhysics = (): void => {
+        const now = this.scene.time.now;
+        const delta =
+            this.previousFlightDisplayTime === undefined
+                ? 1000
+                : Math.min(100, Math.max(0, now - this.previousFlightDisplayTime));
+        this.previousFlightDisplayTime = now;
+        const difference = this.flightAltitude - this.displayedFlightAltitude;
+        this.displayedFlightAltitude += Math.sign(difference) * Math.min(Math.abs(difference), delta * 1.2);
         this.setDepthIfNeeded(this.computeDepth());
         this.updateUsernameDisplayPosition();
         if (this.avatarActionEffect) {
@@ -188,8 +210,14 @@ export abstract class Character extends Container implements OutlineableInterfac
             this.vehicleMoving,
             this.scene.time.now,
             this.getBody().velocity,
+            {
+                lift: this.flightLift,
+                altitude: Math.min(1, this.displayedFlightAltitude / AIRPLANE_ALTITUDE),
+                groundDepth: floorDepth(this.floorZ, this.y + 16),
+            },
         );
-        if (this.ridingVehicle && this.vehicleMoving) this.scene.markDirty();
+        this.updateAirplanePilot();
+        if (this.ridingVehicle && (this.vehicleMoving || vehicle === Vehicle.Airplane)) this.scene.markDirty();
         const showHeadphones = this.listeningMusic && !this.invisible && isHumanAvatar(this.sprites.keys());
         if (showHeadphones) this.musicHeadphonesEffect ??= new MusicHeadphonesEffect(this.scene, this);
         this.musicHeadphonesEffect?.update(showHeadphones, this.sprites.values().next().value);
@@ -409,6 +437,7 @@ export abstract class Character extends Container implements OutlineableInterfac
 
     /** Whether the body of the character is in the water: what the other players see of a swimmer. */
     protected isSwimmingHere(): boolean {
+        if (this.isInAirplane()) return false;
         // The water of its floor only: a character on a raised floor or a stair drawn over a pool of the ground does
         // not swim, and it swims in a pool of its own floor.
         const body = { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y };
@@ -480,7 +509,8 @@ export abstract class Character extends Container implements OutlineableInterfac
      * none on the ground: hidden, swimming, or standing on a raised floor.
      */
     public skyShadowSource(): { x: number; y: number; sprites: Sprite[] } | undefined {
-        if (this.invisible || !this.visible || this.floorZ >= 2 || this.isInWater()) return undefined;
+        if (this.invisible || !this.visible || this.floorZ >= 2 || this.isInWater() || this.isInAirplane())
+            return undefined;
         return {
             x: this.x,
             y: this.y + CHARACTER_BODY_HEIGHT / 2 + CHARACTER_BODY_OFFSET_Y,
@@ -510,7 +540,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     /** SPIKE (floors study): altitude of the floor the character stands on, in pixels above the ground. */
     private floorZ = 0;
     public getFloorZ(): number {
-        return this.floorZ;
+        return this.isFlying() ? AIRPLANE_AREA_LEVEL : this.floorZ;
     }
 
     /**
@@ -518,15 +548,16 @@ export abstract class Character extends Container implements OutlineableInterfac
      * under it (the stair itself keeps it between its sides).
      */
     public isNearGround(): boolean {
-        return this.floorZ < 2;
+        return !this.isFlying() && this.floorZ < 2;
     }
 
     /** Whether the character stands on the floor of this altitude (0: the ground), stairs apart. */
     public isOnFloor(elevation: number): boolean {
-        return Math.abs(this.floorZ - elevation) < 2;
+        return !this.isFlying() && Math.abs(this.floorZ - elevation) < 2;
     }
 
     public setFloorZ(z: number): void {
+        if (this.isFlying()) return;
         if (this.floorZ === z) return;
         this.floorZ = z;
         this.depthCache = undefined;
@@ -731,7 +762,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     }
 
     protected updateUsernameDisplayPosition(x = this.x, y = this.y): void {
-        this.usernameDisplay?.setPosition(x, y + playerNameY);
+        this.usernameDisplay?.setPosition(x, y + playerNameY - this.flightLift);
     }
 
     public setVideoBubbleVisible(visible: boolean): void {
@@ -765,7 +796,9 @@ export abstract class Character extends Container implements OutlineableInterfac
             this.depthCache = {
                 x: this.x,
                 y: this.y,
-                depth: floorDepth(this.floorZ, groundDepth),
+                depth: this.isFlying()
+                    ? AIRPLANE_RENDER_DEPTH + groundDepth / GROUND_DEPTH_SCALE
+                    : floorDepth(this.floorZ, groundDepth),
             };
             // The treadmill under a runner moves its belt (recomputed with the depth: on each move or action change).
             this.scene.treadmillBelts.setRunner(
@@ -884,17 +917,75 @@ export abstract class Character extends Container implements OutlineableInterfac
             : cardinalVehicleHeading(this._lastDirection);
     }
 
+    /** How high the plane is drawn above its shadow: its altitude, brought down to a few pixels (whole ones). */
+    private get flightLift(): number {
+        return Math.round(Math.min(1, this.displayedFlightAltitude / AIRPLANE_ALTITUDE) * AIRPLANE_VISUAL_LIFT);
+    }
+
+    public get visualY(): number {
+        return this.y - this.flightLift;
+    }
+
+    public isFlying(): boolean {
+        return this.isInAirplane() && this.flightAltitude > 0;
+    }
+
+    public isInAirplane(): boolean {
+        return this.vehicleState?.vehicle === Vehicle.Airplane && this.vehicleMode !== VehicleMode.Off;
+    }
+
+    protected get flightAltitude(): number {
+        return this.isInAirplane() ? (this.vehicleState.altitude ?? AIRPLANE_ALTITUDE) : 0;
+    }
+
+    protected setFlightAltitude(altitude: number): void {
+        if (!this.isInAirplane() || this.vehicleState.altitude === altitude) return;
+        this.vehicleState = { ...this.vehicleState, altitude };
+        this.depthCache = undefined;
+        this.scene.markDirty();
+    }
+
+    private updateAirplanePilot(): void {
+        if (this.isInAirplane() && this.vehicleEffect) {
+            const cockpit = this.vehicleEffect.getPilotAnchor();
+            for (const sprite of this.sprites.values()) {
+                sprite
+                    .setCrop(0, 0, 32, 16)
+                    .setScale(0.75)
+                    .setPosition(cockpit.x - 32, cockpit.y - 10 - this.flightLift);
+            }
+            this.airplanePoseApplied = true;
+        } else if (this.airplanePoseApplied) {
+            for (const sprite of this.sprites.values()) sprite.setCrop().setScale(1).setPosition(0, 0);
+            this.airplanePoseApplied = false;
+        }
+    }
+
+    public get vehicle(): Vehicle {
+        return this.vehicleState.vehicle;
+    }
+
+    protected getVehicleState(): VehicleState {
+        return this.vehicleState;
+    }
+
+    public setVehicles(variables: ReadonlyMap<string, unknown> | undefined): void {
+        this.setVehicle(sharedVehicleState(variables));
+    }
+
     public setVehicle(value: unknown): void {
         const state = readVehicleState(value);
         if (
             state.vehicle === this.vehicleState.vehicle &&
             state.mode === this.vehicleState.mode &&
+            state.altitude === this.vehicleState.altitude &&
             state.color === this.vehicleState.color &&
             state.edgeColor === this.vehicleState.edgeColor &&
             state.wheelsColor === this.vehicleState.wheelsColor
         )
             return;
         this.vehicleState = state;
+        this.depthCache = undefined;
         this.playAnimation(this._lastDirection, this.vehicleMoving);
         this.scene.markDirty();
     }

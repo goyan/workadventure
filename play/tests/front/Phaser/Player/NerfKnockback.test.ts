@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PositionMessage_Direction } from "@workadventure/messages";
+import { readVehicleState } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { Player } from "@wa/front/Phaser/Player/Player";
 import { ActiveEventList, UserInputEvent } from "@wa/front/Phaser/UserInput/UserInputManager";
 import { followStateStore } from "@wa/front/Stores/FollowStore";
@@ -20,12 +21,14 @@ function fixture(seated = false) {
     const emit = vi.fn();
     const standUp = vi.fn();
     Object.assign(player, {
+        vehicleState: readVehicleState(null),
         x: 100,
         y: 100,
         scene,
         _lastDirection: PositionMessage_Direction.RIGHT,
         getBody: () => body,
         updateSwimming: vi.fn(),
+        updateCanoe: vi.fn(),
         updateObjectAction: vi.fn(),
         isSeated: () => seated,
         standUp,

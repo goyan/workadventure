@@ -5,7 +5,7 @@ import { ActiveEventList, UserInputEvent } from "@wa/front/Phaser/UserInput/User
 import { followStateStore } from "@wa/front/Stores/FollowStore";
 import { userMovingStore } from "@wa/front/Stores/GameStore";
 import { localUserStore } from "@wa/front/Connection/LocalUserStore";
-import { Vehicle } from "@wa/front/Phaser/Vehicle/Vehicle";
+import { Vehicle, readVehicleState } from "@wa/front/Phaser/Vehicle/Vehicle";
 
 vi.mock("@wa/front/Phaser/Player/Seat", () => ({
     findSeatUnderFeet: vi.fn(),
@@ -22,6 +22,7 @@ function fixture(realMove = false) {
     const playAnimation = vi.fn();
     const velocity = { x: 0, y: 0 };
     Object.assign(player, {
+        vehicleState: readVehicleState(null),
         x: 16,
         y: 0,
         _lastDirection: PositionMessage_Direction.LEFT,
