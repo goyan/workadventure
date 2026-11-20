@@ -3,7 +3,7 @@ import { isTreePrefab } from "@workadventure/map-editor";
 import { distinguishable } from "../Weather/ScreenScale";
 import { POSE_PAD, treePose } from "./TreePoses";
 
-export { swayAmplitude, swayFrequency, treeSwayAngle } from "./TreePoses";
+export { swayAmplitude, treeSwayAngle } from "./TreePoses";
 
 /**
  * Trees of the nature catalogue: the ones that sway in the wind, and whose snow and leaves follow the season. A tree

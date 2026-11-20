@@ -3,19 +3,17 @@ import { describe, expect, it, vi } from "vitest";
 import {
     isSwayingTree,
     swayAmplitude,
-    swayFrequency,
     treeSwayAngle,
     TreeSway,
 } from "../../../../../src/front/Phaser/Game/Nature/TreeSway";
 
 describe("treeSwayAngle", () => {
-    it("sways more and faster as the wind blows harder, within bounds", () => {
+    it("sways more as the wind blows harder, within bounds", () => {
         expect(swayAmplitude(5)).toBeLessThan(swayAmplitude(20));
         expect(swayAmplitude(20)).toBeLessThan(swayAmplitude(50));
         expect(swayAmplitude(0)).toBeGreaterThan(0);
         expect(swayAmplitude(200)).toBe(swayAmplitude(80));
         expect(swayAmplitude(200)).toBeLessThanOrEqual(4);
-        expect(swayFrequency(5)).toBeLessThan(swayFrequency(50));
     });
 
     it("never leans further than the amplitude, and each tree in its own time", () => {

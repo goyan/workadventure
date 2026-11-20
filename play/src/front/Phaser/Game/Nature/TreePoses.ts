@@ -5,9 +5,12 @@ const STRONGEST_WIND_KMH = 80;
 /** How wide the swing of a tree is, in its own unit: a little in a calm, ten times more in a storm. */
 const CALM_AMPLITUDE = 0.4;
 const STORM_AMPLITUDE = 4;
-/** How often a tree sways, in swings a second. */
-const CALM_FREQUENCY = 0.25;
-const STORM_FREQUENCY = 0.7;
+/**
+ * How often a tree sways, in swings a second: slowly, and the same in any wind. The swing is read at the time of the
+ * server, a huge number of seconds: a pace following the wind made a wind changing by a hair throw every tree
+ * swings away from where it was, and the trees wriggled as long as the real wind moved.
+ */
+export const SWAY_FREQUENCY = 0.1;
 
 const windShare = (windKmh: number): number =>
     Math.max(0, Math.min(STRONGEST_WIND_KMH, Number.isFinite(windKmh) ? windKmh : 0)) / STRONGEST_WIND_KMH;
@@ -17,19 +20,14 @@ export function swayAmplitude(windKmh: number): number {
     return CALM_AMPLITUDE + (STORM_AMPLITUDE - CALM_AMPLITUDE) * windShare(windKmh);
 }
 
-/** How many swings a second for a wind of `windKmh` km/h. */
-export function swayFrequency(windKmh: number): number {
-    return CALM_FREQUENCY + (STORM_FREQUENCY - CALM_FREQUENCY) * windShare(windKmh);
-}
-
 /**
  * How far a tree leans (degrees, positive towards the right) `seconds` into the server time: a main swing and a
  * quicker smaller one, so it does not look like a metronome. `phase` (0 to 1) sets each tree in its own time.
  */
 export function treeSwayAngle(seconds: number, windKmh: number, phase: number): number {
     const amplitude = swayAmplitude(windKmh);
-    const turn = 2 * Math.PI * swayFrequency(windKmh) * seconds;
-    return amplitude * (0.7 * Math.sin(turn + 2 * Math.PI * phase) + 0.3 * Math.sin(2.3 * turn + 6 * Math.PI * phase));
+    const turn = 2 * Math.PI * SWAY_FREQUENCY * seconds;
+    return amplitude * (0.85 * Math.sin(turn + 2 * Math.PI * phase) + 0.15 * Math.sin(2 * turn + 6 * Math.PI * phase));
 }
 
 /** The furthest pose: how many pixels the top of a tree moves to a side at most. */
