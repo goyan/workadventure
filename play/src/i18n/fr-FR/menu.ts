@@ -286,6 +286,9 @@ const menu: DeepPartial<Translation["menu"]> = {
             meteor: "Météores",
             downpour: "Averses",
             fire: "Flammes et fumée",
+            detailedFlames: "Flammes détaillées",
+            detailedFlamesHint:
+                "Un feu plus beau, dessiné plus souvent. Coupé : des flammes plus simples, plus légères à afficher.",
             treeSway: "Arbres qui bougent au vent",
             windowLight: "Lumière des fenêtres",
             waterFlow: "Écume et remous sur l'eau",

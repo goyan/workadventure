@@ -10,9 +10,12 @@ import {
     FLAME_MIN_HEIGHT_PX,
     flameOf,
     flameOutline,
+    flameMass,
     flamePose,
     glowShare,
     spreadTiles,
+    smokeFarScale,
+    smokeShare,
     smokeOf,
     tileSeed,
 } from "../../../../../src/front/Phaser/Game/Fire/FlameShape";
@@ -142,26 +145,118 @@ describe("flameOutline", () => {
 });
 
 describe("smokeOf", () => {
-    it("lift smoke over a strong fire, drifting downwind as it rises", () => {
-        const puffs = smokeOf({
-            ...still,
-            reducedMotion: false,
-            intensity: 1,
-            windFrom: 270,
-            windSpeed: 40,
-            seconds: 5,
-        });
-        expect(puffs.length).toBeGreaterThan(0);
+    const burning = { ...still, reducedMotion: false, intensity: 1, windFrom: 270, windSpeed: 40, seconds: 5 };
+
+    it("lifts a thick smoke over a fire, drifting downwind as it rises", () => {
+        const puffs = smokeOf(burning);
+        expect(puffs.length).toBe(3);
         for (const puff of puffs) {
             expect(puff.y).toBeLessThan(0);
+            // A wind from the west carries it east.
             expect(puff.x).toBeGreaterThanOrEqual(0);
-            expect(puff.alpha).toBeLessThanOrEqual(0.35);
-            expect(puff.radius).toBeGreaterThan(4);
+            expect(puff.radius).toBeGreaterThanOrEqual(14);
         }
-        expect(smokeOf({ ...still, reducedMotion: false, intensity: 0.2, seconds: 5 })).toEqual([]);
-        // Less motion: one puff that does not move.
+        // A fire is seen by its smoke: the thickest puff hides most of what is behind it.
+        expect(Math.max(...puffs.map((puff) => puff.alpha))).toBeGreaterThan(0.45);
+        // It rises well above the flame and widens as it does.
+        const highest = puffs.reduce((top, puff) => (puff.y < top.y ? puff : top));
+        const lowest = puffs.reduce((low, puff) => (puff.y > low.y ? puff : low));
+        expect(highest.y).toBeLessThan(-120);
+        expect(highest.radius).toBeGreaterThan(lowest.radius);
+    });
+
+    // Smoke at the foot of the flames veiled them: it shows above them, thickens as it rises, then thins out.
+    it("leaves the flames clear: no smoke to speak of at their height, the thickest well above them", () => {
+        const samples = [];
+        for (let ms = 0; ms < 8000; ms += 100) samples.push(...smokeOf({ ...burning, seconds: ms / 1000 }));
+        const low = samples.filter((puff) => puff.y > -FLAME_MAX_HEIGHT_PX);
+        const high = samples.filter((puff) => puff.y < -FLAME_MAX_HEIGHT_PX * 1.5);
+        expect(low.length).toBeGreaterThan(0);
+        expect(Math.max(...low.map((puff) => puff.alpha))).toBeLessThan(0.3);
+        expect(Math.max(...high.map((puff) => puff.alpha))).toBeGreaterThan(0.45);
+        // At the very top it has thinned out.
+        const top = samples.filter((puff) => puff.y < -200);
+        expect(Math.max(...top.map((puff) => puff.alpha))).toBeLessThan(0.2);
+    });
+
+    it("smokes from a low fire on, not from one just lit", () => {
+        expect(smokeOf({ ...burning, intensity: 0.3 }).length).toBe(3);
+        expect(smokeOf({ ...burning, intensity: 0.1 })).toEqual([]);
+    });
+
+    it("is thicker and wider over a tree than over the grass", () => {
+        const grass = smokeOf(burning, "grass");
+        const tree = smokeOf(burning, "tree");
+        expect(smokeOf(burning)).toEqual(grass);
+        tree.forEach((puff, index) => {
+            expect(puff.alpha).toBeGreaterThan(grass[index].alpha);
+            expect(puff.radius).toBeGreaterThan(grass[index].radius);
+        });
+    });
+
+    it("is one puff that does not move for who asked for less motion", () => {
         const calm = smokeOf({ ...still, intensity: 1, seconds: 5 });
+        expect(calm).toHaveLength(1);
         expect(calm).toEqual(smokeOf({ ...still, intensity: 1, seconds: 9 }));
+    });
+});
+
+describe("flameMass", () => {
+    // Each tile had its flame of the same size: a fire looked like candles in rows.
+    it("makes the flames of a fire join into a big one: the more tiles burn around a tile, the bigger its flame", () => {
+        // Alone, or with nothing known around: the flame of one tile.
+        expect(flameMass(1)).toBe(1);
+        expect(flameMass(0)).toBe(1);
+        expect(flameMass(Number.NaN)).toBe(1);
+        // In the heart of a fire, every tile around burning (two tiles each way: 25): two and a half times as big.
+        expect(flameMass(25)).toBeCloseTo(2.5, 9);
+        expect(flameMass(60)).toBeCloseTo(2.5, 9);
+        // On the edge of a front (about a third of the tiles around): between the two, and it only grows.
+        expect(flameMass(9)).toBeGreaterThan(1.4);
+        expect(flameMass(9)).toBeLessThan(2);
+        for (let burning = 2; burning <= 25; burning++) {
+            expect(flameMass(burning)).toBeGreaterThan(flameMass(burning - 1));
+        }
+    });
+});
+
+describe("smokeShare", () => {
+    it("shares the smoke between the tiles of a front, so that a big fire is not a grey wall", () => {
+        expect(smokeShare(1)).toBe(1);
+        expect(smokeShare(4)).toBe(1);
+        expect(smokeShare(9)).toBeCloseTo(2 / 3, 9);
+        expect(smokeShare(25)).toBeCloseTo(0.4, 9);
+        // Never less than a third: a big fire still smokes a lot.
+        expect(smokeShare(100)).toBeCloseTo(1 / 3, 9);
+        expect(smokeShare(0)).toBe(1);
+    });
+});
+
+describe("smokeFarScale", () => {
+    it("draws the smoke as it is at the usual zooms, and bigger seen from high, up to three times", () => {
+        expect(smokeFarScale(2)).toBe(1);
+        expect(smokeFarScale(1.5)).toBe(1);
+        expect(smokeFarScale(1)).toBeCloseTo(1.5, 9);
+        expect(smokeFarScale(0.75)).toBeCloseTo(2, 9);
+        expect(smokeFarScale(0.5)).toBe(3);
+        expect(smokeFarScale(0.1)).toBe(3);
+        expect(smokeFarScale(Number.NaN)).toBe(1);
+    });
+});
+
+describe("flamePose and the loop it runs", () => {
+    it("runs the loop it is given: its frames at its pace, the frame after it for less motion", () => {
+        const loop = { frames: 24, framesPerSecond: 16 };
+        const moving = { ...still, reducedMotion: false, intensity: 1 };
+        const frames = new Set<number>();
+        for (let ms = 0; ms < 3000; ms += 20) frames.add(flamePose({ ...moving, seconds: ms / 1000 }, loop).frame);
+        expect(frames.size).toBe(24);
+        expect(Math.max(...frames)).toBe(23);
+        expect(flamePose({ ...still, intensity: 1 }, loop).frame).toBe(24);
+        // Laid the same way whatever the loop.
+        const quick = flamePose({ ...still, intensity: 0.5, windFrom: 270, windSpeed: 30 });
+        const detailed = flamePose({ ...still, intensity: 0.5, windFrom: 270, windSpeed: 30 }, loop);
+        expect({ ...detailed, frame: 0 }).toEqual({ ...quick, frame: 0 });
     });
 });
 

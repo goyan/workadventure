@@ -85,4 +85,30 @@ describe("TreeFireState", () => {
         );
         expect(state.marked().sort()).toEqual(["oak", "pine"]);
     });
+
+    it("lets a tree smoulder for thirty seconds after its fire went out, not a tree that never burnt", () => {
+        const state = new TreeFireState();
+        const told = (fire: number, damage: number, now: number): void => {
+            state.receive({ trees: [{ id: "oak", fire, damage }], whole: false, embers: [] }, now);
+        };
+        told(255, 6, 0);
+        expect(state.smouldering(1000)).toEqual([]);
+        told(0, 16, 10_000);
+        // From 1 as it goes out to 0 thirty seconds later.
+        expect(state.smouldering(10_000)).toEqual([{ id: "oak", left: 1 }]);
+        expect(state.smouldering(25_000)).toEqual([{ id: "oak", left: 0.5 }]);
+        expect(state.smouldering(40_000)).toEqual([]);
+        // Told again while it greens back: it does not smoke again.
+        told(0, 8, 50_000);
+        expect(state.smouldering(50_000)).toEqual([]);
+        // A charred tree told to who joins the room never burnt before their eyes.
+        const joined = new TreeFireState();
+        joined.receive({ trees: [{ id: "pine", fire: 0, damage: 16 }], whole: true, embers: [] }, 0);
+        expect(joined.smouldering(0)).toEqual([]);
+        // It burns again: no more smouldering.
+        told(255, 8, 60_000);
+        told(0, 16, 70_000);
+        told(200, 16, 75_000);
+        expect(state.smouldering(76_000)).toEqual([]);
+    });
 });
