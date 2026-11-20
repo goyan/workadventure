@@ -54,6 +54,7 @@ export * from "./Weather/FireConditions";
 export * from "./Weather/WeatherSchedule";
 export * from "./Weather/RealWeather";
 export * from "./Weather/RainRate";
+export * from "./Weather/Precipitation";
 export * from "./ListeningZone/ListeningZoneJam";
 export * from "./ListeningZone/JamSpaceName";
 export * from "./ListeningZone/KaraokeStage";
