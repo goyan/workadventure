@@ -214,8 +214,10 @@ const DEEPEST_TABLED_PX = 640;
 const DEPTH_POWERS = Float32Array.from({ length: DEEPEST_TABLED_PX * 8 + 1 }, (_, eighths) =>
     Math.pow(Math.max(1, eighths) / 8, -4 / 3),
 );
+/** The water itself crosses no more than this share of a cell in one move. */
+const FASTEST_CELLS_PER_MOVE = 0.5;
 /**
- * A wave crosses no more than this share of a cell in one move, the water it carries along counted. At half a cell
+ * A wave crosses no more than this share of a cell in one move. At half a cell
  * the computation rocks by itself (measured: a small basin never calms down); at a third it calms down.
  */
 const WAVE_CELLS_PER_MOVE = 0.35;
@@ -259,8 +261,12 @@ export function steadyFlowSpeed(
     return Math.min(speed, FASTEST_FLOW_CELLS);
 }
 
-/** The most moves of the water with inertia in a step: enough for the deepest water a map holds. */
-const MAX_INERTIA_MOVES = 10;
+/**
+ * The most moves of the water with inertia in a step. Deeper than what they bear (about 100 px of water), a wave
+ * runs no faster than in that depth: one deep hole would otherwise make every step of the whole map twice as
+ * long (measured on a map with a pit of 300 px).
+ */
+const MAX_INERTIA_MOVES = 3;
 
 /** The cells a water grid covers, in cells of the relief. */
 export interface WaterGridBounds {
@@ -446,8 +452,6 @@ export class WaterGrid {
     /** The same speeds as this move makes them: they take the place of the others when it ends. */
     private nextSpeedEast = new Float32Array(0);
     private nextSpeedSouth = new Float32Array(0);
-    /** The fastest the water ran at the last move, in cells a second: a fast water needs shorter moves. */
-    private fastest = 0;
     /** The friction of the ground of each cell: the square of the roughness of its soil, times MANNING. */
     private readonly rough: Float32Array;
     private depth: Float32Array;
@@ -1233,7 +1237,6 @@ export class WaterGrid {
         this.flowSouth.fill(0);
         this.speedEast.fill(0);
         this.speedSouth.fill(0);
-        this.fastest = 0;
     }
 
     /**
@@ -1270,9 +1273,12 @@ export class WaterGrid {
         if (deepest <= DRY_PX) return false;
         const moves = Math.min(
             MAX_INERTIA_MOVES,
-            Math.max(1, Math.ceil(((Math.sqrt(GRAVITY * deepest) + this.fastest) * step) / WAVE_CELLS_PER_MOVE)),
+            Math.max(1, Math.ceil((Math.sqrt(GRAVITY * deepest) * step) / WAVE_CELLS_PER_MOVE)),
         );
         const dt = step / moves;
+        // No water crosses more than half a cell in one move: a torrent down a cliff would otherwise ask for
+        // shorter moves for the whole map (measured: one strong source on a mount doubled the cost of every step).
+        const swiftest = Math.min(FASTEST_FLOW_CELLS, FASTEST_CELLS_PER_MOVE / dt);
         const depth = this.depth;
         const ground = this.ground;
         const closed = this.closed;
@@ -1287,13 +1293,14 @@ export class WaterGrid {
         const powers = DEPTH_POWERS;
         const lastPower = powers.length - 1;
         const pull = dt * GRAVITY;
+        // The deepest water whose waves these moves bear: deeper, the slope pulls as on that depth.
+        const pulled = (WAVE_CELLS_PER_MOVE / dt) ** 2 / GRAVITY;
         // What a cell at the edge of the grid loses by each of its open sides, as when the water creeps.
         const edgeShare = FLOW_SHARE / moves;
         // The highest the water may stand: a wave is not cut at the level the map sets for its floods.
         const top = Math.max(this.highest, MAX_WATER_MAX_SURFACE);
         let moved = false;
         for (let move = 0; move < moves; move++) {
-            let fastest = 0;
             // The flows pick up and slow down.
             for (let row = 0; row < height; row++) {
                 for (let column = 0; column < width; column++) {
@@ -1315,7 +1322,7 @@ export class WaterGrid {
                             if (passing <= DRY_PX) east[index] = 0;
                             else {
                                 const drop = surface - otherSurface;
-                                let flow = east[index] + pull * passing * drop;
+                                let flow = east[index] + pull * (passing > pulled ? pulled : passing) * drop;
                                 if (carried > 0) {
                                     // The water brings the speed it had upstream, along the row and across it.
                                     const along = speedEast[index];
@@ -1348,9 +1355,9 @@ export class WaterGrid {
                                     if (steep > 0) rate += breaking * steep;
                                 }
                                 flow /= 1 + dt * rate;
+                                if (flow > swiftest * passing) flow = swiftest * passing;
+                                else if (flow < -swiftest * passing) flow = -swiftest * passing;
                                 east[index] = flow;
-                                const ran = (flow < 0 ? -flow : flow) / passing;
-                                if (ran > fastest) fastest = ran;
                                 // The speed the next move carries along: none through a film.
                                 if (passing > 0.05) nextSpeedEast[index] = flow / passing;
                             }
@@ -1369,7 +1376,7 @@ export class WaterGrid {
                             if (passing <= DRY_PX) south[index] = 0;
                             else {
                                 const drop = surface - otherSurface;
-                                let flow = south[index] + pull * passing * drop;
+                                let flow = south[index] + pull * (passing > pulled ? pulled : passing) * drop;
                                 if (carried > 0) {
                                     const along = speedSouth[index];
                                     const alongChange =
@@ -1401,16 +1408,15 @@ export class WaterGrid {
                                     if (steep > 0) rate += breaking * steep;
                                 }
                                 flow /= 1 + dt * rate;
+                                if (flow > swiftest * passing) flow = swiftest * passing;
+                                else if (flow < -swiftest * passing) flow = -swiftest * passing;
                                 south[index] = flow;
-                                const ran = (flow < 0 ? -flow : flow) / passing;
-                                if (ran > fastest) fastest = ran;
                                 if (passing > 0.05) nextSpeedSouth[index] = flow / passing;
                             }
                         }
                     }
                 }
             }
-            this.fastest = fastest > FASTEST_FLOW_CELLS ? FASTEST_FLOW_CELLS : fastest;
             // The speeds of this move are those the next one carries along.
             const wasEast = speedEast;
             const wasSouth = speedSouth;

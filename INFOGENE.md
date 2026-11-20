@@ -3470,12 +3470,17 @@ panneau Relief quand l'inertie est activée, `UpdateWaterSettingMessage.waveRoug
   bassin de 30 px), mais vagues qui grossissent moins en approchant du rivage et montent moins loin qu'à 0.
 
 Sous inertie, une vague n'est plus coupée à la hauteur maximale de l'eau de la carte (18 px par défaut) mais à la
-plus haute qu'une carte puisse régler (256 px) ; sources et pluie restent limitées par le réglage. Une eau rapide
-compte aussi dans le nombre de mouvements par pas (10 au plus). Les deux tests du premier jet qui exigeaient un
+plus haute qu'une carte puisse régler (256 px) ; sources et pluie restent limitées par le réglage. L'eau ne
+franchit jamais plus d'une demi-cellule par mouvement : un torrent ne dicte pas le nombre de mouvements de toute la
+carte (mesuré : une source de 50 m³/s sur un mont doublait le coût de chaque pas). Les deux tests du premier jet qui exigeaient un
 lac calme en 90 s ont été assouplis exprès : une eau profonde clapote maintenant plusieurs minutes.
 
-Coût mesuré avec ces vagues (conteneur Linux sur Mac) : 27 ms par pas sous 20 px d'eau sur une grille de
-600 × 600, 32 sous 80 px, 47 sous 240 px ; 24 ms sur la carte d'équipe locale rejouée (2,5 ms sans inertie).
+Une eau plus profonde qu'environ 100 px porte ses vagues à la vitesse de cette profondeur, pas plus vite : trois
+mouvements par pas au plus (mesuré : un seul trou de 300 px doublait le coût de chaque pas de toute la carte).
+
+Coût mesuré avec ces vagues (conteneur Linux sur Mac) : 30 à 33 ms par pas sur une grille de 600 × 600 sous
+l'eau, quelle que soit sa profondeur ; 22 ms sur la carte d'équipe locale rejouée (100 000 cellules sous l'eau,
+4 ms sans inertie).
 
 ## Ponts de l'outil Carte
 
