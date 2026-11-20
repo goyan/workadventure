@@ -2306,6 +2306,15 @@ ou un disque sur lequel l'eau est versée. Une entrée de catalogue peut porter
 aussitôt (catalogue `Infogène Eau` du dépôt d'infra : fontaine de 2 × 2 cases, gouffre rond de 3 cases). Sous chaque
 réglage de l'eau, une ligne rappelle ses valeurs réelles (ordres de grandeur).
 
+**Vidange des sols intérieurs.** Une porte n'arrête pas l'eau : une inondation entrait dans les bâtiments et y
+restait, le sol plat n'en buvant que l'absorption de la carte (5 mm/h). Les pièces (ce que ferment les murs, portes
+fermées : `landWallsOf`, la même règle que le pré) évacuent maintenant leur eau à `water.indoorDrain` mm/h (réglage
+de carte « Vidange des sols intérieurs » de l'outil Relief, 0 à 10 000, 300 par défaut : à la vitesse 60, une pièce
+noyée à 18 px sèche en deux minutes environ ; 0 garde l'eau). Pour aller plus vite, des grilles d'évacuation se posent
+au sol : objets `layer: "floor"` (sous les objets et les avatars), sans collision, avec un `waterFlow` de puits. Un bassin creusé dans le sol d'une pièce garde son
+eau. L'eau évacuée compte avec les puits dans le bilan. Tant que la cour reste inondée, l'eau continue d'entrer par
+la porte : seul le seuil reste humide. Une pièce que le bord de la grille d'eau coupe compte comme extérieure.
+
 **Eau plus vive autour des puits.** L'eau n'avance que d'une cellule par pas ; sur une carte accélérée, un puits
 puissant vidait son disque puis attendait une eau qui arrivait trop lentement. Autour d'un puits qui demande encore
 de l'eau (son disque et 16 cellules de plus), l'eau avance de nouveau pendant le même pas, jusqu'à 16 fois : une

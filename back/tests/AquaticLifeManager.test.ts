@@ -386,7 +386,15 @@ describe("AquaticLifeManager on the water of a room", () => {
                 },
             },
             settings: {
-                water: { runoff: 0, evaporation: 0, speed: 1, absorption: 0, current: 1, maxSurface: 18 },
+                water: {
+                    runoff: 0,
+                    evaporation: 0,
+                    speed: 1,
+                    absorption: 0,
+                    current: 1,
+                    maxSurface: 18,
+                    indoorDrain: 0,
+                },
                 life: {
                     enabled: true,
                     reproductionDelay: 60,

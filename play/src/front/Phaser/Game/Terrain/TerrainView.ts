@@ -126,9 +126,13 @@ export class TerrainView {
         const camera = this.scene.cameras.main.worldView;
         const screen = { x: camera.x, y: camera.y, width: camera.width, height: camera.height };
         const key = `${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}`;
-        if (key === this.lastKey && this.drawn && wellInside(this.drawn, screen, DRAW_MARGIN / 5)) return;
+        const inside = this.drawn !== undefined && wellInside(this.drawn, screen, DRAW_MARGIN / 5);
+        if (key === this.lastKey && inside) return;
         this.lastKey = key;
-        this.drawn = paddedView(screen, DRAW_MARGIN);
+        // What was drawn reaches beyond the screen: while a scroll stays inside it, the same part of the map is
+        // drawn again (the water alone changed), so the relief read for it is kept. Reading the relief again at
+        // every drawing made the game stutter whenever the avatar walked.
+        if (!inside || !this.drawn) this.drawn = paddedView(screen, DRAW_MARGIN);
         this.draw(this.drawn, now);
         this.visible = true;
         this.scene.markDirty();
@@ -144,7 +148,7 @@ export class TerrainView {
             this.shore = new Uint8Array(size);
         }
         const { everywhere, wet, shore } = this;
-        // The ground changes seldom, the water ten times a second while it moves: the ground is painted once for a
+        // The ground changes seldom, the water five times a second while it moves: the ground is painted once for a
         // relief, a meadow and a canvas, then laid back under the water.
         if (!relief.painted || !this.surface.restore?.(relief.painted)) {
             // The soils first: the shades of the relief and the water are drawn over them.

@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { CELL_LITRES_PER_PX } from "../src/Terrain/WaterGrid";
 import { ratesOf, stepInputOf, WATER_STEP_MS, waterObjectsOf } from "../src/Terrain/WaterInputs";
+import { DEFAULT_WATER_SETTINGS } from "../src/types";
 import type { WAMFileFormat } from "../src/types";
 
 const prefabRef = { collectionName: "eau", id: "x" };
 const wam = (entities: Record<string, unknown>): WAMFileFormat =>
     ({ version: "2.1.0", mapUrl: "m.tmj", areas: [], entityCollections: [], entities }) as WAMFileFormat;
-const water = { runoff: 10, evaporation: 1, speed: 1, absorption: 5, current: 1, maxSurface: 18 };
+const water = { runoff: 10, evaporation: 1, speed: 1, absorption: 5, current: 1, maxSurface: 18, indoorDrain: 0 };
 
 describe("waterObjectsOf", () => {
     it("reads the sources and the sinks of the map, at the foot of their object", () => {
@@ -92,6 +93,17 @@ describe("waterObjectsOf", () => {
 });
 
 describe("stepInputOf", () => {
+    it("drains the floors of the rooms at the pace of the map, the usual pace for a map that says nothing", () => {
+        const pace = stepInputOf({ ...DEFAULT_WATER_SETTINGS, indoorDrain: 3600 }, 0, [], 1).indoorDrainPx ?? 0;
+        // 3600 mm an hour, 60 times faster than reality: 60 mm in a second of real time.
+        expect(pace).toBeCloseTo(stepInputOf(undefined, 3600, [], 1).rainPx / (1 + DEFAULT_WATER_SETTINGS.runoff), 6);
+        expect(stepInputOf({ ...DEFAULT_WATER_SETTINGS, indoorDrain: 0 }, 0, [], 1).indoorDrainPx).toBe(0);
+        expect(stepInputOf(undefined, 0, [], 1).indoorDrainPx).toBeCloseTo(
+            (pace * DEFAULT_WATER_SETTINGS.indoorDrain) / 3600,
+            9,
+        );
+    });
+
     it("steps ten times a second", () => {
         expect(WATER_STEP_MS).toBe(100);
     });
@@ -157,12 +169,20 @@ describe("stepInputOf", () => {
                 absorption: Number.NaN,
                 current: Number.NaN,
                 maxSurface: Number.NaN,
+                indoorDrain: Number.NaN,
             },
             Number.NaN,
             [],
             1,
         );
-        expect(broken).toEqual({ rainPx: 0, evaporationPx: 0, absorptionPx: 0, flowSteps: 1, flows: [] });
+        expect(broken).toEqual({
+            rainPx: 0,
+            evaporationPx: 0,
+            absorptionPx: 0,
+            indoorDrainPx: 0,
+            flowSteps: 1,
+            flows: [],
+        });
         expect(stepInputOf(undefined, 10, [], 3600).rainPx).toBeGreaterThan(0);
     });
 });

@@ -41,7 +41,7 @@ function wamWith(terrain: TerrainData | undefined, weather: WeatherType = Weathe
         entities: {},
         settings: {
             weather,
-            water: { runoff: 10, evaporation: 0, speed: 1, absorption: 0, current: 1, maxSurface: 18 },
+            water: { runoff: 10, evaporation: 0, speed: 1, absorption: 0, current: 1, maxSurface: 18, indoorDrain: 0 },
         },
         terrain,
     };
@@ -412,7 +412,7 @@ describe("TerrainWaterManager", () => {
         const wam = wamWith(undefined);
         wam.settings = {
             weather: WeatherType.Clear,
-            water: { runoff: 0, evaporation: 0, speed: 60, absorption: 0, current: 1, maxSurface: 18 },
+            water: { runoff: 0, evaporation: 0, speed: 60, absorption: 0, current: 1, maxSurface: 18, indoorDrain: 0 },
         };
         wam.entities = { spring: sourceAt(4, 4, 600) };
         const wallPiece = (column: number) => ({
@@ -444,6 +444,50 @@ describe("TerrainWaterManager", () => {
         expect(held.at(4, 8)).toBe(0);
         expect(held.at(4, 12)).toBe(0);
         walled.manager.stop();
+    });
+
+    it("drains the floor of a room closed by walls, at the pace the map sets", () => {
+        // A room of the map tool over the tiles 2 to 5 (cells 4 to 11), a source in its middle.
+        const facade = (column: number, row: number) => ({
+            x: column * 32,
+            y: row * 32,
+            prefabRef: { collectionName: "Carte Murs", id: "Carte Murs:facade-blanc-mid:Default:Down" },
+        });
+        const vertical = (line: number, row: number) => ({
+            x: line * 32 - 6,
+            y: (row - 1) * 32 + 12,
+            prefabRef: { collectionName: "Carte Murs", id: "Carte Murs:mur-vertical-blanc:Default:Down" },
+        });
+        const roomWith = (indoorDrain: number): WAMFileFormat => {
+            const wam = wamWith(undefined);
+            wam.settings = {
+                weather: WeatherType.Clear,
+                water: { runoff: 0, evaporation: 0, speed: 60, absorption: 0, current: 1, maxSurface: 18, indoorDrain },
+            };
+            wam.entities = { spring: sourceAt(7, 7, 60) };
+            for (let tile = 2; tile <= 5; tile++) {
+                wam.entities[`top${tile}`] = facade(tile, 1);
+                wam.entities[`bottom${tile}`] = facade(tile, 5);
+                wam.entities[`left${tile}`] = vertical(2, tile);
+                wam.entities[`right${tile}`] = vertical(6, tile);
+            }
+            return wam;
+        };
+        const waterInRoom = (indoorDrain: number): number => {
+            const { manager, sent, steps } = createHarness({ wam: roomWith(indoorDrain) });
+            manager.start();
+            steps(300);
+            manager.stop();
+            const depths = depthsAfter(sent);
+            let total = 0;
+            for (let y = 4; y <= 11; y++) for (let x = 4; x <= 11; x++) total += depths.at(x, y);
+            // The walls hold it: nothing outside.
+            expect(depths.at(2, 7) + depths.at(13, 7) + depths.at(7, 2) + depths.at(7, 13)).toBe(0);
+            return total;
+        };
+        const kept = waterInRoom(0);
+        expect(kept).toBeGreaterThan(50);
+        expect(waterInRoom(3000)).toBeLessThan(kept / 20);
     });
 
     // A step runs in a timer: an error there would otherwise take the whole server down, with every room.

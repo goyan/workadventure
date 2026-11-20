@@ -80,6 +80,7 @@ describe("UpdateTerrainCommand", () => {
                     absorption: 500,
                     current: 9,
                     maxSurface: 9999,
+                    indoorDrain: 99999,
                 },
             },
         }).execute();
@@ -90,6 +91,7 @@ describe("UpdateTerrainCommand", () => {
             absorption: 100,
             current: 2,
             maxSurface: 256,
+            indoorDrain: 10000,
         });
         await new UpdateWAMSettingCommand(wam, {
             message: {
@@ -104,12 +106,27 @@ describe("UpdateTerrainCommand", () => {
             absorption: 2,
             current: 2,
             maxSurface: 256,
+            indoorDrain: 10000,
         });
         // An older client sends no speed: the one of the map is kept.
         await new UpdateWAMSettingCommand(wam, {
             message: { $case: "updateWaterSettingMessage", updateWaterSettingMessage: { runoff: 4, evaporation: 0.5 } },
         }).execute();
-        expect(wam.settings?.water).toMatchObject({ speed: 1, absorption: 2, current: 2, maxSurface: 256 });
+        expect(wam.settings?.water).toMatchObject({
+            speed: 1,
+            absorption: 2,
+            current: 2,
+            maxSurface: 256,
+            indoorDrain: 10000,
+        });
+        // 0 keeps the water in the rooms.
+        await new UpdateWAMSettingCommand(wam, {
+            message: {
+                $case: "updateWaterSettingMessage",
+                updateWaterSettingMessage: { runoff: 4, evaporation: 0.5, indoorDrain: 0 },
+            },
+        }).execute();
+        expect(wam.settings?.water?.indoorDrain).toBe(0);
     });
 });
 

@@ -10,6 +10,7 @@ import {
     rainUnderCloud,
     STORM_RAIN,
     USUAL_RAIN,
+    rainFineness,
 } from "../../../../../src/front/Phaser/Game/Weather/Rain";
 
 const view = { x: 0, y: 0, width: 800, height: 600 };
@@ -172,5 +173,33 @@ describe("rain sound and development override", () => {
         expect(forcedRainLevel("cycle", 0)).toBeCloseTo(0);
         expect(forcedRainLevel("cycle", 20_000)).toBeCloseTo(1);
         expect(forcedRainLevel(undefined, 5)).toBeUndefined();
+    });
+});
+
+describe("rainFineness", () => {
+    it("draws the rain in map pixels at the usual zooms", () => {
+        expect(rainFineness(0.2)).toBe(1);
+        expect(rainFineness(1)).toBe(1);
+        expect(rainFineness(2.5)).toBe(1);
+    });
+
+    // Zoomed in to the full a drop was a streak as thick as a finger, and the drops hid the map.
+    it("draws it finer and finer past them, so a drop keeps on screen the size it has at a usual zoom", () => {
+        expect(rainFineness(3)).toBe(2);
+        expect(rainFineness(5)).toBe(2);
+        expect(rainFineness(8)).toBe(4);
+        expect(rainFineness(10)).toBe(4);
+        expect(rainFineness(16)).toBe(8);
+        // On screen a map pixel of rain never takes more than at the usual zooms.
+        for (const scale of [3, 4.9, 7, 12, 19, 40]) {
+            const onScreen = scale / rainFineness(scale);
+            expect(onScreen).toBeLessThanOrEqual(2.5);
+            expect(onScreen).toBeGreaterThan(1.25);
+        }
+    });
+
+    it("stays at 1 for a scale that is not a number", () => {
+        expect(rainFineness(Number.NaN)).toBe(1);
+        expect(rainFineness(Number.POSITIVE_INFINITY)).toBe(1);
     });
 });

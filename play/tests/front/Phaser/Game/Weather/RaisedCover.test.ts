@@ -35,4 +35,18 @@ describe("RaisedCover", () => {
         const run = { x: 0, y: 32, width: 160, height: 32 };
         expect(new RaisedCover().uncovered([run])).toEqual([run]);
     });
+
+    it("tells a cover that holds the same cells from one that does not", () => {
+        const one = new RaisedCover();
+        const same = new RaisedCover();
+        const other = new RaisedCover();
+        one.add({ x: 0, y: 0, width: 32, height: 32 });
+        same.add({ x: 0, y: 0, width: 32, height: 32 });
+        other.add({ x: 32, y: 0, width: 32, height: 32 });
+        expect(one.sameAs(same)).toBe(true);
+        expect(one.sameAs(other)).toBe(false);
+        other.add({ x: 0, y: 0, width: 32, height: 32 });
+        expect(one.sameAs(other)).toBe(false);
+        expect(new RaisedCover().sameAs(new RaisedCover())).toBe(true);
+    });
 });

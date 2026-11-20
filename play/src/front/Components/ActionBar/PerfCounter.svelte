@@ -16,7 +16,10 @@
     title={labels.help()}
 >
     {#if stats}
-        <span class="font-bold">{labels.fps({ fps: Math.round(stats.fps) })}</span>
+        <span class="font-bold"
+            >{labels.fps({ fps: Math.round(stats.fps) })}
+            <span class="font-normal text-white/70">{labels.drawn({ drawn: Math.round(stats.drawnFps) })}</span></span
+        >
         <span class="text-white/70">
             {labels.detail({
                 worst: Math.round(stats.worstMs),

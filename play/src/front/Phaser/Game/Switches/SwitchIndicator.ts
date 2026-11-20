@@ -4,6 +4,8 @@ import type { GameScene } from "../GameScene";
 const ON_COLOUR = 0x4ade80;
 const OFF_COLOUR = 0x6b7280;
 const RADIUS = 2;
+/** The step of the outline of the dot, as a share of a turn: eight sides. */
+const DOT_STEP = 1 / 8;
 /** From the top-right corner of the image of the switch. */
 const INSET = 4;
 
@@ -14,7 +16,9 @@ export class SwitchIndicator {
     private key = "";
 
     constructor(scene: GameScene) {
-        this.dot = scene.add.circle(0, 0, RADIUS, OFF_COLOUR).setStrokeStyle(1, 0x111827, 0.8);
+        // A dot of four pixels needs no hundred segments: Phaser draws a circle in steps of a hundredth of a turn by
+        // default, and three dozen of these lights took a twentieth of the time of an image.
+        this.dot = scene.add.circle(0, 0, RADIUS, OFF_COLOUR).setIterations(DOT_STEP).setStrokeStyle(1, 0x111827, 0.8);
     }
 
     /** Follows the switch and shows whether a target is on. True when something changed on the screen. */

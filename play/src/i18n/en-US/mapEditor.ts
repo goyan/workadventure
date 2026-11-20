@@ -715,6 +715,7 @@ const mapEditor: BaseTranslation = {
         runoff: "Runoff (ground feeding a hollow)",
         evaporation: "Evaporation in dry weather",
         absorption: "Ground absorption (how fast a flood goes down)",
+        indoorDrain: "Drainage of the indoor floors",
         speed: "Speed of the water (1: as in reality, 60: a minute for an hour)",
         dashboard: {
             title: "Water balance",
@@ -741,6 +742,8 @@ const mapEditor: BaseTranslation = {
             runoff: "In reality: the ground feeding a pond is 5 to 20 times its surface; 0 for a built basin.",
             evaporation: "In reality: 0.05 mm/h in winter, 0.1 to 0.3 mm/h in summer (3 to 6 mm a day).",
             absorption: "In reality: clay 1 to 5 mm/h, lawn 5 to 15, sand 20 to 30; soaked ground or asphalt: 0.",
+            indoorDrain:
+                "The floors of the rooms closed by walls (doors closed) drain the water that came in. 300 mm/h by default: a flooded room is dry in about two minutes; floor drains take it faster; 0 keeps the water inside. A pool dug indoors keeps its water.",
             speed: "In reality: 1. At that speed a rain of 10 mm/h takes hours to fill a pond.",
             maxSurface:
                 "18 px by default: just enough to swim, under the upper floors. Higher, a flood or the wave of a meteor drowns the ground deep (a tile is 32 px), upper floors too beyond 52 px; under a hard rain on a fast map the water may pile up.",

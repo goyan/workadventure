@@ -4,6 +4,7 @@
         MAX_DEPTH_TILES,
         DEFAULT_WATER_SETTINGS,
         MAX_WATER_CURRENT,
+        MAX_WATER_INDOOR_DRAIN,
         MAX_WATER_MAX_SURFACE,
         MAX_WATER_SPEED,
         MEADOW_BOUNDS,
@@ -43,6 +44,7 @@
     let absorption = $state(saved.absorption);
     let current = $state(saved.current);
     let maxSurface = $state(saved.maxSurface);
+    let indoorDrain = $state(saved.indoorDrain);
 
     let diameterTiles = $state($terrainBrushStore.diameterTiles);
     let forceAuto = $state($terrainBrushStore.forcePx === undefined);
@@ -66,7 +68,7 @@
     function saveWater(): void {
         executeUpdateWAMSettings({
             $case: "updateWaterSettingMessage",
-            updateWaterSettingMessage: { runoff, evaporation, speed, absorption, current, maxSurface },
+            updateWaterSettingMessage: { runoff, evaporation, speed, absorption, current, maxSurface, indoorDrain },
         }).catch((error: unknown) => console.error("The pace of the water could not be saved", error));
     }
 
@@ -319,6 +321,20 @@
             buttonShape="square"
         />
         <p class="retro-hint m-0">{$LL.mapEditor.terrain.real.absorption()}</p>
+    </div>
+    <div data-testid="terrain-indoor-drain">
+        <RangeSlider
+            id="terrain-indoor-drain"
+            label={$LL.mapEditor.terrain.indoorDrain()}
+            unit="mm/h"
+            min={0}
+            max={MAX_WATER_INDOOR_DRAIN}
+            step={100}
+            bind:value={indoorDrain}
+            onchange={saveWater}
+            buttonShape="square"
+        />
+        <p class="retro-hint m-0">{$LL.mapEditor.terrain.real.indoorDrain()}</p>
     </div>
     <div data-testid="terrain-speed">
         <RangeSlider

@@ -6,6 +6,7 @@ import {
     DEFAULT_WATER_SETTINGS,
     DOWNPOUR_PX_PER_SECOND,
     gridBoundsOf,
+    landWallsOf,
     LITRES_PER_M3,
     meteorShape,
     rainRateAt,
@@ -142,19 +143,22 @@ export class TerrainWaterManager {
         );
         // The walls matter only where there is water to hold: a map without relief nor water object reads none.
         const walls = bounds ? waterWallsOf(wam) : undefined;
+        // The rooms (walls with their doors closed): their floors drain the water that came in.
+        const rooms = bounds ? landWallsOf(wam) : undefined;
+        const wallsSignature = walls && rooms ? `${walls.signature}#${rooms.signature}` : undefined;
         const sameGrid =
             this.readTerrain !== null &&
             wam?.terrain === this.readTerrain &&
-            walls?.signature === this.readWalls &&
+            wallsSignature === this.readWalls &&
             sameBounds(bounds, this.grid?.bounds ?? undefined, this.grid !== undefined);
         // A source or a sink may have come or gone: the water is looked at again.
         this.moving = true;
         if (sameGrid) return;
         this.readTerrain = wam?.terrain;
-        this.readWalls = walls?.signature;
+        this.readWalls = wallsSignature;
         const before = this.grid ?? this.saved;
         this.saved = undefined;
-        this.grid = bounds ? new WaterGrid(wam?.terrain, bounds, undefined, walls) : undefined;
+        this.grid = bounds ? new WaterGrid(wam?.terrain, bounds, undefined, walls, rooms) : undefined;
         this.version++;
         if (this.grid && before) this.grid.takeFrom(before);
         // The cells are not the same any more: the room is told the whole state at its next message.

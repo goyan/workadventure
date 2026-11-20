@@ -453,6 +453,8 @@ message UpdateWaterSettingMessage {
   optional double current = 5;
   // How high the water may stand over the level it spills at, in pixels. Absent from older clients: kept.
   optional double maxSurface = 6;
+  // Water the floors of the rooms drain, in mm an hour. Absent from older clients: kept.
+  optional double indoorDrain = 7;
 }
 
 // Map-wide weather, validated against WeatherType before it is stored.

@@ -158,3 +158,17 @@ export function withWeatherPreview(
         weatherLocation: "weatherLocation" in preview ? preview.weatherLocation : settings?.weatherLocation,
     };
 }
+
+/**
+ * A weather that is not the real one (a fixed tile, the automatic one), with the real wind of the place of the map
+ * when it is known: the clouds, the trees and the rain then go the way the wind of the banner says. The weather
+ * itself is untouched; without a known wind the usual drift stays. A map in Real already has its wind.
+ */
+export function withRealWind<T extends { weather?: WeatherType; windFrom?: number; windSpeed?: number }>(
+    settings: T | undefined,
+    real: RealWeatherState,
+): T | undefined {
+    if (!settings || settings.weather === WeatherType.Real || real.status !== "known") return settings;
+    if (real.windFrom === undefined && real.windSpeed === undefined) return settings;
+    return { ...settings, windFrom: real.windFrom, windSpeed: real.windSpeed };
+}

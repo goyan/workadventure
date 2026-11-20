@@ -2050,8 +2050,12 @@ export class GameScene extends DirtyScene {
                 }
             }
         }
-        this.weatherCover = { at: now, cover };
-        return cover;
+        // Read again twice a second, the same most of the time: the same object then, so that what the weather
+        // worked out from it (the outdoors of the view) is not worked out again.
+        const previous = this.weatherCover?.cover;
+        const kept = previous?.sameAs(cover) ? previous : cover;
+        this.weatherCover = { at: now, cover: kept };
+        return kept;
     }
 
     /** Feet of the avatars on the ground (not on a raised floor): the wild animals run from them (WanderFear). */

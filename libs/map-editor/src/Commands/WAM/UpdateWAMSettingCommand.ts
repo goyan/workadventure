@@ -13,6 +13,7 @@ import {
     DEFAULT_LAND_LIFE_SETTINGS,
     LIFE_BOUNDS,
     MAX_WATER_CURRENT,
+    MAX_WATER_INDOOR_DRAIN,
     MAX_WATER_MAX_SURFACE,
     MAX_WATER_SPEED,
     MegaphoneSettings,
@@ -131,7 +132,7 @@ export class UpdateWAMSettingCommand extends Command {
                 break;
             }
             case "updateWaterSettingMessage": {
-                const { runoff, evaporation, speed, absorption, current, maxSurface } =
+                const { runoff, evaporation, speed, absorption, current, maxSurface, indoorDrain } =
                     message.updateWaterSettingMessage;
                 const within = (value: number, min: number, max: number, fallback: number): number =>
                     Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
@@ -140,6 +141,7 @@ export class UpdateWAMSettingCommand extends Command {
                 const keptAbsorption = this.wam.settings.water?.absorption ?? DEFAULT_WATER_SETTINGS.absorption;
                 const keptCurrent = this.wam.settings.water?.current ?? DEFAULT_WATER_SETTINGS.current;
                 const keptMaxSurface = this.wam.settings.water?.maxSurface ?? DEFAULT_WATER_SETTINGS.maxSurface;
+                const keptIndoorDrain = this.wam.settings.water?.indoorDrain ?? DEFAULT_WATER_SETTINGS.indoorDrain;
                 this.wam.settings.water = {
                     runoff: within(runoff, 0, 100, DEFAULT_WATER_SETTINGS.runoff),
                     evaporation: within(evaporation, 0, 10, DEFAULT_WATER_SETTINGS.evaporation),
@@ -155,6 +157,10 @@ export class UpdateWAMSettingCommand extends Command {
                                   MAX_WATER_MAX_SURFACE,
                                   keptMaxSurface,
                               ),
+                    indoorDrain:
+                        indoorDrain === undefined
+                            ? keptIndoorDrain
+                            : within(indoorDrain, 0, MAX_WATER_INDOOR_DRAIN, keptIndoorDrain),
                 };
                 break;
             }

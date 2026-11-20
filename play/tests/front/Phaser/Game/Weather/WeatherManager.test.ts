@@ -7,6 +7,8 @@ import type { GameScene } from "../../../../../src/front/Phaser/Game/GameScene";
 const sounds = vi.hoisted(() => ({ update: vi.fn() }));
 // The blocks (fog, clouds, shadows) painted on a canvas in the game: here, drawn on the graphics of the fixture.
 const surface = vi.hoisted(() => ({
+    /** How many times the canvas of the clouds was painted again. */
+    begins: 0,
     graphics: undefined as
         | undefined
         | {
@@ -21,6 +23,7 @@ vi.mock("../../../../../src/front/Phaser/Game/Weather/BlockSurface", () => {
     return {
         createBlockSurface: () => ({
             begin(view: { x: number; y: number; width: number; height: number }, resolution: number): Cells {
+                surface.begins++;
                 size = resolution;
                 canvas = {
                     x: Math.floor(view.x / resolution) * resolution,
@@ -84,7 +87,7 @@ const { cloudsShownStore, cloudsHeightStore, rainPuddlesStore, weatherEffectsEna
 const { lastStrike } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherFrame");
 const { autoWeatherAt, cloudinessAt, slotStart } =
     await import("../../../../../src/front/Phaser/Game/Weather/WeatherSchedule");
-const { WeatherManager } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherManager");
+const { WeatherManager, blocksPerSecond } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherManager");
 const { SeasonalTheme, SeasonalThemeMode } =
     await import("../../../../../src/front/Phaser/Game/Seasonal/SeasonalTheme");
 const { seasonalThemeModeStore } = await import("../../../../../src/front/Stores/SeasonalThemeStore");
@@ -175,6 +178,28 @@ describe("weather rendering lifecycle", () => {
         manager.update(40, new Date(40));
         expect(graphics.setVisible.mock.calls).not.toContainEqual([true]);
         expect(scene.markDirty.mock.calls).toHaveLength(0);
+    });
+
+    // The clouds drift by whole blocks: painting them as often as the rain falls took a fifth of the time of an image.
+    it("draws the rain 30 times a second and paints its clouds a few times only", () => {
+        const { scene, graphics, wam } = fixture();
+        wam.settings = { weather: WeatherType.Rain };
+        manager = new WeatherManager(scene);
+        surface.begins = 0;
+        for (const now of [0, 40, 80, 120, 160]) manager.update(now, new Date(now));
+        expect(graphics.clear.mock.calls).toHaveLength(5);
+        expect(surface.begins).toBeGreaterThanOrEqual(1);
+        expect(surface.begins).toBeLessThanOrEqual(3);
+        // Painted again once their time has come.
+        const painted = surface.begins;
+        manager.update(400, new Date(400));
+        expect(surface.begins).toBe(painted + 1);
+    });
+
+    it("paints the clouds less often the larger their blocks", () => {
+        expect(blocksPerSecond(4)).toBe(10);
+        expect(blocksPerSecond(16)).toBe(8);
+        expect(blocksPerSecond(64)).toBe(6);
     });
 
     it("moves the leaves 15 times a second, the rain 30 times", () => {
