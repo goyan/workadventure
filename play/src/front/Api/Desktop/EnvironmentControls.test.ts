@@ -28,13 +28,18 @@ import { desktopGraphicsMetricsRequestedStore, graphicsMetricsRequestedStore } f
 const preview = vi.hoisted(() => vi.fn());
 vi.mock("../../Components/Menu/SoundPreview", () => ({ createSoundPreview: () => ({ play: preview }) }));
 const save = vi.hoisted(() => vi.fn());
+const openMenu = vi.hoisted(() => vi.fn());
 vi.mock("../../Stores/GameSceneStore", async () => {
     const { writable } = await import("svelte/store");
     return { gameSceneStore: writable<GameScene | undefined>(undefined) };
 });
 vi.mock("../../Stores/MenuStore", async () => {
     const { writable } = await import("svelte/store");
-    return { mapEditorActivated: writable(false) };
+    return {
+        mapEditorActivated: writable(false),
+        handleOpenMenuEvent: openMenu,
+        SubMenusInterface: { settings: "settings" },
+    };
 });
 vi.mock("../../Phaser/Game/MapEditor/Commands/Facades", () => ({ executeUpdateWAMSettings: save }));
 const { applyDesktopEnvironment, readDesktopEnvironment } = await import("./EnvironmentControls");
@@ -58,6 +63,12 @@ beforeEach(() => {
 });
 
 describe("desktop environment settings", () => {
+    it("opens its settings at the request of the desktop, and says so", async () => {
+        expect(readDesktopEnvironment()).toMatchObject({ canOpenSettings: true });
+        await applyDesktopEnvironment({ setting: DesktopVisualSetting.OpenSettings, value: true });
+        expect(openMenu).toHaveBeenCalledWith("settings");
+    });
+
     it("tells the None quality as Custom to the older desktop apps, and in full to the newer ones", async () => {
         const night = get(nightModeStore);
         await applyDesktopEnvironment({ setting: DesktopVisualSetting.Quality, value: GraphicsQuality.None });
