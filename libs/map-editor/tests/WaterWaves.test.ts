@@ -258,10 +258,35 @@ describe("the precision of the water with inertia", () => {
         expect(arrival(99)).toBe(arrival(8));
     });
 
+    it("flows as many times slower as the map asks: a wave takes twice as long at half its real pace", () => {
+        // A basin 30 px deep, 120 cells long: when the wave of a step in the water reaches its far end.
+        const arrival = (pace?: number): number => {
+            const cells = new Map<string, number>();
+            for (let y = 2; y < 7; y++) for (let x = 2; x < 122; x++) cells.set(cellKey(x, y), -60);
+            const grid = new WaterGrid(withHeights(undefined, cells), { x: 0, y: 0, width: 124, height: 9 });
+            fill(grid, (x, y) => (x >= 2 && x < 122 && y >= 2 && y < 7 ? (x < 12 ? 40 : 30) : 0));
+            for (let step = 1; step <= 2000; step++) {
+                grid.step({ ...withWaves({ damping: 0 }), ...(pace === undefined ? {} : { pace }) });
+                if (grid.depthAt(118, 4) > 30.2) return step;
+            }
+            return 2000;
+        };
+        const real = arrival();
+        expect(arrival(1)).toBe(real);
+        const half = arrival(0.5);
+        expect(half / real).toBeGreaterThan(1.8);
+        expect(half / real).toBeLessThan(2.2);
+        expect(arrival(2)).toBeLessThan(real);
+        // A pace that is not a number: the real one.
+        expect(arrival(Number.NaN)).toBe(real);
+    });
+
     it("goes from the settings of the map to the step, three moves when the map says nothing", () => {
         expect(stepInputOf({ ...DEFAULT_WATER_SETTINGS, inertia: true }, 0, [], 0.1).moves).toBe(3);
         expect(stepInputOf({ ...DEFAULT_WATER_SETTINGS, inertia: true, precision: 6 }, 0, [], 0.1).moves).toBe(6);
         expect(stepInputOf({ ...DEFAULT_WATER_SETTINGS, precision: 6 }, 0, [], 0.1).moves).toBeUndefined();
+        expect(stepInputOf({ ...DEFAULT_WATER_SETTINGS, inertia: true }, 0, [], 0.1).pace).toBe(1);
+        expect(stepInputOf({ ...DEFAULT_WATER_SETTINGS, inertia: true, flowPace: 0.25 }, 0, [], 0.1).pace).toBe(0.25);
     });
 
     it("tells the room every so many steps", () => {
@@ -316,6 +341,14 @@ describe("the settings of the waves", () => {
         expect(wam.settings?.water).toMatchObject({ precision: 8, updates: 5 });
         await send(wam, { precision: 0, updates: 0 });
         expect(wam.settings?.water).toMatchObject({ precision: 1, updates: 1 });
+        // The pace of the flow: kept the same way, within a tenth of the real one and twice.
+        expect(wam.settings?.water).not.toHaveProperty("flowPace");
+        await send(wam, { flowPace: 0.01 });
+        expect(wam.settings?.water?.flowPace).toBe(0.1);
+        await send(wam, {});
+        expect(wam.settings?.water?.flowPace).toBe(0.1);
+        await send(wam, { flowPace: 0.5 });
+        expect(wam.settings?.water?.flowPace).toBe(0.5);
     });
 
     it("go to the water with inertia, the usual ones for a map that set none", () => {

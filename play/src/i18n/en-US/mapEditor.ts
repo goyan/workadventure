@@ -741,6 +741,9 @@ const mapEditor: BaseTranslation = {
         current: "Strength of the current (0: avatars are not carried)",
         maxSurface: "Highest water over the ground",
         inertia: "Water with inertia (on trial)",
+        flowPace: "Pace of the flow",
+        flowPaceHint:
+            "How many times its real speed the water with inertia flows: waves, floods and currents. In reality: 1, for a tile 1.10 m wide; a wave then runs at 2.2 tiles a second in 60 cm of water, 4 tiles a second in 2 m. For scale: the avatar walks at 5.6 tiles a second, 6 m/s, four times faster than a walker. Lower: the water spreads slower. What comes in and goes out (rain, sources, sinks) follows the speed of the water, not this.",
         precision: "Fineness of the computation of the water",
         precisionHint:
             "The most moves of the water in a step (10 steps a second). At 3, a wave runs at 5.5 m/s at most and a torrent at 8 m/s; at 8, 15 and 22 m/s. In reality a wave runs at 7.7 m/s in 6 m of water. Each move more costs the server as much computation.",

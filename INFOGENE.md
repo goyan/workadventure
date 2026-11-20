@@ -2499,6 +2499,12 @@ comète) et l'affichage (un fondu d'un état vers le suivant). Le joueur ne voit
 - **Finesse du calcul** (`settings.water.precision`, 1 à 8, 3 par défaut, `UpdateWaterSettingMessage.precision`
   champ 13) : le plus de mouvements de l'eau à inertie par pas. À 3, une vague court au plus à 5,5 m/s et un
   torrent à 8 m/s ; à 8, 15 et 22 m/s. Chaque mouvement de plus coûte autant de calcul.
+- **Vitesse d'écoulement** (`settings.water.flowPace`, × 0,1 à 2, 1 par défaut, champ 15) : combien de fois sa
+  vitesse réelle l'eau à inertie s'écoule (le temps que l'eau vit à chaque pas est multiplié d'autant : vagues,
+  crues et courants). À 1, l'eau va à sa vitesse physique pour l'échelle de la carte (case de 1,095 m de côté :
+  2,2 cases par seconde sous 60 cm d'eau, 4 sous 2 m). Repère : l'avatar marche à 5,6 cases par seconde, soit
+  6,2 m/s, 4,4 fois plus vite qu'un piéton ; par rapport à lui l'eau est donc plutôt lente. Pluie, sources et puits
+  suivent « Vitesse de l'eau », pas ce réglage. La visualisation des flux affiche la vitesse vue à l'écran.
 - **Envois aux joueurs** (`settings.water.updates`, 1 à 10 par seconde, 1 par défaut, champ 14,
   `stepsBetweenUpdates`) : quand l'eau bouge. Le bouton « Réaliste » le met à 5.
 - **Fondu calé sur l'intervalle réel** (`TerrainWater.glideMs`) : il durait toujours une seconde, même quand les

@@ -979,6 +979,12 @@ export const WAVE_BOUNDS = {
 export const DEFAULT_WATER_PACE = { precision: 3, updates: 1 } as const;
 /** The bounds of each of them. */
 export const WATER_PACE_BOUNDS = { precision: [1, 8], updates: [1, 10] } as const;
+/**
+ * How fast the water with inertia flows next to reality: 1 as in reality for the scale of the map (a tile is about
+ * 1.10 m wide), less to see it spread slower. From a tenth of its real pace to twice.
+ */
+export const DEFAULT_FLOW_PACE = 1;
+export const FLOW_PACE_BOUNDS = [0.1, 2] as const;
 
 /**
  * The water of a map as in reality (the "Realistic" button of the relief tool): it goes at its real pace, has
@@ -997,6 +1003,7 @@ export const REALISTIC_WATER_SETTINGS = {
     waves: DEFAULT_WAVE_SETTINGS,
     precision: DEFAULT_WATER_PACE.precision,
     updates: 5,
+    flowPace: DEFAULT_FLOW_PACE,
 } as const;
 /** The fastest the floors of the rooms of a map may drain, in mm an hour. */
 export const MAX_WATER_INDOOR_DRAIN = 10000;
@@ -1064,6 +1071,12 @@ export const WaterSettings = z.object({
      * wave is seen running instead of fading from a place to the next, for as much more network.
      */
     updates: z.number().int().min(WATER_PACE_BOUNDS.updates[0]).max(WATER_PACE_BOUNDS.updates[1]).optional(),
+    /**
+     * How fast the water with inertia flows next to reality (1 when absent): its waves, its floods and its
+     * currents all go that many times their real speed. What comes in and goes out (rain, sources, sinks) follows
+     * `speed`, not this.
+     */
+    flowPace: z.number().min(FLOW_PACE_BOUNDS[0]).max(FLOW_PACE_BOUNDS[1]).optional(),
     waves: z
         .object({
             roughness: z.number().min(WAVE_BOUNDS.roughness[0]).max(WAVE_BOUNDS.roughness[1]),

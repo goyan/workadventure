@@ -752,6 +752,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         current: "Force du courant (0 : les avatars ne sont pas emportés)",
         maxSurface: "Hauteur maximale de l'eau au-dessus du sol",
         inertia: "Eau à inertie (à l'essai)",
+        flowPace: "Vitesse d'écoulement",
+        flowPaceHint:
+            "Combien de fois sa vitesse réelle l'eau à inertie s'écoule : vagues, crues et courants. En réel : 1, pour une case de 1,10 m de côté ; une vague court alors à 2,2 cases par seconde sous 60 cm d'eau, 4 cases par seconde sous 2 m. Repère : l'avatar marche à 5,6 cases par seconde, soit 6 m/s, quatre fois plus vite qu'un piéton. Plus bas : l'eau se propage plus lentement. Ce qui entre et sort (pluie, sources, puits) suit « Vitesse de l'eau », pas ce réglage.",
         precision: "Finesse du calcul de l'eau",
         precisionHint:
             "Nombre maximal de mouvements de l'eau par pas (10 pas par seconde). À 3, une vague court au plus à 5,5 m/s et un torrent à 8 m/s ; à 8, 15 et 22 m/s. En réel : une vague court à 7,7 m/s sous 6 m d'eau. Chaque mouvement de plus coûte autant de calcul au serveur.",

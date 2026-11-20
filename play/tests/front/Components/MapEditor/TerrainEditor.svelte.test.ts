@@ -18,6 +18,7 @@ const { executeUpdateTerrain, executeUpdateWAMSettings, mapSettings } = vi.hoist
         waves: { roughness: 1, damping: 0.02, breaking: 1, momentum: 1 },
         precision: 3,
         updates: 1,
+        flowPace: 1,
         meadow: { enabled: true, growMinutes: 10, thirstMinutes: 20, moistureHold: 1 },
         life: {
             enabled: false,
@@ -174,6 +175,7 @@ describe("TerrainEditor", () => {
                 waveMomentum: 1,
                 precision: 3,
                 updates: 5,
+                flowPace: 1,
             },
         });
         // The sliders follow, those of the waves now shown.
@@ -195,6 +197,11 @@ describe("TerrainEditor", () => {
         expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
             $case: "updateWaterSettingMessage",
             updateWaterSettingMessage: expect.objectContaining({ updates: 10, precision: 8 }),
+        });
+        setRange("terrain-flow-pace", 0.5);
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: expect.objectContaining({ flowPace: 0.5 }),
         });
     });
 

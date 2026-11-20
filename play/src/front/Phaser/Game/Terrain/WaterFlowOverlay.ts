@@ -13,6 +13,8 @@ export interface WaterFlowOverlayOptions {
     inertia: () => boolean;
     /** How that water makes its waves, when the map says: the friction that holds it back. */
     waves?: () => WaveSettings | undefined;
+    /** How fast that water flows next to reality (1 when the map says nothing): the speeds shown follow it. */
+    pace?: () => number | undefined;
     /** Whether the overlay is asked for. */
     shown: () => boolean;
 }
@@ -86,6 +88,7 @@ export class WaterFlowOverlay {
         const terrain = this.options.water.relief();
         const inertia = this.options.inertia();
         const waves = this.options.waves?.();
+        const pace = inertia ? (this.options.pace?.() ?? 1) : 1;
         const camera = this.scene.cameras.main;
         const view = camera.worldView;
         const zoom = camera.zoom > 0 ? camera.zoom : 1;
@@ -107,6 +110,8 @@ export class WaterFlowOverlay {
             for (let cellX = firstX; cellX < lastX; cellX += size) {
                 const flow = flowOverBlock(water, terrain, cellX, cellY, size, inertia, waves);
                 if (flow.depth <= 0) continue;
+                // What is seen on the map: the real speed of that water, times the pace the map sets for its flow.
+                flow.speed *= pace;
                 const left = cellX * TERRAIN_CELL;
                 const top = cellY * TERRAIN_CELL;
                 const rate = Math.abs(flow.rate);

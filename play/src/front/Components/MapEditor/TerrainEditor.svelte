@@ -5,6 +5,7 @@
         DEFAULT_WATER_SETTINGS,
         MAX_WATER_CURRENT,
         MAX_WATER_INDOOR_DRAIN,
+        FLOW_PACE_BOUNDS,
         MAX_WATER_MAX_SURFACE,
         REALISTIC_WATER_SETTINGS,
         WATER_PACE_BOUNDS,
@@ -55,6 +56,7 @@
     let waveMomentum = $state(saved.waves.momentum);
     let precision = $state(saved.precision);
     let updates = $state(saved.updates);
+    let flowPace = $state(saved.flowPace);
 
     let diameterTiles = $state($terrainBrushStore.diameterTiles);
     let forceAuto = $state($terrainBrushStore.forcePx === undefined);
@@ -85,6 +87,7 @@
         waveMomentum = REALISTIC_WATER_SETTINGS.waves.momentum;
         precision = REALISTIC_WATER_SETTINGS.precision;
         updates = REALISTIC_WATER_SETTINGS.updates;
+        flowPace = REALISTIC_WATER_SETTINGS.flowPace;
         saveWater();
     }
 
@@ -102,7 +105,7 @@
                 inertia,
                 updates,
                 // The waves only matter to the water with inertia: a map without it keeps what it had.
-                ...(inertia ? { waveRoughness, waveDamping, waveBreaking, waveMomentum, precision } : {}),
+                ...(inertia ? { waveRoughness, waveDamping, waveBreaking, waveMomentum, precision, flowPace } : {}),
             },
         }).catch((error: unknown) => console.error("The pace of the water could not be saved", error));
     }
@@ -485,6 +488,20 @@
                 buttonShape="square"
             />
             <p class="retro-hint m-0">{$LL.mapEditor.terrain.waves.momentumHint()}</p>
+        </div>
+        <div data-testid="terrain-flow-pace">
+            <RangeSlider
+                id="terrain-flow-pace"
+                label={$LL.mapEditor.terrain.flowPace()}
+                unit="×"
+                min={FLOW_PACE_BOUNDS[0]}
+                max={FLOW_PACE_BOUNDS[1]}
+                step={0.05}
+                bind:value={flowPace}
+                onchange={saveWater}
+                buttonShape="square"
+            />
+            <p class="retro-hint m-0">{$LL.mapEditor.terrain.flowPaceHint()}</p>
         </div>
         <div data-testid="terrain-precision">
             <RangeSlider

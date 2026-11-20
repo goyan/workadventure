@@ -5,11 +5,13 @@ import {
     AutoWeather,
     CategorySettings,
     DEFAULT_AIR_LIFE_SETTINGS,
+    DEFAULT_FLOW_PACE,
     DEFAULT_LAND_LIFE_SETTINGS,
     DEFAULT_LIFE_SETTINGS,
     DEFAULT_MEADOW_SETTINGS,
     DEFAULT_WATER_SETTINGS,
     DEFAULT_WAVE_SETTINGS,
+    FLOW_PACE_BOUNDS,
     LAND_LIFE_BOUNDS,
     LIFE_BOUNDS,
     MAX_WATER_CURRENT,
@@ -150,6 +152,7 @@ export class UpdateWAMSettingCommand extends Command {
                     waveMomentum,
                     precision,
                     updates,
+                    flowPace,
                 } = message.updateWaterSettingMessage;
                 const within = (value: number, min: number, max: number, fallback: number): number =>
                     Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
@@ -189,6 +192,10 @@ export class UpdateWAMSettingCommand extends Command {
                     if (sent === undefined || !Number.isFinite(sent)) return keptWater?.[key];
                     return Math.round(within(sent, WATER_PACE_BOUNDS[key][0], WATER_PACE_BOUNDS[key][1], sent));
                 };
+                const keptFlowPace =
+                    flowPace === undefined || !Number.isFinite(flowPace)
+                        ? keptWater?.flowPace
+                        : within(flowPace, FLOW_PACE_BOUNDS[0], FLOW_PACE_BOUNDS[1], DEFAULT_FLOW_PACE);
                 this.wam.settings.water = {
                     runoff: within(runoff, 0, 100, DEFAULT_WATER_SETTINGS.runoff),
                     evaporation: within(evaporation, 0, 10, DEFAULT_WATER_SETTINGS.evaporation),
@@ -215,6 +222,7 @@ export class UpdateWAMSettingCommand extends Command {
                         ? {}
                         : { precision: paced("precision", precision) }),
                     ...(paced("updates", updates) === undefined ? {} : { updates: paced("updates", updates) }),
+                    ...(keptFlowPace === undefined ? {} : { flowPace: keptFlowPace }),
                 };
                 break;
             }

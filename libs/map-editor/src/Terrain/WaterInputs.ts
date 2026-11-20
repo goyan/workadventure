@@ -1,5 +1,6 @@
 import {
     DEFAULT_SINK_RADIUS_TILES,
+    DEFAULT_FLOW_PACE,
     DEFAULT_WATER_PACE,
     DEFAULT_WATER_SETTINGS,
     DEFAULT_WAVE_SETTINGS,
@@ -107,6 +108,7 @@ export function stepInputOf(
                   seconds: figure(seconds),
                   waves: { ...DEFAULT_WAVE_SETTINGS, ...settings.waves },
                   moves: settings.precision ?? DEFAULT_WATER_PACE.precision,
+                  pace: settings.flowPace ?? DEFAULT_FLOW_PACE,
               }
             : {}),
         flows: objects

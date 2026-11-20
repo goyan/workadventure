@@ -2,6 +2,7 @@ import {
     DEFAULT_LIFE_SETTINGS,
     DEFAULT_MAX_DEPTH_TILES,
     DEFAULT_MEADOW_SETTINGS,
+    DEFAULT_FLOW_PACE,
     DEFAULT_WATER_PACE,
     DEFAULT_WATER_SETTINGS,
     DEFAULT_WAVE_SETTINGS,
@@ -23,6 +24,7 @@ export function readTerrainMapSettings(): {
     waves: WaveSettings;
     precision: number;
     updates: number;
+    flowPace: number;
     life: LifeSettings;
     meadow: MeadowSettings;
 } {
@@ -40,6 +42,7 @@ export function readTerrainMapSettings(): {
         waves: { ...DEFAULT_WAVE_SETTINGS, ...wam?.settings?.water?.waves },
         precision: wam?.settings?.water?.precision ?? DEFAULT_WATER_PACE.precision,
         updates: wam?.settings?.water?.updates ?? DEFAULT_WATER_PACE.updates,
+        flowPace: wam?.settings?.water?.flowPace ?? DEFAULT_FLOW_PACE,
         life: { ...DEFAULT_LIFE_SETTINGS, ...wam?.settings?.life },
         meadow: { ...DEFAULT_MEADOW_SETTINGS, ...wam?.settings?.meadow },
     };

@@ -389,6 +389,8 @@ export interface WaterStepInput {
     waves?: WaveSettings;
     /** The most moves the water with inertia makes in this step (WaterSettings.precision): three when absent. */
     moves?: number;
+    /** How fast the water with inertia flows next to reality (WaterSettings.flowPace): 1 when absent. */
+    pace?: number;
 }
 
 /** What came in and went out during one step, in pixels of water over one cell (CELL_LITRES_PER_PX litres each). */
@@ -791,7 +793,7 @@ export class WaterGrid {
             }
         }
         if (input.inertia) {
-            if (this.flowWithInertia(tally, input.seconds, input.waves, input.moves)) tally.moved = true;
+            if (this.flowWithInertia(tally, input.seconds, input.waves, input.moves, input.pace)) tally.moved = true;
         } else {
             // A map that went back to the water that creeps: its water forgets the way it was going.
             if (this.flowEast.length > 0) this.forgetFlows();
@@ -1272,6 +1274,7 @@ export class WaterGrid {
         seconds: number | undefined,
         waves: WaveSettings | undefined,
         asked?: number,
+        pace?: number,
     ): boolean {
         const { width, height } = this.bounds;
         const size = width * height;
@@ -1290,7 +1293,10 @@ export class WaterGrid {
         const damping = figure(waves?.damping, DEFAULT_WAVE_SETTINGS.damping);
         const breaking = figure(waves?.breaking, DEFAULT_WAVE_SETTINGS.breaking) * BREAKING_GAIN;
         const carried = Math.min(1, figure(waves?.momentum, DEFAULT_WAVE_SETTINGS.momentum));
-        const step = seconds !== undefined && Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds, 1) : 0.1;
+        // The time the water lives through in this step: the real one, times the pace the map sets for its flow.
+        const paced = pace !== undefined && Number.isFinite(pace) && pace > 0 ? Math.min(pace, 4) : 1;
+        const step =
+            (seconds !== undefined && Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds, 1) : 0.1) * paced;
         const most =
             asked !== undefined && Number.isFinite(asked) && asked >= 1
                 ? Math.min(MOST_INERTIA_MOVES, Math.round(asked))
