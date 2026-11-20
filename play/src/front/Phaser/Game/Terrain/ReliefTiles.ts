@@ -99,6 +99,8 @@ export interface ReliefInputs {
     season(): Season | undefined;
     /** How much of the ground is under the snow of the season (0 to 1). */
     snowShown(): number;
+    /** The season of the calendar, for the snow line of the heights (the same for everyone, as the walk). */
+    snowLineSeason?(): Season | undefined;
     /** The layout of the map, to draw the flat ground too: absent, only the dug ground and its water are drawn. */
     layout?: GroundLayout;
 }
@@ -238,7 +240,9 @@ export class ReliefTiles {
         // The meadow is told again every 10 s (2 s during a fire): a block is drawn again only when what covers one of
         // its cells changes, not at each message.
         const snow = Math.round(this.inputs.snowShown() * 10) / 10;
-        const coverKey = `${this.inputs.meadow?.version() ?? 0}|${layout?.version() ?? 0}|${snow}`;
+        const coverKey = `${this.inputs.meadow?.version() ?? 0}|${layout?.version() ?? 0}|${snow}|${
+            this.inputs.snowLineSeason?.() ?? ""
+        }`;
         if (coverKey !== this.coverKey) {
             this.coverKey = coverKey;
             this.coverSignatures.clear();
@@ -340,6 +344,7 @@ export class ReliefTiles {
             mapGrass: layout && ((cellX, cellY) => layout.mapGrass(cellX, cellY)),
             moistureAt: meadow && ((x, y) => meadow.moistureAt(x, y)),
             waterDepthAt: (x, y) => this.inputs.water.depthAt(x, y, now),
+            snowLineSeason: this.inputs.snowLineSeason?.(),
         };
     }
 

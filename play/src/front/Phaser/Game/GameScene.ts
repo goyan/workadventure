@@ -3846,6 +3846,7 @@ export class GameScene extends DirtyScene {
                         this.seasonalThemeManager?.groundSeason(this.getGroundSeason()) ?? this.getGroundSeason(),
                     snowShown: () => this.seasonalThemeManager?.groundSnow() ?? 0,
                     layout: this.mapGroundLayout,
+                    snowLineSeason: () => this.getGroundSeason(),
                 });
                 this.characterDrops?.destroy();
                 this.characterDrops = new CharacterDrops(this, () => [

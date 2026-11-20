@@ -1,4 +1,14 @@
-import { heightAt, MUD_MOISTURE, MUD_WATER_PX, SOILS, soilAt, TERRAIN_CELL, TILE_PX } from "@workadventure/map-editor";
+import {
+    heightAt,
+    MUD_MOISTURE,
+    MUD_WATER_PX,
+    snowCover,
+    SOILS,
+    soilAt,
+    TERRAIN_CELL,
+    TILE_PX,
+} from "@workadventure/map-editor";
+import type { Season } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 import type { MeadowState } from "../MeadowState";
 import { mottledCover, strawLevel } from "../MeadowState";
@@ -24,6 +34,8 @@ export interface CellInputs {
     /** The moisture of the soil (0 to 1) and the water lying on it (px), at a point of the map. */
     moistureAt?: (x: number, y: number) => number;
     waterDepthAt?: (x: number, y: number) => number;
+    /** The season of the calendar the snow line of the heights is read in (SnowLine.ts); none: no snow of the heights. */
+    snowLineSeason?: Season;
 }
 
 /** From this much snow on the ground, the ground is snow. */
@@ -44,6 +56,10 @@ export function cellMaterial(inputs: CellInputs, cellX: number, cellY: number): 
     // Rooms and the floors of the Carte tool keep their own tiles (nothing is dug there).
     if (!dug && (inputs.outdoor?.(cellX, cellY) === false || inputs.paved?.(cellX, cellY) === true)) return "none";
     if (inputs.snowShown >= SNOW_FROM) return "snow";
+    // The snow of the heights, over the snow line of the season (it slows the walk there too).
+    if (inputs.snowLineSeason && snowCover(heightAt(terrain, cellX, cellY), inputs.snowLineSeason) >= SNOW_FROM) {
+        return "snow";
+    }
     const meadow = inputs.meadow;
     if (meadow) {
         const tileX = Math.floor(cellX / CELLS_A_TILE);

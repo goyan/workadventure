@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cellKey, withHeights, withSoils } from "@workadventure/map-editor";
+import { cellKey, Season, withHeights, withSoils } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 import { MeadowState } from "../../../../../../src/front/Phaser/Game/Terrain/MeadowState";
 import {
@@ -140,5 +140,16 @@ describe("what covers a cell of the flat ground", () => {
             }
         }
         expect(switches.size).toBeGreaterThanOrEqual(3);
+    });
+});
+
+describe("the snow of the heights", () => {
+    it("whitens a mount over the snow line of the season, not under it", () => {
+        // A mount 200 px high: over the line of the winter (96) and of the autumn (160), under the summer's (224).
+        const mount = withHeights(undefined, new Map([[cellKey(1, 1), 200]]));
+        const inputs = (season: Season): CellInputs => ({ terrain: mount, snowShown: 0, snowLineSeason: season });
+        expect(cellMaterial(inputs(Season.Winter), 1, 1)).toBe("snow");
+        expect(cellMaterial(inputs(Season.Autumn), 1, 1)).toBe("snow");
+        expect(cellMaterial(inputs(Season.Summer), 1, 1)).toBe("grass");
     });
 });
