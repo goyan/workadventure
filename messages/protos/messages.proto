@@ -402,7 +402,14 @@ message UpdateWAMSettingsMessage {
     UpdateWaterSettingMessage updateWaterSettingMessage = 6;
     UpdateLifeSettingMessage updateLifeSettingMessage = 7;
     UpdateMeadowSettingMessage updateMeadowSettingMessage = 8;
+    UpdateLightingSettingMessage updateLightingSettingMessage = 9;
   }
+}
+
+// The lighting of the map (LightingSettings in libs/map-editor). energySaving: the lamps standing outdoors go out by
+// day, while the sky gives light enough.
+message UpdateLightingSettingMessage {
+  bool energySaving = 1;
 }
 
 // The meadow of the map (MeadowSettings in libs/map-editor): the grass that grows by itself on its fertile soils.

@@ -105,6 +105,31 @@ describe("WAM Setting", () => {
         expect(WamSchema.parse(wam).settings?.meadow?.enabled).toBe(false);
     });
 
+    it("stores the energy saving of the lamps, off for a map that has none, without touching the weather", async () => {
+        const wam: WAMFileFormat = {
+            ...defaultWamFile,
+            settings: { weather: WeatherType.Snow, weatherStartedAt: 1_000 },
+        };
+        expect(WamSchema.parse(wam).settings?.lighting?.energySaving ?? false).toBe(false);
+        const send = (energySaving: boolean): Promise<void> =>
+            new UpdateWAMSettingCommand(wam, {
+                message: {
+                    $case: "updateLightingSettingMessage",
+                    updateLightingSettingMessage: { energySaving },
+                },
+            }).execute();
+        await send(true);
+        expect(wam.settings?.lighting).toEqual({ energySaving: true });
+        expect(WamSchema.parse(wam).settings?.lighting?.energySaving).toBe(true);
+        expect(wam.settings?.weather).toBe(WeatherType.Snow);
+        expect(wam.settings?.weatherStartedAt).toBe(1_000);
+        await send(false);
+        expect(WamSchema.parse(wam).settings?.lighting?.energySaving).toBe(false);
+        expect(
+            WamSchema.parse({ ...defaultWamFile, settings: { lighting: { energySaving: "yes" } } }).settings?.lighting,
+        ).toBeUndefined();
+    });
+
     it("accepts fog as map weather", () => {
         expect(WamSchema.parse({ ...defaultWamFile, settings: { weather: "fog" } }).settings?.weather).toBe("fog");
     });
