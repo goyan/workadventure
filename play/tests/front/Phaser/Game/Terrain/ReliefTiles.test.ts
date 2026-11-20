@@ -58,7 +58,7 @@ function fixture(
     };
     const water = new TerrainWater();
     water.setTerrain(terrain);
-    let current = terrain;
+    let current: TerrainData | undefined = terrain;
     const setTerrain = (next: TerrainData | undefined) => {
         current = next;
         water.setTerrain(next);

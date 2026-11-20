@@ -64,10 +64,6 @@ const DRAW_BUDGET_MS = 6;
 const ROWS_A_STEP = 16;
 /** The thresholds of the dither (bayer), row by row. */
 const BAYER_ROWS = [0, 1, 2, 3].map((row) => [0, 1, 2, 3].map((column) => bayer(column, row)));
-const MATERIAL_INDEX = Object.fromEntries(MATERIALS.map((material, index) => [material, index])) as Record<
-    Material,
-    number
->;
 /** The rock of the faces of the drops, a little of the material of their rim mixed in. */
 const WALL_SOIL_SHARE = 0.3;
 const WALL_RAMPS = Object.fromEntries(
