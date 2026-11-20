@@ -321,7 +321,7 @@ assez, et se rallument à la tombée du jour ou sous un gros orage. Valable pour
 torches, lampes de Jam, piste de danse et lampes des pièces jamais concernées.
 
 - **WAM** : `settings.lighting.energySaving` (absent = coupé), `LightingSettings` dans `libs/map-editor/src/types.ts`.
-  **Protocole** : `UpdateLightingSettingMessage { bool energySaving = 1; }`, case 9 de `UpdateWAMSettingsMessage`
+  **Protocole** : `UpdateLightingSettingMessage { bool energySaving = 1; }`, case 10 de `UpdateWAMSettingsMessage` (le 9 est pris par les piscines de la PR #392)
   (message à part : passer par celui de la météo relancerait son cycle, `map-storage` y réécrit `startedAt`).
   `play`, `back` et `map-storage` se déploient ensemble.
 - **Règle** (`Lamps/EnergySaving.ts`, sans Phaser, testée) : lumière du jour = `min(1, élévation du soleil / 15°)` ×

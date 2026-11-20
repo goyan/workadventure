@@ -402,7 +402,8 @@ message UpdateWAMSettingsMessage {
     UpdateWaterSettingMessage updateWaterSettingMessage = 6;
     UpdateLifeSettingMessage updateLifeSettingMessage = 7;
     UpdateMeadowSettingMessage updateMeadowSettingMessage = 8;
-    UpdateLightingSettingMessage updateLightingSettingMessage = 9;
+    // 9 is taken by the pools (open pull request #392 of the fork).
+    UpdateLightingSettingMessage updateLightingSettingMessage = 10;
   }
 }
 
