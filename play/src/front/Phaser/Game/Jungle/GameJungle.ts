@@ -109,6 +109,9 @@ export class GameJungle {
                 return player ? feetOf(player) : undefined;
             },
             playerInWater: (userId) => playerOf(userId)?.isInWater() ?? false,
+            // A companion does not fly: left on the ground, it comes back by the walk of the wandering animals.
+            playerFlying: (userId) => playerOf(userId)?.isFlying() ?? false,
+            groundPath: (from, to) => wanderers.getWanderMap().findPath(from, to),
             // Every wandering animal: the jungle ones and the ones placed on the map.
             animals: () => wanderers.tameableCharacters(),
             animalPose: (id) => wanderers.characterPose(id),

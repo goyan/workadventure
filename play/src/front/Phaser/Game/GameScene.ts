@@ -3919,6 +3919,10 @@ export class GameScene extends DirtyScene {
                         return player ? feetOf(player) : undefined;
                     },
                     playerInWater: (userId) => playerOf(userId)?.isInWater() ?? false,
+                    // A tamed lion does not fly: left on the ground, it walks back to its master who landed.
+                    playerFlying: (userId) => playerOf(userId)?.isFlying() ?? false,
+                    groundPath: (from, to) =>
+                        this.wanderingCharactersManager?.getWanderMap().findPath(from, to) ?? Promise.resolve([to]),
                     editorOpen: () => get(mapEditorModeStore),
                     playerOnGround: () => this.CurrentPlayer.isNearGround(),
                     shown: () => get(jungleEnabledStore),

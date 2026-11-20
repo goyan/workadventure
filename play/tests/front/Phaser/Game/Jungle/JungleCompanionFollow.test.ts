@@ -207,3 +207,136 @@ describe("JungleCompanionFollower on raised floors", () => {
         expect(pose.z).toBe(52);
     });
 });
+
+describe("JungleCompanionFollower and a master who flies", () => {
+    /** A companion settled two tiles behind a master standing at (200, 0). */
+    function settled() {
+        const follower = new JungleCompanionFollower({ x: 0, y: 0 }, 0);
+        const { nowMs } = walk(
+            follower,
+            [
+                { x: 0, y: 0 },
+                { x: 200, y: 0 },
+            ],
+            0,
+        );
+        const pose = wait(follower, { x: 200, y: 0 }, nowMs, 1000);
+        return { follower, nowMs: nowMs + 1000, place: { x: pose.x, y: pose.y } };
+    }
+
+    /** The master flies along `points`; the poses of the companion meanwhile. */
+    function fly(follower: JungleCompanionFollower, points: Point[], startMs: number) {
+        const poses = [];
+        let nowMs = startMs;
+        for (const master of points) {
+            nowMs += FRAME_MS;
+            poses.push(follower.poseAt(nowMs, master, true, 0, true));
+        }
+        return { poses, nowMs };
+    }
+
+    const flight = (from: number, to: number): Point[] =>
+        Array.from({ length: (to - from) / 20 + 1 }, (_, i) => ({ x: from + i * 20, y: -300 }));
+
+    it("stays on the ground where it was while its master flies, however far: no walk, no jump", () => {
+        const { follower, nowMs, place } = settled();
+        const { poses } = fly(follower, flight(200, 200 + 3 * COMPANION_TELEPORT_PX), nowMs);
+        for (const pose of poses) {
+            expect(pose.moving).toBe(false);
+            expect(Math.hypot(pose.x - place.x, pose.y - place.y)).toBeLessThan(1);
+            expect(pose.z).toBeUndefined();
+        }
+        // Resting since the take-off: the time of its rest goes on (it sits, then lies down).
+        expect(poses.at(-1)?.pausedMs).toBeGreaterThan(poses[0].pausedMs);
+    });
+
+    it("stops at once when its master takes off, instead of finishing the way to them", () => {
+        const follower = new JungleCompanionFollower({ x: 0, y: 0 }, 0);
+        // Far behind a master who ran: it has a long way left when they take off.
+        const { nowMs } = walk(
+            follower,
+            [
+                { x: 0, y: 0 },
+                { x: 300, y: 0 },
+            ],
+            0,
+        );
+        const before = follower.poseAt(nowMs + FRAME_MS, { x: 300, y: 0 }, true, 0, true);
+        const { poses } = fly(follower, flight(300, 700), nowMs + FRAME_MS);
+        expect(Math.hypot((poses.at(-1)?.x ?? 0) - before.x, (poses.at(-1)?.y ?? 0) - before.y)).toBeLessThan(1);
+    });
+
+    it("waits after the landing until a way on the ground is given, then walks it without a jump", () => {
+        const { follower, nowMs, place } = settled();
+        const landed = { x: 200 + 3 * COMPANION_TELEPORT_PX, y: 0 };
+        let now = fly(follower, flight(200, landed.x), nowMs).nowMs;
+        // Landed far away: it still waits, and tells from where a way is needed.
+        const waiting = follower.poseAt(now + FRAME_MS, landed, true);
+        expect(waiting.moving).toBe(false);
+        expect(Math.hypot(waiting.x - place.x, waiting.y - place.y)).toBeLessThan(1);
+        expect(follower.waitingPlace()).toBeDefined();
+        // The way goes round a wall: by (400, 200).
+        follower.rejoin([{ x: 400, y: 200 }, landed]);
+        expect(follower.waitingPlace()).toBeUndefined();
+        let previous = waiting;
+        let lowest = 0;
+        now += FRAME_MS;
+        for (let t = 0; t < 8000; t += FRAME_MS) {
+            now += FRAME_MS;
+            const pose = follower.poseAt(now, landed, true);
+            // Never faster than a run: no jump to its master.
+            expect(Math.hypot(pose.x - previous.x, pose.y - previous.y)).toBeLessThan(16);
+            lowest = Math.max(lowest, pose.y);
+            previous = pose;
+        }
+        expect(lowest).toBeGreaterThan(150);
+        expect(Math.hypot(previous.x - landed.x, previous.y - landed.y)).toBeLessThan(COMPANION_FOLLOW_PX + 2);
+        expect(previous.moving).toBe(false);
+    });
+
+    it("looks for its way back every two seconds, until there is one", async () => {
+        const { follower, nowMs } = settled();
+        const landed = { x: 900, y: 0 };
+        const now = fly(follower, flight(200, 900), nowMs).nowMs + FRAME_MS;
+        follower.poseAt(now, landed, true);
+        const asked: Point[][] = [];
+        let answer: Point[] = [];
+        const findPath = (from: Point, to: Point): Promise<Point[]> => {
+            asked.push([from, to]);
+            return Promise.resolve(answer);
+        };
+        follower.seekWayBack(now, landed, findPath);
+        follower.seekWayBack(now + 500, landed, findPath);
+        await Promise.resolve();
+        await Promise.resolve();
+        // No way (an island): asked once, still waiting.
+        expect(asked).toHaveLength(1);
+        expect(asked[0][1]).toEqual(landed);
+        expect(follower.waitingPlace()).toBeDefined();
+        follower.seekWayBack(now + 1900, landed, findPath);
+        expect(asked).toHaveLength(1);
+        answer = [landed];
+        follower.seekWayBack(now + 2000, landed, findPath);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(asked).toHaveLength(2);
+        expect(follower.waitingPlace()).toBeUndefined();
+        // Following again: nothing more is asked.
+        follower.seekWayBack(now + 9000, landed, findPath);
+        expect(asked).toHaveLength(2);
+    });
+
+    it("a way found while its master took off again is dropped", async () => {
+        const { follower, nowMs } = settled();
+        const landed = { x: 900, y: 0 };
+        const now = fly(follower, flight(200, 900), nowMs).nowMs + FRAME_MS;
+        follower.poseAt(now, landed, true);
+        follower.seekWayBack(now, landed, () => Promise.resolve([landed]));
+        // Off again before the answer.
+        follower.poseAt(now + FRAME_MS, landed, true, 0, true);
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(follower.poseAt(now + 2 * FRAME_MS, landed, true).moving).toBe(false);
+        expect(follower.waitingPlace()).toBeDefined();
+    });
+});

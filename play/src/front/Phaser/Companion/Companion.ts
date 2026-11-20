@@ -129,6 +129,13 @@ export class Companion extends Container {
     }
 
     public setTarget(x: number, y: number, direction: PositionMessage_Direction) {
+        // A companion does not fly: while its player does, it stays on the ground where it was. Once they landed it
+        // walks to them, or is next to them when they are far (as after a teleport).
+        if (this.owner.isFlying?.()) {
+            this.trail = [];
+            this.target = { x: this.exactX, y: this.exactY, direction: this.target.direction };
+            return;
+        }
         const targetY = y + COMPANION_Y_OFFSET;
         this.target = { x, y: targetY, direction };
 

@@ -3749,6 +3749,19 @@ dessiné `z` pixels plus au nord, dans la bande de profondeur de son altitude (`
   à chaque endroit celle que son maître y avait ; invite « apprivoiser / relâcher » seulement à moins de 6 px
   d'altitude d'écart (`SAME_FLOOR_PX`, comme les bulles), rien en vol.
 
+**Un compagnon ne vole pas.** Quand son maître décolle en avion, le compagnon s'arrête où il est, au sol, et se
+repose (`JungleCompanionFollower.poseAt(…, flying)` : ni piste ni saut pendant le vol). Quand le maître s'est posé,
+le compagnon demande un chemin au sol jusqu'à lui (celui des animaux promeneurs, escaliers et ponts compris,
+`seekWayBack`), le parcourt quelle que soit la distance, puis suit comme avant ; sans chemin (une île, un toit) il
+attend sur place et redemande toutes les 2 s (`WAY_BACK_RETRY_MS`). Vaut pour les promeneurs apprivoisés
+(`JungleCompanions`) et, à l'écran, pour les lions et tigres apprivoisés du serveur (`LandCompanions` ; le serveur
+gardait déjà l'animal à sa dernière place au sol, `leadTamed`). Le vol du maître est lu sur le joueur
+(`Character.isFlying`, déjà partagé) : aucun protocole. Le compagnon d'origine de WorkAdventure reste aussi au sol
+pendant le vol (`Companion.setTarget`) ; à l'atterrissage il marche droit vers son joueur s'il est près, et se
+retrouve à côté de lui s'il est loin (règle des téléportations, inchangée). Limite : un joueur qui n'a pas vu où un
+compagnon a été laissé (maître sorti de sa vue pendant le vol) ne le voit pas jusqu'à l'atterrissage, puis au pied
+du maître ; un lion du serveur est alors montré là où le serveur le garde.
+
 **Limites (lot 1).** Les animaux du serveur (antilopes, lions, tigres de la vie de la terre, apprivoisés compris)
 restent au sol, avec le pont « à plat » d'avant : lot 2, avec protocole. Sur un étage ou un pont, un animal ne fuit
 ni les avatars ni le feu, et n'est pas vu par les capteurs de présence ; il ne s'assoit que sur les sièges du sol.
