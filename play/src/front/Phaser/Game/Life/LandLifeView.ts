@@ -2,6 +2,7 @@ import type * as Phaser from "phaser";
 import { drinkStance } from "../Wander/WanderDrink";
 import type { WanderDirection } from "../Wander/WanderSchedule";
 import { WANDER_FRAME_SIZE, WANDER_WALK_COLUMNS, wanderIdleFrame, wanderWalkFrames } from "../Wander/WanderSheet";
+import { placeAtDepth } from "../DepthSort";
 import type { AquaticLife, ShownAnimal } from "./AquaticLife";
 import { ensureLandTexture, landSpeciesOf } from "./LandSprites";
 import type { LandSpecies } from "./LandSprites";
@@ -147,7 +148,7 @@ export class LandLifeView {
             entry.moving = moving;
             entry.led = led !== undefined;
             sprite.setPosition(x, y);
-            sprite.setDepth(y);
+            placeAtDepth(sprite, y);
             sprite.setAlpha(animal.alpha);
             // Head down at the water (the stance of the wandering animals, without its sway of a pixel: the place
             // of the sprite tells whether the animal moved).

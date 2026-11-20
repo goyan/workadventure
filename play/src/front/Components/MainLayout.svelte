@@ -22,6 +22,7 @@
     import {
         mapEditorAskToClaimPersonalAreaStore,
         mapEditorModeStore,
+        mapEditorPlacementLevelStore,
         mapEditorSelectedToolStore,
         mapEditorVisibilityStore,
         mapExplorationObjectSelectedStore,
@@ -54,6 +55,7 @@
     import { requestedMicrophoneDeviceIdStore, silentStore } from "../Stores/MediaStore";
     import { hideActionBarStoreBecauseOfChatBar } from "../Chat/ChatSidebarWidthStore";
     import { floorLevelsStore } from "../Stores/FloorLevelsStore";
+    import { mapLayerPickLevelStore } from "../Stores/MapLayerStore";
     import { basicActiveStore } from "../Stores/BasicModeStore";
     import AvatarVideoBubbles from "./Video/AvatarVideoBubbles.svelte";
     import { mapEditorSideBarWidthStore } from "./MapEditor/MapEditorSideBarWidthStore";
@@ -128,6 +130,12 @@
     const listeningSpaceName = jamAudioSession.listeningSpaceName;
     let jamSidePanel: HTMLDivElement | undefined = $state();
     let jamPanelAnchorTop = $state(0);
+
+    /** In the map editor, the stack under the clock chooses the level worked on, as the picker of its panel does. */
+    function chooseEditorLevel(level: number | undefined): void {
+        mapLayerPickLevelStore.set(false);
+        mapEditorPlacementLevelStore.set(level ?? "auto");
+    }
 
     $effect(() => {
         const sidePanel = jamSidePanel;
@@ -518,8 +526,11 @@
                 bind:offsetHeight={jamDockHeight}
             >
                 <div class="pointer-events-auto"><WorldClock /></div>
-                <!-- The floors of the map, the one of the avatar marked (maps with raised floors only). -->
-                <FloorLevelStack stack={$floorLevelsStore} />
+                <!-- The floors of the map, the one of the avatar marked; in the map editor, the level it works on. -->
+                <FloorLevelStack
+                    stack={$floorLevelsStore}
+                    onSelectFloor={$mapEditorModeStore ? chooseEditorLevel : undefined}
+                />
                 <!-- What plays in the zone the avatar stands in (its name, its sound): in the column, never over the clock. -->
                 {#if $notificationPlayingStore}
                     <div class="pointer-events-auto flex flex-col items-end gap-2 [&_.notification-playing]:mr-0">

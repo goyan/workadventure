@@ -20,6 +20,7 @@ import {
     isPointInWater,
     segmentCrossesWater,
 } from "../Game/Water/WaterZones";
+import { placeAtDepth } from "../Game/DepthSort";
 import { companionColumns, companionStillFrame, companionWalkFrames } from "./CompanionSheet";
 
 import Sprite = Phaser.GameObjects.Sprite;
@@ -243,7 +244,7 @@ export class Companion extends Container {
             this.direction = this.target.direction;
         }
 
-        this.setDepth(this.exactY);
+        placeAtDepth(this, this.exactY);
         this.playAnimation(this.direction, this.animationType, time);
     }
 
