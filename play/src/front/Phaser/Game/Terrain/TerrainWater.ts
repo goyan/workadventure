@@ -17,8 +17,11 @@ export interface WaterState {
 
 /** A film of water thinner than this is not drawn: what a flood leaves behind would speckle the ground. */
 const SHOWN_PX = 0.5;
-/** How often a gliding water asks to be drawn again. */
-const GLIDE_DRAW_MS = 100;
+/**
+ * How often a gliding water asks to be drawn again: a level that creeps between two states of the server (a second
+ * apart) shows as well at five drawings a second as at ten, and each drawing paints the whole view.
+ */
+const GLIDE_DRAW_MS = 200;
 
 /**
  * The water of the relief as this browser shows it: the depth of the water over each cell of the grid the server
@@ -180,7 +183,7 @@ export class TerrainWater {
         return any;
     }
 
-    /** Changes when what is shown changed: the relief, a state, and ten times a second while the water glides. */
+    /** Changes when what is shown changed: the relief, a state, and five times a second while the water glides. */
     public drawKey(now: number): string {
         const gliding = now < this.at + WATER_MESSAGE_MS + GLIDE_DRAW_MS;
         return gliding ? `${this.changes}:${Math.floor(now / GLIDE_DRAW_MS)}` : `${this.changes}`;

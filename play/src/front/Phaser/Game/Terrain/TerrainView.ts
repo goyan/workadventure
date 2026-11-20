@@ -144,7 +144,7 @@ export class TerrainView {
             this.shore = new Uint8Array(size);
         }
         const { everywhere, wet, shore } = this;
-        // The ground changes seldom, the water ten times a second while it moves: the ground is painted once for a
+        // The ground changes seldom, the water five times a second while it moves: the ground is painted once for a
         // relief, a meadow and a canvas, then laid back under the water.
         if (!relief.painted || !this.surface.restore?.(relief.painted)) {
             // The soils first: the shades of the relief and the water are drawn over them.
