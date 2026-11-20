@@ -2252,8 +2252,10 @@ sur le fil, aucun réglage. Indépendante de la neige de la météo (qui blanchi
 l'avatar, en mètres (une case d'altitude ≈ 1,10 m, `metresOf`) : la hauteur du relief sous ses pieds quand il est au
 sol (négative dans un creux, positive sur un mont), l'altitude de son palier quand il est en hauteur
 (`Floors/AvatarAltitude.ts`, `avatarAltitudeStore`). La pile s'affiche donc aussi sur une carte sans étage dès qu'elle
-a un relief ; rien ne change sur une carte sans relief, ni dans l'éditeur (la pile y est masquée, l'outil Relief dit
-la hauteur sous le curseur). À côté, après un viseur, **l'altitude du sol sous le curseur** (`pointerAltitude`,
+a un relief ; rien ne change sur une carte sans relief. **Dans l'éditeur** la pile reste affichée, avec les mêmes
+altitudes : elle y montre le niveau sur lequel l'éditeur travaille (« Auto » suit le palier sous le pointeur) et le
+choisit, comme le sélecteur de niveau du panneau (`floorLevelStack`, paramètre `editor` ; `chooseEditorLevel` de
+`MainLayout.svelte`). À côté, après un viseur, **l'altitude du sol sous le curseur** (`pointerAltitude`,
 `pointerAltitudeStore`) : la hauteur du relief à cet endroit, même sous un étage ; rien quand le curseur est hors du
 jeu (sur un panneau, hors de la fenêtre).
 
