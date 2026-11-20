@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { Season } from "@workadventure/map-editor";
 import {
     groundColor,
     isContour,
@@ -6,7 +7,7 @@ import {
     slopeLight,
 } from "../../../../../../src/front/Phaser/Game/Terrain/Pixel/GroundPixel";
 import type { Material, Rgb } from "../../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
-import { RAMPS } from "../../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
+import { RAMPS, rampsFor } from "../../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
 
 const MATERIALS: Material[] = [
     "grass",
@@ -88,5 +89,60 @@ describe("the colour of a point of the ground in pixel art", () => {
         const plain = average((x, y) => groundColor("snow", x, y, 0, -40));
         const line = average((x, y) => groundColor("snow", x, y, 0, -40, undefined, true));
         expect(line).toBeLessThan(plain);
+    });
+});
+
+describe("the ground in the four seasons", () => {
+    const count = (colorAt: (x: number, y: number) => Rgb, colors: Rgb[]): number => {
+        let found = 0;
+        for (let x = 0; x < 128; x++) {
+            for (let y = 0; y < 128; y++) {
+                const color = colorAt(x, y);
+                if (colors.some((shade) => shade.every((channel, index) => channel === color[index]))) found++;
+            }
+        }
+        return found;
+    };
+    const FLOWERS: Rgb[] = [
+        [0xff, 0xff, 0xff],
+        [0xf6, 0xd8, 0x4a],
+        [0xf1, 0x9a, 0xc0],
+    ];
+    const LEAVES: Rgb[] = [
+        [0xd9, 0x66, 0x2a],
+        [0xb8, 0x40, 0x2a],
+        [0xe8, 0xa3, 0x3a],
+    ];
+
+    it("paints the grass with the shades of its season", () => {
+        for (const season of [Season.Spring, Season.Summer, Season.Autumn, Season.Winter]) {
+            const ramp = rampsFor(season).grass;
+            const color = groundColor("grass", 5, 9, 0, 0, undefined, false, season, false);
+            const allowed = [...ramp, ...LEAVES];
+            expect(
+                allowed.some((shade) => shade.every((channel, index) => channel === color[index])),
+                season,
+            ).toBe(true);
+        }
+        expect(rampsFor(Season.Spring).grass).not.toEqual(rampsFor(Season.Autumn).grass);
+        expect(rampsFor(undefined)).toEqual(RAMPS);
+    });
+
+    it("sows flowers in dense grass in spring, fewer in summer, none in autumn, in winter or in thin grass", () => {
+        const flowers = (season: Season, dense: boolean) =>
+            count((x, y) => groundColor("grass", x, y, 0, 0, undefined, false, season, dense), FLOWERS);
+        expect(flowers(Season.Spring, true)).toBeGreaterThan(0);
+        expect(flowers(Season.Summer, true)).toBeLessThan(flowers(Season.Spring, true));
+        expect(flowers(Season.Spring, false)).toBe(0);
+        expect(flowers(Season.Autumn, true)).toBe(0);
+        expect(flowers(Season.Winter, true)).toBe(0);
+    });
+
+    it("strews fallen leaves on the grass in autumn only", () => {
+        const leaves = (season: Season) =>
+            count((x, y) => groundColor("grass", x, y, 0, 0, undefined, false, season, true), LEAVES);
+        expect(leaves(Season.Autumn)).toBeGreaterThan(0);
+        expect(leaves(Season.Spring)).toBe(0);
+        expect(leaves(Season.Winter)).toBe(0);
     });
 });

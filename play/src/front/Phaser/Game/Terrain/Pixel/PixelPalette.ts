@@ -1,3 +1,5 @@
+import { Season } from "@workadventure/map-editor";
+
 /** A colour: red, green, blue, 0 to 255. */
 export type Rgb = readonly [number, number, number];
 /** Four shades of a material, from the darkest to the lightest. */
@@ -45,6 +47,29 @@ export const RAMPS: Record<Material | "wall", Ramp> = {
     // Wet clay, where the walk slows down (reflections of water: GroundPixel).
     mud: ramp("#2f2018", "#45301f", "#5c4129", "#735437"),
 };
+
+/** What changes with the season (the mock-ups of the seasons): the grass, and the sand of the summer. */
+const SEASON_RAMPS: Record<Season, Partial<Record<Material, Ramp>>> = {
+    [Season.Spring]: { grass: ramp("#3f7032", "#55923d", "#72b34b", "#98d065") },
+    [Season.Summer]: {
+        grass: ramp("#4a6a2c", "#64883a", "#86a849", "#b3c36a"),
+        sand: ramp("#b39860", "#d4b97c", "#ead39c", "#f7e9c0"),
+    },
+    [Season.Autumn]: { grass: ramp("#4a5a2a", "#647036", "#848a45", "#a8a35a") },
+    [Season.Winter]: { grass: ramp("#4f6a48", "#6b8460", "#8aa07c", "#a9ba9a") },
+};
+const seasonRamps = new Map<Season, Record<Material | "wall", Ramp>>();
+
+/** The shades of the materials in a season; without a season, RAMPS. */
+export function rampsFor(season: Season | undefined): Record<Material | "wall", Ramp> {
+    if (season === undefined) return RAMPS;
+    let ramps = seasonRamps.get(season);
+    if (!ramps) {
+        ramps = { ...RAMPS, ...SEASON_RAMPS[season] };
+        seasonRamps.set(season, ramps);
+    }
+    return ramps;
+}
 
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 

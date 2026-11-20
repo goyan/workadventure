@@ -1,6 +1,7 @@
+import { Season } from "@workadventure/map-editor";
 import { hash2, valueNoise } from "./PixelNoise";
 import type { Material, Rgb } from "./PixelPalette";
-import { RAMPS, shadeAt } from "./PixelPalette";
+import { RAMPS, rampsFor, shadeAt } from "./PixelPalette";
 
 /** The dark line on the grass side of a border. */
 const GRASS_LINE: Rgb = [0x22, 0x36, 0x1c];
@@ -146,10 +147,16 @@ export function groundColor(
     outline?: "dark" | "light",
     /** On a level line (see isContour): a shade darker. */
     contour = false,
+    /** The season of the ground: its shades and what is sown on the grass. */
+    season?: Season,
+    /** Dense grass of the meadow: the flowers grow there. */
+    dense = false,
 ): Rgb {
-    const ramp = RAMPS[material];
+    const ramp = rampsFor(season)[material];
     if (outline === "dark") return material === "grass" ? GRASS_LINE : ramp[0];
     if (outline === "light") return RAMPS.snow[3];
+    const sown = sprinkleAt(material, season, dense, x, y);
+    if (sown) return sown;
     if (material === "mud" && hash2(x, y) > 0.96 && valueNoise(x / 4, y / 4) > 0.5) return WATER_GLINT;
     if (material === "ember") {
         const glow = hash2(x, y);
@@ -160,6 +167,43 @@ export function groundColor(
         groundValue(textureValue(material, textureTable(material), textureIndex(x, y), x, y), light, height) -
         (contour ? CONTOUR_SHADE : 0);
     return shadeAt(ramp, value, x, y);
+}
+
+const FLOWERS: readonly [number, Rgb][] = [
+    [0.995, [0xf1, 0x9a, 0xc0]],
+    [0.992, [0xf6, 0xd8, 0x4a]],
+    [0.988, [0xff, 0xff, 0xff]],
+];
+/** Flowers are rarer in summer: their thresholds this much higher. */
+const SUMMER_RARER = 0.006;
+const LEAVES: readonly [number, Rgb][] = [
+    [0.994, [0xe8, 0xa3, 0x3a]],
+    [0.99, [0xb8, 0x40, 0x2a]],
+    [0.982, [0xd9, 0x66, 0x2a]],
+];
+
+/**
+ * What the season sows on the grass at a pixel: flowers in dense grass in spring (fewer in summer), fallen leaves in
+ * autumn, nothing in winter; undefined where nothing is.
+ */
+export function sprinkleAt(
+    material: Material,
+    season: Season | undefined,
+    dense: boolean,
+    x: number,
+    y: number,
+): Rgb | undefined {
+    if (material !== "grass" || season === undefined) return undefined;
+    if (season === Season.Autumn) {
+        const draw = hash2(x * 5 + 3, y * 11 + 7);
+        for (const [threshold, color] of LEAVES) if (draw > threshold) return color;
+        return undefined;
+    }
+    if (!dense || season === Season.Winter) return undefined;
+    const rarer = season === Season.Summer ? SUMMER_RARER : 0;
+    const draw = hash2(x * 3 + 1, y * 7 + 2);
+    for (const [threshold, color] of FLOWERS) if (draw > threshold + rarer) return color;
+    return undefined;
 }
 
 /**
