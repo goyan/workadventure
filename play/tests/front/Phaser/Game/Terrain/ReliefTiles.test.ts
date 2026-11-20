@@ -3,6 +3,7 @@ import { cellKey, withHeights, withSoils } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 import { ReliefTiles } from "../../../../../src/front/Phaser/Game/Terrain/ReliefTiles";
 import { TerrainWater } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
+import { MeadowState } from "../../../../../src/front/Phaser/Game/Terrain/MeadowState";
 import { RAMPS } from "../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
 import type { Rgb } from "../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
 
@@ -13,7 +14,7 @@ function dugEverywhere(): TerrainData {
     return withHeights(undefined, changes);
 }
 
-function fixture(terrain: TerrainData = dugEverywhere()) {
+function fixture(terrain: TerrainData = dugEverywhere(), meadow?: MeadowState) {
     const worldView = { x: 300, y: 300, width: 600, height: 400 };
     const images: { visible: boolean }[] = [];
     /** The last pixels put in each block, by texture key. */
@@ -59,6 +60,7 @@ function fixture(terrain: TerrainData = dugEverywhere()) {
     };
     const tiles = new ReliefTiles(scene as never, {
         relief: () => current,
+        meadow,
         water,
         season: () => undefined,
         snowShown: () => 0,
@@ -271,5 +273,31 @@ describe("the blocks of the relief seen in 3/4", () => {
         tiles.update(0);
         expect(tiles.redraws()).toBe(1);
         expect(performance.now() - start).toBeLessThan(80);
+    });
+
+    it("draws no block again when the meadow is told again without changing what covers the ground", () => {
+        const meadow = new MeadowState();
+        const told = (grass: number, dryness = 0) => {
+            const tiles = 64 * 64;
+            meadow.receive({
+                width: 64,
+                height: 64,
+                grass: new Uint8Array(tiles).fill(grass),
+                moisture: new Uint8Array(tiles),
+                dryness: new Uint8Array(tiles).fill(dryness),
+            });
+        };
+        told(200);
+        const { tiles, settle } = fixture(dugEverywhere(), meadow);
+        settle();
+        const drawn = tiles.redraws();
+        // Told again every 10 s: the grass grew a little, still grass.
+        told(210);
+        settle();
+        expect(tiles.redraws()).toBe(drawn);
+        // The grass dried out to straw: the blocks are drawn again.
+        told(210, 255);
+        settle();
+        expect(tiles.redraws()).toBeGreaterThan(drawn);
     });
 });

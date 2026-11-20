@@ -111,6 +111,8 @@ export class ReliefTiles {
     private reliefKept: TerrainData | undefined;
     private readonly reliefSignatures = new Map<string, string>();
     private waterKey = "";
+    private meadowVersion = -1;
+    private readonly meadowSignatures = new Map<string, string>();
     private readonly waterSignatures = new Map<string, string>();
     private readonly heights = new Float32Array(GRID_WIDTH * GRID_HEIGHT);
     private readonly gridWater = new Uint8Array(GRID_WIDTH * GRID_HEIGHT);
@@ -180,9 +182,14 @@ export class ReliefTiles {
             this.waterKey = waterKey;
             this.waterSignatures.clear();
         }
-        const shared = `${this.inputs.meadow?.version() ?? 0}|${this.inputs.season() ?? ""}|${
-            Math.round(this.inputs.snowShown() * 10) / 10
-        }`;
+        // The meadow is told again every 10 s (2 s during a fire): a block is drawn again only when what covers one of
+        // its cells changes, not at each message.
+        const meadowVersion = this.inputs.meadow?.version() ?? 0;
+        if (meadowVersion !== this.meadowVersion) {
+            this.meadowVersion = meadowVersion;
+            this.meadowSignatures.clear();
+        }
+        const shared = `${this.inputs.season() ?? ""}|${Math.round(this.inputs.snowShown() * 10) / 10}`;
         const signatures = new Map<string, string>();
         for (const key of around) {
             let relief = this.reliefSignatures.get(key);
@@ -196,7 +203,16 @@ export class ReliefTiles {
                 water = this.waterSignature(key, now);
                 this.waterSignatures.set(key, water);
             }
-            signatures.set(key, relief === "" && water === "" ? "" : `${relief}|${water}|${shared}`);
+            if (relief === "" && water === "") {
+                signatures.set(key, "");
+                continue;
+            }
+            let meadow = this.meadowSignatures.get(key);
+            if (meadow === undefined) {
+                meadow = this.meadowSignature(key, terrain);
+                this.meadowSignatures.set(key, meadow);
+            }
+            signatures.set(key, `${relief}|${water}|${meadow}|${shared}`);
         }
         for (const key of this.schedule.toRedraw(around, signatures, undefined, new Set(visible))) {
             if (signatures.get(key) === "") this.drop(key);
@@ -217,6 +233,22 @@ export class ReliefTiles {
             }
         }
         return keys;
+    }
+
+    /** What covers the cells a block is drawn from (cellMaterial: meadow, snow, soil), as a short text. */
+    private meadowSignature(key: string, terrain: TerrainData): string {
+        if (!this.inputs.meadow) return "";
+        const [blockX, blockY] = key.split(",").map(Number);
+        const gridX = blockX * TERRAIN_CHUNK - 1;
+        const gridY = blockY * TERRAIN_CHUNK - MAX_DROP / TERRAIN_CELL - 1;
+        const inputs = { terrain, meadow: this.inputs.meadow, snowShown: this.inputs.snowShown() };
+        let hash = 0;
+        for (let row = 0; row < GRID_HEIGHT; row++) {
+            for (let column = 0; column < GRID_WIDTH; column++) {
+                hash = (Math.imul(hash, 31) + MATERIAL_INDEX[cellMaterial(inputs, gridX + column, gridY + row)]) | 0;
+            }
+        }
+        return hash.toString(36);
     }
 
     /** The water a block is drawn with (its cells and the rows north of it), as a short text; empty when dry. */
