@@ -3268,8 +3268,63 @@ ce lot dessine le feu. Rien ne change côté serveur ni sur le fil.
   relief sont composés une fois pour un relief, un pré et une vue, puis reposés sous l'eau ; tant que l'eau bouge
   (10 dessins par seconde) seule l'eau est repeinte.
 
-Limites : flammes au sol seulement (les arbres ne brûlent pas encore), pas de son, la lueur n'éclaire pas la nuit
-comme une lampe (elle ne perce pas le voile).
+Limites : pas de son, la lueur n'éclaire pas la nuit comme une lampe (elle ne perce pas le voile). Les arbres
+brûlent depuis le lot 4, ci-dessous.
+
+## Feu de végétation : les arbres brûlent, les animaux fuient (lot 4)
+
+Les arbres du catalogue nature (`Nature:tree-…`, ceux qui se balancent au vent) prennent feu, lancent des braises
+sous le vent, restent noirs puis reverdissent seuls. Les animaux fuient le feu de l'herbe et celui des arbres. Le
+serveur seul décide ; `play` (front et pusher) et `back` se déploient ensemble.
+
+**Règles** (`libs/map-editor/src/Terrain/TreeFire.ts`, pur, testé)
+
+- Chaque arbre a une chaleur, un feu, une part brûlée et une attente. Il chauffe par l'herbe qui brûle à son pied,
+  par un arbre voisin en plein feu (le vent porte la chaleur, `fireWindPush`) et par les braises ; il s'embrase,
+  brûle 90 s (`TREE_BURN_SECONDS`) et rallume l'herbe sous lui.
+- Un arbre en plein feu lance des braises sous le vent (8 par arbre, 40 en vol par salle au plus), qui allument un
+  foyer plus loin (`emberReachTiles`). L'eau à son pied et une forte pluie l'éteignent.
+- Ce qui a brûlé reste noir la moitié du temps de repousse de l'herbe de la carte (5 min par défaut pour un arbre
+  entièrement brûlé, moins s'il a été éteint avant), puis l'arbre reverdit seul. Un arbre ni en feu ni brûlé n'est
+  pas regardé.
+- La catastrophe « Feu » allume aussitôt les arbres sous le patch (`TreeFire.ignite`).
+
+**Serveur** : `MeadowManager` fait avancer les arbres après le pré, à son pas de 2 s, et les garde dans Redis avec
+le pré (champ `trees`). Il annonce les arbres qui changent et les braises parties : `TreeFireMessage`
+(`SubMessage` 48, `SubToPusherRoomMessage` 28, `RoomJoinedMessage.treeFire` 36 pour qui entre).
+
+**Navigateur**
+
+- `Fire/TreeFireState.ts` garde ce que le serveur a dit. `Nature/CharredTreeTexture.ts` fabrique l'image calcinée
+  d'un arbre en quatre degrés (roussi, brûlé, noir, noir et troué), une fois par image et par degré ; l'objet la
+  choisit dans `Entity.showPrefabTexture`, là où il choisit son image enneigée. Un arbre calciné n'a ni neige ni
+  feuilles qui tombent. Pendant que la carte est éditée, il montre son image normale.
+- `Fire/TreeFlames.ts` (pur) place les flammes dans la couronne, celles du bas d'abord ; `Fire/TreeFireView.ts` les
+  pose avec les images de `FireView`, une lueur et une colonne de fumée par arbre, et les braises sur leur arc. Vu de
+  loin, une flamme par arbre.
+
+**Les animaux fuient** (`Life/FireFear.ts` : `LifeFire`, `lifeFireOf`)
+
+- Le feu vu par les animaux : la case d'herbe en feu ou l'arbre en feu le plus proche, à 5 cases au plus
+  (`FIRE_FEAR_PX`).
+- Antilopes, lions et tigres simulés (`stepPopulation`, paramètre facultatif `fire`) : le feu passe avant tout,
+  avant l'avatar et le prédateur, y compris pour un lion ou un tigre rassasié. Effrayé, l'animal ne chasse pas, ne
+  s'accouple pas, arrête de boire. Il ne court jamais vers une case en feu. Encerclé, il reste sur place ; si sa
+  propre case brûle, il court vers la plus proche qui ne brûle pas, à travers les flammes. **Il ne meurt pas.**
+  Aucun couple n'arrive sur un sol en feu.
+- Mouettes : posée, elle s'envole d'un feu à moins de 3 cases et ne se pose pas sur une rive aussi proche d'un feu.
+  Poissons et dauphins : rien, l'eau ne brûle pas. Les animaux apprivoisés suivent leur maître.
+- `MeadowManager.lifeFire()` donne le feu à la vie de la salle (`AquaticLifeManager.followFire`), seulement quand
+  quelque chose brûle : sans feu, aucun tirage de plus, les empreintes témoins de la vie ne changent pas.
+- Animaux promeneurs du navigateur (jungle, chiens, chats, canards ; `Wander/WanderFear.ts` `fearedPoint`,
+  `WanderingCharactersManager.runFromThreats`, `GameScene.getLifeFire`) : tous fuient le feu, les braves et les
+  animaux posés sur la carte compris, jamais vers un sol en feu, et restent à l'écart tant que le feu est à moins de
+  7 cases (`FIRE_CALM_PX`). Un animal mené par un joueur ne fuit pas. Chaque navigateur calcule cette fuite : deux
+  joueurs peuvent voir un promeneur à deux endroits voisins pendant un feu.
+
+Limites : un arbre calciné ne fume pas après le feu et n'a pas de points rouges qui s'éteignent (prévus par la
+conception, non faits) ; pas de son ; un animal encerclé ne meurt pas ; la fuite des animaux simulés est en ligne
+droite, sans recherche de chemin ; un lion ou un tigre revient autour de son arbre, même calciné.
 
 ## Catastrophes : le météore
 
