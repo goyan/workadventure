@@ -167,7 +167,8 @@ describe("the fire spreading", () => {
         const river = { ...lucky, waterAt: (tileX: number) => (tileX === 6 ? 4 : 0) };
         meadow.step({ ...river, random: () => 1 });
         meadow.ignite(10, 10, 0);
-        run(meadow, 200, river);
+        // Out within 70 s, before the ash of the first tiles starts going (see "the ground after a fire").
+        run(meadow, 70, river);
         expect(meadow.burning()).toBe(0);
         // Everything between the river and the sand burnt.
         for (const x of [7, 9, 11, 13]) expect(meadow.ashAt(x, 3)).toBe(1);
@@ -245,10 +246,22 @@ describe("the fire spreading", () => {
     it("burns a whole dry map out, and stops by itself", () => {
         const meadow = prairie(1);
         meadow.ignite(10, 10, 0);
-        run(meadow, 600, lucky);
+        run(meadow, 70, lucky);
         expect(meadow.burning()).toBe(0);
         expect(meadow.ashAt(0, 0)).toBe(1);
         expect(meadow.ashAt(20, 20)).toBe(1);
+        // The grass comes back over the whole map, and nothing takes fire again. Then its own rules hold: this dry
+        // soil makes it die slowly of thirst.
+        run(meadow, 530, lucky);
+        expect(meadow.burning()).toBe(0);
+        for (const [x, y] of [
+            [0, 0],
+            [10, 10],
+            [20, 20],
+        ]) {
+            expect(meadow.ashAt(x, y)).toBe(0);
+            expect(meadow.grassAt(x, y)).toBeGreaterThan(0.7);
+        }
     });
 });
 
@@ -270,6 +283,60 @@ describe("a fire starting by itself", () => {
         // A try needs a draw under 2 / 60.
         meadow.step({ ...night, fireDanger: 1, random: () => 0.05 });
         expect(meadow.burning()).toBe(0);
+    });
+});
+
+describe("the ground after a fire", () => {
+    /** An autumn night on a soil gone dry: the grass alone would not grow back at all. */
+    const autumnNight: MeadowStepInput = { ...night, season: Season.Autumn };
+    /** A tile burnt through: lit, burnt in 30 s, then 10 s in ash. */
+    const burnt = (input: MeadowStepInput = autumnNight): Meadow => {
+        const meadow = prairie(1);
+        meadow.ignite(10, 10, 0);
+        run(meadow, 40, input);
+        expect(meadow.fireAt(10, 10)).toBe(0);
+        expect(meadow.ashAt(10, 10)).toBeGreaterThan(0.9);
+        expect(meadow.grassAt(10, 10)).toBeLessThan(0.1);
+        return meadow;
+    };
+
+    it("is green again in five minutes, by night, in autumn, on a dry soil", () => {
+        const meadow = burnt();
+        // The ash stays whole while the embers die, about 45 s.
+        expect(meadow.ashAt(10, 10)).toBe(1);
+        run(meadow, 30, autumnNight);
+        expect(meadow.ashAt(10, 10)).toBe(1);
+        run(meadow, 130, autumnNight);
+        expect(meadow.ashAt(10, 10)).toBeGreaterThan(0.45);
+        expect(meadow.ashAt(10, 10)).toBeLessThan(0.55);
+        expect(meadow.grassAt(10, 10)).toBeCloseTo(1 - meadow.ashAt(10, 10), 5);
+        // Five minutes after it burnt through.
+        run(meadow, 130, autumnNight);
+        expect(meadow.ashAt(10, 10)).toBe(0);
+        expect(meadow.grassAt(10, 10)).toBe(1);
+    });
+
+    it("burns again once half of its grass is back, not before", () => {
+        const meadow = burnt();
+        run(meadow, 140, autumnNight);
+        expect(meadow.ignite(10, 10, 0)).toBe(0);
+        run(meadow, 40, autumnNight);
+        expect(meadow.ignite(10, 10, 0)).toBe(1);
+    });
+
+    it("comes back as fast as the grass of a map that grows faster", () => {
+        const fast = { ...autumnNight, growSeconds: 60 };
+        const meadow = burnt(fast);
+        run(meadow, 60, fast);
+        expect(meadow.ashAt(10, 10)).toBe(0);
+        expect(meadow.grassAt(10, 10)).toBe(1);
+    });
+
+    it("loses its ash under water, without grass coming back there", () => {
+        const meadow = burnt();
+        run(meadow, 300, { ...autumnNight, waterAt: (x, y) => (x === 10 && y === 10 ? 4 : 0) });
+        expect(meadow.ashAt(10, 10)).toBe(0);
+        expect(meadow.grassAt(10, 10)).toBe(0);
     });
 });
 
@@ -301,6 +368,9 @@ describe("the ash", () => {
         next.takeFrom(meadow);
         expect(next.ashAt(10, 10)).toBe(1);
         expect(next.fireAt(3, 3)).toBeGreaterThan(0);
+        // The ash that just went out stays whole as long on the edited map.
+        next.step(night);
+        expect(next.ashAt(10, 10)).toBe(1);
     });
 });
 

@@ -1,6 +1,6 @@
 import { TILE_PX } from "../types";
 import type { BurnableTree } from "./LandTrees";
-import { fireWindPush, GROW_SECONDS } from "./Meadow";
+import { AFTER_FIRE_SECONDS, fireWindPush, GROW_SECONDS } from "./Meadow";
 
 /** A tree burns this long, three times a tile of grass, and its fire rises to its height in this long. */
 export const TREE_BURN_SECONDS = 90;
@@ -22,7 +22,10 @@ const NEIGHBOUR_WIND_BOUNDS: readonly [number, number] = [0.1, 3];
 const COOL_SECONDS = 20;
 /** A rain puts a tree out as it puts the grass out, three times less well. */
 const TREE_RAIN_QUENCH_MM = 300;
-/** A tree stays black this share of the time the meadow takes to grow, then greens back in that time. */
+/**
+ * A tree that burnt through is green again as fast as the ground after a fire: in the time the meadow of the map takes
+ * to grow, AFTER_FIRE_SECONDS at most. It stays black this share of that time, then greens back in the rest.
+ */
 const BLACK_SHARE = 0.5;
 /** Embers: the chance one leaves a tree in full fire at a step of 2 s, how many a tree throws, how many fly at once. */
 const EMBER_CHANCE = 0.25;
@@ -257,6 +260,7 @@ export class TreeFire {
             input.growSeconds !== undefined && Number.isFinite(input.growSeconds) && input.growSeconds > 0
                 ? input.growSeconds
                 : GROW_SECONDS;
+        const afterFire = Math.min(grow, AFTER_FIRE_SECONDS);
         const random = input.random ?? Math.random;
         const speed =
             input.windSpeed !== undefined && Number.isFinite(input.windSpeed) ? Math.max(0, input.windSpeed) : 0;
@@ -293,14 +297,14 @@ export class TreeFire {
             if (fire <= 0) {
                 // Put out: what burnt of it stays black, the less the shorter.
                 tree.fire = 0;
-                tree.wait = BLACK_SHARE * grow * tree.damage;
+                tree.wait = BLACK_SHARE * afterFire * tree.damage;
                 continue;
             }
             tree.damage += seconds / TREE_BURN_SECONDS;
             if (tree.damage >= 1 - 1e-9) {
                 tree.damage = 1;
                 tree.fire = 0;
-                tree.wait = BLACK_SHARE * grow;
+                tree.wait = BLACK_SHARE * afterFire;
                 continue;
             }
             tree.fire = Math.min(1, fire);
@@ -334,7 +338,7 @@ export class TreeFire {
                 if (tree.wait > 0) {
                     tree.wait = Math.max(0, tree.wait - seconds);
                 } else {
-                    tree.damage = Math.max(0, tree.damage - seconds / grow);
+                    tree.damage = Math.max(0, tree.damage - seconds / (afterFire * (1 - BLACK_SHARE)));
                     if (tree.damage <= 1e-9) {
                         tree.damage = 0;
                         tree.embers = 0;
@@ -427,7 +431,7 @@ export class TreeFire {
         const kept: KeptTree[] = [];
         for (const tree of this.trees.values()) {
             if (tree.damage <= 0) continue;
-            const wait = tree.fire > 0 ? BLACK_SHARE * GROW_SECONDS * tree.damage : tree.wait;
+            const wait = tree.fire > 0 ? BLACK_SHARE * AFTER_FIRE_SECONDS * tree.damage : tree.wait;
             kept.push({ id: tree.id, damage: tree.damage, wait });
         }
         return kept;

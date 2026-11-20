@@ -3391,6 +3391,24 @@ ce lot dessine le feu. Rien ne change côté serveur ni sur le fil.
 Limites : pas de son, la lueur n'éclaire pas la nuit comme une lampe (elle ne perce pas le voile). Les arbres
 brûlent depuis le lot 4, ci-dessous.
 
+## Feu de végétation : la repousse après le feu
+
+Une case brûlée est verte de nouveau en **5 minutes** au plus (`AFTER_FIRE_SECONDS` de
+`libs/map-editor/src/Terrain/Meadow.ts`), quels que soient l'heure, la saison, l'humidité et l'altitude : c'est un
+jeu, pas une forêt. Avant, la cendre ne partait qu'avec l'herbe qui repoussait, de jour seulement, à 40 % de sa vitesse
+en automne et pas du tout en hiver : en automne de nuit une case restait noire jusqu'au matin.
+
+- La cendre d'une case éteinte reste entière 15 % de ce temps (45 s, le temps des braises que dessine le navigateur),
+  puis part régulièrement ; l'herbe revient avec elle jusqu'à un pré plein (`1 − cendre`), même là où il n'y en avait
+  qu'une litière sèche. Ensuite l'herbe suit ses règles habituelles (soif, noyade, saison).
+- Elle repousse partout où l'herbe peut pousser : pas sous l'eau, sous la neige des hauteurs, sur le sable, le rocher,
+  le gravier, un sol de l'outil Carte ni dedans. Là, la cendre part quand même, sans herbe.
+- Une case rebrûle dès que la moitié de sa cendre est partie (un peu moins de 3 min après son feu), comme avant à
+  mi-repousse : une case en cendres reste un coupe-feu pendant un incendie.
+- Une carte dont l'herbe pousse plus vite que 5 min (réglage « pré plein en … min ») repousse aussi vite qu'elle.
+- Aucun réglage nouveau, rien sur le fil : bibliothèque et `back` seulement. Le compte à rebours de la cendre entière
+  n'est pas gardé : après un redémarrage de `back`, la cendre part aussitôt.
+
 ## Feu de végétation : les arbres brûlent, les animaux fuient (lot 4)
 
 Les arbres du catalogue nature (`Nature:tree-…`, ceux qui se balancent au vent) prennent feu, lancent des braises
@@ -3404,9 +3422,9 @@ serveur seul décide ; `play` (front et pusher) et `back` se déploient ensemble
   brûle 90 s (`TREE_BURN_SECONDS`) et rallume l'herbe sous lui.
 - Un arbre en plein feu lance des braises sous le vent (8 par arbre, 40 en vol par salle au plus), qui allument un
   foyer plus loin (`emberReachTiles`). L'eau à son pied et une forte pluie l'éteignent.
-- Ce qui a brûlé reste noir la moitié du temps de repousse de l'herbe de la carte (5 min par défaut pour un arbre
-  entièrement brûlé, moins s'il a été éteint avant), puis l'arbre reverdit seul. Un arbre ni en feu ni brûlé n'est
-  pas regardé.
+- Un arbre entièrement brûlé est vert de nouveau en 5 min au plus (`AFTER_FIRE_SECONDS`, moins si l'herbe de la
+  carte pousse plus vite) : noir la première moitié, il reverdit dans la seconde, de jour comme de nuit, en toute
+  saison ; éteint avant, il revient d'autant plus vite. Un arbre ni en feu ni brûlé n'est pas regardé.
 - La catastrophe « Feu » allume aussitôt les arbres sous le patch (`TreeFire.ignite`).
 
 **Serveur** : `MeadowManager` fait avancer les arbres après le pré, à son pas de 2 s, et les garde dans Redis avec
