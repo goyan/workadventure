@@ -34,6 +34,7 @@ import type { FrontCommand } from "../Commands/FrontCommand";
 import type { MapEditorModeManager } from "../MapEditorModeManager";
 import { MAP_LAYER_TILE_SIZE } from "../MapLayer/MapLayerCatalog";
 import { FloorModel, stairImagePosition } from "../MapLayer/FloorModel";
+import { stairOutline } from "../MapLayer/MapLayerTarget";
 import {
     applySlabs,
     availableLevels,
@@ -41,7 +42,6 @@ import {
     computeFloorPlacements,
     canMoveStair,
     diffFloorPlacements,
-    eraseSlabs,
     floorCellAt,
     floorPlacementKey,
     levelUnderPoint,
@@ -49,7 +49,6 @@ import {
     placeStair,
     stairUnderPoint,
     stairTargets,
-    removeStairAt,
     stairArrivalCells,
     stairHasArrival,
     stairRiseBetween,
@@ -72,7 +71,8 @@ import { MAX_ENTITIES_PER_OPERATION } from "../MapLayer/MapLayerSync";
 
 const OK_COLOR = 0x22c55e;
 const REFUSED_COLOR = 0xef4444;
-const ERASE_COLOR = 0xf97316;
+/** A placed stair the pointer would grab: the one a drag moves. */
+const GRAB_COLOR = 0xffffff;
 /** The tiles one steps onto at the top of a stair: with a slab, and without one. */
 const ARRIVAL_COLOR = 0x3b82f6;
 const PREVIEW_MODEL_MS = 300;
@@ -127,7 +127,7 @@ export class MapLayerFloorEditing {
     }
 
     /** The floors of the map for the previews: read again at most a few times per second, and after an edit. */
-    private previewModel(): FloorModel {
+    public previewModel(): FloorModel {
         const now = performance.now();
         if (!this.cached || now - this.cached.at > PREVIEW_MODEL_MS) {
             this.cached = { model: this.readModel(), at: now };
@@ -239,17 +239,6 @@ export class MapLayerFloorEditing {
                 return true;
             };
         }
-        if (mode === "slabErase") {
-            return (model) => {
-                // A click on a stair that starts from this level removes it; slabs are removed by rectangles.
-                if (from.x === to.x && from.y === to.y) {
-                    const stair = stairUnderPoint(model, level, end.x, end.y);
-                    if (stair && removeStairAt(model, level, stair.foot)) return true;
-                }
-                eraseSlabs(model, level, from, to);
-                return true;
-            };
-        }
         if (mode === "stair") {
             // A press on a stair already placed moves it, with its own shape: the panel sets the next one only.
             if (stairUnderPoint(this.readModel(), level, start.x, start.y)) {
@@ -314,6 +303,17 @@ export class MapLayerFloorEditing {
             .setVisible(true);
         const to = floorCellAt(current.x, current.y, level);
         if (mode === "stair") {
+            // Over a placed stair, a press grabs it (a drag moves it, a click does nothing): that stair is outlined,
+            // not a new one.
+            const hovered = start ? undefined : stairUnderPoint(placedModel, level, current.x, current.y);
+            if (hovered) {
+                const outline = stairOutline(hovered);
+                graphics.fillStyle(GRAB_COLOR, 0.2);
+                graphics.fillRect(outline.x, outline.y, outline.width, outline.height);
+                graphics.lineStyle(2, GRAB_COLOR, 0.9);
+                graphics.strokeRect(outline.x, outline.y, outline.width, outline.height);
+                return;
+            }
             // A gesture that starts on a placed stair moves it: the preview is that stair, at the tile reached.
             const picked = start ? stairUnderPoint(placedModel, level, start.x, start.y) : undefined;
             const shape = picked?.shape ?? this.stairShape();
@@ -407,23 +407,9 @@ export class MapLayerFloorEditing {
         const y = Math.min(from.y, to.y) * size - level;
         const width = (Math.abs(to.x - from.x) + 1) * size;
         const height = (Math.abs(to.y - from.y) + 1) * size;
-        if (mode === "slabErase" && from.x === to.x && from.y === to.y) {
-            // A click here removes the stair under the pointer: the whole stair is shown, not a tile of it.
-            const stair = stairUnderPoint(placedModel, level, current.x, current.y);
-            if (stair) {
-                const image = stairImagePosition(stair.shape, stair.foot, stair.base);
-                const box = stairScreenBox(stair.shape, stair.foot);
-                graphics.fillStyle(ERASE_COLOR, 0.3);
-                graphics.fillRect(image.x, image.y, box.width, box.height);
-                graphics.lineStyle(2, ERASE_COLOR, 1);
-                graphics.strokeRect(image.x, image.y, box.width, box.height);
-                return;
-            }
-        }
-        const color = mode === "slabErase" ? ERASE_COLOR : OK_COLOR;
-        graphics.fillStyle(color, 0.3);
+        graphics.fillStyle(OK_COLOR, 0.3);
         graphics.fillRect(x, y, width, height);
-        graphics.lineStyle(2, color, 1);
+        graphics.lineStyle(2, OK_COLOR, 1);
         graphics.strokeRect(x, y, width, height);
     }
 
@@ -467,7 +453,7 @@ export class MapLayerFloorEditing {
         return commands;
     }
 
-    /** Applies the gesture as one undo step. */
+    /** Applies the gesture of a floor mode as one undo step. */
     public commit(start: Point, end: Point): void {
         this.graphics?.clear();
         if (get(mapLayerModeStore) === "slab" && get(mapLayerLevelStore) === 0) {

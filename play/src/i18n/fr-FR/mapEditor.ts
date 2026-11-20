@@ -803,7 +803,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             height: "Hauteur",
             erase: "Gomme",
             slab: "Dalles de palier",
-            slabErase: "Gomme de palier",
             stair: "Escalier",
         },
         hints: {
@@ -815,11 +814,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             door: "Cliquez sur un mur pour transformer deux de ses segments en porte. Elle s’ouvre quand quelqu’un s’approche.",
             window: "Cliquez ou glissez le long d’un mur horizontal pour y poser des fenêtres. On voit à travers. Glissez une fenêtre posée pour la déplacer.",
             height: "Cliquez sur un mur, une porte ou une fenêtre (ou glissez le long d’un mur) pour le sélectionner, puis choisissez sa hauteur.",
-            erase: "Partez d’un mur et glissez le long pour effacer ses segments (portes et fenêtres comprises), ou partez d’un sol pour effacer des sols. Un clic efface ce qui est sous le curseur. Les objets restent.",
+            erase: "Un clic efface ce qui est entouré en rouge, au niveau choisi : escalier ou rampe, porte, fenêtre, mur, dalle de palier ou sol. Partez d’un mur et glissez le long pour effacer ses segments (portes et fenêtres comprises) ; sur un palier, glissez un rectangle pour retirer ses dalles ; au sol, partez d’un sol pour effacer les sols survolés. Les objets restent.",
             slab: "Choisissez un niveau, puis glissez un rectangle pour poser les dalles d’un palier.",
-            slabErase:
-                "Glissez un rectangle pour retirer des dalles du niveau, ou cliquez sur un escalier qui en part.",
-            stair: "Cliquez sur la case de la première marche, au niveau d’où part l’escalier. Survolez la carte pour voir où il arrive. Glissez un escalier déjà posé pour le déplacer.",
+            stair: "Cliquez sur la case de la première marche, au niveau d’où part l’escalier. Survolez la carte pour voir où il arrive. Un escalier ou une rampe déjà posé est entouré en blanc au survol : glissez-le pour le déplacer.",
         },
         floors: "Sol",
         floorGuide: {

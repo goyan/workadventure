@@ -14,7 +14,6 @@ export type MapLayerMode =
     | "height"
     | "erase"
     | "slab"
-    | "slabErase"
     | "stair";
 
 export const mapLayerModeStore = writable<MapLayerMode>("wall");
@@ -99,9 +98,9 @@ export type MapLayerStatus =
     | "failed";
 export const mapLayerStatusStore = writable<MapLayerStatus | undefined>(undefined);
 
-/** The modes that edit the raised floors: slabs, their eraser, stairs. */
-export function isFloorMode(mode: MapLayerMode): mode is "slab" | "slabErase" | "stair" {
-    return mode === "slab" || mode === "slabErase" || mode === "stair";
+/** The modes that lay the raised floors: slabs and stairs (the eraser removes them with the rest). */
+export function isFloorMode(mode: MapLayerMode): mode is "slab" | "stair" {
+    return mode === "slab" || mode === "stair";
 }
 
 /** Whether the catalog of the raised floors (slabs and stairs) is loaded in the current room. */
