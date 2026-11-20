@@ -56,6 +56,16 @@ export interface JungleCompanionWorld {
      * the stairs behind its master; without it, everything is on the ground (see playerOnGround).
      */
     playerFloorZ?(userId: number): number | undefined;
+    /**
+     * Whether a player this client sees flies (in a plane). A companion does not fly: it stays on the ground where it
+     * was, and walks back to its master once they landed.
+     */
+    playerFlying?(userId: number): boolean;
+    /**
+     * A way on the ground between two places (see Point), [] when there is none: the one a companion walks back to
+     * a master who landed. Without it, it walks straight to them.
+     */
+    groundPath?(from: Point, to: Point): Promise<Point[]>;
     editorOpen(): boolean;
     /** Whether the local player stands on the ground, where the animals are (not on a raised floor over them). */
     playerOnGround?(): boolean;
@@ -98,6 +108,10 @@ export class JungleCompanions {
     private lastArrivalAnnounce = Number.NEGATIVE_INFINITY;
 
     constructor(private readonly world: JungleCompanionWorld) {}
+
+    /** The way a companion left on the ground walks back to its master (see JungleCompanionFollower.seekWayBack). */
+    private readonly wayBack = (from: Point, to: Point): Promise<Point[]> =>
+        this.world.groundPath?.(from, to) ?? Promise.resolve([to]);
 
     /** A room event: claims of the other players. */
     public receive(senderId: number | undefined, name: string, data: unknown, nowMs: number): void {
@@ -301,8 +315,13 @@ export class JungleCompanions {
                         return undefined;
                     }
                     const master = this.placeOfPlayer(feet, owner);
+                    const flying = this.world.playerFlying?.(owner) ?? false;
+                    // Nobody here saw where it was left on the ground: not shown until its master lands.
+                    if (!follower && flying) return undefined;
                     follower ??= new JungleCompanionFollower(master, nowMs);
-                    return follower.poseAt(nowMs, master, !this.world.playerInWater(owner), entry.slot);
+                    const pose = follower.poseAt(nowMs, master, !this.world.playerInWater(owner), entry.slot, flying);
+                    if (!flying) follower.seekWayBack(nowMs, master, this.wayBack);
+                    return pose;
                 },
             };
             this.world.setLead(animal, entry.lead);

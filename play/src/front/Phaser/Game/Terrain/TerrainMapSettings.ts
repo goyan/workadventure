@@ -5,7 +5,7 @@ import {
     DEFAULT_WATER_SETTINGS,
     DEFAULT_WAVE_SETTINGS,
 } from "@workadventure/map-editor";
-import type { LifeSettings, MeadowSettings, WaveSettings } from "@workadventure/map-editor";
+import type { LifeSettings, MeadowSettings, PoolStyle, WaveSettings } from "@workadventure/map-editor";
 import { gameManager } from "../GameManager";
 
 /** What the map says of its relief and of the pace of its water, with the defaults of a map that says nothing. */
@@ -22,6 +22,8 @@ export function readTerrainMapSettings(): {
     waves: WaveSettings;
     life: LifeSettings;
     meadow: MeadowSettings;
+    /** The styles of the pools painted on the map (Terrain/Pools.ts). */
+    pools: PoolStyle[];
 } {
     const wam = gameManager.getCurrentGameScene().getGameMap().getWamFile()?.getWam();
     return {
@@ -37,5 +39,6 @@ export function readTerrainMapSettings(): {
         waves: { ...DEFAULT_WAVE_SETTINGS, ...wam?.settings?.water?.waves },
         life: { ...DEFAULT_LIFE_SETTINGS, ...wam?.settings?.life },
         meadow: { ...DEFAULT_MEADOW_SETTINGS, ...wam?.settings?.meadow },
+        pools: [...(wam?.settings?.pools ?? [])],
     };
 }

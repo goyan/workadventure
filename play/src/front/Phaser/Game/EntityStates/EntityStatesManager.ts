@@ -1,4 +1,4 @@
-import { ENTITY_STATE_DEFAULT, isEntityStateKey, isEntityStateValue } from "@workadventure/map-editor";
+import { entityStateDefault, isEntityStateKey, isEntityStateValue } from "@workadventure/map-editor";
 import type { EntityStateKey, EntityStateValue } from "@workadventure/map-editor";
 import type { Observable, Subscription } from "rxjs";
 import { writable } from "svelte/store";
@@ -43,11 +43,16 @@ export class EntityStatesManager {
     }
 
     public get(entityId: string, key: EntityStateKey): EntityStateValue {
-        return this.states.get(stateId(entityId, key)) ?? ENTITY_STATE_DEFAULT;
+        return this.states.get(stateId(entityId, key)) ?? entityStateDefault(key);
     }
 
     public isOn(entityId: string): boolean {
         return this.get(entityId, "on") === "true";
+    }
+
+    /** Whether the water of a pool is heated (a switch set it): it never freezes, and steams in the cold. */
+    public isHot(entityId: string): boolean {
+        return this.get(entityId, "hot") === "true";
     }
 
     /** Asks the server to set the state `key` of the targets of a switch. */
@@ -67,7 +72,7 @@ export class EntityStatesManager {
         if (!isEntityStateKey(key) || !isEntityStateValue(value) || this.get(entityId, key) === value) {
             return false;
         }
-        if (value === ENTITY_STATE_DEFAULT) {
+        if (value === entityStateDefault(key)) {
             this.states.delete(stateId(entityId, key));
         } else {
             this.states.set(stateId(entityId, key), value);

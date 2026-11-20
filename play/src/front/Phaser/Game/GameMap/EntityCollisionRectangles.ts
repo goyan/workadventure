@@ -108,7 +108,11 @@ export class EntityCollisionRectangles {
                 player,
                 state.group,
                 undefined,
-                () => !player.isSwimming() && player.isOnFloor(elevationOf(state.entity)),
+                // Frozen, a pool is ice: one walks onto it and skates (FrozenWater.ts through the scene).
+                () =>
+                    !player.isSwimming() &&
+                    !this.isFrozenPool(state.entity.entityId) &&
+                    player.isOnFloor(elevationOf(state.entity)),
             );
         }
         const prefab = state.entity.getPrefab();
@@ -164,8 +168,15 @@ export class EntityCollisionRectangles {
                 )
                 // The paths are computed on the ground: what stands on a raised floor is not in their way.
                 .filter((state) => elevationOf(state.entity) === 0)
+                // A frozen pool is walked across.
+                .filter((state) => this.kind !== "water" || !this.isFrozenPool(state.entity.entityId))
                 .map((state) => state.group)
         );
+    }
+
+    private isFrozenPool(entityId: string): boolean {
+        const scene = this.scene as Phaser.Scene & { isPoolEntityFrozen?(entityId: string): boolean };
+        return scene.isPoolEntityFrozen?.(entityId) === true;
     }
 
     public destroy(): void {

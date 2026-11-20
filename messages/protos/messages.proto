@@ -402,9 +402,32 @@ message UpdateWAMSettingsMessage {
     UpdateWaterSettingMessage updateWaterSettingMessage = 6;
     UpdateLifeSettingMessage updateLifeSettingMessage = 7;
     UpdateMeadowSettingMessage updateMeadowSettingMessage = 8;
-    // 9 is taken by the pools (open pull request #392 of the fork).
+    UpdatePoolSettingMessage updatePoolSettingMessage = 9;
     UpdateLightingSettingMessage updateLightingSettingMessage = 10;
+    UpdatePoolLaddersSettingMessage updatePoolLaddersSettingMessage = 11;
   }
+}
+
+// The styles of the pools painted on the map (PoolStyle in libs/map-editor), by their number: the whole list.
+message UpdatePoolSettingMessage {
+  repeated PoolStyleMessage pools = 1;
+}
+
+message PoolStyleMessage {
+  // Colours, "#rrggbb".
+  string water = 1;
+  string coping = 2;
+  // How deep the pool is, in map pixels.
+  double depthPx = 3;
+  // Whether its water is hot: it never freezes, and steams in the cold.
+  bool hot = 4;
+  // Ladders along its top edge: 0, 1 or 2. Absent from older clients: 2.
+  optional uint32 ladders = 5;
+}
+
+// The ladders put by hand on the pools of the map: the cells ("x,y") of the top edges they stand on, the whole list.
+message UpdatePoolLaddersSettingMessage {
+  repeated string cells = 1;
 }
 
 // The lighting of the map (LightingSettings in libs/map-editor). energySaving: the lamps standing outdoors go out by
