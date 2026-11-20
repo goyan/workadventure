@@ -150,3 +150,22 @@ describe("the border of what nothing covers", () => {
         }
     });
 });
+
+describe("the snow of the map coming", () => {
+    it("covers the ground cell after cell as it thickens, not all at once at half", () => {
+        const share = (snowShown: number) => {
+            let snowy = 0;
+            for (let x = 0; x < 40; x++) {
+                for (let y = 0; y < 40; y++) {
+                    if (cellMaterial({ terrain: undefined, snowShown }, x, y) === "snow") snowy++;
+                }
+            }
+            return snowy / 1600;
+        };
+        expect(share(0)).toBe(0);
+        expect(share(0.3)).toBeGreaterThan(0.2);
+        expect(share(0.3)).toBeLessThan(0.4);
+        expect(share(0.7)).toBeGreaterThan(0.6);
+        expect(share(1)).toBe(1);
+    });
+});

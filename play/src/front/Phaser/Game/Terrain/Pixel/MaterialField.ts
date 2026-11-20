@@ -12,7 +12,7 @@ import type { Season } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 import type { MeadowState } from "../MeadowState";
 import { mottledCover, strawLevel } from "../MeadowState";
-import { valueNoise } from "./PixelNoise";
+import { hash2, valueNoise } from "./PixelNoise";
 import type { Material } from "./PixelPalette";
 
 /** What covers a cell: a material, or nothing (transparent: the tiles of the map show). */
@@ -55,7 +55,11 @@ export function cellMaterial(inputs: CellInputs, cellX: number, cellY: number): 
     const dug = heightAt(terrain, cellX, cellY) !== 0;
     // Rooms and the floors of the Carte tool keep their own tiles (nothing is dug there).
     if (!dug && (inputs.outdoor?.(cellX, cellY) === false || inputs.paved?.(cellX, cellY) === true)) return "none";
-    if (inputs.snowShown >= SNOW_FROM) return "snow";
+    // The snow of the map comes cell after cell as it thickens (all of it under the theme of the winter): each cell
+    // whitens at its own share of the snow, so the ground goes white by patches, not all at once.
+    if (inputs.snowShown >= 1 || (inputs.snowShown > 0 && inputs.snowShown > hash2(cellX * 7 + 13, cellY * 5 + 3))) {
+        return "snow";
+    }
     // The snow of the heights, over the snow line of the season (it slows the walk there too).
     if (inputs.snowLineSeason && snowCover(heightAt(terrain, cellX, cellY), inputs.snowLineSeason) >= SNOW_FROM) {
         return "snow";
