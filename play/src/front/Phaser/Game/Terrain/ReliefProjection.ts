@@ -55,3 +55,78 @@ export function groundPointAt(
     }
     return { x: screen.x, y: found ?? screen.y };
 }
+
+/** Map pixels for a texel of the drawing of the relief. */
+export const RELIEF_TEXEL = 2;
+/**
+ * The face of a drop: this much lighter than its tint at the rim, darker as it goes down, as dark as WALL_FOOT from
+ * WALL_DARK_DROP px of drop on. Shaded by how far down it is, not by its place in one gap: a slope drawn as many small
+ * gaps is one even face, not stripes.
+ */
+const WALL_TOP = 1.15;
+const WALL_FOOT = 0.55;
+const WALL_DARK_DROP = 64;
+/** A darker stratum of the face every this many texels of the screen. */
+const STRATUM_TEXELS = 4;
+const STRATUM_SHADE = 0.85;
+
+/** A texel of the ground of a column, as `paintColumn` draws it. */
+export interface ColumnSample {
+    /** Its place on the ground (map pixels). */
+    groundY: number;
+    /** How much lower it is drawn (dropAt, or the drop of the surface of the water over it). */
+    drop: number;
+    color: readonly [number, number, number];
+    /** The colour of the face of a drop that starts at it. */
+    wallTint: readonly [number, number, number];
+    /** Flat ground: left to the map, unless it hides something drawn before it. */
+    plain: boolean;
+}
+
+function put(out: Uint8ClampedArray, index: number, red: number, green: number, blue: number): void {
+    out[index] = red;
+    out[index + 1] = green;
+    out[index + 2] = blue;
+    out[index + 3] = 255;
+}
+
+/**
+ * Draws one column of texels of a block of the relief (`rows` texels from the screen row `firstRow`, one texel a
+ * RELIEF_TEXEL of the screen) into the RGBA pixels `out`, `stride` texels a row. The samples go from the north to
+ * the south, from far enough north for the highest face to reach the block. Each one is drawn over what is there
+ * (the south rim hides the floor behind it); where the drawing jumps down, the face of the drop fills the gap.
+ */
+export function paintColumn(
+    samples: readonly ColumnSample[],
+    rows: number,
+    firstRow: number,
+    out: Uint8ClampedArray,
+    stride: number,
+    column: number,
+): void {
+    const index = (row: number): number => (row * stride + column) * 4;
+    let previous: number | undefined;
+    let previousDrop = 0;
+    let previousTint: readonly [number, number, number] | undefined;
+    for (const sample of samples) {
+        const at = Math.round((sample.groundY + sample.drop) / RELIEF_TEXEL) - firstRow;
+        if (previous !== undefined && previousTint && at > previous + 1) {
+            const span = at - previous;
+            for (let k = 1; k < span; k++) {
+                const row = previous + k;
+                if (row < 0 || row >= rows) continue;
+                const drop = previousDrop + ((sample.drop - previousDrop) * k) / span;
+                const t = Math.min(1, drop / WALL_DARK_DROP);
+                const stratum = (row + firstRow) % STRATUM_TEXELS === 0 ? STRATUM_SHADE : 1;
+                const shade = (WALL_TOP * (1 - t) + WALL_FOOT * t) * stratum;
+                put(out, index(row), previousTint[0] * shade, previousTint[1] * shade, previousTint[2] * shade);
+            }
+        }
+        if (at >= 0 && at < rows && (!sample.plain || out[index(at) + 3] > 0)) {
+            put(out, index(at), sample.color[0], sample.color[1], sample.color[2]);
+        }
+        previous = at;
+        previousDrop = sample.drop;
+        previousTint = sample.wallTint;
+    }
+}

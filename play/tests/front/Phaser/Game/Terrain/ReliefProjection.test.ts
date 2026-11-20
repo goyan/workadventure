@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { cellKey, withHeights } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
+import type { ColumnSample } from "../../../../../src/front/Phaser/Game/Terrain/ReliefProjection";
 import {
     DROP_SCALE,
     MAX_DROP,
     dropAt,
     groundPointAt,
+    paintColumn,
 } from "../../../../../src/front/Phaser/Game/Terrain/ReliefProjection";
 
 /**
@@ -49,5 +51,61 @@ describe("the relief seen in 3/4", () => {
 
     it("leaves a point as it is on a map without relief", () => {
         expect(groundPointAt(undefined, { x: 10, y: 20 })).toEqual({ x: 10, y: 20 });
+    });
+});
+
+describe("a column of the relief drawn in 3/4", () => {
+    const FLAT: [number, number, number] = [200, 210, 220];
+    const FLOOR: [number, number, number] = [90, 100, 80];
+    const WALL: [number, number, number] = [150, 130, 100];
+    /** One sample a texel (2 px) of the ground from y 0, dug `drop` px lower on the texels `from` to `to`. */
+    function samples(from: number, to: number, drop: number, count = 100): ColumnSample[] {
+        return Array.from({ length: count }, (_, texel) => {
+            const dug = texel >= from && texel <= to;
+            return {
+                groundY: texel * 2,
+                drop: dug ? drop : 0,
+                color: dug ? FLOOR : FLAT,
+                wallTint: WALL,
+                plain: !dug,
+            };
+        });
+    }
+    const paint = (column: ColumnSample[], rows: number, firstRow: number): Uint8ClampedArray => {
+        const out = new Uint8ClampedArray(rows * 4);
+        paintColumn(column, rows, firstRow, out, 1, 0);
+        return out;
+    };
+    const alpha = (out: Uint8ClampedArray, row: number) => out[row * 4 + 3];
+    const rgb = (out: Uint8ClampedArray, row: number) => [out[row * 4], out[row * 4 + 1], out[row * 4 + 2]];
+
+    it("leaves the plain ground to the map", () => {
+        const out = paint(samples(1000, 1000, 0), 100, 0);
+        expect([...Array(100).keys()].every((row) => alpha(out, row) === 0)).toBe(true);
+    });
+
+    it("draws the face of the drop under the north rim, then the floor lower by its drop", () => {
+        // Dug 64 px deep: drawn 32 px (16 texels) lower, from the texel 20 of the ground.
+        const out = paint(samples(20, 79, 32), 120, 0);
+        expect(alpha(out, 19)).toBe(0);
+        for (let row = 20; row <= 35; row++) expect(alpha(out, row)).toBe(255);
+        const top = rgb(out, 20).reduce((a, b) => a + b, 0);
+        const foot = rgb(out, 35).reduce((a, b) => a + b, 0);
+        expect(top).toBeGreaterThan(foot);
+        expect(rgb(out, 40)).toEqual(FLOOR);
+    });
+
+    it("lets the south rim hide the floor behind it", () => {
+        const out = paint(samples(20, 79, 32), 120, 0);
+        expect(alpha(out, 85)).toBe(255);
+        expect(rgb(out, 85)).toEqual(FLAT);
+        expect(alpha(out, 97)).toBe(0);
+    });
+
+    it("draws in a block the face of a drop that starts north of it", () => {
+        // The block starts at the texel 30; the hollow starts 4 texels north of it.
+        const out = paint(samples(26, 79, 32), 60, 30);
+        expect(alpha(out, 0)).toBe(255);
+        expect(alpha(out, 11)).toBe(255);
     });
 });
