@@ -391,8 +391,9 @@ import { isLandKind } from "./Life/LandSprites";
 import { LifeSpeciesStats, withoutSpeciesCounts } from "./Life/LifeSpeciesStats";
 import { LifeStats } from "./Life/LifeStats";
 import { MapGroundLayout, GRASS_NAME, mapTileIsGrass } from "./Terrain/MapGroundLayout";
+import { footprintSurface, GroundFootprints } from "./Terrain/Footprints";
 import { ReliefTiles } from "./Terrain/ReliefTiles";
-import { projectionShown } from "./Terrain/ReliefProjection";
+import { dropAt, projectionShown } from "./Terrain/ReliefProjection";
 import { CharacterDrops } from "./Terrain/CharacterDrops";
 import { avatarDrop, waterDepthAtPoint } from "./Terrain/AvatarDrop";
 import { WaterFlowView } from "./Terrain/WaterFlowView";
@@ -639,6 +640,8 @@ export class GameScene extends DirtyScene {
     private readonly aquaticLifeSpecies = new LifeSpeciesStats();
     private aquaticLifeSubscription: Subscription | undefined;
     private mapGroundLayout: MapGroundLayout | undefined;
+    /** The footprints of the players in the snow, the mud and the sand. */
+    private groundFootprints: GroundFootprints | undefined;
     /** The relief seen in 3/4: the dug ground drawn lower, its faces, its water. */
     private reliefTiles: ReliefTiles | undefined;
     /** The characters drawn lower in the hollows of the relief, while the image is drawn. */
@@ -1737,6 +1740,8 @@ export class GameScene extends DirtyScene {
         this.gameSwitches = undefined;
         this.weatherManager?.destroy();
         this.mapGroundLayout = undefined;
+        this.groundFootprints?.destroy();
+        this.groundFootprints = undefined;
         this.reliefTiles?.destroy();
         this.reliefTiles = undefined;
         this.characterDrops?.destroy();
@@ -2387,6 +2392,11 @@ export class GameScene extends DirtyScene {
             this.reliefTiles?.setHidden(isBasicActive());
             this.reliefTiles?.setProjected(!get(mapEditorModeStore));
             this.reliefTiles?.update(time);
+            // The footprints: none laid while the map is edited, none shown in the basic mode.
+            this.groundFootprints?.setVisible(!isBasicActive());
+            if (this.groundFootprints?.update(time, get(mapEditorModeStore) ? [] : this.seasonalWalkers())) {
+                this.markDirty();
+            }
             // Every character drawn as low as the ground (or the water) under it, in a hollow.
             if (this.reliefTiles) {
                 const relief = this.terrainWater.relief();
@@ -3848,6 +3858,13 @@ export class GameScene extends DirtyScene {
                     layout: this.mapGroundLayout,
                     snowLineSeason: () => this.getGroundSeason(),
                 });
+                this.groundFootprints?.destroy();
+                this.groundFootprints = new GroundFootprints(
+                    this,
+                    (x, y) => footprintSurface(this.reliefTiles?.coverAt(x, y, this.time.now) ?? "none"),
+                    // As low as the ground is drawn: in 3/4 out of the editor.
+                    (x, y) => (get(mapEditorModeStore) ? 0 : dropAt(this.terrainWater.relief(), x, y)),
+                );
                 this.characterDrops?.destroy();
                 this.characterDrops = new CharacterDrops(this, () => [
                     ...(this.CurrentPlayer ? [this.CurrentPlayer] : []),

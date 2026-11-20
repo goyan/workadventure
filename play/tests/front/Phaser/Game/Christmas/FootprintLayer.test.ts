@@ -10,6 +10,7 @@ function fakeImage() {
         setDisplaySize: vi.fn(() => image),
         setDepth: vi.fn(() => image),
         setVisible: vi.fn(() => image),
+        setTint: vi.fn(() => image),
         setAlpha: vi.fn((alpha: number) => {
             image.alpha = alpha;
             return image;

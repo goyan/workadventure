@@ -167,6 +167,13 @@ export class ReliefTiles {
         private readonly inputs: ReliefInputs,
     ) {}
 
+    /** What covers the ground at a point of the map (map pixels), as the blocks draw it: for the footprints. */
+    public coverAt(x: number, y: number, now: number): Cover {
+        const cellX = Math.floor(x / TERRAIN_CELL);
+        const cellY = Math.floor(y / TERRAIN_CELL);
+        return cellMaterial(this.cellInputs(this.inputs.relief(), now), cellX, cellY);
+    }
+
     /** Whether a block is being drawn, a step an image (its drawing not shown yet). */
     public isDrawing(): boolean {
         return this.job !== undefined;

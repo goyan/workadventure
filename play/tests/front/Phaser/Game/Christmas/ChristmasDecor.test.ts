@@ -38,27 +38,18 @@ function decor() {
 }
 
 describe("ChristmasDecor", () => {
-    it("leaves footprints for walkers and asks a redraw", () => {
+    it("leaves no footprint: they are the terrain's, all the year", () => {
         const christmas = decor();
         christmas.update(0, [{ id: "a", x: 0, y: 0, running: false }]);
-        expect(christmas.update(500, [{ id: "a", x: 20, y: 0, running: false }])).toBe(true);
-        expect(prints.add).toHaveBeenCalled();
-    });
-
-    it("redraws fading footprints at most every 100 ms", () => {
-        const christmas = decor();
-        prints.count = 3;
-        expect(christmas.update(1000, [])).toBe(true);
-        expect(christmas.update(1050, [])).toBe(false);
-        expect(christmas.update(1100, [])).toBe(true);
-        prints.count = 0;
+        expect(christmas.update(500, [{ id: "a", x: 20, y: 0, running: false }])).toBe(false);
+        expect(prints.add).not.toHaveBeenCalled();
     });
 
     it("shows, hides and destroys all its layers", () => {
         const christmas = decor();
         christmas.setVisible(false);
         christmas.destroy();
-        for (const layer of [caps, prints]) {
+        for (const layer of [caps]) {
             expect(layer.setVisible).toHaveBeenCalledWith(false);
             expect(layer.destroy).toHaveBeenCalled();
         }
@@ -66,6 +57,6 @@ describe("ChristmasDecor", () => {
 
     it("fades all its layers", () => {
         decor().setAlpha(0.4);
-        for (const layer of [caps, prints]) expect(layer.setAlpha).toHaveBeenLastCalledWith(0.4);
+        for (const layer of [caps]) expect(layer.setAlpha).toHaveBeenLastCalledWith(0.4);
     });
 });
