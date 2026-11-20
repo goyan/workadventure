@@ -113,8 +113,9 @@ export class TerrainView {
         /** The season of the map: the snow holds on its heights, lower in winter. None: no snow is drawn. */
         private readonly season?: () => Season | undefined,
     ) {
-        // Smooth: a hollow and its water have soft slopes and edges, not the squares of its cells.
-        this.surface = surface ?? createBlockSurface(scene, TERRAIN_DEPTH, true);
+        // Sharp cells, not blended: each keeps its own shade (the mottled grass, the soils), the only detail of the
+        // relief seen from close. Blended, the ground turned into a blur.
+        this.surface = surface ?? createBlockSurface(scene, TERRAIN_DEPTH);
     }
 
     /** While the relief is edited: the water fainter, so what is dug under it can be seen. */
