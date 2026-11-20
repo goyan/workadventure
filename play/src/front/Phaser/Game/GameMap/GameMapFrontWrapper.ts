@@ -42,6 +42,7 @@ import { EntityCollisionRectangles } from "./EntityCollisionRectangles";
 import { TiledTileCollisions } from "./TiledTileCollisions";
 import { getTileLayerStats, isWorthRenderingOnGpu } from "./TilemapGpuLayerEligibility";
 
+import { keepCulledTiles } from "./TileCullCache";
 import TilemapLayer = Phaser.Tilemaps.TilemapLayer;
 import TilemapGPULayer = Phaser.Tilemaps.TilemapGPULayer;
 import Tilemap = Phaser.Tilemaps.Tilemap;
@@ -274,13 +275,16 @@ export class GameMapFrontWrapper {
     private createRenderableLayer(layer: ITiledMapTileLayer, terrains: Array<Tileset>): RenderableTilemapLayer | null {
         const gpuTileset = this.getGpuTilesetForLayer(layer, terrains);
 
-        return this.phaserMap.createLayer(
+        const created = this.phaserMap.createLayer(
             layer.name,
             gpuTileset ?? terrains,
             (layer.x || 0) * 32,
             (layer.y || 0) * 32,
             gpuTileset !== undefined,
         );
+        // A classic layer walks every cell of the view at every image: its tiles are kept while nothing changes.
+        if (created instanceof Phaser.Tilemaps.TilemapLayer) keepCulledTiles(created);
+        return created;
     }
 
     private getGpuTilesetForLayer(layer: ITiledMapTileLayer, terrains: Array<Tileset>): Tileset | undefined {

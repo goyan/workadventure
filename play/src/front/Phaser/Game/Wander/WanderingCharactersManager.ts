@@ -13,6 +13,7 @@ import type { GameScene } from "../GameScene";
 import { JUNGLE_RADIUS_TILES } from "../Jungle/JunglePlan";
 import type { JungleAnimal } from "../Jungle/JunglePlan";
 import { getSolidRectangles } from "../../../Utils/EntityHitbox";
+import { placeAtDepth } from "../DepthSort";
 import { effectShownStores } from "../../../Stores/EffectsStore";
 import { blockRectangles, sameGrids, withAreaBorders } from "./WanderCollisions";
 import type { WanderRectangle } from "./WanderCollisions";
@@ -686,7 +687,7 @@ export class WanderingCharactersManager {
                               );
                     const depth = seat?.depth ?? pose.y;
                     if (sprite.depth !== depth) {
-                        sprite.setDepth(depth);
+                        placeAtDepth(sprite, depth);
                         changed = true;
                     }
                     if (pose.moving) {
@@ -793,7 +794,7 @@ export class WanderingCharactersManager {
             character.inStance = false;
         }
         sprite.setPosition(x, y);
-        sprite.setDepth(y);
+        placeAtDepth(sprite, y);
         character.opener.x = x;
         character.opener.y = y - WANDER_FRAME_SIZE / 2;
         character.moving = true;

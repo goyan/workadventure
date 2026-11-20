@@ -1,5 +1,6 @@
 import type * as Phaser from "phaser";
 import { DEPTH_OVERLAY_INDEX } from "../DepthIndexes";
+import { placeAtDepth } from "../DepthSort";
 import type { AquaticLife } from "./AquaticLife";
 import { ensureGullTexture, GULL_FLAP_MS } from "./GullSprites";
 
@@ -86,11 +87,11 @@ export class GullLifeView {
                 changed ||= onScreen(x, y) || onScreen(sprite.x, sprite.y);
             }
             sprite.setPosition(x, y);
-            sprite.setDepth(landed ? ground : GULL_FLIGHT_DEPTH);
+            placeAtDepth(sprite, landed ? ground : GULL_FLIGHT_DEPTH);
             sprite.setAlpha(gull.alpha);
             sprite.setFlipX(gull.facingLeft);
             shadow.setPosition(x, ground);
-            shadow.setDepth(ground - 1);
+            placeAtDepth(shadow, ground - 1);
             shadow.setAlpha(gull.alpha);
             shadow.setVisible(!landed);
         }
