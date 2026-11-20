@@ -48,6 +48,8 @@ const MATERIALS: readonly Material[] = [
     "mud",
 ];
 const UNKNOWN_MATERIAL = 255;
+/** The most blocks whose covers are read in one image. */
+const COVERS_AN_IMAGE = 8;
 /** What covers a point, as stored: the materials, then "none" (transparent). */
 const COVERS: readonly Cover[] = [...MATERIALS, "none"];
 const COVER_INDEX = Object.fromEntries(COVERS.map((cover, index) => [cover, index])) as Record<Cover, number>;
@@ -138,6 +140,9 @@ export class ReliefTiles {
     private readonly reliefSignatures = new Map<string, string>();
     private waterKey = "";
     private coverKey = "";
+    private coverReadCount = 0;
+    /** The blocks whose covers are to be read again (their old signature kept meanwhile). */
+    private readonly staleCovers = new Set<string>();
     /** The block being drawn, a step an image. */
     private job: { key: string; steps: Generator<void, void, void> } | undefined;
     private readonly coverSignatures = new Map<string, string>();
@@ -176,9 +181,19 @@ export class ReliefTiles {
         return cellMaterial(this.cellInputs(this.inputs.relief(), now), cellX, cellY);
     }
 
+    /** How many times what covers the cells of a block was read: spread over images after a message of the meadow. */
+    public coverReads(): number {
+        return this.coverReadCount;
+    }
+
     /** Whether a block is being drawn, a step an image (its drawing not shown yet). */
     public isDrawing(): boolean {
-        return this.job !== undefined;
+        return this.job !== undefined || this.staleCovers.size > 0;
+    }
+
+    /** What covers the cells changed somewhere (meadow, layout, snow, relief): every block is read again, in turn. */
+    private markCoversStale(): void {
+        for (const key of this.coverSignatures.keys()) this.staleCovers.add(key);
     }
 
     /** Blocks drawn so far: none while the view only scrolls or zooms. */
@@ -235,7 +250,7 @@ export class ReliefTiles {
             this.reliefKept = terrain;
             this.reliefSignatures.clear();
             // The soils painted are read by what covers the cells too.
-            this.coverSignatures.clear();
+            this.markCoversStale();
         }
         const view = this.scene.cameras.main.worldView;
         const visible = this.blocksOver(view.x, view.y, view.width, view.height);
@@ -258,7 +273,26 @@ export class ReliefTiles {
         }`;
         if (coverKey !== this.coverKey) {
             this.coverKey = coverKey;
-            this.coverSignatures.clear();
+            this.markCoversStale();
+        }
+        // What covers the cells is read again COVERS_AN_IMAGE blocks an image at most, the visible ones first: a
+        // message of the meadow (every 10 s) would else read the whole view in one image. Until then a block keeps
+        // the signature it had.
+        // Blocks gone out of the view are forgotten (read again when they come back).
+        const aroundKeys = new Set(around);
+        for (const key of this.staleCovers) {
+            if (aroundKeys.has(key)) continue;
+            this.staleCovers.delete(key);
+            this.coverSignatures.delete(key);
+        }
+        let reads = 0;
+        const visibleKeys = new Set(visible);
+        for (const key of [...visible, ...around.filter((key) => !visibleKeys.has(key))]) {
+            if (reads >= COVERS_AN_IMAGE) break;
+            if (this.coverSignatures.has(key) && !this.staleCovers.has(key)) continue;
+            this.coverSignatures.set(key, this.coverSignature(key, terrain, now));
+            this.staleCovers.delete(key);
+            reads++;
         }
         const shared = `${this.inputs.season() ?? ""}|${snow}|${this.projected ? "3/4" : "flat"}|${this.seeThrough}`;
         const signatures = new Map<string, string>();
@@ -279,10 +313,11 @@ export class ReliefTiles {
                 signatures.set(key, "");
                 continue;
             }
-            let cover = this.coverSignatures.get(key);
+            const cover = this.coverSignatures.get(key);
+            // Not read yet (its turn comes in a next image): not drawn yet.
             if (cover === undefined) {
-                cover = this.coverSignature(key, terrain, now);
-                this.coverSignatures.set(key, cover);
+                signatures.set(key, "");
+                continue;
             }
             // With it: nothing to draw where nothing covers the ground, nothing is dug and no water lies.
             signatures.set(
@@ -328,6 +363,7 @@ export class ReliefTiles {
      * text; empty when nothing does (only with the layout of the map: without it, bare ground is grass).
      */
     private coverSignature(key: string, terrain: TerrainData | undefined, now: number): string {
+        this.coverReadCount++;
         const [blockX, blockY] = key.split(",").map(Number);
         const gridX = blockX * TERRAIN_CHUNK - 1;
         const gridY = blockY * TERRAIN_CHUNK - MAX_DROP / TERRAIN_CELL - 1;

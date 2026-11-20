@@ -280,8 +280,12 @@ describe("the blocks of the relief seen in 3/4", () => {
         const { tiles, settle } = fixture(dugEverywhere(), meadow);
         settle();
         const drawn = tiles.redraws();
-        // Told again every 10 s: the grass grew a little, still grass.
+        // Told again every 10 s: the grass grew a little, still grass. What covers the cells is read again over
+        // several images (8 blocks an image at most), not all of it in the image that follows the message.
         told(210);
+        const read = tiles.coverReads();
+        tiles.update(99_999);
+        expect(tiles.coverReads() - read).toBeLessThanOrEqual(8);
         settle();
         expect(tiles.redraws()).toBe(drawn);
         // The grass dried out to straw: the blocks are drawn again.
