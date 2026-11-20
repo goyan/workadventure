@@ -167,7 +167,7 @@ export class MapLayerFloorEditing {
             if (!(elevation > 0)) continue;
             const prefab = entity.getPrefab();
             const piece = parseAnyLevelPrefab(prefab.collectionName, prefab.id);
-            if (piece && piece.kind !== "floor" && piece.height >= 2) {
+            if (piece && piece.kind !== "floor" && piece.kind !== "bridge" && piece.height >= 2) {
                 const height = FLOOR_WALL_HEIGHTS.find((candidate) => candidate === piece.height);
                 if (height) wallTops.push(elevation + floorElevation(height));
             }

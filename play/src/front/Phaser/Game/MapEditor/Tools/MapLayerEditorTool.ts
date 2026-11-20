@@ -1085,6 +1085,7 @@ export class MapLayerEditorTool extends MapEditorTool {
             case "window":
                 rect = { x: target.wall.x * size, y: target.wall.y * size, width: size, height: size };
                 break;
+            case "bridge":
             case "floor":
                 rect = { x: target.cell.x * size, y: target.cell.y * size, width: size, height: size };
                 break;

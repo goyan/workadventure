@@ -89,6 +89,8 @@ export function edgeKey(orientation: WallOrientation, x: number, y: number): str
  */
 export class MapLayerModel {
     private readonly floors = new Map<string, FloorCell>();
+    /** The tiles that carry the deck of a bridge, whatever floor is under it. */
+    private readonly bridges = new Map<string, { x: number; y: number }>();
     private readonly walls = new Map<string, WallEdge>();
     private readonly doors = new Map<string, DoorRef>();
     /** Horizontal wall segments drawn as a window. The wall stays in the model under it, like under a door. */
@@ -99,6 +101,7 @@ export class MapLayerModel {
     public clone(): MapLayerModel {
         const copy = new MapLayerModel();
         for (const floor of this.floors.values()) copy.setFloor(floor.x, floor.y, floor.family);
+        for (const bridge of this.bridges.values()) copy.setBridge(bridge.x, bridge.y);
         for (const wall of this.walls.values()) copy.setWall(wall.orientation, wall.x, wall.y, wall.tint, wall.height);
         for (const door of this.doors.values()) copy.doors.set(edgeKey(door.orientation, door.x, door.y), { ...door });
         for (const pane of this.windows.values()) copy.windows.set(edgeKey("h", pane.x, pane.y), pane);
@@ -116,6 +119,22 @@ export class MapLayerModel {
 
     public getFloor(x: number, y: number): FloorCell | undefined {
         return this.floors.get(cellKey(x, y));
+    }
+
+    public setBridge(x: number, y: number): void {
+        this.bridges.set(cellKey(x, y), { x, y });
+    }
+
+    public removeBridge(x: number, y: number): boolean {
+        return this.bridges.delete(cellKey(x, y));
+    }
+
+    public hasBridge(x: number, y: number): boolean {
+        return this.bridges.has(cellKey(x, y));
+    }
+
+    public getBridges(): IterableIterator<{ x: number; y: number }> {
+        return this.bridges.values();
     }
 
     /**
