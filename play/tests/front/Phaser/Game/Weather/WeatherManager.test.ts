@@ -197,8 +197,8 @@ describe("weather rendering lifecycle", () => {
     });
 
     it("paints the clouds less often the larger their blocks", () => {
-        expect(blocksPerSecond(4)).toBe(15);
-        expect(blocksPerSecond(16)).toBe(10);
+        expect(blocksPerSecond(4)).toBe(10);
+        expect(blocksPerSecond(16)).toBe(8);
         expect(blocksPerSecond(64)).toBe(6);
     });
 

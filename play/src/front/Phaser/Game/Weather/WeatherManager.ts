@@ -96,7 +96,7 @@ const VEIL_STEP = 256;
  * whole blocks, so large blocks (seen from far) move seldom.
  */
 export function blocksPerSecond(blockSize: number): number {
-    return blockSize >= 32 ? 6 : blockSize >= 16 ? 10 : 15;
+    return blockSize >= 32 ? 6 : blockSize >= 16 ? 8 : 10;
 }
 
 /** A veil of more rectangles than this is painted in the canvas of the clouds instead (see fillVeil). */
