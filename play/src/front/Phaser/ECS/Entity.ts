@@ -13,6 +13,7 @@ import { deepmergeInto } from "deepmerge-ts";
 import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
 import { SNOW_STEPS, seedOf, snowyTreeTexture, treeSnowStep } from "../Game/Nature/SnowyTreeTexture";
+import { charredTreeTexture } from "../Game/Nature/CharredTreeTexture";
 import { isSwayingTree } from "../Game/Nature/TreeSway";
 import { parseFloorPiece } from "../Game/MapEditor/MapLayer/MapLayerFloors";
 import { parseAnyLevelPrefab } from "../Game/MapEditor/MapLayer/MapLayerLevels";
@@ -171,10 +172,14 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
             this.prefab.seasonal && season === Season.Winter && (isSwayingTree(this.prefab.id) || step < SNOW_STEPS)
                 ? snowyTreeTexture(this.scene, this.prefab.seasonal?.[Season.Summer] ?? this.prefab.imagePath, step)
                 : undefined;
-        this.setTexture(
+        const shown =
             snowyTree ??
-                (seasonalPath && this.scene.textures.exists(seasonalPath) ? seasonalPath : this.prefab.imagePath),
-        );
+            (seasonalPath && this.scene.textures.exists(seasonalPath) ? seasonalPath : this.prefab.imagePath);
+        // A tree the fire took is its own image of the season, charred as far as it burnt: no snow settles on it.
+        const charred = isSwayingTree(this.prefab.id) ? (scene.getTreeFire?.().degreeOf(this.entityId) ?? 0) : 0;
+        const unsnowed =
+            seasonalPath && this.scene.textures.exists(seasonalPath) ? seasonalPath : this.prefab.imagePath;
+        this.setTexture((charred > 0 ? charredTreeTexture(this.scene, unsnowed, charred) : undefined) ?? shown);
         if (animationKey) {
             this.play(animationKey);
         }

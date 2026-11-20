@@ -34,18 +34,30 @@ const SURFACE_LIGHTNESS = 0.2;
 const TREE_DELAY = 0.35;
 
 /**
- * The colour of a pixel of a tree once snow covers it: the trunk and the shadow on the ground keep their own, the
- * foliage turns to snow with its light and shade kept, its outline to a dark blue. `rowShare` is how far down the tree the pixel is (0 top, 1 foot).
+ * What a pixel of a tree image is: nothing (`clear`, transparent or nearly), the trunk and its branches (`wood`), the
+ * shadow drawn on the ground at its foot (`shadow`), or its foliage (`leaf`). `rowShare` is how far down the tree the
+ * pixel is (0 top, 1 foot). Snow and fire change the foliage and leave the rest.
  */
-export function snowyTreePixel([red, green, blue, alpha]: Rgba, rowShare: number): Rgba {
-    if (alpha < OPAQUE_FROM) return [red, green, blue, alpha];
+export function treePixelPart([red, green, blue, alpha]: Rgba, rowShare: number): "clear" | "wood" | "shadow" | "leaf" {
+    if (alpha < OPAQUE_FROM) return "clear";
     const max = Math.max(red, green, blue) / 255;
     const min = Math.min(red, green, blue) / 255;
     const lightness = (max + min) / 2;
     const saturation = max === min ? 0 : (max - min) / (1 - Math.abs(2 * lightness - 1));
     const wood = red > green && green >= blue && red - blue > 20;
-    if (wood && rowShare >= WOOD_FROM_ROW && lightness <= WOOD_MAX_LIGHTNESS) return [red, green, blue, alpha];
-    if (rowShare >= SHADOW_FROM_ROW && saturation < SHADOW_MAX_SATURATION) return [red, green, blue, alpha];
+    if (wood && rowShare >= WOOD_FROM_ROW && lightness <= WOOD_MAX_LIGHTNESS) return "wood";
+    if (rowShare >= SHADOW_FROM_ROW && saturation < SHADOW_MAX_SATURATION) return "shadow";
+    return "leaf";
+}
+
+/**
+ * The colour of a pixel of a tree once snow covers it: the trunk and the shadow on the ground keep their own, the
+ * foliage turns to snow with its light and shade kept, its outline to a dark blue. `rowShare` is how far down the tree the pixel is (0 top, 1 foot).
+ */
+export function snowyTreePixel(pixel: Rgba, rowShare: number): Rgba {
+    const [red, green, blue, alpha] = pixel;
+    if (treePixelPart(pixel, rowShare) !== "leaf") return [red, green, blue, alpha];
+    const lightness = (Math.max(red, green, blue) + Math.min(red, green, blue)) / 510;
     if (lightness < OUTLINE_LIGHTNESS) return [...OUTLINE, alpha];
     const shade = SNOW_SHADES.find(({ from }) => lightness >= from) ?? SNOW_SHADES[SNOW_SHADES.length - 1];
     return [...shade.color, alpha];
