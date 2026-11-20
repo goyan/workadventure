@@ -27,12 +27,9 @@ vi.mock("../../../../src/front/Stores/MenuStore", async () => {
     canEdit.store = writable(false);
     return { mapEditorActivated: canEdit.store };
 });
+const getGameMap = vi.hoisted(() => vi.fn());
 vi.mock("../../../../src/front/Phaser/Game/GameManager", () => ({
-    gameManager: {
-        getCurrentGameScene: () => ({
-            getGameMap: () => ({ getWamFile: () => ({ getWam: () => ({ settings: wamSettings.value }) }) }),
-        }),
-    },
+    gameManager: { getCurrentGameScene: () => ({ getGameMap }) },
 }));
 vi.mock("../../../../src/front/Phaser/Game/MapEditor/Commands/Facades", () => ({ executeUpdateWAMSettings }));
 
@@ -55,6 +52,10 @@ beforeEach(() => {
     executeUpdateWAMSettings.mockReset();
     executeUpdateWAMSettings.mockResolvedValue(undefined);
     wamSettings.value = {};
+    getGameMap.mockReset();
+    getGameMap.mockImplementation(() => ({
+        getWamFile: () => ({ getWam: () => ({ settings: wamSettings.value }) }),
+    }));
 });
 
 afterEach(async () => {
@@ -69,6 +70,8 @@ describe("MapLightingSection", () => {
         canEdit.store.set(false);
         render();
         expect(target.querySelector('[data-testid="map-lighting-settings"]')).toBeNull();
+        // The map is not even read for them.
+        expect(getGameMap).not.toHaveBeenCalled();
     });
 
     it("shows the energy saving off on a map that never set it, with its hint", () => {
