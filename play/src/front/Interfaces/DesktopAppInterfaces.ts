@@ -93,6 +93,8 @@ export interface DesktopLightControl {
 
 export interface DesktopEnvironmentState {
     graphicsQuality: GraphicsQuality;
+    /** The quality in full, "none" included (graphicsQuality tells it as "custom" to the older apps). */
+    graphicsPreset: GraphicsQuality;
     graphicsMonitoring: boolean;
     graphicsStats?: PerfStats;
     animations: boolean;

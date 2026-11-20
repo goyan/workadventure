@@ -73,7 +73,13 @@ const soundStores = {
 export const desktopEnvironmentRequestSchema = z.discriminatedUnion("setting", [
     z.object({
         setting: z.literal(DesktopVisualSetting.Quality),
-        value: z.enum([GraphicsQuality.Low, GraphicsQuality.Medium, GraphicsQuality.High, GraphicsQuality.Ultra]),
+        value: z.enum([
+            GraphicsQuality.None,
+            GraphicsQuality.Low,
+            GraphicsQuality.Medium,
+            GraphicsQuality.High,
+            GraphicsQuality.Ultra,
+        ]),
     }),
     z.object({ setting: z.literal(DesktopVisualSetting.Metrics), value: z.boolean() }),
     z.object({ setting: z.literal(DesktopVisualSetting.Animations), value: z.boolean() }),
@@ -128,7 +134,11 @@ export function readDesktopEnvironment(busy = false, error = ""): DesktopEnviron
     const scene = get(gameSceneStore);
     if (!scene) return null;
     return {
-        graphicsQuality: get(graphicsQualityStore),
+        // The desktop apps released before the "None" quality check this field against the qualities they know and
+        // drop the whole state on an unknown one: None is told to them as Custom, and to the newer ones in full below.
+        graphicsQuality:
+            get(graphicsQualityStore) === GraphicsQuality.None ? GraphicsQuality.Custom : get(graphicsQualityStore),
+        graphicsPreset: get(graphicsQualityStore),
         graphicsMonitoring: get(desktopGraphicsMetricsRequestedStore),
         graphicsStats: get(perfStatsStore),
         animations: !get(tileAnimationsDisabledStore),
