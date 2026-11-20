@@ -3,7 +3,6 @@ import type { InteractionTrigger } from "@workadventure/map-editor";
 import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRectangles";
 import { getObjectInteraction } from "../../../Utils/ObjectCategories";
 import type { GameScene } from "../GameScene";
-import { isPoolFrozen } from "../Ice/FrozenWater";
 
 /** A rectangle of water in world pixels. */
 export interface WaterRectangle {
@@ -81,7 +80,8 @@ function allWaterRectangles(scene: Phaser.Scene): CachedWater {
             }
         }
     }
-    const frozen = ground.filter((rectangle) => isPoolFrozen(gameScene, rectangle));
+    // Asked of the scene (FrozenWater.ts through GameScene): what the cold does stays out of this module.
+    const frozen = gameScene.isPoolFrozen ? ground.filter((rectangle) => gameScene.isPoolFrozen?.(rectangle)) : [];
     cache = {
         scene,
         frame,

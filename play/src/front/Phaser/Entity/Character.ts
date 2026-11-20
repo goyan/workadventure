@@ -30,7 +30,6 @@ import {
     isWithinOneTileOfWater,
 } from "@wa/front/Phaser/Game/Water/WaterZones";
 import { getIceRectangles, isOnIce } from "@wa/front/Phaser/Game/Ice/IceZones";
-import { isOnFrozenWater } from "@wa/front/Phaser/Game/Ice/FrozenWater";
 import { currentPush } from "@wa/front/Phaser/Game/Terrain/WaterCurrent";
 import type { CurrentVector } from "@wa/front/Phaser/Game/Terrain/WaterCurrent";
 import { moveAnimationType, skateLean, stepLean } from "@wa/front/Phaser/Game/Ice/SkatePose";
@@ -455,7 +454,7 @@ export abstract class Character extends Container implements OutlineableInterfac
         if (this.floorZ >= 2 || isBasicActive()) return false;
         const body = { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y };
         // Frozen, it is skated on, not swum in.
-        if (isOnFrozenWater(this.scene, body)) return false;
+        if (this.scene.isFrozenWaterAt?.(body.x, body.y)) return false;
         return isDeepTerrainWater(this.scene.getTerrainWater?.(), body, this.scene.time.now);
     }
 
@@ -471,7 +470,7 @@ export abstract class Character extends Container implements OutlineableInterfac
         // A drain of the catastrophes pulls the water, never who is in it.
         if (this.scene.isDrainCalm?.(this.x, this.y + BODY_CENTER_OFFSET_Y)) return { x: 0, y: 0 };
         // Under the ice, the current carries nobody.
-        if (isOnFrozenWater(this.scene, { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y })) return { x: 0, y: 0 };
+        if (this.scene.isFrozenWaterAt?.(this.x, this.y + BODY_CENTER_OFFSET_Y)) return { x: 0, y: 0 };
         const strength =
             this.scene.getGameMap().getWamFile()?.getWam().settings?.water?.current ?? DEFAULT_WATER_SETTINGS.current;
         return currentPush(water, this.x, this.y + BODY_CENTER_OFFSET_Y, this.scene.time.now, strength, walkSpeed);
@@ -489,7 +488,7 @@ export abstract class Character extends Container implements OutlineableInterfac
         return (
             (isOnIce(getIceRectangles(this.scene), body) ||
                 isPointInWater(getFrozenPoolRectangles(this.scene), body) ||
-                isOnFrozenWater(this.scene, body)) &&
+                this.scene.isFrozenWaterAt?.(body.x, body.y) === true) &&
             !this.isSwimmingHere()
         );
     }

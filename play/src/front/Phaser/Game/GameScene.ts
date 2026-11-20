@@ -382,7 +382,7 @@ import { WeatherManager } from "./Weather/WeatherManager";
 import { TerrainWater } from "./Terrain/TerrainWater";
 import { AquaticLife } from "./Life/AquaticLife";
 import { AquaticLifeView } from "./Life/AquaticLifeView";
-import { isOnFrozenWater } from "./Ice/FrozenWater";
+import { isOnFrozenWater, isPoolFrozen } from "./Ice/FrozenWater";
 import { FrozenPoolsView } from "./Ice/FrozenPoolsView";
 import { LandLifeView } from "./Life/LandLifeView";
 import { GullLifeView, isGullKind } from "./Life/GullLifeView";
@@ -3088,6 +3088,16 @@ export class GameScene extends DirtyScene {
     }
 
     /** Whether a point of the map (pixels) is in or near an open drain: the current carries no avatar there. */
+    /** Whether the water of the relief is frozen there for this player (FrozenWater.ts): skated on, not swum in. */
+    public isFrozenWaterAt(x: number, y: number): boolean {
+        return isOnFrozenWater(this, { x, y });
+    }
+
+    /** Whether a pool of the ground is frozen for this player (FrozenWater.ts): its water is no water then. */
+    public isPoolFrozen(pool: { x: number; y: number; width: number; height: number; entityId?: string }): boolean {
+        return isPoolFrozen(this, pool);
+    }
+
     public isDrainCalm(x: number, y: number): boolean {
         return this.drainView?.calms(x, y) ?? false;
     }

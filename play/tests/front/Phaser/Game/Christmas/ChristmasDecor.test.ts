@@ -9,7 +9,13 @@ const prints = vi.hoisted(() => ({
     destroy: vi.fn(),
     count: 0,
 }));
-const ground = vi.hoisted(() => ({ draw: vi.fn(), setVisible: vi.fn(), setAlpha: vi.fn(), destroy: vi.fn() }));
+const ground = vi.hoisted(() => ({
+    draw: vi.fn(),
+    follow: vi.fn(() => false),
+    setVisible: vi.fn(),
+    setAlpha: vi.fn(),
+    destroy: vi.fn(),
+}));
 const caps = vi.hoisted(() => ({ rebuild: vi.fn(), setVisible: vi.fn(), setAlpha: vi.fn(), destroy: vi.fn() }));
 vi.mock("../../../../../src/front/Phaser/Game/Christmas/FootprintLayer", () => ({
     FootprintLayer: class {
@@ -26,6 +32,7 @@ vi.mock("../../../../../src/front/Phaser/Game/Christmas/FootprintLayer", () => (
 vi.mock("../../../../../src/front/Phaser/Game/Christmas/SnowGround", () => ({
     SnowGround: class {
         public draw = ground.draw;
+        public follow = ground.follow;
         public setVisible = ground.setVisible;
         public setAlpha = ground.setAlpha;
         public destroy = ground.destroy;
