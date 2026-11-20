@@ -250,6 +250,18 @@ describe("the fire spreading", () => {
         expect(meadow.burning()).toBe(0);
         expect(meadow.ashAt(0, 0)).toBe(1);
         expect(meadow.ashAt(20, 20)).toBe(1);
+        // The grass comes back over the whole map, and nothing takes fire again. Then its own rules hold: this dry
+        // soil makes it die slowly of thirst.
+        run(meadow, 530, lucky);
+        expect(meadow.burning()).toBe(0);
+        for (const [x, y] of [
+            [0, 0],
+            [10, 10],
+            [20, 20],
+        ]) {
+            expect(meadow.ashAt(x, y)).toBe(0);
+            expect(meadow.grassAt(x, y)).toBeGreaterThan(0.7);
+        }
     });
 });
 
@@ -356,6 +368,9 @@ describe("the ash", () => {
         next.takeFrom(meadow);
         expect(next.ashAt(10, 10)).toBe(1);
         expect(next.fireAt(3, 3)).toBeGreaterThan(0);
+        // The ash that just went out stays whole as long on the edited map.
+        next.step(night);
+        expect(next.ashAt(10, 10)).toBe(1);
     });
 });
 

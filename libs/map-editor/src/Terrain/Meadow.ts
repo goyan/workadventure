@@ -708,6 +708,7 @@ export class Meadow {
                 this.fire[index] = previous.fireAt(tileX, tileY);
                 this.fuel[index] = this.fire[index] > 0 ? Math.max(this.fuelOf(index), FIRE_MIN_FUEL) : 0;
                 this.ash[index] = previous.ashAt(tileX, tileY);
+                this.smoulder[index] = previous.smoulder[tileY * previous.width + tileX];
             }
         }
     }
