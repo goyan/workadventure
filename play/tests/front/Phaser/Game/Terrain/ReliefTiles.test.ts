@@ -19,7 +19,7 @@ function dugEverywhere(): TerrainData {
 function fixture(
     terrain: TerrainData | undefined = dugEverywhere(),
     meadow?: MeadowState,
-    options: { layout?: GroundLayout; season?: () => Season | undefined } = {},
+    options: { layout?: GroundLayout; season?: () => Season | undefined; snowLineSeason?: Season } = {},
 ) {
     const worldView = { x: 300, y: 300, width: 600, height: 400 };
     const images: { visible: boolean }[] = [];
@@ -71,6 +71,7 @@ function fixture(
         water,
         season: options.season ?? (() => undefined),
         snowShown: () => 0,
+        snowLineSeason: () => options.snowLineSeason,
     });
     // Updates until every block around the view is drawn: a block is drawn over several images, as many as the machine
     // needs (more under the load of the whole suite).
@@ -89,6 +90,8 @@ function fixture(
     };
     return { tiles, worldView, images, settle, painted, setTerrain, scene, water, clock: () => clock, skip };
 }
+
+const near = (value: number, expected: number) => expect(Math.abs(value - expected)).toBeLessThanOrEqual(2);
 
 describe("the blocks of the relief seen in 3/4", () => {
     it("draws no block again while the view scrolls or zooms over drawn blocks", () => {
@@ -244,6 +247,71 @@ describe("the blocks of the relief seen in 3/4", () => {
         const dug = timeOf(mountOnSand(-128));
         const raised = timeOf(mountOnSand(128));
         expect(raised).toBeLessThan(dug * 1.5 + 10);
+    });
+
+    describe("a mount from end to end", () => {
+        /** mountOnSand, the mount in rock: told apart from the sand around it. */
+        const rockMount = (): TerrainData => {
+            const rock = new Map<string, number>();
+            for (let x = 20; x <= 27; x++) for (let y = 20; y <= 27; y++) rock.set(cellKey(x, y), 5);
+            return withSoils(mountOnSand(128), rock);
+        };
+        const isOf = (ramp: readonly (readonly number[])[], block: Uint8ClampedArray, column: number, row: number) => {
+            const at = (row * 256 + column) * 4;
+            return ramp.some(
+                (shade) => shade[0] === block[at] && shade[1] === block[at + 1] && shade[2] === block[at + 2],
+            );
+        };
+        const RIM: Rgb = [0x2a, 0x24, 0x20];
+
+        it("draws its top higher by half its height, over the ground behind it, cerned at its foot", () => {
+            const { settle, painted } = fixture(rockMount());
+            settle();
+            const block = painted.get("relief-block:1,1");
+            if (!block) throw new Error("no block");
+            // The column x 356. The top of the mount at y 340 is drawn at 276 (row 20), in rock.
+            expect(isOf(RAMPS.rock, block, 100, 20)).toBe(true);
+            // The sand at y 300, north of the mount, is drawn at 304 (row 48) beside it; there the mount hides it.
+            expect(isOf(RAMPS.sand, block, 40, 48)).toBe(true);
+            expect(isOf(RAMPS.sand, block, 100, 48)).toBe(false);
+            // Nothing drawn above the top of the mount but the sand of the ground there.
+            expect(isOf(RAMPS.rock, block, 100, 2)).toBe(false);
+            // The foot of its south flank, cerned (drawn from 376 down to 460, the rows 120 to 204).
+            let rims = 0;
+            for (let row = 190; row <= 210; row++) {
+                const at = (row * 256 + 100) * 4;
+                if (block[at] === RIM[0] && block[at + 1] === RIM[1] && block[at + 2] === RIM[2]) rims++;
+            }
+            expect(rims).toBe(1);
+        });
+
+        it("wears snow on its top over the snow line of the season", () => {
+            const { settle, painted } = fixture(mountOnSand(128), undefined, {
+                season: () => Season.Winter,
+                snowLineSeason: Season.Winter,
+            });
+            settle();
+            const block = painted.get("relief-block:1,1");
+            if (!block) throw new Error("no block");
+            const winter = rampsFor(Season.Winter);
+            expect(isOf(winter.snow, block, 100, 40)).toBe(true);
+            // The sand south of it, below the snow line: no snow.
+            expect(isOf(winter.snow, block, 100, 240)).toBe(false);
+        });
+
+        it("is drawn flat while the map is edited, and found where it is drawn in 3/4", () => {
+            const { settle, painted, tiles } = fixture(rockMount());
+            settle();
+            near(tiles.groundPointAt({ x: 356, y: 340 - 64 }).y, 340);
+            tiles.setProjected(false);
+            settle();
+            const block = painted.get("relief-block:1,1");
+            if (!block) throw new Error("no block");
+            // Flat: the sand at y 276 at its place (row 20), the mount at its place only (row 84).
+            expect(isOf(RAMPS.sand, block, 100, 20)).toBe(true);
+            expect(isOf(RAMPS.rock, block, 100, 84)).toBe(true);
+            expect(tiles.groundPointAt({ x: 356, y: 276 }).y).toBe(276);
+        });
     });
 
     /** A flat floor dug 64 px deep over 64 × 64 cells, sand from the cell `sandFrom` on (x = 16 × sandFrom). */
