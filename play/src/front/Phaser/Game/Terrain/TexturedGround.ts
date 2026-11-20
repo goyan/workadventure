@@ -18,7 +18,7 @@ export const GROUND_TEXTURES = {
     sand: "/resources/terrain/ground-sand.png?v=2",
     rock: "/resources/terrain/ground-rock.png?v=7",
     gravel: "/resources/terrain/ground-gravel.png",
-    grass: "/resources/objects/weather/terrain-green.png",
+    grass: "/resources/terrain/ground-grass.png",
     autumnGrass: "/resources/objects/weather/terrain-autumn.png",
     snow: "/resources/objects/weather/terrain-snow.png",
     water: "/resources/terrain/ground-water-0.png",
