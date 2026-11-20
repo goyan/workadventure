@@ -25,8 +25,8 @@ import { ReliefTileSchedule, reliefSignature } from "./ReliefTileSchedule";
 import { DEEP_WATER_COLOR, deepWaterAlpha, SHALLOW_WATER, SHORE_PX, SHORE_WATER } from "./TerrainShading";
 import type { TerrainWater } from "./TerrainWater";
 
-/** Over the relief of the ground (0.65), under the objects and the avatars. */
-const RELIEF_TILES_DEPTH = 0.66;
+/** The ground outdoors: under the foam and the life of the water (0.66), the objects and the avatars. */
+export const RELIEF_TILES_DEPTH = 0.655;
 /** Map pixels across a block: one chunk of the relief. */
 const BLOCK_PX = TERRAIN_CHUNK * TERRAIN_CELL;
 const BLOCK_TEXELS = BLOCK_PX / RELIEF_TEXEL;

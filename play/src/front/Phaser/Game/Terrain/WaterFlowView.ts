@@ -27,7 +27,7 @@ export interface WaterFlowViewOptions {
 }
 
 /** Over the water of the relief (0.65), under the puddles (0.7), the objects and the avatars. */
-const FOAM_DEPTH = 0.66;
+export const FOAM_DEPTH = 0.66;
 /** The whirls and the rings: over the floors and the floor objects (a sink may be one), under every character. */
 const MARKS_DEPTH = FLOOR_OBJECT_DEPTH + 0.44;
 /** The moving water is drawn 15 times a second, as the leaves of the trees: each drawing draws the map again. */

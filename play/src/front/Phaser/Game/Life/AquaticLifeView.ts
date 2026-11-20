@@ -5,7 +5,7 @@ import type { AquaticLife } from "./AquaticLife";
 import { ensureAquaticTexture } from "./AquaticSprites";
 
 /** Just above the relief and its water (TERRAIN_DEPTH in TerrainView), under the objects and the avatars. */
-const AQUATIC_DEPTH = 0.66;
+export const AQUATIC_DEPTH = 0.66;
 /** An animal this close to the screen counts as on it: its image is wider than its point. */
 const MARGIN_PX = 32;
 /** Seen through the water. */
