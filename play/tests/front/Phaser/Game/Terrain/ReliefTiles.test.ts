@@ -396,6 +396,18 @@ describe("the blocks of the relief seen in 3/4", () => {
             expect(tiles.redraws()).toBeGreaterThan(painted);
         });
 
+        it("hides the blocks drawn in 3/4 as soon as the editor opens, until they are drawn flat", () => {
+            const { settle, tiles, images } = fixture(sandBlock(), undefined, { layout });
+            settle();
+            expect(images.some((image) => image.visible)).toBe(true);
+            tiles.setProjected(false);
+            tiles.update(10_000);
+            // Not one block left in the old way: they would not match the clicks nor the avatars.
+            expect(images.filter((image) => image.visible).length).toBeLessThanOrEqual(1);
+            settle();
+            expect(images.some((image) => image.visible)).toBe(true);
+        });
+
         it("draws a block again when a room is built over it", () => {
             const { settle, tiles } = fixture(sandBlock(), undefined, { layout });
             settle();

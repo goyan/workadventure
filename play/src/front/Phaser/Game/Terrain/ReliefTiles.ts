@@ -117,6 +117,8 @@ export interface GroundLayout {
 interface Block {
     texture: Phaser.Textures.CanvasTexture;
     image: Phaser.GameObjects.Image;
+    /** Whether it was last drawn in 3/4: hidden while the relief is shown the other way, until it is drawn again. */
+    projected: boolean;
 }
 
 /**
@@ -203,6 +205,8 @@ export class ReliefTiles {
     public setProjected(projected: boolean): void {
         if (projected === this.projected) return;
         this.projected = projected;
+        // A block drawn the other way would not match the clicks nor the avatars: hidden until it is drawn again.
+        for (const block of this.blocks.values()) block.image.setVisible(!this.hidden && block.projected === projected);
         this.schedule.forget();
         this.scene.markDirty();
     }
@@ -217,7 +221,7 @@ export class ReliefTiles {
     public setHidden(hidden: boolean): void {
         if (hidden === this.hidden) return;
         this.hidden = hidden;
-        for (const block of this.blocks.values()) block.image.setVisible(!hidden);
+        for (const block of this.blocks.values()) block.image.setVisible(!hidden && block.projected === this.projected);
         // What changed while it was hidden is drawn again when it shows.
         if (!hidden) this.schedule.forget();
         this.scene.markDirty();
@@ -401,7 +405,7 @@ export class ReliefTiles {
             .setDisplaySize(BLOCK_PX, BLOCK_PX)
             .setDepth(RELIEF_TILES_DEPTH)
             .setVisible(!this.hidden);
-        const block = { texture, image };
+        const block = { texture, image, projected: this.projected };
         this.blocks.set(key, block);
         return block;
     }
@@ -627,6 +631,7 @@ export class ReliefTiles {
         }
         context.putImageData(pixels, 0, 0);
         refreshCanvasTexture(block.texture);
+        block.projected = this.projected;
         block.image.setVisible(!this.hidden);
         this.scene.markDirty();
     }
