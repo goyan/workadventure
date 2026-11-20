@@ -2417,7 +2417,17 @@ calendrier** (`SeasonalThemeManager.groundSeason`, `Pixel/PixelPalette.ts` `ramp
 dense au printemps (plus rares en été), feuilles tombées en automne. Dans l'éditeur, le sol est dessiné à plat dans le
 même style (eau plus transparente pendant l'outil Relief) ; rien en mode Basique. `TerrainView` et les deux couches
 `SnowGround` (herbe d'automne, neige de l'hiver) sont retirées. **Traces de pas** (`Terrain/Footprints.ts`) : toute
-l'année, dans la neige, la boue et le sable, de la couleur du sol, posées au fond d'un trou à son décalage. **Avatars** : chacun, le sien et ceux des autres, est dessiné plus bas de la
+l'année, dans la neige, la boue et le sable, de la couleur du sol, posées au fond d'un trou à son décalage.
+
+**L'eau** (lot C) : dans les mêmes blocs, en pixel art (`Pixel/WaterPixel.ts`) : 4 teintes de la saison (été plus
+turquoise, automne plus sombre, hiver plus pâle), plus sombre avec la profondeur, écume claire sous 3 px, bord gelé
+sous 6 px en hiver ; pendant l'outil Relief, un pixel sur deux de la trame laisse voir le fond. Un bloc n'est redessiné
+que si l'eau d'une de ses cellules change de 2 px (`WATER_STEP_PX`). **Reflets** (`Terrain/WaterGlints.ts`) : quelques
+points d'1-2 px qui s'allument et s'éteignent sur l'eau d'au moins 2 px, redessinés 8 fois par seconde au plus sans
+toucher aux blocs ; aucun en mouvement réduit, en mode Basique ni très dézoomé. **Écume du courant**, tourbillons et
+ronds des sources tracés en pixels entiers (`pixelRun`, `ringPixels`). **Poissons, dauphins, bouchon de pêche et
+reflets** sont posés à la surface de l'eau dessinée, au fond d'un trou en 3/4 (`GameScene.surfaceDropAt`) ; rien n'est
+décalé sur un pont ni dans l'éditeur. La canne reste à la place vraie de l'avatar. **Avatars** : chacun, le sien et ceux des autres, est dessiné plus bas de la
 profondeur du sol (ou de la surface de l'eau où il nage) sous lui (`Terrain/AvatarDrop.ts`), seulement le temps du
 dessin (`Terrain/CharacterDrops.ts`, comme les arbres au vent) ; son nom suit (`Character.setGroundDrop`) ; rien sur
 un palier. **Clic** et altitude sous le pointeur passent par `groundPointAt` : un clic sur une paroi mène à son pied.
