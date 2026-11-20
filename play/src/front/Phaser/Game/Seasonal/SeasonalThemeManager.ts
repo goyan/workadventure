@@ -61,7 +61,7 @@ interface ActiveDecor {
 
 /**
  * The personal seasonal theme outdoors: picks the theme, and creates, shows, hides and destroys its decor. The map snow
- * is a second, Christmas decor fading in over the theme one as the snow builds up, and out as it melts.
+ * is a second, snow decor (Christmas/) fading in over the theme one as the snow builds up, and out as it melts.
  */
 export class SeasonalThemeManager {
     private readonly unsubscribers: Unsubscriber[] = [];
@@ -70,7 +70,7 @@ export class SeasonalThemeManager {
     private theme: SeasonalTheme | undefined;
     private lastCheck = -Infinity;
     private active: ActiveDecor | undefined;
-    /** The Christmas decor of the map snow, when it lies and the theme decor is not already Christmas. */
+    /** The snow decor of the map snow, while it lies. */
     private snow: ActiveDecor | undefined;
 
     constructor(
@@ -107,8 +107,7 @@ export class SeasonalThemeManager {
         }
         if (this.active && this.active.theme !== this.theme) this.removeDecor();
         const snowAlpha = this.snowAlpha();
-        // The Christmas theme already shows its snow, fully.
-        const snowDecor = snowAlpha > 0 && this.theme !== SeasonalTheme.Christmas;
+        const snowDecor = snowAlpha > 0;
         if (!snowDecor) this.removeSnowDecor();
         const grid = this.deps.outdoorGrid();
         if (!grid) return;

@@ -2884,20 +2884,29 @@ plus ; la piste de danse et la lumière des fenêtres, plus bas, sont voilées c
 Limites : le brouillard du dehors reste sous les lumières (une lampe dehors le perce comme avant) ; pluie et neige
 gardent leur voile au dehors seul.
 
-**Thème saisonnier** (« Paramètres → Ambiance → Thème saisonnier ») : Auto, Automne, Noël, Aucun. Réglage perso
+**Thème saisonnier** (« Paramètres → Ambiance → Thème saisonnier ») : Auto, Automne, Aucun (Noël retiré, voir plus bas). Réglage perso
 (`seasonalTheme` dans le navigateur), appliqué sans recharger. Il remplace « Thème de Noël » (repris une fois :
-Toujours → Noël, Jamais → Aucun) et « Sol extérieur » (effacé). Auto suit le calendrier de Paris, revérifié chaque
-minute : automne du 1er septembre au 30 novembre, Noël du 1er décembre au 6 janvier ; tant que l'heure du serveur
+Toujours → Auto depuis le retrait de Noël, Jamais → Aucun) et « Sol extérieur » (effacé). Auto suit le calendrier de
+Paris, revérifié chaque minute : automne du 1er septembre au 30 novembre ; tant que l'heure du serveur
 n'est pas reçue, Auto n'affiche rien (`Seasonal/SeasonalTheme.ts`). `SeasonalThemeManager` crée le décor du thème
 (`SeasonalDecor`), le masque pendant l'édition et le reconstruit quand un mur ou un objet change.
+
+**Thème Noël retiré** le 2026-11-20, à la demande de l'utilisateur (« la neige est une résultante des conditions
+météo, ce n'est pas un script ») : son sol de neige uni cachait la texture des tuiles. Plus de choix « Noël » (un choix
+enregistré, l'ancien réglage « Toujours » et la commande « christmas: always » de l'app de bureau valent Auto), Auto
+ne passe plus en hiver, et rien de ce que le thème forçait ne s'affiche : flocons et météo Neige pour soi
+(`effectiveWeather` retiré), sol uni, calottes, empreintes, arbres en image d'hiver (`forcedTreeSeason`) et neige sur
+les arbres. Le code du décor de neige (`Christmas/` : `ChristmasDecor`, `SnowGround`, calottes, empreintes) reste :
+la météo « Neige » de la carte le fond à proportion de sa couverture (même sol uni) et la PR #392 le modifie ;
+`SeasonalTheme.Christmas` n'y est plus que le nom de ce décor.
 
 - **Noël** (`Christmas/ChristmasDecor.ts`) : la météo affichée pour soi devient Neige (flocons et son de la météo
   existante), le sol extérieur se couvre de neige bleutée, les objets dehors portent une neige épaisse sur leur bord du
   haut, les sols posés dehors sont givrés, et chaque joueur laisse des empreintes (une tous les 16 px en marche, une
   trace en course, fondu en 45 s, 400 au plus). Les arbres saisonniers prennent leur image d'hiver, sans neige ajoutée.
 - **Automne** (`Autumn/`) : la météo de la carte est gardée ; l'herbe prend la texture d'automne d'Amine, les arbres
-  leur image d'automne ; feuilles au sol venues des arbres (voir ci-dessous), feuilles qui tombent (couche de la
-  boucle météo, même par temps clair), tas de feuilles au pied des objets là où le sol porte des feuilles (arbres
+  leur image d'automne ; feuilles au sol venues des arbres (voir ci-dessous), feuilles qui tombent du feuillage
+  (`Nature/TreeLeafFall.ts`), tas de feuilles au pied des objets là où le sol porte des feuilles (arbres
   compris), feuilles soulevées par les pas au même endroit (3-4 feuilles de 5×3 px tous les 24 px en marche, 5-6 tous
   les 16 px en course, 120 au plus). Palette `#c8642a`, `#d9a23b`, `#9b3d23`, `#7a5a2e` ; aucune image ajoutée.
 
@@ -2925,7 +2934,9 @@ relues sur leur sol, et la couche n'est redessinée que si l'une d'elles est att
 (`LeafScatterLayer.refreshGround`). Rien de loin (`seenFromFar`). Front seul.
 
 Empreintes et feuilles soulevées sont calculées par chaque navigateur depuis les positions déjà reçues : rien sur le
-réseau. « Afficher la météo » coupé retire aussi ce qui tombe (flocons de Noël, feuilles) ; le reste suit le thème.
+réseau. « Afficher la météo » coupé retire aussi les flocons de Noël ; le reste suit le thème. Plus aucune feuille ne
+tombe du ciel (2026-11-20 : la boucle météo en semait partout dehors, mer et lacs compris, sans rapport avec les
+arbres, `leafParticles` retiré) : en automne, toutes les feuilles viennent des arbres.
 Sans thème, la neige de la carte tient sur l'herbe pour tout le monde (elle était réservée à « Suivre la saison et la
 météo »).
 
