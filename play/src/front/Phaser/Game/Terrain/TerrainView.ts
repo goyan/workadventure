@@ -14,6 +14,7 @@ import { createBlockSurface } from "../Weather/BlockSurface";
 import type { BlockCanvasArea, BlockSnapshot, BlockSurface } from "../Weather/BlockSurface";
 import { paddedView, wellInside } from "../Weather/WeatherFrame";
 import type { WeatherView } from "../Weather/WeatherFrame";
+import { isBasicActive } from "../../../Stores/BasicModeStore";
 import {
     DEEP_WATER_COLOR,
     deepWaterAlpha,
@@ -113,7 +114,8 @@ export class TerrainView {
     }
 
     public update(now: number): void {
-        if (!this.water.hasAnything() && !this.meadow?.hasGrass()) {
+        // Basique shows the ground of the map as it is: no water, relief, soils nor grass drawn over it.
+        if (isBasicActive() || (!this.water.hasAnything() && !this.meadow?.hasGrass())) {
             if (this.visible) {
                 this.surface.hide();
                 this.visible = false;

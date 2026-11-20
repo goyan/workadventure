@@ -3,6 +3,7 @@ import type { Unsubscriber } from "svelte/store";
 import { localUserStore } from "../../Connection/LocalUserStore";
 import { karaokeSpotlightStore } from "../../Karaoke/KaraokeShow";
 import type { Character } from "../Entity/Character";
+import { isEffectShown } from "../../Stores/EffectsStore";
 import type { GameScene } from "./GameScene";
 import { nerfGunPose } from "./Nerf/NerfProtocol";
 
@@ -34,7 +35,7 @@ export class KaraokeSpotlight {
     }
 
     public update(time: number): void {
-        const lit = this.singerCharacters();
+        const lit = isEffectShown("karaokeSpotlight") ? this.singerCharacters() : [];
         this.updateMics(lit, time);
         if (!lit.length) {
             if (this.shown) {

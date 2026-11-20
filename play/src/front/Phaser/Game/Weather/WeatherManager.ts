@@ -16,6 +16,7 @@ import type { GameScene } from "../GameScene";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { SeasonalTheme } from "../Seasonal/SeasonalTheme";
 import type { SunPosition } from "../Night/NightClock";
+import { unlessBasic } from "../../../Stores/BasicModeStore";
 import type { RaisedCover } from "./RaisedCover";
 import {
     effectiveWeather,
@@ -199,8 +200,8 @@ export class WeatherManager {
         this.snowGround = new SnowGround(scene);
         this.unsubscribers = [
             mapEditorModeStore.subscribe((editing) => (this.editing = editing)),
-            weatherEffectsEnabledStore.subscribe((shown) => (this.weatherShown = shown)),
-            cloudsShownStore.subscribe((shown) => (this.cloudsShown = shown)),
+            unlessBasic(weatherEffectsEnabledStore).subscribe((shown) => (this.weatherShown = shown)),
+            unlessBasic(cloudsShownStore).subscribe((shown) => (this.cloudsShown = shown)),
             cloudsHeightStore.subscribe((height) => (this.cloudsHeight = height)),
             rainAmountStore.subscribe((value) => (this.rainSettings.amount = value)),
             rainLeanStore.subscribe((value) => (this.rainSettings.lean = value)),

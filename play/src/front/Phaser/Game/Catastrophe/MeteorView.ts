@@ -3,6 +3,7 @@ import { METEOR_DEFAULT_TILES, METEOR_FALL_MS, meteorShape, TERRAIN_CELL } from 
 import type { MeteorShape } from "@workadventure/map-editor";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import { LAMP_MIN_FLASH_INTERVAL_MS } from "../Lamps/LampSignal";
+import { isEffectShown } from "../../../Stores/EffectsStore";
 import { flashAllowed, meteorFrame, waveCircles, wetStretches } from "./MeteorFall";
 
 /** The meteor of the usual size is drawn this wide; the others in proportion to their crater. */
@@ -73,6 +74,12 @@ export class MeteorView {
     }
 
     public update(now: number): void {
+        // Turned off on this computer: the meteors fall unseen (their craters and waves are the server's).
+        const visible = isEffectShown("meteor");
+        if (this.graphics.visible !== visible) {
+            this.graphics.setVisible(visible);
+            this.scene.markDirty();
+        }
         if (this.meteors.length === 0) return;
         const graphics = this.graphics;
         graphics.clear();
