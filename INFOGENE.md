@@ -2420,8 +2420,8 @@ même style (eau plus transparente pendant l'outil Relief) ; rien en mode Basiqu
 l'année, dans la neige, la boue et le sable, de la couleur du sol, posées au fond d'un trou à son décalage.
 
 **L'eau** (lot C) : dans les mêmes blocs, en pixel art (`Pixel/WaterPixel.ts`) : 4 teintes de la saison (été plus
-turquoise, automne plus sombre, hiver plus pâle), plus sombre avec la profondeur, écume claire sous 3 px, bord gelé
-sous 6 px en hiver ; pendant l'outil Relief, un pixel sur deux de la trame laisse voir le fond. Un bloc n'est redessiné
+turquoise, automne plus sombre, hiver plus pâle), plus sombre avec la profondeur, la teinte la plus claire sous 3 px, un liseré d'écume d'1 px au bord (de
+glace en hiver) ; pendant l'outil Relief, un pixel sur deux de la trame laisse voir le fond. Un bloc n'est redessiné
 que si l'eau d'une de ses cellules change de 2 px (`WATER_STEP_PX`). **Reflets** (`Terrain/WaterGlints.ts`) : quelques
 points d'1-2 px qui s'allument et s'éteignent sur l'eau d'au moins 2 px, redessinés 8 fois par seconde au plus sans
 toucher aux blocs ; aucun en mouvement réduit, en mode Basique ni très dézoomé. **Écume du courant**, tourbillons et
