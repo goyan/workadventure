@@ -7,6 +7,8 @@ import {
     FOAM_MIN_DEPTH_PX,
     FOAM_SPEED,
     foamStreak,
+    pixelRun,
+    ringPixels,
     sourceRings,
     WaterFoam,
     wetAround,
@@ -166,5 +168,28 @@ describe("the whirl of a sink and the rings of a source", () => {
                 0,
             ),
         ).toBe(0);
+    });
+});
+
+describe("the foam drawn in pixels", () => {
+    it("runs from one end to the other through whole, touching pixels", () => {
+        const run = pixelRun(2.4, 3.6, 9.2, 6.1);
+        expect(run[0]).toEqual({ x: 2, y: 4 });
+        expect(run[run.length - 1]).toEqual({ x: 9, y: 6 });
+        expect(run).toHaveLength(Math.max(7, 2) + 1);
+        for (let index = 1; index < run.length; index++) {
+            expect(Math.abs(run[index].x - run[index - 1].x)).toBeLessThanOrEqual(1);
+            expect(Math.abs(run[index].y - run[index - 1].y)).toBeLessThanOrEqual(1);
+            expect(Number.isInteger(run[index].x) && Number.isInteger(run[index].y)).toBe(true);
+        }
+        expect(pixelRun(5, 5, 5, 5)).toEqual([{ x: 5, y: 5 }]);
+    });
+
+    it("draws a ring as whole pixels around its centre, at its radius", () => {
+        const ring = ringPixels(100, 100, 12);
+        expect(ring.length).toBeGreaterThan(40);
+        for (const pixel of ring) {
+            expect(Math.abs(Math.hypot(pixel.x - 100, pixel.y - 100) - 12)).toBeLessThanOrEqual(1.5);
+        }
     });
 });
