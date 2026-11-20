@@ -23,7 +23,6 @@ export class PerfMonitor {
     private readonly unsubscribe: Unsubscriber;
     private listening = false;
     private frameStart = 0;
-    private updateMs = 0;
     private renderStart = 0;
 
     constructor(
@@ -41,8 +40,12 @@ export class PerfMonitor {
         this.frameStart = this.now();
     };
 
+    // Every step of the game counts as an image, drawn again or not: the game draws only what changed.
     private readonly onPostUpdate = (): void => {
-        this.updateMs = this.now() - this.frameStart;
+        const stats = this.meter.step(this.frameStart, this.now() - this.frameStart);
+        if (stats) {
+            perfStatsStore.set(stats);
+        }
     };
 
     private readonly onPreRender = (): void => {
@@ -50,10 +53,7 @@ export class PerfMonitor {
     };
 
     private readonly onPostRender = (): void => {
-        const stats = this.meter.frame(this.frameStart, this.updateMs, this.now() - this.renderStart);
-        if (stats) {
-            perfStatsStore.set(stats);
-        }
+        this.meter.drawn(this.now() - this.renderStart);
     };
 
     private listen(): void {

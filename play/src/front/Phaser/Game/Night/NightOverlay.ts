@@ -1,5 +1,6 @@
 import * as Phaser from "phaser";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
+import { LampSteadiness, MASK_FROM_LAMPS } from "./NightLampMask";
 import type { NightFrame } from "./NightRenderDecision";
 
 /** Night blue of the veil. */
@@ -93,6 +94,11 @@ export class NightOverlay {
     private readonly discs: Phaser.GameObjects.Image[] = [];
     // And for the RGB lamps: one image per lamp, showing the texture its light is drawn in.
     private readonly lampLights: Phaser.GameObjects.Image[] = [];
+    // The lights of the lamps that do not change, all in one texture kept from a drawing to the next: the veil is
+    // pierced with it in one go (see LampSteadiness). Made on the first night with enough lamps.
+    private mask: Phaser.GameObjects.RenderTexture | undefined;
+    private maskKey: string | undefined;
+    private readonly steadiness = new LampSteadiness();
     private textureWidth = 0;
     private textureHeight = 0;
 
@@ -121,6 +127,8 @@ export class NightOverlay {
             this.textureWidth = width;
             this.textureHeight = height;
             this.texture.resize(width, height);
+            this.mask?.resize(width, height);
+            this.maskKey = undefined;
         }
         this.texture
             .setScale(1 / zoom)
@@ -173,25 +181,39 @@ export class NightOverlay {
 
         // An RGB lamp lights the same by day and by night: the veil is pierced with the very shape of its light,
         // shadows included (the texture is drawn by RgbLampVisual).
+        const shown = frame.lamps.filter(
+            (lamp) =>
+                lamp.x + lamp.size > view.x &&
+                lamp.y + lamp.size > view.y &&
+                lamp.x < view.x + view.width &&
+                lamp.y < view.y + view.height &&
+                this.scene.textures.exists(lamp.textureKey),
+        );
         let lampsUsed = 0;
-        for (const lamp of frame.lamps) {
-            if (
-                lamp.x + lamp.size <= view.x ||
-                lamp.y + lamp.size <= view.y ||
-                lamp.x >= view.x + view.width ||
-                lamp.y >= view.y + view.height ||
-                !this.scene.textures.exists(lamp.textureKey)
-            ) {
-                continue;
-            }
-            const light = this.lampLight(lampsUsed++);
-            light
+        const lightOf = (lamp: (typeof shown)[number]): Phaser.GameObjects.Image =>
+            this.lampLight(lampsUsed++)
                 .setTexture(lamp.textureKey)
                 .setDisplaySize(lamp.size * zoom, lamp.size * zoom)
                 .setPosition((lamp.x - view.x) * zoom, (lamp.y - view.y) * zoom)
                 // A dimmed torch takes less of the veil away; the images are shared by all lights, set each time.
                 .setAlpha(lamp.intensity ?? 1);
-            this.texture.erase(light);
+        const { steady, moving, key } = this.steadiness.split(shown);
+        if (steady.length >= MASK_FROM_LAMPS) {
+            // The lamps that do not change: their lights drawn once over each other into the mask (as opaque
+            // together as the veil they take away one after the other), kept while they and the view stay the same.
+            const maskKey = `${view.x},${view.y},${view.width},${view.height},${zoom},${width}x${height}|${key}`;
+            this.mask ??= this.scene.make.renderTexture({ x: 0, y: 0, width, height }, false).setOrigin(0, 0);
+            if (maskKey !== this.maskKey) {
+                this.maskKey = maskKey;
+                this.mask.clear();
+                for (const lamp of steady) this.mask.draw(lightOf(lamp));
+                this.mask.render();
+            }
+            this.texture.erase(this.mask);
+            for (const lamp of moving) this.texture.erase(lightOf(lamp));
+        } else {
+            this.maskKey = undefined;
+            for (const lamp of shown) this.texture.erase(lightOf(lamp));
         }
 
         this.texture.render();
@@ -204,6 +226,7 @@ export class NightOverlay {
 
     public destroy(): void {
         this.texture.destroy();
+        this.mask?.destroy();
         for (const brush of this.brushes) {
             brush.destroy();
         }
