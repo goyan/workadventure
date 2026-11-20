@@ -57,7 +57,7 @@ describe("construction floor picker", () => {
         expect(target.querySelector('[role="menu"]')).toBeNull();
         expect(target.querySelector('[aria-haspopup="menu"]')?.textContent).toContain("Étage 2");
     });
-    it("names the floors one after the other from the ground, without the wall heights that have no slab", async () => {
+    it("offers every level, with or without slabs, named by its height and by its rank when it has slabs", async () => {
         flushSync(() => {
             component = mount(FloorLevelPicker, { target });
         });
@@ -65,7 +65,42 @@ describe("construction floor picker", () => {
         const names = [...target.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].map((button) =>
             button.textContent?.replace("●", "").trim(),
         );
-        expect(names.filter((name) => !name?.startsWith("Auto"))).toEqual(["Étage 2", "Étage 1", "Sol"]);
+        expect(names.filter((name) => !name?.startsWith("Auto"))).toEqual([
+            "Niveau 4 · Étage 2",
+            "Niveau 3",
+            "Niveau 2 · Étage 1",
+            "Sol",
+        ]);
+    });
+    it("offers the low level of the bridges before anything is laid on it", async () => {
+        mapLayerBuiltLevelsStore.set([]);
+        mapLayerLevelsStore.set([20, 52, 84, 116]);
+        mapEditorPlacementLevelStore.set(0);
+        flushSync(() => {
+            component = mount(FloorLevelPicker, { target });
+        });
+        await openMenu();
+        const option = [...target.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find(
+            (button) => button.textContent?.replace("●", "").trim() === "Niveau 1",
+        );
+        expect(option).toBeDefined();
+        flushSync(() => option?.click());
+        expect(get(mapEditorPlacementLevelStore)).toBe(20);
+    });
+    it("steps with the arrows through every level, not only the ones that have slabs", () => {
+        flushSync(() => {
+            component = mount(FloorLevelPicker, { target });
+        });
+        const up = target.querySelector<HTMLButtonElement>('[data-testid="floorUp"]');
+        const down = target.querySelector<HTMLButtonElement>('[data-testid="floorDown"]');
+        flushSync(() => up?.click());
+        expect(get(mapEditorPlacementLevelStore)).toBe(84);
+        flushSync(() => up?.click());
+        flushSync(() => up?.click());
+        expect(get(mapEditorPlacementLevelStore)).toBe(116);
+        expect(up?.disabled).toBe(true);
+        flushSync(() => down?.click());
+        expect(get(mapEditorPlacementLevelStore)).toBe(84);
     });
     it("moves a selected object without changing the working floor or offering auto", async () => {
         const move = vi.fn();
