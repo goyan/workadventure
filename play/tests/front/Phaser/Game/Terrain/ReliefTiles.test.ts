@@ -379,6 +379,23 @@ describe("the blocks of the relief seen in 3/4", () => {
             expect(tiles.redraws()).toBeGreaterThan(drawn);
         });
 
+        it("draws a block of flat ground again when a soil is painted on it or a mount is raised", () => {
+            const { settle, tiles, setTerrain } = fixture(sandBlock(), undefined, { layout });
+            settle();
+            const drawn = tiles.redraws();
+            // Gravel painted on the flat cell 20,17 (nothing dug in the block).
+            setTerrain(withSoils(sandBlock(), new Map([[cellKey(20, 17), 6]])));
+            settle();
+            expect(tiles.redraws()).toBeGreaterThan(drawn);
+            const painted = tiles.redraws();
+            // A mount raised on the cell 22,22.
+            setTerrain(
+                withHeights(withSoils(sandBlock(), new Map([[cellKey(20, 17), 6]])), new Map([[cellKey(22, 22), 64]])),
+            );
+            settle();
+            expect(tiles.redraws()).toBeGreaterThan(painted);
+        });
+
         it("draws a block again when a room is built over it", () => {
             const { settle, tiles } = fixture(sandBlock(), undefined, { layout });
             settle();

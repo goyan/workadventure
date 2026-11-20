@@ -10,7 +10,7 @@ export const KEPT_BLOCKS = 64;
 
 /**
  * The heights and soils a block of the relief is drawn from (its cells, the NORTH_ROWS rows north of it, one more all around), as a short text:
- * the same relief gives the same text. Empty when none of them is dug.
+ * the same relief gives the same text. Empty when none of them is dug, raised or painted.
  */
 export function reliefSignature(terrain: TerrainData | undefined, blockX: number, blockY: number): string {
     if (!terrain) return "";
@@ -23,10 +23,13 @@ export function reliefSignature(terrain: TerrainData | undefined, blockX: number
     for (let y = firstY; y <= (blockY + 1) * TERRAIN_CHUNK; y++) {
         for (let x = firstX; x <= firstX + TERRAIN_CHUNK + 1; x++) {
             const height = heightAt(terrain, x, y);
-            if (height < 0) dug = true;
+            // Dug or raised: a relief to draw (a mount is lit by its slope and carries level lines).
+            if (height !== 0) dug = true;
             hash = (Math.imul(hash, 31) + height + 1000) | 0;
             // The soil painted there: its texture is drawn.
-            hash = (Math.imul(hash, 31) + soilAt(terrain, x, y)) | 0;
+            const soil = soilAt(terrain, x, y);
+            if (soil !== 0) dug = true;
+            hash = (Math.imul(hash, 31) + soil) | 0;
         }
     }
     return dug ? hash.toString(36) : "";

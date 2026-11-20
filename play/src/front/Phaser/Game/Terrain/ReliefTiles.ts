@@ -230,6 +230,8 @@ export class ReliefTiles {
         if (terrain !== this.reliefKept) {
             this.reliefKept = terrain;
             this.reliefSignatures.clear();
+            // The soils painted are read by what covers the cells too.
+            this.coverSignatures.clear();
         }
         const view = this.scene.cameras.main.worldView;
         const visible = this.blocksOver(view.x, view.y, view.width, view.height);
