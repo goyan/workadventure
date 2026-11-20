@@ -77,7 +77,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     /** While the click of an armed downpour is held: tells the server where the pointer is, a few times a second. */
     private downpourReports: Phaser.Time.TimerEvent | undefined;
     /** The catastrophe a held click is throwing: a downpour that follows the pointer, or fire painted along it. */
-    private heldKind: "downpour" | "fire" | undefined;
+    private heldKind: "downpour" | "fire" | "drain" | undefined;
     // The current touch gesture involved two fingers or more (a pinch): lifting a finger must not count as a tap.
     private multiTouch = false;
     private pinchFreedView = false;
@@ -310,10 +310,10 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         );
     }
 
-    /** The catastrophe a held click throws, when one of those is armed: the downpour and the fire. */
-    private heldCatastrophe(): "downpour" | "fire" | undefined {
+    /** The catastrophe a held click throws, when one of those is armed: the downpour, the fire and the drain. */
+    private heldCatastrophe(): "downpour" | "fire" | "drain" | undefined {
         const armed = get(armedCatastropheStore);
-        return armed === "downpour" || armed === "fire" ? armed : undefined;
+        return armed === "downpour" || armed === "fire" || armed === "drain" ? armed : undefined;
     }
 
     /**
@@ -342,6 +342,11 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                     y,
                     get(fireRadiusTilesStore),
                 );
+                return;
+            }
+            if (kind === "drain") {
+                // The square of a drain has one size: only where it is goes to the server.
+                this.gameScene.connection?.emitLaunchCatastrophe(CatastropheKind.CATASTROPHE_DRAIN, x, y, 0);
                 return;
             }
             this.gameScene.connection?.emitLaunchCatastrophe(
@@ -652,7 +657,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
 
     private canDragMap(): boolean {
         // The other editor tools use the left drag themselves; they pan with MapPanShortcut instead.
-        if (get(armedCatastropheStore) === "downpour") return false;
+        const armed = get(armedCatastropheStore);
+        if (armed === "downpour" || armed === "drain") return false;
         return this.canMoveView() && (!get(mapEditorModeStore) || get(mapExplorationModeStore));
     }
 

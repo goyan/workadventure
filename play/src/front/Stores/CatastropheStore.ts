@@ -2,7 +2,7 @@ import { DOWNPOUR_DEFAULT_TILES, FIRE_DEFAULT_TILES, METEOR_DEFAULT_TILES } from
 import { derived, get, writable } from "svelte/store";
 import { mapEditorModeStore } from "./MapEditorStore";
 
-export type CatastropheChoice = "meteor" | "downpour" | "fire";
+export type CatastropheChoice = "meteor" | "downpour" | "fire" | "drain";
 
 /** Whether the catastrophe panel is shown. Session only: closed at each page load. */
 export const catastrophePanelStore = writable<boolean>(false);
