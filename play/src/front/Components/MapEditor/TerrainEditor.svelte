@@ -234,7 +234,9 @@
                 <button
                     type="button"
                     role="radio"
-                    class="btn btn-sm justify-start gap-2 {chosenPool === index ? 'btn-secondary' : 'btn-light btn-ghost'}"
+                    class="btn btn-sm justify-start gap-2 {chosenPool === index
+                        ? 'btn-secondary'
+                        : 'btn-light btn-ghost'}"
                     aria-checked={chosenPool === index}
                     data-testid="terrain-pool-{index}"
                     onclick={() => choosePool(index)}
@@ -291,7 +293,11 @@
                         onchange={(event) => setPool(chosenPool, { depthPx: Number(event.currentTarget.value) })}
                     />
                 </label>
-                <div class="flex items-center justify-between gap-2 text-sm" role="radiogroup" aria-label={$LL.mapEditor.terrain.pools.ladders()}>
+                <div
+                    class="flex items-center justify-between gap-2 text-sm"
+                    role="radiogroup"
+                    aria-label={$LL.mapEditor.terrain.pools.ladders()}
+                >
                     {$LL.mapEditor.terrain.pools.ladders()}
                     <span class="flex gap-1">
                         {#each [0, 1, 2] as count (count)}

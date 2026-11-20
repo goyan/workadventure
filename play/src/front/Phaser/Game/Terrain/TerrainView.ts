@@ -254,7 +254,14 @@ export class TerrainView {
                     poolStyles: relief.poolStyles,
                     imagePools: imageCells,
                 });
-                this.ladders?.draw(areaOf(canvas), topEdgesOf(poolMaskOf(relief.soils, imageCells, relief.poolStyles, size), canvas.columns, canvas.rows));
+                this.ladders?.draw(
+                    areaOf(canvas),
+                    topEdgesOf(
+                        poolMaskOf(relief.soils, imageCells, relief.poolStyles, size),
+                        canvas.columns,
+                        canvas.rows,
+                    ),
+                );
             } else if (this.grounds) {
                 this.layGrounds(this.grounds, canvas, relief, meadow);
             } else {
