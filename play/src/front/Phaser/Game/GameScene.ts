@@ -319,7 +319,7 @@ import { floorPath } from "./MapEditor/MapLayer/FloorPath";
 import { levelUnderPoint } from "./MapEditor/MapLayer/FloorOperations";
 import { levelItems } from "./MapEditor/MapLayer/MapLayerLevels";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
-import { effectiveWeather, weatherAtTime } from "./Weather/WeatherFrame";
+import { weatherAtTime } from "./Weather/WeatherFrame";
 import { setRoomConditions, shownMapPlace, shownWeatherSettings } from "./Weather/RealWeatherClient";
 import { isSwayingTree, TreeSway } from "./Nature/TreeSway";
 import { TreePoseTextures } from "./Nature/TreePoses";
@@ -405,7 +405,8 @@ import { joinedUserId } from "./Jungle/JungleCompanions";
 import { InteractionPrompt } from "./Water/InteractionPrompt";
 import type { OutdoorGrid } from "./Outdoor/OutdoorGrid";
 import { SeasonalThemeManager } from "./Seasonal/SeasonalThemeManager";
-import { forcedTreeSeason, SeasonalTheme } from "./Seasonal/SeasonalTheme";
+import type { SeasonalTheme } from "./Seasonal/SeasonalTheme";
+import { forcedTreeSeason } from "./Seasonal/SeasonalTheme";
 import type { WalkerSample } from "./Christmas/FootprintTrail";
 import { NightManager } from "./Night/NightManager";
 import { PerfMonitor } from "./Perf/PerfMonitor";
@@ -2062,10 +2063,7 @@ export class GameScene extends DirtyScene {
      */
     private skyWeatherFactor(): number {
         if (!get(weatherEffectsEnabledStore) || isBasicActive()) return 1;
-        const theme = this.getSeasonalTheme();
-        const cloudiness =
-            theme === SeasonalTheme.Christmas || !get(cloudsShownStore) ? 0 : (this.shownWeather()?.cloudiness ?? 0);
-        // The weather of the map, not the snow of the Christmas theme: a personal decor dims no light.
+        const cloudiness = get(cloudsShownStore) ? (this.shownWeather()?.cloudiness ?? 0) : 0;
         return skyWeatherFactor(this.getMapWeather(), cloudiness);
     }
 
@@ -3139,16 +3137,12 @@ export class GameScene extends DirtyScene {
         return daylightOf(sun.elevation, skyWeatherFactor(weather, settings?.cloudiness ?? 0));
     }
 
-    public getDesktopWeather(): WeatherType {
-        return effectiveWeather(this.getMapWeather(), this.getSeasonalTheme());
-    }
-
     /** The map weather as it is shown now, with its wind. */
     private shownWeather(): ReturnType<typeof shownWeatherSettings> {
         return shownWeatherSettings(this.getGameMap().getWamFile()?.getWam().settings, this.nightManager?.serverDate());
     }
 
-    /** How much the map snow covers the ground for this person, 0 to 1: drawn as the Christmas decor fading in. */
+    /** How much the map snow covers the ground for this person, 0 to 1: drawn as the snow decor fading in. */
     public getMapSnowCoverage(): number {
         const serverDate = this.nightManager?.serverDate();
         const settings = shownWeatherSettings(this.getGameMap().getWamFile()?.getWam().settings, serverDate);
@@ -4027,9 +4021,7 @@ export class GameScene extends DirtyScene {
                     autumnProgress: () => autumnProgress(this.nightManager?.serverDate() ?? new Date(Number.NaN)),
                     windSpeed: () => this.shownWeather()?.windSpeed,
                     windFrom: () => this.shownWeather()?.windFrom,
-                    // The Christmas theme shows its snow whatever the map weather.
-                    snowCoverage: () =>
-                        this.getSeasonalTheme() === SeasonalTheme.Christmas ? 1 : this.getMapSnowCoverage(),
+                    snowCoverage: () => this.getMapSnowCoverage(),
                     enabled: () => !get(mapEditorModeStore) && get(weatherEffectsEnabledStore) && !isBasicActive(),
                     isOutdoor: (x, y) => this.getOutdoorGrid()?.isOutdoorAt(x, y) ?? true,
                     isWet: (x, y) => isGroundUnderWater(this, this.terrainWater, x, y),

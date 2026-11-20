@@ -78,20 +78,26 @@ afterEach(() => {
 
 describe("SeasonalThemeManager", () => {
     it("creates the decor of the active theme and draws it", () => {
-        seasonalThemeModeStore.set(SeasonalThemeMode.Christmas);
+        seasonalThemeModeStore.set(SeasonalThemeMode.Autumn);
         setup().update(0, walking);
-        expect(events).toEqual(["christmas:create", "christmas:ground", "christmas:objects"]);
-        expect(manager?.activeTheme()).toBe(SeasonalTheme.Christmas);
+        expect(events).toEqual(["autumn:create", "autumn:ground", "autumn:objects"]);
+        expect(manager?.activeTheme()).toBe(SeasonalTheme.Autumn);
     });
 
-    it("switches decor without leftovers", () => {
-        seasonalThemeModeStore.set(SeasonalThemeMode.Christmas);
+    it("removes the decor without leftovers when the theme goes", () => {
+        seasonalThemeModeStore.set(SeasonalThemeMode.Autumn);
         setup().update(0, walking);
         events.length = 0;
-        seasonalThemeModeStore.set(SeasonalThemeMode.Autumn);
+        seasonalThemeModeStore.set(SeasonalThemeMode.None);
         manager?.update(16, walking);
-        expect(events.slice(0, 2)).toEqual(["christmas:destroy", "autumn:create"]);
-        expect(manager?.activeTheme()).toBe(SeasonalTheme.Autumn);
+        expect(events).toEqual(["autumn:destroy"]);
+        expect(manager?.activeTheme()).toBeUndefined();
+    });
+
+    it("shows no scripted snow in auto in December", () => {
+        setup({ serverDate: () => new Date("2026-12-24T10:00:00Z") }).update(0, walking);
+        expect(manager?.activeTheme()).toBeUndefined();
+        expect(events).toEqual([]);
     });
 
     it("waits for server time in auto, then follows it at once", () => {
@@ -106,15 +112,15 @@ describe("SeasonalThemeManager", () => {
     });
 
     it("checks the calendar again every minute", () => {
-        let date = new Date("2026-11-30T22:59:00Z");
+        let date = new Date("2026-08-31T21:59:00Z");
         setup({ serverDate: () => date });
         manager?.update(0, walking);
-        date = new Date("2026-11-30T23:00:30Z");
+        date = new Date("2026-08-31T22:00:30Z");
         manager?.update(30_000, walking);
-        expect(manager?.activeTheme()).toBe(SeasonalTheme.Autumn);
+        expect(manager?.activeTheme()).toBeUndefined();
         manager?.update(60_000, walking);
-        expect(manager?.activeTheme()).toBe(SeasonalTheme.Christmas);
-        expect(events).toContain("autumn:destroy");
+        expect(manager?.activeTheme()).toBe(SeasonalTheme.Autumn);
+        expect(events).toContain("autumn:create");
     });
 
     it("hides the decor while editing, forgets walkers, and rebuilds objects after", () => {
@@ -229,14 +235,6 @@ describe("SeasonalThemeManager", () => {
             expect(decorOf(SeasonalTheme.Christmas).destroy).toHaveBeenCalledTimes(1);
             expect(decorOf(SeasonalTheme.Autumn).destroy).not.toHaveBeenCalled();
             expect(decorOf(SeasonalTheme.Autumn).setAlpha).toHaveBeenLastCalledWith(1);
-        });
-
-        it("keeps a single Christmas decor with the Christmas theme", () => {
-            seasonalThemeModeStore.set(SeasonalThemeMode.Christmas);
-            setup({ mapSnowCoverage: () => 0.5 }).update(0, walking);
-            manager?.update(16, walking);
-            expect(events.filter((event) => event.endsWith(":create"))).toEqual(["christmas:create"]);
-            for (const call of decors[0].setAlpha.mock.calls) expect(call[0]).toBe(1);
         });
 
         it("shows the snow decor alone without a theme decor, and does not crash", () => {
