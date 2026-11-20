@@ -498,6 +498,17 @@ describe("the blocks of the relief seen in 3/4", () => {
             expect(count(block, RAMPS.water)).toBeGreaterThan(20_000);
         });
 
+        it("draws a lake 15.7 px deep as water one wades in (clear), as the walk sees it, not rounded up to 16", () => {
+            const { settle, painted, water, skip } = fixture(hollow());
+            water.receive(lake(1, 15.7), 0);
+            skip(10_000);
+            settle();
+            const block = painted.get("relief-block:1,1");
+            if (!block) throw new Error("no block");
+            expect(count(block, [RAMPS.water[3]])).toBeGreaterThan(20_000);
+            expect(count(block, RAMPS.water.slice(0, 3))).toBe(0);
+        });
+
         it("draws a block again only when its water changes in a way that shows", () => {
             const { settle, tiles, water, clock, skip } = fixture(hollow());
             water.receive(lake(1, 20), 0);

@@ -197,7 +197,9 @@ export class TerrainWater {
                 const start = from[gridLine + column];
                 const depth = start + (to[gridLine + column] - start) * share;
                 if (depth < SHOWN_PX) continue;
-                levels[line + column] = depth < 1 ? 1 : depth > 255 ? 255 : Math.round(depth);
+                // Truncated, not rounded: water 15.7 px deep is drawn as water one wades in, as the walk sees it
+                // (one swims from SWIM_DEPTH_PX on).
+                levels[line + column] = depth < 1 ? 1 : depth > 255 ? 255 : Math.floor(depth);
                 any = true;
             }
         }
