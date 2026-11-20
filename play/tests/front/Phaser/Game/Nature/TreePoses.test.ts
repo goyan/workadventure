@@ -42,6 +42,36 @@ describe("treePose", () => {
     });
 });
 
+describe("how often a tree moves", () => {
+    /** Times a tree takes another pose in a minute. */
+    const moves = (wind: number, phase: number) => {
+        const seen = poses(wind, 0, phase);
+        return seen.filter((pose, index) => index > 0 && pose !== seen[index - 1]).length;
+    };
+
+    it("takes another pose at most once every two seconds in a light wind: a tree sways, it does not wriggle", () => {
+        for (const wind of [5, 10, 16, 25]) {
+            for (const phase of [0, 0.2, 0.55, 0.9]) {
+                expect(moves(wind, phase), `wind ${wind}, phase ${phase}`).toBeLessThanOrEqual(30);
+            }
+        }
+    });
+
+    it("stands the same when the wind changes by a hair: a real wind never stops moving", () => {
+        let moved = 0;
+        for (let tenth = 0; tenth < 600; tenth++) {
+            const seconds = 1_795_190_000 + tenth / 10;
+            if (treePose(seconds, 15.5, 0, 0.2) !== treePose(seconds, 15.501, 0, 0.2)) moved++;
+        }
+        expect(moved).toBeLessThanOrEqual(6);
+    });
+
+    it("still moves in a light wind, and more often in a storm", () => {
+        expect(moves(16, 0.2)).toBeGreaterThan(4);
+        expect(moves(80, 0.2)).toBeGreaterThan(moves(16, 0.2));
+    });
+});
+
 describe("poseRowShift", () => {
     it("leaves the trunk where it is and moves the top the furthest", () => {
         const height = 96;
