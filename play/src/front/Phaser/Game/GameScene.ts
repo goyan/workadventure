@@ -391,6 +391,7 @@ import { isLandKind } from "./Life/LandSprites";
 import { LifeSpeciesStats, withoutSpeciesCounts } from "./Life/LifeSpeciesStats";
 import { LifeStats } from "./Life/LifeStats";
 import { TerrainView } from "./Terrain/TerrainView";
+import { ReliefTiles } from "./Terrain/ReliefTiles";
 import { WaterFlowView } from "./Terrain/WaterFlowView";
 import { gunzip } from "./Terrain/WaterStateCodec";
 import { MeadowState } from "./Terrain/MeadowState";
@@ -635,6 +636,8 @@ export class GameScene extends DirtyScene {
     private readonly aquaticLifeSpecies = new LifeSpeciesStats();
     private aquaticLifeSubscription: Subscription | undefined;
     private terrainView: TerrainView | undefined;
+    /** The relief seen in 3/4: the dug ground drawn lower, its faces, its water. */
+    private reliefTiles: ReliefTiles | undefined;
     private waterFlowView: WaterFlowView | undefined;
     private terrainWaterQueue: Promise<void> = Promise.resolve();
     private skyShadowManager: SkyShadowManager | undefined;
@@ -1730,6 +1733,8 @@ export class GameScene extends DirtyScene {
         this.weatherManager?.destroy();
         this.terrainView?.destroy();
         this.terrainView = undefined;
+        this.reliefTiles?.destroy();
+        this.reliefTiles = undefined;
         this.waterFlowView?.destroy();
         this.waterFlowView = undefined;
         this.aquaticLifeView?.destroy();
@@ -2365,7 +2370,12 @@ export class GameScene extends DirtyScene {
             const pointer = this.input.isOver ? this.input.activePointer : undefined;
             pointer?.updateWorldPoint(this.cameras.main);
             pointerAltitudeStore.set(pointerAltitude(terrain, pointer && { x: pointer.worldX, y: pointer.worldY }));
+            // The relief is drawn in 3/4 out of the editor; flat in it, to dig and place where one aims.
+            const editorOpen = get(mapEditorModeStore);
+            this.reliefTiles?.setHidden(editorOpen);
+            this.terrainView?.setProjected(!editorOpen && this.reliefTiles !== undefined);
             this.terrainView?.update(time);
+            this.reliefTiles?.update(time);
             this.waterFlowView?.update(time);
             this.aquaticLifeView?.update(time);
             this.gullLifeView?.update(time);
@@ -3073,6 +3083,10 @@ export class GameScene extends DirtyScene {
     }
 
     /** The drawing of the relief, for the editor to show the bottom through the water while it is edited. */
+    public getReliefTiles(): ReliefTiles | undefined {
+        return this.reliefTiles;
+    }
+
     public getTerrainView(): TerrainView | undefined {
         return this.terrainView;
     }
@@ -3793,6 +3807,14 @@ export class GameScene extends DirtyScene {
                 this.terrainView = new TerrainView(this, this.terrainWater, undefined, this.meadow, () =>
                     this.getGroundSeason(),
                 );
+                this.reliefTiles?.destroy();
+                this.reliefTiles = new ReliefTiles(this, {
+                    relief: () => this.terrainWater.relief(),
+                    water: this.terrainWater,
+                    meadow: this.meadow,
+                    season: () => this.getGroundSeason(),
+                    snowShown: () => this.seasonalThemeManager?.groundSnow() ?? 0,
+                });
                 // The water seen moving: foam on its current, whirls over the sinks, rings over the sources.
                 this.waterFlowView?.destroy();
                 this.waterFlowView = new WaterFlowView(this, {

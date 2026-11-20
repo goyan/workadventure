@@ -88,6 +88,11 @@ export class SeasonalThemeManager {
         );
     }
 
+    /** How much snow lies on the ground outdoors (0 to 1): all of it under the Christmas theme, else the map snow. */
+    groundSnow(): number {
+        return this.theme === SeasonalTheme.Christmas ? 1 : this.snowAlpha();
+    }
+
     activeTheme(): SeasonalTheme | undefined {
         return this.theme;
     }

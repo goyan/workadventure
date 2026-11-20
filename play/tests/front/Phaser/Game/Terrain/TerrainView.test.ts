@@ -13,6 +13,7 @@ import {
     strawLevel,
 } from "../../../../../src/front/Phaser/Game/Terrain/MeadowState";
 import { TerrainWater } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
+import { SHALLOW_WATER } from "../../../../../src/front/Phaser/Game/Terrain/TerrainShading";
 import type { WaterState } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
 
 const pit = withHeights(
@@ -367,5 +368,23 @@ describe("TerrainView", () => {
             expect(keeping.restore).toHaveBeenCalledTimes(1);
             expect(keeping.snapshot).toHaveBeenCalledTimes(2);
         });
+    });
+
+    it("leaves the dug ground and the water to the relief seen in 3/4 while it is drawn", () => {
+        const colours = (projected: boolean) => {
+            const { view, water, surface } = fixture();
+            view.setProjected(projected);
+            water.receive(stateOf(1, 4), 0);
+            view.update(0);
+            return surface.paintField.mock.calls.map((call) => call[4] as number);
+        };
+        const flat = colours(false);
+        const projected = colours(true);
+        expect(flat).toContain(SHALLOW_WATER.color);
+        expect(projected).not.toContain(SHALLOW_WATER.color);
+        // The veil of the dug cells (black) is not painted; the shade of the slopes (black too) still is.
+        expect(projected.filter((colour) => colour === 0x000000)).toHaveLength(
+            flat.filter((colour) => colour === 0x000000).length - 1,
+        );
     });
 });

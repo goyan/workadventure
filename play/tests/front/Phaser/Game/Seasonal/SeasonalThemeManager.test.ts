@@ -198,6 +198,18 @@ describe("SeasonalThemeManager", () => {
     });
 
     describe("map snow", () => {
+        it("tells how much snow lies on the ground: the map snow, all of it under the Christmas theme", () => {
+            setup({ serverDate: october, mapSnowCoverage: () => 0.4 }).update(0, walking);
+            expect(manager?.groundSnow()).toBeCloseTo(0.4);
+            manager?.destroy();
+            setup({ serverDate: october }).update(0, walking);
+            expect(manager?.groundSnow()).toBe(0);
+            manager?.destroy();
+            seasonalThemeModeStore.set(SeasonalThemeMode.Christmas);
+            setup().update(0, walking);
+            expect(manager?.groundSnow()).toBe(1);
+        });
+
         it("fades the Christmas decor in with the map snow", () => {
             setup({ serverDate: october, mapSnowCoverage: () => 0.4 }).update(0, walking);
             expect(events.slice(0, 6)).toEqual([

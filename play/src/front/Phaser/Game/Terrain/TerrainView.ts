@@ -96,6 +96,8 @@ export class TerrainView {
     private lastKey: string | undefined;
     private visible = false;
     private seeThrough = false;
+    /** The relief is drawn in 3/4 (ReliefTiles): the dug ground and the water are left to it. */
+    private projected = false;
     private relief: ReliefLayers | undefined;
     private meadowLayers: MeadowLayers | undefined;
     /** The ground once painted on the canvas (relief and meadow), kept while the water alone moves. */
@@ -122,6 +124,15 @@ export class TerrainView {
         this.seeThrough = seeThrough;
     }
 
+    /** While the relief is drawn in 3/4 (ReliefTiles), this drawing leaves it the dug ground and the water. */
+    public setProjected(projected: boolean): void {
+        if (projected === this.projected) return;
+        this.projected = projected;
+        // The ground painted is kept from one drawing to the next: paint it again without (or with) the dug cells.
+        this.painted = undefined;
+        this.lastKey = undefined;
+    }
+
     public update(now: number): void {
         // Basique shows the ground of the map as it is: no water, relief, soils nor grass drawn over it.
         if (isBasicActive() || (!this.water.hasAnything() && !this.meadow?.hasGrass())) {
@@ -136,7 +147,7 @@ export class TerrainView {
         }
         const camera = this.scene.cameras.main.worldView;
         const screen = { x: camera.x, y: camera.y, width: camera.width, height: camera.height };
-        const key = `${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}`;
+        const key = `${this.water.drawKey(now)}:${this.seeThrough}:${this.projected}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}`;
         const inside = this.drawn !== undefined && wellInside(this.drawn, screen, DRAW_MARGIN / 5);
         if (key === this.lastKey && inside) return;
         this.lastKey = key;
@@ -185,9 +196,11 @@ export class TerrainView {
                 this.surface.paintField(canvas, meadow.fire, everywhere, NO_SHIFT, FIRE_GLOW_COLOR, fireGlowAlpha);
             }
             if (relief.dug) {
-                this.surface.paintField(canvas, relief.ground, everywhere, NO_SHIFT, 0x000000, (level) =>
-                    groundAlpha(-level),
-                );
+                if (!this.projected) {
+                    this.surface.paintField(canvas, relief.ground, everywhere, NO_SHIFT, 0x000000, (level) =>
+                        groundAlpha(-level),
+                    );
+                }
                 this.surface.paintField(canvas, relief.raised, everywhere, NO_SHIFT, 0xffffff, (level) =>
                     raisedAlpha(level),
                 );
@@ -207,14 +220,16 @@ export class TerrainView {
             this.painted = snapshot ? { relief, meadow, snapshot } : undefined;
         }
         // Water lies in the hollows, and on flat ground where they overflow or where a source pours.
-        const anyWater = this.water.levelsOver(
-            canvas.x / TERRAIN_CELL,
-            canvas.y / TERRAIN_CELL,
-            canvas.columns,
-            canvas.rows,
-            now,
-            wet,
-        );
+        const anyWater =
+            !this.projected &&
+            this.water.levelsOver(
+                canvas.x / TERRAIN_CELL,
+                canvas.y / TERRAIN_CELL,
+                canvas.columns,
+                canvas.rows,
+                now,
+                wet,
+            );
         if (anyWater) {
             for (let index = 0; index < size; index++) shore[index] = wet[index] > 0 && wet[index] < SHORE_PX ? 1 : 0;
             const strength = this.seeThrough ? SEE_THROUGH : 1;
