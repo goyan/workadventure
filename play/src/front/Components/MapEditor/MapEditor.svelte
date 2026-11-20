@@ -40,7 +40,9 @@
     );
 
     let mapEditorSideBarWidth = $derived(
-        $mapEditorVisibilityStore && $mapEditorSelectedToolStore !== EditorToolName.WAMSettingsEditor
+        $mapEditorVisibilityStore &&
+            $mapEditorSelectedToolStore !== undefined &&
+            $mapEditorSelectedToolStore !== EditorToolName.WAMSettingsEditor
             ? $mapEditorSideBarWidthStore
             : 0,
     );
@@ -81,7 +83,8 @@
         {@attach blocker}
         class={`map-editor relative h-dvh max-w-full md:max-w-[calc(100%-64px)] pointer-events-auto ${$mapEditorSelectedToolStore}`}
     >
-        {#if $mapEditorVisibilityStore && $mapEditorSelectedToolStore !== EditorToolName.WAMSettingsEditor}
+        <!-- No tool at all while a catastrophe is armed: no empty panel over the map. -->
+        {#if $mapEditorVisibilityStore && $mapEditorSelectedToolStore !== undefined && $mapEditorSelectedToolStore !== EditorToolName.WAMSettingsEditor}
             <div class="absolute h-dvh -start-0.5 top-0 flex flex-col z-[2000]">
                 <MapEditorResizeHandle
                     minWidth={200}

@@ -41,14 +41,12 @@ describe("CatastropheStore", () => {
         expect(get(armedCatastropheStore)).toBeUndefined();
     });
 
-    it("forgets the choice when the editor opens, and refuses to arm while it is open", () => {
-        toggleArmedCatastrophe("meteor");
+    it("arms while the map editor is open, and stays armed when it closes", () => {
         mapEditorModeStore.switchMode(true);
-        expect(get(armedCatastropheStore)).toBeUndefined();
         toggleArmedCatastrophe("meteor");
-        expect(get(armedCatastropheStore)).toBeUndefined();
+        expect(get(armedCatastropheStore)).toBe("meteor");
         mapEditorModeStore.switchMode(false);
-        expect(get(armedCatastropheStore)).toBeUndefined();
+        expect(get(armedCatastropheStore)).toBe("meteor");
     });
 
     it("does not arm while the panel is closed", () => {

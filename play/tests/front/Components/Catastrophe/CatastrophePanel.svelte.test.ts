@@ -202,7 +202,7 @@ describe("CatastrophePanel", () => {
         expect(tile()?.getAttribute("aria-pressed")).toBe("false");
     });
 
-    it("is not rendered when the panel is closed or the editor is open", () => {
+    it("is not rendered when the panel is closed, and stays usable while the editor is open", () => {
         render();
         catastrophePanelStore.set(false);
         flushSync();
@@ -210,6 +210,8 @@ describe("CatastrophePanel", () => {
         catastrophePanelStore.set(true);
         mapEditorModeStore.switchMode(true);
         flushSync();
-        expect(tile()).toBeNull();
+        tile()?.click();
+        flushSync();
+        expect(get(armedCatastropheStore)).toBe("meteor");
     });
 });

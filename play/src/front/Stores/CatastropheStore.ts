@@ -5,7 +5,6 @@ import {
     METEOR_DEFAULT_TILES,
 } from "@workadventure/map-editor";
 import { derived, get, writable } from "svelte/store";
-import { mapEditorModeStore } from "./MapEditorStore";
 
 /** "meteor" is the comet, which brings water; "fireball" is the burning meteor, which sets its crater on fire. */
 export type CatastropheChoice = "meteor" | "fireball" | "downpour" | "fire" | "drain";
@@ -28,25 +27,26 @@ export const fireRadiusTilesStore = writable<number>(FIRE_DEFAULT_TILES);
 
 const chosenCatastropheStore = writable<CatastropheChoice | undefined>(undefined);
 
-// Closing the panel or opening the map editor forgets the choice, so that coming back is never armed.
-function forgetUnlessUsable(panelShown: boolean, editorOpen: boolean): void {
-    if (!panelShown || editorOpen) chosenCatastropheStore.set(undefined);
-}
-// Both subscriptions live as long as the page: the unsubscribers are kept, never called.
+// Closing the panel forgets the choice, so that reopening it is never armed.
+// The subscription lives as long as the page: the unsubscriber is kept, never called.
 export const forgetChoiceSubscriptions = [
-    catastrophePanelStore.subscribe((panelShown) => forgetUnlessUsable(panelShown, get(mapEditorModeStore))),
-    mapEditorModeStore.subscribe((editorOpen) => forgetUnlessUsable(get(catastrophePanelStore), editorOpen)),
+    catastrophePanelStore.subscribe((panelShown) => {
+        if (!panelShown) chosenCatastropheStore.set(undefined);
+    }),
 ];
 
-/** The catastrophe the next click on the map throws: the chosen one while the panel is shown and the editor closed. */
+/**
+ * The catastrophe the next click on the map throws: the chosen one while the panel is shown. In the map editor too:
+ * the editor puts its tool aside while one is armed (see MapEditorModeManager).
+ */
 export const armedCatastropheStore = derived(
-    [chosenCatastropheStore, catastrophePanelStore, mapEditorModeStore],
-    ([$chosen, $panelShown, $editorOpen]) => ($panelShown && !$editorOpen ? $chosen : undefined),
+    [chosenCatastropheStore, catastrophePanelStore],
+    ([$chosen, $panelShown]) => ($panelShown ? $chosen : undefined),
 );
 
-/** Arms the catastrophe, or disarms it when it is already the armed one. Nothing while the editor is open. */
+/** Arms the catastrophe, or disarms it when it is already the armed one. */
 export function toggleArmedCatastrophe(choice: CatastropheChoice): void {
-    if (!get(catastrophePanelStore) || get(mapEditorModeStore)) return;
+    if (!get(catastrophePanelStore)) return;
     chosenCatastropheStore.update((chosen) => (chosen === choice ? undefined : choice));
 }
 

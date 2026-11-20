@@ -117,7 +117,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         this.pointerCapture = new MapDragPointerCapture(
             gameScene.game.canvas,
             // A held downpour or fire keeps the pointer too: its release is seen even over a panel.
-            () => this.canDragMap() || (this.heldCatastrophe() !== undefined && !get(mapEditorModeStore)),
+            () => this.canDragMap() || this.heldCatastrophe() !== undefined,
             () => this.handlePointerCancelEvent(),
         );
         // Same Key object as the "interact" key: addKey returns the existing one.
@@ -194,15 +194,16 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         if (pointer.wasTouch && this.multiTouch) {
             return;
         }
-        if (get(mapEditorModeStore)) {
-            return;
-        }
         // An armed catastrophe takes the click that is not a drag (the drag test above): it walks, activates and
-        // picks nothing. The press itself is left to the map drag, which stays free.
+        // picks nothing. The press itself is left to the map drag, which stays free. In the map editor too, whose
+        // tool is put aside while a catastrophe is armed.
         if (get(armedCatastropheStore) !== undefined && (pointer.wasTouch || pointer.leftButtonReleased())) {
             // The downpour rained, the fire was painted, while the click was held: releasing it only ends it.
             if (this.heldCatastrophe() !== undefined) this.stopDownpour();
             else this.launchArmedCatastrophe(pointer);
+            return;
+        }
+        if (get(mapEditorModeStore)) {
             return;
         }
         if (pointer.wasTouch || pointer.leftButtonReleased()) {
@@ -622,7 +623,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         }
         // An armed downpour or fire takes the press: it rains, or burns, while it is held, and the drag moves the
         // cloud or paints the fire, not the map.
-        if (this.heldCatastrophe() !== undefined && !get(mapEditorModeStore)) {
+        if (this.heldCatastrophe() !== undefined) {
             if (pointer.wasTouch || pointer.leftButtonDown()) this.startDownpour(pointer);
             return;
         }

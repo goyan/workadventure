@@ -3661,8 +3661,11 @@ Conception et plan dans le dépôt d'infra, `docs/superpowers/{specs,plans}/2026
 le météore, qui ne touche que l'eau du relief.
 
 **En jeu.** Le menu des applications a un bouton « Catastrophe » qui montre ou cache un petit widget sous l'horloge
-(fermé à chaque chargement de page ; absent dans l'éditeur). Dans le widget, la tuile « Météore » **arme** le tir
-(un second clic sur la tuile le désarme ; fermer le widget ou ouvrir l'éditeur aussi) : le curseur devient un viseur
+(fermé à chaque chargement de page). Il reste utilisable quand l'éditeur de carte est ouvert : tant qu'une
+catastrophe est armée, l'éditeur met son outil de côté (aucun outil choisi, panneau de l'outil masqué) et le reprend
+dès qu'elle est désarmée ; choisir un outil désarme la catastrophe (`CatastropheToolPause.ts`,
+`MapEditorModeManager`). Dans le widget, la tuile « Météore » **arme** le tir
+(un second clic sur la tuile le désarme ; fermer le widget aussi) : le curseur devient un viseur
 et un **clic gauche sur la carte** (ou un toucher bref) lance le météore à cet endroit. **Échap** annule. Le glisser
 de la carte reste libre : seul un clic qui n'est pas un glissé tire, et il ne fait alors ni marcher, ni activer, ni
 choisir quoi que ce soit. Rien n'est tiré hors de la carte ni quand les commandes sont suspendues. Armé, le tir
