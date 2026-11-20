@@ -52,16 +52,27 @@ export function fadeToward(value: number, target: number, delta: number, span: n
  * How a floor above the avatar shows. Indoors, or up a floor, it is hidden whole with what stands on it (the stairs going
  * up to it stay, see StairHints). Outdoors on the ground a building stays whole; a floor that hides the avatar lets it
  * show through a window around it.
+ *
+ * A floor in the open air (`openAir`: no room under any of its slabs, as the deck of a bridge) is no storey of a
+ * building: it always shows, with the window around an avatar under it, unless it is drawn over the room the avatar
+ * is in (`coversRoom`).
  */
 export function aboveLevelShows(where: {
     indoors: boolean;
+    /** Up a floor of a building (not on a floor in the open air, which is outdoors like the ground). */
     raised: boolean;
     hidesAvatar: boolean;
     underFloor?: boolean;
+    openAir?: boolean;
+    coversRoom?: boolean;
 }): {
     alpha: number;
     window?: true;
 } {
+    if (where.openAir) {
+        if (where.indoors && where.coversRoom) return { alpha: 0 };
+        return where.hidesAvatar || where.underFloor ? { alpha: 1, window: true } : { alpha: 1 };
+    }
     if (where.indoors || where.raised || where.underFloor) return { alpha: 0 };
     return where.hidesAvatar ? { alpha: 1, window: true } : { alpha: 1 };
 }

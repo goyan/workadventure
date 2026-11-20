@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { cloudPatches } from "../../../../../src/front/Phaser/Game/Weather/Clouds";
-import { fieldLevels, fogBlocks, outdoorCells } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
+import {
+    farFogCells,
+    fieldLevels,
+    fogBlocks,
+    outdoorCells,
+} from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
 import { paintField } from "../../../../../src/front/Phaser/Game/Weather/BlockSurface";
 
 describe("fieldLevels and outdoorCells", () => {
@@ -62,5 +67,39 @@ describe("paintField", () => {
         );
         // Indoors (the fourth cell): nothing, even under a cloud.
         expect(pixel(pixels, 3)).toEqual([0, 0, 0, 0]);
+    });
+});
+
+describe("farFogCells", () => {
+    // A canvas of 4 × 3 cells of 16 px over a map where the cells of column 0 are outdoors, a wall stands in column 1,
+    // the avatar's room (0) in column 2 and another room (1) in column 3.
+    const size = 16;
+    const area = { x: 0, y: 0, columns: 4, rows: 3 };
+    const outdoor = new Uint8Array([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]);
+    const roomAt = (x: number): number | undefined => (x < 32 ? undefined : x < 48 ? 0 : 1);
+
+    it("covers every cell that is not outdoors, but the room the avatar stands in", () => {
+        expect(Array.from(farFogCells(area, size, outdoor, roomAt, 0))).toEqual([0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1]);
+    });
+
+    it("covers the whole inside when the avatar is outdoors", () => {
+        expect(Array.from(farFogCells(area, size, outdoor, roomAt, undefined))).toEqual([
+            0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1,
+        ]);
+    });
+
+    it("reads the room at the centre of each cell, on a canvas that does not start at the origin", () => {
+        const asked: number[] = [];
+        farFogCells(
+            { x: 32, y: 16, columns: 1, rows: 1 },
+            size,
+            new Uint8Array([0]),
+            (x, y) => {
+                asked.push(x, y);
+                return 0;
+            },
+            0,
+        );
+        expect(asked).toEqual([40, 24]);
     });
 });

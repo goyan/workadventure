@@ -737,6 +737,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         forceAuto: "Force automatique (un huitième du diamètre)",
         force: "Force (épaisseur enlevée par passage)",
         mapSettings: "Réglages de la carte",
+        realistic: "Réaliste",
+        realisticHint:
+            "Remet tous les réglages de l'eau sur leurs valeurs physiques : vitesse 1, eau à inertie, vagues selon le sol et la profondeur, hauteur d'eau non plafonnée (256 px), ruissellement 10, évaporation 0,2 mm/h, absorption 5 mm/h, vidange 300 mm/h.",
         maxDepth: "Profondeur et hauteur maximales (cases)",
         runoff: "Ruissellement (terrain qui alimente un creux)",
         evaporation: "Évaporation par temps sec",
@@ -764,20 +767,34 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         current: "Force du courant (0 : les avatars ne sont pas emportés)",
         maxSurface: "Hauteur maximale de l'eau au-dessus du sol",
         inertia: "Eau à inertie (à l'essai)",
+        waves: {
+            roughness: "Frottement du sol",
+            roughnessHint:
+                "Combien de fois le frottement que donnent les sols de la carte (prairie et rocher freinent plus que sable et argile). Il grandit avec la vitesse de l'eau et faiblit avec sa profondeur : presque rien sous une houle au large, fort sous une lame d'eau qui court sur la terre. Plus haut : les vagues montent moins loin sur les rives. En réel : 1, avec les rugosités de Manning des sols : argile 0,022, sable 0,025, terre et gravier 0,03, rocher 0,04, prairie 0,045.",
+            damping: "Amorti de l'eau",
+            dampingHint:
+                "Part de son débit que l'eau perd chaque seconde, quelles que soient sa profondeur et sa vitesse. 0,02 par défaut : une houle traverse un lac. Plus haut : un lac dérangé se calme vite, mais les vagues s'éteignent avant d'atteindre la rive. En réel : 0 ; 0,02 est le minimum qui garde le calcul calme.",
+            breaking: "Déferlement des vagues",
+            breakingHint:
+                "Ce que perd une vague dont le front est raide pour l'eau où elle court : elle casse près du rivage et sur la terre. 0 : les vagues ne cassent jamais et montent plus loin. En réel : 1. Sans effet sur la terre émergée.",
+            momentum: "Élan emporté par l'eau",
+            momentumHint:
+                "À 1, l'eau emporte sa vitesse avec elle : les fronts sont nets et un lac dérangé clapote moins. À 0, chaque passage ne garde que son propre débit : les vagues grossissent davantage en approchant du rivage et montent plus loin, mais l'eau clapote longtemps. En réel : 1. Sans effet sur la terre émergée.",
+        },
         real: {
             inertia:
-                "L'eau garde son élan d'un instant à l'autre : des vagues courent, un lac dérangé se remet à niveau en une minute environ au lieu de s'étaler lentement. Coupé : l'eau avance de proche en proche, comme avant.",
+                "L'eau garde son élan d'un instant à l'autre : des vagues courent, un lac dérangé se remet à niveau en une minute environ au lieu de s'étaler lentement. Coupé : l'eau avance de proche en proche, comme avant. En réel : activée.",
             maxDepth: "En réel : une case fait environ 1,10 m. Mare : 1 case ; étang : 2 à 3 ; lac : 4 et plus.",
             runoff: "En réel : le terrain qui alimente une mare fait 5 à 20 fois sa surface ; 0 pour un bassin maçonné.",
             evaporation: "En réel : 0,05 mm/h en hiver, 0,1 à 0,3 mm/h en été (3 à 6 mm par jour).",
             absorption: "En réel : argile 1 à 5 mm/h, pelouse 5 à 15, sable 20 à 30 ; sol gorgé d'eau ou bitume : 0.",
             indoorDrain:
                 "Les sols des pièces fermées par des murs (portes fermées) évacuent l'eau entrée. 300 mm/h par défaut : une pièce inondée sèche en deux minutes environ ; des grilles d'évacuation posées au sol vont plus vite ; 0 garde l'eau à l'intérieur. Un bassin creusé à l'intérieur garde son eau.",
-            speed: "En réel : 1. À cette vitesse, une pluie de 10 mm/h met des heures à remplir un étang.",
+            speed: "En réel : 1. À cette vitesse, une pluie de 10 mm/h met des heures à remplir un étang. 60 par défaut : une minute pour une heure.",
             maxSurface:
-                "18 px par défaut : juste de quoi nager, sous les étages. Plus haut, une crue ou la vague d'un météore noie le sol en profondeur (une case = 32 px), étages compris au-delà de 52 px ; sous une forte pluie accélérée, l'eau peut s'empiler.",
+                "18 px par défaut : juste de quoi nager, sous les étages. Plus haut, une crue ou la vague d'un météore noie le sol en profondeur (une case = 32 px), étages compris au-delà de 52 px ; sous une forte pluie accélérée, l'eau peut s'empiler. En réel : aucun plafond (256 px, le maximum).",
             current:
-                "À 1, le courant le plus fort emporte au quart de la vitesse de la marche : on lui résiste en marchant. Rien dans une eau au repos ni sous un quart de case d'eau.",
+                "À 1, le courant le plus fort emporte au quart de la vitesse de la marche : on lui résiste en marchant. Rien dans une eau au repos ni sous un quart de case d'eau. Réglage de jeu, pas une grandeur physique : 1 par défaut.",
         },
         paceHint:
             "Les creux se remplissent avec la pluie de la carte et sèchent par beau temps. Une source ou un puits s'ajoute à n'importe quel objet depuis ses propriétés.",
@@ -796,7 +813,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Pinceau de sol",
             floorRectangle: "Rectangle de sol",
             floorFill: "Remplir un sol",
-            bridge: "Pont",
             door: "Porte",
             window: "Fenêtre",
             height: "Hauteur",
@@ -811,7 +827,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Maintenez le bouton et peignez les dalles de sol.",
             floorRectangle: "Glissez un rectangle pour le remplir de sol.",
             floorFill: "Cliquez dans une pièce fermée pour la remplir.",
-            bridge: "Maintenez le bouton et peignez le tablier d’un pont, case par case. Tout ce qui marche le traverse à sec ; l’eau coule dessous.",
             door: "Cliquez sur un mur pour transformer deux de ses segments en porte. Elle s’ouvre quand quelqu’un s’approche.",
             window: "Cliquez ou glissez le long d’un mur horizontal pour y poser des fenêtres. On voit à travers. Glissez une fenêtre posée pour la déplacer.",
             height: "Cliquez sur un mur, une porte ou une fenêtre (ou glissez le long d’un mur) pour le sélectionner, puis choisissez sa hauteur.",
@@ -874,8 +889,14 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             target: "Monte jusqu’à",
             noTarget: "Aucun palier atteignable depuis ce niveau : posez d’abord ses dalles.",
             openSide: "Flanc vide",
+            ramp: "Rampe en bois",
+            rampHint:
+                "Une rampe de planches au lieu de marches : avec des dalles en traverses de bois, elle fait un pont que les animaux empruntent. Grisé si le catalogue de la salle n’a pas les rampes.",
         },
         walls: "Style de mur",
+        woodSlab: "Traverses en bois",
+        woodSlabHint:
+            "Le tablier d’un pont : posé au niveau 1 au-dessus d’une rivière, avec une rampe à chaque bout. Grisé si le catalogue de la salle n’a pas la dalle en bois.",
         glassSlab: "Dalles en verre",
         glassSlabHint:
             "Des dalles transparentes : on voit à travers ce qui est sous le palier. Grisé si le catalogue de la salle n’a pas la dalle en verre.",
@@ -906,7 +927,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             doorsUnavailable: "Cette salle n’a pas de catalogue de portes : les portes ne sont pas disponibles.",
             windowInvalid: "Une fenêtre se pose sur un mur horizontal libre (ni porte ni fenêtre). Cliquez sur un mur.",
             windowsUnavailable: "Cette salle n’a pas de catalogue de fenêtres : les fenêtres ne sont pas disponibles.",
-            bridgesUnavailable: "Cette salle n’a pas de catalogue de ponts : les ponts ne sont pas disponibles.",
             slabOnGround: "Choisissez d’abord un niveau au-dessus du sol : le sol se dessine avec les modes de sol.",
             stairNoArrival:
                 "Escalier posé, mais il ne mène encore nulle part : posez des dalles du niveau d’arrivée sur les cases orange.",

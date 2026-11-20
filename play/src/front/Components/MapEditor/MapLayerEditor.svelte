@@ -12,11 +12,13 @@
         mapLayerDoorHeightsAvailableStore,
         mapLayerDoorGlazedStore,
         mapLayerDoorsAvailableStore,
-        mapLayerBridgesAvailableStore,
         mapLayerGlazedDoorHeightsAvailableStore,
         mapLayerGlazedDoorsAvailableStore,
         mapLayerGlassSlabsAvailableStore,
         mapLayerSlabGlassStore,
+        mapLayerSlabWoodStore,
+        mapLayerStairRampStore,
+        mapLayerBridgePiecesAvailableStore,
         mapLayerHeightRequestStore,
         mapLayerHeightSelectionStore,
         mapLayerFloorFamilyStore,
@@ -49,7 +51,6 @@
     import {
         IconArrowAutofitHeight,
         IconBrush,
-        IconBuildingBridge,
         IconStack2,
         IconStairs,
         IconBucket,
@@ -84,7 +85,6 @@
                 { mode: "floorBrush", icon: IconBrush },
                 { mode: "floorRectangle", icon: IconRectangle },
                 { mode: "floorFill", icon: IconBucket },
-                { mode: "bridge", icon: IconBuildingBridge },
             ],
         },
         {
@@ -136,7 +136,6 @@
             $mapLayerModeStore !== "slabErase" &&
             $mapLayerModeStore !== "stair" &&
             $mapLayerModeStore !== "erase" &&
-            $mapLayerModeStore !== "bridge" &&
             $mapLayerModeStore !== "door" &&
             $mapLayerModeStore !== "window" &&
             $mapLayerModeStore !== "height",
@@ -193,11 +192,7 @@
         type="button"
         disabled={(mode === "door" && !$mapLayerDoorsAvailableStore) ||
             (mode === "window" && !$mapLayerWindowsAvailableStore) ||
-            (mode === "bridge" && !$mapLayerBridgesAvailableStore) ||
             (isFloorMode(mode) && !$mapLayerFloorsAvailableStore)}
-        title={mode === "bridge" && !$mapLayerBridgesAvailableStore
-            ? $LL.mapEditor.mapLayer.status.bridgesUnavailable()
-            : undefined}
         class="build-slot labeled"
         data-testid="mapLayerMode-{mode}"
         aria-label={$LL.mapEditor.mapLayer.modes[mode]()}
@@ -330,8 +325,18 @@
                     id="map-layer-stair-open"
                     label={$LL.mapEditor.mapLayer.stair.openSide()}
                     bind:value={$mapLayerStairOpenStore}
+                    disabled={$mapLayerStairRampStore && $mapLayerBridgePiecesAvailableStore}
                     margin="mt-0"
                 />
+                <span title={$LL.mapEditor.mapLayer.stair.rampHint()}>
+                    <InputSwitch
+                        id="map-layer-stair-ramp"
+                        label={$LL.mapEditor.mapLayer.stair.ramp()}
+                        bind:value={$mapLayerStairRampStore}
+                        disabled={!$mapLayerBridgePiecesAvailableStore}
+                        margin="mt-0"
+                    />
+                </span>
                 <details class="text-xs">
                     <summary class="cursor-pointer opacity-70">{$LL.mapEditor.mapLayer.stairLegend.title()}</summary>
                     <ul
@@ -435,10 +440,19 @@
                     disabled={!$mapLayerGlassSlabsAvailableStore}
                     margin="mt-0"
                 />
+                <span title={$LL.mapEditor.mapLayer.woodSlabHint()}>
+                    <InputSwitch
+                        id="map-layer-wood-slab"
+                        label={$LL.mapEditor.mapLayer.woodSlab()}
+                        bind:value={$mapLayerSlabWoodStore}
+                        disabled={!$mapLayerBridgePiecesAvailableStore}
+                        margin="mt-0"
+                    />
+                </span>
             </section>
         {/if}
 
-        {#if usesFloor && !($mapLayerModeStore === "slab" && $mapLayerSlabGlassStore && $mapLayerGlassSlabsAvailableStore)}
+        {#if usesFloor && !($mapLayerModeStore === "slab" && (($mapLayerSlabGlassStore && $mapLayerGlassSlabsAvailableStore) || ($mapLayerSlabWoodStore && $mapLayerBridgePiecesAvailableStore)))}
             <section class="flex flex-col gap-2">
                 <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.floors()}</h3>
                 <div class="grid grid-cols-[repeat(auto-fill,minmax(5rem,1fr))] gap-2">

@@ -42,8 +42,9 @@ import {
     type WAMFileFormat,
     WAMSettingsUtils,
     WeatherType,
-    bridgeTilesOf,
+    bridgesOf,
 } from "@workadventure/map-editor";
+import type { Bridges } from "@workadventure/map-editor";
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
 import Debug from "debug";
 import { asError } from "catch-unknown";
@@ -309,6 +310,7 @@ import { jungleEnabledStore } from "../../Stores/JungleStore";
 import { isEffectShown } from "../../Stores/EffectsStore";
 import { fireConditionsStore } from "../../Stores/FireConditionsStore";
 import { isBasicActive } from "../../Stores/BasicModeStore";
+import { waterFlowOverlayStore } from "../../Stores/VisualisationStore";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -396,6 +398,7 @@ import { LifeSpeciesStats, withoutSpeciesCounts } from "./Life/LifeSpeciesStats"
 import { LifeStats } from "./Life/LifeStats";
 import { TerrainView } from "./Terrain/TerrainView";
 import { WaterFlowView } from "./Terrain/WaterFlowView";
+import { WaterFlowOverlay } from "./Terrain/WaterFlowOverlay";
 import { gunzip } from "./Terrain/WaterStateCodec";
 import { MeadowState } from "./Terrain/MeadowState";
 import { entityOutdoorRect, OutdoorTracker } from "./Outdoor/OutdoorTracker";
@@ -609,6 +612,8 @@ export class GameScene extends DirtyScene {
     private readonly terrainWater = new TerrainWater();
     /** When the bridges of the map were last read, in ms of the game. */
     private bridgesReadAt = -Infinity;
+    /** The bridges of the map: decks one walks up to from the ground (see bridgesOf). */
+    private bridges: Bridges | undefined;
     /** The grass and the moisture of the soil of the map, as the server tells them. */
     private readonly meadow = new MeadowState();
     private meadowSubscription: Subscription | undefined;
@@ -642,6 +647,7 @@ export class GameScene extends DirtyScene {
     private aquaticLifeSubscription: Subscription | undefined;
     private terrainView: TerrainView | undefined;
     private waterFlowView: WaterFlowView | undefined;
+    private waterFlowOverlay: WaterFlowOverlay | undefined;
     private terrainWaterQueue: Promise<void> = Promise.resolve();
     private skyShadowManager: SkyShadowManager | undefined;
     private skyWindowLightManager: SkyWindowLightManager | undefined;
@@ -1742,6 +1748,8 @@ export class GameScene extends DirtyScene {
         this.waterFlowView = undefined;
         this.frozenPoolsView?.destroy();
         this.frozenPoolsView = undefined;
+        this.waterFlowOverlay?.destroy();
+        this.waterFlowOverlay = undefined;
         this.aquaticLifeView?.destroy();
         this.aquaticLifeView = undefined;
         this.gullLifeView?.destroy();
@@ -1924,13 +1932,19 @@ export class GameScene extends DirtyScene {
     }
 
     /**
-     * The bridges of the map are read again twice a second at most: an editor lays or erases one, and what walks
-     * (the avatars, the wandering animals) crosses the water there, or no longer.
+     * The bridges of the map are read again twice a second at most: an editor lays or erases one, and the animals
+     * cross the water there, or no longer. An avatar walks on their slabs as on any raised floor.
      */
     private refreshBridges(time: number): void {
         if (time - this.bridgesReadAt < 500) return;
         this.bridgesReadAt = time;
-        this.terrainWater.setBridges(bridgeTilesOf(this.getGameMap().getWamFile()?.getWam()));
+        this.bridges = bridgesOf(this.getGameMap().getWamFile()?.getWam());
+        this.terrainWater.setBridges(this.bridges.tiles);
+    }
+
+    /** How high over the ground an animal walks above a point of the ground (map pixels): 0 off the bridges. */
+    public getBridgeElevationAt(x: number, y: number): number {
+        return this.bridges?.elevationAt(x, y) ?? 0;
     }
 
     /** The floor tiles of the map layer laid on the ground. */
@@ -2377,6 +2391,7 @@ export class GameScene extends DirtyScene {
             pointerAltitudeStore.set(pointerAltitude(terrain, pointer && { x: pointer.worldX, y: pointer.worldY }));
             this.terrainView?.update(time);
             this.waterFlowView?.update(time);
+            this.waterFlowOverlay?.update(time);
             this.aquaticLifeView?.update(time);
             this.frozenPoolsView?.update(time);
             this.gullLifeView?.update(time);
@@ -3812,6 +3827,13 @@ export class GameScene extends DirtyScene {
                 this.weatherManager = new WeatherManager(this, {
                     outdoorGrid: () => this.getOutdoorGrid(),
                     raisedCover: () => this.raisedWeatherCover(),
+                    // Seen from far the fog passes over the buildings, never over the avatar's room (at its feet).
+                    avatarRoom: () => {
+                        const player = this.CurrentPlayer;
+                        return player
+                            ? this.getOutdoorGrid()?.roomAt(player.x, player.y + CHARACTER_BODY_OFFSET_Y)
+                            : undefined;
+                    },
                     seasonalTheme: () => this.getSeasonalTheme(),
                 });
                 // The relief of the ground and the water of its hollows.
@@ -3829,6 +3851,14 @@ export class GameScene extends DirtyScene {
                 });
                 this.frozenPoolsView?.destroy();
                 this.frozenPoolsView = new FrozenPoolsView(this);
+                // The flows of that water drawn over the map, for whoever asked (apps menu, "Visualisation").
+                this.waterFlowOverlay?.destroy();
+                this.waterFlowOverlay = new WaterFlowOverlay(this, {
+                    water: this.terrainWater,
+                    inertia: () => this.getGameMap().getWamFile()?.getWam().settings?.water?.inertia === true,
+                    waves: () => this.getGameMap().getWamFile()?.getWam().settings?.water?.waves,
+                    shown: () => get(waterFlowOverlayStore) && !isBasicActive(),
+                });
                 // The fish and the dolphins of that water.
                 this.aquaticLifeView?.destroy();
                 this.aquaticLifeView = new AquaticLifeView(
@@ -3886,6 +3916,7 @@ export class GameScene extends DirtyScene {
                     (species) => this.gameJungle?.sheetOf(species),
                     (animal, now) => companions.poseOf(animal.id, now),
                     (x, y) => this.meadow.coverAt(x, y) >= GRAZING_COVER,
+                    (x, y) => this.getBridgeElevationAt(x, y),
                 );
                 // The shadows of the sun and of the moon, outdoors. One set at a time.
                 this.skyShadowManager?.destroy();
@@ -4270,6 +4301,7 @@ export class GameScene extends DirtyScene {
             this,
             (x, y) => this.terrainWater.depthAt(x, y, this.time.now) >= METEOR_WET_DEPTH_PX,
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+            () => this.getGameMap().getWamFile()?.getWam().settings?.water?.inertia === true,
         );
         this.meteorView = meteorView;
         // The flames of the tiles on fire, laid by the wind of the scene.

@@ -26,11 +26,12 @@
     import { showRecordingList } from "../../../Stores/RecordingStore";
     import { weatherBannerStore } from "../../../Stores/WeatherBannerStore";
     import { catastrophePanelStore } from "../../../Stores/CatastropheStore";
+    import { visualisationPanelStore, waterFlowOverlayStore } from "../../../Stores/VisualisationStore";
     import { basicActiveStore } from "../../../Stores/BasicModeStore";
     import PixelIcon from "../../ActionsMenu/PixelIcon.svelte";
     import RecordingIcon from "../../Icons/RecordingIcon.svelte";
     import AdditionalMenuItems from "./AdditionalMenuItems.svelte";
-    import { IconCalendar, IconCheckList, IconCloud, IconWorldSearch } from "@wa-icons";
+    import { IconCalendar, IconCheckList, IconCloud, IconEye, IconWorldSearch } from "@wa-icons";
 
     // The ActionBarButton component is displayed differently in the menu.
     // We use the context to decide how to render it.
@@ -90,6 +91,11 @@
     function toggleCatastrophePanel() {
         catastrophePanelStore.update((shown) => !shown);
         openedMenuStore.closeAll();
+    }
+
+    // The visualisation panel under the clock: what to draw over the map.
+    function toggleVisualisationPanel() {
+        visualisationPanelStore.update((shown) => !shown);
     }
 </script>
 
@@ -158,6 +164,16 @@
     dataTestId="catastrophePanelButton"
 >
     <PixelIcon name="meteor" size={20} />
+</ActionBarButton>
+
+<!-- What is drawn over the map to read it better (the flows of the water): a panel under the clock. -->
+<ActionBarButton
+    onclick={toggleVisualisationPanel}
+    label={$LL.actionbar.visualisation.label()}
+    state={$basicActiveStore ? "disabled" : $visualisationPanelStore || $waterFlowOverlayStore ? "active" : "normal"}
+    dataTestId="visualisationPanelButton"
+>
+    <IconEye width="20" height="20" />
 </ActionBarButton>
 
 <!-- External module action bar -->

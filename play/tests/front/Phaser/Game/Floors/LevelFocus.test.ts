@@ -88,6 +88,17 @@ describe("a floor above the avatar", () => {
         });
     });
 
+    it("always shows a floor in the open air (the deck of a bridge), with a window around an avatar under it", () => {
+        const deck = { raised: false, hidesAvatar: false, openAir: true };
+        expect(aboveLevelShows({ ...deck, indoors: false })).toEqual({ alpha: 1 });
+        // From a room far away, and from under its slabs.
+        expect(aboveLevelShows({ ...deck, indoors: true })).toEqual({ alpha: 1 });
+        expect(aboveLevelShows({ ...deck, indoors: false, underFloor: true })).toEqual({ alpha: 1, window: true });
+        expect(aboveLevelShows({ ...deck, indoors: false, hidesAvatar: true })).toEqual({ alpha: 1, window: true });
+        // Drawn over the room the avatar is in, it would hide the room.
+        expect(aboveLevelShows({ ...deck, indoors: true, coversRoom: true })).toEqual({ alpha: 0 });
+    });
+
     it("leaves the floors under the avatar clearly darker", () => {
         expect(VEIL_ALPHA).toBe(0.7);
     });

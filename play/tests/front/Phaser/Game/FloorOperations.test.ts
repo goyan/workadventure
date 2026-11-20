@@ -157,6 +157,8 @@ describe("floor operations", () => {
         expect(availableLevels(model)).toEqual([52, 84, 104, 116]);
         // The tops of walls standing on a floor are offered too: a floor over the floor.
         expect(availableLevels(new FloorModel(), [136, 52])).toEqual([52, 84, 116, 136]);
+        // The low floor of the bridges, when the catalog of the room has its pieces.
+        expect(availableLevels(new FloorModel(), [], true)).toEqual([20, 52, 84, 116]);
     });
 
     it("sends a stair to the floor asked, else to one that has slabs, else to the first in reach", () => {
@@ -220,8 +222,9 @@ describe("floor operations", () => {
         expect(reachableLevels(52, levels)).toEqual([84, 116]);
         expect(reachableLevels(84, levels)).toEqual([116]);
         expect(reachableLevels(116, levels)).toEqual([]);
-        // No stair goes up 20 px.
-        expect(reachableLevels(84, [104, 116])).toEqual([116]);
+        // 20 px up: the stairs of the low floor.
+        expect(reachableLevels(84, [104, 116])).toEqual([104, 116]);
+        expect(reachableLevels(0, [20, 52])).toEqual([20, 52]);
     });
 
     it("offers a stair the levels one or two tiles up from any floor, built or not", () => {

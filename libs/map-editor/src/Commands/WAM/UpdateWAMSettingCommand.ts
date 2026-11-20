@@ -2,24 +2,26 @@ import { validPoolStyles } from "../../Terrain/Pools";
 import type { UpdateWAMSettingsMessage } from "@workadventure/messages";
 import type { WAMFileFormat, WAMSettings } from "../../types";
 import {
+    AIR_LIFE_BOUNDS,
     AutoWeather,
     CategorySettings,
+    DEFAULT_AIR_LIFE_SETTINGS,
+    DEFAULT_LAND_LIFE_SETTINGS,
     DEFAULT_LIFE_SETTINGS,
     DEFAULT_MEADOW_SETTINGS,
     DEFAULT_WATER_SETTINGS,
-    MEADOW_BOUNDS,
+    DEFAULT_WAVE_SETTINGS,
     LAND_LIFE_BOUNDS,
-    AIR_LIFE_BOUNDS,
-    DEFAULT_AIR_LIFE_SETTINGS,
-    DEFAULT_LAND_LIFE_SETTINGS,
     LIFE_BOUNDS,
     MAX_WATER_CURRENT,
     MAX_WATER_INDOOR_DRAIN,
     MAX_WATER_MAX_SURFACE,
     MAX_WATER_SPEED,
+    MEADOW_BOUNDS,
     MegaphoneSettings,
     PrefabOverride,
     RecordingSettings,
+    WAVE_BOUNDS,
     Weather,
     WeatherLocation,
     WeatherType,
@@ -133,8 +135,20 @@ export class UpdateWAMSettingCommand extends Command {
                 break;
             }
             case "updateWaterSettingMessage": {
-                const { runoff, evaporation, speed, absorption, current, maxSurface, indoorDrain, inertia } =
-                    message.updateWaterSettingMessage;
+                const {
+                    runoff,
+                    evaporation,
+                    speed,
+                    absorption,
+                    current,
+                    maxSurface,
+                    indoorDrain,
+                    inertia,
+                    waveRoughness,
+                    waveDamping,
+                    waveBreaking,
+                    waveMomentum,
+                } = message.updateWaterSettingMessage;
                 const within = (value: number, min: number, max: number, fallback: number): number =>
                     Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
                 // An older client sends no speed: the one of the map is kept.
@@ -143,6 +157,29 @@ export class UpdateWAMSettingCommand extends Command {
                 const keptCurrent = this.wam.settings.water?.current ?? DEFAULT_WATER_SETTINGS.current;
                 const keptMaxSurface = this.wam.settings.water?.maxSurface ?? DEFAULT_WATER_SETTINGS.maxSurface;
                 const keptIndoorDrain = this.wam.settings.water?.indoorDrain ?? DEFAULT_WATER_SETTINGS.indoorDrain;
+                // The waves: what the client sends within its bounds, the rest as the map had it. A map that never
+                // set any, from a client that says nothing of them, keeps none.
+                const keptWaves = this.wam.settings.water?.waves;
+                const sentWaves = {
+                    roughness: waveRoughness,
+                    damping: waveDamping,
+                    breaking: waveBreaking,
+                    momentum: waveMomentum,
+                };
+                const wave = (key: keyof typeof DEFAULT_WAVE_SETTINGS): number => {
+                    const kept = keptWaves?.[key] ?? DEFAULT_WAVE_SETTINGS[key];
+                    const sent = sentWaves[key];
+                    return sent === undefined ? kept : within(sent, WAVE_BOUNDS[key][0], WAVE_BOUNDS[key][1], kept);
+                };
+                const waves =
+                    keptWaves || Object.values(sentWaves).some((sent) => sent !== undefined)
+                        ? {
+                              roughness: wave("roughness"),
+                              damping: wave("damping"),
+                              breaking: wave("breaking"),
+                              momentum: wave("momentum"),
+                          }
+                        : undefined;
                 this.wam.settings.water = {
                     runoff: within(runoff, 0, 100, DEFAULT_WATER_SETTINGS.runoff),
                     evaporation: within(evaporation, 0, 10, DEFAULT_WATER_SETTINGS.evaporation),
@@ -164,6 +201,7 @@ export class UpdateWAMSettingCommand extends Command {
                             : within(indoorDrain, 0, MAX_WATER_INDOOR_DRAIN, keptIndoorDrain),
                     // An older client says nothing of the inertia: the map keeps the water it had.
                     ...((inertia ?? this.wam.settings.water?.inertia) ? { inertia: true } : {}),
+                    ...(waves ? { waves } : {}),
                 };
                 break;
             }

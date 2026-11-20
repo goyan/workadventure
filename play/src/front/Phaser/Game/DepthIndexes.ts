@@ -14,6 +14,11 @@ export const DEPTH_NIGHT_INDEX = 1_040_000;
 export const DEPTH_DOOR_LOCK_INDEX = 1_045_000;
 /** Lights of the lamps and the torches: above the night veil, which they pierce, so that they glow at night. */
 export const DEPTH_LAMP_LIGHT_INDEX = DEPTH_NIGHT_INDEX + 100;
+/**
+ * The fog over the buildings once the map is seen from far (WeatherManager): over the lights of the lamps (they reach
+ * DEPTH_LAMP_LIGHT_INDEX + 2), so that they no longer pierce it, under the padlocks, the bubbles and the texts.
+ */
+export const DEPTH_FAR_FOG_INDEX = DEPTH_LAMP_LIGHT_INDEX + 10;
 export const DEPTH_CONVERSATION_BUBBLE_INDEX = 1_050_000;
 export const DEPTH_INGAME_TEXT_INDEX = 1_100_000;
 /** Map editor area previews (zones) – above overlay layers so they are always visible when the map editor is open. */

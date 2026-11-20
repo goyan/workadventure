@@ -157,9 +157,10 @@ describe("the bridges over the water of the relief", () => {
         expect(water.isBridgeAt(40, 5)).toBe(false);
         expect(water.walkerSettledDepthAt(20, 5)).toBe(0);
         expect(water.walkerSettledDepthAt(40, 5)).toBe(40);
-        // The water itself is still there under the deck: it is drawn, and the fish swim in it.
+        // The water itself is still there under the deck: it is drawn, the fish swim in it, and so does an avatar
+        // on the ground there (one on the deck stands on a raised floor, which reads no water).
         expect(water.settledDepthAt(20, 5)).toBe(40);
-        expect(isDeepTerrainWater(water, { x: 20, y: 5 }, 10_000)).toBe(false);
+        expect(isDeepTerrainWater(water, { x: 20, y: 5 }, 10_000)).toBe(true);
         expect(isDeepTerrainWater(water, { x: 40, y: 5 }, 10_000)).toBe(true);
     });
 

@@ -2161,6 +2161,8 @@ prend que l'eau au-dessus (trop-plein). À chaque pas, l'un et l'autre sont limi
 au niveau (`heldFlow` de `WaterGrid.ts`) ; un puits à niveau ne prend que dans son disque, il n'aspire pas le plan
 d'eau. Un lac reste ainsi plein quelle que soit la météo, sans déborder. Sans `level`, rien ne change. Le repère de
 l'outil Relief écrit le niveau après le débit (« +60 m³/h → −0.5 m »).
+Le panneau enregistre la propriété entière à chaque changement (`onSetProperty`) : décocher « Tenir un niveau »
+retire bien le niveau de la carte (une fusion le gardait, corrigé le 2026-11-20).
 
 **Modèle** (`libs/map-editor/src/Terrain/`, lu à l'identique par `back` et par le front). Le relief est un champ
 facultatif du WAM (`terrain` : hauteurs par cellule de 16 px, 0 au sol, négatif creusé, par blocs de 16 × 16 ; absent =
@@ -2385,6 +2387,105 @@ de la pluie ne se posent pas sur le relief ; les éclaboussures deviennent des r
 murs). Pas de mode Rivière tracée. Relief négatif seulement, au sol et dehors. Animaux et compagnons ignorent l'eau.
 Pas de courant qui pousse l'avatar. Un geste immense part en plusieurs commandes (autant d'annulations). Les valeurs
 par défaut du rythme sont à doser avec le tableau de bord. `play`, `back` et `map-storage` se déploient ensemble.
+
+## Eau à inertie (à l'essai)
+
+Réglage de carte `settings.water.inertia` (interrupteur « Eau à inertie (à l'essai) » du panneau Relief,
+`UpdateWaterSettingMessage.inertia`, champ 8, facultatif ; absent ou faux : rien ne change). Sur une carte qui
+l'active, l'eau ne se contente plus d'avancer de proche en proche (un cinquième de l'écart de niveau par pas,
+`WaterGrid.flow`) : chaque passage entre deux cellules garde son **débit** d'un pas à l'autre
+(`WaterGrid.flowWithInertia`, `flowEast` et `flowSouth`). Le débit accélère avec l'écart des surfaces et la hauteur
+d'eau qui passe (gravité à l'échelle de la carte : une onde court à 4,5 cellules par seconde sous 18 px d'eau, 17
+sous 256 px), ralentit par frottement (20 % par seconde, davantage dans une eau mince), et une cellule ne donne
+jamais plus que ce qu'elle a. L'eau a donc de l'élan : des vagues courent et rebondissent, un lac dérangé se remet
+à niveau en une minute environ.
+
+Une eau profonde est déplacée en plusieurs mouvements par pas (jusqu'à 8), pour que ses ondes ne dépassent pas un
+tiers de cellule par mouvement : au-delà le calcul s'emballe. Murs, bord de la grille et hauteur maximale de l'eau
+sont ceux de l'eau d'avant. Sources, puits, pluie, drains, comète et les échanges lointains des cartes accélérées
+ne changent pas : ils posent ou retirent de l'eau, l'inertie la fait ensuite courir. Les débits ne sont ni envoyés
+aux navigateurs ni sauvegardés : le courant senti par les avatars reste déduit de la pente, et l'eau repart
+immobile après un redémarrage du serveur.
+
+Coût mesuré (grille de 600 × 600, conteneur Linux sur Mac) : 11 ms par pas sous 20 px d'eau, 16 ms sous 80 px,
+27 ms sous 240 px, contre 4 à 5 ms pour l'eau d'avant ; 4 ms contre 2 sur une grille presque sèche.
+
+Le même chiffre sur une vraie carte (carte d'équipe locale rejouée hors jeu, 480 × 320 cellules dont 59 000 sous
+l'eau, 10 à 80 px d'eau) : 14 ms par pas, contre 2,5 ms.
+
+### Effets connus de l'inertie sur le reste (mesurés hors jeu, à juger à l'écran)
+
+- **Crue sur sol plat moins étalée** : pour la même eau, trois fois moins de cellules mouillées (le frottement
+  retient les films minces ; la nappe est plus épaisse et plus ramassée).
+- **Lac plus plat entre une source et un puits** : la pente permanente de l'un à l'autre disparaît presque. Le
+  courant senti par les avatars et les canoës, encore déduit de la pente, y est donc plus faible.
+- **Puits fort plus efficace** : à la vitesse 1, un puits qui demande plus que son disque vide un lac 2,5 fois plus
+  vite (l'eau court vers lui) ; sur une carte accélérée, où les échanges lointains jouaient déjà, presque rien ne
+  change.
+- **Eau qui converge autour d'un puits** : un puits à grand disque, ou un trop-plein (puits qui tient un niveau),
+  creuse un trou où l'eau se rue et forme une bosse ; un peu d'eau est alors jetée par la hauteur maximale, et un
+  trop-plein fait descendre le lac sous son niveau. Défaut connu, non corrigé.
+- **Comète** : son onde reste posée anneau par anneau (`ImpactWave`), et l'inertie fait courir en plus de vraies
+  vagues depuis le cratère et depuis chaque anneau : deux ondes se superposent, les cercles dessinés suivent la
+  première seulement.
+- **Météore brûlant et drain** : ils retirent de l'eau comme avant ; le trou se referme par une vraie vague au lieu
+  de se combler sans bruit.
+
+### Vagues : frottement du sol, déferlement, élan (réglables par carte)
+
+Ce qui suit remplace le frottement uniforme de 20 % par seconde décrit plus haut, et les effets connus qui en
+dépendaient (crue moins étalée, comète à deux ondes).
+
+Le premier jet freinait l'eau de la même façon partout (20 % de son débit par seconde) : mesuré hors jeu, une
+vague perdait 80 % de sa hauteur en 200 cellules et n'atteignait jamais la rive. Ce qui retient l'eau dépend
+maintenant de l'endroit où elle court, par quatre réglages de la carte (`settings.water.waves`, curseurs du
+panneau Relief quand l'inertie est activée, `UpdateWaterSettingMessage.waveRoughness`, `waveDamping`,
+`waveBreaking`, `waveMomentum`, champs 9 à 12, facultatifs) :
+
+- **Frottement du sol** (`roughness`, × 0 à 10, 1 par défaut) : frottement de Manning. La part de débit perdue par
+  seconde vaut le carré de la rugosité du sol × la vitesse de l'eau / sa profondeur à la puissance 4/3 : presque
+  rien sous une houle au large, fort sous une lame d'eau rapide sur la terre. La rugosité vient du sol peint sur
+  chaque case (`soilRoughness` : argile 0,022, sable 0,025, terre, gravier et case non peinte 0,03, rocher 0,04,
+  prairie 0,045).
+- **Amorti** (`damping`, 0 à 1 par seconde, 0,02 par défaut) : perte de débit uniforme, ce qui calme un lac dérangé.
+  Plus haut, les vagues s'éteignent avant la rive.
+- **Déferlement** (`breaking`, × 0 à 5, 1 par défaut) : un front dont la surface tombe de plus d'un dixième de
+  l'eau qui passe perd son débit en proportion ; une houle douce n'est pas touchée.
+- **Élan emporté** (`momentum`, 0 à 1, 1 par défaut) : l'eau emporte sa vitesse avec elle (terme d'advection,
+  pris en amont). Mesuré : fronts plus nets, lac dérangé bien plus calme (crête de 31 px au lieu de 39 dans un
+  bassin de 30 px), mais vagues qui grossissent moins en approchant du rivage et montent moins loin qu'à 0.
+
+**Terre émergée et cuvettes.** Le déferlement et l'élan emporté n'agissent que dans les cuvettes du relief (lac,
+étang, mer : cases dont le sol est sous leur niveau de débordement, `WaterGrid.hollow`). Sur la terre émergée, le
+front d'une crue est une lame qui avance, pas une vague qui casse : seul le frottement du sol la retient. Mesuré
+sur le tsunami d'une comète de 24 cases dans un lac de 120 cellules de rayon : avec ces deux termes aussi sur la
+terre, 46 cellules d'inondation ; sans, 165 cellules (90 m), sous 28 à 34 px d'eau sur les 60 premières, masse
+conservée, rien de perdu.
+
+**Comète sous inertie : impact physique seul.** Sur une carte à inertie, la comète ne pose plus son onde anneau
+par anneau (`ImpactWave`) : l'eau du cratère et celle qu'elle apporte sont jetées en bourrelet autour du cratère
+(jusqu'à une fois et demie son rayon, au-dessus du niveau des crues s'il le faut, `strikeWater`), et l'eau fait
+elle-même la vague. Les cercles dessinés par le navigateur ne le sont plus (ils suivaient l'onde d'avant), et la
+salle reçoit l'eau cinq fois par seconde pendant trente secondes après l'impact. Sans inertie, rien ne change.
+
+**Bouton « Réaliste »** (panneau Relief, en tête des réglages de la carte) : remet tous les réglages de l'eau sur
+leurs valeurs physiques (`REALISTIC_WATER_SETTINGS` : vitesse 1, inertie activée, vagues par défaut, hauteur d'eau
+à 256 px, ruissellement 10, évaporation 0,2 mm/h, absorption 5 mm/h, vidange 300 mm/h). Seul l'amorti (0,02) n'est
+pas physique : 0 en réel, c'est le minimum qui garde le calcul calme. Chaque réglage dit sa valeur réelle dans sa
+description.
+
+Sous inertie, une vague n'est plus coupée à la hauteur maximale de l'eau de la carte (18 px par défaut) mais à la
+plus haute qu'une carte puisse régler (256 px) ; sources et pluie restent limitées par le réglage. L'eau ne
+franchit jamais plus d'une demi-cellule par mouvement : un torrent ne dicte pas le nombre de mouvements de toute la
+carte (mesuré : une source de 50 m³/s sur un mont doublait le coût de chaque pas). Les deux tests du premier jet qui exigeaient un
+lac calme en 90 s ont été assouplis exprès : une eau profonde clapote maintenant plusieurs minutes.
+
+Une eau plus profonde qu'environ 100 px porte ses vagues à la vitesse de cette profondeur, pas plus vite : trois
+mouvements par pas au plus (mesuré : un seul trou de 300 px doublait le coût de chaque pas de toute la carte).
+
+Coût mesuré avec ces vagues (conteneur Linux sur Mac) : 30 à 33 ms par pas sur une grille de 600 × 600 sous
+l'eau, quelle que soit sa profondeur ; 22 ms sur la carte d'équipe locale rejouée (100 000 cellules sous l'eau,
+4 ms sans inertie).
 
 ## Vie aquatique (poissons et dauphins)
 
@@ -2700,6 +2801,18 @@ après le dernier changement de mur ou de porte (`Outdoor/OutdoorTracker.ts`). A
 
 **Météo seulement dehors.** Pluie, neige, voile et lueur d'orage ne sont plus dessinés au-dessus des pièces
 (`WeatherManager`, option `outdoorGrid`). Les sons ne changent pas. Une carte sans mur reste entièrement dehors.
+
+**Brouillard vu de loin** (2026-11-20, signalé en beta sur la carte d'équipe : dézoomé au maximum, les bâtiments
+restaient en pleines couleurs dans une carte délavée, lampes et piste de danse comprises). En dézoomant, le brouillard
+passe aussi sur les bâtiments (pièces, murs, paliers), aux mêmes zooms que les nuages sur les toits
+(`cloudsOverRoofs` : rien au-dessus de 0,7 pixel d'écran par pixel de carte, plein à 0,45, fondu linéaire entre les
+deux) ; plein, il a l'épaisseur du dehors (voile 0,6 et plaques, plus léger la nuit). La pièce où se tiennent les pieds
+de l'avatar reste nette à tous les zooms (`farFogCells`, option `avatarRoom` : `OutdoorGrid.roomAt`), ses murs non.
+Ce voile intérieur est peint dans un second canevas (`DEPTH_FAR_FOG_INDEX`, au-dessus des lumières des lampes, sous les
+cadenas, les bulles et les noms) : les lampes RGB, les lampes de Jam, les torches et le feu à l'intérieur ne le percent
+plus ; la piste de danse et la lumière des fenêtres, plus bas, sont voilées comme le sol. Vu de près, rien ne change.
+Limites : le brouillard du dehors reste sous les lumières (une lampe dehors le perce comme avant) ; pluie et neige
+gardent leur voile au dehors seul.
 
 **Thème saisonnier** (« Paramètres → Ambiance → Thème saisonnier ») : Auto, Automne, Noël, Aucun. Réglage perso
 (`seasonalTheme` dans le navigateur), appliqué sans recharger. Il remplace « Thème de Noël » (repris une fois :
@@ -3278,6 +3391,24 @@ ce lot dessine le feu. Rien ne change côté serveur ni sur le fil.
 Limites : pas de son, la lueur n'éclaire pas la nuit comme une lampe (elle ne perce pas le voile). Les arbres
 brûlent depuis le lot 4, ci-dessous.
 
+## Feu de végétation : la repousse après le feu
+
+Une case brûlée est verte de nouveau en **5 minutes** au plus (`AFTER_FIRE_SECONDS` de
+`libs/map-editor/src/Terrain/Meadow.ts`), quels que soient l'heure, la saison, l'humidité et l'altitude : c'est un
+jeu, pas une forêt. Avant, la cendre ne partait qu'avec l'herbe qui repoussait, de jour seulement, à 40 % de sa vitesse
+en automne et pas du tout en hiver : en automne de nuit une case restait noire jusqu'au matin.
+
+- La cendre d'une case éteinte reste entière 15 % de ce temps (45 s, le temps des braises que dessine le navigateur),
+  puis part régulièrement ; l'herbe revient avec elle jusqu'à un pré plein (`1 − cendre`), même là où il n'y en avait
+  qu'une litière sèche. Ensuite l'herbe suit ses règles habituelles (soif, noyade, saison).
+- Elle repousse partout où l'herbe peut pousser : pas sous l'eau, sous la neige des hauteurs, sur le sable, le rocher,
+  le gravier, un sol de l'outil Carte ni dedans. Là, la cendre part quand même, sans herbe.
+- Une case rebrûle dès que la moitié de sa cendre est partie (un peu moins de 3 min après son feu), comme avant à
+  mi-repousse : une case en cendres reste un coupe-feu pendant un incendie.
+- Une carte dont l'herbe pousse plus vite que 5 min (réglage « pré plein en … min ») repousse aussi vite qu'elle.
+- Aucun réglage nouveau, rien sur le fil : bibliothèque et `back` seulement. Le compte à rebours de la cendre entière
+  n'est pas gardé : après un redémarrage de `back`, la cendre part aussitôt.
+
 ## Feu de végétation : les arbres brûlent, les animaux fuient (lot 4)
 
 Les arbres du catalogue nature (`Nature:tree-…`, ceux qui se balancent au vent) prennent feu, lancent des braises
@@ -3291,9 +3422,9 @@ serveur seul décide ; `play` (front et pusher) et `back` se déploient ensemble
   brûle 90 s (`TREE_BURN_SECONDS`) et rallume l'herbe sous lui.
 - Un arbre en plein feu lance des braises sous le vent (8 par arbre, 40 en vol par salle au plus), qui allument un
   foyer plus loin (`emberReachTiles`). L'eau à son pied et une forte pluie l'éteignent.
-- Ce qui a brûlé reste noir la moitié du temps de repousse de l'herbe de la carte (5 min par défaut pour un arbre
-  entièrement brûlé, moins s'il a été éteint avant), puis l'arbre reverdit seul. Un arbre ni en feu ni brûlé n'est
-  pas regardé.
+- Un arbre entièrement brûlé est vert de nouveau en 5 min au plus (`AFTER_FIRE_SECONDS`, moins si l'herbe de la
+  carte pousse plus vite) : noir la première moitié, il reverdit dans la seconde, de jour comme de nuit, en toute
+  saison ; éteint avant, il revient d'autant plus vite. Un arbre ni en feu ni brûlé n'est pas regardé.
 - La catastrophe « Feu » allume aussitôt les arbres sous le patch (`TreeFire.ignite`).
 
 **Serveur** : `MeadowManager` fait avancer les arbres après le pré, à son pas de 2 s, et les garde dans Redis avec
@@ -3424,70 +3555,48 @@ avec 8 px apportés par cellule du cratère). Pas de son. Rien n'a été vu à l
 cette section : widget, viseur, chute, éclair et gerbe ne sont validés que par les tests ; l'effet sur l'eau en jeu
 n'est pas vu.
 
+## Ponts : un palier bas, des traverses et des rampes
 
-## Eau à inertie (à l'essai)
+Un pont est un **palier en plein air** : des dalles posées au-dessus d'une rivière, avec une rampe ou un escalier à
+chaque bout. Il remplace le mode « Pont » et les pièces `Carte Ponts` (PR #377), retirés du jeu : les pièces
+`pont-bois-…` déjà posées sur une carte restent des objets ordinaires, sans effet, à effacer avec l'outil Objets.
 
-Réglage de carte `settings.water.inertia` (interrupteur « Eau à inertie (à l'essai) » du panneau Relief,
-`UpdateWaterSettingMessage.inertia`, champ 8, facultatif ; absent ou faux : rien ne change). Sur une carte qui
-l'active, l'eau ne se contente plus d'avancer de proche en proche (un cinquième de l'écart de niveau par pas,
-`WaterGrid.flow`) : chaque passage entre deux cellules garde son **débit** d'un pas à l'autre
-(`WaterGrid.flowWithInertia`, `flowEast` et `flowSouth`). Le débit accélère avec l'écart des surfaces et la hauteur
-d'eau qui passe (gravité à l'échelle de la carte : une onde court à 4,5 cellules par seconde sous 18 px d'eau, 17
-sous 256 px), ralentit par frottement (20 % par seconde, davantage dans une eau mince), et une cellule ne donne
-jamais plus que ce qu'elle a. L'eau a donc de l'élan : des vagues courent et rebondissent, un lac dérangé se remet
-à niveau en une minute environ.
+**Dans l'éditeur** (outil Carte, groupe « Plateformes »).
+- **Niveau 1** : un palier bas, à 20 px du sol (le haut d'un mur d'une case, `LOW_FLOOR_ELEVATION`). Proposé dans
+  le sélecteur de niveau quand le catalogue de la salle a les pièces des ponts.
+- Mode **Dalles**, interrupteur **« Traverses en bois »** : la dalle `dalle-bois`.
+- Mode **Escalier**, interrupteur **« Rampe en bois »** : une rampe de planches (`rampe-<n|e|s|o>-l<1|2>-<h1…h4|m1|m2>`),
+  qui se pose et se monte comme un escalier de même hauteur ; toujours longue (une case par case montée, une de plus
+  vers le sud), flanc toujours ouvert. Les escaliers ordinaires montent aussi au niveau 1 (`escalier-…-h1`).
+- Les deux interrupteurs sont grisés tant que le catalogue `Carte Paliers` de la salle n'a pas ces pièces.
+- Pour un pont : niveau 1, peindre les dalles au-dessus de l'eau, puis revenir au sol et poser une rampe à chaque
+  bout, son haut contre le tablier.
 
-Une eau profonde est déplacée en plusieurs mouvements par pas (jusqu'à 8), pour que ses ondes ne dépassent pas un
-tiers de cellule par mouvement : au-delà le calcul s'emballe. Murs, bord de la grille et hauteur maximale de l'eau
-sont ceux de l'eau d'avant. Sources, puits, pluie, drains, comète et les échanges lointains des cartes accélérées
-ne changent pas : ils posent ou retirent de l'eau, l'inertie la fait ensuite courir. Les débits ne sont ni envoyés
-aux navigateurs ni sauvegardés : le courant senti par les avatars reste déduit de la pente, et l'eau repart
-immobile après un redémarrage du serveur.
+**Visibilité.** Un étage **en plein air** (aucune pièce de la carte sous ses dalles) n'est pas l'étage d'un
+bâtiment : il reste toujours affiché, même quand l'avatar est dans une pièce ailleurs, sauf s'il est dessiné
+par-dessus la pièce où se trouve l'avatar. Un avatar qui passe dessous se voit à travers les dalles autour de lui.
+Un avatar qui marche sur un étage en plein air est dehors comme au sol : pas de voile sombre sur le paysage, les
+étages des bâtiments restent affichés (`aboveLevelShows` : `openAir`, `coversRoom` ; `FloorSpike.fade`).
 
-Coût mesuré (grille de 600 × 600, conteneur Linux sur Mac) : 11 ms par pas sous 20 px d'eau, 16 ms sous 80 px,
-27 ms sous 240 px, contre 4 à 5 ms pour l'eau d'avant ; 4 ms contre 2 sur une grille presque sèche.
+**Les animaux.** `libs/map-editor/src/Terrain/Bridges.ts`, `bridgesOf(wam)` : un pont est fait des escaliers et
+rampes **posés au sol** et des dalles de l'étage que chacun atteint, de proche en proche. Un étage qu'aucun escalier
+du sol n'atteint n'est pas un pont (un toit, l'étage d'un bâtiment sans accès du sol).
+- Serveur : sur les cases du sol sous un pont, l'eau vaut 0 pour ce qui marche (`dryOnBridges`,
+  `AquaticLifeManager.readLand`) : les deux rives sont une seule terre pour antilopes, lions et tigres, relue quand
+  un pont change. Le serveur lit les noms et les places des pièces ; un test du front vérifie qu'il lit un pont là
+  où l'éditeur le pose.
+- Navigateur : ces cases ne sont jamais « mouillées » pour les animaux promeneurs (`TerrainWater.setBridges`, relu
+  deux fois par seconde). Un animal au-dessus d'un pont est dessiné à la hauteur du tablier (une part de cette
+  hauteur le long d'une rampe), par-dessus les dalles (`Bridges.elevationAt`, `LandLifeView`,
+  `WanderingCharactersManager`).
+- Avatar : rien de particulier, il marche sur les dalles comme sur tout palier (ni nage ni courant en hauteur) ;
+  au sol sous le tablier, il nage comme ailleurs.
 
-## Ponts de l'outil Carte
-
-Un pont est un **tablier posé case par case** par un éditeur de la carte. Tout ce qui marche le traverse à sec :
-antilopes, lions et tigres (simulés par le serveur), animaux promeneurs (jungle, chiens, chats, canards) et avatars.
-L'eau coule dessous sans changement.
-
-**Dans l'éditeur.** Outil Carte, groupe « Plateformes », mode **« Pont »** : maintenir le bouton et peindre les
-cases. La gomme de l'outil efface un pont avant le sol de la même case. Au sol seulement. Le mode est grisé (avec une
-explication au survol) tant que le catalogue de la salle n'a pas les pièces.
-
-**Dans la carte.** Aucun changement de format ni de protocole : un pont est fait d'entités ordinaires de la collection
-**`Carte Ponts`** (catalogue privé publié par le repo d'infra, `tools/build_bridge_prefabs.py`). Seize pièces
-`pont-bois-<m>` : `m` est le masque des voisines qui sont du pont aussi (1 nord, 2 est, 4 sud, 8 ouest) ; chaque bord
-sans voisine porte une lisse. L'outil recalcule les pièces voisines à chaque case peinte ou effacée
-(`MapLayerModel.setBridge`, `computePlacements`). Les pièces sont dessinées à la profondeur fixe 0,8
-(`MAP_LAYER_BRIDGE_DEPTH`) : au-dessus de l'eau du relief (0,65) et de son écume (0,66), qui cachent un sol de l'outil
-Carte, et sous les objets de sol et les personnages. **Ne jamais renommer un identifiant publié.**
-
-**La règle, lue partout** (`libs/map-editor/src/Terrain/Bridges.ts`) : `bridgeTilesOf(wam)` donne les cases de pont ;
-sur une case de pont, la hauteur d'eau vue par ce qui marche est 0 (`dryOnBridges`).
-
-- Serveur, vie de la terre (`AquaticLifeManager.readLand`) : les deux rives deviennent une seule terre, relue quand
-  un pont est posé ou retiré. Troupeaux et meutes se mêlent, les lions traversent pour chasser.
-- Serveur, pré : rien ne pousse sous un tablier (`pavedTilesOf`).
-- Navigateur (`TerrainWater.setBridges`, relu deux fois par seconde au plus par `GameScene.refreshBridges`) : sur un
-  pont, pas de nage, pas de courant, le canoë se range ; une case de pont n'est jamais « mouillée » pour les animaux
-  promeneurs.
-- Eau, poissons, averse, drain, météore, dessin de l'eau : inchangés, le pont n'existe pas pour eux.
-
-**Saisons.** Pour la neige et les feuilles d'automne, un tablier est un sol (`FLOOR_COLLECTIONS`) : la neige givre
-toute sa surface au lieu de poser une calotte sur le bord de chaque dalle, et aucun tas de feuilles ne se forme au
-pied des dalles.
-
-**À savoir.** Un pont est toujours à sec, même sous une crue. On y entre et on en sort par n'importe quel bord (pas
-de collision). On peut pêcher depuis un pont. Un lion ou un tigre peut prendre un poisson qui passe sous le tablier
-(pour lui la case est à sec). Le pont ne brûle pas et un météore ne le casse pas. Une seule matière : le bois. Pas de
-pièce d'angle rentrant : dans un coude, la lisse s'arrête au bord de la case.
-
-**Limites.** Un navigateur resté sur une version d'avant voit les pièces sous l'eau et y nage ; un pont posé sur une
-carte dont `back` est plus ancien ne réunit pas les terres. `play` et `back` se déploient ensemble.
-
+**Limites.** Les animaux du serveur vivent à plat : un animal qui arrive par la berge sous le tablier monte dessus
+d'un coup, et un lion peut prendre un poisson qui passe dessous. Pas de recherche de chemin : un animal ne traverse
+que si sa ligne droite suit le pont. Un animal apprivoisé qui suit son maître sur un pont est dessiné sous les dalles.
+Les dalles d'un palier ne reçoivent ni pluie ni nuages. Pas de garde-corps propre au pont (ceux des paliers). Bois
+seul. L'herbe pousse sous un tablier.
 
 ## Catastrophes : le météore brûlant
 

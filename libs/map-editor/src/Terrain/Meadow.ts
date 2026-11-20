@@ -1,6 +1,5 @@
 import { Season, TERRAIN_CELL, TILE_PX } from "../types";
 import type { TerrainData, WAMFileFormat } from "../types";
-import { bridgeTilesOf } from "./Bridges";
 import { snowCover } from "./SnowLine";
 import { soilName } from "./Soils";
 import type { SoilName } from "./Soils";
@@ -23,6 +22,14 @@ export const DRY_MOISTURE = 0.08;
 export const GROW_SECONDS = 600;
 export const THIRST_SECONDS = 1200;
 export const DROWN_SECONDS = 60;
+/**
+ * A burnt tile is green again in this many seconds at most, whatever the hour, the season, the moisture and the
+ * altitude: a game, not a forest. Its ash stays whole for a while (the embers die), then goes, and the grass comes
+ * back with it wherever grass may grow. A map whose grass grows faster than that comes back as fast as it grows.
+ */
+export const AFTER_FIRE_SECONDS = 300;
+/** The share of that time the ash of a tile that just went out stays whole. */
+const SMOULDER_SHARE = 0.15;
 /** At the highest danger, without rain, a soil loses its moisture this many times faster: the hot wind dries it out. */
 const PARCHING = 20;
 /** A tile on fire burns its full grass in this many seconds, and its fire is at its height after FIRE_RISE_SECONDS. */
@@ -142,11 +149,10 @@ export interface MeadowStepInput {
 }
 
 /**
- * The tiles a floor of the "Map" tool covers on the ground (a paved path, a terrace), and those under the deck of a
- * bridge: nothing grows there.
+ * The tiles a floor of the "Map" tool covers on the ground (a paved path, a terrace): nothing grows there.
  */
 export function pavedTilesOf(wam: Pick<WAMFileFormat, "entities"> | undefined): Set<string> {
-    const paved = bridgeTilesOf(wam);
+    const paved = new Set<string>();
     for (const entity of Object.values(wam?.entities ?? {})) {
         if (entity?.prefabRef?.collectionName !== "Carte Sols" || (entity.elevation ?? 0) > 0) continue;
         paved.add(`${Math.floor(entity.x / TILE_PX)},${Math.floor(entity.y / TILE_PX)}`);
@@ -172,6 +178,8 @@ export class Meadow {
     /** The fire of each tile, from 0 (none) to 1 (at its height), and the ash a fire left, from 0 to 1. */
     private readonly fire: Float32Array;
     private readonly ash: Float32Array;
+    /** Seconds the ash of a tile that went out still stays whole before it goes; not saved. */
+    private readonly smoulder: Float32Array;
     /** What each tile on fire still has to burn (see fuelOf), from 0 to 1. */
     private readonly fuel: Float32Array;
     /** The water lying on each tile, as the last step read it. */
@@ -197,6 +205,7 @@ export class Meadow {
         this.dryness = new Float32Array(tiles);
         this.fire = new Float32Array(tiles);
         this.ash = new Float32Array(tiles);
+        this.smoulder = new Float32Array(tiles);
         this.fuel = new Float32Array(tiles);
         this.water = new Float32Array(tiles);
         this.hold = new Float32Array(tiles);
@@ -478,7 +487,8 @@ export class Meadow {
             }
             grass[index] = Math.min(1, Math.max(0, cover));
         }
-        this.burn(input, seconds);
+        this.burn(input, seconds, Math.min(growSeconds, AFTER_FIRE_SECONDS));
+        this.regrow(input, seconds, Math.min(growSeconds, AFTER_FIRE_SECONDS));
         // The grass dries towards what the conditions and its soil make it: straw on a dry soil when it is hot, dry
         // and windy, green again on a wet soil or when the conditions ease.
         const share = 1 - Math.exp(-seconds / DRYING_SECONDS);
@@ -508,9 +518,37 @@ export class Meadow {
         }
     }
 
+    /**
+     * After a fire, whatever the conditions: the ash of a tile that went out stays whole for a while, then goes in
+     * the rest of `afterFire` seconds, and the grass comes back as it goes, up to a full meadow, wherever grass may
+     * grow: neither under water nor under the snow of the heights. Its own rules take the grass back from there.
+     */
+    private regrow(input: MeadowStepInput, seconds: number, afterFire: number): void {
+        const { grass, fire, ash, smoulder, water, ground, fertility, outdoor } = this;
+        const fading = afterFire * (1 - SMOULDER_SHARE);
+        for (let index = 0; index < ash.length; index++) {
+            if (ash[index] <= 0 || fire[index] > 0) continue;
+            let left = seconds;
+            if (smoulder[index] > 0) {
+                const waited = Math.min(smoulder[index], left);
+                smoulder[index] -= waited;
+                left -= waited;
+            }
+            ash[index] = Math.max(0, ash[index] - left / fading);
+            if (
+                outdoor[index] === 1 &&
+                fertility[index] > 0 &&
+                water[index] < DROWNING_WATER_PX &&
+                snowCover(ground[index], input.season) <= 0
+            ) {
+                grass[index] = Math.max(grass[index], 1 - ash[index]);
+            }
+        }
+    }
+
     /** The tiles on fire burn their grass, go out under water and rain, and set their neighbours on fire. */
-    private burn(input: MeadowStepInput, seconds: number): void {
-        const { width, height, moisture, grass, dryness, fire, ash, fuel, water } = this;
+    private burn(input: MeadowStepInput, seconds: number, afterFire: number): void {
+        const { width, height, moisture, grass, dryness, fire, ash, smoulder, fuel, water } = this;
         const rain = Number.isFinite(input.rainMmPerHour) && input.rainMmPerHour > 0 ? input.rainMmPerHour : 0;
         const random = input.random ?? Math.random;
         const speed =
@@ -529,6 +567,7 @@ export class Meadow {
             if (water[index] >= SOAKED_WATER_PX || moisture[index] >= FIRE_MAX_MOISTURE) flame = 0;
             if (flame <= 0) {
                 fire[index] = 0;
+                smoulder[index] = afterFire * SMOULDER_SHARE;
                 continue;
             }
             fuel[index] -= seconds / BURN_SECONDS;
@@ -541,6 +580,7 @@ export class Meadow {
                 dryness[index] = 0;
                 ash[index] = 1;
                 fire[index] = 0;
+                smoulder[index] = afterFire * SMOULDER_SHARE;
                 continue;
             }
             fire[index] = Math.min(1, flame);
@@ -610,6 +650,7 @@ export class Meadow {
         this.dryness.fill(0);
         this.fire.fill(0);
         this.ash.fill(0);
+        this.smoulder.fill(0);
         this.fuel.fill(0);
     }
 
@@ -665,6 +706,7 @@ export class Meadow {
                 this.fire[index] = previous.fireAt(tileX, tileY);
                 this.fuel[index] = this.fire[index] > 0 ? Math.max(this.fuelOf(index), FIRE_MIN_FUEL) : 0;
                 this.ash[index] = previous.ashAt(tileX, tileY);
+                this.smoulder[index] = previous.smoulder[tileY * previous.width + tileX];
             }
         }
     }

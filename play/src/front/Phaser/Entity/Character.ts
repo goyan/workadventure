@@ -465,8 +465,7 @@ export abstract class Character extends Container implements OutlineableInterfac
      */
     protected waterCurrentPush(walkSpeed: number): CurrentVector {
         const water = this.floorZ < 2 && !isBasicActive() ? this.scene?.getTerrainWater?.() : undefined;
-        // The current runs under the deck of a bridge, not over it.
-        if (!water || water.isBridgeAt(this.x, this.y + BODY_CENTER_OFFSET_Y)) return { x: 0, y: 0 };
+        if (!water) return { x: 0, y: 0 };
         // A drain of the catastrophes pulls the water, never who is in it.
         if (this.scene.isDrainCalm?.(this.x, this.y + BODY_CENTER_OFFSET_Y)) return { x: 0, y: 0 };
         // Under the ice, the current carries nobody.

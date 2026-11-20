@@ -174,7 +174,6 @@ export { default as IconShovel } from "~icons/tabler/shovel";
 export { default as IconFish } from "~icons/tabler/fish";
 export { default as IconDroplet } from "~icons/tabler/droplet";
 export { default as IconBrush } from "~icons/tabler/brush";
-export { default as IconBuildingBridge } from "~icons/tabler/building-bridge";
 export { default as IconEraser } from "~icons/tabler/eraser";
 export { default as IconBucket } from "~icons/tabler/bucket";
 export { default as IconRectangle } from "~icons/tabler/rectangle";

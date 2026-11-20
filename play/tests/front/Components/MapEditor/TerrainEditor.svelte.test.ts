@@ -15,6 +15,7 @@ const { executeUpdateTerrain, executeUpdateWAMSettings, mapSettings } = vi.hoist
         maxSurface: 18,
         indoorDrain: 300,
         inertia: false,
+        waves: { roughness: 1, damping: 0.02, breaking: 1, momentum: 1 },
         meadow: { enabled: true, growMinutes: 10, thirstMinutes: 20, moistureHold: 1 },
         life: {
             enabled: false,
@@ -146,6 +147,64 @@ describe("TerrainEditor", () => {
         expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
             $case: "updateWaterSettingMessage",
             updateWaterSettingMessage: expect.objectContaining({ inertia: false }),
+        });
+    });
+
+    it("sets every setting of the water back to its realistic value with one button", () => {
+        render();
+        setRange("terrain-runoff", 50);
+        byTestId("terrain-water-realistic").querySelector("button")?.click();
+        flushSync();
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: {
+                runoff: 10,
+                evaporation: 0.2,
+                speed: 1,
+                absorption: 5,
+                current: 1,
+                maxSurface: 256,
+                indoorDrain: 300,
+                inertia: true,
+                waveRoughness: 1,
+                waveDamping: 0.02,
+                waveBreaking: 1,
+                waveMomentum: 1,
+            },
+        });
+        // The sliders follow, those of the waves now shown.
+        expect(byTestId("terrain-speed").querySelector<HTMLInputElement>('input[type="range"]')?.value).toBe("1");
+        expect(target.querySelector('[data-testid="terrain-wave-roughness"]')).not.toBeNull();
+    });
+
+    it("sets the waves of the water with inertia, shown only for it", () => {
+        render();
+        expect(target.querySelector('[data-testid="terrain-wave-roughness"]')).toBeNull();
+        byTestId("terrain-inertia").querySelector("input")?.click();
+        flushSync();
+        // Turning the inertia on sends the waves the map had.
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: expect.objectContaining({
+                inertia: true,
+                waveRoughness: 1,
+                waveDamping: 0.02,
+                waveBreaking: 1,
+                waveMomentum: 1,
+            }),
+        });
+        setRange("terrain-wave-roughness", 3);
+        setRange("terrain-wave-damping", 0.1);
+        setRange("terrain-wave-breaking", 0);
+        setRange("terrain-wave-momentum", 0.5);
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: expect.objectContaining({
+                waveRoughness: 3,
+                waveDamping: 0.1,
+                waveBreaking: 0,
+                waveMomentum: 0.5,
+            }),
         });
     });
 

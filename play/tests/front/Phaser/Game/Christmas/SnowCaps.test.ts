@@ -86,16 +86,6 @@ describe("SnowCaps", () => {
         ]);
     });
 
-    it("frosts the whole deck of a bridge, like a floor: no cap along the edge of each of its tiles", () => {
-        const { scene, caps } = setup();
-        caps.rebuild([entity(0, 0, "Carte Ponts", "pont-bois-10"), entity(32, 0, "Carte Ponts", "pont-bois-8")], grid);
-        expect(scene.add.rectangle.mock.calls).toEqual([
-            [0, 0, 32, 32, 0xeef1fb, 0.35],
-            [32, 0, 32, 32, 0xeef1fb, 0.35],
-        ]);
-        expect(scene.add.image.mock.calls).toHaveLength(0);
-    });
-
     it("skips unreadable textures", () => {
         const { scene, caps } = setup(
             vi.fn(() => {

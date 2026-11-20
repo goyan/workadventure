@@ -15,6 +15,7 @@ import { JUNGLE_RADIUS_TILES } from "../Jungle/JunglePlan";
 import type { JungleAnimal } from "../Jungle/JunglePlan";
 import { getSolidRectangles } from "../../../Utils/EntityHitbox";
 import { placeAtDepth } from "../DepthSort";
+import { floorDepth } from "../MapEditor/MapLayer/FloorDepth";
 import { effectShownStores } from "../../../Stores/EffectsStore";
 import { blockRectangles, sameGrids, withAreaBorders } from "./WanderCollisions";
 import type { WanderRectangle } from "./WanderCollisions";
@@ -67,6 +68,11 @@ export interface WanderLead {
     poseAt(nowMs: number): WanderPose | undefined;
 }
 
+/** The depth of an animal walking `lift` pixels over the ground: among what stands that high, over the slabs. */
+function depthOnBridge(lift: number, y: number): number {
+    return lift > 0 ? floorDepth(lift, y) : y;
+}
+
 interface WanderingCharacter {
     /** Undefined for a free character (a jungle animal): no object of the map stands for it. */
     entity: Entity | undefined;
@@ -91,6 +97,8 @@ interface WanderingCharacter {
     fleeing: boolean;
     /** Whether the sprite is drawn in a drinking stance (turned or squeezed): undone when it stops drinking. */
     inStance: boolean;
+    /** How high over the ground it is drawn, on a bridge: absent or 0 on the ground. */
+    lift?: number;
     /** Where a wild animal runs to, away from an avatar it fears (see WanderFear); undefined when it is calm. */
     scaredTo?: Point;
 }
@@ -619,6 +627,14 @@ export class WanderingCharactersManager {
             const sprite = character.sprite;
             if (sprite && !this.isEditorMode) {
                 const lead = character.lead;
+                // On a bridge it is drawn as high as the deck, over its slabs; its place stays told on the ground.
+                const lift = lead ? 0 : Math.round(this.scene.getBridgeElevationAt?.(sprite.x, sprite.y) ?? 0);
+                if ((character.lift ?? 0) !== lift) {
+                    character.lift = lift;
+                    sprite.setOrigin(0.5, 1 + lift / sprite.height);
+                    placeAtDepth(sprite, depthOnBridge(lift, sprite.y));
+                    changed = true;
+                }
                 const pose = lead ? lead.poseAt(now) : character.schedule.poseAt(now);
                 if (lead && !pose) {
                     // Led out of view: not shown, rather than left where it was last seen.
@@ -688,7 +704,7 @@ export class WanderingCharactersManager {
                                       Math.abs(candidate.feet.x - pose.x) < 1 &&
                                       Math.abs(candidate.feet.y - pose.y) < 1,
                               );
-                    const depth = seat?.depth ?? pose.y;
+                    const depth = seat?.depth ?? depthOnBridge(character.lift ?? 0, pose.y);
                     if (sprite.depth !== depth) {
                         placeAtDepth(sprite, depth);
                         changed = true;
@@ -801,7 +817,7 @@ export class WanderingCharactersManager {
             character.inStance = false;
         }
         sprite.setPosition(x, y);
-        placeAtDepth(sprite, y);
+        placeAtDepth(sprite, depthOnBridge(character.lift ?? 0, y));
         character.opener.x = x;
         character.opener.y = y - WANDER_FRAME_SIZE / 2;
         character.moving = true;
