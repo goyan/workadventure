@@ -1,4 +1,5 @@
 import { Season } from "@workadventure/map-editor";
+import { SWIM_DEPTH_PX } from "../../Water/WaterZones";
 import { valueNoise } from "./PixelNoise";
 import type { Rgb } from "./PixelPalette";
 import { bayer, rampsFor, shadeAt } from "./PixelPalette";
@@ -16,7 +17,7 @@ const SEE_THROUGH_SHARE = 0.45;
 
 /**
  * The colour of a point of water (map pixels) in pixel art: a shade of the water of the season, darker deeper down,
- * a slow ripple of noise, the clearest shade where it is thin; a line of foam 1 px wide at its edge, of ice in winter. While the relief is edited
+ * a slow ripple of noise, the clearest shade where one wades (under SWIM_DEPTH_PX); a line of foam 1 px wide at its edge, of ice in winter. While the relief is edited
  * (`seeThrough`), one pixel in two of the dither shows the ground under it (`ground`), so what is dug there shows.
  */
 export function waterColor(
@@ -31,8 +32,10 @@ export function waterColor(
 ): Rgb {
     if (seeThrough && ground && bayer(x, y) < SEE_THROUGH_SHARE) return ground;
     if (edge) return season === Season.Winter ? SHORE_ICE : SHORE_FOAM;
-    // Shallow water off the edge: the clearest shade of the water.
-    if (depth < SHORE_PX) return rampsFor(season).water[3];
+    // The water one wades in: the clearest shade. From where one swims, the three darker ones, darker deeper down
+    // (never the clearest: where one starts swimming shows).
+    if (depth < SWIM_DEPTH_PX) return rampsFor(season).water[3];
     const ripple = (valueNoise(x / 10, y / 5) - 0.5) * 0.1;
-    return shadeAt(rampsFor(season).water, 0.85 - Math.min(1, depth / DARKEST_DEPTH) * 0.8 + ripple, x, y);
+    const deep = Math.min(1, (depth - SWIM_DEPTH_PX) / (DARKEST_DEPTH - SWIM_DEPTH_PX));
+    return shadeAt(rampsFor(season).water, 0.55 - deep * 0.5 + ripple, x, y);
 }
