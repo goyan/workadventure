@@ -3143,8 +3143,12 @@ export class GameScene extends DirtyScene {
     /** Whether a point of the water is hidden by the south rim of its hollow, as the relief is drawn in 3/4. */
     public hiddenOnWater(x: number, y: number): boolean {
         if (get(mapEditorModeStore)) return false;
-        return hiddenBehindRim(this.terrainWater.relief(), x, y, (pointX, pointY) =>
-            this.surfaceDropAt(pointX, pointY),
+        return hiddenBehindRim(
+            this.terrainWater.relief(),
+            x,
+            y,
+            (pointX, pointY) => this.surfaceDropAt(pointX, pointY),
+            this.terrainWater.deepest(),
         );
     }
 

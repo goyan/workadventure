@@ -34,6 +34,25 @@ export function shiftOfHeight(height: number): number {
     return Math.min(MAX_DROP, Math.max(-MAX_RISE, -height * DROP_SCALE)) + 0;
 }
 
+/** The highest ground of each relief, read once (a relief is never changed in place: an edit makes a new one). */
+const highestGrounds = new WeakMap<TerrainData, number>();
+
+/**
+ * How far above its place anything of a map is drawn: its highest ground, with `over` px more on it (the water of a lake
+ * on a mount); 0 on a map without a mount. What lies south of a point can only hide it, or be found under it, this far.
+ */
+export function riseOf(terrain: TerrainData | undefined, over = 0): number {
+    if (!terrain) return 0;
+    let highest = highestGrounds.get(terrain);
+    if (highest === undefined) {
+        highest = 0;
+        for (const chunk of Object.values(terrain.chunks))
+            for (const height of chunk) if (height > highest) highest = height;
+        highestGrounds.set(terrain, highest);
+    }
+    return Math.max(0, -shiftOfHeight(highest + Math.max(0, over)));
+}
+
 /**
  * How much lower than its place a point of the ground is drawn: positive in a hollow, negative on a mount (drawn
  * higher by half its height).
@@ -60,8 +79,9 @@ export function groundPointAt(
     const isFace = (y: number): boolean => drawnAt(y) - drawnAt(y - 1) > FACE_JUMP_PX;
     let found: number | undefined;
     let previous = drawnAt(screen.y - MAX_DROP - 1);
-    // From as far north as a hollow draws its floor, to as far south as a mount draws its top.
-    for (let y = screen.y - MAX_DROP; y <= screen.y + MAX_RISE; y++) {
+    // From as far north as a hollow draws its floor, to as far south as the highest mount of the map draws its top.
+    const rise = riseOf(terrain);
+    for (let y = screen.y - MAX_DROP; y <= screen.y + rise; y++) {
         const drawn = drawnAt(y);
         // Drawn further down than the pixel of ground before it: from just under that one down to its own place (as
         // paintColumn stretches it); drawn higher (the north side of a mount, hidden): its own row only.
@@ -71,8 +91,16 @@ export function groundPointAt(
                 : drawn >= screen.y - 0.5 && drawn < screen.y + 0.5;
         if (covers) {
             let foot = y;
-            // On a face: down to where the ground stops falling away, its foot.
-            if (isFace(y)) while (foot < screen.y + MAX_DROP + MAX_RISE && isFace(foot + 1)) foot++;
+            if (isFace(y)) {
+                if (drawnAt(y - 1) < y - 1) {
+                    // The south flank of a mount (the face comes down from a ground drawn higher): the mount, its edge
+                    // where the flank is a cliff down to the ground.
+                    foot = drawnAt(y) < y ? y : y - 1;
+                } else {
+                    // The face of a hollow: down to where the ground stops falling away, its foot.
+                    while (foot < screen.y + MAX_DROP + rise && isFace(foot + 1)) foot++;
+                }
+            }
             found = foot;
         }
         previous = drawn;
@@ -84,17 +112,20 @@ export function groundPointAt(
  * Whether a point of the ground (or of the surface of its water: `dropOf`) is hidden in 3/4 by the ground south of it:
  * the south rim of a hollow drawn over the floor behind it, or a mount drawn over the ground north of it. A ground
  * further south hides it when it is drawn as high or higher on the screen; it can only be between the point and
- * MAX_RISE south of where the point is drawn (a ground is never drawn higher than that above its place).
+ * as far south of where the point is drawn as the highest ground (and its water) of the map rises (riseOf).
  */
 export function hiddenBehindRim(
     terrain: TerrainData | undefined,
     x: number,
     y: number,
     dropOf: (x: number, y: number) => number,
+    /** The deepest water of the map: a lake on a mount draws its surface that much higher still. */
+    deepestWater = 0,
 ): boolean {
     if (!terrain) return false;
     const drawn = y + dropOf(x, y);
-    for (let south = Math.floor(y) + 1; south < drawn + MAX_RISE; south++) {
+    const end = drawn + riseOf(terrain, deepestWater);
+    for (let south = Math.floor(y) + 1; south < end; south++) {
         if (south + dropOf(x, south) < drawn - 0.5) return true;
     }
     return false;

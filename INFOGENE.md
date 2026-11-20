@@ -2439,7 +2439,8 @@ zone cliquable d'un avatar dans un trou reste à sa place ; les éclaboussures d
 
 **Les monts** (lot D) : un sol élevé est dessiné plus haut de la moitié de sa hauteur (128 px au plus,
 `ReliefProjection.shiftAt`, décalage signé : positif dans un trou, négatif sur un mont) et cache le sol derrière lui.
-Un bloc lit 8 rangées de cases au sud (un mont du bloc du sud y monte) et 4 colonnes à l'ouest, une seule fenêtre pour
+Un bloc lit 8 rangées de cases au sud (un mont du bloc du sud y monte) et 8 colonnes à l'ouest (l'ombre du plus haut
+mont, 113 px), une seule fenêtre pour
 le dessin et ses signatures (`ReliefTileSchedule.blockCellWindow`). Son **flanc sud** est son sol à l'ombre, en roche
 là où c'est une falaise (le dessin y saute de 6 px et plus par pixel de sol, `CLIFF_JUMP_PX`), cerné d'un liseré sombre
 à son pied ; la **silhouette** de ce qui cache le sol derrière lui (sommet d'un mont, bord sud d'un trou) est cernée
@@ -2448,7 +2449,8 @@ au-dessus d'un rayon de pente 1,6 (`Pixel/GroundPixel.ts` `shadowHorizon`, horiz
 bloc), direction fixe ; aussi sous le bord nord-ouest d'un trou. Neige au sommet au-dessus de la ligne de neige.
 Avatars, poissons, reflets, bouchon et traces montent avec le mont ; un clic sur le mont donne le mont ; rien ne monte
 sur un palier, un pont ni dans l'éditeur. **Limites** : un avatar, un objet ou un animal derrière un mont est dessiné
-par-dessus lui (lot 2 du relief) ; une ombre qui viendrait de plus de 64 px hors du bloc s'arrête au bord de sa fenêtre.
+par-dessus lui (lot 2 du relief). Un clic sur le flanc sud d'un mont donne le mont (son bord quand le flanc est une
+falaise), pas le sol à son pied. Courbes de niveau sur les monts comme dans les trous ; neige aux teintes écartées.
 
 **Limites.** L'eau traverse encore les murs (elle devra passer par les portes seulement : `back` ne connaît pas les
 murs). Pas de mode Rivière tracée. Relief au sol et dehors seulement. Animaux et compagnons ignorent l'eau.

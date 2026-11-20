@@ -42,6 +42,8 @@ export class TerrainWater {
     private wet = false;
     private changes = 0;
     private bridges: ReadonlySet<string> = new Set();
+    /** The deepest water shown, now or while it glides to its last state (px). */
+    private deepestDepth = 0;
 
     /** The relief of the map, as it is now (drawn with the water). */
     public setTerrain(terrain: TerrainData | undefined): void {
@@ -108,7 +110,15 @@ export class TerrainWater {
         this.bytes = bytes;
         this.seq = state.seq;
         this.wet = wet || this.from.some((depth) => depth > 0);
+        let deepest = 0;
+        for (let index = 0; index < cells; index++) deepest = Math.max(deepest, this.from[index], to[index]);
+        this.deepestDepth = deepest;
         this.changes++;
+    }
+
+    /** The deepest water of the map (px), as shown or gliding: how much higher a lake on a mount draws its surface. */
+    public deepest(): number {
+        return this.deepestDepth;
     }
 
     /** Pixels of water over a point of the map (map pixels) at this time of the game: 0 where it is dry. */

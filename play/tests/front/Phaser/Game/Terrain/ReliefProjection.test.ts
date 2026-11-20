@@ -119,6 +119,23 @@ describe("the relief seen in 3/4", () => {
         expect(hiddenBehindRim(mount(), 192, 400, (x, y) => shiftAt(mount(), x, y))).toBe(false);
     });
 
+    it("gives the mount to a click on its south flank, not the ground at its foot", () => {
+        // The top ends at the centre of the cell 21 (y 344, drawn at 280); the flank comes down to the cell 22 (y 360).
+        const found = groundPointAt(mount(), { x: 192, y: 320 });
+        expect(shiftAt(mount(), 192, found.y)).toBeLessThan(0);
+    });
+
+    it("looks no further south behind a hollow than the highest ground of the map can rise", () => {
+        // A map dug only: nothing is drawn higher than its place, the ground south of a point cannot hide it from far.
+        let reads = 0;
+        const dropOf = (x: number, y: number) => {
+            reads++;
+            return shiftAt(hollow(), x, y);
+        };
+        hiddenBehindRim(hollow(), 192, 100, dropOf);
+        expect(reads).toBeLessThan(10);
+    });
+
     it("leaves a point as it is on a map without relief", () => {
         expect(groundPointAt(undefined, { x: 10, y: 20 })).toEqual({ x: 10, y: 20 });
     });

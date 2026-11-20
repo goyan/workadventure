@@ -272,7 +272,8 @@ export const SHADOW_RISE_A_STEP = SHADOW_SLOPE * Math.SQRT2;
  * The horizon of a point towards the north-west: the highest the ground there rises over a ray of slope SHADOW_SLOPE
  * from it, `heightAt(x − d, y − d) − SHADOW_RISE_A_STEP × d` for d from 1 to SHADOW_REACH_PX; the point is in the
  * shadow where its horizon is higher than its ground. A point's horizon is also its south-east neighbour's, one step
- * lower: a block works the horizons out along the diagonals and calls this on their first points only.
+ * lower: a block works the horizons out along the diagonals and calls this on their first points only (the first
+ * row, the first column).
  */
 export function shadowHorizon(heightAt: (x: number, y: number) => number, x: number, y: number): number {
     let horizon = Number.NEGATIVE_INFINITY;
@@ -281,20 +282,6 @@ export function shadowHorizon(heightAt: (x: number, y: number) => number, x: num
         if (over > horizon) horizon = over;
     }
     return horizon;
-}
-
-/**
- * Whether a point of the ground is in the shadow of the relief: the ground north-west of it (the fixed direction of
- * the light, as slopeLight) rises over a ray of slope SHADOW_SLOPE, within SHADOW_REACH_PX. `highest` is the highest
- * ground around: the ray stops where nothing can rise over it any more.
- */
-export function castShadow(heightAt: (x: number, y: number) => number, x: number, y: number, highest: number): boolean {
-    const here = heightAt(x, y);
-    for (let d = 1; d <= SHADOW_REACH_PX; d++) {
-        if (highest - here <= SHADOW_RISE_A_STEP * d) return false;
-        if (heightAt(x - d, y - d) - here > SHADOW_RISE_A_STEP * d) return true;
-    }
-    return false;
 }
 
 /** The light of a point (see slopeLight) in the shadow: SHADOW_SHADE darker once it is shared into its value. */

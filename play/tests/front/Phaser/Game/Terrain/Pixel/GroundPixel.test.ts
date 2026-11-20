@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { Season } from "@workadventure/map-editor";
 import {
-    castShadow,
     groundColor,
     isContour,
     lightOfRise,
     shadowedLight,
+    shadowHorizon,
     slopeLight,
 } from "../../../../../../src/front/Phaser/Game/Terrain/Pixel/GroundPixel";
 import type { Material, Rgb } from "../../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
@@ -211,15 +211,17 @@ describe("the patches of the seasons", () => {
 describe("the shadow cast by a mount", () => {
     // A mount 128 px high over x and y from 100 to 200, flat ground around it.
     const mount = (x: number, y: number): number => (x >= 100 && x <= 200 && y >= 100 && y <= 200 ? 128 : 0);
+    const shaded = (x: number, y: number) => shadowHorizon(mount, x, y) > mount(x, y);
 
-    it("falls south-east of it, not north-west, nor beyond its reach", () => {
-        expect(castShadow(mount, 220, 220, 128)).toBe(true);
-        expect(castShadow(mount, 80, 80, 128)).toBe(false);
-        expect(castShadow(mount, 280, 280, 128)).toBe(false);
+    it("falls south-east of it, not north-west, nor further than its ray reaches", () => {
+        expect(shaded(220, 220)).toBe(true);
+        expect(shaded(80, 80)).toBe(false);
+        // 80 px south-east of its corner: the ray from there passes over its top.
+        expect(shaded(280, 280)).toBe(false);
     });
 
     it("never on flat ground, nor on the top of the mount", () => {
-        expect(castShadow(() => 0, 50, 50, 0)).toBe(false);
-        expect(castShadow(mount, 150, 150, 128)).toBe(false);
+        expect(shadowHorizon(() => 0, 50, 50)).toBeLessThan(0);
+        expect(shaded(150, 150)).toBe(false);
     });
 });
