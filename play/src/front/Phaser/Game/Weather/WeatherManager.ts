@@ -11,7 +11,7 @@ import {
     rainSplashesStore,
     weatherEffectsEnabledStore,
 } from "../../../Stores/WeatherStore";
-import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
+import { DEPTH_FAR_FOG_INDEX, DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import type { GameScene } from "../GameScene";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { SeasonalTheme } from "../Seasonal/SeasonalTheme";
@@ -20,6 +20,7 @@ import { unlessBasic } from "../../../Stores/BasicModeStore";
 import type { RaisedCover } from "./RaisedCover";
 import {
     effectiveWeather,
+    farFogCells,
     FOG_LEVELS,
     fieldLevels,
     fogPatches,
@@ -133,6 +134,11 @@ export interface WeatherManagerOptions {
      * the weather leaves it alone, as it leaves the rooms.
      */
     raisedCover?: () => RaisedCover | undefined;
+    /**
+     * The room the avatar stands in (OutdoorGrid.roomAt at its feet), undefined outdoors: seen from far the fog passes
+     * over the buildings, never over this room.
+     */
+    avatarRoom?: () => number | undefined;
     /** The personal seasonal theme: Christmas shows snow instead of the map weather, autumn colours the grass. */
     seasonalTheme?: () => SeasonalTheme | undefined;
     /** Overrides the system "reduced motion" setting (read once from matchMedia otherwise). Used by tests. */
@@ -143,6 +149,8 @@ export class WeatherManager {
     private readonly graphics: Phaser.GameObjects.Graphics;
     /** Fog, clouds and their shadows: one image over the veils and the falling weather. */
     private readonly blocks: BlockSurface;
+    /** Seen from far, the fog over the buildings: over the lights of the lamps, so that they do not pierce it. */
+    private readonly farFog: BlockSurface;
     private lastFrameAt = -Infinity;
     private visible = false;
     private readonly sounds: WeatherSounds;
@@ -216,6 +224,7 @@ export class WeatherManager {
             .setVisible(false);
         // Added after the graphics, at the same depth: above them.
         this.blocks = createBlockSurface(scene, DEPTH_NIGHT_INDEX + 1);
+        this.farFog = createBlockSurface(scene, DEPTH_FAR_FOG_INDEX);
     }
 
     /** `sun`: where the sun of the map is (NightManager), for the shadows of the clouds and their fading at dusk. */
@@ -261,6 +270,7 @@ export class WeatherManager {
             if (this.visible) {
                 this.graphics.clear().setVisible(false);
                 this.blocks.hide();
+                this.farFog.hide();
                 this.blockFrame = undefined;
                 this.visible = false;
                 this.scene.markDirty();
@@ -291,6 +301,7 @@ export class WeatherManager {
                     : 1
                 : 1;
         const shadowOffset = showClouds && sunlight.shadows > 0 ? cloudShadowOffset(sun) : undefined;
+        const avatarRoom = this.options.avatarRoom?.();
         if ((fogOnly || cloudsOnly) && this.reducedMotion) {
             // Nothing moves: draw again only when the camera, the fog or clouds, the sun or the night changed.
             const key = [
@@ -306,6 +317,7 @@ export class WeatherManager {
                 Math.round(sunlight.shadows * 20),
                 Math.round((shadowOffset?.x ?? 0) / 4),
                 Math.round((shadowOffset?.y ?? 0) / 4),
+                avatarRoom,
             ].join("|");
             if (this.visible && key === this.lastFogKey) return;
             this.lastFogKey = key;
@@ -321,6 +333,7 @@ export class WeatherManager {
             if (this.visible) {
                 this.graphics.clear().setVisible(false);
                 this.blocks.hide();
+                this.farFog.hide();
                 this.blockFrame = undefined;
                 this.visible = false;
                 this.scene.markDirty();
@@ -340,7 +353,8 @@ export class WeatherManager {
         const size = foggy ? Math.max(FOG_BLOCK, cloudBlock) : cloudBlock;
         // The clouds and the fog drift slowly, by whole blocks: they are painted a few times a second, while what
         // falls is drawn 30 times. Painted again at once when what they show changes or the scroll nears their edge.
-        const blockKey = [weather, showClouds, this.cloudsShown, night, size, this.reducedMotion].join("|");
+        // Painted again at once when the avatar goes into another room: the fog seen from far leaves it clear.
+        const blockKey = [weather, showClouds, this.cloudsShown, night, size, this.reducedMotion, avatarRoom].join("|");
         // The outdoors the walls leave (the same list while they do not change); the whole view without walls.
         const outdoors = grid ? veil : undefined;
         const kept = this.blockFrame;
@@ -381,6 +395,7 @@ export class WeatherManager {
                 this.blocks.paintField(canvas, levels, outdoor, NO_SHIFT, FOG_COLOR, (level) => {
                     return ((FOG_PATCH_ALPHA * level) / FOG_LEVELS) * density;
                 });
+                this.paintFarFog(view, canvas, size, outdoor, levels, density, grid, avatarRoom);
             }
         } else if (showWeather) {
             if (weather !== WeatherType.Snow) {
@@ -468,7 +483,42 @@ export class WeatherManager {
             }
         }
         if (paint) this.blocks.end();
+        // Only the fog passes over the buildings seen from far.
+        if (paint && !(showWeather && weather === WeatherType.Fog)) this.farFog.hide();
         this.scene.markDirty();
+    }
+
+    /**
+     * Seen from far, the fog over the buildings too (but the room of the avatar), as thick as outdoors once the camera
+     * is high enough and fading in on the way (the clouds pass over the roofs at the same zoom, cloudsOverRoofs): a
+     * room left clear stood out of the washed map. Over the lights of the lamps, which no longer pierce it. Seen from
+     * close, nothing: the rooms stay as they are.
+     */
+    private paintFarFog(
+        view: WeatherView,
+        canvas: BlockCanvasArea,
+        size: number,
+        outdoor: Uint8Array,
+        levels: Uint8Array,
+        density: number,
+        grid: OutdoorGrid | undefined,
+        avatarRoom: number | undefined,
+    ): void {
+        const share = grid ? cloudsOverRoofs(this.screenScale()) : 0;
+        if (!grid || share <= 0) {
+            this.farFog.hide();
+            return;
+        }
+        // The same cells as the canvas of the clouds (same view, same size).
+        this.farFog.begin(view, size);
+        const inside = farFogCells(canvas, size, outdoor, (x, y) => grid.roomAt(x, y), avatarRoom);
+        if (this.everyCell.length !== inside.length) this.everyCell = new Uint8Array(inside.length).fill(1);
+        const veil = FOG_VEIL_ALPHA * density * share;
+        this.farFog.paintField(canvas, this.everyCell, inside, NO_SHIFT, FOG_COLOR, () => veil);
+        this.farFog.paintField(canvas, levels, inside, NO_SHIFT, FOG_COLOR, (level) => {
+            return ((FOG_PATCH_ALPHA * level) / FOG_LEVELS) * density * share;
+        });
+        this.farFog.end();
     }
 
     /**
@@ -796,5 +846,6 @@ export class WeatherManager {
         this.graphics.destroy();
         this.puddleGraphics.destroy();
         this.blocks.destroy();
+        this.farFog.destroy();
     }
 }

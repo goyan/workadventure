@@ -394,6 +394,31 @@ export function outdoorCells(area: CellArea, size: number, runs: readonly Weathe
 }
 
 /**
+ * The cells of `area` the fog passes over once the map is seen from far (see WeatherManager): 1 for each cell that is
+ * not outdoors (rooms, walls, raised floors), but the cells of the room the avatar stands in, kept clear at every zoom.
+ * `roomAt` is read at the centre of each cell; `keptRoom` undefined (the avatar outdoors) covers the whole inside.
+ */
+export function farFogCells(
+    area: CellArea,
+    size: number,
+    outdoor: Uint8Array,
+    roomAt: (x: number, y: number) => number | undefined,
+    keptRoom: number | undefined,
+): Uint8Array {
+    const cells = new Uint8Array(area.columns * area.rows);
+    for (let line = 0; line < area.rows; line++) {
+        const centreY = area.y + (line + 0.5) * size;
+        for (let column = 0; column < area.columns; column++) {
+            const cell = line * area.columns + column;
+            if (outdoor[cell]) continue;
+            if (keptRoom !== undefined && roomAt(area.x + (column + 0.5) * size, centreY) === keptRoom) continue;
+            cells[cell] = 1;
+        }
+    }
+    return cells;
+}
+
+/**
  * Index of a span of the row (sorted by start) from which on any span may reach `x`: every span before it starts more
  * than the widest span away on the left, so it ends before `x`.
  */

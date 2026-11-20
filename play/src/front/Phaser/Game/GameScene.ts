@@ -3792,6 +3792,13 @@ export class GameScene extends DirtyScene {
                 this.weatherManager = new WeatherManager(this, {
                     outdoorGrid: () => this.getOutdoorGrid(),
                     raisedCover: () => this.raisedWeatherCover(),
+                    // Seen from far the fog passes over the buildings, never over the avatar's room (at its feet).
+                    avatarRoom: () => {
+                        const player = this.CurrentPlayer;
+                        return player
+                            ? this.getOutdoorGrid()?.roomAt(player.x, player.y + CHARACTER_BODY_OFFSET_Y)
+                            : undefined;
+                    },
                     seasonalTheme: () => this.getSeasonalTheme(),
                 });
                 // The relief of the ground and the water of its hollows.
