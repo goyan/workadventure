@@ -90,19 +90,27 @@ const TEXTURE_PERIOD = 512;
 export const TEXTURE_MASK = TEXTURE_PERIOD - 1;
 const textures: Partial<Record<Material, Float32Array>> = {};
 
-/** The texture of a material over a square of TEXTURE_PERIOD px (row by row), worked out at its first use. */
+/**
+ * The texture of a material over a square of TEXTURE_PERIOD px (row by row). Each value is worked out the first time
+ * it is read (textureValue), never all at once: the first block drawn does not freeze the game.
+ */
 export function textureTable(material: Material): Float32Array {
     let table = textures[material];
     if (!table) {
-        table = new Float32Array(TEXTURE_PERIOD * TEXTURE_PERIOD);
-        for (let row = 0; row < TEXTURE_PERIOD; row++) {
-            for (let column = 0; column < TEXTURE_PERIOD; column++) {
-                table[row * TEXTURE_PERIOD + column] = texture(material, column, row);
-            }
-        }
+        table = new Float32Array(TEXTURE_PERIOD * TEXTURE_PERIOD).fill(Number.NaN);
         textures[material] = table;
     }
     return table;
+}
+
+/** The texture of a material at a point of the map (whole pixels), from its table (`index`: textureIndex(x, y)). */
+export function textureValue(material: Material, table: Float32Array, index: number, x: number, y: number): number {
+    let value = table[index];
+    if (value !== value) {
+        value = texture(material, x & TEXTURE_MASK, y & TEXTURE_MASK);
+        table[index] = value;
+    }
+    return value;
 }
 
 /** Where a point of the map (whole pixels) falls in a texture table. */
@@ -144,7 +152,8 @@ export function groundColor(
         if (glow > 0.94) return EMBER;
     }
     const value =
-        groundValue(textureTable(material)[textureIndex(x, y)], light, height) - (contour ? CONTOUR_SHADE : 0);
+        groundValue(textureValue(material, textureTable(material), textureIndex(x, y), x, y), light, height) -
+        (contour ? CONTOUR_SHADE : 0);
     return shadeAt(ramp, value, x, y);
 }
 

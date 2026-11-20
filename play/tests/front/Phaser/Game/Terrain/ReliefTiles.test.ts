@@ -251,4 +251,25 @@ describe("the blocks of the relief seen in 3/4", () => {
         const sorted = times.slice(1).sort((a, b) => a - b);
         expect(sorted[Math.floor(sorted.length / 2)]).toBeLessThan(25);
     });
+
+    it("draws its first block without freezing: the textures are worked out as they are used", async () => {
+        // A fresh copy of the modules: no texture worked out yet.
+        vi.resetModules();
+        const fresh = await import("../../../../../src/front/Phaser/Game/Terrain/ReliefTiles");
+        const { scene, setTerrain } = fixture(floorWithSand(24));
+        const terrain = floorWithSand(24);
+        setTerrain(terrain);
+        const water = new TerrainWater();
+        water.setTerrain(terrain);
+        const tiles = new fresh.ReliefTiles(scene as never, {
+            relief: () => terrain,
+            water,
+            season: () => undefined,
+            snowShown: () => 0,
+        });
+        const start = performance.now();
+        tiles.update(0);
+        expect(tiles.redraws()).toBe(1);
+        expect(performance.now() - start).toBeLessThan(80);
+    });
 });

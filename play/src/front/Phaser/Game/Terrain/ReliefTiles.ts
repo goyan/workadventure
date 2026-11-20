@@ -11,6 +11,7 @@ import {
     lightOfRise,
     textureIndex,
     textureTable,
+    textureValue,
     TEXTURE_MASK,
 } from "./Pixel/GroundPixel";
 import { cellMaterial, outlineOf, pickMaterial } from "./Pixel/MaterialField";
@@ -368,7 +369,8 @@ export class ReliefTiles {
         }
         // 2. Its colours: texture, light of the slope, depth, and the line of a border.
         const colors = this.pointColors;
-        const textures = MATERIALS.map((material) => textureTable(material));
+        // The textures of the materials met in this block only (a table is 1 MB).
+        const textures: (Float32Array | undefined)[] = [];
         for (let row = Math.max(1, firstRow + 1); row < Math.min(POINT_ROWS - 1, endRow - 1); row++) {
             const y = originY + row;
             const textureRow = textureIndex(0, y);
@@ -406,8 +408,17 @@ export class ReliefTiles {
                 if (outline === undefined && material !== "ember") {
                     // The common case of groundColor, without its calls: texture, light, depth, then the dither.
                     const value =
-                        groundValue(textures[here][textureRow + (x & TEXTURE_MASK)], light, heights[index]) -
-                        contourShade(contour);
+                        groundValue(
+                            textureValue(
+                                material,
+                                (textures[here] ??= textureTable(material)),
+                                textureRow + (x & TEXTURE_MASK),
+                                x,
+                                y,
+                            ),
+                            light,
+                            heights[index],
+                        ) - contourShade(contour);
                     const shade = Math.round(value * 3 + bayerRow[x & 3] - 0.5);
                     colors[index] = RAMPS[material][shade < 0 ? 0 : shade > 3 ? 3 : shade];
                 } else {
