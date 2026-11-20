@@ -57,6 +57,7 @@ describe("LeafPiles", () => {
                 entity(0, 0, "Carte Portes"),
                 entity(0, 0, "Infogène Murs fins"),
                 entity(0, 0, "Carte Sols"),
+                entity(0, 0, "Carte Ponts"),
                 entity(0, 0, "Infogène Sols"),
                 entity(128, 128),
             ],
