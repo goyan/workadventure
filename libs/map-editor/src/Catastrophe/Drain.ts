@@ -2,8 +2,8 @@ import { TILE_PX } from "../types";
 
 /** The side of the square a drain empties, in tiles: always the same, around the tile under the pointer. */
 export const DRAIN_SIDE_TILES = 5;
-/** Pixels of water a drain takes from each cell under it, each second: sixteen times what a downpour brings. */
-export const DRAIN_PX_PER_SECOND = 64;
+/** Pixels of water a drain takes from each cell under it, each second: sixty-four times what a downpour brings. */
+export const DRAIN_PX_PER_SECOND = 256;
 /** How long a drain goes on after the last message of its player, in milliseconds: it follows a held click. */
 export const DRAIN_LASTS_MS = 1000;
 /** How many drains can be open at once in a room. */

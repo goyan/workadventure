@@ -195,7 +195,7 @@ describe("TerrainWaterManager", () => {
         manager.setDrains(() => [{ id: 1, x: 240, y: 240 }]);
         sent.length = 0;
         steps(1);
-        // A step of a tenth of a second at 64 px a second: 6.4 px gone from each cell of the square.
+        // A step of a tenth of a second at 256 px a second: up to 25.6 px gone from each cell of the square.
         expect(manager.getGrid()?.depthAt(15, 15)).toBeLessThan(2);
         expect(manager.getGrid()?.depthAt(28, 28)).toBeGreaterThan(7.5);
         steps(9);

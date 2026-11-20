@@ -3374,7 +3374,7 @@ ignorés, point dans la carte. Chaque message accepté est annoncé à la salle 
 le drain dure). Le drain et l'averse d'un même joueur vivent chacun leur vie.
 
 **Ce qu'il fait.** À chaque pas de l'eau (10 par seconde), chaque cellule du carré (`drainSquare`, 10 × 10 cellules
-de 16 px) perd de l'eau (`WaterGrid.drainOn`, **64 px par seconde**, seize fois ce qu'apporte une averse, rien d'un
+de 16 px) perd de l'eau (`WaterGrid.drainOn`, **256 px par seconde**, soixante-quatre fois ce qu'apporte une averse, rien d'un
 mur, seulement les cellules de la grille), comptée avec les **puits** du bilan ; la salle reçoit l'eau cinq fois par
 seconde tant qu'un drain prend de l'eau. Le carré est vide en moins d'une seconde ; ensuite il prend ce qui coule
 depuis les cellules voisines, une cellule par pas : la surface penche vers lui, et le courant y emporte les avatars.
