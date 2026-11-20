@@ -2390,8 +2390,8 @@ sa surface. La position vraie reste au sol (serveur, collisions, bulles, eau de 
 bouge. `Terrain/ReliefProjection.ts` (pur : `dropAt`, `groundPointAt` de l'écran vers le sol, `paintColumn`),
 `Terrain/ReliefTiles.ts` (une image par bloc de relief de 16 × 16 cellules, au-dessus du relief plat à 0,66),
 `Terrain/ReliefTileSchedule.ts` (un bloc n'est redessiné que si son relief, ses sols peints, celui des 8 rangées au
-nord, son eau, la prairie, la saison ou la neige changent ; jamais en marchant ni en zoomant ; 1 bloc par image au
-plus, les visibles d'abord ; 64 blocs gardés ; 13 à 20 ms par bloc mesurés dans le conteneur de dev).
+nord, son eau, ce qui couvre ses cellules ou la saison changent ; jamais en marchant ni en zoomant ; un bloc à la
+fois, les visibles d'abord, son dessin étalé sur plusieurs images à 6 ms par image au plus ; 64 blocs gardés).
 
 **En pixel art net** (conception `docs/superpowers/specs/2026-11-20-terrain-pixel-art-design.md` du dépôt d'infra,
 lot A) : un pixel du bloc pour un pixel de la carte, jamais lissé. Chaque point du sol prend une **matière**
@@ -2400,8 +2400,10 @@ avec une frontière nette et irrégulière entre deux matières et un liseré d'
 matière la plus sombre, clair côté neige) ; sa **couleur** (`Pixel/GroundPixel.ts`) vient de la texture de la
 matière (tables de 512 px), de la lumière de la pente (nord-ouest) et de la profondeur, réduite à une rampe de
 4 teintes par une trame 4 × 4 (`Pixel/PixelPalette.ts`, `Pixel/PixelNoise.ts`). Une **paroi** commence là où le
-dessin tombe de plus de 2 px pour un pixel de sol (`FACE_JUMP_PX`) : tout ce qui tombe dessus prend sa couleur (plus
-de rayures), le haut d'une paroi est cerné de sombre (`RIM_OUTLINE`) ; plus doux, le sol est étiré. Sur un **pont**,
+dessin tombe de plus de 2 px pour un pixel de sol (`FACE_JUMP_PX`, sur la chute exacte) : tout ce qui tombe dessus
+prend sa couleur (plus de rayures), le haut d'une paroi est cerné de sombre (`RIM_OUTLINE`) ; plus doux, le sol est
+étiré, éclairé par sa pente même douce, et une **courbe de niveau** d'1 px plus sombre marque chaque case de
+profondeur (`isContour`) : la forme d'une cuvette se lit même sous la neige. Sur un **pont**,
 un avatar reste au niveau du tablier et un clic vise le tablier. Le sol plat, l'eau et les saisons suivront (lots B
 et C). `TerrainView` ne dessine alors plus
 l'assombrissement des creux ni l'eau. **Avatars** : chacun, le sien et ceux des autres, est dessiné plus bas de la
