@@ -1,12 +1,12 @@
 <script lang="ts">
     import type { WeatherType } from "@workadventure/map-editor";
-    import { LL } from "../../../i18n/i18n-svelte";
-    import { FORECAST_HOURS } from "../../Phaser/Game/Weather/WeatherForecast";
-    import type { ForecastCell } from "../../Phaser/Game/Weather/WeatherForecast";
-    import { compassPointOf, windArrowOf } from "../../Phaser/Game/Weather/WindDirection";
-    import type { CompassPoint } from "../../Phaser/Game/Weather/WindDirection";
-    import WeatherIcon from "../Menu/WeatherIcon.svelte";
-    import { weatherLook, weatherName } from "../Menu/WeatherName";
+    import { LL } from "@wa/i18n/i18n-svelte";
+    import { FORECAST_HOURS } from "@wa/front/Phaser/Game/Weather/WeatherForecast";
+    import type { ForecastCell } from "@wa/front/Phaser/Game/Weather/WeatherForecast";
+    import { compassPointOf, windArrowOf } from "@wa/front/Phaser/Game/Weather/WindDirection";
+    import type { CompassPoint } from "@wa/front/Phaser/Game/Weather/WindDirection";
+    import WeatherIcon from "@wa/front/Components/Menu/WeatherIcon.svelte";
+    import { weatherLook, weatherName } from "@wa/front/Components/Menu/WeatherName";
     import WindArrowIcon from "./WindArrowIcon.svelte";
     import { IconDeviceDesktop, IconWorld } from "@wa-icons";
 

@@ -1,6 +1,14 @@
 <script lang="ts">
     import type { WeatherType } from "@workadventure/map-editor";
-    import type { ForecastCell } from "../../Phaser/Game/Weather/WeatherForecast";
+    import type { ForecastCell } from "@wa/front/Phaser/Game/Weather/WeatherForecast";
+    import {
+        chosenPlaceForecast,
+        chosenPlaceStore,
+        chosenWeatherStateStore,
+    } from "@wa/front/Phaser/Game/Weather/ChosenPlaceWeather";
+    import { weatherLook } from "@wa/front/Components/Menu/WeatherName";
+    import { compassPointOf, windArrowOf } from "@wa/front/Phaser/Game/Weather/WindDirection";
+    import type { WindArrow } from "@wa/front/Phaser/Game/Weather/WindDirection";
     import { LL } from "../../../i18n/i18n-svelte";
     import { gameManager } from "../../Phaser/Game/GameManager";
     import { shownMapPlace, shownWeatherForecast } from "../../Phaser/Game/Weather/RealWeatherClient";
@@ -8,15 +16,7 @@
     import { fireConditionsStore } from "../../Stores/FireConditionsStore";
     import { weatherBannerStore } from "../../Stores/WeatherBannerStore";
     import { nowCellWithConditions } from "../../Phaser/Game/Weather/ManualConditions";
-    import {
-        chosenPlaceForecast,
-        chosenPlaceStore,
-        chosenWeatherStateStore,
-    } from "../../Phaser/Game/Weather/ChosenPlaceWeather";
     import WeatherIcon from "../Menu/WeatherIcon.svelte";
-    import { weatherLook } from "../Menu/WeatherName";
-    import { compassPointOf, windArrowOf } from "../../Phaser/Game/Weather/WindDirection";
-    import type { WindArrow } from "../../Phaser/Game/Weather/WindDirection";
     import WeatherCard from "./WeatherCard.svelte";
     import WindArrowIcon from "./WindArrowIcon.svelte";
     import { IconDeviceDesktop, IconWorld, IconX } from "@wa-icons";

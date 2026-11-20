@@ -1,9 +1,9 @@
 import * as Phaser from "phaser";
 import { DEFAULT_POOL_STYLE, poolStyleAt, poolStyleOf } from "@workadventure/map-editor";
 import type { PoolStyle } from "@workadventure/map-editor";
-import { refreshCanvasTexture } from "../CanvasTextureRefresh";
-import { DEEP_ICE_PX, POOL_ICE_DEPTH_PX } from "../Weather/Frost";
-import type { WaterCycle } from "../Weather/Frost";
+import { refreshCanvasTexture } from "@wa/front/Phaser/Game/CanvasTextureRefresh";
+import { DEEP_ICE_PX, POOL_ICE_DEPTH_PX } from "@wa/front/Phaser/Game/Weather/Frost";
+import type { WaterCycle } from "@wa/front/Phaser/Game/Weather/Frost";
 import { GROUND_TEXTURES } from "./TexturedGround";
 import type { GroundArea } from "./TexturedGround";
 

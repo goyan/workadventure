@@ -802,6 +802,11 @@ npm run pretty        # corrige le formatage
 - **Ne jamais committer de secret** : ce dépôt est **public**.
 - Écrire du code (et ses commentaires) en anglais, comme le reste de WorkAdventure ; messages de commit en français.
 - Les écouteurs d'événements doivent être nommés et retirés (règle de lint `listeners/*`).
+- **Imports dans `play/` : alias `@wa/...`, jamais de chemin relatif qui remonte** (`../`). `@wa/*` pointe sur
+  `play/src/*` (`play/tsconfig.json`, Vite, Vitest) : `import { gameManager } from "@wa/front/Phaser/Game/GameManager"`,
+  pas `"../../../Phaser/Game/GameManager"`. Vaut pour tout fichier créé ou modifié, tests compris
+  (`@wa/front/...` au lieu de `../../../../../src/front/...`). Seul un fichier voisin du même dossier s'importe en
+  `./`. Le code amont encore en relatif est converti quand on le touche.
 - Ne pas modifier les fichiers de `.github/workflows/` sans en parler : le workflow `build-play` publie l'image de la prod.
 - Un comportement visuel (zoom, interaction, interface) n'est « terminé » que quand quelqu'un l'a **vu fonctionner en beta**.
 - Pousser sur `infogene` déploie ce code **sur notre serveur** : les droits d'écriture sont réservés aux personnes de confiance.
@@ -3775,3 +3780,15 @@ gèlent comme des hauts-fonds et deviennent des patinoires, sauf si leur **eau c
 d'état d'objet `hot` (`ENTITY_STATE_KEYS`, défaut « non », `entityStateDefault`), commandée par un interrupteur
 (« Il agit sur : l'eau chaude des piscines », cibles choisies pour une piscine dehors) ; chauffée, elle fume dans le
 froid et ne gèle jamais.
+
+**Piscines codées.** Une piscine est peinte au sol avec l'outil **Relief**, mode **Piscine** : ses cases gardent un sol
+de piscine (codes 7 à 14, `libs/map-editor/src/Terrain/Pools.ts`), un par style. Jusqu'à 8 styles par carte, dans
+`settings.pools` (message `UpdatePoolSettingMessage`) : couleur de l'eau, couleur de la margelle, profondeur, 0 à 2
+échelles, eau chaude. Le shader de l'eau les dessine (`poolColor`) : margelle par érosion de la forme
+(`poolAround`), carrelage vu à travers l'eau, couleur selon la profondeur. On y nage (`WaterZones.paintedPoolRectangles`,
+la profondeur du style), les échelles se posent sur le bord haut (`Terrain/PoolLadders.ts`). Les anciennes
+piscines-images (objets avec eau) sont redessinées de la même façon, image cachée (`Terrain/ImagePools.ts` ;
+`?classicPools` ou `localStorage.classicPools = "1"` pour revoir l'image), et retirées du catalogue ; « Convertir en
+piscine modifiable » dans l'éditeur d'objets la remplace par une piscine peinte (`MapEditor/PoolConversion.ts`).
+**Gel** : une piscine gèle en surface comme une eau calme de 32 px, quelle que soit sa profondeur
+(`POOL_ICE_DEPTH_PX`), soit vers -8 °C ; jamais dedans (`OutdoorGrid`) ni chauffée.

@@ -1,7 +1,7 @@
 import { get } from "svelte/store";
-import { entityStatesManagerStore } from "../../../Stores/EntityStatesStore";
-import type { GameScene } from "../GameScene";
-import { isFrozen, POOL_ICE_DEPTH_PX, waterCycleNow } from "../Weather/Frost";
+import { entityStatesManagerStore } from "@wa/front/Stores/EntityStatesStore";
+import type { GameScene } from "@wa/front/Phaser/Game/GameScene";
+import { isFrozen, POOL_ICE_DEPTH_PX, waterCycleNow } from "@wa/front/Phaser/Game/Weather/Frost";
 
 /**
  * Whether the point is on water of the relief frozen for this player (Frost.ts): it is skated on as on a rink, nobody

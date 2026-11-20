@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { placeOfPoint } from "../../../../../src/front/Phaser/Game/Night/WorldDaylight";
+import { placeOfPoint } from "@wa/front/Phaser/Game/Night/WorldDaylight";
 
 describe("placeOfPoint", () => {
     it("names a point after the nearest city of the list, however far it is, and keeps its own coordinates", () => {

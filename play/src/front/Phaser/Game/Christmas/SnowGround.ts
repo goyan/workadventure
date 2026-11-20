@@ -1,6 +1,6 @@
+import { GROUND_TEXTURES, TexturedGround } from "@wa/front/Phaser/Game/Terrain/TexturedGround";
 import { DEPTH_SNOW_GROUND_INDEX } from "../DepthIndexes";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
-import { GROUND_TEXTURES, TexturedGround } from "../Terrain/TexturedGround";
 
 /** Snow textured beyond each edge of the screen, in cells: a short scroll keeps the same drawing. */
 const MARGIN_CELLS = 6;

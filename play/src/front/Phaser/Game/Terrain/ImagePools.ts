@@ -1,5 +1,5 @@
 import { get } from "svelte/store";
-import { entityStatesManagerStore } from "../../../Stores/EntityStatesStore";
+import { entityStatesManagerStore } from "@wa/front/Stores/EntityStatesStore";
 
 /**
  * The pools of the map placed as images (objects with water): drawn by the shaders in their place, as the pools

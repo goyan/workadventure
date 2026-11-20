@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { WindArrow } from "../../Phaser/Game/Weather/WindDirection";
+    import type { WindArrow } from "@wa/front/Phaser/Game/Weather/WindDirection";
 
     interface Props {
         /** Where the wind goes, north up as on the map. */

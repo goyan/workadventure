@@ -1,10 +1,10 @@
 import type * as Phaser from "phaser";
-import { GROUND_TEXTURES } from "../Terrain/TexturedGround";
-import { getWaterRectangles, getFrozenPoolRectangles } from "../Water/WaterZones";
-import type { WaterRectangle } from "../Water/WaterZones";
-import { waterCycleNow } from "../Weather/Frost";
-import type { GameScene } from "../GameScene";
-import { classicPoolsShown } from "../Terrain/ImagePools";
+import { GROUND_TEXTURES } from "@wa/front/Phaser/Game/Terrain/TexturedGround";
+import { getWaterRectangles, getFrozenPoolRectangles } from "@wa/front/Phaser/Game/Water/WaterZones";
+import type { WaterRectangle } from "@wa/front/Phaser/Game/Water/WaterZones";
+import { waterCycleNow } from "@wa/front/Phaser/Game/Weather/Frost";
+import type { GameScene } from "@wa/front/Phaser/Game/GameScene";
+import { classicPoolsShown } from "@wa/front/Phaser/Game/Terrain/ImagePools";
 import { isPoolHot } from "./FrozenWater";
 
 /** The steam of a hot pool in the cold is drawn this often: each drawing draws the map again. */

@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-    frostAt,
-    iceAt,
-    isFrozen,
-    POOL_ICE_DEPTH_PX,
-    towards,
-} from "../../../../../src/front/Phaser/Game/Weather/Frost";
+import { frostAt, iceAt, isFrozen, POOL_ICE_DEPTH_PX, towards } from "@wa/front/Phaser/Game/Weather/Frost";
 
 describe("Frost", () => {
     it("whitens the ground from 0 °C, all of it at -10 °C", () => {

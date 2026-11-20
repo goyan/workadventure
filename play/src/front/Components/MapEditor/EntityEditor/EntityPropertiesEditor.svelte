@@ -6,6 +6,7 @@
     import type { ApplicationDefinitionInterface } from "@workadventure/messages";
     import { v4 as uuid } from "uuid";
     import type { EntityPrefab, PrefabOverride } from "@workadventure/map-editor";
+    import { paintImagePool } from "@wa/front/Phaser/Game/MapEditor/PoolConversion";
     import {
         mapEditorEntityModeStore,
         mapEditorSelectedEntityPrefabStore,
@@ -36,7 +37,6 @@
     import { mapLayerBuiltLevelsStore } from "../../../Stores/MapLayerStore";
     import SwitchPropertyEditor from "../PropertyEditor/SwitchPropertyEditor.svelte";
     import WaterFlowPropertyEditor from "../PropertyEditor/WaterFlowPropertyEditor.svelte";
-    import { paintImagePool } from "../../../Phaser/Game/MapEditor/PoolConversion";
     import { waterAnchorOf } from "../../../Phaser/Game/Terrain/WaterAnchor";
     import { selfSensorProperty } from "../../../Phaser/Game/Switches/SwitchWiring";
     import DanceFloorSizeEditor from "./DanceFloorSizeEditor.svelte";

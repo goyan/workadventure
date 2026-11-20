@@ -1,8 +1,8 @@
 import { derived, get, writable, type Readable, type Writable } from "svelte/store";
 import type { WeatherLocation } from "@workadventure/map-editor";
+import { WorldMoment, type WorldPoint } from "@wa/front/Phaser/Game/Night/WorldDaylight";
 import { localUserStore } from "../Connection/LocalUserStore";
 import { NIGHT_DARKNESS_MAX, NIGHT_DARKNESS_MIN, NIGHT_MAX_OPACITY } from "../Phaser/Game/Night/NightClock";
-import { WorldMoment, type WorldPoint } from "../Phaser/Game/Night/WorldDaylight";
 import {
     createPersistedChoiceStore,
     createPersistedNumberStore,

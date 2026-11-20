@@ -1,6 +1,6 @@
 import { cellKey, DEFAULT_POOL_STYLE, MAX_POOL_STYLES, poolSoilCode, TERRAIN_CELL } from "@workadventure/map-editor";
-import { readTerrainMapSettings } from "../Terrain/TerrainMapSettings";
-import { terrainBrushStore } from "../../../Stores/TerrainEditorStore";
+import { readTerrainMapSettings } from "@wa/front/Phaser/Game/Terrain/TerrainMapSettings";
+import { terrainBrushStore } from "@wa/front/Stores/TerrainEditorStore";
 import { executeUpdateTerrain, executeUpdateWAMSettings } from "./Commands/Facades";
 
 /** What is read of a pool placed as an image: where its image is. */

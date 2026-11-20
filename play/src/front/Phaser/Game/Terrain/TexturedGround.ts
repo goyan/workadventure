@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import { refreshCanvasTexture } from "../CanvasTextureRefresh";
+import { refreshCanvasTexture } from "@wa/front/Phaser/Game/CanvasTextureRefresh";
 
 /** Where a ground is shown: the top left corner of a grid of square cells, in map pixels, and its size in cells. */
 export interface GroundArea {

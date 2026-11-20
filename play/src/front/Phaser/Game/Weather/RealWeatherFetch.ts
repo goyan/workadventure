@@ -1,7 +1,7 @@
-import { localUserStore } from "../../../Connection/LocalUserStore";
-import { ABSOLUTE_PUSHER_URL } from "../../../Enum/ComputedConst";
-import { RealWeatherForecast } from "../../../../common/RealWeather";
-import type { MapPlace } from "../../../../common/RealWeather";
+import { localUserStore } from "@wa/front/Connection/LocalUserStore";
+import { ABSOLUTE_PUSHER_URL } from "@wa/front/Enum/ComputedConst";
+import { RealWeatherForecast } from "@wa/common/RealWeather";
+import type { MapPlace } from "@wa/common/RealWeather";
 
 /** The weather timeline of a place (Paris when absent), through the pusher (Open-Meteo, cached there). */
 export async function fetchRealWeather(place: MapPlace | undefined): Promise<RealWeatherForecast> {

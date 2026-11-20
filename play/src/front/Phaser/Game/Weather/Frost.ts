@@ -1,7 +1,7 @@
 import { get } from "svelte/store";
 import { WeatherType } from "@workadventure/map-editor";
-import { nightDateStore } from "../../../Stores/NightStore";
-import { fireConditionsStore } from "../../../Stores/FireConditionsStore";
+import { nightDateStore } from "@wa/front/Stores/NightStore";
+import { fireConditionsStore } from "@wa/front/Stores/FireConditionsStore";
 import { chosenPlaceForecast, chosenWeatherNow } from "./ChosenPlaceWeather";
 import { shownWeatherForecast, shownWeatherSettings } from "./RealWeatherClient";
 import type { MapSnowSettings } from "./SnowCover";

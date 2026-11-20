@@ -13,15 +13,15 @@ import {
 } from "@workadventure/map-editor";
 import { Season } from "@workadventure/map-editor";
 import type { PoolStyle, TerrainData } from "@workadventure/map-editor";
+import type { OutdoorGrid } from "@wa/front/Phaser/Game/Outdoor/OutdoorGrid";
+import { waterCycleNow } from "@wa/front/Phaser/Game/Weather/Frost";
+import type { WaterCycle } from "@wa/front/Phaser/Game/Weather/Frost";
 import type { GameScene } from "../GameScene";
-import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { createBlockSurface } from "../Weather/BlockSurface";
 import type { BlockCanvasArea, BlockSnapshot, BlockSurface } from "../Weather/BlockSurface";
 import { paddedView, wellInside } from "../Weather/WeatherFrame";
 import type { WeatherView } from "../Weather/WeatherFrame";
 import { isBasicActive } from "../../../Stores/BasicModeStore";
-import { waterCycleNow } from "../Weather/Frost";
-import type { WaterCycle } from "../Weather/Frost";
 import {
     DEEP_WATER_COLOR,
     deepWaterAlpha,

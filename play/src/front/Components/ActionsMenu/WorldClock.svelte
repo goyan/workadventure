@@ -1,7 +1,5 @@
 <script lang="ts">
-    import { LL, locale } from "../../../i18n/i18n-svelte";
-    import { worldClockTimeZone } from "../../Phaser/Game/Night/NightClock";
-    import { sunHeightAt, WorldMoment } from "../../Phaser/Game/Night/WorldDaylight";
+    import { sunHeightAt, WorldMoment } from "@wa/front/Phaser/Game/Night/WorldDaylight";
     import {
         NightMode,
         mapTimeZoneStore,
@@ -11,7 +9,9 @@
         worldCustomMinutesStore,
         worldMomentStore,
         worldPointStore,
-    } from "../../Stores/NightStore";
+    } from "@wa/front/Stores/NightStore";
+    import { LL, locale } from "../../../i18n/i18n-svelte";
+    import { worldClockTimeZone } from "../../Phaser/Game/Night/NightClock";
 
     /** The map of the world (Natural Earth, public domain): equirectangular, a point is read straight from it. */
     const WORLD_MAP = "/resources/terrain/world-map.png";
