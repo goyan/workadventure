@@ -3846,6 +3846,10 @@ export class GameScene extends DirtyScene {
                     gridVersion: () => this.getOutdoorVersion(),
                     wam: () => this.getGameMap().getWamFile()?.getWam(),
                     isGrassTile: (x, y) => mapTileIsGrass(this.Map, exteriorIsGrass, x, y),
+                    mapSize: () => ({
+                        width: this.Map.width * this.Map.tileWidth,
+                        height: this.Map.height * this.Map.tileHeight,
+                    }),
                 });
                 this.reliefTiles?.destroy();
                 this.reliefTiles = new ReliefTiles(this, {

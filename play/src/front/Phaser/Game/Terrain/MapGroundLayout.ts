@@ -11,6 +11,8 @@ export interface MapGroundLayoutDeps {
     wam(): Pick<WAMFileFormat, "entities"> | undefined;
     /** Whether the tile of the map under a point (map pixels) is grass. */
     isGrassTile(x: number, y: number): boolean;
+    /** The size of the map (pixels): the ground stops at its edges. */
+    mapSize(): { width: number; height: number } | undefined;
 }
 
 /** The floors of the Carte tool are read again this often (ms): they change only while the map is edited. */
@@ -57,7 +59,12 @@ export class MapGroundLayout implements GroundLayout {
     }
 
     public outdoor(cellX: number, cellY: number): boolean {
-        return this.deps.grid()?.isOutdoorAt((cellX + 0.5) * TERRAIN_CELL, (cellY + 0.5) * TERRAIN_CELL) ?? true;
+        const x = (cellX + 0.5) * TERRAIN_CELL;
+        const y = (cellY + 0.5) * TERRAIN_CELL;
+        // Beyond the edges of the map: its picture (exteriorTexture), not its ground.
+        const size = this.deps.mapSize();
+        if (size && (x < 0 || y < 0 || x >= size.width || y >= size.height)) return false;
+        return this.deps.grid()?.isOutdoorAt(x, y) ?? true;
     }
 
     public paved(cellX: number, cellY: number): boolean {
