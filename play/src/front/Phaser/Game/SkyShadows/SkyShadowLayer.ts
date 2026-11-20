@@ -1,5 +1,6 @@
 import * as Phaser from "phaser";
 import type { WeatherView } from "../Weather/WeatherFrame";
+import { refreshCanvasTexture } from "../CanvasTextureRefresh";
 import type { Point } from "./SkyShadowGeometry";
 import { drawableSource } from "./SkyShadowPicture";
 import type { ShadowPicture } from "./SkyShadowPicture";
@@ -122,7 +123,7 @@ export class SkyShadowLayer {
                 Math.ceil(rect.height * scale),
             );
         }
-        texture.refresh();
+        refreshCanvasTexture(texture);
         this.image
             .setPosition(area.x, area.y)
             .setDisplaySize(width / scale, height / scale)

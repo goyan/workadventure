@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import { refreshCanvasTexture } from "../CanvasTextureRefresh";
 import type { DanceFloorEngine } from "./DanceFloorEngine";
 import { DANCE_FLOOR_TILE_PX, type FloorGrid } from "./DanceFloorPatterns";
 import { makeWhiteTexture } from "./LampTextures";
@@ -123,9 +124,9 @@ export class DanceFloorVisual {
         }
         engine.paint(this.tilesPixels.data, this.haloPixels.data);
         this.tilesTexture.getContext().putImageData(this.tilesPixels, 0, 0);
-        this.tilesTexture.refresh();
+        refreshCanvasTexture(this.tilesTexture);
         this.haloTexture.getContext().putImageData(this.haloPixels, 0, 0);
-        this.haloTexture.refresh();
+        refreshCanvasTexture(this.haloTexture);
         // The joints glow with the floor: a little brighter on each beat.
         this.joints.setAlpha((0.45 + 0.55 * engine.glow) * this.alpha);
     }

@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import { refreshCanvasTexture } from "../CanvasTextureRefresh";
 
 export const LAMP_DISC_TEXTURE = "lamp-soft-disc";
 export const LAMP_BEAM_TEXTURE = "lamp-beam";
@@ -35,7 +36,7 @@ export function makeWhiteTexture(
         }
     }
     context.putImageData(image, 0, 0);
-    texture.refresh();
+    refreshCanvasTexture(texture);
     // The game runs without antialiasing (nearest filtering): a soft light must be smoothed all the same.
     texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
 }
@@ -176,7 +177,7 @@ export function ensureMirrorBallTexture(scene: Phaser.Scene): void {
         texture.add(frame, 0, frame * size, 0, size, size);
     }
     context.putImageData(image, 0, 0);
-    texture.refresh();
+    refreshCanvasTexture(texture);
 }
 
 function normalize(vector: number[]): number[] {

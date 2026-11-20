@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import { refreshCanvasTexture } from "../CanvasTextureRefresh";
 import { realLightFalloff } from "./LampLumens";
 import { lightRealFalloffNow, lightSoftEdgePxNow } from "./LightSoftEdge";
 import { lightFalloff, type LightCone, type Point } from "./RgbLampGeometry";
@@ -101,7 +102,7 @@ export class RgbLampVisual {
                     context.fill();
                 }
             }
-            this.texture.refresh();
+            refreshCanvasTexture(this.texture);
         }
         this.image.setPosition(left, top).setDisplaySize(size, size).setTint(colour);
     }
