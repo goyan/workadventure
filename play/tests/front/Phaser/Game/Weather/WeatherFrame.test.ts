@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { WeatherType } from "@workadventure/map-editor";
 import {
-    effectiveWeather,
     FOG_LEVELS,
     fogBlocks,
     fogPatches,
@@ -15,7 +14,6 @@ import {
 } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
 import { autoWeatherAt, slotStart } from "../../../../../src/front/Phaser/Game/Weather/WeatherSchedule";
 import { OutdoorGrid } from "../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid";
-import { SeasonalTheme } from "../../../../../src/front/Phaser/Game/Seasonal/SeasonalTheme";
 
 const view = { x: 0, y: 0, width: 800, height: 600 };
 
@@ -181,14 +179,6 @@ describe("outdoor weather", () => {
 
     it("drops particles above indoor cells", () => {
         expect(keepOutdoorParticles(particles, (x, y) => closedRoom.isOutdoorAt(x, y))).toEqual([particles[1]]);
-    });
-
-    it("christmas forces snow", () => {
-        expect(effectiveWeather(WeatherType.Rain, SeasonalTheme.Christmas)).toBe(WeatherType.Snow);
-        expect(effectiveWeather(WeatherType.Rain, undefined)).toBe(WeatherType.Rain);
-        expect(effectiveWeather(WeatherType.Clear, SeasonalTheme.Christmas)).toBe(WeatherType.Snow);
-        // Autumn keeps the map weather.
-        expect(effectiveWeather(WeatherType.Rain, SeasonalTheme.Autumn)).toBe(WeatherType.Rain);
     });
 });
 

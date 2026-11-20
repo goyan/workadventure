@@ -296,23 +296,6 @@ describe("weather rendering lifecycle", () => {
         expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Rain);
     });
 
-    it("draws snow when christmas is active on a clear map", () => {
-        const { scene, graphics, wam } = fixture();
-        wam.settings = { weather: WeatherType.Clear };
-        manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Christmas });
-        manager.update(0, new Date(0));
-        expect(graphics.fillRect.mock.calls).toContainEqual([expect.any(Number), expect.any(Number), 2, 2]);
-        expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Snow);
-    });
-
-    it("hides the seasonal ground while the christmas theme draws its own snow ground", () => {
-        const { scene, wam } = fixture();
-        wam.settings = { weather: WeatherType.Clear };
-        manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Christmas });
-        manager.update(0, new Date(0));
-        expect(ground.update.mock.lastCall?.[2]).toBe(false);
-    });
-
     describe("storm", () => {
         it("darkens more than rain, and flashes with a bolt right after a strike", () => {
             const { scene, graphics, wam } = fixture();
@@ -617,15 +600,6 @@ describe("weather rendering lifecycle", () => {
             manager = new WeatherManager(scene);
             manager.update(0, new Date(0));
             expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Fog);
-        });
-
-        it("shows the Christmas snow rather than the map fog", () => {
-            const { scene, graphics, wam } = fixture();
-            wam.settings = { weather: WeatherType.Fog };
-            manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Christmas });
-            manager.update(0, new Date(0));
-            expect(graphics.fillRect.mock.calls).toContainEqual([expect.any(Number), expect.any(Number), 2, 2]);
-            expect(fogFill(graphics)).toHaveLength(0);
         });
 
         it("draws the snow of the map in autumn, with no leaf falling from the sky", () => {

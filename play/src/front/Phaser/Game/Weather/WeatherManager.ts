@@ -19,7 +19,6 @@ import type { SunPosition } from "../Night/NightClock";
 import { unlessBasic } from "../../../Stores/BasicModeStore";
 import type { RaisedCover } from "./RaisedCover";
 import {
-    effectiveWeather,
     farFogCells,
     FOG_LEVELS,
     fieldLevels,
@@ -138,7 +137,7 @@ export interface WeatherManagerOptions {
      * over the buildings, never over this room.
      */
     avatarRoom?: () => number | undefined;
-    /** The personal seasonal theme: Christmas shows snow instead of the map weather, autumn colours the grass. */
+    /** The personal seasonal theme: autumn colours the grass. */
     seasonalTheme?: () => SeasonalTheme | undefined;
     /** Overrides the system "reduced motion" setting (read once from matchMedia otherwise). Used by tests. */
     reducedMotion?: boolean;
@@ -236,28 +235,21 @@ export class WeatherManager {
         const realFogSince = real ? settings?.weatherStartedAt : undefined;
         const realFogUntil = real ? settings?.weatherEndsAt : undefined;
         const theme = this.options.seasonalTheme?.();
-        const weather = effectiveWeather(weatherAtTime(configured, serverDate, settings?.weatherAuto), theme);
+        const weather = weatherAtTime(configured, serverDate, settings?.weatherAuto);
         const storm = weather === WeatherType.Storm;
         const forcedRain = forcedRainLevel(this.forcedRain, now);
         const rain = forcedRain ?? rainIntensity(settings?.rainRate, storm);
         const raining = storm || weather === WeatherType.Rain;
         // A forced level (development) soaks the ground as much, so the puddles can be seen at once.
         const wetness = Math.max(mapGroundWetness(settings, serverDate), raining ? (forcedRain ?? 0) : 0);
-        this.drawPuddles(this.weatherShown && !this.editing && theme !== SeasonalTheme.Christmas ? wetness : 0);
+        this.drawPuddles(this.weatherShown && !this.editing ? wetness : 0);
         this.sounds.update(weather, serverDate, this.editing, night, rain);
         const enabled = this.weatherShown && !this.editing;
-        // The snow of the map is the Christmas decor fading in (SeasonalThemeManager): this ground stays grass.
-        this.snowGround.update(
-            now,
-            serverDate,
-            // The Christmas theme draws its own snow ground over the whole outside: the seasonal ground steps aside.
-            !this.editing && theme !== SeasonalTheme.Christmas,
-            theme === SeasonalTheme.Autumn,
-        );
+        // The snow of the map is the snow decor fading in (SeasonalThemeManager): this ground stays grass.
+        this.snowGround.update(now, serverDate, !this.editing, theme === SeasonalTheme.Autumn);
         const showWeather = enabled && weather !== WeatherType.Clear;
-        // Clouds of a clear sky, still fading out over the first minutes of a bad weather; none at night, nor in the
-        // Christmas snow.
-        const cloudiness = theme === SeasonalTheme.Christmas ? 0 : (settings?.cloudiness ?? 0);
+        // Clouds of a clear sky, still fading out over the first minutes of a bad weather; none at night.
+        const cloudiness = settings?.cloudiness ?? 0;
         const sunlight = cloudSunlight(sun?.elevation);
         // The grey veil of an overcast sky only by day: at night it would light the night veil up.
         const veilAlpha = overcastVeil(cloudiness, 1 - sunlight.night);

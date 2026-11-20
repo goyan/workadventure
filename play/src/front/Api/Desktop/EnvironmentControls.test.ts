@@ -54,7 +54,7 @@ beforeEach(() => {
     gameSceneStore.set({
         connection: {},
         getNightActive: () => isNight,
-        getDesktopWeather: () => settings.weather,
+        getMapWeather: () => settings.weather,
         getGameMap: () => ({ getWamFile: () => ({ getWam: () => ({ settings }) }) }),
         getMapEditorModeManager: () => ({}),
         setTileAnimationsPaused: vi.fn(),
@@ -249,9 +249,11 @@ describe("desktop environment settings", () => {
     });
 
     it("keeps the former Christmas control working for an older desktop app", async () => {
+        await applyDesktopEnvironment({ setting: "christmas", value: "never" });
+        // The Christmas theme is gone: "always" follows the calendar, as auto.
         await applyDesktopEnvironment({ setting: "christmas", value: "always" });
-        expect(get(seasonalThemeModeStore)).toBe(SeasonalThemeMode.Christmas);
-        expect(readDesktopEnvironment()).toMatchObject({ seasonal: SeasonalThemeMode.Christmas, christmas: "always" });
+        expect(get(seasonalThemeModeStore)).toBe(SeasonalThemeMode.Auto);
+        expect(readDesktopEnvironment()).toMatchObject({ seasonal: SeasonalThemeMode.Auto, christmas: "auto" });
         await applyDesktopEnvironment({ setting: "christmas", value: "never" });
         expect(get(seasonalThemeModeStore)).toBe(SeasonalThemeMode.None);
         await applyDesktopEnvironment({ setting: "seasonal", value: SeasonalThemeMode.Autumn });

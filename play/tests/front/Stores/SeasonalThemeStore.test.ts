@@ -13,8 +13,9 @@ describe("seasonalThemeModeStore", () => {
         localStorage.setItem("christmasTheme", "always");
         localStorage.setItem("groundMode", "seasonal");
         const { seasonalThemeModeStore } = await load();
-        expect(get(seasonalThemeModeStore)).toBe("christmas");
-        expect(localStorage.getItem("seasonalTheme")).toBe("christmas");
+        // The Christmas theme is gone: its former "always" follows the calendar.
+        expect(get(seasonalThemeModeStore)).toBe("auto");
+        expect(localStorage.getItem("seasonalTheme")).toBe("auto");
         expect(localStorage.getItem("christmasTheme")).toBeNull();
         expect(localStorage.getItem("groundMode")).toBeNull();
     });
@@ -24,6 +25,12 @@ describe("seasonalThemeModeStore", () => {
         localStorage.setItem("christmasTheme", "always");
         const { seasonalThemeModeStore } = await load();
         expect(get(seasonalThemeModeStore)).toBe("autumn");
+    });
+
+    it("reads a saved Christmas theme, now gone, as auto", async () => {
+        localStorage.setItem("seasonalTheme", "christmas");
+        const { seasonalThemeModeStore } = await load();
+        expect(get(seasonalThemeModeStore)).toBe("auto");
     });
 
     it("defaults to auto", async () => {

@@ -1,7 +1,6 @@
 import { WeatherType } from "@workadventure/map-editor";
 import type { AutoWeatherSettings } from "@workadventure/map-editor";
 import { snowPossibleAt } from "../Nature/SeasonClock";
-import { SeasonalTheme } from "../Seasonal/SeasonalTheme";
 import { hash01 } from "../Autumn/LeafPalette";
 import { autoWeatherAt, slotStart } from "./WeatherSchedule";
 
@@ -167,11 +166,6 @@ export function keepOutdoorParticles<T extends { x: number; y: number }>(
     isOutdoor: ((x: number, y: number) => boolean) | undefined,
 ): T[] {
     return isOutdoor ? particles.filter((particle) => isOutdoor(particle.x, particle.y)) : particles;
-}
-
-/** The personal Christmas theme shows snow, whatever the map weather; autumn keeps the map weather. */
-export function effectiveWeather(weather: WeatherType, theme: SeasonalTheme | undefined): WeatherType {
-    return theme === SeasonalTheme.Christmas ? WeatherType.Snow : weather;
 }
 
 const SLOT_MS = 30 * 60 * 1000;
