@@ -516,6 +516,15 @@ export class FloorSpike {
         const room = this.room(p);
         // The floors that hide the avatar outdoors: they let it show through a window around it.
         const windowed = new Set<LevelDrawing>();
+        // The tile of the ground under the avatar, and whether it stands in or on a building: a floor in the open
+        // air (the deck of a bridge, no room under it) is outdoors like the ground.
+        const groundCell = `${Math.floor(p.x / TILE)}:${Math.floor((p.y + this.state.elevation) / TILE)}`;
+        const own =
+            this.state.elevation > 0
+                ? this.levels.find((level) => level.elevation === this.state.elevation && level.cells.has(groundCell))
+                : undefined;
+        const onBuilding = room !== undefined || (own !== undefined && own.roomsUnder.size > 0);
+        const raised = (this.state.elevation > 0 || this.state.stair !== undefined) && onBuilding;
         // The floors the avatar is on: its own, or both floors of the stair it climbs.
         const current =
             editor.open && Number.isFinite(editor.level)
@@ -532,11 +541,11 @@ export class FloorSpike {
             } else if (levelLook(level.elevation, current) === "above") {
                 const shows = aboveLevelShows({
                     indoors: room !== undefined,
-                    underFloor: level.cells.has(
-                        `${Math.floor(p.x / TILE)}:${Math.floor((p.y + this.state.elevation) / TILE)}`,
-                    ),
-                    raised: this.state.elevation > 0 || this.state.stair !== undefined,
+                    underFloor: level.cells.has(groundCell),
+                    raised,
                     hidesAvatar: level.slabEntities.some((slab) => slabCoversAvatar(slab, p)),
+                    openAir: level.roomsUnder.size === 0,
+                    coversRoom: room !== undefined && level.roomsCovered.has(room),
                 });
                 target = shows.alpha;
                 if (shows.window) windowed.add(level);
@@ -569,7 +578,9 @@ export class FloorSpike {
         this.fadeWindow(windowed, p, delta);
         // The stairs of the floor of the avatar show: they tell how to go up and down (LevelFocus). A stair standing on
         // a floor above the avatar shows with that floor; one coming from under the avatar is lifted over the veil.
-        const veil = editor.open && !Number.isFinite(editor.level) ? undefined : veilDepth(current);
+        // No veil over the landscape for an avatar on a floor in the open air: it is outdoors, as on the ground.
+        const veiled = editor.open || onBuilding || this.state.elevation === 0;
+        const veil = !veiled || (editor.open && !Number.isFinite(editor.level)) ? undefined : veilDepth(current);
         for (const stair of this.stairDrawings) {
             const { entity } = stair;
             // A stair drawn over the avatar lets it show through, without fading away (it tells the way up).

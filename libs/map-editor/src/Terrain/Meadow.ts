@@ -1,6 +1,5 @@
 import { Season, TERRAIN_CELL, TILE_PX } from "../types";
 import type { TerrainData, WAMFileFormat } from "../types";
-import { bridgeTilesOf } from "./Bridges";
 import { snowCover } from "./SnowLine";
 import { soilName } from "./Soils";
 import type { SoilName } from "./Soils";
@@ -142,11 +141,10 @@ export interface MeadowStepInput {
 }
 
 /**
- * The tiles a floor of the "Map" tool covers on the ground (a paved path, a terrace), and those under the deck of a
- * bridge: nothing grows there.
+ * The tiles a floor of the "Map" tool covers on the ground (a paved path, a terrace): nothing grows there.
  */
 export function pavedTilesOf(wam: Pick<WAMFileFormat, "entities"> | undefined): Set<string> {
-    const paved = bridgeTilesOf(wam);
+    const paved = new Set<string>();
     for (const entity of Object.values(wam?.entities ?? {})) {
         if (entity?.prefabRef?.collectionName !== "Carte Sols" || (entity.elevation ?? 0) > 0) continue;
         paved.add(`${Math.floor(entity.x / TILE_PX)},${Math.floor(entity.y / TILE_PX)}`);

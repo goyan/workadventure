@@ -4,7 +4,7 @@ import { asError } from "catch-unknown";
 import { get } from "svelte/store";
 import { v4 as uuidv4 } from "uuid";
 import type { WAMEntityData } from "@workadventure/map-editor";
-import { SLAB_GLASS_FAMILY } from "../MapLayer/MapLayerFloors";
+import { SLAB_GLASS_FAMILY, SLAB_WOOD_FAMILY } from "../MapLayer/MapLayerFloors";
 import { FLOOR_PREVIEW_DEPTH } from "../MapLayer/FloorDepth";
 import { mapEditorPlacementLevelStore } from "../../../../Stores/MapEditorStore";
 import {
@@ -21,6 +21,9 @@ import {
     mapLayerStairOpenStore,
     mapLayerStairWidthStore,
     mapLayerShortStairsAvailableStore,
+    mapLayerBridgePiecesAvailableStore,
+    mapLayerSlabWoodStore,
+    mapLayerStairRampStore,
     mapLayerStatusStore,
 } from "../../../../Stores/MapLayerStore";
 import { LL } from "../../../../../i18n/i18n-svelte";
@@ -167,12 +170,12 @@ export class MapLayerFloorEditing {
             if (!(elevation > 0)) continue;
             const prefab = entity.getPrefab();
             const piece = parseAnyLevelPrefab(prefab.collectionName, prefab.id);
-            if (piece && piece.kind !== "floor" && piece.kind !== "bridge" && piece.height >= 2) {
+            if (piece && piece.kind !== "floor" && piece.height >= 2) {
                 const height = FLOOR_WALL_HEIGHTS.find((candidate) => candidate === piece.height);
                 if (height) wallTops.push(elevation + floorElevation(height));
             }
         }
-        const levels = availableLevels(model, wallTops);
+        const levels = availableLevels(model, wallTops, get(mapLayerBridgePiecesAvailableStore));
         mapLayerLevelsStore.set(levels);
         mapLayerBuiltLevelsStore.set(model.getLevels());
     }
@@ -194,7 +197,17 @@ export class MapLayerFloorEditing {
         const reachable = stairTargets(level, get(mapLayerLevelsStore));
         const target = stairTarget(reachable, get(mapLayerBuiltLevelsStore), get(mapLayerStairTargetStore));
         const rise = target === undefined ? undefined : stairRiseBetween(level, target);
-        if (rise === undefined) return undefined;
+        // The stairs of 20 px came with the pieces of the bridges.
+        if (rise === undefined || (rise === 20 && !get(mapLayerBridgePiecesAvailableStore))) return undefined;
+        if (get(mapLayerStairRampStore) && get(mapLayerBridgePiecesAvailableStore)) {
+            return {
+                direction: get(mapLayerStairDirectionStore),
+                width: get(mapLayerStairWidthStore),
+                rise,
+                open: true,
+                ramp: true,
+            };
+        }
         return {
             direction: get(mapLayerStairDirectionStore),
             width: get(mapLayerStairWidthStore),
@@ -213,9 +226,11 @@ export class MapLayerFloorEditing {
         if (mode === "slab") {
             // Of glass when the switch is on and the catalog has the glass slab; else of the floor chosen.
             const family =
-                get(mapLayerSlabGlassStore) && get(mapLayerGlassSlabsAvailableStore)
-                    ? SLAB_GLASS_FAMILY
-                    : get(mapLayerFloorFamilyStore);
+                get(mapLayerSlabWoodStore) && get(mapLayerBridgePiecesAvailableStore)
+                    ? SLAB_WOOD_FAMILY
+                    : get(mapLayerSlabGlassStore) && get(mapLayerGlassSlabsAvailableStore)
+                      ? SLAB_GLASS_FAMILY
+                      : get(mapLayerFloorFamilyStore);
             return (model, bounds) => {
                 applySlabs(model, level, from, to, family, bounds);
                 return true;

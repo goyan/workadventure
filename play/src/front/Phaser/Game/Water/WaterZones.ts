@@ -86,14 +86,11 @@ export const SWIM_DEPTH_PX = 16;
  * the pools above, have no edge to dive from, one walks into them.
  */
 export function isDeepTerrainWater(
-    water:
-        | { depthAt(x: number, y: number, now: number): number; isBridgeAt?(x: number, y: number): boolean }
-        | undefined,
+    water: { depthAt(x: number, y: number, now: number): number } | undefined,
     point: Point,
     now: number,
 ): boolean {
-    // On the deck of a bridge one walks, whatever water runs under it.
-    if (water === undefined || water.isBridgeAt?.(point.x, point.y)) return false;
+    if (water === undefined) return false;
     return water.depthAt(point.x, point.y, now) >= SWIM_DEPTH_PX;
 }
 

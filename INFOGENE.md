@@ -3423,47 +3423,48 @@ avec 8 px apportés par cellule du cratère). Pas de son. Rien n'a été vu à l
 cette section : widget, viseur, chute, éclair et gerbe ne sont validés que par les tests ; l'effet sur l'eau en jeu
 n'est pas vu.
 
-## Ponts de l'outil Carte
+## Ponts : un palier bas, des traverses et des rampes
 
-Un pont est un **tablier posé case par case** par un éditeur de la carte. Tout ce qui marche le traverse à sec :
-antilopes, lions et tigres (simulés par le serveur), animaux promeneurs (jungle, chiens, chats, canards) et avatars.
-L'eau coule dessous sans changement.
+Un pont est un **palier en plein air** : des dalles posées au-dessus d'une rivière, avec une rampe ou un escalier à
+chaque bout. Il remplace le mode « Pont » et les pièces `Carte Ponts` (PR #377), retirés du jeu : les pièces
+`pont-bois-…` déjà posées sur une carte restent des objets ordinaires, sans effet, à effacer avec l'outil Objets.
 
-**Dans l'éditeur.** Outil Carte, groupe « Plateformes », mode **« Pont »** : maintenir le bouton et peindre les
-cases. La gomme de l'outil efface un pont avant le sol de la même case. Au sol seulement. Le mode est grisé (avec une
-explication au survol) tant que le catalogue de la salle n'a pas les pièces.
+**Dans l'éditeur** (outil Carte, groupe « Plateformes »).
+- **Niveau 1** : un palier bas, à 20 px du sol (le haut d'un mur d'une case, `LOW_FLOOR_ELEVATION`). Proposé dans
+  le sélecteur de niveau quand le catalogue de la salle a les pièces des ponts.
+- Mode **Dalles**, interrupteur **« Traverses en bois »** : la dalle `dalle-bois`.
+- Mode **Escalier**, interrupteur **« Rampe en bois »** : une rampe de planches (`rampe-<n|e|s|o>-l<1|2>-<h1…h4|m1|m2>`),
+  qui se pose et se monte comme un escalier de même hauteur ; toujours longue (une case par case montée, une de plus
+  vers le sud), flanc toujours ouvert. Les escaliers ordinaires montent aussi au niveau 1 (`escalier-…-h1`).
+- Les deux interrupteurs sont grisés tant que le catalogue `Carte Paliers` de la salle n'a pas ces pièces.
+- Pour un pont : niveau 1, peindre les dalles au-dessus de l'eau, puis revenir au sol et poser une rampe à chaque
+  bout, son haut contre le tablier.
 
-**Dans la carte.** Aucun changement de format ni de protocole : un pont est fait d'entités ordinaires de la collection
-**`Carte Ponts`** (catalogue privé publié par le repo d'infra, `tools/build_bridge_prefabs.py`). Seize pièces
-`pont-bois-<m>` : `m` est le masque des voisines qui sont du pont aussi (1 nord, 2 est, 4 sud, 8 ouest) ; chaque bord
-sans voisine porte une lisse. L'outil recalcule les pièces voisines à chaque case peinte ou effacée
-(`MapLayerModel.setBridge`, `computePlacements`). Les pièces sont dessinées à la profondeur fixe 0,8
-(`MAP_LAYER_BRIDGE_DEPTH`) : au-dessus de l'eau du relief (0,65) et de son écume (0,66), qui cachent un sol de l'outil
-Carte, et sous les objets de sol et les personnages. **Ne jamais renommer un identifiant publié.**
+**Visibilité.** Un étage **en plein air** (aucune pièce de la carte sous ses dalles) n'est pas l'étage d'un
+bâtiment : il reste toujours affiché, même quand l'avatar est dans une pièce ailleurs, sauf s'il est dessiné
+par-dessus la pièce où se trouve l'avatar. Un avatar qui passe dessous se voit à travers les dalles autour de lui.
+Un avatar qui marche sur un étage en plein air est dehors comme au sol : pas de voile sombre sur le paysage, les
+étages des bâtiments restent affichés (`aboveLevelShows` : `openAir`, `coversRoom` ; `FloorSpike.fade`).
 
-**La règle, lue partout** (`libs/map-editor/src/Terrain/Bridges.ts`) : `bridgeTilesOf(wam)` donne les cases de pont ;
-sur une case de pont, la hauteur d'eau vue par ce qui marche est 0 (`dryOnBridges`).
+**Les animaux.** `libs/map-editor/src/Terrain/Bridges.ts`, `bridgesOf(wam)` : un pont est fait des escaliers et
+rampes **posés au sol** et des dalles de l'étage que chacun atteint, de proche en proche. Un étage qu'aucun escalier
+du sol n'atteint n'est pas un pont (un toit, l'étage d'un bâtiment sans accès du sol).
+- Serveur : sur les cases du sol sous un pont, l'eau vaut 0 pour ce qui marche (`dryOnBridges`,
+  `AquaticLifeManager.readLand`) : les deux rives sont une seule terre pour antilopes, lions et tigres, relue quand
+  un pont change. Le serveur lit les noms et les places des pièces ; un test du front vérifie qu'il lit un pont là
+  où l'éditeur le pose.
+- Navigateur : ces cases ne sont jamais « mouillées » pour les animaux promeneurs (`TerrainWater.setBridges`, relu
+  deux fois par seconde). Un animal au-dessus d'un pont est dessiné à la hauteur du tablier (une part de cette
+  hauteur le long d'une rampe), par-dessus les dalles (`Bridges.elevationAt`, `LandLifeView`,
+  `WanderingCharactersManager`).
+- Avatar : rien de particulier, il marche sur les dalles comme sur tout palier (ni nage ni courant en hauteur) ;
+  au sol sous le tablier, il nage comme ailleurs.
 
-- Serveur, vie de la terre (`AquaticLifeManager.readLand`) : les deux rives deviennent une seule terre, relue quand
-  un pont est posé ou retiré. Troupeaux et meutes se mêlent, les lions traversent pour chasser.
-- Serveur, pré : rien ne pousse sous un tablier (`pavedTilesOf`).
-- Navigateur (`TerrainWater.setBridges`, relu deux fois par seconde au plus par `GameScene.refreshBridges`) : sur un
-  pont, pas de nage, pas de courant, le canoë se range ; une case de pont n'est jamais « mouillée » pour les animaux
-  promeneurs.
-- Eau, poissons, averse, drain, météore, dessin de l'eau : inchangés, le pont n'existe pas pour eux.
-
-**Saisons.** Pour la neige et les feuilles d'automne, un tablier est un sol (`FLOOR_COLLECTIONS`) : la neige givre
-toute sa surface au lieu de poser une calotte sur le bord de chaque dalle, et aucun tas de feuilles ne se forme au
-pied des dalles.
-
-**À savoir.** Un pont est toujours à sec, même sous une crue. On y entre et on en sort par n'importe quel bord (pas
-de collision). On peut pêcher depuis un pont. Un lion ou un tigre peut prendre un poisson qui passe sous le tablier
-(pour lui la case est à sec). Le pont ne brûle pas et un météore ne le casse pas. Une seule matière : le bois. Pas de
-pièce d'angle rentrant : dans un coude, la lisse s'arrête au bord de la case.
-
-**Limites.** Un navigateur resté sur une version d'avant voit les pièces sous l'eau et y nage ; un pont posé sur une
-carte dont `back` est plus ancien ne réunit pas les terres. `play` et `back` se déploient ensemble.
-
+**Limites.** Les animaux du serveur vivent à plat : un animal qui arrive par la berge sous le tablier monte dessus
+d'un coup, et un lion peut prendre un poisson qui passe dessous. Pas de recherche de chemin : un animal ne traverse
+que si sa ligne droite suit le pont. Un animal apprivoisé qui suit son maître sur un pont est dessiné sous les dalles.
+Les dalles d'un palier ne reçoivent ni pluie ni nuages. Pas de garde-corps propre au pont (ceux des paliers). Bois
+seul. L'herbe pousse sous un tablier.
 
 ## Catastrophes : le météore brûlant
 

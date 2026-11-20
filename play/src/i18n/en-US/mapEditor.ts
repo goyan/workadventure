@@ -767,7 +767,6 @@ const mapEditor: BaseTranslation = {
             floorBrush: "Floor brush",
             floorRectangle: "Floor rectangle",
             floorFill: "Floor fill",
-            bridge: "Bridge",
             door: "Door",
             window: "Window",
             height: "Height",
@@ -782,7 +781,6 @@ const mapEditor: BaseTranslation = {
             floorBrush: "Hold the button and paint floor tiles.",
             floorRectangle: "Drag a rectangle to fill it with the floor.",
             floorFill: "Click inside a closed room to fill it.",
-            bridge: "Hold the button and paint the deck of a bridge, tile by tile. Everything that walks crosses it dry; the water runs under it.",
             door: "Click on a wall to turn two of its segments into a door. It opens when someone comes near.",
             window: "Click or drag along a horizontal wall to put windows in it. You can see through them. Drag a placed window to move it.",
             height: "Click a wall, a door or a window (or drag along a wall) to select it, then choose its height.",
@@ -844,8 +842,14 @@ const mapEditor: BaseTranslation = {
             target: "Goes up to",
             noTarget: "No floor in reach of a stair from this level: lay its slabs first.",
             openSide: "Open side",
+            ramp: "Wooden ramp",
+            rampHint:
+                "A ramp of planks instead of steps: with slabs of wooden sleepers it makes a bridge the animals take. Disabled when the catalog of the room does not have the ramps.",
         },
         walls: "Wall style",
+        woodSlab: "Wooden sleepers",
+        woodSlabHint:
+            "The deck of a bridge: laid at level 1 over a river, with a ramp at each end. Disabled when the catalog of the room does not have the wooden slab.",
         glassSlab: "Glass slabs",
         glassSlabHint:
             "See-through slabs: what is under the floor shows through them. Greyed out when the catalog of the room has no glass slab.",
@@ -876,7 +880,6 @@ const mapEditor: BaseTranslation = {
             doorsUnavailable: "This room has no door catalog: doors are not available.",
             windowInvalid: "A window goes on a free horizontal wall (no door, no window yet). Click on a wall.",
             windowsUnavailable: "This room has no window catalog: windows are not available.",
-            bridgesUnavailable: "This room has no bridge catalog: bridges are not available.",
             slabOnGround:
                 "Choose a level above the ground first: the floors of the ground are drawn with the floor modes.",
             stairNoArrival:
