@@ -289,6 +289,7 @@ import {
     jungleVolumeStore,
     notificationSoundVolumeStore,
 } from "@wa/front/Stores/SoundEffectsStore";
+import { waterCycleNow } from "@wa/front/Phaser/Game/Weather/Frost";
 import { karaokeSingerActiveStore } from "../../Karaoke/KaraokeGameStore";
 import type { TileBarriers } from "../../Utils/TileBarriers";
 import { nerfEquippedStore } from "../../Stores/NerfStore";
@@ -4068,6 +4069,7 @@ export class GameScene extends DirtyScene {
                     },
                     isWet: (x, y) => isGroundUnderWater(this, this.terrainWater, x, y),
                     waterVersion: () => this.terrainWater.version(),
+                    frost: () => waterCycleNow(this.getGameMap().getWamFile()?.getWam().settings).frost,
                 });
                 // Same: one event subscription and one timer at a time.
                 this._knockManager?.destroy();

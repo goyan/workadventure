@@ -1,4 +1,5 @@
 import { get, type Unsubscriber, derived } from "svelte/store";
+import { FrostPrints } from "@wa/front/Phaser/Game/Weather/FrostPrints";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { seasonalThemeModeStore } from "../../../Stores/SeasonalThemeStore";
 import { AutumnDecor } from "../Autumn/AutumnDecor";
@@ -25,6 +26,8 @@ const MISSING_TEXTURE = "__MISSING";
  * 40 times rather than at every frame.
  */
 const SNOW_ALPHA_STEPS = 40;
+/** The footprints on the frost fade with it by steps of a tenth. */
+const FROST_ALPHA_STEPS = 10;
 
 export interface SeasonalThemeDeps {
     outdoorGrid: () => OutdoorGrid | undefined;
@@ -43,6 +46,8 @@ export interface SeasonalThemeDeps {
     isWet?: (x: number, y: number) => boolean;
     /** Changes when the water does. */
     waterVersion?: () => number;
+    /** How frosted the ground is for this player, 0 to 1 (Weather/Frost.ts): footprints show on it. */
+    frost?: () => number;
 }
 
 interface ActiveDecor {
@@ -72,6 +77,8 @@ export class SeasonalThemeManager {
     private active: ActiveDecor | undefined;
     /** The Christmas decor of the map snow, when it lies and the theme decor is not already Christmas. */
     private snow: ActiveDecor | undefined;
+    /** The footprints on the frosted ground, while it is frosted and neither the snow nor Christmas leaves its own. */
+    private frostPrints: FrostPrints | undefined;
 
     constructor(
         private readonly scene: Phaser.Scene,
@@ -124,12 +131,36 @@ export class SeasonalThemeManager {
             const snow = this.snow ?? (this.snow = this.createDecor(SeasonalTheme.Christmas));
             this.drive(snow, grid, time, visible, snowAlpha, walkerSamples);
         }
+        this.driveFrostPrints(time, visible, snowAlpha > 0 || this.theme === SeasonalTheme.Christmas, walkerSamples);
+    }
+
+    private driveFrostPrints(time: number, visible: boolean, snowPrints: boolean, walkers: () => WalkerSample[]): void {
+        const frost = snowPrints ? 0 : Math.round((this.deps.frost?.() ?? 0) * FROST_ALPHA_STEPS) / FROST_ALPHA_STEPS;
+        if (frost <= 0) {
+            if (this.frostPrints) {
+                this.frostPrints.destroy();
+                this.frostPrints = undefined;
+                this.deps.markDirty();
+            }
+            return;
+        }
+        const prints =
+            this.frostPrints ??
+            (this.frostPrints = new FrostPrints(
+                this.scene,
+                (x, y) => this.deps.outdoorGrid()?.isOutdoorAt(x, y) ?? false,
+                (x, y) => this.deps.isWet?.(x, y) ?? false,
+            ));
+        prints.setVisible(visible);
+        if (prints.update(time, walkers(), frost)) this.deps.markDirty();
     }
 
     destroy(): void {
         for (const unsubscribe of this.unsubscribers) unsubscribe();
         this.removeDecor();
         this.removeSnowDecor();
+        this.frostPrints?.destroy();
+        this.frostPrints = undefined;
     }
 
     /** The map snow cover, by steps of a fortieth; any snow shows at least one step. */
