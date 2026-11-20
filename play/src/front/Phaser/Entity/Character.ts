@@ -45,6 +45,7 @@ import { decodeNerfHearts } from "@wa/front/Phaser/Game/Nerf/NerfProtocol";
 import { heartsDropped } from "@wa/front/Phaser/Game/Nerf/NerfHearts";
 import { NERF_BLINK_ALPHA, NERF_BLINK_TINT, nerfBlinkTinted } from "@wa/front/Phaser/Game/Nerf/NerfBlink";
 import { cardinalVehicleHeading, vehicleHeading } from "@wa/front/Phaser/Vehicle/VehicleFrames";
+import { isBasicActive } from "@wa/front/Stores/BasicModeStore";
 import { normalizeUserName } from "../../Connection/LocalUserUtils";
 import { floorDepth } from "../Game/MapEditor/MapLayer/FloorDepth";
 import { lazyLoadPlayerCharacterTextures } from "./PlayerTexturesLoadingManager";
@@ -419,7 +420,8 @@ export abstract class Character extends Container implements OutlineableInterfac
 
     /** Whether the body of the character is over water of the relief deep enough to swim, on the ground. */
     protected isOverDeepTerrainWater(): boolean {
-        if (this.floorZ >= 2) return false;
+        // Basique hides the water of the relief: here nobody swims nor floats in it (the pools of the map remain).
+        if (this.floorZ >= 2 || isBasicActive()) return false;
         const body = { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y };
         return isDeepTerrainWater(this.scene.getTerrainWater?.(), body, this.scene.time.now);
     }
@@ -430,7 +432,7 @@ export abstract class Character extends Container implements OutlineableInterfac
      * hardest (and the usual strength) it carries at a quarter of the speed one walks at (`walkSpeed`).
      */
     protected waterCurrentPush(walkSpeed: number): CurrentVector {
-        const water = this.floorZ < 2 ? this.scene?.getTerrainWater?.() : undefined;
+        const water = this.floorZ < 2 && !isBasicActive() ? this.scene?.getTerrainWater?.() : undefined;
         if (!water) return { x: 0, y: 0 };
         const strength =
             this.scene.getGameMap().getWamFile()?.getWam().settings?.water?.current ?? DEFAULT_WATER_SETTINGS.current;

@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import type { Unsubscriber } from "svelte/store";
+import { get, type Unsubscriber } from "svelte/store";
 import { DEFAULT_LIFE_SETTINGS } from "@workadventure/map-editor";
 import { getSeats } from "../../Player/Seat";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
@@ -13,7 +13,7 @@ import type { GameScene } from "../GameScene";
 import { JUNGLE_RADIUS_TILES } from "../Jungle/JunglePlan";
 import type { JungleAnimal } from "../Jungle/JunglePlan";
 import { getSolidRectangles } from "../../../Utils/EntityHitbox";
-import { isEffectShown } from "../../../Stores/EffectsStore";
+import { effectShownStores } from "../../../Stores/EffectsStore";
 import { blockRectangles, sameGrids, withAreaBorders } from "./WanderCollisions";
 import type { WanderRectangle } from "./WanderCollisions";
 import { drinkStance } from "./WanderDrink";
@@ -707,7 +707,8 @@ export class WanderingCharactersManager {
 
             // Reapplied every frame: the entity becomes visible again when its image finishes loading.
             // Turned off on this computer: no animal walks, nor stands at its nest (the map editor still shows them).
-            const hiddenByUser = !this.isEditorMode && !isEffectShown("wanderers");
+            // Basique leaves the animals placed on the map: only their own switch hides them.
+            const hiddenByUser = !this.isEditorMode && !get(effectShownStores.wanderers);
             const showSprite = sprite !== undefined && character.hasPose && !this.isEditorMode && !hiddenByUser;
             if (sprite && sprite.visible !== showSprite) {
                 sprite.setVisible(showSprite);

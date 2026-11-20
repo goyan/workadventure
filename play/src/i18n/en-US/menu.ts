@@ -247,22 +247,14 @@ const menu: BaseTranslation = {
         },
         graphicsQuality: {
             title: "Graphics quality",
-            none: "None",
             low: "Low",
             medium: "Medium",
             high: "High",
             ultra: "Ultra",
             custom: "Custom",
             current: "Current preset: {quality}",
-            cost: {
-                none: "GPU: minimal",
-                low: "GPU: low",
-                medium: "GPU: moderate",
-                high: "GPU: high",
-                ultra: "GPU: very high",
-            },
+            cost: { low: "GPU: low", medium: "GPU: moderate", high: "GPU: high", ultra: "GPU: very high" },
             description: {
-                none: "A plain office, for you only: no effect, no animal, no animation, no night. Other players see their own settings.",
                 low: "Optional effects off: no weather, clouds, sky shadows, indirect lighting or tile animations.",
                 medium: "Light weather and simple shadows; clouds, detailed silhouettes and light bounces off.",
                 high: "Clouds, realistic silhouettes, soft light edges and one light bounce.",

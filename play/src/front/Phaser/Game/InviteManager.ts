@@ -13,7 +13,7 @@ import MeetingInvitationLimitToast from "../../Components/MeetingInvitation/Meet
 import MeetingInvitationMissedToast from "../../Components/MeetingInvitation/MeetingInvitationMissedToast.svelte";
 import MeetingInvitationNoAnswerToast from "../../Components/MeetingInvitation/MeetingInvitationNoAnswerToast.svelte";
 import { analyticsClient } from "../../Administration/AnalyticsClient";
-import { isEffectShown } from "../../Stores/EffectsStore";
+import { effectShownStores } from "../../Stores/EffectsStore";
 import { IncomingCall, INVITATION_TELEPORT_WAIT_MS, OutgoingCalls } from "./InvitationCall";
 
 const MEETING_INVITATION_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
@@ -34,7 +34,7 @@ export class InviteManager {
     private readonly incoming = new IncomingCall(
         // The first ring always sounds; the next ones only for whom kept the ring of calls (see EffectsStore).
         (first) => {
-            if (first || isEffectShown("callRing")) gameManager.getCurrentGameScene()?.playMeetingInSound();
+            if (first || get(effectShownStores.callRing)) gameManager.getCurrentGameScene()?.playMeetingInSound();
         },
         () => this.missIncomingCall(),
     );

@@ -301,6 +301,7 @@ import {
 import { jungleEnabledStore } from "../../Stores/JungleStore";
 import { isEffectShown } from "../../Stores/EffectsStore";
 import { fireConditionsStore } from "../../Stores/FireConditionsStore";
+import { isBasicActive } from "../../Stores/BasicModeStore";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -2001,7 +2002,7 @@ export class GameScene extends DirtyScene {
      * of it with the weather effects hidden or the clouds turned off, as the sky then looks clear.
      */
     private skyWeatherFactor(): number {
-        if (!get(weatherEffectsEnabledStore)) return 1;
+        if (!get(weatherEffectsEnabledStore) || isBasicActive()) return 1;
         const theme = this.getSeasonalTheme();
         const cloudiness =
             theme === SeasonalTheme.Christmas || !get(cloudsShownStore) ? 0 : (this.shownWeather()?.cloudiness ?? 0);
@@ -3715,7 +3716,7 @@ export class GameScene extends DirtyScene {
                 this.aquaticLifeView = new AquaticLifeView(
                     this,
                     this.aquaticLife,
-                    () => get(aquaticLifeShownStore),
+                    () => get(aquaticLifeShownStore) && !isBasicActive(),
                     () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
                 );
                 // The gulls over that water: shown and hidden with the fish.
@@ -3723,7 +3724,7 @@ export class GameScene extends DirtyScene {
                 this.gullLifeView = new GullLifeView(
                     this,
                     this.gullLife,
-                    () => get(aquaticLifeShownStore),
+                    () => get(aquaticLifeShownStore) && !isBasicActive(),
                     () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
                 );
                 // The antelopes, the lions and the tigers of the land: hidden with the jungle.
@@ -3775,7 +3776,7 @@ export class GameScene extends DirtyScene {
                     outdoorGrid: () => this.getOutdoorGrid(),
                     outdoorVersion: () => this.getOutdoorVersion(),
                     // Each body has its own switch, read with the light (NightManager.skyLight).
-                    enabled: () => !get(mapEditorModeStore),
+                    enabled: () => !get(mapEditorModeStore) && !isBasicActive(),
                     categories: () => this.skyShadowCategories,
                     // The shadows of the trees sway with them, unless turned off by this person.
                     swayVersion: () => (this.skyShadowCategories?.treeSway ? this.treeSway?.version : undefined),
@@ -3876,7 +3877,7 @@ export class GameScene extends DirtyScene {
                     // The Christmas theme shows its snow whatever the map weather.
                     snowCoverage: () =>
                         this.getSeasonalTheme() === SeasonalTheme.Christmas ? 1 : this.getMapSnowCoverage(),
-                    enabled: () => !get(mapEditorModeStore) && get(weatherEffectsEnabledStore),
+                    enabled: () => !get(mapEditorModeStore) && get(weatherEffectsEnabledStore) && !isBasicActive(),
                     isOutdoor: (x, y) => this.getOutdoorGrid()?.isOutdoorAt(x, y) ?? true,
                     view: () => this.cameras.main.worldView,
                 });

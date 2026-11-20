@@ -52,6 +52,7 @@ import { getSolidRectangles } from "@wa/front/Utils/EntityHitbox";
 import { NERF_KNOCKBACK_MS, NERF_KNOCKBACK_PX } from "../Game/Nerf/NerfBlink";
 import { groundPace } from "../Game/Terrain/GroundPace";
 import { isInActiveConversationStore } from "../../Stores/StreamableCollectionStore";
+import { isBasicActive } from "../../Stores/BasicModeStore";
 import { RUN_ANIMATION_SPEED } from "./Animation";
 import { computeTileSnapTarget, getFeetTile } from "./TileSnap";
 import type { Seat } from "./Seat";
@@ -618,7 +619,8 @@ export class Player extends Character {
 
     /** The soil under the feet slows the avatar down (sand, the mud of a wet clay): on the ground only. */
     private soilPace(): number {
-        const water = this.getFloorZ() < 2 ? this.scene?.getTerrainWater?.() : undefined;
+        // Basique: the ground slows nobody down (no mud, sand nor snow to see).
+        const water = this.getFloorZ() < 2 && !isBasicActive() ? this.scene?.getTerrainWater?.() : undefined;
         if (!water) return 1;
         const feet = this.getFeet();
         const meadow = this.scene.getMeadow?.();

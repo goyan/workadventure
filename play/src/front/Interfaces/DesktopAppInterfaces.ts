@@ -96,8 +96,6 @@ export interface DesktopLightControl {
 
 export interface DesktopEnvironmentState {
     graphicsQuality: GraphicsQuality;
-    /** The quality in full, "none" included (graphicsQuality tells it as "custom" to the older apps). */
-    graphicsPreset: GraphicsQuality;
     /** This WorkAdventure opens its settings at the request of the desktop (DesktopVisualSetting.OpenSettings). */
     canOpenSettings: boolean;
     graphicsMonitoring: boolean;

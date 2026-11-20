@@ -262,22 +262,14 @@ const menu: DeepPartial<Translation["menu"]> = {
         },
         graphicsQuality: {
             title: "Qualité graphique",
-            none: "Aucun effet",
             low: "Bas",
             medium: "Moyen",
             high: "Haut",
             ultra: "Ultra",
             custom: "Personnalisé",
             current: "Préréglage actuel : {quality}",
-            cost: {
-                none: "GPU : minimal",
-                low: "GPU : faible",
-                medium: "GPU : modéré",
-                high: "GPU : élevé",
-                ultra: "GPU : très élevé",
-            },
+            cost: { low: "GPU : faible", medium: "GPU : modéré", high: "GPU : élevé", ultra: "GPU : très élevé" },
             description: {
-                none: "Un bureau simple, pour toi seul : aucun effet, aucun animal, aucune animation, pas de nuit. Les autres gardent leurs réglages.",
                 low: "Effets optionnels coupés : météo, nuages, ombres du ciel, éclairage indirect et animations de tuiles.",
                 medium: "Météo légère et ombres simples ; nuages, silhouettes détaillées et rebonds coupés.",
                 high: "Nuages, silhouettes réalistes, bords de lumière adoucis et un rebond.",

@@ -69,22 +69,6 @@ describe("desktop environment settings", () => {
         expect(openMenu).toHaveBeenCalledWith("settings");
     });
 
-    it("tells the None quality as Custom to the older desktop apps, and in full to the newer ones", async () => {
-        const night = get(nightModeStore);
-        await applyDesktopEnvironment({ setting: DesktopVisualSetting.Quality, value: GraphicsQuality.None });
-        expect(get(graphicsQualityStore)).toBe(GraphicsQuality.None);
-        expect(readDesktopEnvironment()).toMatchObject({
-            graphicsQuality: GraphicsQuality.Custom,
-            graphicsPreset: GraphicsQuality.None,
-        });
-        await applyDesktopEnvironment({ setting: DesktopVisualSetting.Quality, value: GraphicsQuality.High });
-        expect(readDesktopEnvironment()).toMatchObject({
-            graphicsQuality: GraphicsQuality.High,
-            graphicsPreset: GraphicsQuality.High,
-        });
-        nightModeStore.set(night);
-    });
-
     it("applies graphical quality without editing shared weather or changing the night clock", async () => {
         nightModeStore.set(NightMode.Always);
         const season = get(seasonalThemeModeStore);

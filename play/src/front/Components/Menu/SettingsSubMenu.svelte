@@ -42,6 +42,7 @@
     import { NIGHT_DARKNESS_MAX, NIGHT_DARKNESS_MIN, NIGHT_MAX_OPACITY } from "../../Phaser/Game/Night/NightClock";
     import { lampEffectsEnabledStore } from "../../Stores/LampEffectsStore";
     import { jungleEnabledStore } from "../../Stores/JungleStore";
+    import { basicModeStore } from "../../Stores/BasicModeStore";
     import { videoQualityStore } from "../../Stores/MediaStore";
     import { avatarVideosEnabledStore } from "../../Stores/AvatarVideoStore";
     import { browserNotificationStore } from "../../Stores/BrowserNotificationStore";
@@ -468,6 +469,15 @@
             </div>
         </SettingsSection>
     {:else if settingsTab === "ambiance"}
+        <SettingsSection title={$LL.actionbar.basicMode.label()} dataTestId="basic-mode-settings">
+            <InputSwitch
+                id="basic-mode"
+                bind:value={$basicModeStore}
+                label={$LL.actionbar.basicMode.switch()}
+                labelPosition="right"
+            />
+            <p class="m-0 text-xs text-white/60">{$LL.actionbar.basicMode.hint()}</p>
+        </SettingsSection>
         <SettingsSection title={$LL.menu.settings.graphics.nature()} dataTestId="graphics-nature-settings">
             <div class="flex flex-col gap-2">
                 <p class="m-0 text-sm font-bold text-white/90">{$LL.menu.settings.seasonal.label()}</p>

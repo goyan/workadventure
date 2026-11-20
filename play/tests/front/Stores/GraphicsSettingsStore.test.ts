@@ -17,12 +17,7 @@ import {
 } from "../../../src/front/Stores/GraphicsSettingsStore";
 import { readLightSettings, setLightSetting } from "../../../src/front/Stores/LightSettings";
 import { decodeLightSettings } from "../../../src/front/Stores/LightSettingsCode";
-import { EFFECTS, effectShownStores } from "../../../src/front/Stores/EffectsStore";
-import { jungleEnabledStore } from "../../../src/front/Stores/JungleStore";
-import { lampEffectsEnabledStore } from "../../../src/front/Stores/LampEffectsStore";
-import { NightMode, nightModeStore } from "../../../src/front/Stores/NightStore";
 import {
-    aquaticLifeShownStore,
     cloudsShownStore,
     weatherEffectsEnabledStore,
     rainAmountStore,
@@ -38,18 +33,8 @@ const originalClouds = get(cloudsShownStore);
 const originalDisabled = get(tileAnimationsDisabledStore);
 const rainStores = [rainAmountStore, rainLeanStore, rainSplashesStore, rainPuddlesStore, rainCloudsStore];
 const originalRain = rainStores.map((store) => get(store));
-const livelyStores = [
-    ...EFFECTS.map((name) => effectShownStores[name]),
-    jungleEnabledStore,
-    aquaticLifeShownStore,
-    lampEffectsEnabledStore,
-];
-const originalLively = livelyStores.map((store) => get(store));
-const originalNight = get(nightModeStore);
 
 afterEach(() => {
-    livelyStores.forEach((store, index) => store.set(originalLively[index]));
-    nightModeStore.set(originalNight);
     for (const [name, value] of Object.entries(originalLights)) setLightSetting(name, value);
     weatherEffectsEnabledStore.set(originalEffects);
     cloudsShownStore.set(originalClouds);
@@ -134,22 +119,5 @@ describe("graphics presets", () => {
             lightBounceOn: true,
             lightSecondBounceOn: false,
         });
-    });
-
-    it("turns everything off for a plain office, for this person only, and back on with another quality", () => {
-        applyGraphicsQuality(GraphicsQuality.None);
-        expect(get(graphicsQualityStore)).toBe(GraphicsQuality.None);
-        for (const store of livelyStores) expect(get(store)).toBe(false);
-        expect(get(nightModeStore)).toBe(NightMode.Disabled);
-        expect(get(weatherEffectsEnabledStore)).toBe(false);
-        expect(get(tileAnimationsDisabledStore)).toBe(true);
-
-        // One effect turned back on by hand: no preset any more.
-        effectShownStores.callRing.set(true);
-        expect(get(graphicsQualityStore)).toBe(GraphicsQuality.Custom);
-
-        applyGraphicsQuality(GraphicsQuality.High);
-        expect(get(graphicsQualityStore)).toBe(GraphicsQuality.High);
-        for (const store of livelyStores) expect(get(store)).toBe(true);
     });
 });

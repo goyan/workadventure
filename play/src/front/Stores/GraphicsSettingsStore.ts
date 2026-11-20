@@ -2,15 +2,10 @@ import { derived, get } from "svelte/store";
 import { localUserStore } from "../Connection/LocalUserStore";
 import { MAX_SHADOW_TILES } from "../Phaser/Game/Night/SkyLight";
 import { gameSceneStore } from "./GameSceneStore";
-import { EFFECTS, effectShownStores } from "./EffectsStore";
-import { jungleEnabledStore } from "./JungleStore";
-import { lampEffectsEnabledStore } from "./LampEffectsStore";
-import { NightMode, nightModeStore } from "./NightStore";
 import { createPersistedSwitchStore } from "./PersistedSwitchStore";
 import { lightSettingsValuesStore, setLightSetting } from "./LightSettings";
 import type { LightSettingValue } from "./LightSettingsCode";
 import {
-    aquaticLifeShownStore,
     cloudsShownStore,
     weatherEffectsEnabledStore,
     rainAmountStore,
@@ -21,8 +16,6 @@ import {
 } from "./WeatherStore";
 
 export enum GraphicsQuality {
-    /** A plain office, for this person only: no effect, no animal, no animation, no night. */
-    None = "none",
     Low = "low",
     Medium = "medium",
     High = "high",
@@ -31,7 +24,6 @@ export enum GraphicsQuality {
 }
 export type GraphicsPreset = Exclude<GraphicsQuality, GraphicsQuality.Custom>;
 export const GRAPHICS_PRESETS: readonly GraphicsPreset[] = [
-    GraphicsQuality.None,
     GraphicsQuality.Low,
     GraphicsQuality.Medium,
     GraphicsQuality.High,
@@ -48,11 +40,6 @@ export interface GraphicsProfile {
     effects: boolean;
     clouds: boolean;
     animations: boolean;
-    /**
-     * The effects without a switch of their own (EffectsStore), the animals, the lamp effects: all on but for a plain
-     * office (None), which also turns the night off.
-     */
-    lively: boolean;
     rain: readonly number[];
     lights: Readonly<Record<string, LightSettingValue>>;
 }
@@ -65,15 +52,13 @@ export interface GraphicsProfile {
  * doses, fewer effects turned on, a shorter reach for the sky.
  */
 export function graphicsProfile(quality: GraphicsPreset): GraphicsProfile {
-    const none = quality === GraphicsQuality.None;
-    const low = quality === GraphicsQuality.Low || none;
+    const low = quality === GraphicsQuality.Low;
     const high = quality === GraphicsQuality.High || quality === GraphicsQuality.Ultra;
     const ultra = quality === GraphicsQuality.Ultra;
     return {
         effects: !low,
         clouds: high,
         animations: !low,
-        lively: !none,
         rain: ultra ? [2, 2, 2, 2, 1] : high ? [1, 1, 1, 1, 0.8] : low ? [0.25, 0, 0, 0, 0] : [0.5, 0.5, 0.25, 0, 0.5],
         lights: {
             sunShown: !low,
@@ -118,23 +103,6 @@ export function graphicsProfile(quality: GraphicsPreset): GraphicsProfile {
     };
 }
 
-/** All the lively things (see GraphicsProfile.lively): "on", "off", or "mixed" when some are and some are not. */
-function livelySwitches() {
-    return [
-        ...EFFECTS.map((name) => effectShownStores[name]),
-        jungleEnabledStore,
-        aquaticLifeShownStore,
-        lampEffectsEnabledStore,
-    ];
-}
-
-const livelyStore = derived([...livelySwitches(), nightModeStore], (values) => {
-    const night = values[values.length - 1];
-    const switches = values.slice(0, -1);
-    if (switches.every((on) => on === true)) return "on";
-    return switches.every((on) => on === false) && night === NightMode.Disabled ? "off" : "mixed";
-});
-
 export const graphicsQualityStore = derived(
     [
         lightSettingsValuesStore,
@@ -146,14 +114,11 @@ export const graphicsQualityStore = derived(
         rainSplashesStore,
         rainPuddlesStore,
         rainCloudsStore,
-        livelyStore,
     ],
-    ([lights, effects, clouds, disabled, rainAmount, rainLean, rainSplashes, rainPuddles, rainClouds, lively]) =>
+    ([lights, effects, clouds, disabled, ...rain]) =>
         GRAPHICS_PRESETS.find((quality) => {
             const profile = graphicsProfile(quality);
-            const rain = [rainAmount, rainLean, rainSplashes, rainPuddles, rainClouds];
             return (
-                lively === (profile.lively ? "on" : "off") &&
                 effects === profile.effects &&
                 clouds === profile.clouds &&
                 disabled === !profile.animations &&
@@ -175,8 +140,6 @@ export function applyGraphicsQuality(quality: GraphicsPreset): void {
     weatherEffectsEnabledStore.set(profile.effects);
     cloudsShownStore.set(profile.clouds);
     setTileAnimationsDisabled(!profile.animations);
-    for (const store of livelySwitches()) store.set(profile.lively);
-    if (!profile.lively) nightModeStore.set(NightMode.Disabled);
     [rainAmountStore, rainLeanStore, rainSplashesStore, rainPuddlesStore, rainCloudsStore].forEach((store, index) =>
         store.set(profile.rain[index] ?? 0),
     );
