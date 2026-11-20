@@ -145,8 +145,8 @@ export function groundColor(
     light: number,
     height: number,
     outline?: "dark" | "light",
-    /** On a level line (see isContour): a shade darker. */
-    contour = false,
+    /** On a level line (see contourOf): a shade darker on its low side (−1), lighter on its high side (1). */
+    contour = 0,
     /** The season of the ground: its shades and what is sown on the grass. */
     season?: Season,
     /** Dense grass of the meadow: the flowers grow there. */
@@ -165,7 +165,7 @@ export function groundColor(
     }
     const value =
         groundValue(textureValue(material, textureTable(material), textureIndex(x, y), x, y), light, height) -
-        (contour ? CONTOUR_SHADE : 0);
+        contourShade(contour);
     return shadeAt(ramp, value, x, y);
 }
 
@@ -234,26 +234,29 @@ export function lightOfRise(rise: number): number {
     return Math.sign(rise) * Math.min(1, Math.sqrt(Math.abs(rise) * LIGHT_RESPONSE));
 }
 
-/** How much darker a point on a level line is (see isContour), as a share of its ramp. */
-export function contourShade(contour: boolean): number {
-    return contour ? CONTOUR_SHADE : 0;
+/** How much darker a point of a level line is (see contourOf), as a share of its ramp: lighter on its high side. */
+export function contourShade(contour: number): number {
+    return contour < 0 ? CONTOUR_SHADE : contour > 0 ? -CONTOUR_SHADE : 0;
 }
 
 /**
- * Whether a point of the relief carries a level line: one each tile of depth or height (TILE_DEPTH_PX), drawn on the
- * side further from the ground level where one of its four neighbours is a tile nearer to it. The lines say the shape,
- * the depth and the height of a hollow or a mount at a glance, even a gentle one, even under the snow.
+ * The level line a point of the relief carries, drawn in relief as the terraces of pixel art: one each tile of depth or
+ * height (TILE_DEPTH_PX). A point next to a neighbour a tile higher is its dark side (−1); next to one a tile lower, its
+ * light side (1); the dark wins where both meet, so the line stays unbroken; 0 elsewhere. The lines say the shape, the
+ * depth and the height of a hollow or a mount at a glance, even a gentle one, under the snow and at night.
  */
-export function isContour(height: number, west: number, east: number, north: number, south: number): boolean {
+export function contourOf(height: number, west: number, east: number, north: number, south: number): -1 | 0 | 1 {
     // Tiles below (negative) or above (positive) the ground level.
     const levelOf = (value: number): number =>
         value < 0 ? -Math.floor(-value / TILE_DEPTH_PX) : Math.floor(value / TILE_DEPTH_PX);
     const level = levelOf(height);
-    if (level === 0) return false;
-    // A neighbour a tile nearer to the ground level (or on the other side of it).
-    const nearer = (neighbour: number): boolean =>
-        level > 0 ? levelOf(neighbour) < level : levelOf(neighbour) > level;
-    return nearer(west) || nearer(east) || nearer(north) || nearer(south);
+    let lower = false;
+    for (const neighbour of [west, east, north, south]) {
+        const other = levelOf(neighbour);
+        if (other > level) return -1;
+        if (other < level) lower = true;
+    }
+    return lower ? 1 : 0;
 }
 
 /** The shadow of a mount: cast along a ray rising this steeply (px of height a px of the map) from the north-west. */

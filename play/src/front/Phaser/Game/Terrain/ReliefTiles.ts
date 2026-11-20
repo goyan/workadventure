@@ -9,7 +9,7 @@ import {
     groundValue,
     shadowHorizon,
     SHADOW_RISE_A_STEP,
-    isContour,
+    contourOf,
     lightOfRise,
     shadowedLight,
     seasonPatch,
@@ -619,7 +619,7 @@ export class ReliefTiles {
                 // In the shadow of a mount (or of the north-west rim of a hollow): darker.
                 const light =
                     shaded && horizons[index] > heights[index] ? shadowedLight(lightOfRise(rise)) : lightOfRise(rise);
-                const contour = isContour(
+                const contour = contourOf(
                     heights[index],
                     heights[index - 1],
                     heights[index + 1],
