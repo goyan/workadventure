@@ -20,9 +20,9 @@ import { cellMaterial, outlineOf, pickMaterial } from "./Pixel/MaterialField";
 import type { CellInputs, Cover } from "./Pixel/MaterialField";
 import { bayer, RAMPS, rampsFor } from "./Pixel/PixelPalette";
 import type { Material, Ramp, Rgb as PaletteRgb } from "./Pixel/PixelPalette";
-import { DROP_SCALE, groundPointAt, MAX_DROP, paintColumn, RELIEF_TEXEL } from "./ReliefProjection";
+import { groundPointAt, MAX_DROP, MAX_RISE, paintColumn, RELIEF_TEXEL, shiftOfHeight } from "./ReliefProjection";
 import type { ColumnSample } from "./ReliefProjection";
-import { ReliefTileSchedule, reliefSignature } from "./ReliefTileSchedule";
+import { blockCellWindow, ReliefTileSchedule, reliefSignature } from "./ReliefTileSchedule";
 import { waterColor } from "./Pixel/WaterPixel";
 import type { TerrainWater } from "./TerrainWater";
 
@@ -31,9 +31,9 @@ export const RELIEF_TILES_DEPTH = 0.655;
 /** Map pixels across a block: one chunk of the relief. */
 const BLOCK_PX = TERRAIN_CHUNK * TERRAIN_CELL;
 const BLOCK_TEXELS = BLOCK_PX / RELIEF_TEXEL;
-/** The ground of a block seen from above: 1 px more all around than the block, and MAX_DROP px north of it. */
+/** The ground of a block seen from above: 1 px more all around than the block, MAX_DROP px north and MAX_RISE south. */
 const POINT_COLUMNS = BLOCK_PX + 2;
-const POINT_ROWS = MAX_DROP + BLOCK_PX + 2;
+const POINT_ROWS = MAX_DROP + BLOCK_PX + MAX_RISE + 2;
 const MATERIALS: readonly Material[] = [
     "grass",
     "earth",
@@ -75,9 +75,9 @@ const WALL_RAMPS = Object.fromEntries(
         ) as unknown as Ramp,
     ]),
 ) as Record<Material, Ramp>;
-/** The cells a block is drawn from: its own, the rows north of it its faces come from, one more all around. */
-const GRID_WIDTH = TERRAIN_CHUNK + 2;
-const GRID_HEIGHT = TERRAIN_CHUNK + MAX_DROP / TERRAIN_CELL + 2;
+/** The cells a block is drawn from (blockCellWindow). */
+const GRID_WIDTH = blockCellWindow(0, 0).width;
+const GRID_HEIGHT = blockCellWindow(0, 0).height;
 /** Water thinner than this is not drawn (as on the flat drawing). */
 const WATER_SEEN_PX = 0.5;
 /** The water is drawn, and its blocks drawn again, by steps of this many pixels of depth. */
@@ -147,14 +147,17 @@ export class ReliefTiles {
     private readonly pointColors: (PaletteRgb | undefined)[] = new Array<PaletteRgb | undefined>(
         POINT_COLUMNS * POINT_ROWS,
     ).fill(undefined);
-    /** One sample a texel of a column, from MAX_DROP north of the block to its bottom: reused, nothing allocated. */
-    private readonly samples: ColumnSample[] = Array.from({ length: (MAX_DROP + BLOCK_PX) / RELIEF_TEXEL + 1 }, () => ({
-        groundY: 0,
-        drop: 0,
-        color: RAMPS.grass[0],
-        wallRamp: RAMPS.wall,
-        plain: true,
-    }));
+    /** One sample a texel of a column, from MAX_DROP north of the block to MAX_RISE south of it: reused, nothing allocated. */
+    private readonly samples: ColumnSample[] = Array.from(
+        { length: (MAX_DROP + BLOCK_PX + MAX_RISE) / RELIEF_TEXEL + 1 },
+        () => ({
+            groundY: 0,
+            drop: 0,
+            color: RAMPS.grass[0],
+            wallRamp: RAMPS.wall,
+            plain: true,
+        }),
+    );
     private readonly levels = new Uint8Array(GRID_WIDTH * GRID_HEIGHT);
 
     constructor(
@@ -353,8 +356,7 @@ export class ReliefTiles {
     private coverSignature(key: string, terrain: TerrainData | undefined, now: number): string {
         this.coverReadCount++;
         const [blockX, blockY] = key.split(",").map(Number);
-        const gridX = blockX * TERRAIN_CHUNK - 1;
-        const gridY = blockY * TERRAIN_CHUNK - MAX_DROP / TERRAIN_CELL - 1;
+        const { x: gridX, y: gridY } = blockCellWindow(blockX, blockY);
         const inputs = this.cellInputs(terrain, now);
         let hash = 0;
         let covered = false;
@@ -385,18 +387,12 @@ export class ReliefTiles {
         };
     }
 
-    /** The water a block is drawn with (its cells and the rows north of it), as a short text; empty when dry. */
+    /** The water a block is drawn with (blockCellWindow), as a short text; empty when dry. */
     private waterSignature(key: string, now: number): string {
         const [blockX, blockY] = key.split(",").map(Number);
-        // The same cells as the drawing reads (draw): its own, the rows north of it, one more all around.
-        const any = this.inputs.water.levelsOver(
-            blockX * TERRAIN_CHUNK - 1,
-            blockY * TERRAIN_CHUNK - MAX_DROP / TERRAIN_CELL - 1,
-            GRID_WIDTH,
-            GRID_HEIGHT,
-            now,
-            this.levels,
-        );
+        // The same cells as the drawing reads (draw).
+        const window = blockCellWindow(blockX, blockY);
+        const any = this.inputs.water.levelsOver(window.x, window.y, GRID_WIDTH, GRID_HEIGHT, now, this.levels);
         if (!any) return "";
         let hash = 0;
         for (let index = 0; index < GRID_WIDTH * GRID_HEIGHT; index++) {
@@ -447,8 +443,7 @@ export class ReliefTiles {
         if (!block) return;
         // The heights and the water of the cells the block is drawn from, read once (one more cell around for the
         // interpolation between centres): reading the relief map at every pixel would cost far too much.
-        const gridX = blockX * TERRAIN_CHUNK - 1;
-        const gridY = blockY * TERRAIN_CHUNK - MAX_DROP / TERRAIN_CELL - 1;
+        const { x: gridX, y: gridY } = blockCellWindow(blockX, blockY);
         const width = GRID_WIDTH;
         const height = GRID_HEIGHT;
         for (let row = 0; row < height; row++) {
@@ -457,21 +452,30 @@ export class ReliefTiles {
             }
         }
         const wet = this.inputs.water.levelsOver(gridX, gridY, width, height, now, this.gridWater);
-        // Only the rows of the ground that can be drawn in the block are worked out: a point is drawn lower by its drop,
-        // between the least and the most of the block (no least under water, whose surface is drawn higher). One more
-        // row each way, for the face of a drop that comes from the row before or goes on past the block.
+        // Only the rows of the ground that can be drawn in the block are worked out: a point is drawn lower in a hollow,
+        // higher on a mount (or the surface of its water). One more row each way, for the face of a drop that comes from
+        // the row before or goes on past the block.
         let lowest = 0;
         let highest = Number.NEGATIVE_INFINITY;
-        for (const value of this.heights) {
+        let highestSurface = 0;
+        for (let index = 0; index < width * height; index++) {
+            const value = this.heights[index];
             if (value < lowest) lowest = value;
             if (value > highest) highest = value;
+            const surface = value + (wet ? this.gridWater[index] : 0);
+            if (surface > highestSurface) highestSurface = surface;
         }
-        // Flat in the map editor: nothing is drawn lower.
-        const scale = this.projected ? DROP_SCALE : 0;
-        const mostDrop = Math.min(MAX_DROP, Math.max(0, -lowest) * scale);
-        const leastDrop = wet ? 0 : Math.min(MAX_DROP, Math.max(0, -highest) * scale);
+        // Flat in the map editor: nothing is drawn lower nor higher.
+        const shiftOf = (ground: number): number => (this.projected ? shiftOfHeight(ground) : 0);
+        const mostDrop = Math.max(0, shiftOf(lowest));
+        const mostRise = Math.max(0, -shiftOf(highestSurface));
+        // No least drop under water, whose surface is drawn higher.
+        const leastDrop = wet ? 0 : Math.max(0, shiftOf(highest));
         const firstY = top - Math.ceil(mostDrop) - 1;
-        const endY = Math.min(top + BLOCK_PX, top + BLOCK_PX - Math.floor(leastDrop) + 1);
+        const endY =
+            mostRise > 0
+                ? top + BLOCK_PX + Math.ceil(mostRise) + 1
+                : Math.min(top + BLOCK_PX, top + BLOCK_PX - Math.floor(leastDrop) + 1);
         const bilinear = (values: ArrayLike<number>, x: number, y: number): number => {
             const fx = Math.min(width - 1.001, Math.max(0, x / TERRAIN_CELL - 0.5 - gridX));
             const fy = Math.min(height - 1.001, Math.max(0, y / TERRAIN_CELL - 0.5 - gridY));
@@ -623,7 +627,7 @@ export class ReliefTiles {
             }
             if (row % ROWS_A_STEP === 0) yield;
         }
-        // 3. Projected in 3/4, column by column, from MAX_DROP px north of the block.
+        // 3. Projected in 3/4, column by column, from MAX_DROP px north of the block to MAX_RISE south of it.
         const context = block.texture.getContext();
         const pixels = context.createImageData(BLOCK_TEXELS, BLOCK_TEXELS);
         const samples = this.samples;
@@ -641,7 +645,7 @@ export class ReliefTiles {
                 if (water >= WATER_SEEN_PX) {
                     // The water as its signature knows it (WATER_STEP_PX): a block is drawn again only when it shows.
                     const depth = Math.max(WATER_SEEN_PX, Math.floor(water / WATER_STEP_PX) * WATER_STEP_PX);
-                    sample.drop = Math.min(MAX_DROP, Math.max(0, -(ground + depth)) * scale);
+                    sample.drop = shiftOf(ground + depth);
                     const edge =
                         waters[index - 1] < WATER_SEEN_PX ||
                         waters[index + 1] < WATER_SEEN_PX ||
@@ -650,11 +654,11 @@ export class ReliefTiles {
                     sample.color = waterColor(depth, x, y, season, colors[index], this.seeThrough, edge);
                     sample.plain = false;
                 } else {
-                    sample.drop = Math.min(MAX_DROP, Math.max(0, -ground) * scale);
+                    sample.drop = shiftOf(ground);
                     sample.color = colors[index];
                     // Left to the map (unless it hides what is drawn behind it): what nothing covers; without the layout
                     // of the map (the 3/4 relief only), the flat ground.
-                    sample.plain = this.inputs.layout ? here === NONE_INDEX : ground > -0.5;
+                    sample.plain = this.inputs.layout ? here === NONE_INDEX : Math.abs(ground) < 0.5;
                 }
             }
             paintColumn(samples, count, BLOCK_TEXELS, top, pixels.data, BLOCK_TEXELS, column);

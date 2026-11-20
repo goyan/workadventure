@@ -168,6 +168,28 @@ describe("the blocks of the relief seen in 3/4", () => {
         expect(firstRow.every((alpha) => alpha === 255)).toBe(true);
     });
 
+    it("draws in a block the top of a mount that rises from the block south of it, without a seam", () => {
+        // A mount 128 px high on the cells 20 to 27 across, 32 to 35 down (x 320 to 447, y 512 to 575): the first rows of
+        // the block 1,2, drawn 64 px higher, in the last rows of the block 1,1.
+        const changes = new Map<string, number>();
+        for (let x = 20; x <= 27; x++) for (let y = 32; y <= 35; y++) changes.set(cellKey(x, y), 128);
+        const { settle, painted } = fixture(withHeights(undefined, changes));
+        settle();
+        const north = painted.get("relief-block:1,1");
+        const south = painted.get("relief-block:1,2");
+        if (!north || !south) throw new Error("no block");
+        const alpha = (block: Uint8ClampedArray, column: number, row: number) => block[(row * 256 + column) * 4 + 3];
+        // The top of the mount (x 356, y 520 to 560) is drawn 64 px higher: y 456 to 496, the rows 200 to 240 of 1,1.
+        for (let row = 200; row <= 240; row++) expect(alpha(north, 100, row)).toBe(255);
+        // Nothing above the mount.
+        expect(alpha(north, 100, 150)).toBe(0);
+        // No seam: drawn on both sides of the edge of the blocks.
+        for (let column = 80; column < 180; column++) {
+            expect(alpha(north, column, 255)).toBe(255);
+            expect(alpha(south, column, 0)).toBe(255);
+        }
+    });
+
     /** A flat floor dug 64 px deep over 64 × 64 cells, sand from the cell `sandFrom` on (x = 16 × sandFrom). */
     function floorWithSand(sandFrom: number): TerrainData {
         const cells = Array.from({ length: 64 * 64 }, (_, index): [string, number] => [

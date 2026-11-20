@@ -3,25 +3,44 @@ import type { TerrainData } from "@workadventure/map-editor";
 
 /** Rows of cells north of a block read to draw it: the highest face of a drop (128 px drawn, 8 cells) reaches it. */
 export const NORTH_ROWS = 8;
+/** Rows of cells south of a block read to draw it: the highest top of a mount (128 px drawn, 8 cells) rises into it. */
+export const SOUTH_ROWS = 8;
+/** Columns of cells west of a block read to draw it: the shadow of a mount (64 px, 4 cells) falls south-east. */
+export const SHADOW_CELLS = 4;
+
+/**
+ * The cells a block of the relief is drawn from: its own, NORTH_ROWS north of it (the faces of the hollows),
+ * SOUTH_ROWS south (the tops of the mounts), SHADOW_CELLS west (the shadows), and one more all around (the heights are
+ * interpolated between the centres of the cells). The drawing and every signature of a block read this one window.
+ */
+export function blockCellWindow(
+    blockX: number,
+    blockY: number,
+): { x: number; y: number; width: number; height: number } {
+    return {
+        x: blockX * TERRAIN_CHUNK - 1 - SHADOW_CELLS,
+        y: blockY * TERRAIN_CHUNK - NORTH_ROWS - 1,
+        width: TERRAIN_CHUNK + 2 + SHADOW_CELLS,
+        height: TERRAIN_CHUNK + NORTH_ROWS + SOUTH_ROWS + 2,
+    };
+}
+
 /** The most blocks drawn in one image of the game; the others wait for the next one. */
 export const BLOCKS_AN_IMAGE = 1;
 /** The most blocks kept drawn. */
 export const KEPT_BLOCKS = 64;
 
 /**
- * The heights and soils a block of the relief is drawn from (its cells, the NORTH_ROWS rows north of it, one more all around), as a short text:
- * the same relief gives the same text. Empty when none of them is dug, raised or painted.
+ * The heights and soils a block of the relief is drawn from (blockCellWindow), as a short text: the same relief gives the
+ * same text. Empty when none of them is dug, raised or painted.
  */
 export function reliefSignature(terrain: TerrainData | undefined, blockX: number, blockY: number): string {
     if (!terrain) return "";
     let hash = 0;
     let dug = false;
-    // The cells the drawing of the block reads: its own and the NORTH_ROWS north of it, and one more all around
-    // (the heights are interpolated between the centres of the cells).
-    const firstX = blockX * TERRAIN_CHUNK - 1;
-    const firstY = blockY * TERRAIN_CHUNK - NORTH_ROWS - 1;
-    for (let y = firstY; y <= (blockY + 1) * TERRAIN_CHUNK; y++) {
-        for (let x = firstX; x <= firstX + TERRAIN_CHUNK + 1; x++) {
+    const window = blockCellWindow(blockX, blockY);
+    for (let y = window.y; y < window.y + window.height; y++) {
+        for (let x = window.x; x < window.x + window.width; x++) {
             const height = heightAt(terrain, x, y);
             // Dug or raised: a relief to draw (a mount is lit by its slope and carries level lines).
             if (height !== 0) dug = true;
