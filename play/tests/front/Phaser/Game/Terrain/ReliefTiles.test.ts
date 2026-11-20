@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { cellKey, withHeights, withSoils } from "@workadventure/map-editor";
+import { cellKey, Season, withHeights, withSoils } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 import { ReliefTiles } from "../../../../../src/front/Phaser/Game/Terrain/ReliefTiles";
+import type { GroundLayout } from "../../../../../src/front/Phaser/Game/Terrain/ReliefTiles";
 import { TerrainWater } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
 import { MeadowState } from "../../../../../src/front/Phaser/Game/Terrain/MeadowState";
-import { RAMPS } from "../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
+import { RAMPS, rampsFor } from "../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
 import type { Rgb } from "../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
 
 /** Hollows dug all over a large part of the map: every block of 256 px holds some. */
@@ -14,7 +15,11 @@ function dugEverywhere(): TerrainData {
     return withHeights(undefined, changes);
 }
 
-function fixture(terrain: TerrainData = dugEverywhere(), meadow?: MeadowState) {
+function fixture(
+    terrain: TerrainData | undefined = dugEverywhere(),
+    meadow?: MeadowState,
+    options: { layout?: GroundLayout; season?: () => Season | undefined } = {},
+) {
     const worldView = { x: 300, y: 300, width: 600, height: 400 };
     const images: { visible: boolean }[] = [];
     /** The last pixels put in each block, by texture key. */
@@ -54,15 +59,16 @@ function fixture(terrain: TerrainData = dugEverywhere(), meadow?: MeadowState) {
     const water = new TerrainWater();
     water.setTerrain(terrain);
     let current = terrain;
-    const setTerrain = (next: TerrainData) => {
+    const setTerrain = (next: TerrainData | undefined) => {
         current = next;
         water.setTerrain(next);
     };
     const tiles = new ReliefTiles(scene as never, {
         relief: () => current,
         meadow,
+        layout: options.layout,
         water,
-        season: () => undefined,
+        season: options.season ?? (() => undefined),
         snowShown: () => 0,
     });
     /** Updates until every block around the view is drawn. */
@@ -301,5 +307,107 @@ describe("the blocks of the relief seen in 3/4", () => {
         expect(painted.size).toBeGreaterThanOrEqual(4);
         const sorted = times.slice(1, lastFinished + 1).sort((a, b) => a - b);
         expect(sorted[Math.floor(sorted.length / 2)]).toBeLessThan(10);
+    });
+
+    describe("the flat ground, with the layout of the map", () => {
+        // Indoors from x 512 on (cell 32), a floor of the Carte tool on the cell 20,20, grass tiles of the map below
+        // y 448 (cell 28).
+        let layoutVersion = 1;
+        let indoorsFrom = 32;
+        const layout: GroundLayout = {
+            outdoor: (cellX) => cellX < indoorsFrom,
+            paved: (cellX, cellY) => cellX === 20 && cellY === 20,
+            mapGrass: (_cellX, cellY) => cellY >= 28,
+            version: () => layoutVersion,
+        };
+        const sandAt = (cells: [number, number][]) =>
+            withSoils(undefined, new Map(cells.map(([x, y]): [string, number] => [cellKey(x, y), 4])));
+        const sandBlock = (): TerrainData =>
+            sandAt(
+                Array.from({ length: 16 * 16 }, (_, index): [number, number] => [
+                    16 + (index % 16),
+                    16 + Math.floor(index / 16),
+                ]),
+            );
+
+        it("draws the soil painted on flat ground, on a map without relief, opaque", () => {
+            const { settle, painted, tiles } = fixture(sandBlock(), undefined, { layout });
+            settle();
+            const block = painted.get("relief-block:1,1");
+            expect(block).toBeDefined();
+            if (!block) return;
+            // The cell 18,18: pixel (32 + 8, 32 + 8) of the block.
+            expect(kindOf(pixelOf(block, 40, 40))).toBe("sand");
+            expect(block[(40 * 256 + 40) * 4 + 3]).toBe(255);
+            expect(tiles.isActive()).toBe(true);
+            expect(tiles.groundPointAt({ x: 300, y: 300 })).toEqual({ x: 300, y: 300 });
+        });
+
+        it("leaves the rooms and the floors of the Carte tool to the map: transparent", () => {
+            const { settle, painted } = fixture(sandBlock(), undefined, { layout });
+            settle();
+            const block = painted.get("relief-block:1,1");
+            if (!block) throw new Error("no block");
+            // The cell 20,20 (floor of the Carte tool): pixel (64 + 8, 64 + 8).
+            expect(block[(72 * 256 + 72) * 4 + 3]).toBe(0);
+            const indoors = sandAt(Array.from({ length: 16 }, (_, index): [number, number] => [33 + index, 18]));
+            const inside = fixture(indoors, undefined, { layout });
+            inside.settle();
+            const room = inside.painted.get("relief-block:2,1");
+            if (room) expect(room[(40 * 256 + 40) * 4 + 3]).toBe(0);
+        });
+
+        it("draws the grass tiles of the map in the grass of the season, again when the season changes", () => {
+            let season: Season | undefined = Season.Spring;
+            const { settle, painted, tiles } = fixture(undefined, undefined, { layout, season: () => season });
+            settle();
+            const block = painted.get("relief-block:1,1");
+            if (!block) throw new Error("no block");
+            // Row 230 of the block 1,1 is y 486: a grass tile of the map.
+            const color = pixelOf(block, 100, 230);
+            expect([...rampsFor(Season.Spring).grass, GRASS_LINE].some((shade) => same(shade, color))).toBe(true);
+            const drawn = tiles.redraws();
+            season = Season.Autumn;
+            settle();
+            expect(tiles.redraws()).toBeGreaterThan(drawn);
+        });
+
+        it("draws a block again when a room is built over it", () => {
+            const { settle, tiles } = fixture(sandBlock(), undefined, { layout });
+            settle();
+            const drawn = tiles.redraws();
+            // Walls built: the room now starts at x 256, over the block 1,1.
+            indoorsFrom = 16;
+            layoutVersion++;
+            settle();
+            expect(tiles.redraws()).toBeGreaterThan(drawn);
+            indoorsFrom = 32;
+            layoutVersion++;
+        });
+
+        it("draws a hollow at its place while the map is edited, and in 3/4 again once it is closed", () => {
+            const deep = withHeights(
+                undefined,
+                new Map(
+                    Array.from({ length: 64 * 64 }, (_, index): [string, number] => [
+                        cellKey(index % 64, Math.floor(index / 64)),
+                        -64,
+                    ]),
+                ),
+            );
+            const { settle, painted, tiles } = fixture(deep, undefined, { layout });
+            tiles.setProjected(false);
+            settle();
+            expect(tiles.isActive()).toBe(false);
+            const flat = painted.get("relief-block:1,1");
+            if (!flat) throw new Error("no block");
+            // Flat: the first row of the block is the ground at its place, opaque (in 3/4 it would be the floor of a
+            // ground 32 px north, the same; the drop shows on the faces only).
+            const drawn = tiles.redraws();
+            tiles.setProjected(true);
+            settle();
+            expect(tiles.redraws()).toBeGreaterThan(drawn);
+            expect(tiles.isActive()).toBe(true);
+        });
     });
 });

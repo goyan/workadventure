@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import { heightAt, TERRAIN_CELL, TERRAIN_CHUNK } from "@workadventure/map-editor";
+import { heightAt, TERRAIN_CELL, TERRAIN_CHUNK, TILE_PX } from "@workadventure/map-editor";
 import type { Season, TerrainData } from "@workadventure/map-editor";
 import { refreshCanvasTexture } from "../CanvasTextureRefresh";
 import type { MeadowState } from "./MeadowState";
@@ -9,14 +9,15 @@ import {
     groundValue,
     isContour,
     lightOfRise,
+    sprinkleAt,
     textureIndex,
     textureTable,
     textureValue,
     TEXTURE_MASK,
 } from "./Pixel/GroundPixel";
 import { cellMaterial, outlineOf, pickMaterial } from "./Pixel/MaterialField";
-import type { Cover } from "./Pixel/MaterialField";
-import { bayer, RAMPS } from "./Pixel/PixelPalette";
+import type { CellInputs, Cover } from "./Pixel/MaterialField";
+import { bayer, RAMPS, rampsFor } from "./Pixel/PixelPalette";
 import type { Material, Ramp, Rgb as PaletteRgb } from "./Pixel/PixelPalette";
 import { DROP_SCALE, groundPointAt, MAX_DROP, paintColumn, RELIEF_TEXEL } from "./ReliefProjection";
 import type { ColumnSample } from "./ReliefProjection";
@@ -47,13 +48,16 @@ const MATERIALS: readonly Material[] = [
     "mud",
 ];
 const UNKNOWN_MATERIAL = 255;
-/**
- * The index of what covers a point. Until the flat ground is drawn (lot B, task 3), the 3/4 relief is given no layout
- * of the map and never meets "none": drawn as grass if it did.
- */
-function indexOfCover(cover: Cover): number {
-    return MATERIAL_INDEX[cover === "none" ? "grass" : cover];
-}
+/** What covers a point, as stored: the materials, then "none" (transparent). */
+const COVERS: readonly Cover[] = [...MATERIALS, "none"];
+const COVER_INDEX = Object.fromEntries(COVERS.map((cover, index) => [cover, index])) as Record<Cover, number>;
+const NONE_INDEX = COVER_INDEX.none;
+/** From this much grass of the meadow (0 to 255), the grass is dense: the flowers of the season grow there. */
+const DENSE_GRASS = 160;
+/** While the relief is edited, the water is drawn this much fainter, so the bottom shows through. */
+const SEE_THROUGH = 0.45;
+/** The ground under water where nothing else covers it. */
+const BARE_UNDER_WATER: PaletteRgb = RAMPS.earth[2];
 /** The time an image spends drawing a block (ms): the rest of the block waits for the next image. */
 const DRAW_BUDGET_MS = 6;
 /** The rows (or columns) of a block drawn between two looks at the time. */
@@ -99,6 +103,17 @@ export interface ReliefInputs {
     season(): Season | undefined;
     /** How much of the ground is under the snow of the season (0 to 1). */
     snowShown(): number;
+    /** The layout of the map, to draw the flat ground too: absent, only the dug ground and its water are drawn. */
+    layout?: GroundLayout;
+}
+
+/** What the flat ground needs to know of the map: its rooms, the floors of the Carte tool, its grass tiles. */
+export interface GroundLayout {
+    outdoor(cellX: number, cellY: number): boolean;
+    paved(cellX: number, cellY: number): boolean;
+    mapGrass(cellX: number, cellY: number): boolean;
+    /** Changes whenever one of them does. */
+    version(): number;
 }
 
 interface Block {
@@ -115,13 +130,15 @@ export class ReliefTiles {
     private readonly blocks = new Map<string, Block>();
     private readonly schedule = new ReliefTileSchedule();
     private hidden = false;
+    /** In 3/4 (the game), or flat (the map editor, to dig and place where one aims). */
+    private projected = true;
     private reliefKept: TerrainData | undefined;
     private readonly reliefSignatures = new Map<string, string>();
     private waterKey = "";
-    private meadowVersion = -1;
+    private coverKey = "";
     /** The block being drawn, a step an image. */
     private job: { key: string; steps: Generator<void, void, void> } | undefined;
-    private readonly meadowSignatures = new Map<string, string>();
+    private readonly coverSignatures = new Map<string, string>();
     private readonly waterSignatures = new Map<string, string>();
     private readonly heights = new Float32Array(GRID_WIDTH * GRID_HEIGHT);
     private readonly gridWater = new Uint8Array(GRID_WIDTH * GRID_HEIGHT);
@@ -129,7 +146,10 @@ export class ReliefTiles {
     /** The ground of a block seen from above, a pixel a pixel of the map: reused, nothing allocated. */
     private readonly pointHeights = new Float32Array(POINT_COLUMNS * POINT_ROWS);
     private readonly pointMaterials = new Uint8Array(POINT_COLUMNS * POINT_ROWS);
-    private readonly pointColors: PaletteRgb[] = new Array<PaletteRgb>(POINT_COLUMNS * POINT_ROWS).fill(RAMPS.grass[0]);
+    /** Undefined where nothing covers the ground (transparent). */
+    private readonly pointColors: (PaletteRgb | undefined)[] = new Array<PaletteRgb | undefined>(
+        POINT_COLUMNS * POINT_ROWS,
+    ).fill(undefined);
     /** One sample a texel of a column, from MAX_DROP north of the block to its bottom: reused, nothing allocated. */
     private readonly samples: ColumnSample[] = Array.from({ length: (MAX_DROP + BLOCK_PX) / RELIEF_TEXEL + 1 }, () => ({
         groundY: 0,
@@ -154,7 +174,18 @@ export class ReliefTiles {
 
     /** Whether the relief is drawn in 3/4 now (a map with relief, the editor closed). */
     public isActive(): boolean {
-        return !this.hidden && this.inputs.relief() !== undefined;
+        return !this.hidden && this.projected && this.inputs.relief() !== undefined;
+    }
+
+    /**
+     * In 3/4 in the game, flat while the map is edited (drawn at its place, its water fainter so that what is dug
+     * under it shows): every block is drawn again in the other way.
+     */
+    public setProjected(projected: boolean): void {
+        if (projected === this.projected) return;
+        this.projected = projected;
+        this.schedule.forget();
+        this.scene.markDirty();
     }
 
     /** The point of the ground drawn under a point of the map on the screen (groundPointAt); itself when flat. */
@@ -175,7 +206,8 @@ export class ReliefTiles {
 
     public update(now: number): void {
         const terrain = this.inputs.relief();
-        if (this.hidden || !terrain) return;
+        const layout = this.inputs.layout;
+        if (this.hidden || (!terrain && !layout)) return;
         if (terrain !== this.reliefKept) {
             this.reliefKept = terrain;
             this.reliefSignatures.clear();
@@ -195,12 +227,13 @@ export class ReliefTiles {
         }
         // The meadow is told again every 10 s (2 s during a fire): a block is drawn again only when what covers one of
         // its cells changes, not at each message.
-        const meadowVersion = this.inputs.meadow?.version() ?? 0;
-        if (meadowVersion !== this.meadowVersion) {
-            this.meadowVersion = meadowVersion;
-            this.meadowSignatures.clear();
+        const snow = Math.round(this.inputs.snowShown() * 10) / 10;
+        const coverKey = `${this.inputs.meadow?.version() ?? 0}|${layout?.version() ?? 0}|${snow}`;
+        if (coverKey !== this.coverKey) {
+            this.coverKey = coverKey;
+            this.coverSignatures.clear();
         }
-        const shared = `${this.inputs.season() ?? ""}|${Math.round(this.inputs.snowShown() * 10) / 10}`;
+        const shared = `${this.inputs.season() ?? ""}|${snow}|${this.projected ? "3/4" : "flat"}`;
         const signatures = new Map<string, string>();
         for (const key of around) {
             let relief = this.reliefSignatures.get(key);
@@ -214,16 +247,21 @@ export class ReliefTiles {
                 water = this.waterSignature(key, now);
                 this.waterSignatures.set(key, water);
             }
-            if (relief === "" && water === "") {
+            // Without the layout of the map, only the dug ground and its water are drawn.
+            if (!layout && relief === "" && water === "") {
                 signatures.set(key, "");
                 continue;
             }
-            let meadow = this.meadowSignatures.get(key);
-            if (meadow === undefined) {
-                meadow = this.meadowSignature(key, terrain);
-                this.meadowSignatures.set(key, meadow);
+            let cover = this.coverSignatures.get(key);
+            if (cover === undefined) {
+                cover = this.coverSignature(key, terrain, now);
+                this.coverSignatures.set(key, cover);
             }
-            signatures.set(key, `${relief}|${water}|${meadow}|${shared}`);
+            // With it: nothing to draw where nothing covers the ground, nothing is dug and no water lies.
+            signatures.set(
+                key,
+                relief === "" && water === "" && cover === "" ? "" : `${relief}|${water}|${cover}|${shared}`,
+            );
         }
         // One block drawn at a time, spread over images: DRAW_BUDGET_MS of it an image.
         if (!this.job) {
@@ -258,20 +296,41 @@ export class ReliefTiles {
         return keys;
     }
 
-    /** What covers the cells a block is drawn from (cellMaterial: meadow, snow, soil), as a short text. */
-    private meadowSignature(key: string, terrain: TerrainData): string {
-        if (!this.inputs.meadow) return "";
+    /**
+     * What covers the cells a block is drawn from (cellMaterial: meadow, snow, soil, the layout of the map), as a short
+     * text; empty when nothing does (only with the layout of the map: without it, bare ground is grass).
+     */
+    private coverSignature(key: string, terrain: TerrainData | undefined, now: number): string {
         const [blockX, blockY] = key.split(",").map(Number);
         const gridX = blockX * TERRAIN_CHUNK - 1;
         const gridY = blockY * TERRAIN_CHUNK - MAX_DROP / TERRAIN_CELL - 1;
-        const inputs = { terrain, meadow: this.inputs.meadow, snowShown: this.inputs.snowShown() };
+        const inputs = this.cellInputs(terrain, now);
         let hash = 0;
+        let covered = false;
         for (let row = 0; row < GRID_HEIGHT; row++) {
             for (let column = 0; column < GRID_WIDTH; column++) {
-                hash = (Math.imul(hash, 31) + indexOfCover(cellMaterial(inputs, gridX + column, gridY + row))) | 0;
+                const cover = cellMaterial(inputs, gridX + column, gridY + row);
+                if (cover !== "none") covered = true;
+                hash = (Math.imul(hash, 31) + COVER_INDEX[cover]) | 0;
             }
         }
-        return hash.toString(36);
+        return covered ? hash.toString(36) : "";
+    }
+
+    /** What the material of a cell is read from (cellMaterial). */
+    private cellInputs(terrain: TerrainData | undefined, now: number): CellInputs {
+        const meadow = this.inputs.meadow;
+        const layout = this.inputs.layout;
+        return {
+            terrain,
+            meadow,
+            snowShown: this.inputs.snowShown(),
+            outdoor: layout && ((cellX, cellY) => layout.outdoor(cellX, cellY)),
+            paved: layout && ((cellX, cellY) => layout.paved(cellX, cellY)),
+            mapGrass: layout && ((cellX, cellY) => layout.mapGrass(cellX, cellY)),
+            moistureAt: meadow && ((x, y) => meadow.moistureAt(x, y)),
+            waterDepthAt: (x, y) => this.inputs.water.depthAt(x, y, now),
+        };
     }
 
     /** The water a block is drawn with (its cells and the rows north of it), as a short text; empty when dry. */
@@ -327,7 +386,7 @@ export class ReliefTiles {
      * Draws a block, a step at a time: it yields every ROWS_A_STEP rows (or columns) so that update can spread a block
      * over several images. The block shows its new drawing once the last step is done.
      */
-    private *drawSteps(key: string, terrain: TerrainData, now: number): Generator<void, void, void> {
+    private *drawSteps(key: string, terrain: TerrainData | undefined, now: number): Generator<void, void, void> {
         const [blockX, blockY] = key.split(",").map(Number);
         const left = blockX * BLOCK_PX;
         const top = blockY * BLOCK_PX;
@@ -354,8 +413,10 @@ export class ReliefTiles {
             if (value < lowest) lowest = value;
             if (value > highest) highest = value;
         }
-        const mostDrop = Math.min(MAX_DROP, Math.max(0, -lowest) * DROP_SCALE);
-        const leastDrop = wet ? 0 : Math.min(MAX_DROP, Math.max(0, -highest) * DROP_SCALE);
+        // Flat in the map editor: nothing is drawn lower.
+        const scale = this.projected ? DROP_SCALE : 0;
+        const mostDrop = Math.min(MAX_DROP, Math.max(0, -lowest) * scale);
+        const leastDrop = wet ? 0 : Math.min(MAX_DROP, Math.max(0, -highest) * scale);
         const firstY = top - Math.ceil(mostDrop) - 1;
         const endY = Math.min(top + BLOCK_PX, top + BLOCK_PX - Math.floor(leastDrop) + 1);
         const bilinear = (values: ArrayLike<number>, x: number, y: number): number => {
@@ -372,17 +433,17 @@ export class ReliefTiles {
         };
         // What covers each cell, read once.
         this.cellMaterials.fill(UNKNOWN_MATERIAL);
-        const cellInputs = { terrain, meadow: this.inputs.meadow, snowShown: this.inputs.snowShown() };
-        const cell = (cellX: number, cellY: number): Material => {
+        const cellInputs = this.cellInputs(terrain, now);
+        const cell = (cellX: number, cellY: number): Cover => {
             const column = Math.min(width - 1, Math.max(0, cellX - gridX));
             const row = Math.min(height - 1, Math.max(0, cellY - gridY));
             const index = row * width + column;
             let known = this.cellMaterials[index];
             if (known === UNKNOWN_MATERIAL) {
-                known = indexOfCover(cellMaterial(cellInputs, gridX + column, gridY + row));
+                known = COVER_INDEX[cellMaterial(cellInputs, gridX + column, gridY + row)];
                 this.cellMaterials[index] = known;
             }
-            return MATERIALS[known];
+            return COVERS[known];
         };
         // 1. The ground seen from above, one pixel a pixel of the map, 1 px more all around than what is drawn (so a
         // border on the edge of a block gets its line on both blocks) and MAX_DROP px north of the block.
@@ -422,15 +483,18 @@ export class ReliefTiles {
                         material === cell(cellX + 1, cellY) &&
                         material === cell(cellX, cellY + 1) &&
                         material === cell(cellX + 1, cellY + 1)
-                            ? MATERIAL_INDEX[material]
+                            ? COVER_INDEX[material]
                             : -1;
                 }
-                materials[index] = uniform >= 0 ? uniform : indexOfCover(pickMaterial(cell, x, y));
+                materials[index] = uniform >= 0 ? uniform : COVER_INDEX[pickMaterial(cell, x, y)];
             }
             if ((row - firstRow) % ROWS_A_STEP === ROWS_A_STEP - 1) yield;
         }
         // 2. Its colours: texture, light of the slope, depth, and the line of a border.
         const colors = this.pointColors;
+        const season = this.inputs.season();
+        const ramps = rampsFor(season);
+        const meadow = this.inputs.meadow;
         // The textures of the materials met in this block only (a table is 1 MB).
         const textures: (Float32Array | undefined)[] = [];
         for (let row = Math.max(1, firstRow + 1); row < Math.min(POINT_ROWS - 1, endRow - 1); row++) {
@@ -440,7 +504,12 @@ export class ReliefTiles {
             for (let column = 1; column < POINT_COLUMNS - 1; column++) {
                 const index = row * POINT_COLUMNS + column;
                 const here = materials[index];
-                const material = MATERIALS[here];
+                // Nothing covers it: transparent, the tiles of the map show.
+                if (here === NONE_INDEX) {
+                    colors[index] = undefined;
+                    continue;
+                }
+                const material = COVERS[here] as Material;
                 const west = materials[index - 1];
                 const east = materials[index + 1];
                 const north = materials[index - POINT_COLUMNS];
@@ -449,10 +518,10 @@ export class ReliefTiles {
                 const outline =
                     west === here && east === here && north === here && south === here
                         ? undefined
-                        : (outlineOf(material, MATERIALS[west]) ??
-                          outlineOf(material, MATERIALS[east]) ??
-                          outlineOf(material, MATERIALS[north]) ??
-                          outlineOf(material, MATERIALS[south]));
+                        : (outlineOf(material, COVERS[west]) ??
+                          outlineOf(material, COVERS[east]) ??
+                          outlineOf(material, COVERS[north]) ??
+                          outlineOf(material, COVERS[south]));
                 const rise =
                     heights[index + 1] -
                     heights[index - 1] +
@@ -467,7 +536,15 @@ export class ReliefTiles {
                     heights[index - POINT_COLUMNS],
                     heights[index + POINT_COLUMNS],
                 );
-                if (outline === undefined && material !== "ember") {
+                // Dense grass of the meadow: where the flowers of the season grow.
+                const dense =
+                    material === "grass" &&
+                    meadow !== undefined &&
+                    meadow.grassAt(Math.floor(x / TILE_PX), Math.floor(y / TILE_PX)) >= DENSE_GRASS;
+                const sown = outline === undefined ? sprinkleAt(material, season, dense, x, y) : undefined;
+                if (sown) {
+                    colors[index] = sown;
+                } else if (outline === undefined && material !== "ember" && material !== "mud") {
                     // The common case of groundColor, without its calls: texture, light, depth, then the dither.
                     const value =
                         groundValue(
@@ -482,9 +559,9 @@ export class ReliefTiles {
                             heights[index],
                         ) - contourShade(contour);
                     const shade = Math.round(value * 3 + bayerRow[x & 3] - 0.5);
-                    colors[index] = RAMPS[material][shade < 0 ? 0 : shade > 3 ? 3 : shade];
+                    colors[index] = ramps[material][shade < 0 ? 0 : shade > 3 ? 3 : shade];
                 } else {
-                    colors[index] = groundColor(material, x, y, light, heights[index], outline, contour);
+                    colors[index] = groundColor(material, x, y, light, heights[index], outline, contour, season, dense);
                 }
             }
             if (row % ROWS_A_STEP === 0) yield;
@@ -501,16 +578,24 @@ export class ReliefTiles {
                 const ground = heights[index];
                 const water = wet ? bilinear(this.gridWater, x + 0.5, y + 0.5) : 0;
                 const sample = samples[count++];
+                const here = materials[index];
                 sample.groundY = y;
-                sample.wallRamp = WALL_RAMPS[MATERIALS[materials[index]]];
+                sample.wallRamp = here === NONE_INDEX ? RAMPS.wall : WALL_RAMPS[COVERS[here] as Material];
                 if (water >= WATER_SEEN_PX) {
-                    sample.drop = Math.min(MAX_DROP, Math.max(0, -(ground + water)) * DROP_SCALE);
-                    sample.color = this.waterOver(colors[index], water, this.waterColors[count - 1]);
+                    sample.drop = Math.min(MAX_DROP, Math.max(0, -(ground + water)) * scale);
+                    sample.color = this.waterOver(
+                        colors[index] ?? BARE_UNDER_WATER,
+                        water,
+                        this.projected ? 1 : SEE_THROUGH,
+                        this.waterColors[count - 1],
+                    );
                     sample.plain = false;
                 } else {
-                    sample.drop = Math.min(MAX_DROP, Math.max(0, -ground) * DROP_SCALE);
+                    sample.drop = Math.min(MAX_DROP, Math.max(0, -ground) * scale);
                     sample.color = colors[index];
-                    sample.plain = ground > -0.5;
+                    // Left to the map (unless it hides what is drawn behind it): what nothing covers; without the layout
+                    // of the map (the 3/4 relief only), the flat ground.
+                    sample.plain = this.inputs.layout ? here === NONE_INDEX : ground > -0.5;
                 }
             }
             paintColumn(samples, count, BLOCK_TEXELS, top, pixels.data, BLOCK_TEXELS, column);
@@ -526,13 +611,13 @@ export class ReliefTiles {
      * The water over a ground: light blue, darker with its depth, a pale shore where it is thin. Written into `into`
      * (a colour kept for the sample): nothing allocated for each pixel under water.
      */
-    private waterOver(ground: PaletteRgb, depth: number, into: Rgb): Rgb {
+    private waterOver(ground: PaletteRgb, depth: number, strength: number, into: Rgb): Rgb {
         into[0] = ground[0];
         into[1] = ground[1];
         into[2] = ground[2];
-        blend(into, SHALLOW_WATER.color, SHALLOW_WATER.alpha);
-        blend(into, DEEP_WATER_COLOR, deepWaterAlpha(depth));
-        if (depth < SHORE_PX) blend(into, SHORE_WATER.color, SHORE_WATER.alpha);
+        blend(into, SHALLOW_WATER.color, SHALLOW_WATER.alpha * strength);
+        blend(into, DEEP_WATER_COLOR, deepWaterAlpha(depth) * strength);
+        if (depth < SHORE_PX) blend(into, SHORE_WATER.color, SHORE_WATER.alpha * strength);
         return into;
     }
 }

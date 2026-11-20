@@ -82,7 +82,8 @@ export interface ColumnSample {
     groundY: number;
     /** How much lower it is drawn (dropAt, or the drop of the surface of the water over it). */
     drop: number;
-    color: Rgb;
+    /** Undefined where nothing covers the ground: left to the map, cleared where it hides something. */
+    color: Rgb | undefined;
     /** The shades of the face of a drop that goes down from it. */
     wallRamp: Ramp;
     /** Flat ground: left to the map, unless it hides something drawn before it. */
@@ -148,7 +149,9 @@ export function paintColumn(
             const from = previous !== undefined && jump > 1 ? previous + 1 : at;
             for (let row = from; row <= at; row++) {
                 if (row >= 0 && row < rows && (!sample.plain || out[index(row) + 3] > 0)) {
-                    put(out, index(row), sample.color);
+                    if (sample.color) put(out, index(row), sample.color);
+                    // Bare ground that hides what is behind it: its own tiles show there.
+                    else out[index(row) + 3] = 0;
                 }
             }
             onFace = false;
