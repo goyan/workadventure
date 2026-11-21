@@ -1,7 +1,6 @@
 import * as Phaser from "phaser";
 import { heightAt, Season, TERRAIN_CELL, TILE_PX } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
-import { refreshCanvasTexture } from "../CanvasTextureRefresh";
 import type { MeadowState } from "./MeadowState";
 import {
     BLOCK_PX,
@@ -17,6 +16,8 @@ import type { BlockJob } from "./Pixel/BlockPainter";
 import { cellMaterial } from "./Pixel/MaterialField";
 import type { CellInputs, Cover } from "./Pixel/MaterialField";
 import { groundPointAt } from "./ReliefProjection";
+import { createReliefSurface } from "./ReliefSurface";
+import type { ReliefSurface } from "./ReliefSurface";
 import { blockCellWindow, COARSE_TEXEL, ReliefTileSchedule, reliefSignature, texelFor } from "./ReliefTileSchedule";
 import type { TerrainWater } from "./TerrainWater";
 
@@ -97,8 +98,8 @@ export interface GroundLayout {
 }
 
 interface Block {
-    texture: Phaser.Textures.CanvasTexture;
-    image: Phaser.GameObjects.Image;
+    /** Its image in the scene and the texture its pixels are sent to (ReliefSurface). */
+    surface: ReliefSurface;
     /** Whether it was last drawn in 3/4: hidden while the relief is shown the other way, until it is drawn again. */
     projected: boolean;
     /** Pixels of the map for a point of its drawing (texelFor). */
@@ -148,10 +149,28 @@ export class ReliefTiles {
     /** The blocks of the map with nothing to draw, as far as known: not looked at again. */
     private readonly aheadEmpty = new Set<string>();
 
+    /** The renderer of the game, where it tells that its WebGL context is back (absent from the scenes of some tests). */
+    private readonly renderer:
+        | { on(event: string, listener: () => void): unknown; off(event: string, listener: () => void): unknown }
+        | undefined;
+
     constructor(
         private readonly scene: Phaser.Scene & { markDirty(): void },
         private readonly inputs: ReliefInputs,
-    ) {}
+    ) {
+        this.renderer = (scene.sys as Phaser.Scenes.Systems | undefined)?.game?.renderer;
+        this.renderer?.on(Phaser.Renderer.Events.RESTORE_WEBGL, this.contextRestored);
+    }
+
+    /**
+     * The WebGL context was lost and is back: Phaser filled every texture again from the buffer the blocks share
+     * (ReliefSurface), so each would show the last block sent. All are let go and drawn again.
+     */
+    private readonly contextRestored = (): void => {
+        for (const key of [...this.blocks.keys()]) this.drop(key);
+        this.schedule.forget();
+        this.lookAheadAgain();
+    };
 
     /** What covers the ground at a point of the map (map pixels), as the blocks draw it: for the footprints. */
     public coverAt(x: number, y: number, now: number): Cover {
@@ -210,7 +229,9 @@ export class ReliefTiles {
         if (projected === this.projected) return;
         this.projected = projected;
         // A block drawn the other way would not match the clicks nor the avatars: hidden until it is drawn again.
-        for (const block of this.blocks.values()) block.image.setVisible(!this.hidden && block.projected === projected);
+        for (const block of this.blocks.values()) {
+            block.surface.image.setVisible(!this.hidden && block.projected === projected);
+        }
         this.schedule.forget();
         this.scene.markDirty();
     }
@@ -225,7 +246,9 @@ export class ReliefTiles {
     public setHidden(hidden: boolean): void {
         if (hidden === this.hidden) return;
         this.hidden = hidden;
-        for (const block of this.blocks.values()) block.image.setVisible(!hidden && block.projected === this.projected);
+        for (const block of this.blocks.values()) {
+            block.surface.image.setVisible(!hidden && block.projected === this.projected);
+        }
         // What changed while it was hidden is drawn again when it shows.
         if (!hidden) this.schedule.forget();
         this.scene.markDirty();
@@ -507,6 +530,7 @@ export class ReliefTiles {
     }
 
     public destroy(): void {
+        this.renderer?.off(Phaser.Renderer.Events.RESTORE_WEBGL, this.contextRestored);
         for (const key of [...this.blocks.keys()]) this.drop(key);
         this.lookAheadAgain();
     }
@@ -579,8 +603,7 @@ export class ReliefTiles {
         if (this.job?.key === key) this.job = undefined;
         const block = this.blocks.get(key);
         if (!block) return;
-        block.image.destroy();
-        block.texture.destroy();
+        block.surface.destroy();
         this.blocks.delete(key);
         this.scene.markDirty();
     }
@@ -592,33 +615,31 @@ export class ReliefTiles {
     private show(key: string, shown: Shown, pixels: Uint8ClampedArray): void {
         let block = this.blocks.get(key);
         if (block && block.texel !== shown.texel) {
-            block.image.destroy();
-            block.texture.destroy();
+            block.surface.destroy();
             this.blocks.delete(key);
             block = undefined;
         }
-        if (!block) {
+        if (block) {
+            block.surface.show(pixels);
+        } else {
             const name = shown.texel === 1 ? `relief-block:${key}` : `relief-block:${key}@${shown.texel}`;
-            const texture = this.scene.textures.createCanvas(name, shown.size, shown.size);
-            if (!texture) return;
-            // Pixel art: each point of the block is drawn as it is, never smoothed.
-            texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
-            const image = this.scene.add
-                .image(shown.left, shown.top, texture.key)
-                .setOrigin(0, 0)
-                .setDisplaySize(BLOCK_PX, BLOCK_PX)
-                .setDepth(RELIEF_TILES_DEPTH);
-            block = { texture, image, projected: shown.projected, texel: shown.texel };
+            const surface = createReliefSurface(
+                this.scene,
+                name,
+                shown.left,
+                shown.top,
+                shown.size,
+                BLOCK_PX,
+                RELIEF_TILES_DEPTH,
+                pixels,
+            );
+            if (!surface) return;
+            block = { surface, projected: shown.projected, texel: shown.texel };
             this.blocks.set(key, block);
         }
-        const context = block.texture.getContext();
-        const image = context.createImageData(shown.size, shown.size);
-        image.data.set(pixels);
-        context.putImageData(image, 0, 0);
-        refreshCanvasTexture(block.texture);
         block.projected = shown.projected;
         // Drawn the other way than the relief is shown now (the editor opened meanwhile): hidden until drawn again.
-        block.image.setVisible(!this.hidden && block.projected === this.projected);
+        block.surface.image.setVisible(!this.hidden && block.projected === this.projected);
         this.scene.markDirty();
     }
 

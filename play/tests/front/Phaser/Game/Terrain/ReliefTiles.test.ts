@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import * as Phaser from "phaser";
 import { cellKey, Season, withHeights, withSoils } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 import { ReliefTiles } from "../../../../../src/front/Phaser/Game/Terrain/ReliefTiles";
@@ -25,6 +26,8 @@ function fixture(
         snowLineSeason?: Season;
         screenScale?: () => number;
         mapSize?: { width: number; height: number };
+        /** Drawn with WebGL: the pixels go straight to textures (`painted` holds what each was last sent). */
+        webgl?: boolean;
     } = {},
 ) {
     const worldView = { x: 300, y: 300, width: 600, height: 400 };
@@ -60,11 +63,49 @@ function fixture(
             putImageData: (pixels: { data: Uint8ClampedArray }) => painted.set(key, pixels.data),
         }),
     });
+    /** The listeners of the renderer (the WebGL context restored). */
+    const listeners = new Map<string, Set<() => void>>();
+    const renderer = {
+        type: Phaser.WEBGL,
+        on: (event: string, listener: () => void) => {
+            listeners.set(event, (listeners.get(event) ?? new Set()).add(listener));
+        },
+        off: (event: string, listener: () => void) => {
+            listeners.get(event)?.delete(listener);
+        },
+        emit: (event: string) => [...(listeners.get(event) ?? [])].forEach((listener) => listener()),
+        listenerCount: () => [...listeners.values()].reduce((count, set) => count + set.size, 0),
+    };
+    const pixelTexture = (key: string) => ({
+        key,
+        setFilter: vi.fn(),
+        destroy: vi.fn(),
+        source: [
+            {
+                glTexture: {
+                    flipY: true,
+                    wrapS: 0,
+                    wrapT: 0,
+                    minFilter: 0,
+                    magFilter: 0,
+                    format: 0,
+                    update: (pixels: Uint8Array) => painted.set(key, Uint8ClampedArray.from(pixels)),
+                },
+            },
+        ],
+    });
     const scene = {
         cameras: { main: { worldView } },
-        textures: { createCanvas: vi.fn((key: string) => texture(key)) },
+        textures: {
+            createCanvas: vi.fn((key: string) => texture(key)),
+            addUint8Array: vi.fn((key: string, data: Uint8Array) => {
+                painted.set(key, Uint8ClampedArray.from(data));
+                return pixelTexture(key);
+            }),
+        },
         add: { image: vi.fn(() => image()) },
         markDirty: vi.fn(),
+        ...(options.webgl ? { sys: { game: { renderer } } } : {}),
     };
     const water = new TerrainWater();
     water.setTerrain(terrain);
@@ -99,7 +140,7 @@ function fixture(
     const skip = (ms: number) => {
         clock += ms;
     };
-    return { tiles, worldView, images, settle, painted, setTerrain, scene, water, clock: () => clock, skip };
+    return { tiles, worldView, images, settle, painted, setTerrain, scene, water, clock: () => clock, skip, renderer };
 }
 
 const near = (value: number, expected: number) => expect(Math.abs(value - expected)).toBeLessThanOrEqual(2);
@@ -384,6 +425,43 @@ describe("the blocks of the relief seen in 3/4", () => {
               : same(GRASS_LINE, color)
                 ? "line"
                 : "other";
+
+    describe("the blocks sent straight to the graphics card", () => {
+        const bytes = (pixels: Uint8ClampedArray | undefined) => Buffer.from(pixels ?? new Uint8ClampedArray(0));
+
+        it("show the same pixels as drawn on a canvas, with no canvas of their own", () => {
+            const canvas = fixture(mountOnSand(128));
+            canvas.settle();
+            const webgl = fixture(mountOnSand(128), undefined, { webgl: true });
+            webgl.settle();
+            expect(webgl.scene.textures.createCanvas).not.toHaveBeenCalled();
+            for (const block of ["1,1", "2,1", "1,2"]) {
+                const expected = canvas.painted.get(`relief-block:${block}`);
+                expect(expected?.length, block).toBe(256 * 256 * 4);
+                expect(bytes(webgl.painted.get(`relief-block:${block}`)).equals(bytes(expected)), block).toBe(true);
+            }
+        });
+
+        it("are all drawn again when the WebGL context comes back: none shows the pixels of another", () => {
+            const { settle, painted, scene, renderer, images, tiles } = fixture(mountOnSand(128), undefined, {
+                webgl: true,
+            });
+            settle();
+            const before = bytes(painted.get("relief-block:1,1"));
+            const made = () =>
+                scene.textures.addUint8Array.mock.calls.filter(([key]) => key === "relief-block:1,1").length;
+            const madeBefore = made();
+            renderer.emit(Phaser.Renderer.Events.RESTORE_WEBGL);
+            // Every block is let go at once: what the textures hold is not theirs any more.
+            expect(images.some((image) => image.visible)).toBe(false);
+            settle();
+            expect(made()).toBeGreaterThan(madeBefore);
+            expect(bytes(painted.get("relief-block:1,1")).equals(before)).toBe(true);
+            expect(images.some((image) => image.visible)).toBe(true);
+            tiles.destroy();
+            expect(renderer.listenerCount()).toBe(0);
+        });
+    });
 
     describe("the blocks kept, and the map drawn ahead", () => {
         it("keeps the blocks one zooms out of: zooming out again draws nothing again", () => {
