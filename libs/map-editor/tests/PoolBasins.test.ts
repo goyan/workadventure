@@ -70,4 +70,21 @@ describe("the basins of the pools", () => {
         expect(held).toBeCloseTo(20, 1);
         expect(grid.depthAt(14, 10)).toBe(0);
     });
+
+    it("takes the rain that falls on it only: its coping keeps the runoff of the ground around out", () => {
+        const basins = poolBasins(painted, styles);
+        const lake = withHeights(basins, new Map([[cellKey(30, 10), -20]]));
+        const bounds = gridBoundsOf(lake, [], { width: 60, height: 40 });
+        const grid = new WaterGrid(lake, bounds);
+        grid.seal(poolCells(painted, styles));
+        // A rain of 1 px a step with the runoff, of which 0.1 px falls on the cell itself.
+        grid.step({ rainPx: 1, sealedRainPx: 0.1, evaporationPx: 0, absorptionPx: 0, flows: [] });
+        expect(grid.depthAt(11, 10)).toBeCloseTo(0.1);
+        expect(grid.depthAt(30, 10)).toBeCloseTo(1);
+        // Without the share of the sealed cells, a pool takes the rain as any hollow.
+        const plain = new WaterGrid(lake, bounds);
+        plain.seal(poolCells(painted, styles));
+        plain.step({ rainPx: 1, evaporationPx: 0, absorptionPx: 0, flows: [] });
+        expect(plain.depthAt(11, 10)).toBeCloseTo(1);
+    });
 });

@@ -363,6 +363,11 @@ export function heldFlow(px: number, level: number | undefined, surface: number,
 export interface WaterStepInput {
     /** Rain falling on each dug cell (the runoff of the ground around included). */
     rainPx: number;
+    /**
+     * Rain falling on each sealed cell (see seal): the rain alone, without the runoff of the ground around, which
+     * the coping of a pool keeps out. `rainPx` when absent.
+     */
+    sealedRainPx?: number;
     /** Water lost by each wet cell in dry weather. */
     evaporationPx: number;
     /** Water the flat ground drinks from each wet cell that is not dug. */
@@ -479,6 +484,8 @@ export class WaterGrid {
      */
     private readonly hollow: Uint8Array;
     private depth: Float32Array;
+    /** The cells the runoff does not reach (see seal): 1 for a sealed cell. */
+    private readonly sealed: Uint8Array;
     /** How high the water of this map may stand over the level it spills at (see setMaxSurface). */
     private highest: number = MAX_WATER_SURFACE_PX;
     private next: Float32Array;
@@ -496,6 +503,7 @@ export class WaterGrid {
         this.ground = new Float32Array(size);
         this.blocked = new Uint8Array(size);
         this.depth = new Float32Array(size);
+        this.sealed = new Uint8Array(size);
         this.next = new Float32Array(size);
         this.queue = new Int32Array(Math.min(size, MAX_DISC_CELLS));
         this.basin = new Int32Array(Math.min(size, BASIN_CELLS));
@@ -570,6 +578,19 @@ export class WaterGrid {
             const index = row * width + column;
             this.closed[index] |= 4;
             this.closed[index + width] |= 8;
+        }
+    }
+
+    /**
+     * These cells are sealed (the basin of a pool, behind its coping): the runoff of the ground around does not
+     * come into them, they take the rain that falls on them only (WaterStepInput.sealedRainPx). The cells sealed
+     * before are forgotten.
+     */
+    public seal(cells: readonly { cellX: number; cellY: number }[]): void {
+        this.sealed.fill(0);
+        for (const { cellX, cellY } of cells) {
+            const index = this.indexOf(cellX, cellY);
+            if (index !== undefined) this.sealed[index] = 1;
         }
     }
 
@@ -766,6 +787,7 @@ export class WaterGrid {
         };
         const amount = (value: number): number => (Number.isFinite(value) && value > 0 ? value : 0);
         const rain = amount(input.rainPx);
+        const sealedRain = input.sealedRainPx === undefined ? rain : amount(input.sealedRainPx);
         const evaporation = amount(input.evaporationPx);
         const absorption = amount(input.absorptionPx);
         const indoorDrain = amount(input.indoorDrainPx ?? 0);
@@ -775,9 +797,10 @@ export class WaterGrid {
                 if (this.blocked[index]) continue;
                 // In a hollow: dug under the ground of the map, or under the rim of a crater on a mount.
                 const dug = this.ground[index] < this.spill[index];
-                if (rain > 0 && dug) {
-                    depth[index] += rain;
-                    tally.rainPx += rain;
+                const falling = this.sealed[index] ? sealedRain : rain;
+                if (falling > 0 && dug) {
+                    depth[index] += falling;
+                    tally.rainPx += falling;
                     tally.moved = true;
                 }
                 if (depth[index] <= 0) continue;

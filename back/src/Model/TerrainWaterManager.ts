@@ -213,6 +213,8 @@ export class TerrainWaterManager {
         this.doorOpenUntil = this.doors.map(() => 0);
         this.closedDoors = undefined;
         this.version++;
+        // The basins of the pools take the rain alone, not the runoff of the ground around.
+        this.grid?.seal(this.pools);
         if (this.grid && before) this.grid.takeFrom(before);
         // The cells are not the same any more: the room is told the whole state at its next message.
         this.sentBytes = undefined;

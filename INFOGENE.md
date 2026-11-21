@@ -3208,12 +3208,15 @@ L'eau d'une piscine peinte n'est plus un dessin toujours plein : c'est de l'eau 
   piscine vide en 8 secondes (`POOL_FILL_SECONDS`) : une piscine plus grande ou plus profonde a une pompe plus forte.
   Remplissage jusqu'à 2 px sous le bord (`POOL_FREEBOARD_PX`), jamais au-dessus : une piscine trop pleine se vide en
   débordant. Compté avec les sources dans le bilan de l'eau. Le fond ne boit pas (sol de piscine, creux).
+  Le bassin est étanche (`WaterGrid.seal`) : il ne reçoit que la pluie qui tombe dessus (`sealedRainPx`), pas le
+  ruissellement du terrain autour, que la margelle arrête ; sinon une pluie le ferait déborder onze fois plus vite.
 - **Ce qui en découle.** La comète y soulève une vague, le météore brûlant fait bouillir son eau, le drain la vide,
   et elle se remplit. La pluie et la fonte y tombent. Une inondation y entre, elle déborde. Elle gèle comme un lac.
 - **À l'écran** (`GroundSplat`, `poolColor`). La margelle et le carrelage restent ; l'eau dessinée suit le niveau du
   serveur : une piscine vidée montre son carrelage sec, puis l'eau revient à mesure qu'elle se remplit. Pas de glace
   dans une piscine vide. Le sol autour d'une piscine ne s'assombrit pas (pas d'anneau de terre mouillée sur une
-  terrasse).
+  terrasse), et l'eau de la piscine ne bave pas sur la terrasse : à côté d'une piscine, le shader lit la profondeur de
+  la case elle-même au lieu de la profondeur lissée entre cases voisines.
 - **Nage** (`WaterZones`). Les rectangles de piscine restent, avec le plongeon et les échelles ; un rectangle ne
   compte comme de l'eau que s'il contient de quoi nager (16 px en son centre) : dans une piscine vidée on marche sur
   le fond. La nage du relief s'applique aussi (c'est la même eau).
