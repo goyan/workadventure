@@ -30,7 +30,7 @@ describe("placeOfPoint", () => {
         south: "S",
         east: "E",
         west: "O",
-        far: (point, city, distance) => `${point} (${city} à ${distance} km)`,
+        far: (point, city, distance) => `${point} · ${city} à ${distance} km`,
         kilometres: (km) => new Intl.NumberFormat("fr-FR").format(km),
     };
     const english: PointWords = {
@@ -38,7 +38,7 @@ describe("placeOfPoint", () => {
         south: "S",
         east: "E",
         west: "W",
-        far: (point, city, distance) => `${point} (${city} ${distance} km away)`,
+        far: (point, city, distance) => `${point} · ${city} ${distance} km away`,
         kilometres: (km) => new Intl.NumberFormat("en-US").format(km),
     };
 
@@ -59,7 +59,7 @@ describe("placeOfPoint", () => {
         expect(distanceKm).toBeGreaterThan(3000);
         expect(place.name).toBe("72° S 170° E");
         expect(place.longName).toBe(
-            `72° S 170° E (${city.name} à ${new Intl.NumberFormat("fr-FR").format(roundedDistanceKm(distanceKm))} km)`,
+            `72° S 170° E · ${city.name} à ${new Intl.NumberFormat("fr-FR").format(roundedDistanceKm(distanceKm))} km`,
         );
         expect(place.name).not.toContain(city.name);
     });
@@ -68,7 +68,7 @@ describe("placeOfPoint", () => {
         expect(placeOfPoint({ latitude: 45.6, longitude: -40.4 }, french).name).toBe("46° N 40° O");
         const english_ = placeOfPoint({ latitude: 45.6, longitude: -40.4 }, english);
         expect(english_.name).toBe("46° N 40° W");
-        expect(english_.longName).toMatch(/^46° N 40° W \(.+ [\d,]+ km away\)$/);
+        expect(english_.longName).toMatch(/^46° N 40° W · .+ [\d,]+ km away$/);
         expect(english_.name).not.toContain(",");
     });
 
