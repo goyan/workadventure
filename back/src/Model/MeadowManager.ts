@@ -11,6 +11,7 @@ import {
     isDaylightAt,
     pavedTilesOf,
     liquidRainRate,
+    soilFrostOf,
     rainRateAt,
     seasonAt,
     TERRAIN_CELL,
@@ -78,6 +79,8 @@ export class MeadowManager {
     private timer: ReturnType<typeof setInterval> | undefined;
     private steps = 0;
     private rainRate = 0;
+    /** How frozen the soil is now, from the same air as the rain (see soilFrost). */
+    private frost = 0;
     /** The air the rain of the map falls through: the conditions of the room, once it gives them. */
     private air: () => PrecipitationAir | undefined = () => undefined;
     private sentGrass: Uint8Array | undefined;
@@ -235,6 +238,8 @@ export class MeadowManager {
                 settings?.weather === WeatherType.Real ? this.rain.slotsFor(settings.weatherLocation) : undefined;
             // What falls as snow lies where it fell: only the rain runs to the hollows and soaks the soil.
             this.rainRate = liquidRainRate(rainRateAt(settings, this.now(), slots), this.air());
+            // ...and in the same cold the soil freezes: its water stays, its grass lies dormant.
+            this.frost = soilFrostOf(this.air());
         }
         this.steps++;
         const set = { ...DEFAULT_MEADOW_SETTINGS, ...settings?.meadow };
@@ -265,6 +270,7 @@ export class MeadowManager {
             windFrom: weather.windFrom,
             windSpeed: weather.windSpeed,
             random: this.random,
+            soilFrost: this.frost,
             waterAt: grid
                 ? (tileX, tileY) => {
                       let deepest = 0;
