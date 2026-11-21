@@ -54,30 +54,79 @@ export function validPoolStyles(sent: readonly unknown[]): PoolStyle[] {
 export const POOL_FILL_SECONDS = 8;
 /** The pump fills a pool up to this many pixels under its rim: its water does not lap over the coping. */
 export const POOL_FREEBOARD_PX = 2;
+/** The overflow of a pool leaves this many pixels over its level before it takes water: a ripple is not a flood. */
+export const POOL_OVERFLOW_SLACK_PX = 0.25;
 
-/** A cell of a pool, as the pump that fills it reads it: how deep its basin is, in pixels. */
+/** A cell of a pool, as the pump that fills it reads it. */
 export interface PoolCell {
     cellX: number;
     cellY: number;
+    /** How deep the basin of its pool is under its rim, in pixels: the depth of its style. */
     depthPx: number;
+    /** The water the cell holds when its pool is full, in pixels: up to a little under the rim. */
+    fullPx: number;
 }
 
-/** The cells of the pools of a relief with the depth of their style, read once for a relief and its styles. */
-function readPools(terrain: TerrainData, pools: readonly PoolStyle[] | undefined): PoolCell[] {
-    const cells: PoolCell[] = [];
+const SIDES: readonly (readonly [number, number])[] = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+];
+
+/**
+ * The pools of a relief, cell by cell, with the height of the floor of each. The cells of a style that touch one
+ * another make one pool, and a pool has one level: its rim is the lowest ground around it, its floor is flat, as deep
+ * as its style under that rim (a cell already lower keeps its ground), and full it stands a little under the rim. So
+ * a pool painted on a slope or on uneven ground does not run over its low side.
+ */
+function readPools(
+    terrain: TerrainData,
+    pools: readonly PoolStyle[] | undefined,
+): { cells: PoolCell[]; floors: Map<string, number> } {
+    const painted = new Map<string, { cellX: number; cellY: number; style: number }>();
     for (const [key, codes] of Object.entries(terrain.soil ?? {})) {
         const [chunkX, chunkY] = key.split(",").map(Number);
         for (let index = 0; index < codes.length; index++) {
             const style = poolStyleOf(codes[index] ?? 0);
             if (style === undefined) continue;
-            cells.push({
-                cellX: chunkX * TERRAIN_CHUNK + (index % TERRAIN_CHUNK),
-                cellY: chunkY * TERRAIN_CHUNK + Math.floor(index / TERRAIN_CHUNK),
-                depthPx: poolStyleAt(pools, style).depthPx,
-            });
+            const cellX = chunkX * TERRAIN_CHUNK + (index % TERRAIN_CHUNK);
+            const cellY = chunkY * TERRAIN_CHUNK + Math.floor(index / TERRAIN_CHUNK);
+            painted.set(cellKey(cellX, cellY), { cellX, cellY, style });
         }
     }
-    return cells;
+    const cells: PoolCell[] = [];
+    const floors = new Map<string, number>();
+    const seen = new Set<string>();
+    for (const [key, first] of painted) {
+        if (seen.has(key)) continue;
+        seen.add(key);
+        // One pool: the cells of this style reached side by side, and the lowest ground along its sides.
+        const members = [first];
+        let rim = Infinity;
+        for (let next = 0; next < members.length; next++) {
+            const { cellX, cellY, style } = members[next];
+            for (const [dx, dy] of SIDES) {
+                const beside = cellKey(cellX + dx, cellY + dy);
+                const other = painted.get(beside);
+                if (other?.style === style) {
+                    if (!seen.has(beside)) {
+                        seen.add(beside);
+                        members.push(other);
+                    }
+                } else {
+                    rim = Math.min(rim, heightAt(terrain, cellX + dx, cellY + dy));
+                }
+            }
+        }
+        const depthPx = poolStyleAt(pools, first.style).depthPx;
+        for (const { cellX, cellY } of members) {
+            const floor = Math.min(rim - depthPx, heightAt(terrain, cellX, cellY));
+            floors.set(cellKey(cellX, cellY), floor);
+            cells.push({ cellX, cellY, depthPx, fullPx: Math.max(0, rim - POOL_FREEBOARD_PX - floor) });
+        }
+    }
+    return { cells, floors };
 }
 
 const basinsOf = new WeakMap<
@@ -88,27 +137,16 @@ const basinsOf = new WeakMap<
 function read(terrain: TerrainData, pools: readonly PoolStyle[] | undefined) {
     const kept = basinsOf.get(terrain);
     if (kept && kept.pools === pools) return kept;
-    const cells = readPools(terrain, pools);
-    const basins =
-        cells.length > 0
-            ? withHeights(
-                  terrain,
-                  new Map(
-                      cells.map(({ cellX, cellY, depthPx }) => [
-                          cellKey(cellX, cellY),
-                          heightAt(terrain, cellX, cellY) - depthPx,
-                      ]),
-                  ),
-              )
-            : terrain;
+    const { cells, floors } = readPools(terrain, pools);
+    const basins = floors.size > 0 ? withHeights(terrain, floors) : terrain;
     const made = { pools, cells, basins };
     basinsOf.set(terrain, made);
     return made;
 }
 
 /**
- * The relief as the water reads it: the relief of the map with each cell of a pool dug as deep as its style under
- * the ground it is painted on. The relief of the map itself is not changed (it is what the editor edits and what is
+ * The relief as the water reads it: the relief of the map with each pool dug as deep as its style under its rim, the
+ * lowest ground around it (see readPools). The relief of the map itself is not changed (it is what the editor edits and what is
  * drawn). The same relief for the same map and the same styles: it is read once. The relief given when it has no
  * pool.
  */

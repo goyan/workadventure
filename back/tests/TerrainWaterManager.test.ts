@@ -792,6 +792,21 @@ describe("the pools of the map in the water of the relief", () => {
         manager.stop();
     });
 
+    it("lets the overflow of a pool take what comes over its level, counted with the sinks", () => {
+        const { manager, sent, steps } = createHarness({ wam: pooled(), mapSize: () => ({ width: 60, height: 60 }) });
+        manager.mapChanged();
+        steps(120);
+        const grid = manager.getGrid();
+        // A snow melts in the pool: one more pixel of water on the two tiles of its west end.
+        for (const tileY of [10, 11]) manager.pour(10, tileY, 1 / PX_PER_MM);
+        expect(grid?.depthAt(20, 20)).toBeGreaterThan(full + 0.5);
+        steps(60);
+        expect(grid?.depthAt(20, 20)).toBeLessThan(full + 0.5);
+        expect(grid?.depthAt(19, 20)).toBe(0);
+        expect(sent.some((message) => (message.stats?.sinks ?? 0) > 0)).toBe(true);
+        manager.stop();
+    });
+
     it("keeps a map without relief nor pool without any water to step", () => {
         const { manager } = createHarness({ wam: wamWith(undefined), mapSize: () => ({ width: 60, height: 60 }) });
         manager.mapChanged();

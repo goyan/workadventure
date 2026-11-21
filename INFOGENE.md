@@ -3199,15 +3199,17 @@ du serveur, la glace est maintenant tenue par le serveur, case par case.
 
 L'eau d'une piscine peinte n'est plus un dessin toujours plein : c'est de l'eau du relief, tenue par le serveur.
 
-- **Le bassin** (`Terrain/Pools.ts`, `poolBasins`). Pour l'eau, chaque case d'une piscine est creusée de la
-  profondeur de son style sous le sol où elle est peinte. Le relief de la carte n'est pas modifié (c'est ce que
+- **Le bassin** (`Terrain/Pools.ts`, `poolBasins`). Pour l'eau, une piscine (les cases d'un même style qui se
+  touchent) est creusée de la profondeur de son style sous son bord, qui est le sol le plus bas le long de ses côtés :
+  un fond plat, un seul niveau. Sur une pente ou un sol inégal elle ne se vide donc pas par son côté bas. Le relief de la carte n'est pas modifié (c'est ce que
   l'éditeur édite et ce qui est dessiné) : le serveur et le navigateur lisent ce relief « avec bassins » pour tout
   ce qui dépend du niveau de l'eau (`TerrainWaterManager`, `TerrainWater.basin()`, courant, flèches des flux). Lu une
   fois par carte et par liste de styles.
 - **La pompe** (`TerrainWaterManager.pumpPools`, `poolCells`). Chaque case sous son niveau reçoit de quoi remplir une
   piscine vide en 8 secondes (`POOL_FILL_SECONDS`) : une piscine plus grande ou plus profonde a une pompe plus forte.
-  Remplissage jusqu'à 2 px sous le bord (`POOL_FREEBOARD_PX`), jamais au-dessus : une piscine trop pleine se vide en
-  débordant. Compté avec les sources dans le bilan de l'eau. Le fond ne boit pas (sol de piscine, creux).
+  Remplissage jusqu'à 2 px sous le bord (`POOL_FREEBOARD_PX`), jamais au-dessus. Un trop-plein reprend au même débit ce
+  qui dépasse le niveau (neige fondue dans la piscine, pluie), compté avec les puits ; une inondation qui apporte plus
+  que ce débit passe quand même par-dessus le bord. Compté avec les sources dans le bilan de l'eau. Le fond ne boit pas (sol de piscine, creux).
   Le bassin est étanche (`WaterGrid.seal`) : il ne reçoit que la pluie qui tombe dessus (`sealedRainPx`), pas le
   ruissellement du terrain autour, que la margelle arrête ; sinon une pluie le ferait déborder onze fois plus vite.
 - **Ce qui en découle.** La comète y soulève une vague, le météore brûlant fait bouillir son eau, le drain la vide,
@@ -3216,7 +3218,8 @@ L'eau d'une piscine peinte n'est plus un dessin toujours plein : c'est de l'eau 
   serveur : une piscine vidée montre son carrelage sec, puis l'eau revient à mesure qu'elle se remplit. Pas de glace
   dans une piscine vide. Le sol autour d'une piscine ne s'assombrit pas (pas d'anneau de terre mouillée sur une
   terrasse), et l'eau de la piscine ne bave pas sur la terrasse : à côté d'une piscine, le shader lit la profondeur de
-  la case elle-même au lieu de la profondeur lissée entre cases voisines.
+  la case elle-même au lieu de la profondeur lissée entre cases voisines, et ne dessine pas d'eau dans le coin d'une
+  case de piscine resté hors de sa forme arrondie.
 - **Nage** (`WaterZones`). Les rectangles de piscine restent, avec le plongeon et les échelles ; un rectangle ne
   compte comme de l'eau que s'il contient de quoi nager (16 px en son centre) : dans une piscine vidée on marche sur
   le fond. La nage du relief s'applique aussi (c'est la même eau).

@@ -29,9 +29,9 @@ describe("the basins of the pools", () => {
         expect(heightAt(basins, 14, 10)).toBe(0);
         // The soils are kept: a pool is still a pool.
         expect(soilAt(basins, 10, 10)).toBe(poolSoilCode(0));
-        // On a mount, the basin is dug from the top of the mount.
-        const raised = withHeights(painted, new Map([[cellKey(10, 10), 30]]));
-        expect(heightAt(poolBasins(raised, styles), 10, 10)).toBe(-18);
+        // A cell of the pool on a bump of the ground: the floor of the pool is flat, under its rim.
+        const bumped = withHeights(painted, new Map([[cellKey(10, 10), 30]]));
+        expect(heightAt(poolBasins(bumped, styles), 10, 10)).toBe(-48);
     });
 
     it("digs the default style on a map that keeps none, and nothing on a map without pools", () => {
@@ -49,11 +49,43 @@ describe("the basins of the pools", () => {
     it("lists the cells of the pools with their depth, for the pump that fills them", () => {
         const cells = poolCells(painted, styles);
         expect(cells).toHaveLength(9);
-        expect(cells).toContainEqual({ cellX: 10, cellY: 10, depthPx: 48 });
-        expect(cells).toContainEqual({ cellX: 20, cellY: 10, depthPx: 24 });
+        expect(cells).toContainEqual({ cellX: 10, cellY: 10, depthPx: 48, fullPx: 48 - POOL_FREEBOARD_PX });
+        expect(cells).toContainEqual({ cellX: 20, cellY: 10, depthPx: 24, fullPx: 24 - POOL_FREEBOARD_PX });
         expect(poolCells(undefined, styles)).toEqual([]);
         expect(POOL_FILL_SECONDS).toBe(8);
         expect(POOL_FREEBOARD_PX).toBeGreaterThan(0);
+    });
+
+    it("gives a pool one level, under the lowest ground around it: on a slope it does not run over its low side", () => {
+        // The ground is 10 px high on the west of the pool, flat on the east, 6 px lower along its south side.
+        const heights = new Map<string, number>();
+        for (let y = 8; y <= 13; y++) for (let x = 6; x <= 11; x++) heights.set(cellKey(x, y), 10);
+        for (let x = 9; x <= 14; x++) heights.set(cellKey(x, 12), -6);
+        const sloped = withHeights(painted, heights);
+        const basins = poolBasins(sloped, styles);
+        // One flat floor, 48 px under the lowest rim (-6).
+        for (const [x, y] of [
+            [10, 10],
+            [11, 11],
+            [13, 10],
+        ]) {
+            expect(heightAt(basins, x, y)).toBe(-54);
+        }
+        const cells = poolCells(sloped, styles).filter((cell) => cell.cellY < 12 && cell.cellX < 15);
+        expect(cells).toHaveLength(8);
+        // Full, every cell holds the same water: its surface is level, a little under that lowest rim.
+        for (const cell of cells) expect(cell.fullPx).toBe(48 - POOL_FREEBOARD_PX);
+        // The ground around is left as it is.
+        expect(heightAt(basins, 9, 10)).toBe(10);
+        expect(heightAt(basins, 12, 12)).toBe(-6);
+    });
+
+    it("keeps two pools that do not touch apart: each has its own rim", () => {
+        const heights = new Map([[cellKey(21, 10), -10]]);
+        const basins = poolBasins(withHeights(painted, heights), styles);
+        expect(heightAt(basins, 10, 10)).toBe(-48);
+        // The second pool (24 px deep) stands by a ditch 10 px deep: its floor is under the ditch.
+        expect(heightAt(basins, 20, 10)).toBe(-34);
     });
 
     it("makes a hollow the water of the relief stands in, sealed: its floor drinks nothing", () => {

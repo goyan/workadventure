@@ -400,9 +400,12 @@ void main() {
     float t = uTime;
     float depth = wetAt(world);
     // Next to a pool, the depth smoothed between the cells would spill the water of the pool half a cell over its
-    // coping: there the water is that of the cell itself, so a dry terrace stays dry up to the stones.
+    // coping: there the water is that of the cell itself, so a dry terrace stays dry up to the stones. The corner of
+    // a cell of the pool left outside its rounded shape shows no water: it is under the coping.
     float poolEdge = pack(5.0, world).r;
-    if (poolEdge > 0.02 && poolEdge <= 0.5) depth = packNearest(2.0, world).b;
+    if (poolEdge > 0.02 && poolEdge <= 0.5) {
+        depth = packNearest(5.0, world).r > 0.5 ? 0.0 : packNearest(2.0, world).b;
+    }
     // The ice (Frost.ts): it takes the shallows first, the deep water last; frozen, nothing moves any more.
     float depthPx = depth * ${WATER_SCALE_PX}.0;
     float frozenAt = 0.1 + 0.9 * min(1.0, depthPx / ${DEEP_ICE_PX}.0) + (vnoise(world / 14.0) - 0.5) * 0.08;

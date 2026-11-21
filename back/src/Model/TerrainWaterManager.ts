@@ -17,7 +17,7 @@ import {
     meteorShape,
     liquidRainRate,
     POOL_FILL_SECONDS,
-    POOL_FREEBOARD_PX,
+    POOL_OVERFLOW_SLACK_PX,
     poolBasins,
     poolCells,
     PX_PER_MM,
@@ -301,20 +301,27 @@ export class TerrainWaterManager {
 
     /**
      * The pumps of the pools: each cell of a pool that stands under its level takes what fills an empty pool in
-     * POOL_FILL_SECONDS, so a larger or deeper pool has a stronger pump. Up to a little under the rim, never over it:
-     * a pool too full empties by overflowing. Counted with the sources.
+     * POOL_FILL_SECONDS, so a larger or deeper pool has a stronger pump; counted with the sources. A cell that stands
+     * over its level (a snow that melted in the pool, a rain) loses as much through the overflow of the pool, counted
+     * with the sinks: a flood that brings more than that still runs over the rim.
      */
     private pumpPools(grid: WaterGrid): void {
         if (this.pools.length === 0) return;
         let laid = 0;
-        for (const { cellX, cellY, depthPx } of this.pools) {
-            const missing = depthPx - POOL_FREEBOARD_PX - grid.depthAt(cellX, cellY);
-            if (missing <= 0) continue;
+        let taken = 0;
+        for (const { cellX, cellY, depthPx, fullPx } of this.pools) {
+            const missing = fullPx - grid.depthAt(cellX, cellY);
             const pumped = (depthPx * WATER_STEP_MS) / 1000 / POOL_FILL_SECONDS;
-            laid += grid.rainOn(cellX, cellY, 0, Math.min(missing, pumped));
+            if (missing > 0) {
+                laid += grid.rainOn(cellX, cellY, 0, Math.min(missing, pumped));
+            } else if (missing < -POOL_OVERFLOW_SLACK_PX) {
+                const px = Math.min(-missing, pumped);
+                taken += grid.drainDisc(cellX, cellY, 0, px, px);
+            }
         }
-        if (laid <= 0) return;
+        if (laid <= 0 && taken <= 0) return;
         this.sums.sourcesPx += laid;
+        this.sums.sinksPx += taken;
         this.moving = true;
         this.version++;
         this.changedSinceSave = true;
