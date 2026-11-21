@@ -73,7 +73,10 @@ function createHarness({
     saved = {},
     failingStore = false,
     mapSize = () => undefined,
+    clock,
 }: {
+    /** A clock in ms to time the steps with; the real one when none is given. */
+    clock?: () => number;
     wam?: WAMFileFormat;
     saved?: Record<string, string>;
     failingStore?: boolean;
@@ -101,6 +104,7 @@ function createHarness({
         { repository, roomUrl: "room" },
         () => Date.UTC(2026, 6, 14, 12),
         mapSize,
+        clock,
     );
     const steps = (count: number): void => {
         for (let step = 0; step < count; step++) manager.step();
@@ -893,4 +897,35 @@ describe("the pools of the map in the water of the relief", () => {
         expect(manager.getGrid()).toBeUndefined();
         manager.stop();
     });
+
+    it("lowers the fineness and says so while its steps take too long, and gives it back level by level once they are quick", () => {
+        const wam = wamWith(wideLake);
+        if (wam.settings?.water) Object.assign(wam.settings.water, { inertia: true, precision: 8, updates: 10 });
+        // Each step reads the clock twice: `cost` ms go by between the two.
+        let cost = 80;
+        let time = 0;
+        let reads = 0;
+        const clock = (): number => {
+            if (reads++ % 2 === 1) time += cost;
+            return time;
+        };
+        const { manager, sent, steps } = createHarness({ wam, clock });
+        manager.mapChanged();
+        fillWithWater(manager);
+        // A strike stirs the water: the room is told while it moves.
+        manager.strike(240, 240, 4);
+        steps(100);
+        const slow = sent.at(-1)?.stats;
+        expect(slow?.easedPrecision).toBeDefined();
+        expect(slow?.easedPrecision).toBeLessThan(8);
+        cost = 2;
+        steps(600);
+        manager.strike(240, 240, 4);
+        steps(20);
+        const quick = sent.at(-1)?.stats;
+        // Given back a level every ten seconds: higher than it was, and the room told as often as the map asks.
+        expect(quick?.easedPrecision ?? 8).toBeGreaterThan(slow?.easedPrecision ?? 8);
+        expect(quick?.easedUpdates).toBeUndefined();
+        // Seven hundred steps of a wide lake stirred at the finest: longer than the usual time of a test.
+    }, 30_000);
 });

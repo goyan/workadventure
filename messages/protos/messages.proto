@@ -1216,6 +1216,11 @@ message TerrainWaterStatsMessage {
   double wetArea = 8;
   // How hard it rains now, in mm an hour.
   double rainRate = 9;
+  // The fineness the water is computed with, when the server lowered it under what the map asks: its steps took
+  // too long. Absent: the fineness of the map.
+  optional uint32 easedPrecision = 10;
+  // How often the players are told a second, when the server lowered it for the same reason.
+  optional uint32 easedUpdates = 11;
 }
 
 // A sound attached to an entity was activated and must be played by every player of the map.

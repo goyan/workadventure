@@ -793,6 +793,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         precision: "Finesse du calcul de l'eau",
         precisionHint:
             "Plus haut : vagues et torrents plus rapides possibles, calcul plus lourd pour le serveur. 3 par défaut.",
+        precisionEased: "Serveur chargé : finesse réduite à {value} sur {asked}, le temps que le calcul s'allège.",
+        updatesEased: "Serveur chargé : envois réduits à {value} par seconde sur {asked}.",
         updates: "Envois de l'eau aux joueurs",
         updatesHint: "Plus haut : on voit les vagues courir au lieu de se fondre, au prix du réseau. 1 par défaut.",
         waves: {

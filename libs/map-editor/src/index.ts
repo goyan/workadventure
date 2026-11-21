@@ -31,6 +31,7 @@ export * from "./Terrain/TerrainBrush";
 export * from "./Terrain/WaterDoors";
 export * from "./Terrain/WaterGrid";
 export * from "./Terrain/WaterInputs";
+export * from "./Terrain/WaterLoad";
 export * from "./Terrain/WaterWalls";
 export * from "./Terrain/LandWalls";
 export * from "./Catastrophe/Meteor";

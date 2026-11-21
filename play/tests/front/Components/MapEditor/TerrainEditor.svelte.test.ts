@@ -53,7 +53,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", async (importOriginal) => {
 });
 
 const { default: TerrainEditor } = await import("../../../../src/front/Components/MapEditor/TerrainEditor.svelte");
-const { DEFAULT_TERRAIN_BRUSH, terrainBlockedStore, terrainBrushStore } =
+const { DEFAULT_TERRAIN_BRUSH, terrainBlockedStore, terrainBrushStore, terrainWaterStatsStore } =
     await import("../../../../src/front/Stores/TerrainEditorStore");
 
 // In the document: a checkbox outside of it does not change when clicked.
@@ -222,6 +222,23 @@ describe("TerrainEditor", () => {
             $case: "updateWaterSettingMessage",
             updateWaterSettingMessage: expect.objectContaining({ flowPace: 0.5 }),
         });
+    });
+
+    it("says when the busy server computes the water less finely than the map asks, and tells it less often", () => {
+        render();
+        byTestId("terrain-inertia").querySelector("input")?.click();
+        flushSync();
+        expect(target.querySelector('[data-testid="terrain-precision-eased"]')).toBeNull();
+        expect(target.querySelector('[data-testid="terrain-updates-eased"]')).toBeNull();
+        const stats = { rain: 0, sources: 0, sinks: 0, evaporation: 0, absorption: 0, lost: 0, stock: 0, wetArea: 0 };
+        terrainWaterStatsStore.set({ ...stats, rainRate: 0, easedPrecision: 2, easedUpdates: 1 });
+        flushSync();
+        expect(byTestId("terrain-precision-eased").textContent).toContain("precisionEased");
+        expect(byTestId("terrain-updates-eased").textContent).toContain("updatesEased");
+        terrainWaterStatsStore.set({ ...stats, rainRate: 0 });
+        flushSync();
+        expect(target.querySelector('[data-testid="terrain-precision-eased"]')).toBeNull();
+        terrainWaterStatsStore.set(undefined);
     });
 
     it("sets how far the blast of a meteor drives the water away, with or without the water with inertia", () => {
