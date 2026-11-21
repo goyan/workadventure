@@ -1,4 +1,5 @@
 import {
+    BALL_DEFAULT_TILES,
     DOWNPOUR_DEFAULT_TILES,
     DRAIN_DEFAULT_TILES,
     FIRE_DEFAULT_TILES,
@@ -7,7 +8,7 @@ import {
 import { derived, get, writable } from "svelte/store";
 
 /** "meteor" is the comet, which brings water; "fireball" is the burning meteor, which sets its crater on fire. */
-export type CatastropheChoice = "meteor" | "fireball" | "downpour" | "fire" | "drain";
+export type CatastropheChoice = "meteor" | "fireball" | "downpour" | "fire" | "drain" | "ball";
 
 /** Whether the catastrophe panel is shown. Session only: closed at each page load. */
 export const catastrophePanelStore = writable<boolean>(false);
@@ -21,6 +22,9 @@ export const downpourWholeMapStore = writable<boolean>(false);
 
 /** How wide the disc a drain empties is, in tiles: kept for the session. */
 export const drainRadiusTilesStore = writable<number>(DRAIN_DEFAULT_TILES);
+
+/** How wide the ball held under the pointer is, in tiles: its diameter, kept for the session. */
+export const ballDiameterTilesStore = writable<number>(BALL_DEFAULT_TILES);
 
 /** How wide the patch of fire set under the pointer is, in tiles: kept for the session. */
 export const fireRadiusTilesStore = writable<number>(FIRE_DEFAULT_TILES);

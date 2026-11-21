@@ -23,6 +23,9 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 downpourArmedHelp: label("Hold the click on the map · Esc to cancel"),
                 drain: label("Drain"),
                 drainSizeLabel: label("Size of the drain"),
+                ball: label("Ball"),
+                ballSizeLabel: label("Size of the ball: its diameter"),
+                ballArmedHelp: label("Hold the click: a solid ball, its centre at level 0"),
             },
         },
     });
@@ -36,6 +39,7 @@ vi.mock("../../../../src/front/Components/Catastrophe/WeatherTab.svelte", async 
 import CatastrophePanel from "../../../../src/front/Components/Catastrophe/CatastrophePanel.svelte";
 import {
     armedCatastropheStore,
+    ballDiameterTilesStore,
     fireRadiusTilesStore,
     downpourWholeMapStore,
     drainRadiusTilesStore,
@@ -171,6 +175,30 @@ describe("CatastrophePanel", () => {
         expect(target.textContent).toContain("10 tiles");
         drainRadiusTilesStore.set(3);
         expect(target.textContent).toContain("Hold the click on the map");
+    });
+
+    it("arms the ball, and chooses its diameter from 1 to 16 tiles, with a help that says where its centre is", () => {
+        render();
+        const ball = target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-ball"]');
+        expect(ball?.textContent).toContain("Ball");
+        ball?.click();
+        flushSync();
+        expect(ball?.getAttribute("aria-pressed")).toBe("true");
+        expect(get(armedCatastropheStore)).toBe("ball");
+        const slider = target.querySelector<HTMLInputElement>('[data-testid="catastrophe-ball-size"]');
+        expect(slider?.min).toBe("1");
+        expect(slider?.max).toBe("16");
+        expect(slider?.getAttribute("aria-label")).toBe("Size of the ball: its diameter");
+        expect(target.textContent).toContain("4 tiles");
+        if (!slider) throw new Error("no slider");
+        slider.value = "9";
+        slider.dispatchEvent(new Event("input", { bubbles: true }));
+        flushSync();
+        expect(get(ballDiameterTilesStore)).toBe(9);
+        expect(target.textContent).toContain("9 tiles");
+        ballDiameterTilesStore.set(4);
+        expect(target.textContent).toContain("Hold the click: a solid ball, its centre at level 0");
+        expect(target.textContent).not.toContain("Hold the click on the map");
     });
 
     it("arms the fire, and chooses the size of its patch from 1 to 8 tiles", () => {

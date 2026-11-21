@@ -301,6 +301,10 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         downpourArmedHelp: "Maintenez le clic sur la carte · Échap pour annuler",
         drain: "Drain",
         drainSizeLabel: "Taille du drain : rayon du disque vidé, en cases",
+        ball: "Boule",
+        ballSizeLabel: "Taille de la boule : son diamètre, en cases",
+        ballArmedHelp:
+            "Maintenez le clic : une boule solide, son centre au niveau 0 de la carte, prend la place de l'eau et la pousse · Échap pour annuler",
         tabs: { catastrophes: "Catastrophes", weather: "Météo" },
         weather: {
             manual: "Manuel",

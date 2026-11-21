@@ -34,6 +34,7 @@ import { Swimwear } from "@wa/front/Phaser/Entity/Swimwear";
 import { ENABLE_TILE_SNAP, WOKA_SPEED } from "@wa/front/Enum/EnvironmentVariable";
 import {
     armedCatastropheStore,
+    ballDiameterTilesStore,
     downpourRadiusTilesStore,
     downpourWholeMapStore,
     fireRadiusTilesStore,
@@ -98,7 +99,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     /** While the click of an armed downpour is held: tells the server where the pointer is, a few times a second. */
     private downpourReports: Phaser.Time.TimerEvent | undefined;
     /** The catastrophe a held click is throwing: a downpour that follows the pointer, or fire painted along it. */
-    private heldKind: "downpour" | "fire" | "drain" | undefined;
+    private heldKind: "downpour" | "fire" | "drain" | "ball" | undefined;
     // The current touch gesture involved two fingers or more (a pinch): lifting a finger must not count as a tap.
     private multiTouch = false;
     private pinchFreedView = false;
@@ -336,10 +337,10 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         );
     }
 
-    /** The catastrophe a held click throws, when one of those is armed: the downpour, the fire and the drain. */
-    private heldCatastrophe(): "downpour" | "fire" | "drain" | undefined {
+    /** The catastrophe a held click throws, when one of those is armed: the downpour, the fire, the drain, the ball. */
+    private heldCatastrophe(): "downpour" | "fire" | "drain" | "ball" | undefined {
         const armed = get(armedCatastropheStore);
-        return armed === "downpour" || armed === "fire" || armed === "drain" ? armed : undefined;
+        return armed === "downpour" || armed === "fire" || armed === "drain" || armed === "ball" ? armed : undefined;
     }
 
     /**
@@ -376,6 +377,16 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                     x,
                     y,
                     get(drainRadiusTilesStore),
+                );
+                return;
+            }
+            if (kind === "ball") {
+                // Where the ball is held: the solid itself goes after that point, on the server.
+                this.gameScene.connection?.emitLaunchCatastrophe(
+                    CatastropheKind.CATASTROPHE_BALL,
+                    x,
+                    y,
+                    get(ballDiameterTilesStore),
                 );
                 return;
             }
@@ -688,7 +699,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     private canDragMap(): boolean {
         // The other editor tools use the left drag themselves; they pan with MapPanShortcut instead.
         const armed = get(armedCatastropheStore);
-        if (armed === "downpour" || armed === "drain") return false;
+        if (armed === "downpour" || armed === "drain" || armed === "ball") return false;
         return this.canMoveView() && (!get(mapEditorModeStore) || get(mapExplorationModeStore));
     }
 

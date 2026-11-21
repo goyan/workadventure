@@ -298,6 +298,10 @@ const actionbar = {
         downpourArmedHelp: "Hold the click on the map · Esc to cancel",
         drain: "Drain",
         drainSizeLabel: "Size of the drain: radius of the disc it empties, in tiles",
+        ball: "Ball",
+        ballSizeLabel: "Size of the ball: its diameter, in tiles",
+        ballArmedHelp:
+            "Hold the click: a solid ball, its centre at level 0 of the map, takes the place of the water and pushes it · Esc to cancel",
         tabs: { catastrophes: "Disasters", weather: "Weather" },
         weather: {
             manual: "Manual",

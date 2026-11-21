@@ -1,5 +1,7 @@
 <script lang="ts">
     import {
+        BALL_MAX_TILES,
+        BALL_MIN_TILES,
         DOWNPOUR_MAX_TILES,
         DOWNPOUR_MIN_TILES,
         DRAIN_MAX_TILES,
@@ -13,6 +15,7 @@
     import { LL } from "../../../i18n/i18n-svelte";
     import {
         armedCatastropheStore,
+        ballDiameterTilesStore,
         catastrophePanelStore,
         disarmCatastrophe,
         downpourRadiusTilesStore,
@@ -38,8 +41,9 @@
     const downpourArmed = $derived($armedCatastropheStore === "downpour");
     const fireArmed = $derived($armedCatastropheStore === "fire");
     const drainArmed = $derived($armedCatastropheStore === "drain");
+    const ballArmed = $derived($armedCatastropheStore === "ball");
     // The size shown is that of the armed catastrophe, and stays that of the last one armed.
-    let sized = $state<"meteor" | "fireball" | "downpour" | "fire" | "drain">("meteor");
+    let sized = $state<"meteor" | "fireball" | "downpour" | "fire" | "drain" | "ball">("meteor");
     $effect(() => {
         if ($armedCatastropheStore !== undefined) sized = $armedCatastropheStore;
     });
@@ -144,6 +148,18 @@
                     <PixelIcon name="drain" size={16} />
                     <span>{$LL.actionbar.catastrophe.drain()}</span>
                 </button>
+                <button
+                    type="button"
+                    class="flex items-center gap-1 rounded-full px-2 py-1 {ballArmed
+                        ? 'bg-white/30 ring-1 ring-white'
+                        : 'bg-white/10 hover:bg-white/20'}"
+                    aria-pressed={ballArmed}
+                    data-testid="catastrophe-ball"
+                    onclick={() => toggleArmedCatastrophe("ball")}
+                >
+                    <PixelIcon name="ball" size={16} />
+                    <span>{$LL.actionbar.catastrophe.ball()}</span>
+                </button>
                 {#if sized === "downpour"}
                     <label class="flex items-center gap-1 whitespace-nowrap">
                         <input
@@ -186,6 +202,22 @@
                             >{$LL.actionbar.catastrophe.size({ tiles: $drainRadiusTilesStore })}</span
                         >
                     </label>
+                {:else if sized === "ball"}
+                    <label class="flex items-center gap-2">
+                        <input
+                            type="range"
+                            class="w-24"
+                            min={BALL_MIN_TILES}
+                            max={BALL_MAX_TILES}
+                            step="1"
+                            aria-label={$LL.actionbar.catastrophe.ballSizeLabel()}
+                            data-testid="catastrophe-ball-size"
+                            bind:value={$ballDiameterTilesStore}
+                        />
+                        <span class="whitespace-nowrap"
+                            >{$LL.actionbar.catastrophe.size({ tiles: $ballDiameterTilesStore })}</span
+                        >
+                    </label>
                 {:else if sized === "fire"}
                     <label class="flex items-center gap-2">
                         <input
@@ -220,11 +252,13 @@
                     </label>
                 {/if}
                 <span class="text-white/60">
-                    {downpourArmed || drainArmed
-                        ? $LL.actionbar.catastrophe.downpourArmedHelp()
-                        : meteorArmed || fireballArmed || fireArmed
-                          ? $LL.actionbar.catastrophe.armedHelp()
-                          : $LL.actionbar.catastrophe.idleHelp()}
+                    {ballArmed
+                        ? $LL.actionbar.catastrophe.ballArmedHelp()
+                        : downpourArmed || drainArmed
+                          ? $LL.actionbar.catastrophe.downpourArmedHelp()
+                          : meteorArmed || fireballArmed || fireArmed
+                            ? $LL.actionbar.catastrophe.armedHelp()
+                            : $LL.actionbar.catastrophe.idleHelp()}
                 </span>
             </div>
         {/if}

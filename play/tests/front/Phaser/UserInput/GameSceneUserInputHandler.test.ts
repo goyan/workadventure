@@ -33,6 +33,7 @@ import {
     rodEquippedStore,
 } from "../../../../src/front/Stores/FishingStore";
 import {
+    ballDiameterTilesStore,
     catastrophePanelStore,
     fireRadiusTilesStore,
     downpourRadiusTilesStore,
@@ -974,6 +975,27 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 expect(launch).toHaveBeenCalledTimes(2);
                 expect(scene.moveTo.mock.calls).toEqual([]);
                 drainRadiusTilesStore.set(3);
+            });
+
+            it("holds a ball under the pointer while the click is held, without dragging the map, and lets it go at its release", () => {
+                catastrophePanelStore.set(true);
+                toggleArmedCatastrophe("ball");
+                ballDiameterTilesStore.set(6);
+                const press = held();
+                handler.handlePointerDownEvent(press, []);
+                expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_BALL, 480, 640, 6]]);
+
+                camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(500, 700));
+                handler.handlePointerMoveEvent(press, []);
+                ticks[0]();
+                expect(launch.mock.calls[1]).toEqual([CatastropheKind.CATASTROPHE_BALL, 500, 700, 6]);
+                expect(cameraManager.startManualPan.mock.calls).toEqual([]);
+
+                handler.handlePointerUpEvent(pointer(0, 1), []);
+                expect(remove).toHaveBeenCalled();
+                expect(launch).toHaveBeenCalledTimes(2);
+                expect(scene.moveTo.mock.calls).toEqual([]);
+                ballDiameterTilesStore.set(4);
             });
 
             it("holding the click does not drag the map, and releasing it launches nothing more", () => {
