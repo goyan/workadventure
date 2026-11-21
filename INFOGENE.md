@@ -3233,9 +3233,17 @@ Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus
   de la neige des hauteurs et de la neige tombée), avec un repli en voile blanc sans shader. La marche ralentit
   (`groundPace`, comme la neige des hauteurs) et les arbres blanchissent avec la couverture moyenne de la carte.
 - **Deux modes** (`Weather/GroundSource.ts`). Un joueur qui suit le temps du serveur voit la neige du serveur. Un
-  joueur qui suit sa propre ville (météo personnelle de #392) n'en voit rien et ne la ralentit pas : son monde reste
-  local. L'eau, elle, est commune : il peut voir monter une eau de fonte sans avoir vu la neige.
-- **Limites.** La neige tient sur l'eau dès 0 °C, avant même que la glace du serveur (section suivante) n'ait pris. Pas de neige locale en météo personnelle. Pas
+  joueur qui suit sa propre ville (météo personnelle de #392) n'en voit rien : son monde reste local, avec la neige
+  de sa ville (ci-dessous). L'eau, elle, est commune : il peut voir monter une eau de fonte sans avoir vu la neige.
+- **Neige de sa propre ville** (`Weather/Frost.ts`, `ownSnowAfter`, champ `snowMm` du cycle local). Pour qui suit
+  une ville, ce qui tombe là-bas en neige (taux de précipitation du créneau en cours, part de neige `snowShare` de
+  l'air de la ville) s'accumule sur son sol, en millimètres d'eau, à la même horloge que la neige du serveur
+  (`THAW_SPEED`), et fond ou part au vent sec avec les mêmes formules, d'après l'air de sa ville. Une seule valeur
+  pour tout le dehors de la carte : le sol blanchit partout pareil (par vingtièmes, le sol n'est repeint que quand
+  elle bouge d'un cran), les arbres et la glace avec, et la marche ralentit dehors. Rien n'est envoyé au serveur et
+  cette neige ne donne pas d'eau. Elle repart de zéro à chaque chargement de la carte et quand on revient au temps
+  du serveur.
+- **Limites.** La neige tient sur l'eau dès 0 °C, avant même que la glace du serveur (section suivante) n'ait pris. Pas
   d'empreintes dans la neige tombée. Sur une carte sans relief ni grille d'eau, l'eau de fonte ne fait qu'humidifier
   le sol. `play` et `back` se déploient ensemble.
 
