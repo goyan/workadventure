@@ -208,6 +208,8 @@ export class TerrainView {
             this.hidden?.() === true ||
             (!this.water.hasAnything() && !this.meadowShows() && !this.hasPools())
         ) {
+            // The pools placed as images get their image back while the relief in 3/4 draws the ground.
+            if (this.hiddenPools.size > 0 && this.hidden?.() === true) this.readImagePools();
             if (this.visible) {
                 this.surface.hide();
                 this.hideGrounds();

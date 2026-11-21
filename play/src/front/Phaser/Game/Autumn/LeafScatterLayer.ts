@@ -1,11 +1,14 @@
 import { DEPTH_TILE_INDEX } from "../DepthIndexes";
+import { pixelReliefShownNow } from "../Terrain/PixelReliefShown";
 import type { WeatherView } from "../Weather/WeatherFrame";
 import { seenFromFar } from "../Weather/ScreenScale";
 import type { LeafSources } from "./LeafDensity";
 import { leafCandidatesInView, liesOn, type ScatteredLeaf } from "./LeafScatter";
 
-/** Above the floors (0.5) and the ground of the terrain (its blocks, 0.66), below objects and avatars. */
-const LEAF_SCATTER_DEPTH = DEPTH_TILE_INDEX + 0.67;
+/** Above the floors (0.5) and the seasonal grass (0.6), below objects and avatars. */
+const LEAF_SCATTER_DEPTH = DEPTH_TILE_INDEX + 0.65;
+/** Over the blocks of the relief shown in 3/4 (0.66), which draw the ground then. */
+const LEAF_OVER_BLOCKS_DEPTH = DEPTH_TILE_INDEX + 0.67;
 
 /**
  * Leaves lying under the trees, around the camera: a map-sized image would exceed the texture size, so only the view and a margin
@@ -17,9 +20,10 @@ export class LeafScatterLayer {
     /** The leaves of the drawn area wherever the ground is, and which of them lie on it. */
     private candidates: ScatteredLeaf[] = [];
     private lying: boolean[] = [];
+    private depth = LEAF_SCATTER_DEPTH;
 
     constructor(private readonly scene: Phaser.Scene) {
-        this.graphics = scene.add.graphics().setDepth(LEAF_SCATTER_DEPTH);
+        this.graphics = scene.add.graphics().setDepth(this.depth);
     }
 
     /** Returns true when it redrew. `isGround`: where a leaf may lie (outdoors, out of the water). */
@@ -29,6 +33,11 @@ export class LeafScatterLayer {
         sources: LeafSources,
         force: boolean,
     ): boolean {
+        const depth = pixelReliefShownNow() ? LEAF_OVER_BLOCKS_DEPTH : LEAF_SCATTER_DEPTH;
+        if (depth !== this.depth) {
+            this.depth = depth;
+            this.graphics.setDepth(depth);
+        }
         // Seen from far a leaf is a pixel, and the view holds tens of thousands of them: none.
         if (seenFromFar(this.scene)) {
             if (!this.drawn) return false;

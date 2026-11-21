@@ -17,6 +17,7 @@ import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { SeasonalTheme } from "../Seasonal/SeasonalTheme";
 import type { SunPosition } from "../Night/NightClock";
 import { unlessBasic } from "../../../Stores/BasicModeStore";
+import { pixelReliefShownNow } from "../Terrain/PixelReliefShown";
 import type { RaisedCover } from "./RaisedCover";
 import {
     farFogCells,
@@ -253,7 +254,13 @@ export class WeatherManager {
         this.drawPuddles(this.weatherShown && !this.editing ? wetness : 0);
         this.sounds.update(weather, serverDate, this.editing, night, rain, snow);
         const enabled = this.weatherShown && !this.editing;
-        this.snowGround.update(now, serverDate, !this.editing, theme === SeasonalTheme.Autumn);
+        // The grass of the map: left to the blocks of the relief while it is shown in 3/4 (they draw it).
+        this.snowGround.update(
+            now,
+            serverDate,
+            !this.editing && !pixelReliefShownNow(),
+            theme === SeasonalTheme.Autumn,
+        );
         const showWeather = enabled && weather !== WeatherType.Clear;
         // Clouds of a clear sky, still fading out over the first minutes of a bad weather; none at night.
         const cloudiness = settings?.cloudiness ?? 0;

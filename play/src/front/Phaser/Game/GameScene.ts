@@ -407,6 +407,7 @@ import { ReliefTiles } from "./Terrain/ReliefTiles";
 import { createBlockPaintPool } from "./Terrain/BlockPaintWorkers";
 import { GroundEngines } from "./Terrain/GroundEngines";
 import type { PixelGround } from "./Terrain/GroundEngines";
+import { tellPixelReliefShown } from "./Terrain/PixelReliefShown";
 import { hiddenBehindRim, projectionShown, shiftAt } from "./Terrain/ReliefProjection";
 import { TerrainView } from "./Terrain/TerrainView";
 import { CharacterDrops } from "./Terrain/CharacterDrops";
@@ -1776,6 +1777,7 @@ export class GameScene extends DirtyScene {
         this.mapGroundLayout = undefined;
         this.pixelRelief?.destroy();
         this.pixelRelief = undefined;
+        tellPixelReliefShown(undefined);
         this.terrainView?.destroy();
         this.terrainView = undefined;
         this.characterDrops?.destroy();
@@ -4095,6 +4097,7 @@ export class GameScene extends DirtyScene {
                 // The relief in 3/4, in pixel art: only for who chose it (nothing of it is made else).
                 this.pixelRelief?.destroy();
                 this.pixelRelief = new GroundEngines(() => this.createPixelRelief());
+                tellPixelReliefShown(() => this.pixelReliefShown());
                 this.characterDrops?.destroy();
                 this.characterDrops = new CharacterDrops(this, () => [
                     ...(this.CurrentPlayer ? [this.CurrentPlayer] : []),
@@ -4318,7 +4321,11 @@ export class GameScene extends DirtyScene {
                     },
                     isWet: (x, y) => isGroundUnderWater(this, this.terrainWater, x, y),
                     waterVersion: () => this.terrainWater.version(),
-                    frost: () => waterCycleNow(this.getGameMap().getWamFile()?.getWam().settings).frost,
+                    // No frost is drawn on the relief shown in 3/4: no footprint on it either (the terrain has its own).
+                    frost: () =>
+                        this.pixelReliefShown()
+                            ? 0
+                            : waterCycleNow(this.getGameMap().getWamFile()?.getWam().settings).frost,
                 });
                 // Same: one event subscription and one timer at a time.
                 this._knockManager?.destroy();
