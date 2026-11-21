@@ -45,11 +45,19 @@ describe("foamOfCell", () => {
     });
 
     it("makes foam where the same crest runs in shallow water: the wave breaks", () => {
-        // The same 6 px, steeper as waves get near a shore, over 5 px of water.
-        const breaker = state(60, 5, (x) => 5 + 6 * Math.exp(-(((x - 30) / 3) ** 2)));
-        let most = 0;
-        for (let x = 20; x < 40; x++) most = Math.max(most, foamOfCell(breaker, undefined, x, 2));
-        expect(most).toBeGreaterThan(0.5);
+        // A crest of 12 px (40 cm), steeper as waves get near a shore, over 5 px of water.
+        const crest = (high: number): SettledWater => state(60, 5, (x) => 5 + high * Math.exp(-(((x - 30) / 3) ** 2)));
+        const most = (water: SettledWater): number => {
+            let found = 0;
+            for (let x = 20; x < 40; x++) found = Math.max(found, foamOfCell(water, undefined, x, 2));
+            return found;
+        };
+        const breaker = crest(12);
+        expect(most(breaker)).toBeGreaterThan(0.6);
+        // A lower wave that breaks leaves less foam; a ripple, none.
+        expect(most(crest(6))).toBeGreaterThan(0.2);
+        expect(most(crest(6))).toBeLessThan(most(breaker));
+        expect(most(crest(2))).toBe(0);
         // Away from the crest the shallows are calm.
         expect(foamOfCell(breaker, undefined, 5, 2)).toBe(0);
     });
@@ -68,7 +76,7 @@ describe("foamOfCell", () => {
             (x) => (x <= 10 ? 4 : 0),
             (x) => (x <= 9 ? 4 : 0),
         );
-        expect(foamOfCell(front, undefined, 10, 2)).toBeGreaterThanOrEqual(0.8);
+        expect(foamOfCell(front, undefined, 10, 2)).toBeGreaterThanOrEqual(0.6);
         // Rain: every cell was dry and all rise together.
         const rain = state(
             20,

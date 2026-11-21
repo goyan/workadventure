@@ -14,8 +14,10 @@ export const BREAKING_FROM = 0.3;
 export const BREAKING_FULL = 0.78;
 /** How far around a cell the trough of its wave is looked for, in cells (about a metre and a half). */
 const TROUGH_REACH = 3;
-/** A wave lower than this, in pixels, is a ripple: it makes no foam. */
-const LOWEST_WAVE_PX = 1;
+/** A wave lower than this, in pixels (10 cm), is a ripple: it makes no foam. */
+const LOWEST_WAVE_PX = 3;
+/** A wave this high, in pixels (40 cm), makes all the foam its steepness asks for; a lower one, less of it. */
+const FULL_WAVE_PX = 12;
 /** The front of a flood: a cell that was dry and now holds this much water, come from a neighbour already wet. */
 const FRONT_PX = 1;
 const NEIGHBOUR_WET_PX = 2;
@@ -63,8 +65,11 @@ export function foamOfCell(water: SettledWater, terrain: TerrainData | undefined
     // The water left under the trough, where the wave runs: never less than a film.
     const under = Math.max(WET_PX, depth - wave);
     const high = wave >= LOWEST_WAVE_PX ? wave / under : 0;
-    const breaking = Math.max(0, Math.min(1, (high - BREAKING_FROM) / (BREAKING_FULL - BREAKING_FROM)));
-    return arrived && fed ? Math.max(breaking, 0.8) : breaking;
+    // A low wave that breaks in a film of water leaves a little foam, a high one a lot.
+    const size = Math.max(0, Math.min(1, (wave - LOWEST_WAVE_PX) / (FULL_WAVE_PX - LOWEST_WAVE_PX)));
+    const breaking =
+        Math.max(0, Math.min(1, (high - BREAKING_FROM) / (BREAKING_FULL - BREAKING_FROM))) * (0.3 + 0.7 * size);
+    return arrived && fed ? Math.max(breaking, 0.6) : breaking;
 }
 
 /**

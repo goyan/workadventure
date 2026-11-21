@@ -3,9 +3,6 @@ import type { WAMFileFormat, WaterObject } from "@workadventure/map-editor";
 import { FLOOR_OBJECT_DEPTH } from "../../ECS/EntityLayerDepth";
 import { distinguishable } from "../Weather/ScreenScale";
 import { isEffectShown } from "../../../Stores/EffectsStore";
-import { BreakingFoam } from "./BreakingFoam";
-import { whitecapAlpha, WHITECAP_MIN_DEPTH_PX, Whitecaps, windHeading } from "./Whitecaps";
-import type { SettledWater } from "./TerrainWater";
 import type { CurrentWater } from "./WaterCurrent";
 import { waterCurrentAt } from "./WaterCurrent";
 import type { FoamView } from "./WaterFoam";
@@ -21,20 +18,11 @@ import {
 
 export interface WaterFlowViewOptions {
     /** The water of the relief as this browser shows it. */
-    water: CurrentWater & {
-        hasAnything(): boolean;
-        /** The last state of the water and a number that changes with it: the foam of its waves is read from them. */
-        settled?(): SettledWater;
-        version?(): number;
-    };
+    water: CurrentWater & { hasAnything(): boolean };
     /** The map, for its sources and its sinks. */
     wam: () => Pick<WAMFileFormat, "entities"> | undefined;
     /** What the camera shows, in map pixels. */
     view: () => FoamView;
-    /** The wind of the map: how fast it blows (km/h) and where it comes from (degrees). It raises the whitecaps. */
-    wind?: () => { speed?: number; from?: number } | undefined;
-    /** Whether a point of the map (map pixels) is outdoors: the wind raises no whitecaps in a building. */
-    isOutdoorAt?: (x: number, y: number) => boolean;
     reducedMotion?: boolean;
     /** Whether the water is frozen there for this player (Frost.ts): no foam runs on it, no whirl turns in it. */
     isFrozenAt?: (x: number, y: number) => boolean;
@@ -73,25 +61,17 @@ const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").m
 const FOAM_STREAK_PX = 8;
 /**
  * The foam the current carries shows on shallow water (a stream, a river, a sheet running on land): under this
- * depth, in pixels (a tile deep). Deeper, moving water is a swell, which carries no foam unless it runs very hard.
+ * depth, in pixels (a tile deep). Deeper, moving water is a swell, which carries no foam unless it runs very hard:
+ * the foam of the waves that break and the whitecaps of the wind are drawn by the water shader (GroundSplat).
  */
 const STREAM_FOAM_DEPTH_PX = 32;
 const DEEP_FOAM_CURRENT = 0.9;
-/** The foam of the waves is drawn cell by cell, never more cells than this: seen from far, one for several. */
-const MOST_FOAM_CELLS = 2500;
-/** A cell of foam shows from this many screen pixels on. */
-const FOAM_CELL_SCREEN_PX = 5;
 
 export class WaterFlowView {
     private readonly reducedMotion: boolean;
     private readonly foamGraphics: Phaser.GameObjects.Graphics;
     private readonly marksGraphics: Phaser.GameObjects.Graphics;
     private readonly foam: WaterFoam;
-    /** The foam of the waves that break and of the floods that advance. */
-    private readonly breaking = new BreakingFoam();
-    private breakingVersion = -1;
-    /** The whitecaps the wind raises on open water. */
-    private readonly whitecaps: Whitecaps;
     private objects: WaterObject[] = [];
     private objectsReadAt = -Infinity;
     private lastFrameAt = -Infinity;
@@ -104,16 +84,9 @@ export class WaterFlowView {
         this.reducedMotion = options.reducedMotion ?? REDUCED_MOTION;
         this.foamGraphics = scene.add.graphics().setDepth(FOAM_DEPTH);
         this.marksGraphics = scene.add.graphics().setDepth(MARKS_DEPTH);
-        this.whitecaps = new Whitecaps(
-            (x, y, now) =>
-                options.water.depthAt(x, y, now) >= WHITECAP_MIN_DEPTH_PX &&
-                options.isFrozenAt?.(x, y) !== true &&
-                options.isOutdoorAt?.(x, y) !== false,
-        );
         this.foam = new WaterFoam((x, y, now) => {
             if (options.isFrozenAt?.(x, y)) return { x: 0, y: 0 };
             const current = waterCurrentAt(options.water, x, y, now, FOAM_MIN_DEPTH_PX);
-            // Over deep water the current of a swell carries no foam: only a water that runs very hard does.
             if (
                 options.water.depthAt(x, y, now) >= STREAM_FOAM_DEPTH_PX &&
                 Math.hypot(current.x, current.y) < DEEP_FOAM_CURRENT
@@ -126,13 +99,16 @@ export class WaterFlowView {
 
     /** `now` in ms of the game. */
     public update(now: number): void {
-        if (this.reducedMotion || !isEffectShown("waterFlow") || !this.options.water.hasAnything()) {
+        // Seen from far a streak of foam is under a pixel: neither moved nor drawn.
+        if (
+            this.reducedMotion ||
+            !isEffectShown("waterFlow") ||
+            !this.options.water.hasAnything() ||
+            !distinguishable(this.scene, FOAM_STREAK_PX)
+        ) {
             this.clear();
             return;
         }
-        // Seen from far a streak of foam is under a pixel: neither moved nor drawn. The foam of the waves, drawn by
-        // blocks, still shows.
-        const streaks = distinguishable(this.scene, FOAM_STREAK_PX);
         const elapsed = now - this.lastFrameAt;
         if (elapsed < FRAME_MS) return;
         this.lastFrameAt = now;
@@ -141,31 +117,10 @@ export class WaterFlowView {
             this.objectsReadAt = now;
         }
         const view = this.options.view();
-        if (streaks) this.foam.step(now, elapsed, view);
-        else this.foam.clear();
+        this.foam.step(now, elapsed, view);
         this.foamGraphics.clear();
         this.marksGraphics.clear();
-        let drawn = this.drawBreakingFoam(now, view);
-        // The whitecaps of the wind: a short white crest across it. Seen from far they are under a pixel.
-        const wind = streaks ? this.options.wind?.() : undefined;
-        if (wind) this.whitecaps.step(now, elapsed, view, wind.speed, wind.from);
-        else this.whitecaps.clear();
-        const heading = windHeading(wind?.from);
-        for (const cap of this.whitecaps.caps()) {
-            const alpha = whitecapAlpha(cap);
-            if (alpha <= 0) continue;
-            // Across the wind: a quarter turn from where it blows. Level when the wind has no known direction.
-            const acrossX = heading ? -heading.y : 1;
-            const acrossY = heading ? heading.x : 0;
-            this.foamGraphics.lineStyle(1.5, FOAM_COLOR, 0.75 * alpha);
-            this.foamGraphics.lineBetween(
-                cap.x - acrossX * cap.half,
-                cap.y - acrossY * cap.half,
-                cap.x + acrossX * cap.half,
-                cap.y + acrossY * cap.half,
-            );
-            drawn = true;
-        }
+        let drawn = false;
         for (const fleck of this.foam.flecks()) {
             const streak = foamStreak(fleck);
             if (streak.alpha <= 0) continue;
@@ -210,69 +165,8 @@ export class WaterFlowView {
         this.drawn = drawn;
     }
 
-    /**
-     * The foam of the waves: white flecks on the cells where a wave breaks or a flood advances, fading behind it.
-     * Returns whether any was drawn.
-     */
-    private drawBreakingFoam(now: number, view: FoamView): boolean {
-        const water = this.options.water;
-        const settled = water.settled?.();
-        if (!settled) return false;
-        const version = water.version?.() ?? 0;
-        if (version !== this.breakingVersion) {
-            this.breakingVersion = version;
-            this.breaking.absorb(settled, water.relief(), now);
-        }
-        if (!this.breaking.active(now)) return false;
-        const zoom = this.scene.cameras.main.zoom > 0 ? this.scene.cameras.main.zoom : 1;
-        // One fleck for a block of cells when they are too small on the screen, or too many.
-        let size = Math.max(1, Math.ceil(FOAM_CELL_SCREEN_PX / (TERRAIN_CELL * zoom)));
-        const cellsAt = (side: number): number =>
-            Math.ceil(view.width / (side * TERRAIN_CELL)) * Math.ceil(view.height / (side * TERRAIN_CELL));
-        while (cellsAt(size) > MOST_FOAM_CELLS * 4) size++;
-        const firstX = Math.floor(view.x / (size * TERRAIN_CELL)) * size;
-        const firstY = Math.floor(view.y / (size * TERRAIN_CELL)) * size;
-        const lastX = Math.ceil((view.x + view.width) / TERRAIN_CELL);
-        const lastY = Math.ceil((view.y + view.height) / TERRAIN_CELL);
-        const block = size * TERRAIN_CELL;
-        // The flecks of a cell change four times a second: foam seethes.
-        const beat = Math.floor(now / 250);
-        let cells = 0;
-        for (let cellY = firstY; cellY < lastY && cells < MOST_FOAM_CELLS; cellY += size) {
-            for (let cellX = firstX; cellX < lastX && cells < MOST_FOAM_CELLS; cellX += size) {
-                const strength = this.breaking.foamAt(cellX, cellY, now);
-                if (
-                    strength <= 0 ||
-                    this.options.isFrozenAt?.((cellX + 0.5) * TERRAIN_CELL, (cellY + 0.5) * TERRAIN_CELL)
-                ) {
-                    continue;
-                }
-                cells++;
-                // Two flecks in the cell, where a number drawn from its place and the beat puts them.
-                let mixed = (cellX * 73856093) ^ (cellY * 19349663) ^ (beat * 83492791);
-                for (let fleck = 0; fleck < 2; fleck++) {
-                    mixed = (Math.imul(mixed ^ (mixed >>> 15), 2246822519) ^ fleck) >>> 0;
-                    const offsetX = (mixed & 255) / 255;
-                    const offsetY = ((mixed >>> 8) & 255) / 255;
-                    const share = 0.3 + 0.35 * (((mixed >>> 16) & 255) / 255);
-                    this.foamGraphics.fillStyle(FOAM_COLOR, Math.min(0.9, 0.25 + 0.65 * strength));
-                    this.foamGraphics.fillRect(
-                        cellX * TERRAIN_CELL + offsetX * block * (1 - share),
-                        cellY * TERRAIN_CELL + offsetY * block * (1 - share),
-                        block * share,
-                        block * share,
-                    );
-                }
-            }
-        }
-        return cells > 0;
-    }
-
     private clear(): void {
         this.foam.clear();
-        this.breaking.clear();
-        this.breakingVersion = -1;
-        this.whitecaps.clear();
         if (!this.drawn) return;
         this.foamGraphics.clear();
         this.marksGraphics.clear();

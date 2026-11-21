@@ -2315,15 +2315,20 @@ partir de ce qu'il reçoit déjà (profondeurs, vent) :
   par la profondeur sous ce creux : rien sous 0,3, tout blanc à 0,78 (seuil réel de déferlement en eau peu
   profonde). Une houle longue sur fond profond, même haute, n'en fait donc aucune : l'onde d'une comète reste
   lisse au large et blanchit en approchant des rives, sur les hauts-fonds et là où le bourrelet de l'impact
-  retombe. Une cascade en fait aussi. S'y ajoute le **front de crue** : une cellule sèche à l'état précédent,
-  mouillée maintenant, à côté d'une eau déjà là (pas la pluie qui remplit une mare). L'écume reste derrière la
-  vague et s'efface de moitié toutes les 1,8 s. Dessinée par cellule, par blocs vue de loin.
+  retombe. Une cascade en fait aussi. Une vague de moins de 3 px (10 cm) est une ride : aucune écume ; la dose
+  croît avec la hauteur jusqu'à 12 px (40 cm). S'y ajoute le **front de crue** : une cellule sèche à l'état
+  précédent, mouillée maintenant, à côté d'une eau déjà là (pas la pluie qui remplit une mare). L'écume reste
+  derrière la vague et s'efface de moitié toutes les 1,8 s.
 - **Moutons** (`Terrain/Whitecaps.ts`) : le vent lève des vagues courtes qui cassent à leur crête, sans rapport
   avec la houle. Part de l'eau blanchie selon la loi usuelle (Monahan et O'Muircheartaigh, 1980 :
   3,84 × 10⁻⁶ × vent^3,41, vent en m/s) : rien sous 3 m/s, environ 0,03 % à force 3, 0,3 % à force 4, 1 % à
-  force 5, 2,4 % à force 6. Seulement dehors, sur une eau d'au moins 8 px, non gelée ; courts traits en travers du
-  vent, qui dérivent lentement sous lui ; 320 au plus à l'écran. Le vent est celui que le joueur voit (météo
-  réelle ou réglée).
+  force 5, 2,4 % à force 6. Seulement dehors, sur une eau d'au moins 8 px, non gelée ; courtes crêtes en travers
+  du vent, qui dérivent lentement sous lui. Le vent est celui que le joueur voit (météo réelle ou réglée).
+
+Le déferlement et les moutons sont dessinés par le **shader de l'eau** (`Terrain/GroundSplat.ts`), comme l'écume
+de rive : l'écume des vagues lui arrive par cellule (bleu du paquet 8), déchirée par un bruit fin qui bouillonne ;
+les moutons par un uniforme (`uWind` : sens du vent et part blanchie), dans une grille posée le long du vent. Sans
+shader (rendu de secours), ni l'un ni l'autre. Coupés avec l'effet « eau en mouvement ».
 
 Aucun réglage, rien d'envoyé par le serveur. Non vu à l'écran par un agent.
 
