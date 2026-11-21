@@ -1256,11 +1256,19 @@ export class RoomConnection implements RoomConnection {
     }
 
     /** Launches a catastrophe at a point of the map, in map pixels. The server decides. */
-    emitLaunchCatastrophe(kind: CatastropheKind, x: number, y: number, radiusTiles: number, wholeMap = false): void {
+    emitLaunchCatastrophe(
+        kind: CatastropheKind,
+        x: number,
+        y: number,
+        radiusTiles: number,
+        wholeMap = false,
+        /** A ball: its player lets it go. */
+        release = false,
+    ): void {
         this.send({
             message: {
                 $case: "launchCatastropheMessage",
-                launchCatastropheMessage: { kind, x: Math.round(x), y: Math.round(y), radiusTiles, wholeMap },
+                launchCatastropheMessage: { kind, x: Math.round(x), y: Math.round(y), radiusTiles, wholeMap, release },
             },
         });
     }

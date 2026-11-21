@@ -30,6 +30,7 @@ import {
     ratesOf,
     stepInputOf,
     stepsBetweenUpdates,
+    sweepBalls,
     TERRAIN_CELL,
     TILE_PX,
     WATER_MESSAGE_MS,
@@ -130,6 +131,8 @@ export class TerrainWaterManager {
     private drains: () => readonly Drain[] = () => [];
     /** The balls standing on the map now, asked at each step: none until the catastrophes of the room say. */
     private balls: () => readonly Ball[] = () => [];
+    /** Where the balls stood at the last step: a ball that moved since is taken along its way. */
+    private ballsBefore: readonly Ball[] = [];
     private sums: Sums = noSums();
     /** Whether the last step moved any water: a grid at rest with nothing coming in is not stepped. */
     private moving = true;
@@ -441,7 +444,15 @@ export class TerrainWaterManager {
      */
     private placeBalls(grid: WaterGrid): boolean {
         const standing = this.balls();
-        if (grid.setBalls(standing)) {
+        if (standing.length === 0 && this.ballsBefore.length === 0) return false;
+        // A ball is under the pointer of its player at once: it may have gone several cells since the last step.
+        // It pushed the water of the whole way, not only of where it is now.
+        let changed = false;
+        for (const balls of sweepBalls(this.ballsBefore, standing)) {
+            if (grid.setBalls(balls)) changed = true;
+        }
+        this.ballsBefore = standing;
+        if (changed) {
             this.moving = true;
             this.version++;
             this.changedSinceSave = true;

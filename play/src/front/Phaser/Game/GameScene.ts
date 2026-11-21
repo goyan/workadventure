@@ -181,6 +181,7 @@ import {
     mapEditorWamSettingsEditorToolCurrentMenuItemStore,
     WAM_SETTINGS_EDITOR_TOOL_MENU_ITEM,
 } from "@wa/front/Stores/MapEditorStore";
+import { heldBallStore } from "@wa/front/Stores/CatastropheStore";
 import { refreshPromptStore } from "@wa/front/Stores/RefreshPromptStore";
 import { mapDeletedPromptStore } from "@wa/front/Stores/MapDeletedPromptStore";
 import { SpaceRegistry } from "@wa/front/Space/SpaceRegistry/SpaceRegistry";
@@ -4472,6 +4473,8 @@ export class GameScene extends DirtyScene {
                 waterPx: this.terrainWater.settledDepthAt(x, y),
             }),
             () => this.terrainWater.version(),
+            () => this.connection?.getUserId(),
+            () => get(heldBallStore),
         );
         this.ballView = ballView;
         this.fireTorchView?.destroy();

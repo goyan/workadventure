@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
-    advanceBall,
     BALL_DEFAULT_TILES,
-    BALL_GROWTH_PX_PER_SECOND,
     BALL_MAX_TILES,
     BALL_MIN_TILES,
-    BALL_SPEED_PX_PER_SECOND,
+    BALL_SWEEP_MOST_STRIDES,
     ballRadiusPx,
     ballTiles,
+    sweepBalls,
 } from "../src/Catastrophe/Ball";
+import type { Ball } from "../src/Catastrophe/Ball";
 import { cellKey, withHeights } from "../src/Terrain/TerrainGrid";
 import { ballColumn, ballDisplaces, ballHalfHeight } from "../src/Terrain/WaterBall";
 import type { WaterBall } from "../src/Terrain/WaterBall";
@@ -45,21 +45,27 @@ function lake(bed: number, level: number): WaterGrid {
 }
 const MIDDLE = (SIDE / 2) * TERRAIN_CELL;
 
-/** Steps a grid with a ball held (or not) for a while: what the model lost, and whether a depth was ever no number. */
+/**
+ * Steps a grid with a ball held where `held` says at each step (nowhere: no ball), as the server does: the ball
+ * sweeps the way from where it was. What the model lost, and whether a depth was ever no number.
+ */
 function run(
     grid: WaterGrid,
     input: WaterStepInput,
     steps: number,
-    ball: WaterBall,
+    ball: WaterBall | undefined,
     held: (step: number) => WaterBall | undefined,
-): { ball: WaterBall; lostPx: number; finite: boolean; highest: number } {
+): { ball: WaterBall | undefined; lostPx: number; finite: boolean; highest: number } {
     let lostPx = 0;
     let finite = true;
     let highest = 0;
     let now = ball;
     for (let step = 0; step < steps; step++) {
-        now = advanceBall(now, held(step), 0.1);
-        grid.setBalls(now.radiusPx > 0 ? [now] : []);
+        const next = held(step);
+        for (const balls of sweepBalls(now ? [{ id: 1, ...now }] : [], next ? [{ id: 1, ...next }] : [])) {
+            grid.setBalls(balls);
+        }
+        now = next;
         lostPx += grid.step(input).lostPx;
         for (let y = BANK; y < SIDE - BANK; y++) {
             for (let x = BANK; x < SIDE - BANK; x++) {
@@ -106,32 +112,40 @@ describe("the size of a ball", () => {
     });
 });
 
-describe("advanceBall", () => {
-    const held = { x: 1000, y: 0, radiusPx: 64 };
+describe("sweepBalls", () => {
+    const ball = (x: number, y = 0): Ball => ({ id: 7, x, y, radiusPx: 64 });
 
-    it("goes after the point it is held at no faster than a ball goes, and swells no faster", () => {
-        const next = advanceBall({ x: 0, y: 0, radiusPx: 0 }, held, 0.1);
-        expect(next.x).toBeCloseTo(BALL_SPEED_PX_PER_SECOND * 0.1, 6);
-        expect(next.y).toBe(0);
-        expect(next.radiusPx).toBeCloseTo(BALL_GROWTH_PX_PER_SECOND * 0.1, 6);
+    it("is where the ball is, in one go, for a ball that did not move, came, or went", () => {
+        expect(sweepBalls([ball(100)], [ball(100)])).toEqual([[ball(100)]]);
+        expect(sweepBalls([], [ball(100)])).toEqual([[ball(100)]]);
+        expect(sweepBalls([ball(100)], [])).toEqual([[]]);
+        expect(sweepBalls([], [])).toEqual([[]]);
     });
 
-    it("stops where it is held, at the radius asked for", () => {
-        let ball: WaterBall = { x: 990, y: 0, radiusPx: 60 };
-        for (let step = 0; step < 20; step++) ball = advanceBall(ball, held, 0.1);
-        expect(ball).toEqual(held);
+    it("takes a ball that moved along its way, a cell at a time, and ends where it is", () => {
+        const strides = sweepBalls([ball(100)], [ball(180, 60)]);
+        // 100 px away: seven strides of a cell at most.
+        expect(strides).toHaveLength(7);
+        expect(strides[strides.length - 1]).toEqual([ball(180, 60)]);
+        let before = ball(100);
+        for (const [now] of strides) {
+            expect(Math.hypot(now.x - before.x, now.y - before.y)).toBeLessThanOrEqual(TERRAIN_CELL + 1e-9);
+            before = now;
+        }
     });
 
-    it("shrinks where it is once nobody holds it, down to nothing", () => {
-        const next = advanceBall({ x: 50, y: 60, radiusPx: 10 }, undefined, 0.1);
-        expect(next).toEqual({ x: 50, y: 60, radiusPx: 10 - BALL_GROWTH_PX_PER_SECOND * 0.1 });
-        expect(advanceBall(next, undefined, 5).radiusPx).toBe(0);
+    it("never takes more strides than a step bears, however far the ball went", () => {
+        const strides = sweepBalls([ball(0)], [ball(100_000)]);
+        expect(strides).toHaveLength(BALL_SWEEP_MOST_STRIDES);
+        expect(strides[strides.length - 1]).toEqual([ball(100_000)]);
     });
 
-    it("never leaps: a long time counts for a quarter of a second, a time that is none for nothing", () => {
-        expect(advanceBall({ x: 0, y: 0, radiusPx: 0 }, held, 60).x).toBeCloseTo(BALL_SPEED_PX_PER_SECOND / 4, 6);
-        expect(advanceBall({ x: 0, y: 0, radiusPx: 5 }, held, Number.NaN)).toEqual({ x: 0, y: 0, radiusPx: 5 });
-        expect(advanceBall({ x: 0, y: 0, radiusPx: 5 }, held, -1)).toEqual({ x: 0, y: 0, radiusPx: 5 });
+    it("leaves where it is a ball that is new, and one whose place is no number", () => {
+        const other: Ball = { id: 9, x: 500, y: 500, radiusPx: 32 };
+        const strides = sweepBalls([ball(100)], [ball(132), other]);
+        expect(strides).toHaveLength(2);
+        expect(strides[0]).toEqual([ball(116), other]);
+        expect(sweepBalls([ball(Number.NaN)], [ball(132)])).toEqual([[ball(132)]]);
     });
 });
 
@@ -213,8 +227,7 @@ describe("WaterGrid.setBalls", () => {
                 const grid = lake(-100, 0);
                 const total = grid.totalPx();
                 const held = { x: MIDDLE, y: MIDDLE, radiusPx: 64 };
-                const { ball, lostPx } = run(grid, input, 700, { ...held, radiusPx: 0 }, () => held);
-                expect(ball).toEqual(held);
+                const { lostPx } = run(grid, input, 700, undefined, () => held);
                 expect(lostPx).toBe(0);
                 expect(grid.totalPx() / total).toBeCloseTo(1, 5);
                 // The open water holds what the lower half of the ball pushed away. The water that went up wets
@@ -226,14 +239,14 @@ describe("WaterGrid.setBalls", () => {
                 expect(gained).toBeLessThan(hemisphere * 1.05);
                 expect(LAKE_CELLS - open).toBe(cellsOf(held, (half) => (half > 0 ? 1 : 0)));
                 // And no water is left on the ball: it stands out of the lake.
-                expect(grid.depthAt(SIDE / 2, SIDE / 2)).toBe(0);
+                expect(grid.depthAt(SIDE / 2, SIDE / 2)).toBeLessThan(0.1);
             });
 
             it("pushes away all its volume when it is under the water", () => {
                 const grid = lake(-100, 90);
                 const total = grid.totalPx();
                 const held = { x: MIDDLE, y: MIDDLE, radiusPx: 32 };
-                const { lostPx } = run(grid, input, 700, { ...held, radiusPx: 0 }, () => held);
+                const { lostPx } = run(grid, input, 700, undefined, () => held);
                 expect(lostPx).toBe(0);
                 expect(grid.totalPx() / total).toBeCloseTo(1, 5);
                 // The surface of the lake, the water over the ball included, went up by the volume of the ball.
@@ -250,36 +263,46 @@ describe("WaterGrid.setBalls", () => {
                 expect(grid.depthAt(SIDE / 2, SIDE / 2)).toBeGreaterThan(50);
             });
 
-            it("makes no water and loses none while it comes, is dragged, grows and goes", () => {
+            it("makes no water and loses none while it comes at once, is dragged, grows and goes at once", () => {
                 const grid = lake(-60, -10);
                 const total = grid.totalPx();
-                let ball: WaterBall = { x: MIDDLE - 200, y: MIDDLE, radiusPx: 0 };
+                let ball: WaterBall | undefined;
                 let lostPx = 0;
                 const stages: ((step: number) => WaterBall | undefined)[] = [
                     () => ({ x: MIDDLE - 200, y: MIDDLE, radiusPx: 64 }),
-                    () => ({ x: MIDDLE + 200, y: MIDDLE + 100, radiusPx: 64 }),
-                    () => ({ x: MIDDLE + 200, y: MIDDLE + 100, radiusPx: 160 }),
+                    // Dragged at 20 cells a second, there and back.
+                    (step) => ({
+                        x: MIDDLE - 200 + 32 * (step < 12 ? step : 24 - step),
+                        y: MIDDLE + step,
+                        radiusPx: 64,
+                    }),
+                    () => ({ x: MIDDLE + 100, y: MIDDLE + 60, radiusPx: 160 }),
                     () => undefined,
                 ];
                 for (const held of stages) {
-                    const stage = run(grid, input, 80, ball, held);
+                    const stage = run(grid, input, 24, ball, held);
                     ball = stage.ball;
                     lostPx += stage.lostPx;
                     expect(stage.finite).toBe(true);
                     expect(grid.totalPx() / total).toBeCloseTo(1, 5);
                 }
-                expect(ball.radiusPx).toBe(0);
+                expect(ball).toBeUndefined();
                 expect(lostPx).toBe(0);
             });
 
             it("lets the water come back by itself once it is gone", () => {
                 const grid = lake(-60, -10);
                 const held = { x: MIDDLE, y: MIDDLE, radiusPx: 96 };
-                run(grid, input, 60, { ...held, radiusPx: 0 }, () => held);
-                // The ball rests on the bed of the lake: no water is left where it stands.
+                // It is there, whole, at the first step: its water was pushed away at once.
+                run(grid, input, 1, undefined, () => held);
                 expect(grid.ballAt(SIDE / 2, SIDE / 2)).toBe(true);
-                expect(grid.depthAt(SIDE / 2, SIDE / 2)).toBe(0);
-                run(grid, input, 1500, held, () => undefined);
+                run(grid, input, 60, held, () => held);
+                // The ball rests on the bed of the lake: no water is left where it stands.
+                expect(grid.depthAt(SIDE / 2, SIDE / 2)).toBeLessThan(1);
+                // And it is gone at once: the hole it leaves fills by itself.
+                run(grid, input, 1, held, () => undefined);
+                expect(grid.ballAt(SIDE / 2, SIDE / 2)).toBe(false);
+                run(grid, input, 1500, undefined, () => undefined);
                 expect(grid.ballAt(SIDE / 2, SIDE / 2)).toBe(false);
                 for (const [x, y] of [
                     [SIDE / 2, SIDE / 2],
@@ -290,20 +313,19 @@ describe("WaterGrid.setBalls", () => {
                 }
             });
 
-            it("stays within bounds at its largest, dragged as fast as it goes", () => {
+            it("stays within bounds at its largest, come at once and dragged as fast as a mouse goes", () => {
                 const grid = lake(-60, 0);
                 const total = grid.totalPx();
-                // The pointer leaps from a side of the lake to the other every second: the ball goes after it.
-                const stage = run(grid, input, 300, { x: MIDDLE, y: MIDDLE, radiusPx: 0 }, (step) => ({
-                    x: Math.floor(step / 10) % 2 === 0 ? 200 : SIDE * TERRAIN_CELL - 200,
-                    y: MIDDLE,
-                    radiusPx: 256,
-                }));
+                // The pointer crosses the lake there and back at 40 tiles a second: 8 cells a step.
+                const stage = run(grid, input, 300, undefined, (step) => {
+                    const phase = step % 12;
+                    return { x: 200 + 128 * (phase < 6 ? phase : 12 - phase), y: MIDDLE, radiusPx: 256 };
+                });
                 expect(stage.finite).toBe(true);
-                expect(stage.lostPx).toBe(0);
-                expect(grid.totalPx() / total).toBeCloseTo(1, 5);
-                // The lake is 60 px deep: the wave a ball that slow pushes stays of the order of the lake.
-                expect(stage.highest).toBeLessThan(60 + 250);
+                // A ball that wide, that fast, throws water over the banks of so small a lake (they are lower than
+                // its top): what the model counts lost is all that is missing.
+                expect((grid.totalPx() + stage.lostPx) / total).toBeCloseTo(1, 5);
+                expect(stage.highest).toBeLessThan(60 + 256 + 250);
             });
 
             it("keeps the water of two balls that overlap", () => {
@@ -326,23 +348,20 @@ describe("WaterGrid.setBalls", () => {
         });
     }
 
-    it("pushes a higher wave the faster it comes", () => {
-        const crest = (seconds: number): number => {
-            const grid = lake(-60, 0);
-            let highest = 0;
-            for (let step = 0; step <= seconds * 10; step++) {
-                grid.setBalls([{ x: MIDDLE, y: MIDDLE, radiusPx: (96 * step) / (seconds * 10) }]);
-                grid.step(inertia);
-                for (let x = BANK; x < SIDE - BANK; x++) {
-                    if (!grid.ballAt(x, SIDE / 2)) highest = Math.max(highest, grid.depthAt(x, SIDE / 2) - 60);
-                }
-            }
-            return highest;
-        };
-        const slow = crest(6);
-        const fast = crest(1.5);
-        expect(slow).toBeGreaterThan(1);
-        expect(fast).toBeGreaterThan(slow * 2);
+    it("pushes the water along its way when it is dragged: more of it in front than behind", () => {
+        const grid = lake(-60, -10);
+        const from = { x: MIDDLE - 300, y: MIDDLE, radiusPx: 64 };
+        run(grid, inertia, 1, undefined, () => from);
+        // Dragged 300 px in one step towards the east.
+        const to = { ...from, x: MIDDLE };
+        for (const balls of sweepBalls([{ id: 1, ...from }], [{ id: 1, ...to }])) grid.setBalls(balls);
+        let front = 0;
+        let behind = 0;
+        for (let x = 1; x <= 8; x++) {
+            front += grid.depthAt(SIDE / 2 + 4 + x, SIDE / 2) - 50;
+            behind += grid.depthAt(SIDE / 2 - 5 - x, SIDE / 2) - 50;
+        }
+        expect(front).toBeGreaterThan(behind + 50);
     });
 
     it("holds water under itself in a deep lake, which a save keeps and a new grid takes", () => {

@@ -1,6 +1,6 @@
 import {
-    advanceBall,
     BALL_LASTS_MS,
+    BALL_MIN_REPORT_MS,
     ballRadiusPx,
     BALLS_PER_ROOM,
     ballTiles,
@@ -17,8 +17,9 @@ import {
     METEOR_FALL_MS,
     meteorShape,
     METEORS_PER_ROOM,
+    TILE_PX,
 } from "@workadventure/map-editor";
-import type { Ball, Downpour, Drain, WaterBall } from "@workadventure/map-editor";
+import type { Ball, Downpour, Drain } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
 import type { GameRoom } from "./GameRoom";
 
@@ -33,10 +34,9 @@ import type { GameRoom } from "./GameRoom";
  * A drain is its opposite: the water is taken hard from a disc of the map for as long as its player keeps telling
  * where. One for each player too; the water reads those that are open.
  *
- * A ball is a solid sphere held under the pointer of its player, its centre at the altitude 0 of the map. It is the
- * only catastrophe that has a body: it never jumps, it goes after the pointer and swells no faster than a ball does
- * (advanceBall), and shrinks to nothing once its player lets go. The water reads where the balls are; the room is
- * told at each message of the player what is asked and where the solid is.
+ * A ball is a solid sphere held under the pointer of its player, its centre at the altitude 0 of the map. It is
+ * there at once, whole, follows the pointer at each message, and is gone at once when its player lets go (or a
+ * moment after their last message, when they left). The water reads where the balls are.
  */
 interface LiveDownpour extends Downpour {
     until: number;
@@ -49,26 +49,15 @@ interface LiveDrain extends Drain {
 }
 
 interface LiveBall extends Ball {
-    /** What its player asks for: where they hold it, and how wide. */
-    held: WaterBall;
-    /** Until when it is held: later, it shrinks. */
+    /** Until when it stands if its player says nothing more. */
     until: number;
     toldAt: number;
-    /** When the solid was last moved. */
-    movedAt: number;
 }
-
-/** A ball is moved by slices of this long, in milliseconds: the step of the water. */
-const BALL_SLICE_MS = 100;
-/** A ball nobody asked about for longer than this is moved as if that long had gone by, in milliseconds. */
-const BALL_LONGEST_SILENCE_MS = 10_000;
 
 export class CatastropheManager {
     private nextId = 1;
     /** The ball each player holds, by the id of the player. */
     private readonly holding = new Map<number, LiveBall>();
-    /** The balls let go that are still shrinking. */
-    private letGo: LiveBall[] = [];
     /** The downpour of each player, by the id of the player. */
     private readonly raining = new Map<number, LiveDownpour>();
     /** The drain of each player, by the id of the player. */
@@ -206,9 +195,8 @@ export class CatastropheManager {
     }
 
     /**
-     * A player holds a ball at a point of the map (pixels), `diameterTiles` wide: their ball appears there with no
-     * radius, or goes on towards that point. The room is told each time, with where the solid is. False when it is
-     * refused.
+     * A player holds a ball at a point of the map (pixels), `diameterTiles` wide: their ball is there at once, whole,
+     * or is now at that point. The room is told each time. False when it is refused.
      */
     public ball(userId: number, x: number, y: number, diameterTiles: number = 0): boolean {
         if (this.stopped) return false;
@@ -216,86 +204,60 @@ export class CatastropheManager {
         if (!size || !Number.isFinite(x) || !Number.isFinite(y)) return false;
         if (x < 0 || y < 0 || x >= size.width || y >= size.height) return false;
         const now = this.now();
-        this.moveBalls(now);
-        let ball = this.holding.get(userId);
-        if (ball && now - ball.toldAt < DOWNPOUR_MIN_REPORT_MS) return false;
-        // A room never has more solids than that, those that are shrinking included.
-        if (!ball && this.holding.size + this.letGo.length >= BALLS_PER_ROOM) return false;
+        this.forgetBalls(now);
+        const held = this.holding.get(userId);
+        if (held ? now - held.toldAt < BALL_MIN_REPORT_MS : this.holding.size >= BALLS_PER_ROOM) return false;
         const tiles = ballTiles(diameterTiles);
-        const held = { x, y, radiusPx: ballRadiusPx(tiles) };
-        if (ball) {
-            ball.held = held;
-            ball.until = now + BALL_LASTS_MS;
-            ball.toldAt = now;
-        } else {
-            ball = {
-                id: this.nextId++,
-                x,
-                y,
-                radiusPx: 0,
-                held,
-                until: now + BALL_LASTS_MS,
-                toldAt: now,
-                movedAt: now,
-            };
-            this.holding.set(userId, ball);
-        }
+        const ball: LiveBall = {
+            id: held?.id ?? this.nextId++,
+            x,
+            y,
+            radiusPx: ballRadiusPx(tiles),
+            until: now + BALL_LASTS_MS,
+            toldAt: now,
+        };
+        this.holding.set(userId, ball);
+        this.tellBall(userId, ball, tiles, BALL_LASTS_MS);
+        return true;
+    }
+
+    /** A player lets their ball go: it is gone at once, and the room is told. False when they held none. */
+    public release(userId: number): boolean {
+        const ball = this.holding.get(userId);
+        if (!ball) return false;
+        this.holding.delete(userId);
+        if (this.stopped) return false;
+        this.tellBall(userId, ball, Math.round((ball.radiusPx * 2) / TILE_PX), 0);
+        return true;
+    }
+
+    private tellBall(userId: number, ball: LiveBall, tiles: number, lastsMs: number): void {
         this.room.sendSubMessageToRoom({
             message: {
                 $case: "catastropheMessage",
                 catastropheMessage: {
                     id: ball.id,
                     kind: CatastropheKind.CATASTROPHE_BALL,
-                    x,
-                    y,
-                    impactInMs: BALL_LASTS_MS,
+                    x: ball.x,
+                    y: ball.y,
+                    impactInMs: lastsMs,
                     radiusTiles: tiles,
                     wholeMap: false,
-                    ballX: ball.x,
-                    ballY: ball.y,
-                    ballRadius: ball.radiusPx,
+                    userId,
                 },
             },
         });
-        return true;
     }
 
-    /** The balls standing on the map now, where the solids are. */
+    /** The balls standing on the map now. */
     public balls(): Ball[] {
-        this.moveBalls(this.now());
-        return [...this.holding.values(), ...this.letGo].map(({ id, x, y, radiusPx }) => ({ id, x, y, radiusPx }));
+        this.forgetBalls(this.now());
+        return [...this.holding.values()].map(({ id, x, y, radiusPx }) => ({ id, x, y, radiusPx }));
     }
 
-    /**
-     * Every ball goes on to `now`: after the point it is held at while it is held, shrinking once it is let go. A
-     * ball let go is no more the ball of its player (their next click makes a new one), and is forgotten once it
-     * has no radius left.
-     */
-    private moveBalls(now: number): void {
-        for (const [userId, ball] of this.holding) {
-            this.moveBall(ball, now);
-            if (ball.until > now) continue;
-            this.holding.delete(userId);
-            if (ball.radiusPx > 0) this.letGo.push(ball);
-        }
-        if (this.letGo.length === 0) return;
-        for (const ball of this.letGo) this.moveBall(ball, now);
-        this.letGo = this.letGo.filter((ball) => ball.radiusPx > 0);
-    }
-
-    private moveBall(ball: LiveBall, now: number): void {
-        let at = Math.max(ball.movedAt, now - BALL_LONGEST_SILENCE_MS);
-        while (at < now) {
-            // A slice ends where the ball is let go, so that it is held, then shrinks, each for its own time.
-            let end = Math.min(now, at + BALL_SLICE_MS);
-            if (at < ball.until && end > ball.until) end = ball.until;
-            const next = advanceBall(ball, at < ball.until ? ball.held : undefined, (end - at) / 1000);
-            ball.x = next.x;
-            ball.y = next.y;
-            ball.radiusPx = next.radiusPx;
-            at = end;
-        }
-        ball.movedAt = now;
+    /** A ball whose player said nothing for too long (they left) is gone. */
+    private forgetBalls(now: number): void {
+        for (const [userId, ball] of this.holding) if (ball.until <= now) this.holding.delete(userId);
     }
 
     /** What a fireball burns is made after the catastrophes of a room: it is given here. */
@@ -362,7 +324,10 @@ export class CatastropheManager {
         y: number,
         radiusTiles: number,
         wholeMap: boolean,
+        release = false,
     ): boolean {
+        // Only a ball is let go: the others end by themselves.
+        if (release) return kind === CatastropheKind.CATASTROPHE_BALL && this.release(userId);
         if (kind === CatastropheKind.CATASTROPHE_DOWNPOUR) return this.rain(userId, x, y, radiusTiles, wholeMap);
         if (kind === CatastropheKind.CATASTROPHE_FIRE) return this.fire(userId, x, y, radiusTiles);
         if (kind === CatastropheKind.CATASTROPHE_DRAIN) return this.drain(userId, x, y, radiusTiles);
@@ -422,6 +387,5 @@ export class CatastropheManager {
         this.raining.clear();
         this.draining.clear();
         this.holding.clear();
-        this.letGo = [];
     }
 }

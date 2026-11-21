@@ -1,19 +1,13 @@
-import {
-    advanceBall,
-    BALL_GROWTH_PX_PER_SECOND,
-    BALL_SPEED_PX_PER_SECOND,
-    ballHalfHeight,
-    TERRAIN_CELL,
-} from "@workadventure/map-editor";
+import { BALL_REPORT_MS, ballHalfHeight, TERRAIN_CELL } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
 import {
     BALL_TONES,
     ballBlockPx,
     ballBlocks,
-    followBall,
-    moveShownBall,
+    ballWaterline,
+    glideBall,
+    tellBall,
 } from "@wa/front/Phaser/Game/Catastrophe/BallShape";
-import type { ShownBall } from "@wa/front/Phaser/Game/Catastrophe/BallShape";
 
 const dry = (): { groundPx: number; waterPx: number } => ({ groundPx: 0, waterPx: 0 });
 
@@ -80,37 +74,54 @@ describe("ballBlocks", () => {
     });
 });
 
-describe("the ball a browser shows", () => {
-    const message = { id: 3, x: 500, y: 300, radiusTiles: 4, impactInMs: 600, ballX: 100, ballY: 300, ballRadius: 10 };
+describe("ballWaterline", () => {
+    const ball = { x: 320, y: 320, radiusPx: 64 };
 
-    it("starts where the server says the solid is, and goes after what its player asks as the server does", () => {
-        let ball = followBall(undefined, message, 1000);
-        expect(ball).toMatchObject({ x: 100, y: 300, radiusPx: 10, until: 1600 });
-        expect(ball.held).toEqual({ x: 500, y: 300, radiusPx: 64 });
-        ball = moveShownBall(ball, 1500);
-        const server = advanceBall({ x: 100, y: 300, radiusPx: 10 }, ball.held, 0.1);
-        expect(ball.x).toBeCloseTo(100 + BALL_SPEED_PX_PER_SECOND / 2, 4);
-        expect(ball.radiusPx).toBeCloseTo(10 + BALL_GROWTH_PX_PER_SECOND / 2, 4);
-        expect(server.x).toBeCloseTo(100 + BALL_SPEED_PX_PER_SECOND / 10, 4);
+    it("runs all around a ball that stands in a lake, at its rim when the lake is no higher than its middle", () => {
+        const line = ballWaterline(ball, () => ({ groundPx: -100, waterPx: 100 }));
+        expect(line.afloat).toBe(true);
+        expect(line.arcs).toHaveLength(1);
+        expect(line.arcs[0].closed).toBe(true);
+        for (const point of line.arcs[0].points) expect(Math.hypot(point.x - 320, point.y - 320)).toBeCloseTo(64, 5);
+        // A lake lower than its middle touches it under its widest: seen from above, still at its rim.
+        const low = ballWaterline(ball, () => ({ groundPx: -100, waterPx: 70 }));
+        for (const point of low.arcs[0].points) expect(Math.hypot(point.x - 320, point.y - 320)).toBeCloseTo(64, 5);
     });
 
-    it("keeps its own place when the server tells nearly the same, and takes the place the server tells when far off", () => {
-        const shown: ShownBall = { ...followBall(undefined, message, 1000), x: 104, radiusPx: 12 };
-        const near = followBall(shown, { ...message, x: 600 }, 1200);
-        expect(near).toMatchObject({ x: 104, radiusPx: 12, until: 1800 });
-        expect(near.held.x).toBe(600);
-        const far = followBall(shown, { ...message, ballX: 300 }, 1200);
-        expect(far.x).toBe(300);
+    it("draws in where the water stands higher than its middle, and is none under the water or on dry ground", () => {
+        const flood = ballWaterline(ball, () => ({ groundPx: 0, waterPx: 30 }));
+        const within = Math.sqrt(64 ** 2 - 30 ** 2);
+        for (const point of flood.arcs[0].points)
+            expect(Math.hypot(point.x - 320, point.y - 320)).toBeCloseTo(within, 5);
+        expect(ballWaterline(ball, () => ({ groundPx: 0, waterPx: 80 })).arcs).toEqual([]);
+        const dry = ballWaterline(ball, () => ({ groundPx: 0, waterPx: 0 }));
+        expect(dry.arcs).toEqual([]);
+        expect(dry.afloat).toBe(false);
     });
 
-    it("shrinks once no message comes any more, and is gone when it has no radius left", () => {
-        let ball: ShownBall = { ...followBall(undefined, message, 1000), radiusPx: 32 };
-        ball = moveShownBall(ball, 1600);
-        const held = ball.radiusPx;
-        ball = moveShownBall(ball, 1850);
-        expect(ball.radiusPx).toBeCloseTo(held - BALL_GROWTH_PX_PER_SECOND / 4, 4);
-        expect(ball.x).toBeCloseTo(moveShownBall({ ...followBall(undefined, message, 1000) }, 1600).x, 4);
-        ball = moveShownBall(ball, 5000);
-        expect(ball.radiusPx).toBe(0);
+    it("runs only along the side where there is water", () => {
+        // Water to the east of the ball only.
+        const line = ballWaterline(ball, (x) => ({ groundPx: x > 320 ? -100 : 0, waterPx: x > 320 ? 100 : 0 }));
+        expect(line.arcs).toHaveLength(1);
+        expect(line.arcs[0].closed).toBe(false);
+        for (const point of line.arcs[0].points) expect(point.x).toBeGreaterThan(320);
+        expect(line.afloat).toBe(false);
+    });
+});
+
+describe("glideBall", () => {
+    it("takes the ball of another player to where the server last told it, in the time between two messages", () => {
+        const shown = { x: 100, y: 300, radiusPx: 64, fromX: 100, fromY: 300, toldAt: 1000, until: 1600 };
+        const told = tellBall(shown, { x: 180, y: 300, radiusTiles: 4, impactInMs: 600 }, 1050);
+        expect(told).toMatchObject({ fromX: 100, x: 180, radiusPx: 64, until: 1650 });
+        expect(glideBall(told, 1050).x).toBe(100);
+        expect(glideBall(told, 1050 + BALL_REPORT_MS / 2).x).toBeCloseTo(140, 5);
+        expect(glideBall(told, 1050 + BALL_REPORT_MS).x).toBe(180);
+        expect(glideBall(told, 5000).x).toBe(180);
+    });
+
+    it("is whole where the server tells it, at once, when it is new", () => {
+        const told = tellBall(undefined, { x: 180, y: 300, radiusTiles: 6, impactInMs: 600 }, 1050);
+        expect(glideBall(told, 1050)).toEqual({ x: 180, y: 300, radiusPx: 96 });
     });
 });

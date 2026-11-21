@@ -1,5 +1,6 @@
 import * as Phaser from "phaser";
 import { get, readable } from "svelte/store";
+import { BALL_REPORT_MS } from "@workadventure/map-editor";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { mock } from "vitest-mock-extended";
 import { CatastropheKind } from "@workadventure/messages";
@@ -34,6 +35,7 @@ import {
 } from "../../../../src/front/Stores/FishingStore";
 import {
     ballDiameterTilesStore,
+    heldBallStore,
     catastrophePanelStore,
     fireRadiusTilesStore,
     downpourRadiusTilesStore,
@@ -977,23 +979,51 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 drainRadiusTilesStore.set(3);
             });
 
-            it("holds a ball under the pointer while the click is held, without dragging the map, and lets it go at its release", () => {
+            it("holds a ball under the pointer at once, tells it as it moves, and lets it go at the release", () => {
+                const delays: number[] = [];
+                Object.defineProperty(scene, "time", {
+                    configurable: true,
+                    value: {
+                        addEvent: (config: { callback: () => void; delay: number }) => {
+                            ticks.push(config.callback);
+                            delays.push(config.delay);
+                            return { remove };
+                        },
+                    },
+                });
                 catastrophePanelStore.set(true);
                 toggleArmedCatastrophe("ball");
                 ballDiameterTilesStore.set(6);
                 const press = held();
                 handler.handlePointerDownEvent(press, []);
                 expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_BALL, 480, 640, 6]]);
+                // Shown under the pointer at once, without waiting for the server.
+                expect(get(heldBallStore)).toEqual({ x: 480, y: 640, radiusPx: 96 });
+                // Told far more often than a downpour, so that everybody sees it follow the pointer.
+                expect(delays).toEqual([BALL_REPORT_MS]);
 
+                // The pointer moves: the ball is under it at once, and the server is told at the next tick.
                 camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(500, 700));
                 handler.handlePointerMoveEvent(press, []);
+                expect(get(heldBallStore)).toEqual({ x: 500, y: 700, radiusPx: 96 });
+                expect(cameraManager.startManualPan.mock.calls).toEqual([]);
                 ticks[0]();
                 expect(launch.mock.calls[1]).toEqual([CatastropheKind.CATASTROPHE_BALL, 500, 700, 6]);
-                expect(cameraManager.startManualPan.mock.calls).toEqual([]);
 
+                // Held still: nothing more is said for a while, then that it is still held.
+                ticks[0]();
+                ticks[0]();
+                ticks[0]();
+                expect(launch).toHaveBeenCalledTimes(2);
+                ticks[0]();
+                expect(launch).toHaveBeenCalledTimes(3);
+
+                // Released: it is gone at once, here and for the server.
                 handler.handlePointerUpEvent(pointer(0, 1), []);
                 expect(remove).toHaveBeenCalled();
-                expect(launch).toHaveBeenCalledTimes(2);
+                expect(get(heldBallStore)).toBeUndefined();
+                expect(launch.mock.calls[3]).toEqual([CatastropheKind.CATASTROPHE_BALL, 500, 700, 6, false, true]);
+                expect(launch).toHaveBeenCalledTimes(4);
                 expect(scene.moveTo.mock.calls).toEqual([]);
                 ballDiameterTilesStore.set(4);
             });

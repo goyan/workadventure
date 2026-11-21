@@ -4505,28 +4505,37 @@ plonge dessous : dans le sol, ou dans l'eau d'un creux. Elle prend la place de l
 et fait une vague ; quand la boule s'en va l'eau revient. C'est un instrument pour éprouver le modèle d'écoulement.
 
 **En jeu.** La tuile « Boule » s'arme comme l'averse et le drain. Un curseur règle le **diamètre, de 1 à 16 cases**
-(4 par défaut ; 1,1 m à 17,5 m à l'échelle de la carte). Tant que le **clic gauche est maintenu**, la boule apparaît
-sous le pointeur et le suit ; relâcher la laisse dégonfler sur place. Pendant ce temps le glisser ne déplace pas la
-carte.
+(4 par défaut ; 1,1 m à 17,5 m à l'échelle de la carte). **Dès le clic, la boule est là, entière**, son centre au
+niveau 0 : elle ne monte pas, ne descend pas, n'enfle pas. Tant que le clic est maintenu elle **suit le pointeur
+sans retard** (souris ou pavé tactile) ; au relâchement elle **disparaît d'un coup**. Pendant ce temps le glisser ne
+déplace pas la carte.
 
-**Un solide ne saute pas.** La boule naît sans rayon et **enfle de 64 px de rayon par seconde** au plus ; elle
-**rattrape le pointeur à 64 px par seconde** au plus (deux cases par seconde, environ 2,2 m/s : une marche rapide) ;
-lâchée, elle reste où elle est et rétrécit à la même vitesse jusqu'à rien. C'est la règle `advanceBall`
-(`libs/map-editor/src/Catastrophe/Ball.ts`), la même sur le serveur, qui décide, et dans les navigateurs, qui
-dessinent la boule entre deux messages. Ces bornes sont dans le modèle, pas dans le solveur de l'eau : l'eau
-chassée l'est au rythme où le solide avance, et la vague qu'il pousse grandit avec sa vitesse (mesuré : dans un lac
-de 60 px de fond, environ 2 m, une boule de 4 cases pousse une crête de 25 à 30 px, ce que donne la loi du piston
-`hauteur = fond × vitesse / célérité` ; deux fois plus vite, deux fois plus haut).
+**Sous le pointeur sans attendre le serveur.** Le joueur qui tient la boule la voit sous son propre pointeur à chaque
+mouvement (`heldBallStore`, écrit par `GameSceneUserInputHandler`) : sa boule n'est jamais dessinée d'après les
+messages du serveur, qui arrivent un aller-retour plus tard. L'eau, elle, reste celle du serveur. Les autres joueurs
+voient la boule là où le serveur la dit, en glissant d'un message au suivant (50 ms).
 
-**Le serveur décide.** Le navigateur redit où est le pointeur toutes les 200 ms (`LaunchCatastropheMessage`, genre
-`CATASTROPHE_BALL` = 5, `radiusTiles` = le **diamètre** du curseur). Le serveur ramène le diamètre dans ses bornes
-(`ballTiles` ; 0 ou une valeur non numérique donne 4), refuse un point hors de la carte ou non fini et les messages
-plus rapprochés que 100 ms. `CatastropheManager.ball` tient **une boule par joueur**, tenue 600 ms après son dernier
-message : un joueur qui relâche, ou qui se déconnecte, voit sa boule dégonfler seule. Un nouveau clic fait une
-nouvelle boule pendant que l'ancienne finit de rétrécir. **8 solides au plus par salle**, ceux qui rétrécissent
-compris. Chaque message accepté est annoncé à la salle (`CatastropheMessage`, même `id` tant que la boule est
-tenue) avec ce qui est demandé (`x`, `y`, `radiusTiles`) et **où est le solide** (`ballX`, `ballY`, `ballRadius`,
-champs 8 à 10, facultatifs).
+**Le serveur décide.** Le navigateur dit où est la boule toutes les 50 ms quand elle a bougé, toutes les 200 ms
+quand elle est tenue immobile (`LaunchCatastropheMessage`, genre `CATASTROPHE_BALL` = 5, `radiusTiles` = le
+**diamètre**), et dit qu'il la lâche (`release` = 6). Le serveur ramène le diamètre dans ses bornes (`ballTiles` ;
+0 ou une valeur non numérique donne 4), refuse un point hors de la carte ou non fini et les messages plus rapprochés
+que 20 ms. `CatastropheManager.ball` tient **une boule par joueur**, à l'endroit du dernier message ; elle disparaît
+au `release`, ou 600 ms après le dernier message d'un joueur parti sans rien dire. **8 boules au plus par salle.**
+Chaque message accepté est annoncé à la salle (`CatastropheMessage`, même `id` tant que la boule est tenue, `userId`
+= 11 pour que chacun reconnaisse la sienne, `impactInMs` = 0 quand elle est lâchée).
+
+**Une boule qui a bougé a balayé son trajet.** L'eau avance par pas de 100 ms ; une souris fait plusieurs cases
+entre deux pas. La boule n'a pas sauté : `sweepBalls` (`Catastrophe/Ball.ts`) la fait passer par le segment entre
+sa place d'avant et sa place de maintenant, **une cellule à la fois** (32 enjambées au plus par pas ; au-delà de 32
+cases par seconde les enjambées s'allongent), et `TerrainWaterManager.placeBalls` pose la boule à chaque enjambée :
+l'eau de tout le trajet est poussée devant elle. Une boule qui apparaît ou disparaît le fait en une fois.
+
+**Ce que ça donne, mesuré** (lac de 60 px de fond, environ 2 m, creusé dans une plaine, eau à inertie, boule apparue
+d'un coup puis traînée 6 s) : boule de 4 cases, crête de 19 à 29 px à la pose, 42 à 52 px traînée à 20 ou 40 cases
+par seconde, rien de perdu ; boule de 16 cases, 24 à 34 px à la pose, 60 à 89 px ensuite, et le lac déborde sur la
+plaine (crue de 33 à 75 px, jusqu'à 11 % de l'eau quitte la carte par le bord, comptée « perdue »). Aucune valeur non
+finie, bilan `eau + perdue` égal au volume de départ à 1e-6 près dans tous les cas : aucune borne de vitesse n'a été
+nécessaire.
 
 **La boule dans le modèle d'eau** (`WaterGrid.setBalls`, géométrie pure dans `Terrain/WaterBall.ts`). Le modèle est
 en colonnes d'eau. Dans chaque colonne qu'elle atteint, la boule occupe les hauteurs entre son dessous et son
@@ -4542,7 +4551,9 @@ exactement le volume de la sphère, à 1 % près), moins ce qui est dans le sol 
 - **L'eau à qui la boule ne laisse plus de place est remise à la première colonne ouverte en s'éloignant du centre
   de la boule** (`pushAway`), jamais à travers un mur ni hors de la grille, sans dépasser la hauteur maximale de la
   carte (le reste va à la colonne suivante ; ce qui ne trouve aucune place reste sur la boule et en ruisselle).
-  C'est la condition d'une paroi qui avance : le volume qu'elle balaie passe à l'eau devant elle.
+  L'eau est poussée de côté, pas vers le haut : le chemin s'arrête à un sol plus haut que le niveau où elle se
+  tenait (une berge, une falaise). C'est la condition d'une paroi qui avance : le volume qu'elle balaie passe à
+  l'eau devant elle.
 - Une colonne dont la boule touche le sol est fermée même à sec : la boule barre le chemin d'une eau qui arrive.
 - **Au retrait rien n'est rempli** : les colonnes se rouvrent, l'eau mise de côté est rendue, et le creux laissé se
   comble par l'écoulement du modèle.
@@ -4553,36 +4564,41 @@ eau n'est créée ni perdue** : `totalPx` (le stock du tableau de bord) compte l
 
 **Pourquoi pas « relever le fond » ni « poser l'eau sur la boule ».** Relever le fond sous toute l'empreinte chasse
 aussi l'eau qui passe sous la moitié basse de la boule dans un lac profond : trois fois trop de volume pour une boule
-de 2 cases dans 2 m d'eau. Poser l'eau chassée sur le dessus de la boule et la laisser retomber respecte Archimède
-mais lui donne une énergie qui ne dépend pas de la vitesse du solide (mesuré : crêtes de 46 à 130 px, plus hautes
-quand la boule va plus lentement, parce que la boule qui enfle hisse le film d'eau qu'elle porte). La remise à la
-colonne ouverte voisine donne une vague proportionnelle à la vitesse, celle du piston.
+de 2 cases dans 2 m d'eau. Poser toute l'eau chassée sur le dessus de la boule et la laisser retomber respecte
+Archimède mais la hisse jusqu'au sommet du solide : la vague ne dépend plus du volume balayé.
 
 **Ce que tout le monde voit** (`Catastrophe/BallView.ts`, règles pures dans `BallShape.ts`) : une sphère rouge en
-blocs, éclairée du haut à gauche en six tons, avec son reflet et son ombre ; les blocs grossissent avec la boule
-(24 par rayon). Ce qui est dans le sol n'est pas dessiné (sur un mont plus haut que son rayon : rien que l'anneau) ;
-ce que l'eau recouvre est dessiné sous la teinte de l'eau. La boule est à la profondeur d'affichage de son milieu,
-comme un avatar qui s'y tiendrait ; un anneau fin et le reflet sont redessinés au-dessus du voile de la nuit. Elle
-n'est redessinée que lorsqu'elle a bougé ou que l'eau a changé. « Flux d'eau » (Visualisation) montre les courants
-qu'elle provoque sans rien de plus : il lit les vitesses et les profondeurs du modèle.
+blocs, éclairée du haut à gauche en six tons, avec son reflet ; les blocs grossissent avec la boule (24 par rayon).
+Ce qui est dans le sol n'est pas dessiné (sur un mont plus haut que son rayon : rien que l'anneau) ; ce que l'eau
+recouvre est dessiné sous la teinte de l'eau. **Dans l'eau, elle est dans l'eau** : là où de l'eau borde la boule
+(`ballWaterline`, lu une cellule au-delà de son bord, au niveau réel de l'eau), une bande d'eau sombre contre elle et
+un liseré d'écume suivent la ligne de flottaison, rentrée vers le centre quand l'eau est plus haute que son milieu ;
+entourée d'eau, elle ne jette pas d'ombre (une ombre sur un lac disait une bille suspendue au-dessus) ; à terre elle
+garde son ombre. La boule est à la profondeur d'affichage de son milieu, comme un avatar qui s'y tiendrait ; un
+anneau fin et le reflet sont redessinés au-dessus du voile de la nuit. Elle n'est redessinée que lorsqu'elle a bougé
+ou que l'eau a changé. « Flux d'eau » (Visualisation) montre les courants qu'elle provoque sans rien de plus : il lit
+les vitesses et les profondeurs du modèle.
 
 **Voisinage.** Aucune collision : les avatars, les animaux et les véhicules la traversent, et sous elle les colonnes
 fermées sont à sec pour eux (un poisson mis à sec meurt après 5 s, comme sous un drain). L'herbe et l'humidité du
 sol ne changent pas. La glace du serveur ne tient pas la boule : sous elle il n'y a plus d'eau à geler, la glace y
 disparaît, et l'eau liquide est chassée comme sans glace. Une pompe de piscine ne remplit pas une case où se tient
 une boule (`ballAt`). Une porte étanche ou un mur arrête l'eau poussée. Si la carte est éditée pendant qu'une boule
-est posée, la nouvelle grille reprend toute l'eau et la boule y est remise au pas suivant. Salle vide : la boule
-dégonfle seule en 4 s au plus.
+est posée, la nouvelle grille reprend toute l'eau et la boule y est remise au pas suivant. Joueur parti sans lâcher :
+la boule disparaît 600 ms après son dernier message.
 
-**Coût.** Sans boule : rien (retour immédiat). Avec : 0,25 à 0,45 ms par pas pour une boule de 16 cases qui bouge,
-0,6 à 1,3 ms pour huit, sur une grille de 600 × 600 (le pas de l'eau y coûte 5 à 50 ms) ; rien de plus quand elle ne
-bouge pas, hormis la relecture de son empreinte. La salle reçoit l'eau cinq fois par seconde tant qu'une boule existe.
+**Coût.** Sans boule : rien (retour immédiat). Avec, sur une grille de 200 × 200 : 0,1 à 0,3 ms par pas pour une
+boule immobile ou de 4 cases, jusqu'à 1,3 ms pour une boule de 16 cases traînée à 40 cases par seconde (une pose par
+enjambée). La salle reçoit l'eau cinq fois par seconde tant qu'une boule existe, et la place de chaque boule jusqu'à
+vingt fois par seconde pendant qu'elle bouge.
 
 **Limites.** L'eau enfermée sous une boule immobile y reste même si le lac baisse autour ; aucun courant ne passe
 sous la boule là où elle touche l'eau (en vrai il en passerait sous pression) ; l'eau qui rampe, sans inertie, ne
 fait pas de vague : l'eau poussée s'entasse près de la boule avant de s'étaler ; une boule qui fait déborder un lac
 envoie l'eau sur la plaine, d'où elle peut quitter la carte par le bord comme toute crue (comptée « perdue ») ; un
-navigateur d'avant dessine une comète à chaque message ; pas de son. `play` et `back` se déploient ensemble.
+navigateur d'avant dessine une comète à chaque message ; la boule apparue d'un coup n'a pas de vitesse : la vague de
+sa pose vient du volume chassé, pas d'un élan ; traînée plus vite qu'une vague ne court, elle entasse l'eau devant
+elle ; pas de son. `play` et `back` se déploient ensemble.
 
 ## Catastrophes : l'averse
 

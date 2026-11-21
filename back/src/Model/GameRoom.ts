@@ -1367,8 +1367,9 @@ export class GameRoom implements BrothersFinder {
         y: number,
         radiusTiles: number,
         wholeMap: boolean,
+        release = false,
     ): void {
-        this.catastrophes?.request(user.id, kind, x, y, radiusTiles, wholeMap);
+        this.catastrophes?.request(user.id, kind, x, y, radiusTiles, wholeMap, release);
     }
 
     /** A player casts their fishing line at a point of the map. */

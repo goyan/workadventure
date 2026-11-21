@@ -1,11 +1,4 @@
-import {
-    advanceBall,
-    ballColumn,
-    ballHalfHeight,
-    ballRadiusPx,
-    BALL_MAX_TILES,
-    TERRAIN_CELL,
-} from "@workadventure/map-editor";
+import { BALL_REPORT_MS, ballColumn, ballHalfHeight, ballRadiusPx, TERRAIN_CELL } from "@workadventure/map-editor";
 import type { WaterBall } from "@workadventure/map-editor";
 import type { CatastropheMessage } from "@workadventure/messages";
 
@@ -20,11 +13,11 @@ const LIGHT = { x: -0.46, y: -0.56, z: 0.69 };
 const GLINT_FROM = 0.975;
 /** Water this thin over the ball is not drawn over it, in pixels. */
 const FILM_PX = 0.5;
-/** The server tells the solid further than this from where a browser shows it (pixels): the browser takes its word. */
-const FAR_OFF_PX = 24;
-const FAR_OFF_RADIUS_PX = 12;
-/** A ball is moved by slices of this long, in milliseconds, as on the server. */
-const SLICE_MS = 100;
+/** The line of the water around a ball is looked at in this many points, never fewer nor more. */
+const FEWEST_LINE_POINTS = 16;
+const MOST_LINE_POINTS = 96;
+/** A ball with water along this share of its rim stands in the water. */
+const AFLOAT_SHARE = 0.6;
 
 /** A square of a ball: its top left corner (map pixels), its tone, and whether water stands over it. */
 export interface BallBlock {
@@ -88,54 +81,96 @@ export function ballBlocks(ball: WaterBall, coverAt: BallCover): BallBlock[] {
     return blocks;
 }
 
-/** A ball as a browser shows it: the solid, what its player asks for, and until when (ms of the game). */
-export interface ShownBall extends WaterBall {
-    held: WaterBall;
-    until: number;
-    /** When the solid was last moved, in ms of the game. */
-    movedAt: number;
+/** The line where the water meets a ball, seen from above: its arcs, and whether water is nearly all around. */
+export interface BallWaterline {
+    arcs: { points: { x: number; y: number }[]; closed: boolean }[];
+    afloat: boolean;
 }
-
-type BallReport = Pick<CatastropheMessage, "x" | "y" | "radiusTiles" | "impactInMs" | "ballX" | "ballY" | "ballRadius">;
 
 /**
- * The ball of a message of the server: held where its player asks, `message.impactInMs` more. A ball not seen yet
- * is where the server says the solid is; one already shown stays where the browser moved it, by the rule of the
- * server, unless the server tells it far from there.
+ * Where the water around a ball meets it: looked at all around, a cell past its rim. Where water stands there, the
+ * line is where the sphere crosses its level: drawn in when the water is higher than the middle of the ball, at the
+ * rim when it is lower (the ball then touches it under its widest part). None along dry ground, nor around a ball
+ * the water stands over.
  */
-export function followBall(known: ShownBall | undefined, message: BallReport, receivedAt: number): ShownBall {
-    const most = ballRadiusPx(BALL_MAX_TILES);
-    // A message that does not say where the solid is: where it is held.
-    const figure = (value: number | undefined, fallback: number): number =>
-        value !== undefined && Number.isFinite(value) ? value : fallback;
-    const told = {
-        x: figure(message.ballX, message.x),
-        y: figure(message.ballY, message.y),
-        radiusPx: Math.min(most, Math.max(0, figure(message.ballRadius, 0))),
-    };
-    const far =
-        !known ||
-        Math.hypot(known.x - told.x, known.y - told.y) > FAR_OFF_PX ||
-        Math.abs(known.radiusPx - told.radiusPx) > FAR_OFF_RADIUS_PX;
+export function ballWaterline(ball: WaterBall, coverAt: BallCover): BallWaterline {
+    const { x, y, radiusPx } = ball;
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(radiusPx) || radiusPx <= 0) {
+        return { arcs: [], afloat: false };
+    }
+    const count = Math.min(MOST_LINE_POINTS, Math.max(FEWEST_LINE_POINTS, Math.round((2 * Math.PI * radiusPx) / 6)));
+    const points: ({ x: number; y: number } | undefined)[] = [];
+    let wet = 0;
+    for (let at = 0; at < count; at++) {
+        const angle = (2 * Math.PI * (at + 0.5)) / count;
+        const away = { x: Math.cos(angle), y: Math.sin(angle) };
+        const cover = coverAt(x + away.x * (radiusPx + TERRAIN_CELL), y + away.y * (radiusPx + TERRAIN_CELL));
+        const level = cover.groundPx + cover.waterPx;
+        if (cover.waterPx <= FILM_PX || level >= radiusPx) {
+            points.push(undefined);
+            continue;
+        }
+        const reach = level > 0 ? Math.sqrt(radiusPx * radiusPx - level * level) : radiusPx;
+        points.push({ x: x + away.x * reach, y: y + away.y * reach });
+        wet++;
+    }
+    const afloat = wet >= count * AFLOAT_SHARE;
+    if (wet === 0) return { arcs: [], afloat };
+    if (wet === count) {
+        return { arcs: [{ points: points.filter((point) => point !== undefined), closed: true }], afloat };
+    }
+    // The arcs, read from a dry spot on, so that none is cut in two where the turn begins.
+    const start = points.findIndex((point) => point === undefined);
+    const arcs: BallWaterline["arcs"] = [];
+    let arc: { x: number; y: number }[] = [];
+    for (let step = 1; step <= count; step++) {
+        const point = points[(start + step) % count];
+        if (point) arc.push(point);
+        else if (arc.length > 0) {
+            arcs.push({ points: arc, closed: false });
+            arc = [];
+        }
+    }
+    return { arcs, afloat };
+}
+
+/** A ball another player holds, as a browser shows it: where the server last told it, and where it was shown then. */
+export interface ToldBall extends WaterBall {
+    fromX: number;
+    fromY: number;
+    /** When the server told it, and until when it stands if nothing more is told (ms of the game). */
+    toldAt: number;
+    until: number;
+}
+
+type BallReport = Pick<CatastropheMessage, "x" | "y" | "radiusTiles" | "impactInMs">;
+
+/**
+ * The ball of a message of the server: whole, where its player holds it, `message.impactInMs` more. One already
+ * shown goes there from where it is shown (see glideBall); a new one is there at once.
+ */
+export function tellBall(known: ToldBall | undefined, message: BallReport, receivedAt: number): ToldBall {
+    const from = known ? glideBall(known, receivedAt) : message;
     return {
-        ...(far || !known ? told : { x: known.x, y: known.y, radiusPx: known.radiusPx }),
-        held: { x: message.x, y: message.y, radiusPx: ballRadiusPx(message.radiusTiles) },
+        x: message.x,
+        y: message.y,
+        radiusPx: ballRadiusPx(message.radiusTiles),
+        fromX: from.x,
+        fromY: from.y,
+        toldAt: receivedAt,
         until: receivedAt + message.impactInMs,
-        movedAt: far || !known ? receivedAt : known.movedAt,
     };
 }
 
-/** The ball at `now` (ms of the game): it went after what is asked while it is held, and shrank since. */
-export function moveShownBall(ball: ShownBall, now: number): ShownBall {
-    let solid: WaterBall = { x: ball.x, y: ball.y, radiusPx: ball.radiusPx };
-    let at = ball.movedAt;
-    while (at < now) {
-        let end = Math.min(now, at + SLICE_MS);
-        if (at < ball.until && end > ball.until) end = ball.until;
-        solid = advanceBall(solid, at < ball.until ? ball.held : undefined, (end - at) / 1000);
-        at = end;
-        // Nothing more happens to a ball that is gone.
-        if (at >= ball.until && solid.radiusPx <= 0) break;
-    }
-    return { ...ball, ...solid, movedAt: Math.max(now, ball.movedAt) };
+/**
+ * Where a ball told by the server is shown at `now` (ms of the game): it is where the server told it once the time
+ * between two messages has gone by, and on the straight way there meanwhile, so that it does not hop.
+ */
+export function glideBall(ball: ToldBall, now: number): WaterBall {
+    const share = Math.min(1, Math.max(0, (now - ball.toldAt) / BALL_REPORT_MS));
+    return {
+        x: ball.fromX + (ball.x - ball.fromX) * share,
+        y: ball.fromY + (ball.y - ball.fromY) * share,
+        radiusPx: ball.radiusPx,
+    };
 }
