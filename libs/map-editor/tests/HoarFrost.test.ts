@@ -3,6 +3,7 @@ import {
     frostPoint,
     hoarFrost,
     iceSaturationPressure,
+    iceSaturationRatio,
     surfaceTemperature,
     waterSaturationPressure,
 } from "../src/Weather/HoarFrost";
@@ -38,10 +39,12 @@ describe("hoarFrost", () => {
     it("is none over a surface above zero", () => {
         expect(hoarFrost({ temperature: 1, humidity: 100 })).toBe(0);
         expect(hoarFrost({ temperature: 5, humidity: 100 })).toBe(0);
+        expect(hoarFrost({ temperature: 0.5, humidity: 100, windSpeed: 40 })).toBe(0);
     });
 
     it("whitens the ground in damp air just under zero", () => {
         expect(hoarFrost({ temperature: -2, humidity: 95 })).toBeGreaterThan(0.5);
+        expect(hoarFrost({ temperature: -2, humidity: 100 })).toBe(1);
     });
 
     it("is none in dry air, however cold: a black frost", () => {
@@ -50,13 +53,30 @@ describe("hoarFrost", () => {
         expect(hoarFrost({ temperature: -25, humidity: 50 })).toBe(0);
     });
 
-    it("is less in a great cold, whose air holds little vapour", () => {
-        expect(hoarFrost({ temperature: -15, humidity: 70 })).toBeLessThan(
-            hoarFrost({ temperature: -2, humidity: 95 }),
-        );
-        expect(hoarFrost({ temperature: -30, humidity: 95 })).toBeLessThan(
-            hoarFrost({ temperature: -2, humidity: 95 }),
-        );
+    it("whitens the ground in a great cold as soon as its air is saturated over the ice of the ground", () => {
+        // -34 °C, 80 % over water, 15 km/h: about 1.15 times the saturation over ice of the ground (PR #424: 0).
+        expect(iceSaturationRatio({ temperature: -34, humidity: 80, windSpeed: 15 })).toBeCloseTo(1.15, 2);
+        expect(hoarFrost({ temperature: -34, humidity: 80, windSpeed: 15 })).toBeCloseTo(0.68, 2);
+        expect(hoarFrost({ temperature: -34, humidity: 80 })).toBeGreaterThan(0.7);
+        expect(hoarFrost({ temperature: -30, humidity: 95 })).toBe(1);
+    });
+
+    it("is none under the saturation over the ice of the ground, however cold", () => {
+        expect(iceSaturationRatio({ temperature: -34, humidity: 60 })).toBeLessThan(1);
+        expect(hoarFrost({ temperature: -34, humidity: 60 })).toBe(0);
+        expect(hoarFrost({ temperature: -34, humidity: 60, windSpeed: 15 })).toBe(0);
+    });
+
+    it("deposits thinner in a colder air at the same supersaturation, never none", () => {
+        /** The humidity over water that saturates an air `ratio` times over the ice of the calm ground under it. */
+        const humidityAt = (temperature: number, ratio: number): number =>
+            (100 * ratio * iceSaturationPressure(surfaceTemperature(temperature, 0))) /
+            waterSaturationPressure(temperature);
+        const mild = hoarFrost({ temperature: -2, humidity: humidityAt(-2, 1.03) });
+        const cold = hoarFrost({ temperature: -30, humidity: humidityAt(-30, 1.03) });
+        expect(cold).toBeLessThan(mild);
+        expect(cold).toBeGreaterThanOrEqual(0.5 * mild - 1e-9);
+        expect(hoarFrost({ temperature: -40, humidity: humidityAt(-40, 1.01) })).toBeGreaterThan(0);
     });
 
     it("is held back by the wind", () => {
@@ -66,16 +86,20 @@ describe("hoarFrost", () => {
     });
 
     it("grows with the humidity", () => {
-        let last = 0;
-        for (let humidity = 0; humidity <= 100; humidity += 5) {
-            const frost = hoarFrost({ temperature: -4, humidity });
-            expect(frost).toBeGreaterThanOrEqual(last);
-            last = frost;
+        for (const temperature of [-4, -34]) {
+            let last = 0;
+            for (let humidity = 0; humidity <= 100; humidity += 5) {
+                const frost = hoarFrost({ temperature, humidity, windSpeed: 15 });
+                expect(frost).toBeGreaterThanOrEqual(last);
+                last = frost;
+            }
+            expect(last).toBeGreaterThan(0);
         }
-        expect(last).toBeGreaterThan(0);
     });
 
     it("is none while the air is not known", () => {
+        expect(iceSaturationRatio(undefined)).toBeUndefined();
+        expect(iceSaturationRatio({ temperature: -2, humidity: Number.NaN })).toBeUndefined();
         expect(hoarFrost(undefined)).toBe(0);
         expect(hoarFrost({ temperature: Number.NaN, humidity: 95 })).toBe(0);
         expect(hoarFrost({ temperature: -2, humidity: Number.NaN })).toBe(0);

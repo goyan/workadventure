@@ -44,6 +44,7 @@ const timeline = (temperature: number, humidity?: number, windSpeed?: number): R
 });
 const thresholds = { thresholdTemperature: 30, thresholdHumidity: 30, thresholdWindSpeed: 30 };
 const lyon = { name: "Lyon", latitude: 45.75, longitude: 4.85 };
+const south = { name: "Auckland", latitude: -77.8, longitude: 166.7 };
 
 /**
  * The frost of the ground once it reached the weather of now: a minute of the game clock later each time, long enough
@@ -108,6 +109,17 @@ describe("the frost of the ground", () => {
         // The city not known yet: no frost, the map's is not shown in its place.
         chosen.now = { place: lyon, state: { status: "pending" } };
         map.timeline = timeline(-2, 95, 0);
+        expect(frostNow()).toBe(0);
+    });
+
+    it("goes by the great cold, the humidity and the wind of the city followed, not by the hot dry air of the map", () => {
+        map.timeline = timeline(36, 19, 0);
+        chosen.now = { place: south, state: timeline(-34, 80, 15) };
+        const frost = frostNow();
+        expect(frost).toBeCloseTo(hoarFrost({ temperature: -34, humidity: 80, windSpeed: 15 }));
+        expect(frost).toBeGreaterThan(0.5);
+        // The humidity of the city not known: none, however cold, and not the map's in its place.
+        chosen.now = { place: south, state: timeline(-34, undefined, 15) };
         expect(frostNow()).toBe(0);
     });
 });
