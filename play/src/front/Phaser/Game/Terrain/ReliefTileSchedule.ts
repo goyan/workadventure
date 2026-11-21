@@ -1,6 +1,7 @@
 import { heightAt, soilAt } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 import { blockCellWindow } from "./Pixel/BlockWindow";
+import { TERRAIN_CHUNK } from "./Pixel/TerrainUnits";
 
 // The window of a block and the fineness of its drawing live in a file the worker can load (Pixel/BlockWindow).
 export { blockCellWindow, COARSE_TEXEL, NORTH_ROWS, SHADOW_CELLS, SOUTH_ROWS, texelFor } from "./Pixel/BlockWindow";
@@ -19,6 +20,21 @@ export function reliefSignature(terrain: TerrainData | undefined, blockX: number
     let hash = 0;
     let dug = false;
     const window = blockCellWindow(blockX, blockY);
+    // No chunk of heights nor of soils under the window (most blocks of a map, and all those beyond it): nothing to
+    // read cell by cell.
+    let chunks = false;
+    const lastChunkX = Math.floor((window.x + window.width - 1) / TERRAIN_CHUNK);
+    const lastChunkY = Math.floor((window.y + window.height - 1) / TERRAIN_CHUNK);
+    for (let chunkY = Math.floor(window.y / TERRAIN_CHUNK); chunkY <= lastChunkY && !chunks; chunkY++) {
+        for (let chunkX = Math.floor(window.x / TERRAIN_CHUNK); chunkX <= lastChunkX; chunkX++) {
+            const chunk = `${chunkX},${chunkY}`;
+            if (terrain.chunks[chunk] !== undefined || terrain.soil?.[chunk] !== undefined) {
+                chunks = true;
+                break;
+            }
+        }
+    }
+    if (!chunks) return "";
     for (let y = window.y; y < window.y + window.height; y++) {
         for (let x = window.x; x < window.x + window.width; x++) {
             const height = heightAt(terrain, x, y);
@@ -46,15 +62,29 @@ export class ReliefTileSchedule {
     private readonly seen = new Map<string, number>();
     private tick = 0;
 
+    /**
+     * The blocks to draw again (their signature is not the one they were drawn from), in the order given. Nothing is
+     * taken: see `take`.
+     */
+    public stale(keys: readonly string[], signatures: ReadonlyMap<string, string>): string[] {
+        this.tick++;
+        for (const key of keys) this.seen.set(key, this.tick);
+        return keys.filter((key) => this.drawn.get(key) !== signatures.get(key));
+    }
+
+    /** Takes a block up: it is drawn from this signature from now on. */
+    public take(key: string, signature: string): void {
+        this.drawn.set(key, signature);
+        this.redraws++;
+    }
+
     public toRedraw(
         keys: readonly string[],
         signatures: ReadonlyMap<string, string>,
         budget = BLOCKS_AN_IMAGE,
         visible?: ReadonlySet<string>,
     ): string[] {
-        this.tick++;
-        for (const key of keys) this.seen.set(key, this.tick);
-        const stale = keys.filter((key) => this.drawn.get(key) !== signatures.get(key));
+        const stale = this.stale(keys, signatures);
         const ordered = visible
             ? [...stale.filter((key) => visible.has(key)), ...stale.filter((key) => !visible.has(key))]
             : stale;

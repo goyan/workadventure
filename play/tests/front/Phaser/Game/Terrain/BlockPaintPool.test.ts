@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BlockPaintPool, PAINT_TIMEOUT_MS } from "../../../../../src/front/Phaser/Game/Terrain/BlockPaintPool";
+import {
+    BlockPaintPool,
+    PAINT_TIMEOUT_MS,
+    WORK_AN_IMAGE,
+} from "../../../../../src/front/Phaser/Game/Terrain/BlockPaintPool";
 import type { WorkerLike } from "../../../../../src/front/Phaser/Game/Terrain/BlockPaintPool";
 import type { PaintRequest, PaintResponse } from "../../../../../src/front/Phaser/Game/Terrain/BlockPaintWorker";
 import type { BlockJob } from "../../../../../src/front/Phaser/Game/Terrain/Pixel/BlockPainter";
@@ -17,21 +21,22 @@ class FakeWorker implements WorkerLike {
     public terminate(): void {
         this.terminated = true;
     }
-    /** Answers its last job with `size` × `size` pixels of the value `fill`. */
+    private answered = 0;
+    /** Answers its oldest job not answered yet (a worker paints them in turn) with `size` × `size` pixels of `fill`. */
     public answer(size = 2, fill = 9): void {
-        const job = this.posted[this.posted.length - 1].message.job;
+        const job = this.posted[this.answered++].message.job;
         const pixels = new ArrayBuffer(size * size * 4);
         new Uint8Array(pixels).fill(fill);
         this.onmessage?.({ data: { id: job.id, pixels, size } });
     }
 }
 
-function job(id: number): BlockJob {
+function job(id: number, texel: 1 | 2 | 4 = 4): BlockJob {
     return {
         id,
         blockX: 0,
         blockY: 0,
-        texel: 4,
+        texel,
         projected: true,
         seeThrough: false,
         withLayout: true,
@@ -56,16 +61,44 @@ function pool(count = 2) {
 describe("the pool of workers that paint the blocks of the terrain", () => {
     afterEach(() => vi.restoreAllMocks());
 
-    it("gives a block to each idle worker, one each at a time", () => {
+    it("gives each block at once to the worker with the least work: each paints its own in turn, without the game", () => {
         const { painters, workers } = pool();
         expect(painters.usable()).toBe(true);
-        expect(painters.idle()).toBe(2);
-        painters.post(job(1), () => undefined);
-        expect(painters.idle()).toBe(1);
-        painters.post(job(2), () => undefined);
-        expect(painters.idle()).toBe(0);
-        expect(workers.map((worker) => worker.posted.length)).toEqual([1, 1]);
-        expect(() => painters.post(job(3), () => undefined)).toThrow();
+        expect(painters.room()).toBe(2 * WORK_AN_IMAGE);
+        const done = vi.fn();
+        for (const id of [1, 2, 3, 4]) painters.post(job(id), done);
+        // Nothing waits for the thread of the game to hand it over: the game answers only between two images.
+        expect(workers.map((worker) => worker.posted.map((each) => each.message.job.id))).toEqual([
+            [1, 3],
+            [2, 4],
+        ]);
+        // A sharp block (16 times the work) to the first: the next ones go to the other.
+        painters.post(job(5, 1), done);
+        painters.post(job(6), done);
+        painters.post(job(7), done);
+        expect(workers[0].posted.map((each) => each.message.job.id)).toEqual([1, 3, 5]);
+        expect(workers[1].posted.map((each) => each.message.job.id)).toEqual([2, 4, 6, 7]);
+        workers[1].answer();
+        workers[1].answer();
+        expect(done).toHaveBeenCalledTimes(2);
+    });
+
+    it("takes about two images of work a worker ahead: four sharp blocks, or 64 coarse ones", () => {
+        expect(WORK_AN_IMAGE).toBe(64);
+        const sharp = pool();
+        for (const id of [1, 2, 3]) sharp.painters.post(job(id, 1), () => undefined);
+        expect(sharp.painters.room()).toBe(2 * 64 - 3 * 16);
+        for (const id of [4, 5, 6, 7, 8]) sharp.painters.post(job(id, 1), () => undefined);
+        expect(sharp.painters.room()).toBe(0);
+        const coarse = pool();
+        for (let id = 1; id <= 120; id++) coarse.painters.post(job(id, 4), () => undefined);
+        expect(coarse.painters.room()).toBe(8);
+        const mid = pool(1);
+        mid.painters.post(job(1, 2), () => undefined);
+        expect(mid.painters.room()).toBe(60);
+        // Painted: its room is free again.
+        mid.workers[0].answer();
+        expect(mid.painters.room()).toBe(64);
     });
 
     it("hands the arrays of the job over, not a copy", () => {
@@ -88,7 +121,7 @@ describe("the pool of workers that paint the blocks of the terrain", () => {
         const pixels = done.mock.calls[0][0] as Uint8ClampedArray;
         expect(pixels.length).toBe(16);
         expect([...pixels].every((value) => value === 9)).toBe(true);
-        expect(painters.idle()).toBe(2);
+        expect(painters.room()).toBe(2 * WORK_AN_IMAGE);
     });
 
     it("sends a buffer given back along with the next job, to be painted into", () => {
@@ -114,6 +147,7 @@ describe("the pool of workers that paint the blocks of the terrain", () => {
                 painters.check(1000 + PAINT_TIMEOUT_MS);
                 expect(painters.usable()).toBe(true);
                 painters.check(1001 + PAINT_TIMEOUT_MS);
+                expect(painters.usable()).toBe(false);
             },
         ],
     ];
@@ -123,13 +157,17 @@ describe("the pool of workers that paint the blocks of the terrain", () => {
             const { painters, workers } = pool();
             const first = vi.fn();
             const second = vi.fn();
+            // Two blocks with the same worker: both given back.
+            const third = vi.fn();
             painters.post(job(1), first);
             painters.post(job(2), second);
+            painters.post(job(3), third);
             fail(workers[0], painters);
             expect(painters.usable()).toBe(false);
-            expect(painters.idle()).toBe(0);
+            expect(painters.room()).toBe(0);
             expect(first).toHaveBeenCalledWith(undefined);
             expect(second).toHaveBeenCalledWith(undefined);
+            expect(third).toHaveBeenCalledWith(undefined);
             expect(workers.every((worker) => worker.terminated)).toBe(true);
             expect(warn).toHaveBeenCalledTimes(1);
             // Once broken, it stays so: nothing more is warned, nor called.
@@ -138,6 +176,22 @@ describe("the pool of workers that paint the blocks of the terrain", () => {
             expect(first).toHaveBeenCalledTimes(1);
         });
     }
+
+    it("is not broken by a worker that keeps answering, however long its blocks wait behind one another", () => {
+        vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        const { painters, workers } = pool(1);
+        for (const id of [1, 2, 3]) painters.post(job(id), () => undefined);
+        painters.check(0);
+        workers[0].answer();
+        painters.check(PAINT_TIMEOUT_MS - 1);
+        workers[0].answer();
+        // 5 s after the first check, yet it answered meanwhile: the wait counts from its last answer.
+        painters.check(PAINT_TIMEOUT_MS + 10);
+        expect(painters.usable()).toBe(true);
+        // Its last block: more than 5 s without an answer since that check.
+        painters.check(2 * PAINT_TIMEOUT_MS + 11);
+        expect(painters.usable()).toBe(false);
+    });
 
     it("is not usable when its workers cannot be started", () => {
         vi.spyOn(console, "warn").mockImplementation(() => undefined);
@@ -156,7 +210,7 @@ describe("the pool of workers that paint the blocks of the terrain", () => {
         painters.post(job(1), done);
         workers[0].onmessage?.({ data: { id: 99, pixels: new ArrayBuffer(16), size: 2 } });
         expect(done).not.toHaveBeenCalled();
-        expect(painters.idle()).toBe(0);
+        expect(painters.room()).toBe(WORK_AN_IMAGE - 1);
     });
 
     it("stops its workers when destroyed, and calls no one any more", () => {

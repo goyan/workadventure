@@ -83,6 +83,30 @@ describe("the blocks of the relief to draw", () => {
         expect(schedule.toRedraw(all, signatures(all), 2, new Set(visible))).toEqual(["10,0", "11,0"]);
     });
 
+    it("tells the blocks to draw again in the order given, and takes them one by one", () => {
+        const schedule = new ReliefTileSchedule();
+        const keys = ["c", "a", "b"];
+        expect(schedule.stale(keys, signatures(keys))).toEqual(["c", "a", "b"]);
+        // Telling takes nothing: they are still to draw.
+        expect(schedule.stale(keys, signatures(keys))).toEqual(["c", "a", "b"]);
+        expect(schedule.redraws).toBe(0);
+        schedule.take("a", signatures(keys).get("a") ?? "");
+        expect(schedule.redraws).toBe(1);
+        expect(schedule.stale(keys, signatures(keys))).toEqual(["c", "b"]);
+        // Taken from another signature than the one asked (drawn coarser): still to draw.
+        schedule.take("c", "coarse");
+        expect(schedule.stale(keys, signatures(keys))).toEqual(["c", "b"]);
+    });
+
+    it("reads nothing of a block whose relief is empty: no chunk of heights nor of soils under its window", () => {
+        const far = withHeights(undefined, new Map([[cellKey(500, 500), -32]]));
+        expect(reliefSignature(far, 0, 0)).toBe("");
+        expect(reliefSignature(far, 31, 31)).not.toBe("");
+        // The window of a block reaches 8 cells south of it: a chunk dug just under it counts.
+        const south = withHeights(undefined, new Map([[cellKey(3, 20), -32]]));
+        expect(reliefSignature(south, 0, 0)).not.toBe("");
+    });
+
     it("lets go by weight: the heavy blocks seen least lately, never the ones that weigh nothing nor the ones kept", () => {
         const schedule = new ReliefTileSchedule();
         // In turn: a sharp block, a coarse one, two sharp ones.

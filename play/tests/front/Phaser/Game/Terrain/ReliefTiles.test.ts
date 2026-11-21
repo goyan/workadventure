@@ -38,6 +38,8 @@ function fixture(
     const images: { visible: boolean }[] = [];
     /** The last pixels put in each block, by texture key. */
     const painted = new Map<string, Uint8ClampedArray>();
+    /** How many times a block was shown (drawn on its canvas). */
+    let shows = 0;
     const image = () => {
         const object = {
             visible: true,
@@ -64,7 +66,10 @@ function fixture(
         destroy: vi.fn(),
         getContext: () => ({
             createImageData: (width: number, height: number) => ({ data: new Uint8ClampedArray(width * height * 4) }),
-            putImageData: (pixels: { data: Uint8ClampedArray }) => painted.set(key, pixels.data),
+            putImageData: (pixels: { data: Uint8ClampedArray }) => {
+                shows++;
+                painted.set(key, pixels.data);
+            },
         }),
     });
     /** The listeners of the renderer (the WebGL context restored). */
@@ -118,10 +123,11 @@ function fixture(
         posted: [] as BlockJob[],
         released: [] as Uint8ClampedArray[],
         mostInFlight: 0,
+        /** The blocks it takes ahead. */
+        capacity: 2,
         usable: () => !broken,
-        idle: () => (broken ? 0 : 2 - waiting.length),
+        room: () => (broken ? 0 : pool.capacity - waiting.length),
         post: (job: BlockJob, done: (pixels: Uint8ClampedArray | undefined) => void) => {
-            if (waiting.length >= 2) throw new Error("no worker is idle");
             pool.posted.push(job);
             waiting.push({ job, done });
             pool.mostInFlight = Math.max(pool.mostInFlight, waiting.length);
@@ -191,6 +197,7 @@ function fixture(
         skip,
         renderer,
         pool,
+        shows: () => shows,
     };
 }
 
@@ -575,6 +582,68 @@ describe("the blocks of the relief seen in 3/4", () => {
             expect(tiles.isDrawing()).toBe(false);
         });
 
+        it("shows the blocks landed within the time of an image: the others at the next images", () => {
+            const { tiles, pool, scene } = fixture(floorWithSand(24), undefined, { pool: true });
+            pool.capacity = 12;
+            for (let frame = 0; frame < 4; frame++) tiles.update(frame);
+            const posted = pool.posted.length;
+            expect(posted).toBeGreaterThanOrEqual(6);
+            expect(pool.flush()).toBe(posted);
+            // From here on the clock runs 1 ms at each look: showing a block "costs" a millisecond or two.
+            let clock = 1000;
+            const now = vi.spyOn(performance, "now").mockImplementation(() => clock++);
+            tiles.update(10);
+            const shownAtOnce = scene.textures.createCanvas.mock.calls.length;
+            expect(shownAtOnce).toBeGreaterThanOrEqual(1);
+            expect(shownAtOnce).toBeLessThan(posted);
+            expect(tiles.isDrawing()).toBe(true);
+            for (let frame = 11; frame < 40; frame++) tiles.update(frame);
+            expect(scene.textures.createCanvas.mock.calls.length).toBeGreaterThanOrEqual(posted);
+            now.mockRestore();
+        });
+
+        it("spends more of an image on the blocks while the view is not sharp than on what is around it", () => {
+            const { tiles, pool, painted, settle, setTerrain, shows } = fixture(floorWithSand(24), undefined, {
+                pool: true,
+            });
+            pool.capacity = 64;
+            const shownIn = (run: () => void): number => {
+                const before = shows();
+                // The clock runs 1 ms at each look: showing a block "costs" a millisecond.
+                let clock = 5000;
+                const now = vi.spyOn(performance, "now").mockImplementation(() => clock++);
+                run();
+                now.mockRestore();
+                return shows() - before;
+            };
+            // The six blocks of the view, coarse, all landed at once: the view is not sharp yet.
+            for (let frame = 0; frame < 3; frame++) tiles.update(frame);
+            expect(pool.flush()).toBeGreaterThanOrEqual(6);
+            const whileNotSharp = shownIn(() => tiles.update(10));
+            expect(whileNotSharp).toBeGreaterThanOrEqual(5);
+            // Everything drawn; then four cells change in the blocks around the view only (0,0; 4,0; 0,2; 0,3; 4,2; 4,3):
+            // these are painted again and land together, the view staying sharp.
+            settle();
+            expect(VISIBLE.every((block) => painted.has(`relief-block:${block}`))).toBe(true);
+            setTerrain(
+                withHeights(
+                    floorWithSand(24),
+                    new Map([
+                        [cellKey(2, 2), -32],
+                        [cellKey(70, 2), -32],
+                        [cellKey(2, 55), -32],
+                        [cellKey(70, 55), -32],
+                    ]),
+                ),
+            );
+            for (let frame = 1000; frame < 1010; frame++) tiles.update(frame);
+            expect(pool.flush()).toBeGreaterThanOrEqual(4);
+            const onceSharp = shownIn(() => tiles.update(600));
+            expect(onceSharp).toBeGreaterThanOrEqual(1);
+            expect(onceSharp).toBeLessThanOrEqual(3);
+            expect(whileNotSharp).toBeGreaterThan(onceSharp);
+        });
+
         it("checks at every image that its workers still answer", () => {
             const { tiles, pool } = fixture(floorWithSand(24), undefined, { pool: true });
             tiles.update(0);
@@ -635,17 +704,19 @@ describe("the blocks of the relief seen in 3/4", () => {
             expect(tiles.redraws()).toBe(drawn);
         });
 
-        it("learns of the blocks of a huge view a few an image, not all at once", () => {
+        it("reads the relief of the blocks of a huge view a few an image, not all at once", () => {
             const { tiles, worldView, settle } = fixture(dugEverywhere(), undefined, { screenScale: () => 0.2 });
             settle();
-            // Far out at once: 40 × 40 blocks, most of them never seen.
+            // Far out at once: 40 × 40 blocks, a hundred of them dug and never seen (the others have no relief: nothing
+            // is read of them).
             Object.assign(worldView, { x: 0, y: 0, width: 10_000, height: 10_000 });
             const before = tiles.signatureReads();
             tiles.update(60_000);
             expect(tiles.signatureReads() - before).toBeGreaterThan(0);
             expect(tiles.signatureReads() - before).toBeLessThanOrEqual(48);
             settle();
-            expect(tiles.signatureReads() - before).toBeGreaterThan(1500);
+            expect(tiles.signatureReads() - before).toBeGreaterThan(60);
+            expect(tiles.signatureReads() - before).toBeLessThan(200);
         });
 
         it("draws the rest of the map coarse once the view is drawn: a far block is there before one goes to it", () => {

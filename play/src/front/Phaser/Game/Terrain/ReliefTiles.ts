@@ -30,6 +30,14 @@ const COVERS_AN_IMAGE = 8;
 const DENSE_GRASS = 160;
 /** The time an image spends drawing blocks (ms): the rest waits for the next image. */
 const DRAW_BUDGET_MS = 6;
+/**
+ * With workers, the time an image spends on the blocks (ms): reading what they are painted from, and sending the
+ * pixels come back to the graphics card (about a millisecond a sharp block). Less than DRAW_BUDGET_MS: the painting
+ * itself is not on the thread of the game any more.
+ */
+const HANDOVER_BUDGET_MS = 3;
+/** With workers, no more blocks are given to them while this many wait to be shown (about 4 MB of pixels). */
+const MAX_LANDED = 16;
 /** The most blocks taken up in one image (cheap ones: coarse, or with nothing to draw). */
 const PICKS_AN_IMAGE = 16;
 /**
@@ -136,6 +144,11 @@ export class ReliefTiles {
     private job: { key: string; steps: Generator<void, void, void> } | undefined;
     private readonly coverSignatures = new Map<string, string>();
     private readonly waterSignatures = new Map<string, string>();
+    /**
+     * Whether a block of the view is still to draw, or to draw sharper (as of the last image): the time of an image is
+     * spent more freely on the blocks then.
+     */
+    private viewToSharpen = true;
     /** The blocks being painted by a worker, by the number of their job: where and how each will be shown. */
     private readonly flying = new Map<number, { key: string; shown: Shown }>();
     /** The pixels come back from the workers, shown at the next image. */
@@ -194,7 +207,10 @@ export class ReliefTiles {
         return this.coverReadCount;
     }
 
-    /** How many times the relief of a block was read for the first time: spread over images when the view is huge. */
+    /**
+     * How many times the relief of a block that has one was read for the first time: spread over images when the view
+     * is huge.
+     */
     public signatureReads(): number {
         return this.reliefReadCount;
     }
@@ -270,7 +286,13 @@ export class ReliefTiles {
         const terrain = this.inputs.relief();
         const layout = this.inputs.layout;
         if (this.hidden || (!terrain && !layout)) return;
-        this.showLanded();
+        // The time of the image: showing what the workers painted, reading what the blocks are drawn from, painting.
+        const start = performance.now();
+        const painters = this.inputs.painters;
+        // With workers: as much as without while the view is not sharp, less for what is around it and ahead.
+        const budgetOf = (): number =>
+            painters?.usable() && !this.viewToSharpen ? HANDOVER_BUDGET_MS : DRAW_BUDGET_MS;
+        this.showLanded(start, budgetOf());
         if (terrain !== this.reliefKept) {
             this.reliefKept = terrain;
             this.reliefSignatures.clear();
@@ -329,8 +351,6 @@ export class ReliefTiles {
             reads++;
         }
         const shared = `${this.inputs.season() ?? ""}|${snow}|${this.projected ? "3/4" : "flat"}|${this.seeThrough}`;
-        // The time of the image counts what the blocks are drawn from too.
-        const start = performance.now();
         this.reliefReads = 0;
         this.reliefsWaiting = false;
         // A block whose relief is not read yet (its turn comes in a next image) is left as it is.
@@ -343,24 +363,30 @@ export class ReliefTiles {
         // images; cheap ones (coarse, or with nothing left to draw) follow one another in the same image.
         const needed = texelFor(this.inputs.screenScale?.() ?? 1);
         this.aheadLooks = 0;
+        // The blocks to draw are told once an image, not at each block: far out, the view is over hundreds of them.
+        const queue = this.plan(nearest, visibleKeys, bases, needed);
+        const budget = budgetOf();
+        let next = 0;
         let picks = 0;
-        const painters = this.inputs.painters;
+        const takeNext = (): boolean => {
+            if (next >= queue.length) return false;
+            this.take(queue[next++], visibleKeys, bases, needed, terrain, now);
+            return true;
+        };
         for (;;) {
             if (!this.job) {
-                // The workers paint: the thread of the game only hands them blocks, while one of them is idle.
-                if (painters?.usable() && painters.idle() === 0) break;
+                // The workers paint: the thread of the game only hands them blocks, as many as they take ahead, and
+                // not while too many of their answers wait to be shown.
+                if (painters?.usable() && (painters.room() <= 0 || this.landed.length >= MAX_LANDED)) break;
                 if (
                     picks++ >= PICKS_AN_IMAGE ||
-                    !(
-                        this.pick(nearest, visibleKeys, bases, needed, terrain, now) ||
-                        this.drawAhead(around, aroundKeys, shared, terrain, now)
-                    )
+                    !(takeNext() || this.drawAhead(around, aroundKeys, shared, terrain, now))
                 ) {
                     break;
                 }
             }
             if (this.job?.steps.next().done) this.job = undefined;
-            if (performance.now() - start >= DRAW_BUDGET_MS) break;
+            if (performance.now() - start >= budget) break;
         }
         for (const key of this.schedule.evict(aroundKeys, KEPT_WEIGHT, (kept) => this.weightOf(kept))) {
             this.drop(key);
@@ -424,11 +450,14 @@ export class ReliefTiles {
                 this.reliefsWaiting = true;
                 return undefined;
             }
-            this.reliefReads++;
-            this.reliefReadCount++;
             const [blockX, blockY] = key.split(",").map(Number);
             relief = reliefSignature(terrain, blockX, blockY);
             this.reliefSignatures.set(key, relief);
+            // A block without relief costs nothing to read: only the others are counted.
+            if (relief !== "") {
+                this.reliefReads++;
+                this.reliefReadCount++;
+            }
         }
         let water = this.waterSignatures.get(key);
         if (water === undefined) {
@@ -505,27 +534,32 @@ export class ReliefTiles {
     }
 
     /**
-     * Takes up the next block to draw (or to drop, where nothing is left to draw), the ones of the view first. A block of
-     * the view never drawn yet is drawn coarse first (COARSE_TEXEL: the view is filled at once), then as sharp as the
-     * screen shows it (`needed`); one drawn sharper than needed is kept as it is. False when nothing is left to do.
+     * The blocks around the view to draw again (or to drop, where nothing is left to draw), in the order they are taken
+     * up: of the view first, the ones never drawn before the others, then what is around it; each group from the middle
+     * of the view outwards. A block drawn sharper than needed is kept as it is; one a worker is painting waits to land.
      */
-    private pick(
-        around: readonly string[],
+    private plan(
+        nearest: readonly string[],
         visible: ReadonlySet<string>,
         bases: ReadonlyMap<string, string>,
         needed: 1 | 2 | 4,
-        terrain: TerrainData | undefined,
-        now: number,
-    ): boolean {
+    ): string[] {
         const signatures = new Map<string, string>();
         const fresh: string[] = [];
         const shown: string[] = [];
         const rest: string[] = [];
         const inFlight = this.keysInFlight();
-        for (const key of around) {
+        // The block being painted on the thread of the game is not taken up again before it is shown either.
+        const painting = this.job?.key;
+        let viewInFlight = false;
+        for (const key of nearest) {
             const base = bases.get(key);
-            // Not read yet, or being painted by a worker: left as it is until its turn, or until it lands.
-            if (base === undefined || inFlight.has(key)) continue;
+            // Not read yet: left as it is until its turn.
+            if (base === undefined) continue;
+            if (inFlight.has(key) || key === painting) {
+                if (visible.has(key)) viewInFlight = true;
+                continue;
+            }
             const drawn = this.blocks.get(key)?.texel;
             signatures.set(
                 key,
@@ -535,17 +569,32 @@ export class ReliefTiles {
             else if (drawn === undefined && base !== "") fresh.push(key);
             else shown.push(key);
         }
-        const [key] = this.schedule.toRedraw([...fresh, ...shown, ...rest], signatures);
-        if (key === undefined) return false;
+        const queue = this.schedule.stale([...fresh, ...shown, ...rest], signatures);
+        this.viewToSharpen = viewInFlight || queue.some((key) => visible.has(key) && bases.get(key) !== "");
+        return queue;
+    }
+
+    /**
+     * Takes up a block of the plan: dropped where nothing is left to draw; else drawn, coarse first when it is in the
+     * view and was never drawn (COARSE_TEXEL: the view is filled at once), as sharp as the screen shows it else.
+     */
+    private take(
+        key: string,
+        visible: ReadonlySet<string>,
+        bases: ReadonlyMap<string, string>,
+        needed: 1 | 2 | 4,
+        terrain: TerrainData | undefined,
+        now: number,
+    ): void {
         const base = bases.get(key) ?? "";
         if (base === "") {
+            this.schedule.take(key, "");
             this.drop(key);
-            return true;
+            return;
         }
         const texel = !this.blocks.has(key) && visible.has(key) && needed < COARSE_TEXEL ? COARSE_TEXEL : needed;
-        this.schedule.mark(key, `${base}|t${texel}`);
+        this.schedule.take(key, `${base}|t${texel}`);
         this.start(key, terrain, now, texel);
-        return true;
     }
 
     /** The blocks a worker is painting. */
@@ -556,8 +605,8 @@ export class ReliefTiles {
     }
 
     /**
-     * Starts the drawing of a block: given to a worker while they work (there is an idle one: see update), else painted
-     * on the thread of the game, a slice an image.
+     * Starts the drawing of a block: given to the workers while they work (they have room for it: see update), else
+     * painted on the thread of the game, a slice an image.
      */
     private start(key: string, terrain: TerrainData | undefined, now: number, texel: 1 | 2 | 4): void {
         const painters = this.inputs.painters;
@@ -579,13 +628,15 @@ export class ReliefTiles {
     }
 
     /**
-     * Shows the blocks come back from the workers, and hands their buffers back. The answer for a block let go meanwhile
-     * is ignored.
+     * Shows the blocks come back from the workers, and hands their buffers back: as many as fit in the time of the
+     * image (one at least), the others at the next images. The answer for a block let go meanwhile is ignored.
      */
-    private showLanded(): void {
+    private showLanded(start: number, budget: number): void {
         const painters = this.inputs.painters;
-        painters?.check(performance.now());
-        for (const { id, pixels } of this.landed.splice(0)) {
+        painters?.check(start);
+        let shown = 0;
+        while (shown < this.landed.length && (shown === 0 || performance.now() - start < budget)) {
+            const { id, pixels } = this.landed[shown++];
             const flight = this.flying.get(id);
             if (flight) {
                 this.flying.delete(id);
@@ -593,6 +644,7 @@ export class ReliefTiles {
             }
             painters?.release(pixels);
         }
+        this.landed.splice(0, shown);
     }
 
     public destroy(): void {
