@@ -587,7 +587,7 @@ export class Meadow {
                 }
             }
         }
-        const thawed = this.stepSnow(input, seconds, rain);
+        const thawed = this.stepSnow(input, seconds, rain, true);
         // The moisture spreads to the four neighbours, and runs from a higher tile to a lower one.
         const pace = seconds / MEADOW_STEP_SECONDS;
         const sides = [1, -1, width, -width];
@@ -691,15 +691,16 @@ export class Meadow {
                 water[index] = Number.isFinite(lying) && lying > 0 ? lying : 0;
             }
         }
-        return this.stepSnow(input, seconds, rain) ? { meltedMm: this.melted } : undefined;
+        return this.stepSnow(input, seconds, rain, false) ? { meltedMm: this.melted } : undefined;
     }
 
     /**
      * The snow of one step: what falls is laid, then it melts by the heat of the air and under the rain, and a dry
-     * wind takes some of it. On open water it melts at once. True when any melted: its water is in `melted`.
+     * wind takes some of it. On open water it melts at once. With `wets`, what melts wets the soil under it as the
+     * same rain would. True when any melted: its water is in `melted`.
      */
-    private stepSnow(input: MeadowStepInput, seconds: number, rain: number): boolean {
-        const { snow, melted, water, outdoor } = this;
+    private stepSnow(input: MeadowStepInput, seconds: number, rain: number, wets: boolean): boolean {
+        const { snow, melted, water, outdoor, moisture, hold } = this;
         const falling =
             input.snowfallMm !== undefined && Number.isFinite(input.snowfallMm) ? Math.max(0, input.snowfallMm) : 0;
         const times =
@@ -725,6 +726,10 @@ export class Meadow {
             if (thaw > 0) {
                 melted[index] = thaw;
                 any = true;
+                // RAIN_GAIN is by mm an hour and by second: a mm of water is 3600 of those.
+                if (wets && hold[index] > 0) {
+                    moisture[index] = Math.min(1, moisture[index] + thaw * 3600 * RAIN_GAIN);
+                }
             }
             snow[index] = lying;
         }

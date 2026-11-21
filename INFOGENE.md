@@ -2960,8 +2960,8 @@ Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus
     10 °C sans vent. Constante à régler à l'essai.
   - Sur une eau libre, la neige fond aussitôt en eau. Une case enneigée ne prend pas feu, un feu s'y éteint, l'herbe
     y meurt comme sous la neige des hauteurs.
-- **Eau de fonte.** Ce qui fond est versé dans l'eau du relief, millimètre pour millimètre (`PX_PER_MM`,
-  `TerrainWaterManager.pour`), compté avec la pluie dans le bilan. Hors de la grille d'eau, le sol est humidifié et le
+- **Eau de fonte.** Ce qui fond humidifie le sol de sa case comme la même pluie le ferait, et est versé dans l'eau du
+  relief, millimètre pour millimètre (`PX_PER_MM`, `TerrainWaterManager.pour`), compté avec la pluie dans le bilan. Hors de la grille d'eau, le sol est humidifié et le
   reste est perdu. La neige de la pluie de la carte s'accumule à la vitesse de l'eau de la carte (`water.speed`),
   sans le ruissellement (`runoff`) : elle tient où elle tombe.
 - **Averse.** `MeadowManager.soak` pose la part de neige à chaque annonce de l'averse (toutes les 200 ms), la part

@@ -76,6 +76,17 @@ describe("the snow melting", () => {
         expect(meadow.snowAt(10, 10)).toBeCloseTo(20 - melt);
     });
 
+    it("wets the soil it melts on, as a rain would", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        meadow.snowOn(10, 10, 0, 20);
+        meadow.step(under(frost));
+        expect(meadow.moistureAt(10, 10)).toBe(0);
+        meadow.step(under(mild));
+        expect(meadow.moistureAt(10, 10)).toBeGreaterThan(0.5);
+        // The soil next to it, without snow, only takes what spreads.
+        expect(meadow.moistureAt(15, 10)).toBe(0);
+    });
+
     it("holds at 0 °C and under, and in an air that is not known", () => {
         for (const weather of [{ ...mild, temperature: 0 }, frost, undefined]) {
             const meadow = new Meadow(size, undefined, undefined);
