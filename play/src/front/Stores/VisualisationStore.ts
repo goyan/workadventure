@@ -9,3 +9,9 @@ export const visualisationPanelStore = writable<boolean>(false);
  * panel is closed.
  */
 export const waterFlowOverlayStore = writable<boolean>(false);
+
+/**
+ * Whether the "Weather explained" board is open in the visualisation panel: why this player sees the rain or the
+ * snow, the frost and the ice they see. For the session; it shows with the panel only.
+ */
+export const weatherExplainedStore = writable<boolean>(false);

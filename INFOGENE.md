@@ -2672,6 +2672,59 @@ surface (`steadyFlowSpeed`, selon le modèle d'eau, les réglages des vagues, la
 d'écoulement de la carte), pas mesurées : une vague qui passe sous inertie ne s'y lit pas ; les masses ignorent
 les murs. Coût non mesurable en images par seconde dans le navigateur de test.
 
+### Météo expliquée : pourquoi je vois ce temps
+
+Dans le même panneau, une seconde tuile « Météo expliquée » (`weatherExplainedStore`, pour la session) ouvre un
+tableau en lecture seule (`WeatherBoard.svelte`) qui dit au joueur, en direct, pourquoi il voit ce qu'il voit. Il
+existe en effet deux airs, et chaque phénomène a le sien :
+
+- **l'air de la carte**, le même pour tous : les conditions réglées à la main dans la salle (Catastrophe → Météo),
+  sinon l'air réel du quart d'heure en cours au lieu de la carte (Paris sans lieu) ;
+- **l'air du joueur** : celui de la ville qu'il suit sur son horloge (« Jour dans le monde »), pour lui seul.
+
+En tête, les deux airs côte à côte (un seul pour qui suit le serveur) : origine, température, humidité, vent, et la
+phrase qui dit lequel s'applique. Puis une carte par phénomène, chacune avec son résultat de maintenant, sa raison
+avec les chiffres du moment, deux pastilles (« Décidé par l'air de la carte / ton air », « Vu par tout le monde /
+tous ceux qui suivent le serveur / toi seul » ; bleu pour la carte, jaune pour le joueur), ce qu'il faudrait pour que
+cela change, et la règle dans un « En savoir plus » :
+
+| Carte | Règle du jeu interrogée | Air qui décide | Vu par |
+|---|---|---|---|
+| Pluie ou neige ? | `snowShareOf(precipitationAirNow)` | ville suivie quand sa météo est dessinée, sinon carte | toi seul, ou ceux qui suivent le serveur |
+| Averse de la catastrophe | `snowShareOf(roomPrecipitationAir)` | carte, toujours | tout le monde |
+| Givre au sol | `frostOf(frostAirNow)` (`hoarFrost`) | ville suivie, sinon carte | toi seul, ou ceux qui suivent le serveur |
+| Glace sur l'eau | `iceOf(frostAirNow)`, `isFrozen` | comme le givre | comme le givre |
+| Sol gelé | `soilFrostOf(roomPrecipitationAir)` | carte (serveur) | tout le monde |
+| Neige au sol | `MeadowState` reçu du serveur, `snowMeltMmPerHour` | carte (serveur) | ceux qui suivent le serveur |
+
+**L'écran du joueur face à la carte du serveur.** Le sujet du tableau est ce que ce joueur voit. Quand il suit une
+ville, la pluie ou la neige, le givre et la glace de son écran sont calculés une seconde fois avec l'air de la carte
+(`onMap`, ce que voient ceux qui suivent le serveur ; `mapFrostAirNow` pour le givre et la glace) :
+
+- sous les deux airs, un bandeau « Ton écran et la carte, en ce moment » liste les six phénomènes en une ligne
+  chacun (« toi, neige · carte, pluie », pastille « écart », « pareil » ou « serveur ») ;
+- une carte dont le résultat diffère (`differs` : forme ou chute de la précipitation, niveau du givre, stade de la
+  glace) montre « Chez toi » puis « Sur la carte (serveur) », chacun avec sa raison, puis un encadré « Écart » : ce
+  que voient les autres, et ce que le serveur compte réellement (la pluie de la carte remplit l'eau, sa neige
+  s'accumule, rien ne tombe ; le givre et la glace ne sont que dessinés, l'eau du serveur reste liquide) ;
+- sans écart, une seule ligne (« Comme sur la carte… », ou « C'est la météo de la carte… » pour qui suit le serveur) ;
+- les cartes du serveur (averse, sol gelé, neige au sol) disent que l'air du joueur n'y change rien, et ce que le
+  serveur applique à tout le monde (sol gelé ou non, neige non montrée).
+
+Aucune physique n'est recopiée : `Weather/WeatherExplained.ts` (`explainWeather`, pur) reçoit les airs que lisent
+les lecteurs du rendu (`Weather/WeatherBoardNow.ts` les appelle : `precipitationAirNow`, `roomPrecipitationAir`,
+`frostAirNow`, `waterCycleNow`, `fireConditionsStore`, `MeadowState`) et interroge les règles du jeu. Les « il
+faudrait » sont trouvés par dichotomie sur ces mêmes règles (`thresholdBetween`), jamais par une formule à côté. Un
+test compare, sur une grille d'airs, chaque valeur expliquée à celle que rend la règle du jeu. `Frost.ts` exporte
+pour cela `frostAirNow`, `frostOf` et `iceOf`, que `waterCycleNow` utilise lui-même.
+
+Le tableau est recalculé une fois par seconde (horloge du jeu) tant qu'il est ouvert ; fermé, il n'est pas monté.
+Ce qui est honnêtement approché : le sol gelé est refait par le navigateur avec le même air que le serveur (les
+frises Open-Meteo des deux sont relevées à des moments différents) ; la neige au sol est ce que le serveur a envoyé
+(toutes les dix secondes quand elle change), sa tendance (s'épaissit, fond, tient) est déduite de l'air de la carte
+et du vent des conditions de la salle. Non couverts : sol mouillé et flaques, eau apportée par la pluie en chiffres,
+soleil et lumière, herbe, feu, saison.
+
 ## Vie aquatique (poissons et dauphins)
 
 Conception et plan dans le dépôt d'infra, `docs/superpowers/{specs,plans}/2026-11-18-vie-aquatique*`.

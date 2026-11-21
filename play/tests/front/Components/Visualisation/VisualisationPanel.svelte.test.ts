@@ -18,15 +18,25 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 totals: ({ stock, area }: { stock: string; area: string }) => `${stock} m3, ${area} m2`,
                 noWater: label("No water told yet"),
                 estimated: label("Estimated"),
+                weather: { button: label("Weather explained") },
             },
         },
     });
     return { default: LL, LL };
 });
 
+vi.mock("../../../../src/front/Components/Visualisation/WeatherBoardLive.svelte", async () => {
+    const mod = (await import("./WeatherBoardLiveStub.svelte")) as { default: unknown };
+    return { default: mod.default };
+});
+
 import VisualisationPanel from "../../../../src/front/Components/Visualisation/VisualisationPanel.svelte";
 import { terrainWaterStatsStore } from "../../../../src/front/Stores/TerrainEditorStore";
-import { visualisationPanelStore, waterFlowOverlayStore } from "../../../../src/front/Stores/VisualisationStore";
+import {
+    visualisationPanelStore,
+    waterFlowOverlayStore,
+    weatherExplainedStore,
+} from "../../../../src/front/Stores/VisualisationStore";
 
 let target: HTMLElement;
 let component: ReturnType<typeof mount> | undefined;
@@ -46,6 +56,7 @@ afterEach(async () => {
     target.remove();
     visualisationPanelStore.set(false);
     waterFlowOverlayStore.set(false);
+    weatherExplainedStore.set(false);
     terrainWaterStatsStore.set(undefined);
 });
 
@@ -102,5 +113,32 @@ describe("VisualisationPanel", () => {
         const totals = find("visualisation-water-totals")?.textContent ?? "";
         // Whatever the thousands separator of the place the test runs in.
         expect(totals.replace(/[^0-9m]/g, "")).toBe("1234m3567m2");
+    });
+
+    it("opens and closes the weather board, which is not mounted while closed", () => {
+        visualisationPanelStore.set(true);
+        flushSync();
+        expect(find("weather-board-live")).toBeNull();
+        expect(find("visualisation-weather-explained")?.getAttribute("aria-pressed")).toBe("false");
+        find("visualisation-weather-explained")?.click();
+        flushSync();
+        expect(get(weatherExplainedStore)).toBe(true);
+        expect(find("visualisation-weather-explained")?.getAttribute("aria-pressed")).toBe("true");
+        expect(find("weather-board-live")).not.toBeNull();
+        // The flows of the water are another thing to show: untouched.
+        expect(get(waterFlowOverlayStore)).toBe(false);
+        find("visualisation-weather-explained")?.click();
+        flushSync();
+        expect(find("weather-board-live")).toBeNull();
+    });
+
+    it("hides the weather board with the panel", () => {
+        visualisationPanelStore.set(true);
+        weatherExplainedStore.set(true);
+        flushSync();
+        expect(find("weather-board-live")).not.toBeNull();
+        visualisationPanelStore.set(false);
+        flushSync();
+        expect(find("weather-board-live")).toBeNull();
     });
 });
