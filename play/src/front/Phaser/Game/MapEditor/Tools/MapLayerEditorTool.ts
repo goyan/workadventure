@@ -244,7 +244,12 @@ export class MapLayerEditorTool extends MapEditorTool {
             this.redraw();
         });
         // The selection belongs to the height mode: choosing another mode lets it go.
+        let previousMode: MapLayerMode | undefined;
         this.unsubscribeMode = mapLayerModeStore.subscribe((mode) => {
+            // The eraser starts on "auto": it removes what is drawn under the pointer, whatever its level. A level
+            // chosen afterwards in the panel restricts it to that level.
+            if (mode === "erase" && previousMode !== "erase") mapEditorPlacementLevelStore.set("auto");
+            previousMode = mode;
             if (mode !== "height" && this.heightSelection.length > 0) {
                 this.setHeightSelection([], undefined);
                 this.redraw();
