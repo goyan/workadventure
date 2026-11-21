@@ -2546,7 +2546,7 @@ sont dessinés par l'un de deux moteurs :
   de l'eau ») : le moteur par défaut, le seul dans l'éditeur de carte. Lui seul dessine les piscines peintes, la glace,
   le givre, le sol mouillé et la crête d'une comète ;
 - **en 3/4, en pixel art** (`Terrain/ReliefTiles.ts`, décrit ci-dessous) : pour qui active le réglage personnel
-  « Relief en 3/4 (pixel art) » (Paramètres → Effets ; `pixelReliefStore`, clé `terrainPixelRelief`, coupé par défaut),
+  « Relief en 3/4 (pixel art) » (Paramètres → Graphismes → Effets ; `pixelReliefStore`, clé `terrainPixelRelief`, coupé par défaut),
   sans recharger. Jamais dans l'éditeur ni en mode Basique.
 
 Une règle dit lequel dessine : `projectionShown({ chosen, editorOpen, basic })`, lue par
