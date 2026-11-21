@@ -2538,7 +2538,39 @@ pixel par cellule, sous les objets et les avatars, redessiné seulement quand le
 (16 px), comme dans une piscine, sans invite ; en dessous on marche. Un avatar sur un palier ne nage pas. Les flaques
 de la pluie ne se posent pas sur le relief ; les éclaboussures deviennent des ronds sur l'eau.
 
-**Relief vu de trois quarts** (conception et plan dans le dépôt d'infra,
+**Deux moteurs du sol, au choix** (2026-11-21, conception et plan dans le dépôt d'infra,
+`docs/superpowers/{specs,plans}/2026-11-21-fusion-infogene-deux-moteurs*`). Le sol, le relief et l'eau d'une carte
+sont dessinés par l'un de deux moteurs :
+
+- **à plat, en shader** (`Terrain/TerrainView.ts`, `GroundSplat.ts`, section « Sol en shader, météo personnelle et gel
+  de l'eau ») : le moteur par défaut, le seul dans l'éditeur de carte. Lui seul dessine les piscines peintes, la glace,
+  le givre, le sol mouillé et la crête d'une comète ;
+- **en 3/4, en pixel art** (`Terrain/ReliefTiles.ts`, décrit ci-dessous) : pour qui active le réglage personnel
+  « Relief en 3/4 (pixel art) » (Paramètres → Effets ; `pixelReliefStore`, clé `terrainPixelRelief`, coupé par défaut),
+  sans recharger. Jamais dans l'éditeur ni en mode Basique.
+
+Une règle dit lequel dessine : `projectionShown({ chosen, editorOpen, basic })`, lue par
+`GameScene.pixelReliefShown()` et, loin de la scène, par `Terrain/PixelReliefShown.ts`. `Terrain/GroundEngines.ts`
+ne crée le moteur 3/4 (blocs, textures, workers, reflets, traces) que pour qui l'a choisi, le détruit quand il est
+coupé, le cache sans le détruire dans l'éditeur et en Basique ; `TerrainView` se cache quand le 3/4 est affiché.
+
+| | Relief affiché en 3/4 | Sinon |
+|---|---|---|
+| Avatar, nom, poissons, bouchon, clic | suivent le relief | à leur place |
+| Nage | là où l'eau est dessinée sombre (profondeur lissée) | par cellule |
+| Traces de pas | celles du terrain, toute l'année | celles du givre |
+| Neige au sol | cellule blanche selon la neige tombée (`GroundSource.snowCoverHere`), neige des hauteurs | shader |
+| Herbe de la carte | dessinée par les blocs | `Weather/SnowGround.ts` |
+| Feuilles d'automne au sol | profondeur 0,67 (au-dessus des blocs) | 0,65 |
+| Piscines posées en image | leur image | dessinées par le shader |
+| Crête d'une comète | cercles de `MeteorView` | dans l'eau |
+
+**Manques du mode 3/4** (à porter) : les piscines peintes ne sont pas dessinées (on y nage quand même), la glace
+non plus (on marche quand même sur l'eau gelée), ni le givre ni le sol mouillé. Le thème « Hiver » de la branche a
+disparu avec celui d'`infogene` : la neige ne vient plus que de la météo. Un pont étant fait de paliers, plus de cas
+particulier d'un pont dans la nage ni dans le décalage de l'avatar.
+
+**Relief vu de trois quarts** (quand le réglage est activé ; conception et plan dans le dépôt d'infra,
 `docs/superpowers/{specs,plans}/2026-11-20-relief-3-4*`). Hors de l'éditeur, le sol creusé est dessiné **plus bas de
 la moitié de sa profondeur**, comme les étages sont dessinés plus haut de leur altitude : un trou de 8 cases (256 px)
 a une paroi de 128 px. Là où le sol descend en allant vers le sud, on voit sa paroi (roche teintée par le sol du bord,
@@ -2565,14 +2597,13 @@ un avatar reste au niveau du tablier et un clic vise le tablier.
 
 **Tout le sol dehors** (lot B) : les mêmes blocs dessinent aussi le sol plat, carte sans relief comprise. Une cellule
 prend une matière (`Pixel/MaterialField.ts`) : rien dans une pièce ni sur un sol de l'outil Carte ou le tablier d'un
-pont (les tuiles de la carte se voient), neige sous le thème Hiver ou la neige de la carte, neige des hauteurs (ligne
+pont (les tuiles de la carte se voient), neige là où la neige de la carte est tombée, neige des hauteurs (ligne
 de neige du calendrier), braise, cendre, paille, herbe de la prairie, **boue** (argile mouillée, règle de la marche),
 sol peint, herbe sur les **tuiles d'herbe de la carte** (`Terrain/MapGroundLayout.ts`, même détection que l'ancienne
 herbe saisonnière) ou au fond d'un trou ; sinon rien. Les couleurs suivent **la saison du thème, sinon du
-calendrier** (`SeasonalThemeManager.groundSeason`, `Pixel/PixelPalette.ts` `rampsFor`) ; fleurs d'1 px dans l'herbe
-dense au printemps (plus rares en été), feuilles tombées en automne. Dans l'éditeur, le sol est dessiné à plat dans le
-même style (eau plus transparente pendant l'outil Relief) ; rien en mode Basique. `TerrainView` et les deux couches
-`SnowGround` (herbe d'automne, neige de l'hiver) sont retirées. **Traces de pas** (`Terrain/Footprints.ts`) : toute
+calendrier** (`forcedTreeSeason` du thème, sinon `GameScene.getGroundSeason`, selon le lieu de la carte ; `Pixel/PixelPalette.ts` `rampsFor`) ; fleurs d'1 px dans l'herbe
+dense au printemps (plus rares en été), feuilles tombées en automne. Dans l'éditeur et réglage coupé, c'est l'autre
+moteur qui dessine (`TerrainView`, herbe de la carte par `Weather/SnowGround.ts`) ; rien en mode Basique. **Traces de pas** (`Terrain/Footprints.ts`) : toute
 l'année, dans la neige, la boue et le sable, de la couleur du sol, posées au fond d'un trou à son décalage.
 
 **L'eau** (lot C) : dans les mêmes blocs, en pixel art (`Pixel/WaterPixel.ts`) : 4 teintes de la saison (été plus
@@ -2587,8 +2618,9 @@ décalé sur un pont ni dans l'éditeur. La canne reste à la place vraie de l'a
 profondeur du sol (ou de la surface de l'eau où il nage) sous lui (`Terrain/AvatarDrop.ts`), seulement le temps du
 dessin (`Terrain/CharacterDrops.ts`, comme les arbres au vent) ; son nom suit (`Character.setGroundDrop`) ; rien sur
 un palier. **Clic** et altitude sous le pointeur passent par `groundPointAt` : un clic sur une paroi mène à son pied.
-**Éditeur ouvert** : tout redevient plat, pour creuser et poser là où l'on vise. Neige du fond : celle du thème de
-l'hiver ou de la carte (`SeasonalThemeManager.groundSnow`). **Limites (lot 1)** : objets, arbres, animaux, compagnons,
+**Éditeur ouvert** : c'est l'autre moteur qui dessine, à plat, pour creuser et poser là où l'on vise (depuis le
+2026-11-21 ; avant, les blocs étaient redessinés à plat). Neige du fond : la neige tombée de la carte
+(`GroundSource.snowCoverHere`). **Limites (lot 1)** : objets, arbres, animaux, compagnons,
 écume et tourbillons de l'eau restent dessinés à leur place (un arbre au fond d'un trou flotte au niveau du bord) ;
 le fond est peint aux matières du relief, pas avec les tuiles de la carte ; la
 zone cliquable d'un avatar dans un trou reste à sa place ; les éclaboussures de la nage partent de sa place.
@@ -3223,25 +3255,6 @@ après le dernier changement de mur ou de porte (`Outdoor/OutdoorTracker.ts`). A
 
 **Météo seulement dehors.** Pluie, neige, voile et lueur d'orage ne sont plus dessinés au-dessus des pièces
 (`WeatherManager`, option `outdoorGrid`). Les sons ne changent pas. Une carte sans mur reste entièrement dehors.
-
-**Thème saisonnier** (« Paramètres → Ambiance → Thème saisonnier ») : Auto, Automne, Hiver (appelé Noël jusqu'au
-2026-11-20 ; valeur `christmas` gardée dans le navigateur et le code), Aucun. Réglage perso
-(`seasonalTheme` dans le navigateur), appliqué sans recharger. Il remplace « Thème de Noël » (repris une fois :
-Toujours → Noël, Jamais → Aucun) et « Sol extérieur » (effacé). Auto suit le calendrier de Paris, revérifié chaque
-minute : automne du 1er septembre au 30 novembre, hiver du 1er décembre à la fin de février (jusqu'au 6 janvier avant le 2026-11-20) ; tant que l'heure du serveur
-n'est pas reçue, Auto n'affiche rien (`Seasonal/SeasonalTheme.ts`). `SeasonalThemeManager` crée le décor du thème
-(`SeasonalDecor`), le masque pendant l'édition et le reconstruit quand un mur ou un objet change.
-
-- **Hiver** (ex-Noël, `Christmas/ChristmasDecor.ts`) : la météo affichée pour soi devient Neige (flocons et son de la météo
-  existante), le sol extérieur se couvre de neige (dessinée par le terrain en pixel art), les objets dehors portent une
-  neige épaisse sur leur bord du haut, les sols posés dehors sont givrés ; chaque joueur laisse des empreintes (une
-  tous les 16 px en marche, une trace en course, fondu en 45 s, 400 au plus), désormais toute l'année dans la neige,
-  la boue et le sable. Les arbres saisonniers prennent leur image d'hiver, sans neige ajoutée.
-- **Automne** (`Autumn/`) : la météo de la carte est gardée ; l'herbe prend les couleurs d'automne du terrain, les arbres
-  leur image d'automne ; feuilles éparses (une par carré de 48 px, placement fixe), feuilles qui tombent (couche de la
-  boucle météo, même par temps clair), tas de feuilles au pied des objets dehors (arbres compris), feuilles soulevées
-  par les pas (3-4 feuilles de 5×3 px tous les 24 px en marche, 5-6 tous les 16 px en course, 120 au plus). Palette `#c8642a`, `#d9a23b`,
-  `#9b3d23`, `#7a5a2e` ; aucune image ajoutée.
 
 **Brouillard vu de loin** (2026-11-20, signalé en beta sur la carte d'équipe : dézoomé au maximum, les bâtiments
 restaient en pleines couleurs dans une carte délavée, lampes et piste de danse comprises). En dézoomant, le brouillard

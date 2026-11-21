@@ -306,6 +306,9 @@ const menu: DeepPartial<Translation["menu"]> = {
             detailedFlames: "Flammes détaillées",
             detailedFlamesHint:
                 "Un feu plus beau, dessiné plus souvent. Coupé : des flammes plus simples, plus légères à afficher.",
+            pixelRelief: "Relief en 3/4 (pixel art)",
+            pixelReliefHint:
+                "Trous et monts vus de trois quarts, sol en pixel art. À l'essai : les piscines peintes, la glace et le givre n'y sont pas dessinés. Jamais dans l'éditeur ni en mode Basique.",
             treeSway: "Arbres qui bougent au vent",
             windowLight: "Lumière des fenêtres",
             waterFlow: "Écume et remous sur l'eau",

@@ -621,8 +621,9 @@ describe("the blocks of the relief seen in 3/4", () => {
                 now.mockRestore();
                 return shows() - before;
             };
-            // The six blocks of the view, coarse, all landed at once: the view is not sharp yet.
-            for (let frame = 0; frame < 3; frame++) tiles.update(frame);
+            // The six blocks of the view, coarse, all landed at once: the view is not sharp yet. Handed over as many
+            // images as the machine needs (3 ms an image: fewer blocks an image under the load of the whole suite).
+            for (let frame = 0; frame < 60 && pool.inFlight().length < 6; frame++) tiles.update(frame);
             expect(pool.flush()).toBeGreaterThanOrEqual(6);
             const whileNotSharp = shownIn(() => tiles.update(10));
             expect(whileNotSharp).toBeGreaterThanOrEqual(5);
