@@ -4640,7 +4640,17 @@ au plus mince, sa teinte vient avec la profondeur jusqu'à `SHORE_PX`) : on voit
 **Canal** : l'humidité est dans le **vert** du paquet 9, dont le rouge est l'écume des vagues (#439) ; les deux
 partageaient le rouge depuis la fusion de #439 et #444 (l'écume effaçait l'humidité, l'humidité moussait les rives).
 **Piscines** : leur bassin est étanche (`Meadow`, `poolTile`) : leur eau ne mouille pas la terrasse par remontée
-capillaire et leurs tuiles ne tiennent pas d'humidité de sol à répandre. Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
+capillaire et leurs tuiles ne tiennent pas d'humidité de sol à répandre. **Ligne de mouillage** (2026-11-21, `fix/sable-mouille-net`, après un essai : sable
+mouillé « presque imperceptible ») : la surface d'un sol est mouillée dès une humidité de `SURFACE_WET_MOISTURE` (0,25,
+un choix : le serveur tient l'eau du sol, l'œil voit ses premiers millimètres, qui sèchent d'abord) ; en deçà elle est
+sèche. La limite est nette, lissée entre tuiles et courbée par le bruit des bords des sols (`WET_LINE_GAIN`) ; au-delà, la
+pleine teinte mouillée vient vite (`MOISTURE_CURVE` 6). Sable : réflectance mouillée 0,45 (bas de la fourchette 0,4 à 0,6
+des sols). **Frange capillaire par sol** (`Meadow`, `SOIL_LIFE`) : `fringeTiles` 3 tuiles pour terre, prairie et argile
+(inchangé), 1 pour sable et gravier (une frange de quelques décimètres, moins qu'une tuile de 1,1 m), 0 pour la roche ;
+`wicking` 0,15 pour sable et gravier (la diffusion latérale de `MOISTURE_SPREAD` y est faible). Humidité d'une plage
+de sable à l'équilibre, à 1, 2, 3 tuiles de l'eau : 0,80, 0,14, 0,03 (avant 0,80, 0,50, 0,17 ; la terre garde 0,80,
+0,58, 0,43). Contraste mouillé/sec mesuré sur le shader (îlot de 10 × 8 tuiles), ΔL* : jour 13,8 → 20,4, soir (voile
+0,3) 10,2 → 15,0, nuit (0,6) 6,4 → 9,4. Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
 (`TexturedGround`). Textures : `resources/terrain/ground-*.png` (générées, 4 tons nets ; `ground-ice.png` dans le
 style des patinoires).
 

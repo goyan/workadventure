@@ -442,3 +442,20 @@ describe("the banks of the water", () => {
         expect(sealed.moistureAt(2, 0)).toBeLessThan(0.05);
     });
 });
+
+describe("the capillary fringe of a sand", () => {
+    it("wets a sand a tile from the water, not three: a sand draws water up a few decimetres only", () => {
+        // A beach: sand on every tile, a lake on the column 0.
+        const cells: [string, number][] = [];
+        for (let x = 0; x < 6; x++) for (let y = 0; y < 2; y++) cells.push(...tile(x, y, soilCode("sand")));
+        const beach = new Meadow({ width: 6, height: 2 }, withSoils(undefined, new Map(cells)), undefined);
+        const earth = new Meadow({ width: 6, height: 2 }, undefined, undefined);
+        run(beach, 120, lake);
+        run(earth, 120, lake);
+        expect(beach.moistureAt(1, 0)).toBeGreaterThanOrEqual(BANK_MOISTURE[0] - 0.05);
+        expect(beach.moistureAt(2, 0)).toBeLessThan(0.2);
+        expect(beach.moistureAt(3, 0)).toBeLessThan(0.05);
+        // An earth keeps its wider fringe.
+        expect(earth.moistureAt(2, 0)).toBeGreaterThanOrEqual(BANK_MOISTURE[1] - 0.05);
+    });
+});

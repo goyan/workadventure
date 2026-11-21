@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     groundWetness,
     MOISTURE_CHANNEL,
+    SURFACE_WET_MOISTURE,
     texel,
     wetColor,
     wetTone,
@@ -19,8 +20,9 @@ describe("wet ground", () => {
         const sand = wetTone(WET_REFLECTANCE.sand, 1);
         const rock = wetTone(WET_REFLECTANCE.rock, 1);
         const grass = wetTone(WET_REFLECTANCE.grass, 1);
-        // The colours are sRGB: a reflectance of 0.55 of the dry one is a colour 0.76 as bright.
-        expect(sand).toBeCloseTo(Math.pow(0.55, 1 / 2.2), 3);
+        // A wet beach sand reflects 0.45 of the dry one (the darker end of 0.4 to 0.6): a colour 0.70 as bright (sRGB).
+        expect(WET_REFLECTANCE.sand).toBe(0.45);
+        expect(sand).toBeCloseTo(Math.pow(0.45, 1 / 2.2), 3);
         expect(sand).toBeLessThan(rock);
         expect(rock).toBeLessThan(grass);
         expect(grass).toBeGreaterThan(0.9);
@@ -32,8 +34,12 @@ describe("wet ground", () => {
         expect(groundWetness(0, 1, 0)).toBeCloseTo(1, 5);
         expect(groundWetness(0, 0, 1)).toBe(1);
         expect(groundWetness(0.4, 0, 0)).toBe(0.4);
-        // A soil half wet is darker than half way: the reflectance falls fast with the first water.
-        expect(groundWetness(0, 0.5, 0)).toBeGreaterThan(0.7);
+        // Once its surface is wet, a soil is soon at its full darkness: the reflectance falls fast with the first water.
+        expect(groundWetness(0, 0.5, 0)).toBeGreaterThan(0.9);
+        expect(groundWetness(0, SURFACE_WET_MOISTURE, 0)).toBeGreaterThan(0.75);
+        // Under it, the moisture is in the depth of the soil: its surface is dry, it is drawn dry (a clear wet line).
+        expect(groundWetness(0, SURFACE_WET_MOISTURE - 0.01, 0)).toBe(0);
+        expect(groundWetness(0, 0.15, 0)).toBe(0);
     });
 
     it("saturates: wet from three sources is as dark as wet from one", () => {
