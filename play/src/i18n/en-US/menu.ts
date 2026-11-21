@@ -152,6 +152,8 @@ const menu: BaseTranslation = {
             custom: "Chosen time",
             worldCity: "Sky of {city}",
             skyMenu: "Sky and time",
+            basicOff:
+                "Basic mode turns the day/night cycle off: full daylight. Your choice ({mode}) comes back when you leave it.",
             disable: "Turn off night mode",
             darkness: "Darkness of the night: {percent:number}%",
             darknessLight: "Light",

@@ -1588,6 +1588,9 @@ d'heure) à ±2 min. La nuit, un voile bleu nuit
   (`worldShadeAt` = `nightOpacityAt` vu de chaque point) : plein jour jusqu'à −0,833°, assombrie jusqu'à −6°, nuit
   au-delà. Dessinée pixel par pixel (240 × 120) : environ 7 ms par dessin (mesuré en conteneur Linux sur un Mac), une
   fois par seconde tant que le menu est ouvert en mode monde.
+- **Mode Basique** : il coupe le cycle (plein jour). Le menu de l'horloge le dit en une ligne et surligne le mode
+  effectif, « Désactivé », pas le mode enregistré ; celui-ci revient en quittant le Basique (`effectiveNightModeStore`,
+  lu aussi par `NightManager`). Le panneau du ciel du monde est masqué tant que le Basique s'applique.
 - **Pas de nuit** en mode édition ou lorsque le cycle est désactivé.
 - **Recette locale** : `?nightAt=21:00` force l'heure de Paris du jour courant (soleil de ce jour), seulement en
   développement (`import.meta.env.DEV`).

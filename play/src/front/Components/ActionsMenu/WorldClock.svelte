@@ -2,6 +2,7 @@
     import { worldShadeAt, WorldMoment } from "@wa/front/Phaser/Game/Night/WorldDaylight";
     import {
         NightMode,
+        effectiveNightModeStore,
         mapTimeZoneStore,
         nightModeStore,
         nightDateStore,
@@ -11,6 +12,7 @@
         worldPointStore,
     } from "@wa/front/Stores/NightStore";
     import { LL, locale } from "../../../i18n/i18n-svelte";
+    import { basicActiveStore } from "../../Stores/BasicModeStore";
     import { NIGHT_MAX_OPACITY, worldClockTimeZone } from "../../Phaser/Game/Night/NightClock";
 
     /** The map of the world (Natural Earth, public domain): equirectangular, a point is read straight from it. */
@@ -27,7 +29,7 @@
             minute: "2-digit",
             hourCycle: "h23",
             // The time of the place of the map (Paris without one), of the city of the world, or the computer's own.
-            timeZone: worldClockTimeZone($nightModeStore === NightMode.Computer, $mapTimeZoneStore),
+            timeZone: worldClockTimeZone($effectiveNightModeStore === NightMode.Computer, $mapTimeZoneStore),
         }),
     );
 
@@ -151,19 +153,26 @@
                 class="absolute end-0 top-full z-50 mt-2 w-64 rounded-lg bg-contrast/95 p-2 text-sm text-white shadow-lg backdrop-blur"
             >
                 <div class="mb-1 px-1 text-xs font-bold opacity-70">{$LL.menu.settings.night.label()}</div>
+                {#if $basicActiveStore}
+                    <p class="mb-1 px-1 text-xs opacity-70" data-testid="world-clock-basic">
+                        {$LL.menu.settings.night.basicOff({
+                            mode: modes.find((mode) => mode.value === $nightModeStore)?.label ?? "",
+                        })}
+                    </p>
+                {/if}
                 {#each modes as mode (mode.value)}
                     <button
                         type="button"
-                        class="block w-full rounded px-2 py-1 text-start hover:bg-white/10 {$nightModeStore ===
+                        class="block w-full rounded px-2 py-1 text-start hover:bg-white/10 {$effectiveNightModeStore ===
                         mode.value
                             ? 'bg-white/15 font-bold'
                             : ''}"
-                        aria-pressed={$nightModeStore === mode.value}
+                        aria-pressed={$effectiveNightModeStore === mode.value}
                         data-testid={`world-clock-mode-${mode.value}`}
                         onclick={() => nightModeStore.set(mode.value)}>{mode.label}</button
                     >
                 {/each}
-                {#if $nightModeStore === NightMode.World}
+                {#if $effectiveNightModeStore === NightMode.World}
                     <div class="mt-2 border-t border-white/10 pt-2">
                         <p class="mb-1 px-1 text-xs opacity-70">{$LL.menu.settings.night.worldHelp()}</p>
                         <img

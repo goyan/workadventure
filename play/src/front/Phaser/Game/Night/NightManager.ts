@@ -9,7 +9,7 @@ import {
     nightDarknessStore,
     nightDateStore,
     nightInEditorStore,
-    nightModeStore,
+    effectiveNightModeStore,
     worldCityStore,
     worldCustomMinutesStore,
     worldMomentStore,
@@ -34,7 +34,6 @@ import {
     setLightSecondBounce,
     setLightSoftEdgePx,
 } from "../Lamps/LightSoftEdge";
-import { basicActiveStore } from "../../../Stores/BasicModeStore";
 import {
     forcedSunMinutes,
     NIGHT_MAX_OPACITY,
@@ -218,9 +217,7 @@ export class NightManager {
             this.scene.markDirty();
         });
         // Basique is the diffuse light of day, whatever the night chosen.
-        this.unsubscribeMode = derived([nightModeStore, basicActiveStore], ([mode, basic]) =>
-            basic ? NightMode.Disabled : mode,
-        ).subscribe((mode) => {
+        this.unsubscribeMode = effectiveNightModeStore.subscribe((mode) => {
             this.mode = mode;
             this.disabled = mode === NightMode.Disabled;
             this.lastClockAt = undefined;
