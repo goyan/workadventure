@@ -404,8 +404,9 @@ import { MapGroundLayout, GRASS_NAME, mapTileIsGrass } from "./Terrain/MapGround
 import { footprintSurface, GroundFootprints } from "./Terrain/Footprints";
 import { WaterGlints } from "./Terrain/WaterGlints";
 import { ReliefTiles } from "./Terrain/ReliefTiles";
-import type { BlockPaintPool } from "./Terrain/BlockPaintPool";
 import { createBlockPaintPool } from "./Terrain/BlockPaintWorkers";
+import { GroundEngines } from "./Terrain/GroundEngines";
+import type { PixelGround } from "./Terrain/GroundEngines";
 import { hiddenBehindRim, projectionShown, shiftAt } from "./Terrain/ReliefProjection";
 import { TerrainView } from "./Terrain/TerrainView";
 import { CharacterDrops } from "./Terrain/CharacterDrops";
@@ -517,6 +518,11 @@ const TALL_WALL = /-h[234](?:[-:]|$)/;
 
 /** Water this deep, in pixels, makes the ground wet: the burst of a meteor is then water, not dust. */
 const METEOR_WET_DEPTH_PX = 2;
+
+/** The relief seen in 3/4, with what goes with it; its blocks are asked by the clicks and the footprints. */
+interface PixelRelief extends PixelGround {
+    tiles: ReliefTiles;
+}
 
 export class GameScene extends DirtyScene {
     Terrains: Array<Tileset>;
@@ -662,16 +668,13 @@ export class GameScene extends DirtyScene {
     private readonly aquaticLifeSpecies = new LifeSpeciesStats();
     private aquaticLifeSubscription: Subscription | undefined;
     private mapGroundLayout: MapGroundLayout | undefined;
-    /** The footprints of the players in the snow, the mud and the sand. */
-    private groundFootprints: GroundFootprints | undefined;
-    /** The glints that shine on the water. */
-    private waterGlints: WaterGlints | undefined;
-    /** The relief seen in 3/4: the dug ground drawn lower, its faces, its water. */
-    private reliefTiles: ReliefTiles | undefined;
+    /**
+     * The relief seen in 3/4, in pixel art: its blocks and their workers, the glints of its water, the footprints on
+     * its ground. Made only for who chose it (GroundEngines).
+     */
+    private pixelRelief: GroundEngines<PixelRelief> | undefined;
     /** The other engine of the ground: flat, by shaders (the pools, the ice, the frost). It draws unless the relief is shown in 3/4. */
     private terrainView: TerrainView | undefined;
-    /** The workers that paint the blocks of the terrain off the thread of the game; none where there is no Worker. */
-    private blockPainters: BlockPaintPool | undefined;
     /** The characters drawn lower in the hollows of the relief, while the image is drawn. */
     private characterDrops: CharacterDrops | undefined;
     private waterFlowView: WaterFlowView | undefined;
@@ -1771,14 +1774,8 @@ export class GameScene extends DirtyScene {
         this.gameSwitches = undefined;
         this.weatherManager?.destroy();
         this.mapGroundLayout = undefined;
-        this.groundFootprints?.destroy();
-        this.groundFootprints = undefined;
-        this.waterGlints?.destroy();
-        this.waterGlints = undefined;
-        this.reliefTiles?.destroy();
-        this.reliefTiles = undefined;
-        this.blockPainters?.destroy();
-        this.blockPainters = undefined;
+        this.pixelRelief?.destroy();
+        this.pixelRelief = undefined;
         this.terrainView?.destroy();
         this.terrainView = undefined;
         this.characterDrops?.destroy();
@@ -2445,17 +2442,9 @@ export class GameScene extends DirtyScene {
             // Basique), the flat one else (nothing in Basique).
             const projected = this.pixelReliefShown();
             this.terrainView?.update(time);
-            if (this.reliefTiles) {
-                this.mapGroundLayout?.refresh(time);
-                this.reliefTiles.setHidden(!projected);
-                this.reliefTiles.update(time);
-            }
-            this.waterGlints?.update(time);
-            // The footprints of the terrain: none laid nor shown while the relief is not seen in 3/4.
-            this.groundFootprints?.setVisible(projected);
-            if (this.groundFootprints?.update(time, projected ? this.seasonalWalkers() : [])) {
-                this.markDirty();
-            }
+            // The relief in 3/4 is made when the player turns it on, destroyed when they turn it off, hidden meanwhile
+            // in the editor and in Basique: no page to load again.
+            this.pixelRelief?.sync({ chosen: get(pixelReliefStore), shown: projected }, time);
             // Every character drawn as low as the ground (or the water) under it, in a hollow; at its place when the
             // relief is not seen in 3/4.
             const relief = this.terrainWater.relief();
@@ -3228,7 +3217,7 @@ export class GameScene extends DirtyScene {
 
     /** The relief in 3/4, for its footprints, its clicks and its tests. */
     public getReliefTiles(): ReliefTiles | undefined {
-        return this.reliefTiles;
+        return this.pixelRelief?.current()?.tiles;
     }
 
     /** The flat drawing of the relief, for the editor to show the bottom through the water while it is edited. */
@@ -3251,7 +3240,7 @@ export class GameScene extends DirtyScene {
 
     /** The point of the ground drawn under a point of the map: itself, unless the relief is shown in 3/4. */
     public groundPointUnder(point: { x: number; y: number }): { x: number; y: number } {
-        return this.pixelReliefShown() ? (this.reliefTiles?.groundPointAt(point) ?? point) : point;
+        return this.pixelReliefShown() ? (this.getReliefTiles()?.groundPointAt(point) ?? point) : point;
     }
 
     /** The season the relief in 3/4 is drawn in: the one of the theme this person forces (as their trees), else the map's. */
@@ -3260,9 +3249,9 @@ export class GameScene extends DirtyScene {
     }
 
     /** The relief in 3/4 and what goes with it: its blocks and their workers, the glints of its water, its footprints. */
-    private createPixelRelief(): void {
-        this.blockPainters = createBlockPaintPool();
-        this.reliefTiles = new ReliefTiles(this, {
+    private createPixelRelief(): PixelRelief {
+        const painters = createBlockPaintPool();
+        const tiles = new ReliefTiles(this, {
             relief: () => this.terrainWater.relief(),
             water: this.terrainWater,
             meadow: this.meadow,
@@ -3278,9 +3267,9 @@ export class GameScene extends DirtyScene {
             // The rest of the map is drawn ahead, coarse: zooming out shows the ground at once.
             mapSize: () => ({ width: this.Map.widthInPixels, height: this.Map.heightInPixels }),
             // Painted by workers, off the thread of the game.
-            painters: this.blockPainters,
+            painters,
         });
-        this.waterGlints = new WaterGlints(this, {
+        const glints = new WaterGlints(this, {
             waterAt: (x, y) => this.terrainWater.depthAt(x, y, this.time.now),
             dropAt: (x, y) => this.surfaceDropAt(x, y),
             hiddenAt: (x, y) => this.hiddenOnWater(x, y),
@@ -3288,13 +3277,36 @@ export class GameScene extends DirtyScene {
             reducedMotion: () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
             shown: () => this.pixelReliefShown(),
         });
-        this.groundFootprints = new GroundFootprints(
+        const footprints = new GroundFootprints(
             this,
-            (x, y) => footprintSurface(this.reliefTiles?.coverAt(x, y, this.time.now) ?? "none"),
+            (x, y) => footprintSurface(tiles.coverAt(x, y, this.time.now)),
             // As low as the ground is drawn.
             (x, y) => (this.pixelReliefShown() ? shiftAt(this.terrainWater.relief(), x, y) : 0),
             (x, y) => this.terrainWater.isBridgeAt(x, y),
         );
+        let hidden = false;
+        return {
+            tiles,
+            setHidden: (next) => {
+                hidden = next;
+                tiles.setHidden(next);
+                // The footprints of the terrain: none shown, none laid, while the relief is not seen in 3/4.
+                footprints.setVisible(!next);
+            },
+            update: (now) => {
+                if (!hidden) this.mapGroundLayout?.refresh(now);
+                tiles.update(now);
+                glints.update(now);
+                if (footprints.update(now, hidden ? [] : this.seasonalWalkers())) this.markDirty();
+            },
+            destroy: () => {
+                footprints.destroy();
+                glints.destroy();
+                tiles.destroy();
+                painters?.destroy();
+                this.markDirty();
+            },
+        };
     }
 
     /** Whether a point of the map (pixels) is in or near an open drain: the current carries no avatar there. */
@@ -4080,16 +4092,9 @@ export class GameScene extends DirtyScene {
                     () => this.getGroundSeason(),
                     () => this.pixelReliefShown(),
                 );
-                this.reliefTiles?.destroy();
-                this.reliefTiles = undefined;
-                this.blockPainters?.destroy();
-                this.blockPainters = undefined;
-                this.waterGlints?.destroy();
-                this.waterGlints = undefined;
-                this.groundFootprints?.destroy();
-                this.groundFootprints = undefined;
                 // The relief in 3/4, in pixel art: only for who chose it (nothing of it is made else).
-                if (get(pixelReliefStore)) this.createPixelRelief();
+                this.pixelRelief?.destroy();
+                this.pixelRelief = new GroundEngines(() => this.createPixelRelief());
                 this.characterDrops?.destroy();
                 this.characterDrops = new CharacterDrops(this, () => [
                     ...(this.CurrentPlayer ? [this.CurrentPlayer] : []),
