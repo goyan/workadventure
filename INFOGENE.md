@@ -3619,6 +3619,21 @@ change, à chaque division par deux de la résolution au zoom, à un changement 
 n'atteigne le bord ; un fondu ne change que l'opacité. Coupées dans l'éditeur. « Désactiver la nuit » : soleil seul tant
 qu'il est levé, pas de lune.
 
+**Ombre des ponts et des paliers** (`floorShadowCasters`, `plateShadow`, `slopeShadow`) : le tablier d'un pont, et plus
+généralement les dalles de tout palier (terrasse, étage), projette son ombre sur le sol et l'eau qu'il surplombe. Une
+dalle est une plaque à la hauteur de son étage (20 px pour un pont bas, 52 pour un haut), épaisse de 8 px : son ombre est
+son emprise au sol décalée à l'opposé de l'astre de hauteur / tan(élévation), avec les mêmes bornes de longueur, la même
+couleur et la même opacité que les autres ombres ; le jour passe dessous (le sol juste sous le bord éclairé reste au
+soleil). Les dalles voisines d'un même étage font une seule ombre. Un escalier ou une rampe est une pente : de son pied,
+au sol, jusqu'à son haut décalé de la hauteur de l'étage ; un escalier à flanc plein est plein dessous. Rangées avec les
+murs dans « Ce qui projette une ombre ». Calculées avec les autres ombres fixes : relues quand une pièce change, puis
+redessinées seulement quand l'astre bouge d'un demi-degré, rien à chaque image. Dessinées sous les dalles (profondeur
+0,7) : jamais sur le dessus de leur propre tablier ; sous un tablier, l'ombre est cachée par lui (soleil haut dans l'axe
+du pont). Limites : les ombres des arbres, des murs, des objets, des avatars et des animaux tombent toujours au sol et
+passent sous un tablier sans se poser dessus ; ce qui se tient sur un palier (objets, murs d'étage, avatars, animaux) ne
+projette pas d'ombre ; les garde-corps non plus. Un avatar sous un pont n'est pas assombri (comme à l'ombre d'un mur).
+Rendu non vu à l'écran à l'écriture de ce paragraphe.
+
 **Réglages personnels** (Paramètres → Ambiance, `Stores/SkyLightStore.ts`, gardés dans le navigateur, rien ne change
 pour les autres) : un interrupteur par astre, « Ombres et lumière du soleil » et « Ombres et lumière de la lune »
 (activés par défaut) ; chacun coupe pour son astre les ombres, la teinte et l'éclaircissement du voile et les taches par

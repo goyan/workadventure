@@ -81,6 +81,39 @@ describe("SkyShadowManager", () => {
         expect(draw).toHaveBeenCalledTimes(3);
     });
 
+    it("draws the shadow of the deck of a bridge on the ground, away from the light, once until it or the sun moves", () => {
+        const { manager, setLight, setEntities } = setup();
+        // A deck of one tile 20 px above the tile (10, 5), drawn 20 px further north.
+        const deck: ShadowSourceEntity = {
+            x: 320,
+            y: 160 - 20,
+            displayWidth: 32,
+            displayHeight: 40,
+            elevation: 20,
+            prefab: { collectionName: "Carte Paliers", id: "Carte Paliers:dalle-bois:Default:Down" },
+        };
+        setEntities([deck]);
+        setLight({ ...sun, azimuth: 90, elevation: 45 });
+        manager.update(0);
+        expect(draw).toHaveBeenCalledTimes(1);
+        const polygons: { x: number; y: number }[][] = draw.mock.calls[0][2];
+        // One shadow, 12 to 20 px west of the footprint of the deck on the ground.
+        expect(polygons).toHaveLength(1);
+        expect(Math.min(...polygons[0].map((point) => point.x))).toBeCloseTo(300, 5);
+        expect(Math.max(...polygons[0].map((point) => point.x))).toBeCloseTo(340, 5);
+        expect(Math.min(...polygons[0].map((point) => point.y))).toBeCloseTo(160, 5);
+        expect(Math.max(...polygons[0].map((point) => point.y))).toBeCloseTo(192, 5);
+        // A deck stands still: not drawn again while neither it nor the sun moves.
+        for (let time = 16; time < 3000; time += 16) manager.update(time);
+        expect(draw).toHaveBeenCalledTimes(1);
+        setLight({ ...sun, azimuth: 91, elevation: 45 });
+        manager.update(3016);
+        expect(draw).toHaveBeenCalledTimes(2);
+        setEntities([{ ...deck, x: 352 }]);
+        manager.update(4000);
+        expect(draw).toHaveBeenCalledTimes(3);
+    });
+
     it("only changes the opacity when the light fades", () => {
         const { manager, setLight } = setup();
         manager.update(0);
