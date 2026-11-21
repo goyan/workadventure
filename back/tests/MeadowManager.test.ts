@@ -87,6 +87,38 @@ describe("MeadowManager", () => {
         manager.stop();
     });
 
+    it("grows grass from sunrise to sunset, as the day and night of the game: at 6 in Paris in June too", () => {
+        // June 21, 4:00 UTC: 6:00 in Paris, the sun is up (it rose at 5:47); the grass grows.
+        const dawn = createHarness({ now: Date.UTC(2026, 5, 21, 4) });
+        dawn.manager.mapChanged();
+        dawn.steps(400);
+        expect(grassOf(dawn.sent[dawn.sent.length - 1]).some((cover) => cover > 0)).toBe(true);
+        dawn.manager.stop();
+        // October 21, 6:00 UTC: 8:00 in Paris, before sunrise (8:24): nothing grows yet.
+        const autumnDawn = createHarness({ now: Date.UTC(2026, 9, 21, 6) });
+        autumnDawn.manager.mapChanged();
+        autumnDawn.steps(400);
+        const told = autumnDawn.sent;
+        expect(told.length === 0 || grassOf(told[told.length - 1]).every((cover) => cover === 0)).toBe(true);
+        autumnDawn.manager.stop();
+    });
+
+    it("grows no grass at 7:30 in Paris in November, before sunrise, and grows it at noon", () => {
+        // November 21, 6:30 UTC: 7:30 in Paris, inside the old 7 to 19 window but before the 8:08 sunrise.
+        const early = createHarness({ now: Date.UTC(2026, 10, 21, 6, 30) });
+        early.manager.mapChanged();
+        early.steps(400);
+        const told = early.sent;
+        expect(told.length === 0 || grassOf(told[told.length - 1]).every((cover) => cover === 0)).toBe(true);
+        early.manager.stop();
+        // Same day, 11:00 UTC: noon in Paris.
+        const noon = createHarness({ now: Date.UTC(2026, 10, 21, 11) });
+        noon.manager.mapChanged();
+        noon.steps(400);
+        expect(grassOf(noon.sent[noon.sent.length - 1]).some((cover) => cover > 0)).toBe(true);
+        noon.manager.stop();
+    });
+
     it("grows grass under the rain of the map, by tiles, and tells the room when it changed", () => {
         // 16 × 8 cells of the relief: 8 × 4 tiles.
         const { manager, sent, steps } = createHarness();
