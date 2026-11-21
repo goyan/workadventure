@@ -2454,7 +2454,7 @@ falaise), pas le sol à son pied. Courbes de niveau sur les monts comme dans les
 
 **Chargement du terrain** : un bloc de la vue jamais dessiné est d'abord dessiné **grossier** (un point sur 4 dans
 chaque sens, 16 fois moins cher : `ReliefTileSchedule.COARSE_TEXEL`), puis **net** ; la vue est remplie en quelques
-images, puis affinée, les blocs visibles d'abord. Très dézoomé, un bloc n'est pas dessiné plus fin que l'écran ne le
+images, puis affinée, les blocs visibles d'abord, du milieu de la vue vers ses bords (`nearestFirst`). Très dézoomé, un bloc n'est pas dessiné plus fin que l'écran ne le
 montre (`texelFor` : un point pour 1, 2 ou 4 px de carte selon le zoom de la caméra, un point dessiné au plus un tiers
 plus gros qu'un pixel d'écran : net au-dessus du zoom 0,67, 2 px jusqu'à 0,34, 4 px en deçà) ; il est redessiné plus
 fin quand on zoome, jamais plus grossier quand on dézoome. **Cache** : les blocs qu'on quitte sont gardés, dans la

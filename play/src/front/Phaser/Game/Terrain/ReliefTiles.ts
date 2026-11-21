@@ -239,6 +239,9 @@ export class ReliefTiles {
         }),
     );
     private readonly levels = new Uint8Array(GRID_WIDTH * GRID_HEIGHT);
+    /** The blocks around the view, the nearest to its middle first (nearestFirst). */
+    private nearest: readonly string[] = [];
+    private nearestKey = "";
     /** The blocks of the map left to draw ahead, the nearest to the view first, for the blocks the view is over. */
     private ahead: string[] = [];
     private aheadAt = 0;
@@ -383,8 +386,13 @@ export class ReliefTiles {
         }
         let reads = 0;
         const visibleKeys = new Set(visible);
-        // The blocks of the view first.
-        const inTurn = [...visible, ...around.filter((key) => !visibleKeys.has(key))];
+        // The blocks of the view first, and from its middle outwards: what one looks at is read, drawn and sharpened
+        // first.
+        const nearest = this.nearestFirst(around, view);
+        const inTurn = [
+            ...nearest.filter((key) => visibleKeys.has(key)),
+            ...nearest.filter((key) => !visibleKeys.has(key)),
+        ];
         for (const key of inTurn) {
             if (reads >= COVERS_AN_IMAGE) break;
             if (this.coverSignatures.has(key) && !this.staleCovers.has(key)) continue;
@@ -413,7 +421,7 @@ export class ReliefTiles {
                 !this.job &&
                 (picks++ >= PICKS_AN_IMAGE ||
                     !(
-                        this.pick(around, visibleKeys, bases, needed, terrain, now) ||
+                        this.pick(nearest, visibleKeys, bases, needed, terrain, now) ||
                         this.drawAhead(around, aroundKeys, shared, terrain, now)
                     ))
             ) {
@@ -427,6 +435,30 @@ export class ReliefTiles {
             // Let go sharp: drawn ahead again, coarse.
             this.lookAheadAgain();
         }
+    }
+
+    /**
+     * The blocks around the view, the nearest to its middle first. Worked out again when the view comes over other
+     * blocks, or its middle goes half a block further.
+     */
+    private nearestFirst(
+        around: readonly string[],
+        view: { x: number; y: number; width: number; height: number },
+    ): readonly string[] {
+        const middleX = (view.x + view.width / 2) / BLOCK_PX;
+        const middleY = (view.y + view.height / 2) / BLOCK_PX;
+        const key = `${around[0]}|${around[around.length - 1]}|${Math.round(middleX * 2)},${Math.round(middleY * 2)}`;
+        if (key !== this.nearestKey) {
+            this.nearestKey = key;
+            this.nearest = around
+                .map((block) => {
+                    const [blockX, blockY] = block.split(",").map(Number);
+                    return { block, distance: (blockX + 0.5 - middleX) ** 2 + (blockY + 0.5 - middleY) ** 2 };
+                })
+                .sort((a, b) => a.distance - b.distance)
+                .map((each) => each.block);
+        }
+        return this.nearest;
     }
 
     /** What a block weighs in the blocks kept (KEPT_WEIGHT): nothing while it is coarse, or not drawn. */

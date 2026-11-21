@@ -463,6 +463,20 @@ describe("the blocks of the relief seen in 3/4", () => {
             expect(painted.get("relief-block:1,1@4")?.length).toBe(64 * 64 * 4);
         });
 
+        it("draws and sharpens the blocks of the view from its middle outwards: what one looks at first", () => {
+            const { scene, settle } = fixture(floorWithSand(24));
+            settle();
+            // The middle of the view is (600, 500): in the block 2,1, near the block 2,2; the blocks 3 are the furthest.
+            const fromTheMiddle = ["2,1", "2,2", "1,1", "1,2", "3,1", "3,2"];
+            const created = createdIn(scene);
+            const order = (suffix: string) =>
+                created
+                    .filter((key) => fromTheMiddle.some((block) => key === `relief-block:${block}${suffix}`))
+                    .map((key) => key.replace("relief-block:", "").replace(suffix, ""));
+            expect(order("@4")).toEqual(fromTheMiddle);
+            expect(order("")).toEqual(fromTheMiddle);
+        });
+
         it("shows the same ground coarse as sharp: its materials at their place, as light", () => {
             const { settle, painted } = fixture(floorWithSand(24));
             settle();
