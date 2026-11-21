@@ -2,6 +2,7 @@ import {
     cellOf,
     heightAt,
     snowCover,
+    snowCoverOf,
     SOILS,
     soilAt,
     DEFAULT_POOL_STYLE,
@@ -15,6 +16,7 @@ import { Season } from "@workadventure/map-editor";
 import type { PoolStyle, TerrainData } from "@workadventure/map-editor";
 import type { OutdoorGrid } from "@wa/front/Phaser/Game/Outdoor/OutdoorGrid";
 import { waterCycleNow } from "@wa/front/Phaser/Game/Weather/Frost";
+import { followsServerGround } from "@wa/front/Phaser/Game/Weather/GroundSource";
 import type { WaterCycle } from "@wa/front/Phaser/Game/Weather/Frost";
 import type { WaterRing } from "@wa/front/Phaser/Game/Catastrophe/MeteorFall";
 import type { GameScene } from "../GameScene";
@@ -126,6 +128,10 @@ interface MeadowLayers extends BlockCanvasArea {
     /** The ash and the fire of the meadow over the canvas; undefined where nothing burnt nor burns. */
     ash: Uint8Array | undefined;
     fire: Uint8Array | undefined;
+    /** The snow that fell, as it whitens the ground over the canvas (0 to 255); undefined where none lies. */
+    snow: Uint8Array | undefined;
+    /** Whether these layers show the snow of the server (GroundSource): read again when the player changes of weather. */
+    server: boolean;
 }
 
 /**
@@ -195,7 +201,7 @@ export class TerrainView {
 
     public update(now: number): void {
         // Basique shows the ground of the map as it is: no water, relief, soils nor grass drawn over it.
-        if (isBasicActive() || (!this.water.hasAnything() && !this.meadow?.hasGrass() && !this.hasPools())) {
+        if (isBasicActive() || (!this.water.hasAnything() && !this.meadowShows() && !this.hasPools())) {
             if (this.visible) {
                 this.surface.hide();
                 this.hideGrounds();
@@ -211,7 +217,7 @@ export class TerrainView {
         const camera = this.scene.cameras.main.worldView;
         const screen = { x: camera.x, y: camera.y, width: camera.width, height: camera.height };
         this.readImagePools();
-        const key = `${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}:${this.imagePools.signature}:${this.poolSettingsVersion()}`;
+        const key = `${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}:${this.imagePools.signature}:${this.poolSettingsVersion()}:${followsServerGround()}`;
         const inside = this.drawn !== undefined && wellInside(this.drawn, screen, DRAW_MARGIN / 5);
         if (key === this.lastKey && inside) return;
         this.lastKey = key;
@@ -265,7 +271,7 @@ export class TerrainView {
                 this.splat.setGround(areaOf(canvas), {
                     soils: relief.soils,
                     grass: meadow?.grass,
-                    snow: relief.dug ? snowOf(relief.snow) : undefined,
+                    snow: thickestSnow(relief.dug ? snowOf(relief.snow) : undefined, snowOf(meadow?.snow)),
                     autumn: this.season?.() === Season.Autumn ? 1 : 0,
                     dug: relief.ground,
                     raised: relief.raised,
@@ -311,6 +317,13 @@ export class TerrainView {
                 // The tiles on fire glow on the ground, under their flames.
                 this.surface.paintField(canvas, meadow.fire, everywhere, NO_SHIFT, FIRE_GLOW_COLOR, fireGlowAlpha);
             }
+            const fallen = meadow?.snow;
+            if (fallen && !relief.dug && !this.splat && !this.grounds) {
+                // The snow that fell on a map without relief, when neither shaders nor textures draw the ground.
+                this.surface.paintField(canvas, fallen, everywhere, NO_SHIFT, SNOW_COLOR, (level) =>
+                    snowAlpha(level / 255),
+                );
+            }
             // With the shaders, the relief is shaded by the ground shader itself, in clear steps.
             if (relief.dug && !this.splat) {
                 // Under textured grounds and water the depth and the slopes already show: the dark of the hollow and
@@ -332,8 +345,9 @@ export class TerrainView {
                     0xffffff,
                     (level) => raisedAlpha(level) * hollow,
                 );
-                if (relief.snow && !this.grounds) {
-                    this.surface.paintField(canvas, relief.snow, everywhere, NO_SHIFT, SNOW_COLOR, (level) =>
+                const snow = thickestSnow(relief.snow, meadow?.snow);
+                if (snow && !this.grounds) {
+                    this.surface.paintField(canvas, snow, everywhere, NO_SHIFT, SNOW_COLOR, (level) =>
                         snowAlpha(level / 255),
                     );
                 }
@@ -516,16 +530,25 @@ export class TerrainView {
      * most of a map, costs one look), on the cells of the tile that are outdoors for this browser (a roof drawn in
      * the map keeps the grass off).
      */
+    /** Whether the meadow has anything to draw for this player: grass, a dry ground, or the snow of the server. */
+    private meadowShows(): boolean {
+        const meadow = this.meadow;
+        return meadow !== undefined && (meadow.hasGrass() || (followsServerGround() && meadow.hasSnow()));
+    }
+
     private meadowOver(canvas: BlockCanvasArea): MeadowLayers | undefined {
         const meadow = this.meadow;
-        if (!meadow?.hasGrass()) {
+        if (!meadow || !this.meadowShows()) {
             this.meadowLayers = undefined;
             return undefined;
         }
+        // The snow of the server is for those who follow its weather (GroundSource).
+        const server = followsServerGround();
         const kept = this.meadowLayers;
         if (
             kept &&
             kept.version === meadow.version() &&
+            kept.server === server &&
             kept.x === canvas.x &&
             kept.y === canvas.y &&
             kept.columns === canvas.columns &&
@@ -544,6 +567,8 @@ export class TerrainView {
             straw: undefined,
             ash: undefined,
             fire: undefined,
+            snow: undefined,
+            server,
         };
         const outdoor = this.scene.getOutdoorGrid?.();
         const cellsATile = TILE_PX / TERRAIN_CELL;
@@ -557,7 +582,8 @@ export class TerrainView {
                 const dryness = meadow.drynessAt(tileX, tileY);
                 const ashes = meadow.ashAt(tileX, tileY);
                 const flames = meadow.fireAt(tileX, tileY);
-                if (cover === 0 && dryness === 0 && ashes === 0 && flames === 0) continue;
+                const white = server ? Math.round(snowCoverOf(meadow.snowAt(tileX, tileY)) * 255) : 0;
+                if (cover === 0 && dryness === 0 && ashes === 0 && flames === 0 && white === 0) continue;
                 const firstRow = Math.max(0, tileY * cellsATile - top);
                 const lastRow = Math.min(canvas.rows, (tileY + 1) * cellsATile - top);
                 const firstColumn = Math.max(0, tileX * cellsATile - left);
@@ -577,6 +603,7 @@ export class TerrainView {
                         if (drawn > 0) (layers.grass ??= new Uint8Array(size))[index] = drawn;
                         if (ashes > 0) (layers.ash ??= new Uint8Array(size))[index] = ashes;
                         if (flames > 0) (layers.fire ??= new Uint8Array(size))[index] = flames;
+                        if (white > 0) (layers.snow ??= new Uint8Array(size))[index] = white;
                         // A dry ground yellows with or without grass on it.
                         if (dryness > 0) (layers.straw ??= new Uint8Array(size))[index] = strawLevel(drawn, dryness);
                     }
@@ -615,7 +642,7 @@ export class TerrainView {
         (autumn ? grounds.grass : grounds.autumnGrass).hide();
         if (grass) (autumn ? grounds.autumnGrass : grounds.grass).show(area, (cell) => (grass[cell] ?? 0) / 255, stamp);
         else (autumn ? grounds.autumnGrass : grounds.grass).hide();
-        const snow = relief.dug ? relief.snow : undefined;
+        const snow = thickestSnow(relief.dug ? relief.snow : undefined, meadow?.snow);
         if (snow) grounds.snow.show(area, (cell) => snowAlpha((snow[cell] ?? 0) / 255), stamp);
         else grounds.snow.hide();
     }
@@ -782,6 +809,12 @@ function areaOf(canvas: BlockCanvasArea): GroundArea {
 }
 
 /** The snow of the heights as the shader reads it: how much of the ground it covers, 0 to 255. */
+/** The snow of the heights and the snow that fell, cell by cell: the thicker of the two. */
+function thickestSnow(heights: Uint8Array | undefined, fallen: Uint8Array | undefined): Uint8Array | undefined {
+    if (!heights || !fallen) return heights ?? fallen;
+    return heights.map((level, cell) => Math.max(level, fallen[cell] ?? 0));
+}
+
 function snowOf(snow: Uint8Array | undefined): Uint8Array | undefined {
     if (!snow) return undefined;
     return snow.map((level) => Math.round(snowAlpha(level / 255) * 255));
