@@ -27,6 +27,7 @@ import {
     getWaterRectangles,
     isDeepTerrainWater,
     isPointInWater,
+    isPoolAt,
     isWithinOneTileOfWater,
 } from "@wa/front/Phaser/Game/Water/WaterZones";
 import { getIceRectangles, isOnIce } from "@wa/front/Phaser/Game/Ice/IceZones";
@@ -467,6 +468,12 @@ export abstract class Character extends Container implements OutlineableInterfac
         // A lake of the relief, on the ground only: deep enough, one swims in it as in a pool.
         // In its canoe, it is on the water, not in it.
         return !isCanoeAfloat(this.vehicleState) && this.isOverDeepTerrainWater();
+    }
+
+    /** Whether the body of the character is in a pool painted with the relief tool: one swims there, no canoe. */
+    protected isInPool(): boolean {
+        const terrain = this.scene.getGameMap?.()?.getWamFile()?.getWam().terrain;
+        return isPoolAt(terrain, { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y });
     }
 
     /** Whether the body of the character is over water of the relief deep enough to swim, on the ground. */
