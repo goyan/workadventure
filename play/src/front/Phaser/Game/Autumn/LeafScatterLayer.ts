@@ -7,7 +7,7 @@ import { leafCandidatesInView, liesOn, type ScatteredLeaf } from "./LeafScatter"
 
 /** Above the floors (0.5) and the seasonal grass (0.6), below objects and avatars. */
 const LEAF_SCATTER_DEPTH = DEPTH_TILE_INDEX + 0.65;
-/** Over the blocks of the relief shown in 3/4 (0.66), which draw the ground then. */
+/** Over the blocks of the relief (0.655), where they draw the ground. */
 const LEAF_OVER_BLOCKS_DEPTH = DEPTH_TILE_INDEX + 0.67;
 
 /**

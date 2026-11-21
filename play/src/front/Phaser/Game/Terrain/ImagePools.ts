@@ -32,7 +32,7 @@ export interface PlacedPool {
 
 /**
  * Whether the pools placed as images keep their image: to compare with the pools drawn by the shaders, and while the
- * relief is shown in 3/4 (no shader draws the ground then).
+ * blocks of the relief draw the ground (no shader draws it then).
  */
 export function classicPoolsShown(): boolean {
     if (pixelReliefShownNow()) return true;

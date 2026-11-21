@@ -1,5 +1,7 @@
 import { heightAt } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
+import { paddedView, wellInside } from "../Weather/WeatherFrame";
+import type { WeatherView } from "../Weather/WeatherFrame";
 import { MAX_DROP, MAX_RISE, shiftOfHeight } from "./Pixel/ColumnPainter";
 
 /**
@@ -77,9 +79,36 @@ export function rowOf(surface: number, y: number): number {
     return y + shiftOfHeight(surface);
 }
 
+/**
+ * How far above or under a pixel of the screen the shaders may read the heights in 3/4: the point seen is up to 128 px
+ * away, and its height is read between the centres of two cells.
+ */
+export const OBLIQUE_REACH_PX = MAX_DROP + 16;
+
+/**
+ * The part of the map drawn around the screen: `margin` of the view on each side, as ever; in 3/4 at least twice the
+ * reach above and under it, so that a scroll does not ask for a new drawing at once.
+ */
+export function drawnArea(screen: WeatherView, oblique: boolean, margin: number): WeatherView {
+    const drawn = paddedView(screen, margin);
+    if (!oblique) return drawn;
+    const reach = Math.max(screen.height * margin, 2 * OBLIQUE_REACH_PX);
+    return { x: drawn.x, y: screen.y - reach, width: drawn.width, height: screen.height + 2 * reach };
+}
+
+/** Whether what was drawn still covers the screen (`slack` of the view on each side), and in 3/4 what it reads. */
+export function stillCovers(drawn: WeatherView, screen: WeatherView, oblique: boolean, slack: number): boolean {
+    if (!wellInside(drawn, screen, slack)) return false;
+    if (!oblique) return true;
+    return (
+        screen.y - drawn.y >= OBLIQUE_REACH_PX &&
+        drawn.y + drawn.height - (screen.y + screen.height) >= OBLIQUE_REACH_PX
+    );
+}
+
 /** The rows of cell centres walked at most: from 128 px south of the pixel to 128 px north of it, and one more. */
-const STEPS = Math.ceil((MAX_DROP + MAX_RISE) / 16) + 2;
-const HALVINGS = 6;
+export const OBLIQUE_STEPS = Math.ceil((MAX_DROP + MAX_RISE) / 16) + 2;
+export const OBLIQUE_HALVINGS = 6;
 
 /**
  * The point of a column of the map seen at a row of the screen: the southernmost one drawn at that row or above it.
@@ -99,13 +128,13 @@ export function seenPoint(
     if (rowSouth <= screenY) return { y: south, stretch: 1 };
     // The first row of cell centres north of there.
     let north = (Math.ceil(south / cell - 0.5) - 0.5) * cell;
-    for (let step = 0; step < STEPS; step++) {
+    for (let step = 0; step < OBLIQUE_STEPS; step++) {
         const rowNorth = rowOf(surfaceAt(north), north);
         if (rowNorth <= screenY) {
             const stretch = (rowSouth - rowNorth) / Math.max(south - north, 0.001);
             let low = north;
             let high = south;
-            for (let halving = 0; halving < HALVINGS; halving++) {
+            for (let halving = 0; halving < OBLIQUE_HALVINGS; halving++) {
                 const middle = (low + high) / 2;
                 if (rowOf(surfaceAt(middle), middle) <= screenY) low = middle;
                 else high = middle;

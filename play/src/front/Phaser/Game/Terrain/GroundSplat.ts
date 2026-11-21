@@ -5,6 +5,8 @@ import { refreshCanvasTexture } from "@wa/front/Phaser/Game/CanvasTextureRefresh
 import { DEEP_ICE_PX, POOL_ICE_DEPTH_PX } from "@wa/front/Phaser/Game/Weather/Frost";
 import type { WaterCycle } from "@wa/front/Phaser/Game/Weather/Frost";
 import type { WaterRing } from "@wa/front/Phaser/Game/Catastrophe/MeteorFall";
+import { HEIGHT_OFFSET, HEIGHT_SCALE, OBLIQUE_HALVINGS, OBLIQUE_STEPS, writeHeights } from "./ObliqueView";
+import { MAX_DROP, MAX_RISE } from "./Pixel/ColumnPainter";
 import { GROUND_TEXTURES } from "./TexturedGround";
 import type { GroundArea } from "./TexturedGround";
 
@@ -40,6 +42,11 @@ const WATER_SCALE_PX = 128;
 const RELIEF_SHADE = 0.6;
 /** Texture units the ground shader needs: the weights, six soils, the grass and the snow. */
 const UNITS_NEEDED = 9;
+/** Compiles in the shaders what draws the relief in 3/4: only where the graphics card can (GroundSplat.create). */
+const OBLIQUE_DEFINE = "#define OBLIQUE 1\n";
+/** The picture of the heights is the last texture of each shader. */
+const GROUND_HEIGHTS_UNIT = 9;
+const WATER_HEIGHTS_UNIT = 2;
 
 const SOIL_KEYS = [
     GROUND_TEXTURES.earth,
@@ -63,6 +70,18 @@ uniform sampler2D uData;
 uniform vec4 uArea;   // x, y, width, height of the area, in map pixels
 uniform vec2 uCells;  // columns, rows
 uniform float uTime;  // seconds
+#ifdef OBLIQUE
+// The relief seen in 3/4 (ObliqueView.ts): 1 when it is, and the exact heights of the cells of the area, on two bytes:
+// the ground on the left half of the picture, what is seen (the ground, or the water over it) on the right half. Only
+// where the graphics card can (GroundSplat.create): elsewhere none of this is compiled.
+uniform float uOblique;
+uniform sampler2D uHeights;
+#endif
+// How many rows of the screen a pixel of the ground seen here takes: 1 on flat ground, more on a face.
+float gStretch;
+// The row of the screen this pixel is at, in map pixels, and the height of what is seen at it.
+float gScreenRow;
+float gSeenHeight;
 
 float hash(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -79,11 +98,6 @@ float fbm(vec2 p) {
     return 0.5 * vnoise(p) + 0.3 * vnoise(p * 2.03 + 17.0) + 0.2 * vnoise(p * 4.01 + 31.0);
 }
 
-// The point of the map under this pixel, snapped to the pixels of the map: the patterns keep the pixel art.
-vec2 worldPoint() {
-    vec2 world = uArea.xy + vec2(outTexCoord.x, 1.0 - outTexCoord.y) * uArea.zw;
-    return floor(world) + 0.5;
-}
 
 // One pack of the weights at a point of the map, smooth between the centres of the cells.
 vec3 packIn(float index, vec2 cell) {
@@ -104,6 +118,62 @@ vec3 pack(float index, vec2 world) {
 vec3 packNearest(float index, vec2 world) {
     vec2 cell = floor(clamp((world - uArea.xy) / uArea.zw * uCells, vec2(0.0), uCells - 1.0)) + 0.5;
     return packIn(index, cell);
+}
+
+#ifdef OBLIQUE
+// The height at a point of the map, in map pixels, straight between the centres of the cells: of the ground (0.0), or
+// of what is seen there (1.0: the ground, or the water over it).
+float heightIn(float which, vec2 world) {
+    vec2 cell = clamp((world - uArea.xy) / uArea.zw * uCells, vec2(0.5), uCells - 0.5);
+    vec3 bytes = texture2D(uHeights, vec2((cell.x + which * uCells.x) / (uCells.x * 2.0), 1.0 - cell.y / uCells.y)).rgb;
+    return (bytes.r * 65280.0 + bytes.g * 255.0) / ${HEIGHT_SCALE}.0 - ${HEIGHT_OFFSET}.0;
+}
+
+// The row of the screen a point of the map is drawn at, in 3/4: higher by half the height of what is seen there.
+float rowOf(vec2 world) {
+    return world.y - clamp(heightIn(1.0, world) * 0.5, -${MAX_DROP}.0, ${MAX_RISE}.0);
+}
+#endif
+
+// The point of the map seen at this pixel, snapped to the pixels of the map: the patterns keep the pixel art. Flat, the
+// point under the pixel. In 3/4 (the twin of seenPoint in ObliqueView.ts, same steps): the southernmost point drawn at
+// this row, found walking north from as far south as anything is drawn that high, a row of cell centres at a time,
+// then halved between the last two.
+vec2 worldPoint() {
+    vec2 screen = floor(uArea.xy + vec2(outTexCoord.x, 1.0 - outTexCoord.y) * uArea.zw) + 0.5;
+    gStretch = 1.0;
+    gScreenRow = screen.y;
+    gSeenHeight = 0.0;
+#ifdef OBLIQUE
+    if (uOblique > 0.5) {
+        float cell = uArea.w / uCells.y;
+        vec2 south = vec2(screen.x, screen.y + ${MAX_RISE}.0);
+        float rowSouth = rowOf(south);
+        if (rowSouth <= screen.y) return floor(south) + 0.5;
+        vec2 north = vec2(screen.x, (ceil(south.y / cell - 0.5) - 0.5) * cell);
+        for (int step = 0; step < ${OBLIQUE_STEPS}; step++) {
+            float rowNorth = rowOf(north);
+            if (rowNorth <= screen.y) {
+                gStretch = (rowSouth - rowNorth) / max(south.y - north.y, 0.001);
+                float low = north.y;
+                float high = south.y;
+                for (int halving = 0; halving < ${OBLIQUE_HALVINGS}; halving++) {
+                    float middle = (low + high) * 0.5;
+                    if (rowOf(vec2(screen.x, middle)) <= screen.y) low = middle;
+                    else high = middle;
+                }
+                // Drawn at this row: higher than its place by half its height.
+                gSeenHeight = ((low + high) * 0.5 - screen.y) * 2.0;
+                return vec2(screen.x, floor((low + high) * 0.5) + 0.5);
+            }
+            south = north;
+            rowSouth = rowNorth;
+            north.y -= cell;
+        }
+        return floor(south) + 0.5;
+    }
+#endif
+    return screen;
 }
 
 // A ground texture repeated at its own size, fixed to the map.
@@ -196,6 +266,19 @@ void main() {
     color *= 1.0 - 0.12 * mixed;
     vec4 outColor = vec4(color * soilAlpha, soilAlpha);
 
+    // In 3/4 a ground dug or raised is drawn away from its place, and the tiles of the map stay where they are: they
+    // must not show under it. Where no soil is painted, grass (what a bare ground dug always was, seen in 3/4).
+    float groundHeight = 0.0;
+#ifdef OBLIQUE
+    if (uOblique > 0.5) {
+        groundHeight = heightIn(0.0, world);
+        if (abs(groundHeight) > 0.5 && outColor.a < 1.0) {
+            vec3 turf = ground(uGrass, uGrassSize, world).rgb * 0.82;
+            outColor += vec4(turf, 1.0) * (1.0 - outColor.a);
+        }
+    }
+#endif
+
     // The grass, in tufts: a thin meadow shows its brightest blades first, a full one covers everything.
     float cover = c.r;
     if (cover > 0.002) {
@@ -283,6 +366,33 @@ void main() {
     outColor = vec4(0.0, 0.0, 0.0, dark) + outColor * (1.0 - dark);
     outColor = vec4(vec3(light), light) + outColor * (1.0 - light);
 
+#ifdef OBLIQUE
+    if (uOblique > 0.5 && outColor.a > 0.0) {
+        // A face: where the ground falls to the south, seen in 3/4, it is stretched down the screen. Rock, in strata
+        // that follow the height, darker than the ground around it.
+        float face = clamp((gStretch - 1.6) / 1.5, 0.0, 1.0);
+        if (face > 0.0) {
+            float seen = gSeenHeight;
+            vec3 rock = ground(uSoil4, uSoilSize, vec2(world.x, gScreenRow)).rgb;
+            float strata = 0.82 + 0.18 * step(0.5, fract(seen / 12.0 + 0.15 * vnoise(vec2(world.x / 9.0, 3.7))));
+            outColor.rgb = mix(outColor.rgb, rock * strata * 0.62 * outColor.a, face);
+        } else {
+            // The level lines, in relief: one for 32 px of height or of depth, dark on its low side, light on its high
+            // side; none between the level of the map and the first of them.
+            float level = sign(groundHeight) * floor(abs(groundHeight) / 32.0);
+            float west = heightIn(0.0, world - vec2(1.0, 0.0));
+            float east = heightIn(0.0, world + vec2(1.0, 0.0));
+            float north = heightIn(0.0, world - vec2(0.0, 1.0));
+            float south = heightIn(0.0, world + vec2(0.0, 1.0));
+            float highest = max(max(west, east), max(north, south));
+            float lowest = min(min(west, east), min(north, south));
+            float above = sign(highest) * floor(abs(highest) / 32.0);
+            float below = sign(lowest) * floor(abs(lowest) / 32.0);
+            if (above > level + 0.5) outColor.rgb *= 0.74;
+            else if (below < level - 0.5) outColor.rgb += (vec3(outColor.a) - outColor.rgb) * 0.2;
+        }
+    }
+#endif
     if (outColor.a <= 0.002) discard;
     gl_FragColor = outColor;
 }
@@ -473,6 +583,8 @@ export interface GroundWeights {
     /** How deep each cell is dug and how high it is raised, in map pixels (to 255). */
     dug: Uint8Array;
     raised: Uint8Array;
+    /** The exact height of the ground of each cell, in map pixels: where it is drawn, seen in 3/4. */
+    heights: Float32Array;
     /** The straw, the ash and the fire of the meadow, 0 to 255; undefined: none. */
     straw: Uint8Array | undefined;
     ash: Uint8Array | undefined;
@@ -503,24 +615,29 @@ export class GroundSplat {
     public static create(scene: Phaser.Scene, groundDepth: number, waterDepth: number): GroundSplat | undefined {
         const renderer = scene.game.renderer;
         if (!(renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer)) return undefined;
-        const units = Number(renderer.gl.getParameter(renderer.gl.MAX_TEXTURE_IMAGE_UNITS));
+        const gl = renderer.gl;
+        const units = Number(gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS));
         if (!(units >= UNITS_NEEDED)) return undefined;
-        return new GroundSplat(scene, groundDepth, waterDepth);
+        // The relief in 3/4 reads one more texture, and heights that only fit in precise numbers.
+        const precise = (gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT)?.precision ?? 0) > 0;
+        return new GroundSplat(scene, groundDepth, waterDepth, units > UNITS_NEEDED && precise);
     }
 
     private constructor(
         private readonly scene: Phaser.Scene,
         groundDepth: number,
         waterDepth: number,
+        /** Whether these shaders can draw the relief in 3/4 on this graphics card. */
+        private readonly canProject: boolean,
     ) {
         const time = (): number => this.scene.time.now / 1000;
         this.groundShader = scene.add
             .shader(
                 {
                     name: "GroundSplat",
-                    fragmentSource: GROUND_FRAG,
+                    fragmentSource: `${canProject ? OBLIQUE_DEFINE : ""}${GROUND_FRAG}`,
                     setupUniforms: (setUniform: (name: string, value: unknown) => void) => {
-                        this.setCommonUniforms(setUniform, time());
+                        this.setCommonUniforms(setUniform, time(), GROUND_HEIGHTS_UNIT);
                         SOIL_KEYS.forEach((_, index) => setUniform(`uSoil${index}`, index + 1));
                         setUniform("uGrass", 7);
                         setUniform("uSnow", 8);
@@ -537,7 +654,13 @@ export class GroundSplat {
                 0,
                 1,
                 1,
-                ["__DEFAULT", ...SOIL_KEYS, GROUND_TEXTURES.grass, GROUND_TEXTURES.snow],
+                [
+                    "__DEFAULT",
+                    ...SOIL_KEYS,
+                    GROUND_TEXTURES.grass,
+                    GROUND_TEXTURES.snow,
+                    ...(canProject ? ["__DEFAULT"] : []),
+                ],
             )
             .setOrigin(0)
             .setDepth(groundDepth)
@@ -546,9 +669,9 @@ export class GroundSplat {
             .shader(
                 {
                     name: "WaterSplat",
-                    fragmentSource: WATER_FRAG,
+                    fragmentSource: `${canProject ? OBLIQUE_DEFINE : ""}${WATER_FRAG}`,
                     setupUniforms: (setUniform: (name: string, value: unknown) => void) => {
-                        this.setCommonUniforms(setUniform, time());
+                        this.setCommonUniforms(setUniform, time(), WATER_HEIGHTS_UNIT);
                         setUniform("uStrength", this.strength);
                         setUniform("uIceTexture", 1);
                         setUniform("uIceSize", this.sizeOf(GROUND_TEXTURES.ice));
@@ -567,7 +690,7 @@ export class GroundSplat {
                 0,
                 1,
                 1,
-                ["__DEFAULT", GROUND_TEXTURES.ice],
+                ["__DEFAULT", GROUND_TEXTURES.ice, ...(canProject ? ["__DEFAULT"] : [])],
             )
             .setOrigin(0)
             .setDepth(waterDepth)
@@ -575,6 +698,23 @@ export class GroundSplat {
     }
 
     private autumn = 0;
+    /** The relief seen in 3/4: the picture of the exact heights (ObliqueView.ts), kept only while it is. */
+    private oblique = false;
+    private readonly heightsKey = `ground-heights-${splatCount}`;
+    private heights: ImageData | undefined;
+    private groundHeights: Float32Array | undefined;
+    private surfaceHeights = new Float32Array(0);
+
+    /** Whether these shaders can draw the relief in 3/4 on this graphics card. */
+    public projects(): boolean {
+        return this.canProject;
+    }
+
+    /** Draws the relief in 3/4, or flat: read by the shaders at their next drawing. The grounds are to be laid again. */
+    public setOblique(oblique: boolean): void {
+        this.oblique = oblique && this.canProject;
+    }
+
     /** The cycle of the water this player sees (Frost.ts): frost, ice and wet ground. */
     private cycle: WaterCycle = { frost: 0, ice: 0, wet: 0 };
     private snow = 0;
@@ -626,6 +766,14 @@ export class GroundSplat {
         if (any) smoothWeights(data, columns, rows);
         this.autumn = weights.autumn;
         this.anyGround = any;
+        if (this.oblique) {
+            // Seen in 3/4: the exact heights of the ground, and of what is seen (the ground, until the water is told).
+            const heights = this.heightsFor(area);
+            this.groundHeights = weights.heights;
+            writeHeights(heights.data, 0, weights.heights, columns, rows);
+            writeHeights(heights.data, 1, weights.heights, columns, rows);
+            this.uploadHeights();
+        }
         this.upload();
         this.place(this.groundShader, area, any);
         // The pools are drawn by the water shader, over the shades of the relief: it shows with them, water or not.
@@ -633,12 +781,26 @@ export class GroundSplat {
     }
 
     /** The depth of the water over the area (map pixels a cell, as the area of `setGround`); undefined: dry. */
-    public setWater(wet: Uint8Array | undefined, strength: number): void {
+    public setWater(
+        wet: Uint8Array | undefined,
+        strength: number,
+        /** The depth of the water as it is, cell by cell: where its surface is, seen in 3/4. */
+        depths?: Float32Array,
+    ): void {
         const area = this.area;
         const pixels = this.pixels;
         if (!area || !pixels) return;
         this.strength = strength;
         const { columns, rows } = area;
+        if (this.oblique && this.heights && this.groundHeights) {
+            const size = columns * rows;
+            if (this.surfaceHeights.length !== size) this.surfaceHeights = new Float32Array(size);
+            for (let cell = 0; cell < size; cell++) {
+                this.surfaceHeights[cell] = (this.groundHeights[cell] ?? 0) + Math.max(0, depths?.[cell] ?? 0);
+            }
+            writeHeights(this.heights.data, 1, this.surfaceHeights, columns, rows);
+            this.uploadHeights();
+        }
         const data = pixels.data;
         let any = false;
         for (let cell = 0; cell < columns * rows; cell++) {
@@ -688,12 +850,55 @@ export class GroundSplat {
         this.groundShader.destroy();
         this.waterShader.destroy();
         if (this.scene.textures.exists(this.key)) this.scene.textures.remove(this.key);
+        if (this.scene.textures.exists(this.heightsKey)) this.scene.textures.remove(this.heightsKey);
     }
 
-    private setCommonUniforms(setUniform: (name: string, value: unknown) => void, time: number): void {
+    /** The textures of the two shaders: the weights first, the heights last (a blank one until the relief is in 3/4). */
+    private setShaderTextures(): void {
+        const weights = this.scene.textures.exists(this.key) ? this.key : "__DEFAULT";
+        // Without the 3/4, the shaders are the ones they always were: no texture more.
+        const heights = !this.canProject
+            ? []
+            : [this.scene.textures.exists(this.heightsKey) ? this.heightsKey : "__DEFAULT"];
+        this.groundShader.setTextures([weights, ...SOIL_KEYS, GROUND_TEXTURES.grass, GROUND_TEXTURES.snow, ...heights]);
+        this.waterShader.setTextures([weights, GROUND_TEXTURES.ice, ...heights]);
+    }
+
+    /** The pixels of the heights for this area (two packs side by side); a new canvas when its size changes. */
+    private heightsFor(area: GroundArea): ImageData {
+        const width = area.columns * 2;
+        const height = area.rows;
+        if (!this.heights || this.heights.width !== width || this.heights.height !== height) {
+            this.heights = new ImageData(width, height);
+            if (this.scene.textures.exists(this.heightsKey)) this.scene.textures.remove(this.heightsKey);
+            const canvas = this.scene.textures.createCanvas(this.heightsKey, width, height);
+            // Smooth: the height is read straight between the centres of two cells.
+            canvas?.setFilter(Phaser.Textures.FilterMode.LINEAR);
+            this.setShaderTextures();
+        }
+        return this.heights;
+    }
+
+    private uploadHeights(): void {
+        const texture = this.scene.textures.get(this.heightsKey);
+        if (!(texture instanceof Phaser.Textures.CanvasTexture) || !this.heights) return;
+        texture.getContext().putImageData(this.heights, 0, 0);
+        refreshCanvasTexture(texture);
+    }
+
+    private setCommonUniforms(
+        setUniform: (name: string, value: unknown) => void,
+        time: number,
+        /** The texture unit of the heights (the last texture of the shader). */
+        heightsUnit: number,
+    ): void {
         const area = this.area;
         setUniform("uData", 0);
         setUniform("uTime", time);
+        if (this.canProject) {
+            setUniform("uOblique", this.oblique ? 1 : 0);
+            setUniform("uHeights", heightsUnit);
+        }
         setUniform("uArea", area ? [area.x, area.y, area.columns * area.cell, area.rows * area.cell] : [0, 0, 1, 1]);
         setUniform("uCells", area ? [area.columns, area.rows] : [1, 1]);
     }
@@ -714,8 +919,7 @@ export class GroundSplat {
             if (this.scene.textures.exists(this.key)) this.scene.textures.remove(this.key);
             const canvas = this.scene.textures.createCanvas(this.key, width, height);
             canvas?.setFilter(Phaser.Textures.FilterMode.LINEAR);
-            this.groundShader.setTextures([this.key, ...SOIL_KEYS, GROUND_TEXTURES.grass, GROUND_TEXTURES.snow]);
-            this.waterShader.setTextures([this.key, GROUND_TEXTURES.ice]);
+            this.setShaderTextures();
             this.anyWater = false;
         }
         this.area = area;

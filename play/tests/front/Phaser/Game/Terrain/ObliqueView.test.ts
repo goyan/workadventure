@@ -3,7 +3,10 @@ import { cellKey, heightAt, TERRAIN_CELL, withHeights } from "@workadventure/map
 import type { TerrainData } from "@workadventure/map-editor";
 import { waterDepthAtPoint } from "../../../../../src/front/Phaser/Game/Terrain/AvatarDrop";
 import {
+    OBLIQUE_REACH_PX,
     decodeHeight,
+    drawnArea,
+    stillCovers,
     encodeHeight,
     heightsOver,
     heightTexel,
@@ -98,6 +101,35 @@ describe("the heights sent to the shaders", () => {
         expect(heightTexel(0, 1, columns)).toBe(4);
         expect(heightTexel(1, 1, columns)).toBe(16);
         expect(heightTexel(0, 3, columns)).toBe(24);
+    });
+});
+
+describe("the part of the map drawn around the screen", () => {
+    const screen = { x: 1000, y: 2000, width: 800, height: 300 };
+
+    it("is the one it always was while the ground is drawn flat: a quarter of the view on each side", () => {
+        expect(drawnArea(screen, false, 0.25)).toEqual({ x: 800, y: 1925, width: 1200, height: 450 });
+        expect(stillCovers({ x: 800, y: 1925, width: 1200, height: 450 }, screen, false, 0.05)).toBe(true);
+        // The view scrolled to 10 px of the top of what was drawn: less than a twentieth of its height.
+        expect(stillCovers({ x: 800, y: 1925, width: 1200, height: 450 }, { ...screen, y: 1935 }, false, 0.05)).toBe(
+            false,
+        );
+    });
+
+    it("reaches further up and down in 3/4: a pixel of the screen may show a point 128 px away, read between cells", () => {
+        const drawn = drawnArea(screen, true, 0.25);
+        // The same width; at least twice the reach above and under, however short the view is.
+        expect(drawn.x).toBe(800);
+        expect(drawn.width).toBe(1200);
+        expect(screen.y - drawn.y).toBeGreaterThanOrEqual(2 * OBLIQUE_REACH_PX);
+        expect(drawn.y + drawn.height - (screen.y + screen.height)).toBeGreaterThanOrEqual(2 * OBLIQUE_REACH_PX);
+        expect(stillCovers(drawn, screen, true, 0.05)).toBe(true);
+        // Scrolled until the screen is closer to the top of what was drawn than the reach: drawn again.
+        const scrolled = { ...screen, y: drawn.y + OBLIQUE_REACH_PX - 1 };
+        expect(stillCovers(drawn, scrolled, true, 0.05)).toBe(false);
+        expect(stillCovers(drawn, { ...screen, y: drawn.y + OBLIQUE_REACH_PX + 20 }, true, 0.05)).toBe(true);
+        // What was drawn flat does not reach far enough once the relief is seen in 3/4.
+        expect(stillCovers(drawnArea(screen, false, 0.25), screen, true, 0.05)).toBe(false);
     });
 });
 
