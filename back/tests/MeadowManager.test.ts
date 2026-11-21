@@ -415,6 +415,39 @@ describe("MeadowManager", () => {
         second.manager.stop();
     });
 
+    it("lives the time the room was empty when it opens again, a slice at each step", async () => {
+        const first = createHarness();
+        first.manager.mapChanged();
+        first.steps(30);
+        first.manager.stop();
+        expect(Number(first.store.at)).toBe(Date.UTC(2026, 6, 14, 10));
+        const before = new Uint8Array(gunzipSync(Buffer.from(first.store.grass, "base64")));
+        // A day later, by the same summer rain: the meadow lives that day before the step of now.
+        const second = createHarness({ saved: first.store, now: Date.UTC(2026, 6, 15, 10) });
+        await second.manager.restore();
+        second.manager.mapChanged();
+        expect(second.manager.catchingUp()).toBe(true);
+        second.steps(12);
+        expect(second.manager.catchingUp()).toBe(false);
+        const snapshot = second.manager.snapshot();
+        const sum = (cells: Uint8Array): number => cells.reduce((total, cell) => total + cell, 0);
+        expect(snapshot && sum(grassOf(snapshot))).toBeGreaterThan(sum(before));
+        second.manager.stop();
+    });
+
+    it("does not catch up a meadow saved without its time", async () => {
+        const first = createHarness();
+        first.manager.mapChanged();
+        first.steps(30);
+        first.manager.stop();
+        const withoutTime = Object.fromEntries(Object.entries(first.store).filter(([field]) => field !== "at"));
+        const second = createHarness({ saved: withoutTime, now: Date.UTC(2026, 6, 15, 10) });
+        await second.manager.restore();
+        second.manager.mapChanged();
+        expect(second.manager.catchingUp()).toBe(false);
+        second.manager.stop();
+    });
+
     it("follows the settings of the map: a faster growth, and a meadow turned off is wiped", () => {
         const usual = createHarness();
         const fast = createHarness({ meadow: { enabled: true, growMinutes: 2, thirstMinutes: 20, moistureHold: 1 } });

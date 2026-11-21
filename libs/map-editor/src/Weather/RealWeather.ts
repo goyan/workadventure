@@ -1,6 +1,6 @@
+import { z } from "zod";
 import { WeatherType } from "../types";
 import type { WeatherLocation } from "../types";
-import { z } from "zod";
 
 /** Paris, the place of a map without one (real weather and night clock). */
 export const PARIS_LATITUDE = 48.8566;
@@ -88,23 +88,65 @@ export function openMeteoTimelineUrl(latitude: number, longitude: number): URL {
     return url;
 }
 
-const OpenMeteoTimeline = z.object({
-    minutely_15: z.object({
-        time: z.array(z.number().int().nonnegative()).max(96),
-        weather_code: z.array(z.number().nullable()).max(96),
-        temperature_2m: z.array(z.number().finite().nullable()).max(96),
+/** The columns of an answer of Open-Meteo, the same for its quarter hours and its hours; at most `max` values each. */
+function openMeteoColumns(max: number) {
+    return z.object({
+        time: z.array(z.number().int().nonnegative()).max(max),
+        weather_code: z.array(z.number().nullable()).max(max),
+        temperature_2m: z.array(z.number().finite().nullable()).max(max),
         /** Cloud cover in %, asked since the clouds; absent from older answers. */
-        cloud_cover: z.array(z.number().finite().nullable()).max(96).optional(),
+        cloud_cover: z.array(z.number().finite().nullable()).max(max).optional(),
         /** Where the wind comes from (degrees), asked since the wind moves the clouds; absent from older answers. */
-        wind_direction_10m: z.array(z.number().min(0).max(360).nullable()).max(96).optional(),
+        wind_direction_10m: z.array(z.number().min(0).max(360).nullable()).max(max).optional(),
         /** Wind speed (km/h), asked since the clouds go as fast as the wind; absent from older answers. */
-        wind_speed_10m: z.array(z.number().min(0).max(500).nullable()).max(96).optional(),
-        /** Rain, showers and snow of the quarter hour (mm), asked since the rain has levels; absent from older answers. */
-        precipitation: z.array(z.number().min(0).max(500).nullable()).max(96).optional(),
+        wind_speed_10m: z.array(z.number().min(0).max(500).nullable()).max(max).optional(),
+        /** Rain, showers and snow of the slot (mm), asked since the rain has levels; absent from older answers. */
+        precipitation: z.array(z.number().min(0).max(500).nullable()).max(max).optional(),
         /** Relative humidity of the air (%), asked since the grass dries and burns; absent from older answers. */
-        relative_humidity_2m: z.array(z.number().min(0).max(100).nullable()).max(96).optional(),
-    }),
-});
+        relative_humidity_2m: z.array(z.number().min(0).max(100).nullable()).max(max).optional(),
+    });
+}
+type OpenMeteoColumns = z.infer<ReturnType<typeof openMeteoColumns>>;
+
+const OpenMeteoTimeline = z.object({ minutely_15: openMeteoColumns(96) });
+
+/** The weather of the past days, hour by hour: what a room empty for a while lived through (MeadowManager). */
+export const REAL_WEATHER_HISTORY_MAX_DAYS = 92;
+const OpenMeteoHistory = z.object({ hourly: openMeteoColumns(24 * (REAL_WEATHER_HISTORY_MAX_DAYS + 1)) });
+
+/** The URL of the hours of the past `pastDays` days at a place, with the same values as the timeline. */
+export function openMeteoHistoryUrl(latitude: number, longitude: number, pastDays: number): URL {
+    const url = new URL("https://api.open-meteo.com/v1/forecast");
+    url.searchParams.set("latitude", String(latitude));
+    url.searchParams.set("longitude", String(longitude));
+    url.searchParams.set(
+        "hourly",
+        "weather_code,temperature_2m,cloud_cover,wind_direction_10m,wind_speed_10m,precipitation,relative_humidity_2m",
+    );
+    url.searchParams.set(
+        "past_days",
+        String(Math.max(1, Math.min(REAL_WEATHER_HISTORY_MAX_DAYS, Math.ceil(pastDays)))),
+    );
+    url.searchParams.set("forecast_days", "1");
+    url.searchParams.set("timeformat", "unixtime");
+    return url;
+}
+
+/**
+ * The hours of the past days as quarter hours (each hour given four times, its rain an hour as it is), so that what
+ * reads the timeline reads them the same way. Undefined for an answer that is not one.
+ */
+export function historySlotsFromOpenMeteo(answer: unknown): RealWeatherSlot[] | undefined {
+    const parsed = OpenMeteoHistory.safeParse(answer);
+    if (!parsed.success) return undefined;
+    const hours = slotsOfColumns(parsed.data.hourly, 1);
+    return hours?.flatMap((hour) =>
+        Array.from({ length: QUARTERS_AN_HOUR }, (_, quarter) => ({
+            ...hour,
+            at: hour.at + quarter * REAL_WEATHER_SLOT_MS,
+        })),
+    );
+}
 
 /**
  * The timeline of an Open-Meteo answer asked with minutely_15=weather_code,temperature_2m,cloud_cover,wind_direction_10m,wind_speed_10m,precipitation,relative_humidity_2m
@@ -114,6 +156,11 @@ const OpenMeteoTimeline = z.object({
 export function slotsFromOpenMeteo(answer: unknown): RealWeatherSlot[] | undefined {
     const parsed = OpenMeteoTimeline.safeParse(answer);
     if (!parsed.success) return undefined;
+    return slotsOfColumns(parsed.data.minutely_15, QUARTERS_AN_HOUR);
+}
+
+/** The slots of columns of Open-Meteo; `slotsAnHour` turns the precipitation of a slot (mm) into a rate an hour. */
+function slotsOfColumns(columns: OpenMeteoColumns, slotsAnHour: number): RealWeatherSlot[] | undefined {
     const {
         time,
         weather_code,
@@ -123,7 +170,7 @@ export function slotsFromOpenMeteo(answer: unknown): RealWeatherSlot[] | undefin
         wind_speed_10m,
         precipitation,
         relative_humidity_2m,
-    } = parsed.data.minutely_15;
+    } = columns;
     if (weather_code.length !== time.length || temperature_2m.length !== time.length) return undefined;
     if (cloud_cover && cloud_cover.length !== time.length) return undefined;
     if (wind_direction_10m && wind_direction_10m.length !== time.length) return undefined;
@@ -152,7 +199,7 @@ export function slotsFromOpenMeteo(answer: unknown): RealWeatherSlot[] | undefin
             ...(cloudiness ? { cloudiness } : {}),
             ...(typeof wind_direction_10m?.[index] === "number" ? { windFrom: wind_direction_10m[index] } : {}),
             ...(typeof wind_speed_10m?.[index] === "number" ? { windSpeed: wind_speed_10m[index] } : {}),
-            ...(raining && typeof fallen === "number" ? { rainRate: fallen * QUARTERS_AN_HOUR } : {}),
+            ...(raining && typeof fallen === "number" ? { rainRate: fallen * slotsAnHour } : {}),
             ...(typeof relative_humidity_2m?.[index] === "number" ? { humidity: relative_humidity_2m[index] } : {}),
         };
     });

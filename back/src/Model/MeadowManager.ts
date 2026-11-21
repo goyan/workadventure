@@ -25,6 +25,7 @@ import {
     TILE_PX,
     TreeFire,
     WeatherType,
+    REAL_WEATHER_SLOT_MS,
 } from "@workadventure/map-editor";
 import type {
     Downpour,
@@ -36,6 +37,8 @@ import type {
     TerrainData,
     ToldTree,
     WaterGrid,
+    MapPlace,
+    RealWeatherSlot,
 } from "@workadventure/map-editor";
 import type { MeadowMessage, TreeFireMessage } from "@workadventure/messages";
 import type { VariablesRepositoryInterface } from "../Services/Repository/VariablesRepositoryInterface";
@@ -47,6 +50,21 @@ const CELLS_A_TILE = TILE_PX / TERRAIN_CELL;
 const STEPS_PER_MESSAGE = 5;
 /** The meadow is saved every minute while it changes. */
 const STEPS_PER_SAVE = 30;
+/** A room left empty lives the time it missed by steps this long (s), this many at each step of now, a week at most. */
+const CATCH_UP_STEP_SECONDS = 120;
+const CATCH_UP_STEPS_A_TICK = 150;
+const CATCH_UP_MAX_MS = 7 * 24 * 3600 * 1000;
+/** How long the weather of the past is waited for before the meadow catches up without it (ms). */
+const HISTORY_WAIT_MS = 10_000;
+/** No luck while the time missed is lived again: no fire starts nor spreads by itself then. */
+const NO_LUCK = (): number => 1;
+
+/** What a quarter hour of the past weather does to the meadow: its air, the air over its snow, its fire. */
+export interface ReplayedWeather {
+    air: PrecipitationAir | undefined;
+    snow: SnowWeather | undefined;
+    fire: { danger: number; windFrom: number; windSpeed: number };
+}
 /** No meadow on a map larger than this, in tiles: it would be read at every step. */
 const MAX_MEADOW_TILES = 1_000_000;
 /** A tree on fire melts the snow this many tiles around its foot. */
@@ -118,6 +136,20 @@ export class MeadowManager {
     private changedSinceSave = false;
     /** Whether the meadow was wiped because the map turned it off. */
     private cleared = false;
+    /** When the saved meadow was last true (ms): the room was empty since, and the meadow lives that time again. */
+    private savedAt: number | undefined;
+    /** The time missed while the room was empty, lived again a slice at each step (stepCatchUp). */
+    private catchUp:
+        | { at: number; to: number; history: readonly RealWeatherSlot[] | undefined; askedAt: number | undefined }
+        | undefined;
+    /** The time being lived again and its weather, while the meadow catches up; undefined: the time of now. */
+    private replay:
+        | { now: number; slots: readonly RealWeatherSlot[] | undefined; weather: ReplayedWeather | undefined }
+        | undefined;
+    /** The weather of the past at the place of the map (the real weather), and what a quarter hour of it does here. */
+    private history: (place: MapPlace | undefined, since: number) => Promise<RealWeatherSlot[] | undefined> = () =>
+        Promise.resolve(undefined);
+    private weatherOfSlot: (slot: RealWeatherSlot) => ReplayedWeather | undefined = () => undefined;
 
     constructor(
         private readonly room: Pick<GameRoom, "getWam" | "sendSubMessageToRoom">,
@@ -167,6 +199,9 @@ export class MeadowManager {
                 // Absent from a meadow saved before its water could freeze.
                 ...(fields.ice ? { ice: new Uint8Array(gunzipSync(Buffer.from(fields.ice, "base64"))) } : {}),
             };
+            // Absent from a meadow saved before it knew when: it does not catch up.
+            const at = Number(fields.at);
+            this.savedAt = Number.isFinite(at) && at > 0 ? at : undefined;
             // Absent from a meadow saved before its trees could burn.
             if (fields.trees) {
                 this.savedTrees = JSON.parse(gunzipSync(Buffer.from(fields.trees, "base64")).toString("utf8"));
@@ -183,6 +218,8 @@ export class MeadowManager {
     public stop(): void {
         if (this.timer) clearInterval(this.timer);
         this.timer = undefined;
+        // Saved with its time even unchanged: the next room catches up from now on.
+        this.changedSinceSave = true;
         this.save();
     }
 
@@ -223,6 +260,12 @@ export class MeadowManager {
                 this.saved.snow,
                 this.saved.ice,
             );
+            // Saved a while ago: the room was empty since, the meadow lives that time again (a week at most).
+            const now = this.now();
+            if (this.savedAt !== undefined && now - this.savedAt > CATCH_UP_STEP_SECONDS * 1000) {
+                const from = Math.max(this.savedAt, now - CATCH_UP_MAX_MS);
+                this.catchUp = { at: from, to: now, history: undefined, askedAt: undefined };
+            }
         }
         this.saved = undefined;
         this.readTrees();
@@ -277,13 +320,96 @@ export class MeadowManager {
     }
 
     /**
+     * How a room left empty catches up: the weather of the past at the place of its map (real weather), and what the
+     * conditions of a quarter hour of it are for the meadow (its air, its snow, its fire). Without them it lives the
+     * time it missed with the conditions of now.
+     */
+    public catchUpWith(
+        history: (place: MapPlace | undefined, since: number) => Promise<RealWeatherSlot[] | undefined>,
+        weatherOfSlot: (slot: RealWeatherSlot) => ReplayedWeather | undefined,
+    ): void {
+        this.history = history;
+        this.weatherOfSlot = weatherOfSlot;
+    }
+
+    /** Whether the meadow is still living the time it missed. */
+    public catchingUp(): boolean {
+        return this.catchUp !== undefined;
+    }
+
+    /** The time of the meadow: the time being lived again while it catches up, else the clock of the room. */
+    private clock(): number {
+        return this.replay?.now ?? this.now();
+    }
+
+    private airNow(): PrecipitationAir | undefined {
+        return this.replay?.weather ? this.replay.weather.air : this.air();
+    }
+
+    private fireNow(): { danger: number; windFrom: number; windSpeed: number } {
+        return this.replay?.weather ? this.replay.weather.fire : this.fireWeather();
+    }
+
+    /**
+     * A slice of the time missed while the room was empty, lived again at CATCH_UP_STEP_SECONDS a step: true while it
+     * goes on (the step of now waits). The weather of the past is asked first, waited for a while at most.
+     */
+    private stepCatchUp(): boolean {
+        const catchUp = this.catchUp;
+        const meadow = this.meadow;
+        if (!catchUp || !meadow) return false;
+        const settings = this.room.getWam()?.settings;
+        const real = settings?.weather === WeatherType.Real;
+        if (real && catchUp.history === undefined) {
+            if (catchUp.askedAt === undefined) {
+                catchUp.askedAt = this.now();
+                this.history(settings?.weatherLocation, catchUp.at)
+                    .then((slots) => {
+                        catchUp.history = slots ?? [];
+                    })
+                    .catch(() => {
+                        catchUp.history = [];
+                    });
+                return true;
+            }
+            if (this.now() - catchUp.askedAt < HISTORY_WAIT_MS) return true;
+            catchUp.history = [];
+        }
+        const slots = catchUp.history && catchUp.history.length > 0 ? catchUp.history : undefined;
+        try {
+            for (let step = 0; step < CATCH_UP_STEPS_A_TICK && catchUp.at < catchUp.to; step++) {
+                const at = catchUp.at;
+                const slot = slots?.find((candidate) => candidate.at <= at && at < candidate.at + REAL_WEATHER_SLOT_MS);
+                this.replay = { now: catchUp.at, slots, weather: slot ? this.weatherOfSlot(slot) : undefined };
+                const seconds = Math.min(CATCH_UP_STEP_SECONDS, (catchUp.to - catchUp.at) / 1000);
+                this.advance(seconds);
+                catchUp.at += seconds * 1000;
+            }
+        } finally {
+            this.replay = undefined;
+        }
+        // Seen living its missed time quickly: the room is told after each slice.
+        this.changedSinceSave = true;
+        this.tell(meadow);
+        if (catchUp.at >= catchUp.to) {
+            this.catchUp = undefined;
+            this.save();
+            return false;
+        }
+        return true;
+    }
+
+    /**
      * What a step reads of the snow: the air over it, and the snow of the map falling on every tile, at the pace the
      * water of the map comes (its speed), so that a snow weighs what the same rain would have.
      */
-    private snowInput(): Pick<MeadowStepInput, "weather" | "snowfallMm"> {
+    private snowInput(seconds: number): Pick<MeadowStepInput, "weather" | "snowfallMm"> {
         const speed = this.room.getWam()?.settings?.water?.speed ?? DEFAULT_WATER_SETTINGS.speed;
-        const hours = (MEADOW_STEP_SECONDS * (Number.isFinite(speed) && speed > 0 ? speed : 1)) / 3600;
-        return { weather: this.snowWeather(), snowfallMm: this.snowRate * hours };
+        const hours = (seconds * (Number.isFinite(speed) && speed > 0 ? speed : 1)) / 3600;
+        return {
+            weather: this.replay?.weather ? this.replay.weather.snow : this.snowWeather(),
+            snowfallMm: this.snowRate * hours,
+        };
     }
 
     /** The water of the snow that melted at a step runs to the water of the relief; what it cannot take wets the soil. */
@@ -301,20 +427,35 @@ export class MeadowManager {
 
     /** One step of the meadow (every two seconds); every ten seconds the room is told when it changed. */
     public step(): void {
+        if (!this.meadow) return;
+        // A room that was left empty first lives through the time it missed (catchUp), a slice at each step.
+        if (this.stepCatchUp()) return;
+        this.advance(MEADOW_STEP_SECONDS);
+    }
+
+    /**
+     * The meadow moved on by `seconds`: at the time of the clock of the room, or at the time being replayed while it
+     * catches up (then with the weather of that time, no luck, no grazing, and nothing told nor saved at each step).
+     */
+    private advance(seconds: number): void {
         const meadow = this.meadow;
         if (!meadow) return;
+        const replaying = this.replay !== undefined;
         const settings = this.room.getWam()?.settings;
-        const date = new Date(this.now());
-        if (this.steps % STEPS_PER_MESSAGE === 0) {
-            const slots =
-                settings?.weather === WeatherType.Real ? this.rain.slotsFor(settings.weatherLocation) : undefined;
+        const date = new Date(this.clock());
+        if (replaying || this.steps % STEPS_PER_MESSAGE === 0) {
+            const slots = this.replay
+                ? this.replay.slots
+                : settings?.weather === WeatherType.Real
+                  ? this.rain.slotsFor(settings.weatherLocation)
+                  : undefined;
             // What falls as snow lies where it fell: only the rain runs to the hollows and soaks the soil.
-            const falling = rainRateAt(settings, this.now(), slots);
-            this.rainRate = liquidRainRate(falling, this.air());
+            const falling = rainRateAt(settings, this.clock(), slots);
+            this.rainRate = liquidRainRate(falling, this.airNow());
             // ...and the snow lies on the ground, until it melts.
-            this.snowRate = snowRainRate(falling, this.air());
+            this.snowRate = snowRainRate(falling, this.airNow());
             // ...and in the same cold the soil freezes: its water stays, its grass lies dormant.
-            this.frost = soilFrostOf(this.air());
+            this.frost = soilFrostOf(this.airNow());
         }
         this.steps++;
         const set = { ...DEFAULT_MEADOW_SETTINGS, ...settings?.meadow };
@@ -331,7 +472,7 @@ export class MeadowManager {
                   return deepest;
               }
             : () => 0;
-        const snow = this.snowInput();
+        const snow = this.snowInput(seconds);
         if (snow.snowfallMm) this.snowMoved = true;
         // The trees on fire melt the snow around their foot.
         if (meadow.snowy() || meadow.icy()) {
@@ -340,7 +481,7 @@ export class MeadowManager {
                     Math.floor(tree.x / TILE_PX),
                     Math.floor(tree.y / TILE_PX),
                     TREE_THAW_TILES,
-                    FIRE_THAW_MM_PER_SECOND * tree.fire * MEADOW_STEP_SECONDS,
+                    FIRE_THAW_MM_PER_SECOND * tree.fire * seconds,
                 );
             }
         }
@@ -357,7 +498,7 @@ export class MeadowManager {
             const freezing = snow.weather !== undefined && snow.weather.temperature < 0;
             if (meadow.snowy() || meadow.icy() || snow.snowfallMm || freezing) {
                 const thawed = meadow.stepSnowAlone({
-                    seconds: MEADOW_STEP_SECONDS,
+                    seconds: seconds,
                     rainMmPerHour: this.rainRate,
                     daylight: false,
                     season: seasonAt(date, settings?.weatherLocation),
@@ -367,14 +508,14 @@ export class MeadowManager {
                 this.pourMelted(meadow, thawed?.meltedMm);
                 if (meadow.iceMoved()) this.snowMoved = true;
             }
-            if (this.steps % STEPS_PER_MESSAGE === 0 || this.snowMoved) this.tell(meadow);
-            if (this.steps % STEPS_PER_SAVE === 0) this.save();
+            if (!replaying && (this.steps % STEPS_PER_MESSAGE === 0 || this.snowMoved)) this.tell(meadow);
+            if (!replaying && this.steps % STEPS_PER_SAVE === 0) this.save();
             return;
         }
         this.cleared = false;
-        const weather = this.fireWeather();
+        const weather = this.fireNow();
         const thawed = meadow.step({
-            seconds: MEADOW_STEP_SECONDS,
+            seconds: seconds,
             rainMmPerHour: this.rainRate,
             // Day from sunrise to sunset at the place of the map, as the game draws its day and night.
             daylight: isDaylightAt(date, settings?.weatherLocation),
@@ -385,7 +526,7 @@ export class MeadowManager {
             fireDanger: weather.danger,
             windFrom: weather.windFrom,
             windSpeed: weather.windSpeed,
-            random: this.random,
+            random: replaying ? NO_LUCK : this.random,
             soilFrost: this.frost,
             waterAt,
             ...snow,
@@ -393,24 +534,26 @@ export class MeadowManager {
         this.pourMelted(meadow, thawed?.meltedMm);
         // An ice that thickens or thaws is seen moving, as a snow is.
         if (meadow.iceMoved()) this.snowMoved = true;
-        for (const grazer of this.grazers()) meadow.graze(grazer.x, grazer.y, MEADOW_STEP_SECONDS);
+        if (!replaying) for (const grazer of this.grazers()) meadow.graze(grazer.x, grazer.y, seconds);
         // The trees after the ground they stand on: what they set on fire is told with this step.
         const trees = this.trees.step({
-            seconds: MEADOW_STEP_SECONDS,
+            seconds: seconds,
             rainMmPerHour: this.rainRate,
             windFrom: weather.windFrom,
             windSpeed: weather.windSpeed,
             growSeconds: set.growMinutes * 60,
             groundBurning: meadow.burning() > 0,
-            random: this.random,
+            random: replaying ? NO_LUCK : this.random,
         });
-        this.tellTrees(trees.changed, trees.embers);
+        if (!replaying) this.tellTrees(trees.changed, trees.embers);
         // A fire is seen running: the room is told at every step while one burns, and once more when it is out.
         const burning = meadow.burning() > 0 || this.trees.burning() > 0;
         // So is a snow falling or melting.
-        if (this.steps % STEPS_PER_MESSAGE === 0 || burning || this.wasBurning || this.snowMoved) this.tell(meadow);
+        if (!replaying && (this.steps % STEPS_PER_MESSAGE === 0 || burning || this.wasBurning || this.snowMoved)) {
+            this.tell(meadow);
+        }
         this.wasBurning = burning;
-        if (this.steps % STEPS_PER_SAVE === 0) this.save();
+        if (!replaying && this.steps % STEPS_PER_SAVE === 0) this.save();
     }
 
     /**
@@ -627,6 +770,8 @@ export class MeadowManager {
             ["ice", Buffer.from(gzipSync(this.meadow.writeIce())).toString("base64")],
             ["trees", Buffer.from(gzipSync(JSON.stringify(this.trees.write()))).toString("base64")],
             ["size", `${this.meadow.width}x${this.meadow.height}`],
+            // When it is true: the time reached while it catches up, else now.
+            ["at", String(this.catchUp ? this.catchUp.at : this.now())],
         ];
         for (const [field, value] of fields) {
             this.store.repository
