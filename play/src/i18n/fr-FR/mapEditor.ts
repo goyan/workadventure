@@ -748,8 +748,18 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         force: "Force (épaisseur enlevée par passage)",
         mapSettings: "Réglages de la carte",
         realistic: "Réaliste",
-        realisticHint:
-            "Remet tous les réglages de l'eau sur leurs valeurs physiques : vitesse 1, eau à inertie, vagues selon le sol et la profondeur, 5 envois par seconde, hauteur d'eau non plafonnée (256 px), ruissellement 10, évaporation 0,2 mm/h, absorption 5 mm/h, vidange 300 mm/h.",
+        realisticHint: "Remet tous les réglages de l'eau sur leurs valeurs physiques.",
+        more: "En savoir plus",
+        realisticDetail:
+            "Vitesse 1, eau à inertie, vagues selon le sol et la profondeur, vitesse d'écoulement 1, 5 envois par seconde, hauteur d'eau non plafonnée (256 px), ruissellement 10, évaporation 0,2 mm/h, absorption 5 mm/h, vidange 300 mm/h. Seul l'amorti (0,02) n'est pas physique.",
+        inertiaDetail:
+            "Une comète y jette l'eau de son cratère en bourrelet et l'eau fait elle-même la vague. Sur la terre émergée, seule la rugosité du sol retient la crue. Une eau profonde clapote plusieurs minutes avant de se calmer.",
+        flowPaceDetail:
+            "Une case fait 1,10 m de côté : à 1, une vague court à 2,2 cases par seconde sous 60 cm d'eau, 4 sous 2 m. Repère : l'avatar marche à 5,6 cases par seconde, quatre fois plus vite qu'un piéton. Pluie, sources et puits suivent « Vitesse de l'eau », pas ce réglage.",
+        precisionDetail:
+            "Nombre maximal de mouvements de l'eau par pas (10 pas par seconde). À 3, une vague court au plus à 5,8 m/s et un torrent à 8 m/s ; à 8, 15 et 16 m/s. En réel, une vague court à 7,7 m/s sous 6 m d'eau.",
+        updatesDetail:
+            "Nombre d'envois par seconde quand l'eau bouge. Mesuré pendant un tsunami : environ 45 Ko par envoi et par joueur, soit 450 Ko/s à 10 ; presque rien sur une eau calme. Sous une averse, un drain ou après une comète : au moins 5.",
         maxDepth: "Profondeur et hauteur maximales (cases)",
         runoff: "Ruissellement (terrain qui alimente un creux)",
         evaporation: "Évaporation par temps sec",
@@ -778,42 +788,48 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         maxSurface: "Hauteur maximale de l'eau au-dessus du sol",
         inertia: "Eau à inertie (à l'essai)",
         flowPace: "Vitesse d'écoulement",
-        flowPaceHint:
-            "Combien de fois sa vitesse réelle l'eau à inertie s'écoule : vagues, crues et courants. En réel : 1, pour une case de 1,10 m de côté ; une vague court alors à 2,2 cases par seconde sous 60 cm d'eau, 4 cases par seconde sous 2 m. Repère : l'avatar marche à 5,6 cases par seconde, soit 6 m/s, quatre fois plus vite qu'un piéton. Plus bas : l'eau se propage plus lentement. Ce qui entre et sort (pluie, sources, puits) suit « Vitesse de l'eau », pas ce réglage.",
+        flowPaceHint: "Ralentit ou accélère tout ce qui coule : vagues, crues, courants. En réel : 1.",
         precision: "Finesse du calcul de l'eau",
         precisionHint:
-            "Nombre maximal de mouvements de l'eau par pas (10 pas par seconde). À 3, une vague court au plus à 5,5 m/s et un torrent à 8 m/s ; à 8, 15 et 22 m/s. En réel : une vague court à 7,7 m/s sous 6 m d'eau. Chaque mouvement de plus coûte autant de calcul au serveur.",
+            "Plus haut : vagues et torrents plus rapides possibles, calcul plus lourd pour le serveur. 3 par défaut.",
         updates: "Envois de l'eau aux joueurs",
-        updatesHint:
-            "Nombre de fois par seconde où les joueurs reçoivent l'eau quand elle bouge. À 1, une vague se fond d'un endroit au suivant ; à 5 ou 10, on la voit courir. Mesuré pendant un tsunami : environ 45 Ko par envoi et par joueur, soit 450 Ko/s à 10 ; presque rien sur une eau calme. Sous une averse, un drain ou après une comète : au moins 5.",
+        updatesHint: "Plus haut : on voit les vagues courir au lieu de se fondre, au prix du réseau. 1 par défaut.",
         waves: {
             roughness: "Frottement du sol",
             roughnessHint:
-                "Combien de fois le frottement que donnent les sols de la carte (prairie et rocher freinent plus que sable et argile). Il grandit avec la vitesse de l'eau et faiblit avec sa profondeur : presque rien sous une houle au large, fort sous une lame d'eau qui court sur la terre. Plus haut : les vagues montent moins loin sur les rives. En réel : 1, avec les rugosités de Manning des sols : argile 0,022, sable 0,025, terre et gravier 0,03, rocher 0,04, prairie 0,045.",
+                "Freine l'eau rapide ou peu profonde, selon le sol peint. Plus haut : les vagues montent moins loin. En réel : 1.",
             damping: "Amorti de l'eau",
             dampingHint:
-                "Part de son débit que l'eau perd chaque seconde, quelles que soient sa profondeur et sa vitesse. 0,02 par défaut : une houle traverse un lac. Plus haut : un lac dérangé se calme vite, mais les vagues s'éteignent avant d'atteindre la rive. En réel : 0 ; 0,02 est le minimum qui garde le calcul calme.",
+                "Calme l'eau partout, quelle que soit sa profondeur. Plus haut : les vagues s'éteignent avant la rive. En réel : 0.",
             breaking: "Déferlement des vagues",
             breakingHint:
-                "Ce que perd une vague dont le front est raide pour l'eau où elle court : elle casse près du rivage et sur la terre. 0 : les vagues ne cassent jamais et montent plus loin. En réel : 1. Sans effet sur la terre émergée.",
+                "Fait casser les vagues trop raides, dans les lacs seulement. 0 : elles ne cassent jamais. En réel : 1.",
             momentum: "Élan emporté par l'eau",
             momentumHint:
-                "À 1, l'eau emporte sa vitesse avec elle : les fronts sont nets et un lac dérangé clapote moins. À 0, chaque passage ne garde que son propre débit : les vagues grossissent davantage en approchant du rivage et montent plus loin, mais l'eau clapote longtemps. En réel : 1. Sans effet sur la terre émergée.",
+                "L'eau emporte sa vitesse : fronts nets, lac vite calme. 0 : vagues plus hautes au rivage, clapotis long. En réel : 1.",
+            roughnessDetail:
+                "Frottement de Manning : il grandit avec la vitesse de l'eau et faiblit avec sa profondeur, presque nul sous une houle au large. Rugosités des sols : argile 0,022, sable 0,025, terre et gravier 0,03, rocher 0,04, prairie 0,045.",
+            dampingDetail:
+                "Part de son débit que l'eau perd chaque seconde. 0,02 par défaut : le minimum qui garde le calcul calme ; une houle traverse encore un lac.",
+            breakingDetail:
+                "Un front dont la surface tombe de plus d'un dixième de l'eau où il court perd son débit. Sans effet sur la terre émergée, où une crue est une lame qui avance.",
+            momentumDetail:
+                "Sans effet sur la terre émergée. À 0, chaque passage entre deux cellules ne garde que son propre débit.",
         },
         real: {
             inertia:
-                "L'eau garde son élan d'un instant à l'autre : des vagues courent, un lac dérangé se remet à niveau en une minute environ au lieu de s'étaler lentement. Coupé : l'eau avance de proche en proche, comme avant. En réel : activée.",
+                "L'eau garde son élan : des vagues courent, cassent et noient les rives. Coupé : l'eau avance de proche en proche. En réel : activée.",
             maxDepth: "En réel : une case fait environ 1,10 m. Mare : 1 case ; étang : 2 à 3 ; lac : 4 et plus.",
             runoff: "En réel : le terrain qui alimente une mare fait 5 à 20 fois sa surface ; 0 pour un bassin maçonné.",
             evaporation: "En réel : 0,05 mm/h en hiver, 0,1 à 0,3 mm/h en été (3 à 6 mm par jour).",
             absorption: "En réel : argile 1 à 5 mm/h, pelouse 5 à 15, sable 20 à 30 ; sol gorgé d'eau ou bitume : 0.",
             indoorDrain:
                 "Les sols des pièces fermées par des murs (portes fermées) évacuent l'eau entrée. 300 mm/h par défaut : une pièce inondée sèche en deux minutes environ ; des grilles d'évacuation posées au sol vont plus vite ; 0 garde l'eau à l'intérieur. Un bassin creusé à l'intérieur garde son eau.",
-            speed: "En réel : 1. À cette vitesse, une pluie de 10 mm/h met des heures à remplir un étang. 60 par défaut : une minute pour une heure.",
+            speed: "En réel : 1. À cette vitesse, une pluie de 10 mm/h met des heures à remplir un étang. 60 par défaut.",
             maxSurface:
-                "18 px par défaut : juste de quoi nager, sous les étages. Plus haut, une crue ou la vague d'un météore noie le sol en profondeur (une case = 32 px), étages compris au-delà de 52 px ; sous une forte pluie accélérée, l'eau peut s'empiler. En réel : aucun plafond (256 px, le maximum).",
+                "18 px par défaut : de quoi nager, sous les étages (52 px). Plus haut, une crue noie le sol en profondeur. En réel : aucun plafond (256 px).",
             current:
-                "À 1, le courant le plus fort emporte au quart de la vitesse de la marche : on lui résiste en marchant. Rien dans une eau au repos ni sous un quart de case d'eau. Réglage de jeu, pas une grandeur physique : 1 par défaut.",
+                "À 1, le courant le plus fort emporte au quart de la vitesse de la marche. Réglage de jeu : 1 par défaut.",
         },
         paceHint:
             "Les creux se remplissent avec la pluie de la carte et sèchent par beau temps. Une source ou un puits s'ajoute à n'importe quel objet depuis ses propriétés.",

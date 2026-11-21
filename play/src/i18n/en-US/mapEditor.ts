@@ -737,8 +737,18 @@ const mapEditor: BaseTranslation = {
         force: "Force (thickness taken off by a stroke)",
         mapSettings: "Map settings",
         realistic: "Realistic",
-        realisticHint:
-            "Sets every setting of the water back to its physical value: speed 1, water with inertia, waves as the ground and the depth make them, 5 tellings a second, water height not capped (256 px), runoff 10, evaporation 0.2 mm/h, absorption 5 mm/h, drainage 300 mm/h.",
+        realisticHint: "Sets every setting of the water back to its physical value.",
+        more: "Learn more",
+        realisticDetail:
+            "Speed 1, water with inertia, waves as the ground and the depth make them, pace of the flow 1, 5 tellings a second, water height not capped (256 px), runoff 10, evaporation 0.2 mm/h, absorption 5 mm/h, drainage 300 mm/h. Only the damping (0.02) is not physical.",
+        inertiaDetail:
+            "A comet throws the water of its crater up in a rim there, and the water itself makes the wave. On dry land only the roughness of the ground holds back a flood. Deep water rocks for minutes before it calms down.",
+        flowPaceDetail:
+            "A tile is 1.10 m wide: at 1, a wave runs at 2.2 tiles a second in 60 cm of water, 4 in 2 m. For scale: the avatar walks at 5.6 tiles a second, four times faster than a walker. Rain, sources and sinks follow the speed of the water, not this.",
+        precisionDetail:
+            "The most moves of the water in a step (10 steps a second). At 3, a wave runs at 5.8 m/s at most and a torrent at 8 m/s; at 8, 15 and 16 m/s. In reality a wave runs at 7.7 m/s in 6 m of water.",
+        updatesDetail:
+            "How many tellings a second while the water moves. Measured during a tsunami: about 45 KB a telling and a player, 450 KB/s at 10; next to nothing on calm water. Under a downpour, a drain or after a comet: 5 at least.",
         maxDepth: "Maximum depth and height (tiles)",
         runoff: "Runoff (ground feeding a hollow)",
         evaporation: "Evaporation in dry weather",
@@ -767,42 +777,46 @@ const mapEditor: BaseTranslation = {
         maxSurface: "Highest water over the ground",
         inertia: "Water with inertia (on trial)",
         flowPace: "Pace of the flow",
-        flowPaceHint:
-            "How many times its real speed the water with inertia flows: waves, floods and currents. In reality: 1, for a tile 1.10 m wide; a wave then runs at 2.2 tiles a second in 60 cm of water, 4 tiles a second in 2 m. For scale: the avatar walks at 5.6 tiles a second, 6 m/s, four times faster than a walker. Lower: the water spreads slower. What comes in and goes out (rain, sources, sinks) follows the speed of the water, not this.",
+        flowPaceHint: "Slows down or speeds up all that flows: waves, floods, currents. In reality: 1.",
         precision: "Fineness of the computation of the water",
         precisionHint:
-            "The most moves of the water in a step (10 steps a second). At 3, a wave runs at 5.5 m/s at most and a torrent at 8 m/s; at 8, 15 and 22 m/s. In reality a wave runs at 7.7 m/s in 6 m of water. Each move more costs the server as much computation.",
+            "Higher: faster waves and torrents are possible, heavier computation for the server. 3 by default.",
         updates: "Tellings of the water to the players",
-        updatesHint:
-            "How many times a second the players receive the water while it moves. At 1, a wave fades from a place to the next; at 5 or 10, it is seen running. Measured during a tsunami: about 45 KB a telling and a player, 450 KB/s at 10; next to nothing on calm water. Under a downpour, a drain or after a comet: 5 at least.",
+        updatesHint: "Higher: waves are seen running instead of fading, for more network. 1 by default.",
         waves: {
             roughness: "Friction of the ground",
             roughnessHint:
-                "How many times the friction the soils of the map give (meadow and rock hold back more than sand and clay). It grows with the speed of the water and falls with its depth: next to nothing under a swell at sea, strong under a sheet of water running on land. Higher: waves run less far up the shores. In reality: 1, with Manning's roughness of the soils: clay 0.022, sand 0.025, earth and gravel 0.03, rock 0.04, meadow 0.045.",
+                "Holds back fast or shallow water, by the painted soil. Higher: waves run less far up. In reality: 1.",
             damping: "Damping of the water",
             dampingHint:
-                "The share of its flow the water loses each second, whatever its depth and its speed. 0.02 by default: a swell crosses a lake. Higher: a stirred lake calms quickly, but waves die out before they reach the shore. In reality: 0; 0.02 is the least that keeps the computation calm.",
+                "Calms the water everywhere, whatever its depth. Higher: waves die out before the shore. In reality: 0.",
             breaking: "Breaking of the waves",
-            breakingHint:
-                "What a wave whose front is steep for the water it runs in loses: it breaks near the shore and on land. 0: waves never break and run further up. In reality: 1. No effect on dry land.",
+            breakingHint: "Makes waves that are too steep break, in lakes only. 0: they never break. In reality: 1.",
             momentum: "Momentum carried by the water",
             momentumHint:
-                "At 1, the water carries its speed along: fronts are sharp and a stirred lake rocks less. At 0, each passage keeps its own flow only: waves grow more as they near the shore and run further up, but the water rocks for a long time. In reality: 1. No effect on dry land.",
+                "The water carries its speed: sharp fronts, a lake soon calm. 0: higher waves at the shore, long rocking. In reality: 1.",
+            roughnessDetail:
+                "Manning's friction: it grows with the speed of the water and falls with its depth, next to nothing under a swell at sea. Roughness of the soils: clay 0.022, sand 0.025, earth and gravel 0.03, rock 0.04, meadow 0.045.",
+            dampingDetail:
+                "The share of its flow the water loses each second. 0.02 by default: the least that keeps the computation calm; a swell still crosses a lake.",
+            breakingDetail:
+                "A front whose surface drops more than a tenth of the water it runs in loses its flow. No effect on dry land, where a flood is a sheet that advances.",
+            momentumDetail: "No effect on dry land. At 0, each passage between two cells keeps its own flow only.",
         },
         real: {
             inertia:
-                "The water keeps its momentum from one moment to the next: waves run, a stirred lake levels in about a minute instead of spreading slowly. Off: the water creeps from cell to cell, as before. In reality: on.",
+                "The water keeps its momentum: waves run, break and flood the shores. Off: the water creeps from cell to cell. In reality: on.",
             maxDepth: "In reality: a tile is about 1.10 m. Pond: 1 tile; large pond: 2 to 3; lake: 4 and more.",
             runoff: "In reality: the ground feeding a pond is 5 to 20 times its surface; 0 for a built basin.",
             evaporation: "In reality: 0.05 mm/h in winter, 0.1 to 0.3 mm/h in summer (3 to 6 mm a day).",
             absorption: "In reality: clay 1 to 5 mm/h, lawn 5 to 15, sand 20 to 30; soaked ground or asphalt: 0.",
             indoorDrain:
                 "The floors of the rooms closed by walls (doors closed) drain the water that came in. 300 mm/h by default: a flooded room is dry in about two minutes; floor drains take it faster; 0 keeps the water inside. A pool dug indoors keeps its water.",
-            speed: "In reality: 1. At that speed a rain of 10 mm/h takes hours to fill a pond. 60 by default: a minute for an hour.",
+            speed: "In reality: 1. At that speed a rain of 10 mm/h takes hours to fill a pond. 60 by default.",
             maxSurface:
-                "18 px by default: just enough to swim, under the upper floors. Higher, a flood or the wave of a meteor drowns the ground deep (a tile is 32 px), upper floors too beyond 52 px; under a hard rain on a fast map the water may pile up. In reality: no cap (256 px, the most).",
+                "18 px by default: enough to swim, under the upper floors (52 px). Higher, a flood drowns the ground deep. In reality: no cap (256 px).",
             current:
-                "At 1 the hardest current carries at a quarter of the walking speed: one resists it by walking. Nothing in still water nor under a quarter of a tile of water. A setting of the game, not a physical quantity: 1 by default.",
+                "At 1 the hardest current carries at a quarter of the walking speed. A setting of the game: 1 by default.",
         },
         paceHint:
             "Hollows fill with the rain of the map and dry in fine weather. A source or a sink is added to any object from its properties.",
