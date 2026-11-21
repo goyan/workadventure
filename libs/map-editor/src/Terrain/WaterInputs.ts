@@ -75,7 +75,7 @@ export function waterObjectsOf(wam: Pick<WAMFileFormat, "entities"> | undefined)
 const SPEED_PER_FLOW_STEP = 4;
 
 /** Pixels of water a millimetre of water makes. */
-const PX_PER_MM = 1 / (-metresOf(-1) * 1000);
+export const PX_PER_MM = 1 / (-metresOf(-1) * 1000);
 
 /**
  * What one step of `seconds` does to the water of a map, from its settings, how hard it rains (mm an hour) and its
