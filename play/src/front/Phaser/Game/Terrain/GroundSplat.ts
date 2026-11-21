@@ -29,7 +29,8 @@ import type { GroundArea } from "./TexturedGround";
  * grass, the snow and the water; the relief (how deep a cell is dug, how high it is raised, in map pixels) and the
  * ash; the straw and the fire of the meadow, and what is outdoors; the pools (whether a cell is one, how deep, whether
  * hot), the colour of their water and of their coping; the ice the server keeps over the water (its thickness, see
- * iceByte) and whether a cell is a pool placed as an image, and three packs to spare.
+ * iceByte), whether a cell is a pool placed as an image and whether it holds water; the moisture of the soil the
+ * server keeps (pack 9, red), and two packs to spare.
  */
 const PACKS = 12;
 /** The packs are laid in a grid this many wide (and PACKS / PACKS_ACROSS high): a wide view stays within the size a
@@ -40,6 +41,26 @@ const PACKS_DOWN = PACKS / PACKS_ACROSS;
 const WATER_SCALE_PX = 128;
 /** The depth (0 to 1 of WATER_SCALE_PX) times this is how far a deep water reaches over the cells around it. */
 const SHORE_GAIN = 12;
+/**
+ * The reflectance of a ground soaked, against the same ground dry (linear, visible light). Porous soils lose about
+ * half of it: 0.4 to 0.6 for soils (Lobell & Asner 2002, Soil Sci. Soc. Am. J. 66:722), a loam's albedo from about
+ * 0.30 dry to 0.14 wet (Idso et al. 1975, J. Appl. Meteorol. 14:109), sand about 0.4 dry and 0.23 wet. Rock, gravel and
+ * grass are a choice, not sourced: a stone does not drink (a film only), the blades of grass are not porous.
+ */
+export const WET_REFLECTANCE = {
+    earth: 0.54,
+    meadow: 0.54,
+    clay: 0.48,
+    sand: 0.55,
+    rock: 0.8,
+    gravel: 0.65,
+    grass: 0.9,
+} as const;
+const SRGB_GAMMA = 2.2;
+/** How fast the reflectance falls with the moisture of the soil (0 to 1): most of the darkening by half of it. */
+const MOISTURE_CURVE = 3;
+/** The tone of a soaked ground, as GLSL: what is left of its colour (see wetTone). */
+const wetToneGlsl = (reflectance: number): string => Math.pow(reflectance, 1 / SRGB_GAMMA).toFixed(4);
 /** How strong the dark of the hollows and the light of the mounts are, against the bare relief: the water and the
  * textures already tell the depth. */
 const RELIEF_SHADE = 0.6;
@@ -124,6 +145,13 @@ float luma(vec3 c) {
 float bend(float level, float noise, float strength) {
     return clamp(level + noise * strength * 4.0 * level * (1.0 - level), 0.0, 1.0);
 }
+
+// How wet the soil is from its moisture as the server keeps it (pack 9, red): fast with the first water, then level
+// (groundWetness is the twin of this rule).
+float soakedAt(vec2 world) {
+    float moisture = pack(9.0, world).r;
+    return (1.0 - exp(-${MOISTURE_CURVE}.0 * moisture)) / (1.0 - exp(-${MOISTURE_CURVE}.0));
+}
 `;
 
 const GROUND_FRAG = `${COMMON_GLSL}
@@ -200,6 +228,14 @@ void main() {
     float mixed = sum.a > 0.0 ? 1.0 - clamp((sum.a - BLEND) / BLEND, 0.0, 1.0) : 0.0;
     color *= 1.0 - 0.12 * mixed;
     vec4 outColor = vec4(color * soilAlpha, soilAlpha);
+    // What is left of the colour of the ground soaked (wetTone): by its soil, earth where none is painted (as the
+    // server counts it), then by what lies over it.
+    float weights = a.r + a.g + a.b + b.r + b.g + b.b;
+    float tone = weights > 0.001
+        ? (a.r * ${wetToneGlsl(WET_REFLECTANCE.earth)} + a.g * ${wetToneGlsl(WET_REFLECTANCE.meadow)}
+            + a.b * ${wetToneGlsl(WET_REFLECTANCE.clay)} + b.r * ${wetToneGlsl(WET_REFLECTANCE.sand)}
+            + b.g * ${wetToneGlsl(WET_REFLECTANCE.rock)} + b.b * ${wetToneGlsl(WET_REFLECTANCE.gravel)}) / weights
+        : ${wetToneGlsl(WET_REFLECTANCE.earth)};
 
     // The grass, in tufts: a thin meadow shows its brightest blades first, a full one covers everything.
     float cover = c.r;
@@ -217,6 +253,7 @@ void main() {
             blade = mix(blade, yellowed, (0.3 + 0.35 * vnoise(world / 90.0)) * uAutumn);
         }
         outColor = vec4(blade * grassAlpha, grassAlpha) + outColor * (1.0 - grassAlpha);
+        tone = mix(tone, ${wetToneGlsl(WET_REFLECTANCE.grass)}, grassAlpha);
     }
 
     // What the weather and the fire did to the meadow: straw where it dried, ash where it burnt, the glow of the fire.
@@ -232,6 +269,7 @@ void main() {
         strawColor *= 0.9 + 0.15 * hash(floor(world / 2.0) + 3.0);
         float strawAlpha = dry * 0.92;
         outColor = vec4(strawColor * strawAlpha, strawAlpha) + outColor * (1.0 - strawAlpha);
+        tone = mix(tone, ${wetToneGlsl(WET_REFLECTANCE.grass)}, strawAlpha);
     }
     if (ash > 0.002) {
         // Burnt ground in patches, flecked with grey ash: it goes back patch by patch as the grass grows again.
@@ -245,6 +283,7 @@ void main() {
         float glow = step(1.0 - fire, 0.5 + 0.5 * vnoise(world / 6.0 + uTime * 2.0)) * 0.85;
         vec3 glowColor = mix(vec3(1.0, 0.48, 0.1), vec3(1.0, 0.8, 0.3), vnoise(world / 4.0 - uTime * 3.0));
         outColor = vec4(glowColor * glow, glow) + outColor * (1.0 - glow);
+        tone = mix(tone, 1.0, glow);
     }
 
     // The snow of the heights, its edge bent like the soils.
@@ -253,13 +292,24 @@ void main() {
         vec4 flakes = ground(uSnow, uSnowSize, world);
         float snowAlpha = step(0.45, bend(snow, edgeNoise + (luma(flakes.rgb) - 0.8) * 0.4, 1.4));
         outColor = vec4(flakes.rgb * snowAlpha, snowAlpha) + outColor * (1.0 - snowAlpha);
+        tone = mix(tone, 1.0, snowAlpha);
     }
 
-    // The cycle of the water (Frost.ts): the ground darkened by the rain, then white with frost when it freezes.
+    // The ground wet (groundWetness): by the rain of the air of the player (Frost.ts), by the moisture of its soil the
+    // server keeps, under the water of the relief (pack 8, blue): the most of the three, never their sum. Darker as
+    // its soil drinks (tone), in clear steps, with a sheen; then white with frost when it freezes.
     float outdoors = step(0.5, pack(4.0, world).b);
-    if (uWet * outdoors > 0.001 && outColor.a > 0.0) {
-        outColor.rgb *= 1.0 - 0.3 * uWet;
-        float sheen = step(0.82, fbm(world / 7.0)) * uWet * 0.25;
+    // The rain darkens the grounds the shaders paint, as before; the moisture and the water, those of the server,
+    // wet the tiles of the map too.
+    float rain = outColor.a > 0.002 ? uWet * outdoors : 0.0;
+    float wet = max(max(rain, soakedAt(world)), pack(8.0, world).b);
+    float wetDither = (hash(floor(world / 2.0) + 5.0) - 0.5) * 0.18 + edgeNoise * 0.25;
+    wet = clamp(floor(min(wet, 1.0) * 4.0 + 0.5 + wetDither) / 4.0, 0.0, 1.0);
+    if (wet > 0.001) {
+        // Over a ground the shaders do not paint (the tiles of the map), a veil of the same dark.
+        float shade = mix(1.0, tone, wet);
+        outColor = vec4(0.0, 0.0, 0.0, 1.0 - shade) + outColor * shade;
+        float sheen = step(0.82, fbm(world / 7.0)) * wet * 0.25;
         outColor.rgb += vec3(0.55, 0.65, 0.75) * sheen * outColor.a;
     }
     // No frost holds where the ground burns, nor on its ash while it is still warm.
@@ -475,6 +525,8 @@ void main() {
         damp *= 1.0 - step(0.25, nearPool);
     }
     vec4 outColor = vec4(0.0, 0.0, 0.0, 0.3 * damp);
+    // The ground shader darkens the soil by its moisture as the server keeps it: this ring adds only what that left.
+    outColor *= 1.0 - soakedAt(world);
 
     if (cover > 0.001 && frozen > 0.5) {
         // Ice as on the rinks of the map, a little darker over the deep water under it.
@@ -488,9 +540,10 @@ void main() {
     } else if (cover > 0.001) {
         float deep = clamp(depth * ${WATER_SCALE_PX}.0 / 64.0, 0.0, 1.0);
         vec3 water = mix(SHALLOW, DEEP, deep);
-        // A film thinner than the shore of the water (SHORE_PX) is a wet sheen: the ground shows through it.
+        // A film thinner than the shore of the water (SHORE_PX) is clear: the wet ground shows through it, darkened
+        // by the ground shader, under a light tint and the glints of its surface.
         float film = smoothstep(0.0, ${SHORE_PX}.0, depthPx);
-        float alpha = mix(0.5, 0.92, deep) * mix(0.6, 1.0, film);
+        float alpha = mix(0.5, 0.92, deep) * mix(0.2, 1.0, film);
 
         // The waves of the comets: a bright crest running to the shores, a dark trough behind, the surface pushed.
         float shock = ringsAt(world);
@@ -560,6 +613,8 @@ export interface GroundWeights {
     snow: Uint8Array | undefined;
     /** The ice the server keeps over the water, a byte a cell (iceByte); undefined: none. */
     ice?: Uint8Array;
+    /** The moisture of the soil as the server keeps it, 0 (dry) to 255 (sodden); undefined: none known. */
+    moisture?: Uint8Array;
     /** 0 in summer, 1 in autumn: the grass yellows. */
     autumn: number;
     /** How deep each cell is dug and how high it is raised, in map pixels (to 255). */
@@ -718,7 +773,9 @@ export class GroundSplat {
             writeColor(data, at(7, cell), style?.coping);
             data[at(8, cell)] = weights.ice?.[cell] ?? 0;
             data[at(8, cell) + 1] = image ? 255 : 0;
-            if (grass || snow || style || data[relief] || data[relief + 1] || data[relief + 2]) any = true;
+            const moisture = weights.moisture?.[cell] ?? 0;
+            data[at(9, cell)] = moisture;
+            if (grass || snow || style || moisture || data[relief] || data[relief + 1] || data[relief + 2]) any = true;
             if (data[meadow] || data[meadow + 1]) any = true;
         }
         this.anyPool = pools.some((value) => value > 0) || (weights.imagePools?.some((value) => value > 0) ?? false);
@@ -727,7 +784,7 @@ export class GroundSplat {
         this.autumn = weights.autumn;
         this.anyGround = any;
         this.upload();
-        this.place(this.groundShader, area, any);
+        this.place(this.groundShader, area, any || this.anyWater);
         // The pools are drawn by the water shader, over the shades of the relief: it shows with them, water or not.
         this.place(this.waterShader, area, this.anyWater || this.anyPool);
     }
@@ -750,6 +807,8 @@ export class GroundSplat {
         if (!any && !this.anyWater) return;
         this.anyWater = any;
         this.upload();
+        // The ground under the water is wet: the ground shader darkens it, painted or not.
+        this.place(this.groundShader, area, this.anyGround || any);
         this.place(this.waterShader, area, any || this.anyPool);
     }
 
@@ -866,6 +925,7 @@ function smoothWeights(data: Uint8ClampedArray, columns: number, rows: number): 
         [],
         [],
         [0],
+        [0],
     ];
     for (let pack = 0; pack < PACKS; pack++) {
         for (const channel of channels[pack] ?? []) {
@@ -957,6 +1017,26 @@ export function writeWater(
  */
 export function waterShoreLevel(depth: number, present: number): number {
     return Math.max(Math.min(1, Math.max(0, depth * SHORE_GAIN)), present);
+}
+
+/**
+ * The tone of a wet ground, against the same ground dry: how much of its colour is left (sRGB) when a ground of this
+ * reflectance (wet over dry) is this wet (0 to 1). Water in the pores lowers the reflectance (Twomey, Bohren &
+ * Mergenthaler 1986); the reflectance is linear, the colours drawn are sRGB. The twin of the rule of GROUND_FRAG.
+ */
+export function wetTone(reflectance: number, wet: number): number {
+    return 1 - (1 - Math.pow(reflectance, 1 / SRGB_GAMMA)) * wet;
+}
+
+/**
+ * How wet a ground is (0 to 1), from the rain of the air of the player (Frost.ts), the moisture of its soil as the
+ * server keeps it (0 to 1, Meadow.ts) and the water over it (0 to 1, its presence): wet is wet, the most of the three,
+ * never their sum. The reflectance falls fast with the first water then levels off (Lobell & Asner 2002). The twin of
+ * the rule of GROUND_FRAG.
+ */
+export function groundWetness(rain: number, moisture: number, present: number): number {
+    const soaked = (1 - Math.exp(-MOISTURE_CURVE * moisture)) / (1 - Math.exp(-MOISTURE_CURVE));
+    return Math.min(1, Math.max(rain, soaked, present));
 }
 
 export function texel(pack: number, cell: number, columns: number, rows: number): number {
