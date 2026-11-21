@@ -23,6 +23,7 @@ import {
     stepPopulation,
     tameAnimal,
     waterBodiesOf,
+    poolCells,
     WaterGrid as LifeWaterGrid,
     wireKindOf,
 } from "@workadventure/map-editor";
@@ -164,6 +165,8 @@ export class AquaticLifeManager {
     private bodies: WaterBodies | undefined;
     private bodiesGrid: WaterGrid | undefined;
     private bodiesVersion = -1;
+    /** The cells of the pools of the map, read again when the relief or the styles of the pools change. */
+    private pools: { terrain: unknown; styles: unknown; cells: Set<string> } | undefined;
     private bodiesStep = -Infinity;
     /** The outdoor land of the map, for the animals that walk; undefined while the land is off or its size unknown. */
     private land: Places | undefined;
@@ -390,6 +393,19 @@ export class AquaticLifeManager {
         }
     }
 
+    /** Whether a cell is in a pool: treated water, no fish in it (waterBodiesOf). */
+    private poolCellsNow(): (cellX: number, cellY: number) => boolean {
+        const wam = this.room.getWam();
+        const terrain = wam?.terrain;
+        const styles = wam?.settings?.pools;
+        if (!this.pools || this.pools.terrain !== terrain || this.pools.styles !== styles) {
+            const cells = new Set(poolCells(terrain, styles).map((cell) => `${cell.cellX},${cell.cellY}`));
+            this.pools = { terrain, styles, cells };
+        }
+        const { cells } = this.pools;
+        return (cellX, cellY) => cells.has(`${cellX},${cellY}`);
+    }
+
     /** One step of the life (two a second), and once a second the room is told. */
     public step(): void {
         const grid = this.water.getGrid();
@@ -408,7 +424,7 @@ export class AquaticLifeManager {
                 grid !== this.bodiesGrid ||
                 (stale && this.steps - this.bodiesStep >= STEPS_PER_BODIES)
             ) {
-                this.bodies = waterBodiesOf(grid);
+                this.bodies = waterBodiesOf(grid, this.poolCellsNow());
                 this.bodiesGrid = grid;
                 this.bodiesVersion = version;
                 this.bodiesStep = this.steps;
