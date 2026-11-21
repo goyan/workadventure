@@ -283,6 +283,41 @@ describe("TerrainWater.settled", () => {
         water.receive({ x: 0, y: 0, width: 1, height: 1, seq: 3, full: true, depths: bytesOf([5]) }, 4000);
         expect(water.settled().seconds).toBe(Infinity);
     });
+
+    /**
+     * A pond of 4 by 4 cells, 40 px deep plus `level(seconds)`, told once a second for `seconds`; `slosh` sends its
+     * west half up while its east half goes down, as a wave does.
+     */
+    const pond = (level: (seconds: number) => number, seconds: number, slosh = false): TerrainWater => {
+        const water = new TerrainWater();
+        for (let second = 0; second <= seconds; second++) {
+            const depthAt = (index: number): number =>
+                Math.round((40 + (slosh && index % 4 >= 2 ? -level(second) : level(second))) * 8) / 8;
+            const depths = bytesOf(Array.from({ length: 16 }, (_, index) => depthAt(index)));
+            water.receive({ x: 0, y: 0, width: 4, height: 4, seq: second, full: true, depths }, second * 1000);
+        }
+        return water;
+    };
+    const ripple = (second: number): number => 1.5 * Math.sin((2 * Math.PI * second) / 2.6);
+
+    it("tints neither a rise nor a fall where the water only ripples, and its body neither fills nor empties", () => {
+        const water = pond(ripple, 40, true);
+        const settled = water.settled(40_000);
+        expect(flowOverBlock(settled, undefined, 0, 0, 4, true).tint).toBe(0);
+        // The rate between the two last states is still there, as it is.
+        expect(Math.abs(flowAtCell(settled, undefined, 1, 1, true).rate)).toBeGreaterThan(0.5);
+        expect(Math.abs(waterMassesOf(settled)[0].trendM3PerMinute)).toBeLessThan(0.05);
+    });
+
+    it("tints a rise under the ripples, and lets it die when the server falls silent", () => {
+        const water = pond((second) => second * 0.3 + ripple(second) / 3, 30);
+        const rising = water.settled(30_000);
+        expect(flowOverBlock(rising, undefined, 0, 0, 4, true).tint).toBe(1);
+        expect(flowAtCell(rising, undefined, 1, 1, true).trend).toBeGreaterThan(0.2);
+        expect(waterMassesOf(rising)[0].trendM3PerMinute).toBeGreaterThan(0);
+        // Nothing more for 30 s: the water is still.
+        expect(flowAtCell(water.settled(60_000), undefined, 1, 1, true).tint).toBe(0);
+    });
 });
 
 describe("TerrainWater speeds", () => {

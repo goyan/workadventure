@@ -1,6 +1,7 @@
 import { CELL_METRES, heightAt, soilAt, soilRoughness, steadyFlowSpeed } from "@workadventure/map-editor";
 import type { TerrainData, WaveSettings } from "@workadventure/map-editor";
 import type { SettledWater } from "./TerrainWater";
+import { STEADY_PX_PER_SECOND } from "./WaterTrend";
 
 /** Water thinner than this is a film: it has no flow to show, and its edge is a shore. */
 export const FLOW_MIN_DEPTH_PX = 0.5;
@@ -19,11 +20,15 @@ export interface WaterFlow {
     speed: number;
     /** Pixels of water there. */
     depth: number;
-    /** How fast the level changes, in pixels a second: positive when it rises. */
+    /** How fast the level changes between the two last states, in pixels a second: positive when it rises. */
     rate: number;
+    /** How fast it rises over a few seconds, the waves left out (WaterTrend), in pixels a second. */
+    trend: number;
+    /** Whether that shows as a rise (1), a fall (-1), or neither (0): a sea that only ripples is neither. */
+    tint: number;
 }
 
-const STILL: WaterFlow = { x: 0, y: 0, speed: 0, depth: 0, rate: 0 };
+const STILL: WaterFlow = { x: 0, y: 0, speed: 0, depth: 0, rate: 0, trend: 0, tint: 0 };
 
 function depthOf(water: SettledWater, cellX: number, cellY: number, from: Float32Array): number {
     const column = cellX - water.x;
@@ -51,6 +56,7 @@ export function flowAtCell(
     if (depth < FLOW_MIN_DEPTH_PX) return STILL;
     const earlier = depthOf(water, cellX, cellY, water.before);
     const rate = Number.isFinite(water.seconds) && water.seconds > 0 ? (depth - earlier) / water.seconds : 0;
+    const { trend, tint } = trendAtCell(water, cellX, cellY, rate);
     const here = heightAt(terrain, cellX, cellY) + depth;
     const surface = (awayX: number, awayY: number): number => {
         const held = depthOf(water, cellX + awayX, cellY + awayY, water.depths);
@@ -62,13 +68,13 @@ export function flowAtCell(
     const known = water.speedAt?.(cellX, cellY);
     if (known) {
         const speed = Math.hypot(known.x, known.y);
-        if (speed < FLOW_REST_SPEED) return { x: 0, y: 0, speed: 0, depth, rate };
-        return { x: known.x / speed, y: known.y / speed, speed: speed * CELL_METRES, depth, rate };
+        if (speed < FLOW_REST_SPEED) return { x: 0, y: 0, speed: 0, depth, rate, trend, tint };
+        return { x: known.x / speed, y: known.y / speed, speed: speed * CELL_METRES, depth, rate, trend, tint };
     }
     const slopeX = (surface(1, 0) - surface(-1, 0)) / 2;
     const slopeY = (surface(0, 1) - surface(0, -1)) / 2;
     const slope = Math.hypot(slopeX, slopeY);
-    if (slope < FLOW_REST_SLOPE) return { x: 0, y: 0, speed: 0, depth, rate };
+    if (slope < FLOW_REST_SLOPE) return { x: 0, y: 0, speed: 0, depth, rate, trend, tint };
     return {
         x: -slopeX / slope || 0,
         y: -slopeY / slope || 0,
@@ -76,7 +82,21 @@ export function flowAtCell(
             steadyFlowSpeed(slope, depth, inertia, waves, soilRoughness(soilAt(terrain, cellX, cellY))) * CELL_METRES,
         depth,
         rate,
+        trend,
+        tint,
     };
+}
+
+/**
+ * The trend of the level of a cell and whether it shows (WaterTrend); when the water keeps none, the rate between
+ * the two last states, shown from the same threshold.
+ */
+function trendAtCell(water: SettledWater, cellX: number, cellY: number, rate: number): { trend: number; tint: number } {
+    const index = (cellY - water.y) * water.width + (cellX - water.x);
+    if (water.trend && water.trendShown && index < water.trend.length) {
+        return { trend: water.trend[index], tint: water.trendShown[index] };
+    }
+    return { trend: rate, tint: Math.abs(rate) >= STEADY_PX_PER_SECOND ? Math.sign(rate) : 0 };
 }
 
 /**
@@ -111,6 +131,8 @@ export function flowOverBlock(
     let y = 0;
     let depth = 0;
     let rate = 0;
+    let trend = 0;
+    let tint = 0;
     for (const [awayX, awayY] of places) {
         const flow = flowAtCell(water, terrain, cellX + awayX, cellY + awayY, inertia, waves);
         if (flow.depth <= 0) continue;
@@ -119,6 +141,8 @@ export function flowOverBlock(
         y += flow.y * flow.speed;
         depth += flow.depth;
         rate += flow.rate;
+        trend += flow.trend;
+        tint += flow.tint;
     }
     if (wet === 0) return STILL;
     const speed = Math.hypot(x, y) / wet;
@@ -129,6 +153,9 @@ export function flowOverBlock(
         speed,
         depth: depth / wet,
         rate: rate / wet,
+        trend: trend / wet,
+        // The block rises where most of its cells that show anything rise.
+        tint: Math.sign(tint),
     };
 }
 

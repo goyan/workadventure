@@ -8,6 +8,7 @@ import {
     WATER_MESSAGE_MS,
 } from "@workadventure/map-editor";
 import type { PoolStyle, TerrainData } from "@workadventure/map-editor";
+import { WaterTrend } from "./WaterTrend";
 
 /** A state of the water as the server sends it, its bytes already unzipped (TerrainWaterMessage). */
 export interface WaterState {
@@ -42,6 +43,12 @@ export interface SettledWater {
     seconds: number;
     /** The speed of the water over a cell of the map, in cells a second; undefined when the server tells none. */
     speedAt?: (cellX: number, cellY: number) => { x: number; y: number } | undefined;
+    /**
+     * How fast the level of each cell rises over a few seconds, its waves left out, in pixels a second (WaterTrend),
+     * and whether that shows as a rise (1), a fall (-1) or neither (0). Absent: read the two states instead.
+     */
+    trend?: Float32Array;
+    trendShown?: Int8Array;
 }
 
 /** A film of water thinner than this is not drawn: what a flood leaves behind would speckle the ground. */
@@ -80,6 +87,8 @@ export class TerrainWater {
     private before = new Float32Array(0);
     private betweenMs = Infinity;
     private receivedAt = -Infinity;
+    /** How fast the level rises or falls over a few seconds, cell by cell: the waves left out. */
+    private readonly trend = new WaterTrend();
     /** The speed of the water block by block, as the server last told it; undefined when it tells none. */
     private speeds: Int8Array | undefined;
     private wet = false;
@@ -162,12 +171,14 @@ export class TerrainWater {
             // Only then the pace of the new glide: the time the server took between the two states.
             this.before = this.to;
             this.betweenMs = Math.max(100, now - this.receivedAt);
+            this.trend.add(this.to, to, now);
         } else {
             // The first state, or another grid (the relief was edited): shown at once.
             this.from = to;
             this.at = -Infinity;
             this.before = to;
             this.betweenMs = Infinity;
+            this.trend.reset(to, now);
         }
         this.receivedAt = now;
         this.to = to;
@@ -209,15 +220,19 @@ export class TerrainWater {
     /**
      * The last state the server sent, cell by cell, with the one before it and the seconds between the two: what
      * the water holds and how fast it rises or falls (the view of the flows of the water). The arrays are those of
-     * this object: read, never written.
+     * this object: read, never written. With `now` (ms of the game), the trend of a water the server has fallen
+     * silent about dies down: it is still.
      */
-    public settled(): SettledWater {
+    public settled(now?: number): SettledWater {
+        if (now !== undefined) this.trend.idle(now);
         return {
             ...this.grid,
             depths: this.to,
             before: this.before,
             seconds: this.betweenMs / 1000,
             ...(this.speeds ? { speedAt: (cellX: number, cellY: number) => this.speedOfCell(cellX, cellY) } : {}),
+            trend: this.trend.trend(),
+            trendShown: this.trend.shown(),
         };
     }
 

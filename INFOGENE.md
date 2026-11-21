@@ -2762,9 +2762,41 @@ Par-dessus la carte (`Terrain/WaterFlowOverlay.ts`, dix dessins par seconde, au-
 - **une flèche là où l'eau court** : sens, vitesse par la longueur et la couleur (échelle de 0 à 3 m/s et plus,
   `FLOW_SPEED_SCALE`), point qui file le long de la flèche. Une flèche par bloc de cellules, plus gros vu de loin,
   3 000 au plus ;
-- **une teinte là où le niveau change** : bleue quand il monte, magenta quand il baisse ;
+- **une teinte là où le niveau change** : bleue quand il monte, magenta quand il baisse, plus soutenue quand il
+  change vite (pleine à partir de 0,5 px/s, 1 m par minute). Elle suit la **tendance** du niveau sur quelques
+  secondes, pas le clapot (voir ci-dessous) ;
 - **une étiquette sur les 8 plus grosses masses d'eau en vue** (`Terrain/WaterMasses.ts`) : volume en m³, surface
-  en m², profondeur moyenne en m, puis ce qu'elle gagne ou perd en m³ par minute.
+  en m², profondeur moyenne en m, puis ce qu'elle gagne ou perd en m³ par minute (somme des tendances de ses
+  cellules : elle ne saute pas avec les vagues).
+
+**Tendance plutôt que clapot** (`Terrain/WaterTrend.ts`, alimenté par `TerrainWater.receive`). Le serveur envoie
+l'eau une fois par seconde ; les vagues du modèle à inertie durent 2 à 4 s (mesuré : 2,3 à 3,8 s sous 40 px, jusqu'à
+5 s sous 12 px). L'écart entre deux états d'affilée est donc la pente de la vague du moment : sur une mer qui
+clapote, il changeait de signe une seconde sur deux (26 à 39 fois sur 58) et 80 à 90 % des blocs étaient teintés,
+damier bleu et magenta qui clignotait. S'y ajoutait le seuil (0,02 px/s), sous le plus petit écart que le serveur
+transmet (il ne redit une cellule qu'à partir d'un quart de pixel). Lisser sur 1 s ne changeait rien : la donnée
+arrive déjà à 1 s. La règle, par cellule de la grille (indépendante du zoom et de la caméra) :
+
+- l'écart de chaque état, rapporté au temps écoulé, passe dans deux filtres exponentiels de 4 s à la suite (résolus
+  exactement, quel que soit l'intervalle entre deux états) : une vague de 3 s n'en garde qu'un soixante-dixième ;
+- **zone morte** : aucune teinte sous 0,06 px/s (2 mm/s, 12 cm par minute), ni sous 15 % de l'agitation de l'eau
+  (moyenne quadratique, sur 10 s, de sa vitesse de montée mesurée sur une seconde) : une mer forte cache une montée
+  lente, jamais ne la montre à l'envers. Rien n'est teinté avant trois secondes d'observation ;
+- **hystérésis** : une teinte reste jusqu'à ce que la tendance retombe sous la moitié de son seuil ;
+- **silence du serveur** (rien ne bouge d'un quart de pixel, il n'envoie plus) : après 2 s sans état, la tendance
+  s'éteint d'elle-même (`TerrainWater.settled(now)`).
+
+Mesuré sur le modèle (bassin de 80 × 80 cellules, 40 px, `WaterGrid` avec inertie, bande morte du serveur
+reproduite) : 0 à 2 changements de teinte par minute et par cellule sur mer forte (vagues de 30 à 45 cm), 0 à 2
+sur mer modérée, au lieu d'un changement de signe toutes les une à deux secondes. Une montée de 0,1 px/s sous un
+clapot modéré apparaît en 5 à 11 s, une de 0,5 px/s en 2 à 3 s, une de 1 px/s sur mer forte en 1 à 4 s, puis ne
+s'éteint plus tant qu'elle dure. L'étiquette d'une masse atteint 63 % d'un nouveau débit en 8 à 9 s. Rien n'a été vu
+à l'écran par un agent.
+
+Les **flèches** ne sont pas lissées : elles montrent la vitesse que le serveur calcule, une vague qui passe
+comprise. Sur mer modérée, cette vitesse reste sous son pas d'envoi (un quart de cellule par seconde) : pas de
+flèche. Sur mer forte, une flèche s'inverse d'une seconde à l'autre 15 à 35 % du temps, ce qui est le mouvement réel
+de l'eau sous la vague.
 
 Tout est lu des profondeurs que le navigateur reçoit déjà (`TerrainWater.settled` garde l'état d'avant et le temps
 entre les deux) : rien n'est demandé au serveur. Limites : les vitesses sont **estimées** d'après la pente de la
