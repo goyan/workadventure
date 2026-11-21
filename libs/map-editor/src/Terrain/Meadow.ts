@@ -1,7 +1,15 @@
 import { Season, TERRAIN_CELL, TILE_PX } from "../types";
 import type { TerrainData, WAMFileFormat } from "../types";
-import { rainMeltMm, SNOW_MAX_MM, snowByte, snowCoverOf, snowMeltMmPerHour, snowMmOfByte } from "./Snow";
-import { snowSublimationMmPerHour, THAW_SPEED } from "./Snow";
+import {
+    rainMeltMm,
+    SNOW_MAX_MM,
+    snowByte,
+    snowCoverOf,
+    snowMeltMmPerHour,
+    snowMmOfByte,
+    snowSublimationMmPerHour,
+    THAW_SPEED,
+} from "./Snow";
 import type { SnowWeather } from "./Snow";
 import { snowCover } from "./SnowLine";
 import { soilName } from "./Soils";
@@ -663,6 +671,27 @@ export class Meadow {
             if (ash[index] > 0 && fire[index] === 0) ash[index] = Math.min(ash[index], 1 - grass[index]);
         }
         return thawed ? { meltedMm: this.melted } : undefined;
+    }
+
+    /**
+     * One step of the snow alone, on a map that turned its meadow off: it falls, melts and goes as in a full step,
+     * and nothing else moves. Returns the water of the snow that melted, when some did.
+     */
+    public stepSnowAlone(input: MeadowStepInput): MeadowStepOutput | undefined {
+        const seconds = Number.isFinite(input.seconds) && input.seconds > 0 ? input.seconds : 0;
+        if (seconds === 0) return undefined;
+        const rain = Number.isFinite(input.rainMmPerHour) && input.rainMmPerHour > 0 ? input.rainMmPerHour : 0;
+        const { width, height, water, outdoor } = this;
+        water.fill(0);
+        for (let tileY = 0; tileY < height; tileY++) {
+            for (let tileX = 0; tileX < width; tileX++) {
+                const index = tileY * width + tileX;
+                if (!outdoor[index]) continue;
+                const lying = input.waterAt(tileX, tileY);
+                water[index] = Number.isFinite(lying) && lying > 0 ? lying : 0;
+            }
+        }
+        return this.stepSnow(input, seconds, rain) ? { meltedMm: this.melted } : undefined;
     }
 
     /**

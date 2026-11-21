@@ -131,6 +131,20 @@ describe("the snow melting", () => {
     });
 });
 
+describe("the snow of a map without grass", () => {
+    it("falls, melts and gives its water by itself, the grass untouched", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        meadow.set(10, 10, 0.5, 0.4);
+        expect(meadow.stepSnowAlone(under(frost, { snowfallMm: 20 }))).toBeUndefined();
+        expect(meadow.snowAt(10, 10)).toBeCloseTo(20);
+        const melted = meadow.stepSnowAlone(under(mild));
+        expect(melted?.meltedMm[10 * size.width + 10]).toBeGreaterThan(0);
+        expect(meadow.stepSnowAlone(under(mild, { waterAt: () => 4 }))?.meltedMm[0]).toBeGreaterThan(19);
+        expect(meadow.grassAt(10, 10)).toBeCloseTo(0.4);
+        expect(meadow.moistureAt(10, 10)).toBeCloseTo(0.5);
+    });
+});
+
 describe("the snow and the fire", () => {
     it("keeps a tile from taking fire, and puts a fire out", () => {
         const meadow = new Meadow(size, undefined, undefined);

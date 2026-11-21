@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { liquidRainRate, snowShare, snowShareOf, wetBulbTemperature } from "../src/Weather/Precipitation";
+import { liquidRainRate, snowRainRate, snowShare, snowShareOf, wetBulbTemperature } from "../src/Weather/Precipitation";
 
 describe("wetBulbTemperature", () => {
     it("gives the worked example of Stull (2011): 20 °C at 50 % is 13.7 °C", () => {
@@ -94,5 +94,16 @@ describe("liquidRainRate", () => {
         const mixed = liquidRainRate(4, { temperature: 1.2, humidity: 99 });
         expect(mixed).toBeGreaterThan(1.6);
         expect(mixed).toBeLessThan(2.4);
+    });
+});
+
+describe("the snow of a precipitation", () => {
+    it("is what the rain leaves: both make the whole of what falls", () => {
+        expect(snowRainRate(10, { temperature: -5, humidity: 50 })).toBe(10);
+        expect(snowRainRate(10, { temperature: 20, humidity: 50 })).toBe(0);
+        expect(snowRainRate(10, undefined)).toBe(0);
+        for (const air of [{ temperature: 1.2, humidity: 99 }, { temperature: 2, humidity: 40 }, undefined]) {
+            expect(snowRainRate(10, air) + liquidRainRate(10, air)).toBeCloseTo(10);
+        }
     });
 });

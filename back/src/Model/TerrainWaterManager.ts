@@ -13,6 +13,8 @@ import {
     LITRES_PER_M3,
     meteorShape,
     liquidRainRate,
+    PX_PER_MM,
+    snowShareOf,
     rainRateAt,
     startImpactWave,
     ratesOf,
@@ -276,7 +278,10 @@ export class TerrainWaterManager {
     private pourDownpours(grid: WaterGrid): boolean {
         const falling = this.downpours();
         if (falling.length === 0) return false;
-        const px = (DOWNPOUR_PX_PER_SECOND * WATER_STEP_MS) / 1000;
+        // In the cold of the room a downpour falls as snow: that part lies on the ground (MeadowManager) and brings
+        // no water until it melts.
+        const px = ((DOWNPOUR_PX_PER_SECOND * WATER_STEP_MS) / 1000) * (1 - snowShareOf(this.air()));
+        if (px <= 0) return false;
         let laid = 0;
         for (const downpour of falling) {
             laid += grid.rainOn(
@@ -293,6 +298,28 @@ export class TerrainWaterManager {
             this.changedSinceSave = true;
         }
         return laid > 0;
+    }
+
+    /**
+     * The water of a snow that melted on a tile (`mm` of water) is poured on the cells of that tile, as a rain:
+     * counted with the rain, nothing in a wall nor over the highest level. Returns the mm that were poured: none
+     * outside the grid of the water.
+     */
+    public pour(tileX: number, tileY: number, mm: number): number {
+        const grid = this.grid;
+        if (!grid || !Number.isFinite(mm) || mm <= 0 || !Number.isFinite(tileX) || !Number.isFinite(tileY)) return 0;
+        const cells = TILE_PX / TERRAIN_CELL;
+        let laid = 0;
+        for (let y = 0; y < cells; y++) {
+            for (let x = 0; x < cells; x++)
+                laid += grid.rainOn(tileX * cells + x, tileY * cells + y, 0, mm * PX_PER_MM);
+        }
+        if (laid <= 0) return 0;
+        this.sums.rainPx += laid;
+        this.moving = true;
+        this.version++;
+        this.changedSinceSave = true;
+        return laid / (cells * cells * PX_PER_MM);
     }
 
     /** The catastrophes of the room say which drains are open. */

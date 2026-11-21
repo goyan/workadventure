@@ -76,3 +76,11 @@ export function snowShareOf(air: PrecipitationAir | undefined): number {
 export function liquidRainRate(rate: number, air: PrecipitationAir | undefined): number {
     return rate * (1 - snowShareOf(air));
 }
+
+/**
+ * The part of a precipitation rate (mm of water an hour) that falls as snow, and lies on the ground: what
+ * liquidRainRate leaves.
+ */
+export function snowRainRate(rate: number, air: PrecipitationAir | undefined): number {
+    return rate * snowShareOf(air);
+}
