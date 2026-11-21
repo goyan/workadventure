@@ -142,41 +142,48 @@
                 {/if}
                 {#if showsWind(cell, index)}
                     {@const point = windPoint(cell, index)}
-                    <!-- Wind for now only: three of them would not fit the banner on a narrow screen. -->
-                    {#if point}
-                        {@const arrow = windArrowOf(point)}
-                        <!-- An arrow to where the wind goes, north up as on the map, in place of the gusts: it says
-                             there is wind as well, and both would crowd the banner. -->
-                        <WindArrowIcon {arrow} class="ms-1" testid="weather-banner-wind-arrow" />
-                    {:else}
-                        <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 16 16"
-                            shape-rendering="crispEdges"
-                            aria-hidden="true"
-                            class="ms-1 shrink-0"
-                            data-testid="weather-banner-wind-icon"
-                        >
-                            <!-- three gusts with a curl at their end, in the 16x16 pixel art of the weather icons -->
-                            <g fill="#cfd8e3">
-                                <rect x="1" y="4" width="10" height="1" />
-                                <rect x="11" y="2" width="1" height="2" />
-                                <rect x="9" y="1" width="2" height="1" />
-                                <rect x="1" y="8" width="13" height="1" />
-                                <rect x="14" y="6" width="1" height="2" />
-                                <rect x="12" y="5" width="2" height="1" />
-                                <rect x="3" y="12" width="8" height="1" />
-                                <rect x="11" y="13" width="1" height="1" />
-                                <rect x="9" y="14" width="2" height="1" />
-                            </g>
-                        </svg>
-                    {/if}
+                    <!-- Wind for now only: three of them would not fit the banner on a narrow screen. The arrow (or
+                         the gusts) and the wind text are kept together, so a wrap never leaves the arrow by the
+                         temperature and its text on the next line. -->
                     <span
-                        class="tabular-nums"
-                        style:font-family="var(--ui-font-system)"
-                        data-testid="weather-banner-wind">{windText(cell.windSpeed, point)}</span
+                        class="ms-1 flex items-center gap-1 whitespace-nowrap"
+                        data-testid="weather-banner-wind-group"
                     >
+                        {#if point}
+                            {@const arrow = windArrowOf(point)}
+                            <!-- An arrow to where the wind goes, north up as on the map, in place of the gusts: it says
+                                 there is wind as well, and both would crowd the banner. -->
+                            <WindArrowIcon {arrow} testid="weather-banner-wind-arrow" />
+                        {:else}
+                            <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 16 16"
+                                shape-rendering="crispEdges"
+                                aria-hidden="true"
+                                class="shrink-0"
+                                data-testid="weather-banner-wind-icon"
+                            >
+                                <!-- three gusts with a curl at their end, in the 16x16 pixel art of the weather icons -->
+                                <g fill="#cfd8e3">
+                                    <rect x="1" y="4" width="10" height="1" />
+                                    <rect x="11" y="2" width="1" height="2" />
+                                    <rect x="9" y="1" width="2" height="1" />
+                                    <rect x="1" y="8" width="13" height="1" />
+                                    <rect x="14" y="6" width="1" height="2" />
+                                    <rect x="12" y="5" width="2" height="1" />
+                                    <rect x="3" y="12" width="8" height="1" />
+                                    <rect x="11" y="13" width="1" height="1" />
+                                    <rect x="9" y="14" width="2" height="1" />
+                                </g>
+                            </svg>
+                        {/if}
+                        <span
+                            class="tabular-nums"
+                            style:font-family="var(--ui-font-system)"
+                            data-testid="weather-banner-wind">{windText(cell.windSpeed, point)}</span
+                        >
+                    </span>
                 {/if}
                 {#if index === 0 && now?.humidity !== undefined}
                     <!-- The humidity of the air, for now only: with the heat and the wind it says whether fire takes. -->
