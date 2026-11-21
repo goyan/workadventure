@@ -290,9 +290,8 @@ const menu: BaseTranslation = {
             fire: "Flames and smoke",
             detailedFlames: "Detailed flames",
             detailedFlamesHint: "A nicer fire, drawn more often. Off: simpler flames, lighter to display.",
-            pixelRelief: "3/4 relief (pixel art)",
-            pixelReliefHint:
-                "Hollows and mounts seen from three quarters, pixel art ground. Experimental: painted pools, ice and frost are not drawn. Never in the editor nor in Basic mode.",
+            pixelRelief: "3/4 relief",
+            pixelReliefHint: "Hollows and mounts seen from three quarters. Never in the editor nor in Basic mode.",
             treeSway: "Trees swaying in the wind",
             windowLight: "Light through the windows",
             waterFlow: "Foam and whirls on the water",

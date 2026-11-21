@@ -2538,39 +2538,46 @@ pixel par cellule, sous les objets et les avatars, redessiné seulement quand le
 (16 px), comme dans une piscine, sans invite ; en dessous on marche. Un avatar sur un palier ne nage pas. Les flaques
 de la pluie ne se posent pas sur le relief ; les éclaboussures deviennent des ronds sur l'eau.
 
-**Deux moteurs du sol, au choix** (2026-11-21, conception et plan dans le dépôt d'infra,
-`docs/superpowers/{specs,plans}/2026-11-21-fusion-infogene-deux-moteurs*`). Le sol, le relief et l'eau d'une carte
-sont dessinés par l'un de deux moteurs :
+**Relief en 3/4 : par le shader du sol, blocs en repli** (2026-11-21, conception et plan dans le dépôt d'infra,
+`docs/superpowers/{specs,plans}/2026-11-21-relief-3-4-shader*` ; la fusion d'`infogene` qui a amené là :
+`…/2026-11-21-fusion-infogene-deux-moteurs*`). Réglage personnel « Relief en 3/4 » (Paramètres → Graphismes → Effets ;
+`pixelReliefStore`, clé `terrainPixelRelief`, coupé par défaut), sans recharger ; jamais dans l'éditeur ni en mode
+Basique. Une règle dit qui dessine (`Terrain/GroundEngineChoice.ts` `groundEngineOf`) :
 
-- **à plat, en shader** (`Terrain/TerrainView.ts`, `GroundSplat.ts`, section « Sol en shader, météo personnelle et gel
-  de l'eau ») : le moteur par défaut, le seul dans l'éditeur de carte. Lui seul dessine les piscines peintes, la glace,
-  le givre, le sol mouillé et la crête d'une comète ;
-- **en 3/4, en pixel art** (`Terrain/ReliefTiles.ts`, décrit ci-dessous) : pour qui active le réglage personnel
-  « Relief en 3/4 (pixel art) » (Paramètres → Graphismes → Effets ; `pixelReliefStore`, clé `terrainPixelRelief`, coupé par défaut),
-  sans recharger. Jamais dans l'éditeur ni en mode Basique.
+| Réglage | Éditeur ou Basique | Shader capable | Qui dessine le sol |
+|---|---|---|---|
+| coupé | — | — | le moteur à plat (`TerrainView`, `GroundSplat`) ; rien en Basique |
+| activé | oui | — | le moteur à plat ; rien en Basique |
+| activé | non | oui | le même moteur, ses shaders en 3/4 |
+| activé | non | non | les blocs en pixel art (`ReliefTiles`), en 3/4 |
 
-Une règle dit lequel dessine : `projectionShown({ chosen, editorOpen, basic })`, lue par
-`GameScene.pixelReliefShown()` et, loin de la scène, par `Terrain/PixelReliefShown.ts`. `Terrain/GroundEngines.ts`
-ne crée le moteur 3/4 (blocs, textures, workers, reflets, traces) que pour qui l'a choisi, le détruit quand il est
-coupé, le cache sans le détruire dans l'éditeur et en Basique ; `TerrainView` se cache quand le 3/4 est affiché.
+**En shader.** Les deux shaders de `GroundSplat` partent de `worldPoint()` (quel point de la carte est sous ce pixel).
+En 3/4 cette fonction rend le point du sol **vu** au pixel : le plus au sud dessiné à cette ligne, la surface étant le
+sol ou l'eau posée dessus, dessinée plus haut de la moitié de sa hauteur (±128 px au plus). Elle remonte vers le nord
+depuis 128 px au sud du pixel, une rangée de centres de cellules à la fois (18 au plus), puis 6 moitiés entre les deux
+dernières. `Terrain/ObliqueView.ts` en est le jumeau en TypeScript (`seenPoint`), testé ; le shader a été comparé à lui
+au navigateur (3 013 points, tous à 1 px). Les hauteurs exactes vont au shader dans une image à part (deux octets par
+cellule : `encodeHeight`, sol à gauche, surface à droite ; `TerrainWater.depthsOver` pour l'eau, sans plafond), envoyée
+seulement en 3/4. La zone dessinée dépasse alors l'écran d'au moins 288 px en haut et en bas (`drawnArea`,
+`stillCovers`). En 3/4 le shader ajoute : de l'herbe sous un relief sans sol peint (les tuiles de la carte restent à
+plat dessous), les **parois** (là où le sol descend vite vers le sud : roche par strates, plus sombre), les **courbes
+de niveau** (une par 32 px, sombre côté bas, claire côté haut). Tout le reste est celui du moteur à plat : piscines
+peintes, glace, givre, sol mouillé, crête d'une comète, eau animée.
 
-| | Relief affiché en 3/4 | Sinon |
-|---|---|---|
-| Avatar, nom, poissons, bouchon, clic | suivent le relief | à leur place |
-| Nage | là où l'eau est dessinée sombre (profondeur lissée) | par cellule |
-| Traces de pas | celles du terrain, toute l'année | celles du givre |
-| Neige au sol | cellule blanche selon la neige tombée (`GroundSource.snowCoverHere`), neige des hauteurs | shader |
-| Herbe de la carte | dessinée par les blocs | `Weather/SnowGround.ts` |
-| Feuilles d'automne au sol | profondeur 0,67 (au-dessus des blocs) | 0,65 |
-| Piscines posées en image | leur image | dessinées par le shader |
-| Crête d'une comète | cercles de `MeteorView` | dans l'eau |
+**Où le shader ne peut pas** (`GroundSplat.create` : pas de WebGL, moins de 10 unités de texture, ou pas de nombres
+précis dans les fragments), le 3/4 n'est pas compilé du tout (`#define OBLIQUE`) et le réglage activé donne les blocs
+des lots A à E, décrits ci-dessous (`Terrain/GroundEngines.ts` ne les crée que là). `GameScene.pixelReliefShown()` dit
+« le 3/4 est affiché » (avatar, nom, poissons, bouchon, clic, nage) ; `GameScene.pixelBlocksShown()` et
+`Terrain/PixelReliefShown.ts` disent « les blocs dessinent » (moteur à plat caché, piscines posées en image à leur
+image, feuilles au-dessus des blocs, herbe de la carte laissée aux blocs, écume en pixels, pas de traces du givre).
 
-**Manques du mode 3/4** (à porter) : les piscines peintes ne sont pas dessinées (on y nage quand même), la glace
-non plus (on marche quand même sur l'eau gelée), ni le givre ni le sol mouillé. Le thème « Hiver » de la branche a
-disparu avec celui d'`infogene` : la neige ne vient plus que de la météo. Un pont étant fait de paliers, plus de cas
-particulier d'un pont dans la nage ni dans le décalage de l'avatar.
+**Limites.** L'écume du courant, les feuilles au sol, les flaques, les traces du givre, les arbres et les objets
+restent dessinés à leur place : ils ne montent pas avec un mont (lot 2 du relief). Le rendu en 3/4 est celui des
+textures du moteur à plat, pas le pixel art des blocs. Coût non mesuré sur une carte graphique intégrée. Le thème
+« Hiver » de la branche a disparu avec celui d'`infogene` ; un pont étant fait de paliers, plus de cas particulier d'un
+pont dans la nage, le décalage de l'avatar ni le clic.
 
-**Relief vu de trois quarts** (quand le réglage est activé ; conception et plan dans le dépôt d'infra,
+**Les blocs, repli sans shader : relief vu de trois quarts** ( conception et plan dans le dépôt d'infra,
 `docs/superpowers/{specs,plans}/2026-11-20-relief-3-4*`). Hors de l'éditeur, le sol creusé est dessiné **plus bas de
 la moitié de sa profondeur**, comme les étages sont dessinés plus haut de leur altitude : un trou de 8 cases (256 px)
 a une paroi de 128 px. Là où le sol descend en allant vers le sud, on voit sa paroi (roche teintée par le sol du bord,
