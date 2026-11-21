@@ -616,9 +616,13 @@ void main() {
     if (poolEdge > 0.02 && poolEdge <= 0.5) {
         depth = packNearest(5.0, world).r > 0.5 ? 0.0 : packNearest(2.0, world).b;
     }
-    // The ice (Frost.ts): it takes the shallows first, the deep water last; frozen, nothing moves any more.
+    // The ice (Frost.ts): it takes the shallows first, the deep water last; frozen, nothing moves any more. Its ragged
+    // edge never reaches over 1: at the full cold (-15 °C) the deep water freezes whole, as isFrozen says.
     float depthPx = depth * ${WATER_SCALE_PX}.0;
-    float frozenAt = 0.1 + 0.9 * min(1.0, depthPx / ${DEEP_ICE_PX}.0) + (vnoise(world / 14.0) - 0.5) * 0.08;
+    float frozenAt = min(
+        1.0,
+        0.1 + 0.9 * min(1.0, depthPx / ${DEEP_ICE_PX}.0) + (vnoise(world / 14.0) - 0.5) * 0.08
+    );
     float outdoors = step(0.5, pack(4.0, world).b);
     // The ice of the server: the root of its thickness over a metre, 0.0707 at the 5 mm one slips on.
     float kept = pack(8.0, world).r;
