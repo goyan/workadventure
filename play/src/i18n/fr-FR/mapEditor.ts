@@ -829,6 +829,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             erase: "Gomme",
             slab: "Dalles de palier",
             stair: "Escalier",
+            bridge: "Pont",
         },
         hints: {
             wall: "Glissez pour tracer un mur droit.",
@@ -842,6 +843,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             erase: "Un clic efface ce qui est entouré en rouge, au niveau choisi : escalier ou rampe, porte, fenêtre, mur, dalle de palier ou sol. Partez d’un mur et glissez le long pour effacer ses segments (portes et fenêtres comprises) ; sur un palier, glissez un rectangle pour retirer ses dalles ; au sol, partez d’un sol pour effacer les sols survolés. Les objets restent.",
             slab: "Choisissez un niveau, puis glissez un rectangle pour poser les dalles d’un palier.",
             stair: "Cliquez sur la case de la première marche, au niveau d’où part l’escalier. Survolez la carte pour voir où il arrive. Un escalier ou une rampe déjà posé est entouré en blanc au survol : glissez-le pour le déplacer.",
+            bridge: "Cliquez la berge de départ, glissez jusqu’à la berge d’arrivée et relâchez : le tablier et une montée à chaque bout sont posés d’un coup. Le pont est droit, est-ouest ou nord-sud.",
         },
         floors: "Sol",
         floorGuide: {
@@ -859,6 +861,22 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             well: "Dalles retirées pour la trémie",
             refused: "Ne tient pas ici",
             deadEnd: "Un escalier posé qui ne mène nulle part",
+        },
+        bridge: {
+            width: "Largeur",
+            narrower: "Moins large",
+            wider: "Plus large",
+            tiles: "{count} case{{s}}",
+            style: "Style",
+            height: "Hauteur",
+            low: "Basse",
+            high: "Haute",
+            concreteOnly:
+                "Cette salle n’a pas les pièces des ponts en bois : pont en béton, à hauteur de murs de 2 cases.",
+            styles: {
+                wood: "Bois",
+                concrete: "Béton",
+            },
         },
         floorLevel: {
             adjust: "Ajuster la hauteur",
@@ -938,6 +956,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             stairNoArrival:
                 "Escalier posé, mais il ne mène encore nulle part : posez des dalles du niveau d’arrivée sur les cases orange.",
             stairInvalid: "L’escalier ne tient pas ici : il sort de la carte ou croise un autre escalier.",
+            bridgeTooShort:
+                "Pont trop court : il faut au moins une case de tablier entre les deux montées. Glissez plus loin.",
+            bridgeBlocked: "Le pont ne tient pas ici : il sort de la carte ou croise un escalier.",
             failed: "La modification n'a pas pu être appliquée.",
         },
         families: {

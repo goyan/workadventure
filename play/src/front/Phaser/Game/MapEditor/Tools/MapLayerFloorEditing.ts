@@ -24,6 +24,9 @@ import {
     mapLayerBridgePiecesAvailableStore,
     mapLayerSlabWoodStore,
     mapLayerStairRampStore,
+    mapLayerBridgeHeightStore,
+    mapLayerBridgeStyleStore,
+    mapLayerBridgeWidthStore,
     mapLayerStatusStore,
 } from "../../../../Stores/MapLayerStore";
 import { LL } from "../../../../../i18n/i18n-svelte";
@@ -35,6 +38,8 @@ import type { MapEditorModeManager } from "../MapEditorModeManager";
 import { MAP_LAYER_TILE_SIZE } from "../MapLayer/MapLayerCatalog";
 import { FloorModel, stairImagePosition } from "../MapLayer/FloorModel";
 import { stairOutline } from "../MapLayer/MapLayerTarget";
+import { bridgeFits, layBridge, planBridge } from "../MapLayer/BridgeBuilder";
+import type { BridgeSpec } from "../MapLayer/BridgeBuilder";
 import {
     applySlabs,
     availableLevels,
@@ -92,6 +97,8 @@ export class MapLayerFloorEditing {
     /** The floors read from the map for the previews, kept a short while: the pointer moves often. */
     private cached: { model: FloorModel; at: number } | undefined;
     private unsubscribeMode: (() => void) | undefined;
+    /** Why the last bridge was refused, for the message of the panel. */
+    private bridgeRefusal: "tooShort" | "blocked" | undefined;
 
     constructor(
         private readonly scene: GameScene,
@@ -226,11 +233,34 @@ export class MapLayerFloorEditing {
         };
     }
 
+    /**
+     * The bridge the mode would lay between two points of the screen, read on the ground. Without the pieces of the
+     * bridges in the catalog of the room, one of concrete, high: the pieces every room with raised floors has.
+     */
+    private bridgeSpec(start: Point, end: Point): BridgeSpec {
+        const pieces = get(mapLayerBridgePiecesAvailableStore);
+        return {
+            from: floorCellAt(start.x, start.y, 0),
+            to: floorCellAt(end.x, end.y, 0),
+            width: get(mapLayerBridgeWidthStore),
+            style: pieces ? get(mapLayerBridgeStyleStore) : "concrete",
+            height: pieces ? get(mapLayerBridgeHeightStore) : 52,
+        };
+    }
+
     private operation(start: Point, end: Point): FloorOperation | undefined {
         const mode = get(mapLayerModeStore);
         const level = get(mapLayerLevelStore);
         const from = floorCellAt(start.x, start.y, level);
         const to = floorCellAt(end.x, end.y, level);
+        if (mode === "bridge") {
+            const spec = this.bridgeSpec(start, end);
+            return (model, bounds) => {
+                const refusal = layBridge(model, spec, bounds);
+                if (refusal) this.bridgeRefusal = refusal;
+                return refusal === undefined;
+            };
+        }
         if (mode === "slab") {
             // Of glass when the switch is on and the catalog has the glass slab; else of the floor chosen.
             const family =
@@ -296,6 +326,11 @@ export class MapLayerFloorEditing {
         }
         if (!current) {
             this.label?.setVisible(false);
+            return;
+        }
+        if (mode === "bridge") {
+            this.label?.setVisible(false);
+            this.drawBridge(graphics, placedModel, start ?? current, current);
             return;
         }
         const levelName =
@@ -418,6 +453,39 @@ export class MapLayerFloorEditing {
         graphics.strokeRect(x, y, width, height);
     }
 
+    /** The bridge a gesture from `start` to `current` would lay: its deck and its ways up, red when it is refused. */
+    private drawBridge(graphics: Phaser.GameObjects.Graphics, model: FloorModel, start: Point, current: Point): void {
+        const size = MAP_LAYER_TILE_SIZE;
+        const spec = this.bridgeSpec(start, current);
+        const plan = planBridge(spec);
+        if (plan === "tooShort") {
+            // Nothing to lay yet: the tile under the pointer, where the bridge would start.
+            graphics.lineStyle(2, REFUSED_COLOR, 1);
+            graphics.strokeRect(spec.to.x * size, spec.to.y * size, size, size);
+            return;
+        }
+        const color = bridgeFits(model, plan, this.getBounds()) ? OK_COLOR : REFUSED_COLOR;
+        const { a, b } = plan.deck;
+        const deck = {
+            x: a.x * size,
+            y: a.y * size - plan.level,
+            width: (b.x - a.x + 1) * size,
+            height: (b.y - a.y + 1) * size,
+        };
+        graphics.fillStyle(color, 0.3);
+        graphics.fillRect(deck.x, deck.y, deck.width, deck.height);
+        graphics.lineStyle(2, color, 1);
+        graphics.strokeRect(deck.x, deck.y, deck.width, deck.height);
+        for (const { shape, foot } of plan.ways) {
+            const image = stairImagePosition(shape, foot, 0);
+            const box = stairScreenBox(shape, foot);
+            graphics.fillStyle(color, 0.45);
+            graphics.fillRect(image.x, image.y, box.width, box.height);
+            graphics.lineStyle(2, color, 1);
+            graphics.strokeRect(image.x, image.y, box.width, box.height);
+        }
+    }
+
     /**
      * The commands that make the entities of the map match the floors once `change` has been applied to their model:
      * the slabs and stairs it no longer has are deleted, the missing ones created. Undefined when that would touch too
@@ -469,6 +537,7 @@ export class MapLayerFloorEditing {
         const wamFile = this.scene.getGameMap().getWamFile();
         if (!operation || !wamFile) return;
         const stairMode = get(mapLayerModeStore) === "stair";
+        this.bridgeRefusal = undefined;
         /** Whether the stair just placed leads nowhere yet. */
         let stairLeadsNowhere = false;
 
@@ -483,6 +552,9 @@ export class MapLayerFloorEditing {
             });
             if (refused) {
                 if (stairMode) mapLayerStatusStore.set("stairInvalid");
+                if (this.bridgeRefusal) {
+                    mapLayerStatusStore.set(this.bridgeRefusal === "tooShort" ? "bridgeTooShort" : "bridgeBlocked");
+                }
                 return [];
             }
             if (commands === undefined) {

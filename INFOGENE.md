@@ -3744,6 +3744,24 @@ avec 8 px apportés par cellule du cratère). Pas de son. Rien n'a été vu à l
 cette section : widget, viseur, chute, éclair et gerbe ne sont validés que par les tests ; l'effet sur l'eau en jeu
 n'est pas vu.
 
+## Pont posé en un geste
+
+Outil Carte, groupe des paliers, mode **« Pont »** : presser sur la berge de départ, glisser jusqu'à la berge
+d'arrivée, relâcher. Le tablier et une montée à chaque bout sont posés d'un coup, en une seule annulation
+(`BridgeBuilder.ts` : `planBridge`, `bridgeFits`, `layBridge` ; aperçu vert, rouge quand c'est refusé).
+
+- **Largeur** 1 à 6 cases, centrée sur la case de départ ; au-delà de 2, les montées sont posées côte à côte.
+- **Style** : *Bois* (dalles `dalle-bois`, rampes) ou *Béton* (dalles `dalle-pierre-grise`, escaliers pleins : il
+  n'existe pas de rampe en béton).
+- **Hauteur** : *Basse* (20 px) ou *Haute* (52 px, le dessus de murs de 2 cases).
+- Le pont est **droit**, est-ouest ou nord-sud : il suit le côté le plus long du geste, sur la rangée (ou la colonne)
+  du départ. Les deux points sont lus au sol, quel que soit le niveau choisi dans le sélecteur.
+- Refusé en entier, avec un message : trop court (il faut au moins une case de tablier entre les deux montées), hors
+  de la carte, ou sur un escalier qui part du sol. Les murs ne sont pas regardés.
+- Sans les pièces des ponts dans le catalogue de la salle : béton, hauteur haute, sans choix.
+- Le pont est fait des pièces ordinaires des paliers : il se retouche et s'efface ensuite pièce par pièce (gomme).
+  Un test vérifie que le serveur y lit un pont (cases à sec pour les animaux).
+
 ## Éditeur : choisir un niveau
 
 Le sélecteur de niveau de l'éditeur (`FloorLevelPicker.svelte`) propose **tous les niveaux où l'on peut construire**,
