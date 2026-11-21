@@ -67,9 +67,7 @@ describe("the wet bulb at the extremes", () => {
             expect(Math.abs(wetBulbTemperature(-20.001, humidity) - wetBulbTemperature(-20, humidity))).toBeLessThan(
                 humidity <= 5 ? 4 : 2,
             );
-            expect(Math.abs(wetBulbTemperature(50.001, humidity) - wetBulbTemperature(50, humidity))).toBeLessThan(
-                1.5,
-            );
+            expect(Math.abs(wetBulbTemperature(50.001, humidity) - wetBulbTemperature(50, humidity))).toBeLessThan(1.5);
         }
     });
 });
