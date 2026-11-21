@@ -88,6 +88,7 @@ export class MeadowManager {
               dryness?: Uint8Array;
               ash?: Uint8Array;
               snow?: Uint8Array;
+              ice?: Uint8Array;
           }
         | undefined;
     private timer: ReturnType<typeof setInterval> | undefined;
@@ -106,6 +107,7 @@ export class MeadowManager {
     /** Whether snow fell or melted since the room was last told: it is told at the next step. */
     private snowMoved = false;
     private sentSnow: Uint8Array | undefined;
+    private sentIce: Uint8Array | undefined;
     private sentGrass: Uint8Array | undefined;
     private sentMoisture: Uint8Array | undefined;
     private sentDryness: Uint8Array | undefined;
@@ -121,7 +123,7 @@ export class MeadowManager {
         private readonly room: Pick<GameRoom, "getWam" | "sendSubMessageToRoom">,
         private readonly rain: Pick<RainTimelineService, "slotsFor">,
         /** The water of the relief: the soil under it is soaked, and its grass drowns. */
-        private readonly water: () => WaterGrid | undefined,
+        private readonly water: () => Pick<WaterGrid, "depthAt"> | undefined,
         private readonly store?: { repository: VariablesRepositoryInterface; roomUrl: string },
         private readonly now: () => number = Date.now,
         /** The size of the map in cells of the relief, once read. */
@@ -162,6 +164,8 @@ export class MeadowManager {
                 ...(fields.ash ? { ash: new Uint8Array(gunzipSync(Buffer.from(fields.ash, "base64"))) } : {}),
                 // Absent from a meadow saved before the snow could lie on it, or without any.
                 ...(fields.snow ? { snow: new Uint8Array(gunzipSync(Buffer.from(fields.snow, "base64"))) } : {}),
+                // Absent from a meadow saved before its water could freeze.
+                ...(fields.ice ? { ice: new Uint8Array(gunzipSync(Buffer.from(fields.ice, "base64"))) } : {}),
             };
             // Absent from a meadow saved before its trees could burn.
             if (fields.trees) {
@@ -214,6 +218,7 @@ export class MeadowManager {
                 this.saved.dryness,
                 this.saved.ash,
                 this.saved.snow,
+                this.saved.ice,
             );
         }
         this.saved = undefined;
@@ -326,7 +331,7 @@ export class MeadowManager {
         const snow = this.snowInput();
         if (snow.snowfallMm) this.snowMoved = true;
         // The trees on fire melt the snow around their foot.
-        if (meadow.snowy()) {
+        if (meadow.snowy() || meadow.icy()) {
             for (const tree of this.trees.fires()) {
                 meadow.warm(
                     Math.floor(tree.x / TILE_PX),
@@ -345,8 +350,9 @@ export class MeadowManager {
                 this.tell(meadow);
                 this.save();
             }
-            // The snow is not of the meadow: it goes on falling and melting.
-            if (meadow.snowy() || snow.snowfallMm) {
+            // The snow and the ice are not of the meadow: the snow goes on falling and melting, the water freezing.
+            const freezing = snow.weather !== undefined && snow.weather.temperature < 0;
+            if (meadow.snowy() || meadow.icy() || snow.snowfallMm || freezing) {
                 const thawed = meadow.stepSnowAlone({
                     seconds: MEADOW_STEP_SECONDS,
                     rainMmPerHour: this.rainRate,
@@ -356,6 +362,7 @@ export class MeadowManager {
                     ...snow,
                 });
                 this.pourMelted(meadow, thawed?.meltedMm);
+                if (meadow.iceMoved()) this.snowMoved = true;
             }
             if (this.steps % STEPS_PER_MESSAGE === 0 || this.snowMoved) this.tell(meadow);
             if (this.steps % STEPS_PER_SAVE === 0) this.save();
@@ -381,6 +388,8 @@ export class MeadowManager {
             ...snow,
         });
         this.pourMelted(meadow, thawed?.meltedMm);
+        // An ice that thickens or thaws is seen moving, as a snow is.
+        if (meadow.iceMoved()) this.snowMoved = true;
         for (const grazer of this.grazers()) meadow.graze(grazer.x, grazer.y, MEADOW_STEP_SECONDS);
         // The trees after the ground they stand on: what they set on fire is told with this step.
         const trees = this.trees.step({
@@ -429,8 +438,9 @@ export class MeadowManager {
         if (!this.meadow) return 0;
         const tileX = Math.floor(x / TILE_PX);
         const tileY = Math.floor(y / TILE_PX);
-        // The snow of the crater is gone in steam, as the water the fireball fell into.
-        if (this.meadow.melt(tileX, tileY, radiusTiles) > 0) this.snowMoved = true;
+        // The snow and the ice of the crater are gone in steam, as the water the fireball fell into.
+        this.meadow.melt(tileX, tileY, radiusTiles);
+        this.snowMoved = true;
         if (!{ ...DEFAULT_MEADOW_SETTINGS, ...settings?.meadow }.enabled) return 0;
         // The ground first: a tree takes only where its foot is not wet.
         let lit =
@@ -442,6 +452,14 @@ export class MeadowManager {
         }
         if (lit > 0) this.wasBurning = true;
         return lit;
+    }
+
+    /** A comet lands at a point of the map (pixels), its crater `radiusTiles` wide: it breaks the ice there. */
+    public shatter(x: number, y: number, radiusTiles: number): void {
+        if (!this.meadow) return;
+        const tileX = Math.floor(x / TILE_PX);
+        const tileY = Math.floor(y / TILE_PX);
+        if (this.meadow.breakIce(tileX, tileY, Math.max(0, radiusTiles)) > 0) this.snowMoved = true;
     }
 
     /**
@@ -474,7 +492,8 @@ export class MeadowManager {
             !this.sentDryness ||
             !this.sentFire ||
             !this.sentAsh ||
-            !this.sentSnow
+            !this.sentSnow ||
+            !this.sentIce
         ) {
             return undefined;
         }
@@ -487,6 +506,7 @@ export class MeadowManager {
             fire: gzipSync(this.sentFire),
             ash: gzipSync(this.sentAsh),
             snow: snowField(this.sentSnow),
+            ice: snowField(this.sentIce),
         };
     }
 
@@ -541,6 +561,7 @@ export class MeadowManager {
         const fire = meadow.writeFire();
         const ash = meadow.writeAsh();
         const snow = meadow.writeSnow();
+        const ice = meadow.writeIce();
         this.snowMoved = false;
         const same = (a: Uint8Array, b: Uint8Array | undefined): boolean =>
             b !== undefined && a.length === b.length && a.every((value, index) => value === b[index]);
@@ -549,7 +570,8 @@ export class MeadowManager {
             !this.sentGrass &&
             grass.every((value) => value === 0) &&
             moisture.every((value) => value === 0) &&
-            snow.every((value) => value === 0)
+            snow.every((value) => value === 0) &&
+            ice.every((value) => value === 0)
         ) {
             return;
         }
@@ -559,7 +581,8 @@ export class MeadowManager {
             same(dryness, this.sentDryness) &&
             same(fire, this.sentFire) &&
             same(ash, this.sentAsh) &&
-            same(snow, this.sentSnow)
+            same(snow, this.sentSnow) &&
+            same(ice, this.sentIce)
         ) {
             return;
         }
@@ -569,6 +592,7 @@ export class MeadowManager {
         this.sentFire = fire;
         this.sentAsh = ash;
         this.sentSnow = snow;
+        this.sentIce = ice;
         this.changedSinceSave = true;
         this.room.sendSubMessageToRoom({
             message: {
@@ -582,6 +606,7 @@ export class MeadowManager {
                     fire: gzipSync(fire),
                     ash: gzipSync(ash),
                     snow: snowField(snow),
+                    ice: snowField(ice),
                 },
             },
         });
@@ -596,6 +621,7 @@ export class MeadowManager {
             ["dryness", Buffer.from(gzipSync(this.meadow.writeDryness())).toString("base64")],
             ["ash", Buffer.from(gzipSync(this.meadow.writeAsh())).toString("base64")],
             ["snow", Buffer.from(gzipSync(this.meadow.writeSnow())).toString("base64")],
+            ["ice", Buffer.from(gzipSync(this.meadow.writeIce())).toString("base64")],
             ["trees", Buffer.from(gzipSync(JSON.stringify(this.trees.write()))).toString("base64")],
             ["size", `${this.meadow.width}x${this.meadow.height}`],
         ];
@@ -611,7 +637,7 @@ export class MeadowManager {
     }
 }
 
-/** The snow of the meadow as the room is told it: nothing at all where none lies. */
+/** The snow or the ice of the meadow as the room is told it: nothing at all where none lies. */
 function snowField(snow: Uint8Array): Uint8Array {
     return snow.some((value) => value > 0) ? gzipSync(snow) : new Uint8Array(0);
 }
