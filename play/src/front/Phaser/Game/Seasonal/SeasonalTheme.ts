@@ -1,4 +1,5 @@
-import { Season } from "@workadventure/map-editor";
+import { Season, seasonAt } from "@workadventure/map-editor";
+import type { SeasonPlace } from "@workadventure/map-editor";
 
 /**
  * Personal choice: follow the calendar, force autumn, or none. The Christmas theme is gone (2026-11-20): it spread a
@@ -21,18 +22,19 @@ export enum SeasonalTheme {
     Christmas = "christmas",
 }
 
-const parisMonth = new Intl.DateTimeFormat("en", { timeZone: "Europe/Paris", month: "numeric" });
-
 /**
- * Auto follows the Paris calendar, like the seasonal trees, so the whole team switches at the same time: autumn from
- * September 1st to November 30th. Without the server time yet, auto shows nothing rather than switching right after
- * loading.
+ * Auto follows the season of the map, like its seasonal trees, so everyone on it switches at the same time: autumn
+ * from September 1st to November 30th at its place (Paris without one), from March 1st to May 31 in the south.
+ * Without the server time yet, auto shows nothing rather than switching right after loading.
  */
-export function activeSeasonalTheme(mode: SeasonalThemeMode, serverDate: Date | undefined): SeasonalTheme | undefined {
+export function activeSeasonalTheme(
+    mode: SeasonalThemeMode,
+    serverDate: Date | undefined,
+    place?: SeasonPlace,
+): SeasonalTheme | undefined {
     if (mode === SeasonalThemeMode.Autumn) return SeasonalTheme.Autumn;
     if (mode === SeasonalThemeMode.None || !serverDate || !Number.isFinite(serverDate.getTime())) return undefined;
-    const month = Number(parisMonth.formatToParts(serverDate).find((part) => part.type === "month")?.value);
-    return month >= 9 && month <= 11 ? SeasonalTheme.Autumn : undefined;
+    return seasonAt(serverDate, place) === Season.Autumn ? SeasonalTheme.Autumn : undefined;
 }
 
 /** The theme shows its season on the seasonal trees, for this person only. */

@@ -1,5 +1,6 @@
 <script lang="ts">
     import {
+        calendarTimeZone,
         DEFAULT_AUTO_WEATHER,
         precipitationWeather,
         Season,
@@ -115,20 +116,23 @@
         }
     }
 
-    const timeFormat = new Intl.DateTimeFormat("fr-FR", {
-        timeZone: "Europe/Paris",
-        hour: "2-digit",
-        minute: "2-digit",
-        hourCycle: "h23",
-    });
+    // The schedule, its season and its hours are those of the place chosen in this panel: its times are read on its clock.
+    const timeFormat = $derived(
+        new Intl.DateTimeFormat("fr-FR", {
+            timeZone: calendarTimeZone(location),
+            hour: "2-digit",
+            minute: "2-digit",
+            hourCycle: "h23",
+        }),
+    );
 
     const preview = $derived.by(() => {
         if (weather !== WeatherType.Automatic) return [];
         const auto: AutoWeatherSettings = { frequency, include: autoInclude };
-        const changes = autoWeatherChanges(openedAt, auto, 2);
+        const changes = autoWeatherChanges(openedAt, auto, 2, location);
         const lines: string[] = [];
-        const season = seasonName(seasonAt(openedAt));
-        const current = weatherName(autoWeatherAt(openedAt, auto));
+        const season = seasonName(seasonAt(openedAt, location));
+        const current = weatherName(autoWeatherAt(openedAt, auto, location));
         const first = changes[0];
         lines.push(
             first

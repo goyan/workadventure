@@ -471,8 +471,23 @@ n'a pas de position à lui (comme un va-et-vient).
   (`worldClockTimeZone`, `mapTimeZoneStore` ; l'heure de l'ordinateur en mode « Heure de mon ordinateur ») et les
   **minuteries** des lampes lisent leurs heures dans ce fuseau (`minutesOfDayIn`, évalué par `back`). Sans lieu, ou
   pour un lieu choisi avant ce changement (pas de fuseau enregistré : rechoisir la ville), ou si le fuseau n'en est
-  pas un : heure de Paris. Restent à l'heure de Paris pour toutes les cartes : saisons, thème de Noël, programme de la
-  météo automatique. `play`, `back` et `map-storage` à déployer ensemble.
+  pas un : heure de Paris. Depuis le 2026-11-21, saisons et programme de la météo automatique suivent aussi ce lieu
+  (voir « Saisons du lieu de la carte »). `play`, `back` et `map-storage` à déployer ensemble.
+- **Saisons du lieu de la carte** (2026-11-21) : la saison d'une carte est celle de son lieu (`seasonAt(date, place)`,
+  `libs/map-editor/src/Weather/SeasonClock.ts`, la même fonction pour `back` et pour chaque navigateur, lieu lu dans
+  `settings.weatherLocation` enregistré). Hémisphère nord (latitude ≥ 0) : saisons météorologiques habituelles ;
+  hémisphère sud : décalées de six mois (décembre à février = été, mars à mai = automne). Le mois se lit dans le fuseau
+  du lieu (`placeCalendar`, Paris sans fuseau connu : un lieu choisi avant la #293 garde son hémisphère et le jour de
+  Paris). Suivent la saison du lieu : l'herbe du pré (`MeadowManager`), les arbres saisonniers (`EntitiesManager`), la
+  limite de la neige des hauteurs et l'allure dans la neige (`GameScene.getGroundSeason`), le tapis de feuilles
+  (`autumnProgressAt`, 1er mars au 31 mai au sud), le thème saisonnier « Auto » (automne de la carte, pas du
+  calendrier de Paris) et la **météo automatique** : parts de la saison du lieu, jour tiré dans le fuseau du lieu,
+  brouillard avant 11 h et orages de 13 h à 21 h à l'heure du lieu (`autoWeatherAt(date, auto, place)`,
+  `cloudinessAt`, `autoWeatherChanges`). Les heures de l'aperçu de « Météo de la carte » sont celles du lieu choisi.
+  Sans lieu (ou à Paris) : rien ne change, empreinte du programme figée dans `tests/WeatherSchedulePlace.test.ts`.
+  Limites : les tropiques reçoivent les quatre saisons selon le signe de leur latitude (pas de saison sèche et humide) ;
+  les créneaux de 30 min restent calés sur l'heure du monde, décalés d'un quart d'heure pour un fuseau au quart
+  d'heure (Népal, Chatham) ; le tirage quotidien de la jungle reste au jour de Paris.
 - **Éclairage du jeu dans l'éditeur (réglage personnel)** : l'éditeur de carte masque le voile de nuit, pour voir ce qu'on
   édite ; le **bouton soleil-lune sous la barre d'outils de l'éditeur** (ou l'interrupteur « Même éclairage dans l'éditeur de carte qu'en jeu », Paramètres → Ambiance → Cycle jour/nuit,
   `nightInEditorStore`, désactivé par défaut) le laisse, avec l'obscurité, l'ambiance et les rebonds réglés : on règle
@@ -2318,7 +2333,7 @@ la pose de la boisson (`LandLifeView`, calculé par le navigateur à partir du p
 rien à la vie des antilopes : elles ne cherchent pas l'herbe et n'ont pas faim sans elle. Rien sur le fil.
 
 **Neige en altitude** (`Terrain/SnowLine.ts`). La neige tient sur les monts à partir d'une altitude qui dépend de la
-saison du calendrier de Paris : 96 px (3 cases) en hiver, 160 px au printemps et en automne, 224 px en été ; fine à
+saison du lieu de la carte (Paris sans lieu, saisons inversées au sud) : 96 px (3 cases) en hiver, 160 px au printemps et en automne, 224 px en été ; fine à
 la limite, complète 32 px plus haut (`snowCover`). Le navigateur la dessine en voile blanc sur le sol et l'herbe,
 sous les ombres des pentes, dehors seulement (`TerrainView`, `snowAlpha`) ; on y marche moins vite (85 % sous une
 couverture complète, `snowPace` dans `GroundPace.ts`) ; le serveur y fait mourir l'herbe, à l'allure de la soif sous
@@ -3006,8 +3021,9 @@ gardent leur voile au dehors seul.
 
 **Thème saisonnier** (« Paramètres → Ambiance → Thème saisonnier ») : Auto, Automne, Aucun (Noël retiré, voir plus bas). Réglage perso
 (`seasonalTheme` dans le navigateur), appliqué sans recharger. Il remplace « Thème de Noël » (repris une fois :
-Toujours → Auto depuis le retrait de Noël, Jamais → Aucun) et « Sol extérieur » (effacé). Auto suit le calendrier de
-Paris, revérifié chaque minute : automne du 1er septembre au 30 novembre ; tant que l'heure du serveur
+Toujours → Auto depuis le retrait de Noël, Jamais → Aucun) et « Sol extérieur » (effacé). Auto suit la saison du lieu
+de la carte (Paris sans lieu), revérifiée chaque minute : automne du 1er septembre au 30 novembre au nord, du 1er mars
+au 31 mai au sud ; tant que l'heure du serveur
 n'est pas reçue, Auto n'affiche rien (`Seasonal/SeasonalTheme.ts`). `SeasonalThemeManager` crée le décor du thème
 (`SeasonalDecor`), le masque pendant l'édition et le reconstruit quand un mur ou un objet change.
 

@@ -1,4 +1,5 @@
 import { get, type Unsubscriber, derived } from "svelte/store";
+import type { SeasonPlace } from "@workadventure/map-editor";
 import { FrostPrints } from "@wa/front/Phaser/Game/Weather/FrostPrints";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { seasonalThemeModeStore } from "../../../Stores/SeasonalThemeStore";
@@ -36,6 +37,8 @@ export interface SeasonalThemeDeps {
     /** The scene only redraws when told to. */
     markDirty: () => void;
     serverDate: () => Date | undefined;
+    /** The place of the map, whose season the automatic theme follows (Paris without one). */
+    place?: () => SeasonPlace | undefined;
     createDecor?: (theme: SeasonalTheme) => SeasonalDecor | undefined;
     readPixels?: (entity: SnowEntity) => AlphaMask | undefined;
     /** How much the map snow covers the ground, 0 to 1; 0 when the map snow is not shown. */
@@ -108,7 +111,7 @@ export class SeasonalThemeManager {
     update(time: number, walkers: () => WalkerSample[]): void {
         if (time - this.lastCheck >= DATE_CHECK_MS) {
             const serverDate = this.deps.serverDate();
-            this.theme = activeSeasonalTheme(this.mode, serverDate);
+            this.theme = activeSeasonalTheme(this.mode, serverDate, this.deps.place?.());
             // Without the server time, auto has no theme yet: ask again next frame rather than in a minute.
             if (serverDate || this.mode !== SeasonalThemeMode.Auto) this.lastCheck = time;
         }

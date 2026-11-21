@@ -82,9 +82,12 @@ export function weatherForecast(
         }
         if (weather === WeatherType.Real || weather === WeatherType.Automatic) {
             const date = new Date(at);
-            const drawn = namedPrecipitation(autoWeatherAt(date, settings?.weatherAuto), snowAt(at));
+            const drawn = namedPrecipitation(
+                autoWeatherAt(date, settings?.weatherAuto, settings?.weatherLocation),
+                snowAt(at),
+            );
             const cell = { at, weather: drawn, temperature };
-            return withClouds(cell, cloudinessAt(date, settings?.weatherAuto));
+            return withClouds(cell, cloudinessAt(date, settings?.weatherAuto, settings?.weatherLocation));
         }
         const cell = { at, weather: namedPrecipitation(weatherAtTime(weather, new Date(at)), snowAt(at)), temperature };
         return withClouds(cell, weather === WeatherType.Cloudy ? AUTO_CLOUDINESS : 0);

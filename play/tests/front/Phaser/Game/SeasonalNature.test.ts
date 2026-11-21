@@ -61,6 +61,31 @@ describe("shared seasonal nature", () => {
         expect(markDirty).toHaveBeenCalledTimes(2);
     });
 
+    it("shows the summer trees of a map of Sydney in December, and its autumn in April", () => {
+        const setSeason = vi.fn();
+        const entity = { setSeason } as unknown as Entity;
+        const settings = {
+            weather: WeatherType.Clear,
+            weatherLocation: { name: "Sydney", latitude: -33.87, longitude: 151.21, timezone: "Australia/Sydney" },
+        };
+        const manager = Object.assign(Object.create(EntitiesManager.prototype) as EntitiesManager, {
+            entities: new Map([["tree", entity]]),
+            season: Season.Spring,
+            snowCover: 1,
+            nextSeasonCheck: 0,
+            lastOutdoorVersion: 0,
+            scene: {
+                markDirty: vi.fn(),
+                getOutdoorVersion: () => 0,
+                getGameMap: () => ({ getWamFile: () => ({ getWam: () => ({ settings }) }) }),
+            },
+        }) as EntitiesManager;
+        manager.updateSeason(0, new Date("2026-12-08T02:00:00Z"));
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Summer, 1);
+        manager.updateSeason(60_000, new Date("2027-04-08T02:00:00Z"));
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Autumn, 1);
+    });
+
     it("shows winter trees at once while the personal christmas theme is on, then the map season again", () => {
         const setSeason = vi.fn();
         const entity = { setSeason } as unknown as Entity;
@@ -142,7 +167,11 @@ describe("shared seasonal nature", () => {
             snowCover: 1,
             nextSeasonCheck: 0,
             lastOutdoorVersion: 0,
-            scene: { markDirty: vi.fn(), getOutdoorVersion: () => 0 },
+            scene: {
+                markDirty: vi.fn(),
+                getOutdoorVersion: () => 0,
+                getGameMap: () => ({ getWamFile: () => undefined }),
+            },
         }) as EntitiesManager;
         // A winter day, whatever falls on the map: the trees are not white (nothing lies on them yet).
         const winter = new Date("2026-01-10T12:00:00Z");

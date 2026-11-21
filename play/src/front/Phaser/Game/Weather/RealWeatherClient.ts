@@ -172,7 +172,7 @@ function personalWeatherSettings(
     // While its real weather is not known yet, the automatic one shows, with its clouds.
     const shown =
         real?.weather === WeatherType.Automatic && date
-            ? { ...real, cloudiness: cloudinessAt(date, real.weatherAuto) }
+            ? { ...real, cloudiness: cloudinessAt(date, real.weatherAuto, real.weatherLocation) }
             : real;
     personalMemo = { settings, place, state: chosenState, second, shown };
     return shown;
@@ -198,7 +198,10 @@ export function mapWeatherSettings(
         return withPlaceWind({ ...tried, weather: WeatherType.Clear, cloudiness: AUTO_CLOUDINESS }, date);
     }
     if (tried?.weather === WeatherType.Automatic) {
-        return withPlaceWind(date ? { ...tried, cloudiness: cloudinessAt(date, tried.weatherAuto) } : tried, date);
+        return withPlaceWind(
+            date ? { ...tried, cloudiness: cloudinessAt(date, tried.weatherAuto, tried.weatherLocation) } : tried,
+            date,
+        );
     }
     if (tried?.weather !== WeatherType.Real) return withPlaceWind(tried, date);
     follow(tried.weatherLocation);
@@ -220,7 +223,7 @@ export function mapWeatherSettings(
     // While the real weather is unavailable, the automatic one shows, with its clouds.
     const shown =
         real?.weather === WeatherType.Automatic && date
-            ? { ...real, cloudiness: cloudinessAt(date, real.weatherAuto) }
+            ? { ...real, cloudiness: cloudinessAt(date, real.weatherAuto, real.weatherLocation) }
             : real;
     memo = {
         settings,
