@@ -526,12 +526,22 @@
                 style:top={`${jamPanelAnchorTop}px`}
                 bind:offsetHeight={jamDockHeight}
             >
-                <div class="pointer-events-auto"><WorldClock /></div>
-                <!-- The floors of the map, the one of the avatar marked; in the map editor, the level it works on. -->
-                <FloorLevelStack
-                    stack={$floorLevelsStore}
-                    onSelectFloor={$mapEditorModeStore ? chooseEditorLevel : undefined}
-                />
+                <!-- The clock, the floors and the weather chip: on one line from md up, the clock rightmost and the
+                     others to its left (row-reverse keeps the stacked order below md). Items start at the top so that
+                     the weather brief, unfolded under its chip, pushes what is below without moving the clock. -->
+                <div
+                    class="flex flex-col items-end gap-2 @md/main-layout:flex-row-reverse @md/main-layout:items-start"
+                    data-testid="clock-line"
+                >
+                    <div class="pointer-events-auto"><WorldClock /></div>
+                    <!-- The floors of the map, the one of the avatar marked; in the map editor, the level it works on. -->
+                    <FloorLevelStack
+                        stack={$floorLevelsStore}
+                        onSelectFloor={$mapEditorModeStore ? chooseEditorLevel : undefined}
+                    />
+                    <!-- The weather now, in one hour and in four hours (apps menu, "Weather"). -->
+                    <WeatherForecastBanner />
+                </div>
                 <!-- What plays in the zone the avatar stands in (its name, its sound): in the column, never over the clock. -->
                 {#if $notificationPlayingStore}
                     <div class="pointer-events-auto flex flex-col items-end gap-2 [&_.notification-playing]:mr-0">
@@ -545,8 +555,6 @@
                     start={(minutes) => gameManager.getCurrentGameScene().fishingManager?.startContest(minutes)}
                     join={() => gameManager.getCurrentGameScene().fishingManager?.toggleEquipment()}
                 />
-                <!-- The weather now, in one hour and in four hours, under the clock (apps menu, "Weather"). -->
-                <WeatherForecastBanner />
                 <!-- The disaster picker (apps menu, "Disaster"): arms a catastrophe for the next click on the map. -->
                 {#if !$basicActiveStore}
                     <CatastrophePanel />
