@@ -61,6 +61,16 @@
     let mapCanvas: HTMLCanvasElement | undefined = $state();
     let mapImage: HTMLImageElement | undefined = $state();
 
+    // The map of the world is loaded with the clock, not at the first opening of its menu (it popped in a moment
+    // later): the image of the menu then comes from the cache, already decoded.
+    $effect(() => {
+        const preload = new Image();
+        preload.src = WORLD_MAP;
+        preload.decode().catch(() => {
+            // Not decoded in advance: the menu loads it as before.
+        });
+    });
+
     // The map of the world, with the night where it is night now, and the place whose sky is shown.
     $effect(() => {
         const canvas = mapCanvas;
