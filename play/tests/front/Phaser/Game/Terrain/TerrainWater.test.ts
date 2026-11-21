@@ -109,6 +109,19 @@ describe("TerrainWater", () => {
         expect([...levels]).toEqual([12, 0, 0, 0, 0, 255]);
     });
 
+    it("rounds the water it shows, and truncates it for the relief in 3/4 (drawn as the walk reads it)", () => {
+        const water = new TerrainWater();
+        water.setTerrain(pit);
+        water.receive(full(1, { "0,0": 15.75 }), 0);
+        const levels = new Uint8Array(1);
+        // The flat engine: as it always showed it.
+        water.levelsOver(0, 0, 1, 1, 5000, levels);
+        expect(levels[0]).toBe(16);
+        // The relief in 3/4: 15.75 px is water one wades in (one swims from 16 on), drawn so.
+        water.levelsOver(0, 0, 1, 1, 5000, levels, true);
+        expect(levels[0]).toBe(15);
+    });
+
     it("says when what it shows changed: the relief, a state, or the water gliding", () => {
         const water = new TerrainWater();
         const empty = water.drawKey(0);

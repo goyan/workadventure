@@ -56,6 +56,10 @@ export function cellMaterial(inputs: CellInputs, cellX: number, cellY: number): 
     const dug = heightAt(terrain, cellX, cellY) !== 0;
     // Rooms and the floors of the Carte tool keep their own tiles (nothing is dug there).
     if (!dug && (inputs.outdoor?.(cellX, cellY) === false || inputs.paved?.(cellX, cellY) === true)) return "none";
+    // A pool painted with the relief tool (a soil past the six, Pools.ts): the pixel ground draws none yet, and must
+    // not take it for a soil. Left to the map.
+    const painted = soilAt(terrain, cellX, cellY);
+    if (painted > SOILS.length) return "none";
     // The snow comes cell after cell as it thickens where it lies: each cell whitens at its own share of the snow, so
     // the ground goes white by patches, not all at once.
     const snow = inputs.snowCoverAt?.((cellX + 0.5) * TERRAIN_CELL, (cellY + 0.5) * TERRAIN_CELL) ?? 0;

@@ -1,4 +1,3 @@
-import { Season } from "@workadventure/map-editor";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { writable } from "svelte/store";
 import { mockDeep } from "vitest-mock-extended";

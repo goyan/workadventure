@@ -149,6 +149,24 @@ describe("the border of what nothing covers", () => {
     });
 });
 
+describe("a cell of a pool painted with the relief tool", () => {
+    it("is left to the map: the pixel ground has no pool yet, and must not take it for a soil", () => {
+        // The soils 7 to 14 are the styles of the pools (Pools.ts): none is a material of the pixel ground.
+        for (let code = 7; code <= 14; code++) {
+            expect(cellMaterial({ terrain: painted(code) }, 4, 4), `soil ${code}`).toBe("none");
+            expect(cellMaterial({ terrain: painted(code), meadow: meadow({ grass: 255 }) }, 4, 4)).toBe("none");
+        }
+    });
+
+    it("gives a material it knows for every soil a map may keep", () => {
+        const known: Cover[] = ["earth", "meadow", "clay", "sand", "rock", "gravel", "none"];
+        // 1 to 6 the soils, 7 to 14 the styles of the pools: all a map keeps.
+        for (let code = 1; code <= 14; code++) {
+            expect(known, `soil ${code}`).toContain(cellMaterial({ terrain: painted(code) }, 4, 4));
+        }
+    });
+});
+
 describe("the snow of the map coming", () => {
     it("covers the ground cell after cell as it thickens, not all at once at half", () => {
         const share = (snow: number) => {

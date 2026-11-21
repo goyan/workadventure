@@ -9,14 +9,15 @@ import type { FoamView } from "./WaterFoam";
 import {
     FOAM_MIN_DEPTH_PX,
     foamStreak,
-    pixelRun,
-    ringPixels,
     sourceRings,
     WaterFoam,
     wetAround,
     whirlDots,
     whirlTurnsPerSecond,
 } from "./WaterFoam";
+
+import { pixelReliefShownNow } from "./PixelReliefShown";
+import { strokeRing, strokeStreak } from "./WaterFlowStrokes";
 
 export interface WaterFlowViewOptions {
     /** The water of the relief as this browser shows it. */
@@ -38,9 +39,6 @@ const MARKS_DEPTH = FLOOR_OBJECT_DEPTH + 0.44;
 const FRAME_MS = 1000 / 15;
 /** The sources and the sinks of the map are read again this often: reading them goes through every object. */
 const OBJECTS_MS = 2000;
-/** The foam of the shore (WaterPixel), and its fading shade. */
-const FOAM_COLOR = 0xd6ecf6;
-const FOAM_FADING = 0x9fc3db;
 const WHIRL_COLOR = 0xe8f6ff;
 /** A whirl is this wide, in a share of the disc of its sink, within these bounds (map pixels). */
 const WHIRL_DISC_SHARE = 0.6;
@@ -110,14 +108,12 @@ export class WaterFlowView {
         this.foamGraphics.clear();
         this.marksGraphics.clear();
         let drawn = false;
+        // Smooth lines over the ground drawn flat; whole pixels over the relief in pixel art.
+        const pixelArt = pixelReliefShownNow();
         for (const fleck of this.foam.flecks()) {
             const streak = foamStreak(fleck);
             if (streak.alpha <= 0) continue;
-            // Pixel art: whole pixels of two shades, no smoothed line.
-            this.foamGraphics.fillStyle(streak.alpha > 0.5 ? FOAM_COLOR : FOAM_FADING, 1);
-            for (const pixel of pixelRun(streak.fromX, streak.fromY, streak.toX, streak.toY)) {
-                this.foamGraphics.fillRect(pixel.x, pixel.y, 1, 1);
-            }
+            strokeStreak(this.foamGraphics, streak, pixelArt);
             drawn = true;
         }
         const seconds = now / 1000;
@@ -147,9 +143,7 @@ export class WaterFlowView {
             } else {
                 const radius = Math.min(RINGS_LARGEST, RINGS_RADIUS + disc / 2);
                 for (const ring of sourceRings(seconds, radius)) {
-                    this.marksGraphics.fillStyle(ring.alpha > 0.5 ? WHIRL_COLOR : FOAM_FADING, 1);
-                    for (const pixel of ringPixels(x, y, ring.radius))
-                        this.marksGraphics.fillRect(pixel.x, pixel.y, 1, 1);
+                    strokeRing(this.marksGraphics, x, y, ring, pixelArt);
                 }
             }
             drawn = true;

@@ -234,6 +234,11 @@ export class TerrainWater {
         rows: number,
         now: number,
         levels: Uint8Array,
+        /**
+         * Truncated instead of rounded, for the relief in 3/4: water 15.7 px deep is drawn there as water one wades in,
+         * as the walk reads it (one swims from SWIM_DEPTH_PX on).
+         */
+        floored = false,
     ): boolean {
         levels.fill(0);
         const share = this.share(now);
@@ -250,9 +255,8 @@ export class TerrainWater {
                 const start = from[gridLine + column];
                 const depth = start + (to[gridLine + column] - start) * share;
                 if (depth < SHOWN_PX) continue;
-                // Truncated, not rounded: water 15.7 px deep is drawn as water one wades in, as the walk sees it
-                // (one swims from SWIM_DEPTH_PX on).
-                levels[line + column] = depth < 1 ? 1 : depth > 255 ? 255 : Math.floor(depth);
+                levels[line + column] =
+                    depth < 1 ? 1 : depth > 255 ? 255 : floored ? Math.floor(depth) : Math.round(depth);
                 any = true;
             }
         }

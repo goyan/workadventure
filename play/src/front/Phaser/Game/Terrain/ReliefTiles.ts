@@ -718,7 +718,7 @@ export class ReliefTiles {
         const [blockX, blockY] = key.split(",").map(Number);
         // The same cells as the drawing reads (draw).
         const window = blockCellWindow(blockX, blockY);
-        const any = this.inputs.water.levelsOver(window.x, window.y, GRID_WIDTH, GRID_HEIGHT, now, this.levels);
+        const any = this.inputs.water.levelsOver(window.x, window.y, GRID_WIDTH, GRID_HEIGHT, now, this.levels, true);
         if (!any) return "";
         let hash = 0;
         for (let index = 0; index < GRID_WIDTH * GRID_HEIGHT; index++) {
@@ -841,7 +841,7 @@ export class ReliefTiles {
             }
         }
         const waters = new Uint8Array(cells);
-        const wet = this.inputs.water.levelsOver(gridX, gridY, GRID_WIDTH, GRID_HEIGHT, now, waters);
+        const wet = this.inputs.water.levelsOver(gridX, gridY, GRID_WIDTH, GRID_HEIGHT, now, waters, true);
         const season = this.inputs.season();
         const meadow = this.inputs.meadow;
         let dense: Uint8Array | undefined;
