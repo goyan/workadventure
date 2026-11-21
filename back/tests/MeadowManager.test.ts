@@ -424,11 +424,17 @@ describe("MeadowManager", () => {
         const before = new Uint8Array(gunzipSync(Buffer.from(first.store.grass, "base64")));
         // A day later, by the same summer rain: the meadow lives that day before the step of now.
         const second = createHarness({ saved: first.store, now: Date.UTC(2026, 6, 15, 10) });
+        // The water of the relief lives the same day along with it, told when the meadow caught up.
+        const along: { seconds: number; last: boolean }[] = [];
+        second.manager.liveAlong((seconds, _rain, last) => along.push({ seconds, last }));
         await second.manager.restore();
         second.manager.mapChanged();
         expect(second.manager.catchingUp()).toBe(true);
         second.steps(12);
         expect(second.manager.catchingUp()).toBe(false);
+        expect(along.reduce((total, slice) => total + slice.seconds, 0)).toBeCloseTo(24 * 3600, 0);
+        expect(along.filter((slice) => slice.last)).toHaveLength(1);
+        expect(along.at(-1)?.last).toBe(true);
         const snapshot = second.manager.snapshot();
         const sum = (cells: Uint8Array): number => cells.reduce((total, cell) => total + cell, 0);
         expect(snapshot && sum(grassOf(snapshot))).toBeGreaterThan(sum(before));

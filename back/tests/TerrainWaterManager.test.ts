@@ -628,6 +628,22 @@ describe("TerrainWaterManager", () => {
         expect(sent[0].stats?.stock).toBeGreaterThan(0);
     });
 
+    it("lives again the time the room missed: the rain of the past fills its hollows, its dry days lower them", () => {
+        const { manager, wam } = createHarness();
+        manager.mapChanged();
+        const grid = manager.getGrid();
+        if (!grid) throw new Error("no grid");
+        // Less than ten minutes missed waits for what comes after it, unless the meadow caught up.
+        manager.liveAgain(120, 2, false);
+        expect(grid.totalPx()).toBe(0);
+        for (let slice = 0; slice < 30; slice++) manager.liveAgain(120, 2, slice === 29);
+        const rained = grid.totalPx();
+        expect(rained).toBeGreaterThan(0);
+        if (wam.settings?.water) wam.settings.water.evaporation = 1;
+        for (let slice = 0; slice < 30; slice++) manager.liveAgain(120, 0, slice === 29);
+        expect(grid.totalPx()).toBeLessThan(rained);
+    });
+
     it("fills nothing with a rain that falls as snow in the cold of the room, and half as much with a mix", () => {
         const rainOf = (air: { temperature: number; humidity: number } | undefined): number => {
             const { manager, sent, steps } = createHarness({ wam: wamWith(lake, WeatherType.Rain) });

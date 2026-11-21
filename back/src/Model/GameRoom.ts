@@ -458,6 +458,8 @@ export class GameRoom implements BrothersFinder {
             return air ? { ...air, windSpeed: fireConditions.conditions().windSpeed } : undefined;
         });
         meadow.pourWith(terrainWater.pour.bind(terrainWater));
+        // The water of the relief lives the missed time with the meadow: under the same rain of the past.
+        meadow.liveAlong(terrainWater.liveAgain.bind(terrainWater));
         // A room left empty lives the time it missed: with the weather of the past at the place of a map in real
         // weather, each quarter hour read as the conditions of the room read the quarter hour of now.
         meadow.catchUpWith(rainTimelineService.history.bind(rainTimelineService), (slot) => {

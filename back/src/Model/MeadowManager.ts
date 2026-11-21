@@ -143,6 +143,7 @@ export class MeadowManager {
         | { at: number; to: number; history: readonly RealWeatherSlot[] | undefined; askedAt: number | undefined }
         | undefined;
     /** The time being lived again and its weather, while the meadow catches up; undefined: the time of now. */
+    private along: ((seconds: number, rainMmPerHour: number, last: boolean) => void) | undefined;
     private replay:
         | { now: number; slots: readonly RealWeatherSlot[] | undefined; weather: ReplayedWeather | undefined }
         | undefined;
@@ -332,6 +333,11 @@ export class MeadowManager {
         this.weatherOfSlot = weatherOfSlot;
     }
 
+    /** What lives the time the room missed along with the meadow (the water of the relief), a slice at a time. */
+    public liveAlong(live: (seconds: number, rainMmPerHour: number, last: boolean) => void): void {
+        this.along = live;
+    }
+
     /** Whether the meadow is still living the time it missed. */
     public catchingUp(): boolean {
         return this.catchUp !== undefined;
@@ -384,6 +390,11 @@ export class MeadowManager {
                 const seconds = Math.min(CATCH_UP_STEP_SECONDS, (catchUp.to - catchUp.at) / 1000);
                 this.advance(seconds);
                 catchUp.at += seconds * 1000;
+                try {
+                    this.along?.(seconds, this.rainRate, catchUp.at >= catchUp.to);
+                } catch (error) {
+                    console.error("What lives the missed time along with the meadow failed", error);
+                }
             }
         } finally {
             this.replay = undefined;
