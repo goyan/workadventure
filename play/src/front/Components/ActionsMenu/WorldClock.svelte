@@ -213,7 +213,16 @@
                                 onchange={(event) => setCustomTime(event.currentTarget.value)}
                             />
                         {/if}
-                        {#if $worldCityStore}
+                        {#if $worldCityStore && $worldPointStore}
+                            <!-- A point of the map: no moment is pressed, so say where the sky comes from. -->
+                            <p
+                                class="mt-2 rounded bg-white/15 px-2 py-1 text-xs font-bold"
+                                data-testid="world-clock-city"
+                                data-point="true"
+                            >
+                                {$LL.menu.settings.night.worldPointCity({ city: $worldCityStore.name })}
+                            </p>
+                        {:else if $worldCityStore}
                             <p class="mt-2 px-1 text-xs" data-testid="world-clock-city">
                                 {$LL.menu.settings.night.worldCity({ city: $worldCityStore.name })}
                             </p>
