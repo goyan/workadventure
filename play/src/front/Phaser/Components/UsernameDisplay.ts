@@ -1,10 +1,12 @@
 import * as Phaser from "phaser";
 import { AvailabilityStatus } from "@workadventure/messages";
 import type { GameScene } from "../Game/GameScene";
+import type { PerceptionMark } from "../Game/Perception/PerceptionProtocol";
 import { waScaleManager, WaScaleManagerEvent } from "../Services/WaScaleManager";
 import { PLAYER_NAME_GAP, PLAYER_NAME_HEIGHT } from "./UsernameDisplaySizes";
 import { UsernameMegaphoneDisplay } from "./UsernameMegaphoneDisplay";
 import { UsernameMusicDisplay } from "./UsernameMusicDisplay";
+import { UsernamePerceptionDisplay } from "./UsernamePerceptionDisplay";
 import { UsernameRaisedHandDisplay } from "./UsernameRaisedHandDisplay";
 import { UsernameStatusDisplay } from "./UsernameStatusDisplay";
 
@@ -30,6 +32,7 @@ export class UsernameDisplay {
     private readonly megaphoneDisplay: UsernameMegaphoneDisplay;
     private readonly raisedHandDisplay: UsernameRaisedHandDisplay;
     private readonly musicDisplay: UsernameMusicDisplay;
+    private readonly perceptionDisplay: UsernamePerceptionDisplay;
 
     private readonly onZoomChanged = (zoomModifier: number): void => {
         this.displayScale = this.getDisplayScale(zoomModifier);
@@ -70,6 +73,7 @@ export class UsernameDisplay {
         this.megaphoneDisplay = new UsernameMegaphoneDisplay();
         this.raisedHandDisplay = new UsernameRaisedHandDisplay();
         this.musicDisplay = new UsernameMusicDisplay();
+        this.perceptionDisplay = new UsernamePerceptionDisplay();
         this.playerNameElement = this.createPlayerNameElement();
 
         this.element = document.createElement("div");
@@ -88,6 +92,7 @@ export class UsernameDisplay {
             this.megaphoneDisplay.element,
             this.raisedHandDisplay.element,
             this.musicDisplay.element,
+            this.perceptionDisplay.element,
         );
         this.updateUsernameBackgroundColor(outlineColor);
 
@@ -140,6 +145,11 @@ export class UsernameDisplay {
         this.musicDisplay.show(listening);
     }
 
+    /** The symbol of a perception changed by a spell, `lift` pixels of the game over the tag (see PerceptionMarkShape). */
+    public setPerceptionMark(mark: PerceptionMark | undefined, title: string, lift: number): void {
+        this.perceptionDisplay.show(mark, title, lift);
+    }
+
     public getAvailabilityStatus(): AvailabilityStatus {
         return this.statusDisplay.availabilityStatus;
     }
@@ -173,6 +183,7 @@ export class UsernameDisplay {
         this.megaphoneDisplay.destroy();
         this.raisedHandDisplay.destroy();
         this.musicDisplay.destroy();
+        this.perceptionDisplay.destroy();
         this.scene.game.events.off(WaScaleManagerEvent.ZoomChanged, this.onZoomChanged);
     }
 

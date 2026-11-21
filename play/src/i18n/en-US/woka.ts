@@ -34,6 +34,10 @@ const woka: BaseTranslation = {
         canoeHint:
             "The canoe takes to the water by itself: where you would swim in the water of the relief, you paddle, at walking speed, and the current carries you half as much. On the ground, your land vehicle choice applies.",
     },
+    perception: {
+        basic: "Basic mode: sees neither the night nor the weather",
+        place: "Follows the weather of another city",
+    },
     customWoka: {
         color: "Color",
         defaultColor: "Default color",
