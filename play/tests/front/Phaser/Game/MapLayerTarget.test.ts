@@ -107,6 +107,16 @@ describe("what the eraser of the map tool picks", () => {
         expect(walls.hasWall("h", 1, 2)).toBe(true);
     });
 
+    it("leaves the stair of another level alone when a level is chosen", () => {
+        const floors = new FloorModel();
+        floors.addStair(north, { x: 5, y: 10 }, 0);
+        const box = stairBox(north, { x: 5, y: 10 }, 0);
+        const point = { x: box.x + 10, y: box.y + box.height - 10 };
+        expect(eraseTargetUnder(sceneOf(new MapLayerModel(), floors), point)?.ref.kind).toBe("stair");
+        expect(eraseTargetUnder(sceneOf(new MapLayerModel(), floors, 84), point)).toBeUndefined();
+        expect(erasePlan(sceneOf(new MapLayerModel(), floors, 84), point, point, []).refs).toEqual([]);
+    });
+
     it("picks a floor of the ground last, and nothing in the void", () => {
         const walls = new MapLayerModel();
         walls.setFloor(1, 4, "parquet-clair");
