@@ -4301,16 +4301,27 @@ froid et ne gèle jamais.
 
 **Givre** (2026-11-21, `libs/map-editor/src/Weather/HoarFrost.ts` `hoarFrost`, remplace la rampe « blanc à −10 °C »
 de #392). La gelée blanche est un dépôt de la vapeur de l'air sur une surface plus froide que le point de givrage de
-cet air : il faut un sol sous 0 °C **et** un air assez humide ; par air sec il gèle sans blanchir (gelée noire), et
-l'air très froid porte peu de vapeur. Calcul : pression de vapeur de l'air d'après son humidité relative à l'eau
-(celle d'Open-Meteo et de la salle), comparée à la saturation sur la glace à la température du sol (formes de Magnus
-de l'OMM, WMO-No. 8 annexe 4.B : eau 17,62 / 243,12, glace 22,46 / 272,62, 6,112 hPa) ; givre = excès de vapeur sur
-0,25 hPa (choix : sol tout blanc à 0,25 hPa d'excès). Sol plus froid que l'air de 0,8 °C par vent calme (choix, sous
+cet air : il faut un sol sous 0 °C **et** un air saturé par rapport à la glace de ce sol ; par air plus sec il gèle sans
+blanchir (gelée noire). Calcul : pression de vapeur de l'air d'après son humidité relative à l'eau (celle d'Open-Meteo
+et de la salle), rapportée à la saturation sur la glace à la température du sol (formes de Magnus de l'OMM, WMO-No. 8
+annexe 4.B : eau 17,62 / 243,12, glace 22,46 / 272,62, 6,112 hPa ; `iceSaturationRatio`). **Corrigé le 2026-11-21
+(grand froid)** : la première version (#424) blanchissait selon un excès **absolu** de vapeur (sol blanc à 0,25 hPa),
+qu'un air à −34 °C ne peut presque pas atteindre (saturation de 0,35 hPa sur l'eau) : par grand froid il ne givrait
+plus jamais, même saturé par rapport à la glace. Le dépôt se décide sur le rapport `e / e_i(sol)` ≥ 1 (sol au point de
+givrage ou dessous : glossaire AMS « hoarfrost », UBC ATSC 113 « surface hoar ») ; sa vitesse, elle, suit l'excès
+absolu (Hachikubo et Akitaya 1997, lu en résumé seulement). D'où : blancheur = sursaturation sur la glace `e/e_i − 1`
+ramenée sur 0 à 5 % (`FULL_FROST_SUPERSATURATION`, choix), multipliée par un dépôt plus mince quand l'excès est sous
+0,1 hPa (`FULL_FROST_EXCESS_HPA`, qui change de sens : excès d'un dépôt à pleine épaisseur, choix), sans descendre
+sous la moitié (`COLD_FROST_SHARE`, choix) : jamais nul quand l'air est sursaturé sur la glace. Sol plus froid que
+l'air de 0,8 °C par vent calme (choix, sous
 les 1 à 3 °C de l'herbe par nuit claire et calme, FAO Snyder et de Melo-Abreu 2005, ch. 2), de jour comme de nuit et
 par tout ciel : ni la nuit ni la nébulosité ne sont lues (les conditions réglées à la main n'en ont pas) ; le vent
 ramène le sol à la température de l'air, en entier jusqu'à 7 km/h, plus rien à 18 km/h (choix). Vent inconnu = calme ;
-**humidité inconnue = pas de givre**. Exemples : −2 °C et 95 % → 0,70 ; −2 °C et 40 % → 0 ; −15 °C et 70 % → 0 ;
-+1 °C et 100 % → 0 (sol à +0,2 °C) ; −2 °C, 95 % et 40 km/h → 0 ; −30 °C et 95 % → 0,54. Sources, dans le même ordre
+**humidité inconnue = pas de givre**. Exemples (avant → après la correction) : −2 °C et 95 % → 0,70 → 0,73 ;
+−2 °C et 40 % → 0 ; −15 °C et 70 % → 0 (81 % sur la glace) ; +1 °C et 100 % → 0 (sol à +0,2 °C) ; −2 °C, 95 % et
+40 km/h → 0 (sol à −2 °C, 97 % sur la glace) ; −30 °C et 95 % → 0,54 → 1 ; −34 °C, 80 % et 15 km/h → 0,14 → 0,68 ;
+−34 °C et 60 % → 0 (86 % sur la glace). L'humidité de la ville suivie s'affiche aussi dans la fiche météo personnelle
+du bandeau (quart d'heure en cours de sa frise), comme celle du serveur dans la sienne. Sources, dans le même ordre
 que la température : ville suivie par le joueur (« Jour dans le monde » : température, humidité et vent de sa frise),
 sinon conditions réglées à la main dans la salle, sinon air réel du lieu de la carte. Limites : un vrai givre de nuit
 claire sous un air à +1 °C n'est pas rendu, et le givre se forme aussi de jour au soleil ; le shader le pose sur tout
