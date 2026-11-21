@@ -109,11 +109,18 @@ export class GameJungle {
                 return player ? feetOf(player) : undefined;
             },
             playerInWater: (userId) => playerOf(userId)?.isInWater() ?? false,
+            // A companion does not fly: left on the ground, it comes back by the walk of the wandering animals.
+            playerFlying: (userId) => playerOf(userId)?.isFlying() ?? false,
+            groundPath: (from, to) => wanderers.getWanderMap().findPath(from, to),
             // Every wandering animal: the jungle ones and the ones placed on the map.
             animals: () => wanderers.tameableCharacters(),
             animalPose: (id) => wanderers.characterPose(id),
             editorOpen: () => get(mapEditorModeStore),
-            playerOnGround: () => scene.CurrentPlayer.isNearGround(),
+            // The floor a player stands on: an animal is tamed from its own floor, a companion climbs behind its master.
+            playerFloorZ: (userId) => {
+                const player = playerOf(userId);
+                return player && !player.isFlying() ? player.getFloorZ() : undefined;
+            },
             // The lions and tigers of the life of the map the player tamed: one group, one limit.
             otherCompanions: () => scene.landTamedCount(),
             serverNow: () => scene.getServerDate()?.getTime() ?? Date.now(),

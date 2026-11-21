@@ -12,7 +12,16 @@ import type { MeteorShape } from "@workadventure/map-editor";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import { LAMP_MIN_FLASH_INTERVAL_MS } from "../Lamps/LampSignal";
 import { isEffectShown } from "../../../Stores/EffectsStore";
-import { fireballSparks, flashAllowed, meteorFrame, steamPuffs, waveCircles, wetStretches } from "./MeteorFall";
+import {
+    fireballSparks,
+    flashAllowed,
+    meteorFrame,
+    steamPuffs,
+    waterRingOf,
+    waveCircles,
+    wetStretches,
+} from "./MeteorFall";
+import type { WaterRing } from "./MeteorFall";
 
 /** The meteor of the usual size is drawn this wide; the others in proportion to their crater. */
 const METEOR_RADIUS_PX = 10;
@@ -75,8 +84,27 @@ export class MeteorView {
         private readonly scene: Phaser.Scene & { markDirty(): void },
         private readonly isWet: (x: number, y: number) => boolean,
         private readonly reducedMotion: () => boolean,
+        /**
+         * Whether the water of the map makes its own waves (the water with inertia): the circles drawn for the
+         * wave of a comet would then run next to the real one, so none is drawn.
+         */
+        private readonly realWaves: () => boolean = () => false,
+        /** Whether the water shader draws the waves of the comets (waterRings): no circles are drawn over it then. */
+        private readonly shaderWaves: () => boolean = () => false,
     ) {
         this.graphics = scene.add.graphics().setDepth(DEPTH_NIGHT_INDEX + 2);
+    }
+
+    /** The fronts of the waves of the comets fallen into water now, for the water shader. */
+    public waterRings(now: number): WaterRing[] {
+        if (this.reducedMotion() || this.realWaves() || !isEffectShown("meteor")) return [];
+        const rings: WaterRing[] = [];
+        for (const meteor of this.meteors) {
+            if (!meteor.wet || meteor.burning) continue;
+            const ring = waterRingOf(meteor, now - meteor.launchedAt - METEOR_FALL_MS);
+            if (ring) rings.push(ring);
+        }
+        return rings;
     }
 
     /** `receivedAt` in ms of the game: the impact is `message.impactInMs` later. */
@@ -114,7 +142,10 @@ export class MeteorView {
             const frame = meteorFrame(sinceLaunch, METEOR_FALL_MS, reduced);
             // The circles of the wave run on the water long after the burst: none on dry ground, none in reduced motion.
             const sinceImpact = sinceLaunch - METEOR_FALL_MS;
-            const circles = meteor.wet && !meteor.burning && !reduced ? waveCircles(sinceImpact, meteor.shape) : [];
+            const circles =
+                meteor.wet && !meteor.burning && !reduced && !this.realWaves()
+                    ? waveCircles(sinceImpact, meteor.shape)
+                    : [];
             // What a fireball leaves after its burst: sparks flying out, and steam where it fell into water.
             const sparks =
                 meteor.burning && !reduced ? fireballSparks(sinceImpact, meteor.craterPx, meteor.sparks) : [];
@@ -123,7 +154,7 @@ export class MeteorView {
                 this.meteors.splice(index, 1);
                 continue;
             }
-            this.drawWave(meteor, circles);
+            if (!this.shaderWaves()) this.drawWave(meteor, circles);
             this.drawSteam(meteor, steam);
             this.drawSparks(meteor, sparks);
             if (frame.done) continue;

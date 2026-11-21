@@ -294,6 +294,18 @@ describe("embers", () => {
 });
 
 describe("a charred tree", () => {
+    it("is green again within five minutes of its fire, on a map with the usual meadow", () => {
+        const { meadow } = ground();
+        const fire = new TreeFire([tree("a", 10, 10)], meadow);
+        fire.ignite(10.5 * TILE_PX, 10.5 * TILE_PX, TILE_PX);
+        run(fire, 92);
+        expect(fire.stateOf("a").damage).toBe(1);
+        run(fire, 140);
+        expect(fire.stateOf("a").damage).toBe(1);
+        run(fire, 166);
+        expect(fire.stateOf("a")).toMatchObject({ fire: 0, damage: 0 });
+    });
+
     const charred = () => {
         const set = ground();
         const fire = new TreeFire([tree("a", 10, 10)], set.meadow);
@@ -302,15 +314,15 @@ describe("a charred tree", () => {
         return { ...set, fire };
     };
 
-    it("stays black half the time the meadow takes to grow, then greens back in that time", () => {
+    it("stays black half of the five minutes after its fire, then greens back in the other half", () => {
         const { fire } = charred();
         const growing = { ...calm, growSeconds: 600 };
-        run(fire, 298, growing);
+        run(fire, 148, growing);
         expect(fire.stateOf("a").damage).toBe(1);
-        run(fire, 302, growing);
+        run(fire, 77, growing);
         expect(fire.stateOf("a").damage).toBeGreaterThan(0.45);
         expect(fire.stateOf("a").damage).toBeLessThan(0.55);
-        run(fire, 304, growing);
+        run(fire, 77, growing);
         expect(fire.stateOf("a")).toMatchObject({ fire: 0, damage: 0 });
     });
 
@@ -320,8 +332,8 @@ describe("a charred tree", () => {
         expect(fire.ignite(10.5 * TILE_PX, 10.5 * TILE_PX, TILE_PX)).toBe(0);
         run(fire, 60, { ...calm, growSeconds: 600 });
         expect(fire.stateOf("a").fire).toBe(0);
-        run(fire, 900, { ...calm, growSeconds: 600 });
-        // Green again, the fire still at its foot: it takes.
+        run(fire, 260, { ...calm, growSeconds: 600 });
+        // Green again within five minutes, the fire still at its foot: it takes.
         expect(fire.stateOf("a").fire).toBeGreaterThan(0);
     });
 
@@ -349,10 +361,14 @@ describe("the fire of a forest", () => {
         for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) forest.push(tree(`${x}:${y}`, 10 + x * 3, 10 + y * 3));
         const fire = new TreeFire(forest, meadow);
         fire.ignite(forest[0].x, forest[0].y, TILE_PX);
-        // Embers at every chance, a strong wind: the worst case.
-        run(fire, 600, { ...calm, windFrom: 315, windSpeed: 60, random: () => 0 });
+        // Embers at every chance, a strong wind: the worst case. Each tree burns, then greens back.
+        const burnt = new Set<string>();
+        for (let elapsed = 0; elapsed < 600; elapsed += STEP) {
+            fire.step({ ...calm, windFrom: 315, windSpeed: 60, random: () => 0 });
+            for (const told of fire.damaged()) burnt.add(told.id);
+        }
         expect(fire.burning()).toBe(0);
-        expect(fire.damaged().length).toBe(64);
+        expect(burnt.size).toBe(64);
     });
 
     it("costs nothing while nothing burns and no tree is damaged", () => {

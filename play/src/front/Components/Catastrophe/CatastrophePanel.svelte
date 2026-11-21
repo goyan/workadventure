@@ -22,11 +22,10 @@
         meteorRadiusTilesStore,
         toggleArmedCatastrophe,
     } from "../../Stores/CatastropheStore";
-    import { mapEditorModeStore } from "../../Stores/MapEditorStore";
     import PixelIcon from "../ActionsMenu/PixelIcon.svelte";
     import WeatherTab from "./WeatherTab.svelte";
 
-    const shown = $derived($catastrophePanelStore && !$mapEditorModeStore);
+    const shown = $derived($catastrophePanelStore);
     /** The disasters to throw on the map, or the weather of the room they go by. */
     let tab = $state<"catastrophes" | "weather">("catastrophes");
     // Nothing stays armed behind the weather tab.

@@ -19,6 +19,9 @@ const MIN_DROPS = 24;
 const MAX_DROPS = 420;
 /** The drops lean a little, as a heavy rain does. */
 const LEAN = 0.18;
+/** A flake comes down in this many milliseconds, swaying this many map pixels to each side. */
+const FLAKE_FALL_MS = 2600;
+const FLAKE_SWAY_PX = 6;
 
 /** A number between 0 and 1 that only depends on the drop and on which one of its numbers is asked. */
 function share(drop: number, salt: number): number {
@@ -34,18 +37,25 @@ export function downpourDropCount(radiusPx: number): number {
     return Math.min(MAX_DROPS, Math.max(MIN_DROPS, Math.round((Math.PI * radiusPx * radiusPx) / AREA_PER_DROP)));
 }
 
+/** The drops of a downpour that fall as rain when this share of it (0 to 1) falls as snow: the first of them. */
+function rainDropsOf(count: number, snow: number): number {
+    return Math.round(count * (1 - (Number.isFinite(snow) ? Math.min(1, Math.max(0, snow)) : 0)));
+}
+
 /**
  * The drops of a downpour around a point at a moment (ms): each always lands at the same place of the disc, one
- * fall after the other, so the rain does not flicker. In reduced motion the drops stand still, half-way.
+ * fall after the other, so the rain does not flicker. In reduced motion the drops stand still, half-way. In the cold
+ * a share of the downpour falls as snow (`snow`, 0 to 1): that many of its drops are flakes instead (downpourFlakes).
  */
 export function downpourDrops(
     now: number,
     centre: { x: number; y: number },
     radiusPx: number,
     reducedMotion = false,
+    snow = 0,
 ): DownpourDrop[] {
     const drops: DownpourDrop[] = [];
-    const count = downpourDropCount(radiusPx);
+    const count = rainDropsOf(downpourDropCount(radiusPx), snow);
     for (let drop = 0; drop < count; drop++) {
         const distance = Math.sqrt(share(drop, 0)) * radiusPx;
         const angle = share(drop, 1) * Math.PI * 2;
@@ -64,6 +74,33 @@ export function downpourDrops(
         });
     }
     return drops;
+}
+
+/**
+ * The flakes of a downpour of which this share (0 to 1) falls as snow: the drops the rain leaves, each at its own
+ * place of the disc, coming down slowly from as high as the drops, swaying. No splash: a flake lies where it lands.
+ * In reduced motion the flakes stand still.
+ */
+export function downpourFlakes(
+    now: number,
+    centre: { x: number; y: number },
+    radiusPx: number,
+    snow: number,
+    reducedMotion = false,
+): DownpourDrop[] {
+    const flakes: DownpourDrop[] = [];
+    const count = downpourDropCount(radiusPx);
+    for (let flake = rainDropsOf(count, snow); flake < count; flake++) {
+        const distance = Math.sqrt(share(flake, 0)) * radiusPx;
+        const angle = share(flake, 1) * Math.PI * 2;
+        const landX = centre.x + Math.cos(angle) * distance;
+        const landY = centre.y + Math.sin(angle) * distance * 0.5;
+        const turn = now / FLAKE_FALL_MS + share(flake, 2);
+        const fall = reducedMotion ? share(flake, 2) : turn - Math.floor(turn);
+        const sway = Math.sin((fall * 3 + share(flake, 3)) * Math.PI * 2) * FLAKE_SWAY_PX * (1 - fall);
+        flakes.push({ x: landX + sway, y: landY - (1 - fall) * DOWNPOUR_FALL_PX, landX, landY, fall });
+    }
+    return flakes;
 }
 
 /** How visible a downpour is: it comes in a fifth of a second, and fades over the last third of what it has left. */

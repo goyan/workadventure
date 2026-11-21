@@ -313,6 +313,46 @@ côte à côte (même faisceau au même moment) ; 120 tr/min avec 10° d'ouvertu
 d'une porte qui s'ouvre ; de nuit ; mouvement réduit du système ; effets lumineux coupés puis rallumés pour soi ; une dizaine de lampes tournantes à l'écran pour le
 débit d'images.
 
+### Économie d'énergie
+
+Réglage **par carte**, coupé par défaut (Paramètres → Ambiance → « Éclairage de la carte », visible pour qui peut
+éditer la carte, enregistré au changement) : les lampes RGB posées **dehors** s'éteignent le jour quand le ciel éclaire
+assez, et se rallument à la tombée du jour ou sous un gros orage. Valable pour tous les joueurs. Gyrophares compris ;
+torches, lampes de Jam, piste de danse et lampes des pièces jamais concernées.
+
+- **WAM** : `settings.lighting.energySaving` (absent = coupé), `LightingSettings` dans `libs/map-editor/src/types.ts`.
+  **Protocole** : `UpdateLightingSettingMessage { bool energySaving = 1; }`, case 10 de `UpdateWAMSettingsMessage` (le 9 est pris par les piscines de la PR #392)
+  (message à part : passer par celui de la météo relancerait son cycle, `map-storage` y réécrit `startedAt`).
+  `play`, `back` et `map-storage` se déploient ensemble.
+- **Règle** (`Lamps/EnergySaving.ts`, sans Phaser, testée) : lumière du jour = `min(1, élévation du soleil / 15°)` ×
+  facteur météo (`skyWeatherFactor` : clair 1, couvert 0,35, pluie (gouttes ou flocons) et brouillard 0,3, orage 0,15).
+  Extinction à 0,25, rallumage sous 0,18 (hystérésis). Entre les deux, l'état est celui du dernier instant hors de la
+  bande, cherché en remontant le temps par minutes (6 h au plus, « allumé » sinon) : un joueur qui arrive voit ce que
+  voient les autres. Calculé une fois par seconde. Heures à Paris, 20 novembre : ciel clair, éteintes 8 h 41,
+  rallumées 16 h 40 ; couvert 9 h 38 / 16 h 01 ; pluie ou brouillard 9 h 54 / 15 h 50 ; orage : jamais éteintes
+  (et rallumées s'il arrive en journée).
+- **Entrées, les mêmes pour tous** (`GameScene.mapDaylightAt`) : heure du serveur (rien n'est éteint tant qu'elle
+  n'est pas connue), soleil du lieu de la carte (Paris par défaut), météo de la carte à cet instant avec ses nuages.
+  Rien de personnel : ni « Désactiver la nuit », ni l'horloge de l'ordinateur, ni le thème saisonnier, ni les nuages
+  masqués, ni la météo de la ville suivie sur son horloge (`Lamps/MapDaylight.ts` lit `mapWeatherSettings`, pas
+  `shownWeatherSettings`). Quel que soit son mode d'horloge (« Toujours nuit », « Jour dans le monde »…), chacun voit
+  les lampes de dehors suivre le jour réel de la carte. Écarts possibles : la personne qui essaie une météo dans le panneau (aperçu) voit les lampes suivre son
+  essai ; en météo Réelle, un navigateur qui attend encore la réponse du pusher affiche la météo automatique.
+- **Dehors** : pied de l'image de la lampe (milieu du bas), lu sur la grille dehors/dedans (`OutdoorGrid.isOutdoorAt`) ;
+  pour une lampe sur un palier, le sol sous elle. Une lampe dont le pied tombe dans un mur (façade) compte comme de
+  pièce. Grille pas encore connue : rien n'est éteint.
+- **Interrupteurs** : l'économie éteint par-dessus, sans rien écrire dans l'état partagé des lampes (`RgbLamps`,
+  option `isSaved`, multipliée par le niveau de l'interrupteur) : au retour de l'obscurité la lampe revient comme son
+  interrupteur l'a laissée. Une lampe éteinte ainsi ne dessine rien, ne renvoie rien sur les murs et ne perce plus le
+  voile de nuit. Fondu de 1,5 s (net en mouvement réduit). Dans l'éditeur, inchangé : lampes éteintes, ou allumées
+  quand le bouton soleil-lune montre l'éclairage du jeu, pour pouvoir les régler.
+
+Recette : activer le réglage sur une carte qui a une lampe dehors et une dans une pièce ; en journée, la lampe du
+dehors s'éteint en 1,5 s, celle de la pièce reste (`?nightAt` ne sert à rien ici : l'économie lit l'heure du
+serveur) ; choisir « Orage » dans la météo de la carte en plein jour : la lampe du dehors se rallume ; éteindre la
+lampe à son interrupteur, attendre le soir : elle reste éteinte ; deux navigateurs côte à côte à l'aube ou au
+crépuscule, l'un ouvert depuis longtemps, l'autre rechargé : même état.
+
 ## Interrupteurs
 
 Un **interrupteur** allume et éteint des lampes RGB, pour tout le monde. Plusieurs interrupteurs peuvent commander la
@@ -431,8 +471,23 @@ n'a pas de position à lui (comme un va-et-vient).
   (`worldClockTimeZone`, `mapTimeZoneStore` ; l'heure de l'ordinateur en mode « Heure de mon ordinateur ») et les
   **minuteries** des lampes lisent leurs heures dans ce fuseau (`minutesOfDayIn`, évalué par `back`). Sans lieu, ou
   pour un lieu choisi avant ce changement (pas de fuseau enregistré : rechoisir la ville), ou si le fuseau n'en est
-  pas un : heure de Paris. Restent à l'heure de Paris pour toutes les cartes : saisons, thème de Noël, programme de la
-  météo automatique. `play`, `back` et `map-storage` à déployer ensemble.
+  pas un : heure de Paris. Depuis le 2026-11-21, saisons et programme de la météo automatique suivent aussi ce lieu
+  (voir « Saisons du lieu de la carte »). `play`, `back` et `map-storage` à déployer ensemble.
+- **Saisons du lieu de la carte** (2026-11-21) : la saison d'une carte est celle de son lieu (`seasonAt(date, place)`,
+  `libs/map-editor/src/Weather/SeasonClock.ts`, la même fonction pour `back` et pour chaque navigateur, lieu lu dans
+  `settings.weatherLocation` enregistré). Hémisphère nord (latitude ≥ 0) : saisons météorologiques habituelles ;
+  hémisphère sud : décalées de six mois (décembre à février = été, mars à mai = automne). Le mois se lit dans le fuseau
+  du lieu (`placeCalendar`, Paris sans fuseau connu : un lieu choisi avant la #293 garde son hémisphère et le jour de
+  Paris). Suivent la saison du lieu : l'herbe du pré (`MeadowManager`), les arbres saisonniers (`EntitiesManager`), la
+  limite de la neige des hauteurs et l'allure dans la neige (`GameScene.getGroundSeason`), le tapis de feuilles
+  (`autumnProgressAt`, 1er mars au 31 mai au sud), le thème saisonnier « Auto » (automne de la carte, pas du
+  calendrier de Paris) et la **météo automatique** : parts de la saison du lieu, jour tiré dans le fuseau du lieu,
+  brouillard avant 11 h et orages de 13 h à 21 h à l'heure du lieu (`autoWeatherAt(date, auto, place)`,
+  `cloudinessAt`, `autoWeatherChanges`). Les heures de l'aperçu de « Météo de la carte » sont celles du lieu choisi.
+  Sans lieu (ou à Paris) : rien ne change, empreinte du programme figée dans `tests/WeatherSchedulePlace.test.ts`.
+  Limites : les tropiques reçoivent les quatre saisons selon le signe de leur latitude (pas de saison sèche et humide) ;
+  les créneaux de 30 min restent calés sur l'heure du monde, décalés d'un quart d'heure pour un fuseau au quart
+  d'heure (Népal, Chatham) ; le tirage quotidien de la jungle reste au jour de Paris.
 - **Éclairage du jeu dans l'éditeur (réglage personnel)** : l'éditeur de carte masque le voile de nuit, pour voir ce qu'on
   édite ; le **bouton soleil-lune sous la barre d'outils de l'éditeur** (ou l'interrupteur « Même éclairage dans l'éditeur de carte qu'en jeu », Paramètres → Ambiance → Cycle jour/nuit,
   `nightInEditorStore`, désactivé par défaut) le laisse, avec l'obscurité, l'ambiance et les rebonds réglés : on règle
@@ -802,6 +857,11 @@ npm run pretty        # corrige le formatage
 - **Ne jamais committer de secret** : ce dépôt est **public**.
 - Écrire du code (et ses commentaires) en anglais, comme le reste de WorkAdventure ; messages de commit en français.
 - Les écouteurs d'événements doivent être nommés et retirés (règle de lint `listeners/*`).
+- **Imports dans `play/` : alias `@wa/...`, jamais de chemin relatif qui remonte** (`../`). `@wa/*` pointe sur
+  `play/src/*` (`play/tsconfig.json`, Vite, Vitest) : `import { gameManager } from "@wa/front/Phaser/Game/GameManager"`,
+  pas `"../../../Phaser/Game/GameManager"`. Vaut pour tout fichier créé ou modifié, tests compris
+  (`@wa/front/...` au lieu de `../../../../../src/front/...`). Seul un fichier voisin du même dossier s'importe en
+  `./`. Le code amont encore en relatif est converti quand on le touche.
 - Ne pas modifier les fichiers de `.github/workflows/` sans en parler : le workflow `build-play` publie l'image de la prod.
 - Un comportement visuel (zoom, interaction, interface) n'est « terminé » que quand quelqu'un l'a **vu fonctionner en beta**.
 - Pousser sur `infogene` déploie ce code **sur notre serveur** : les droits d'écriture sont réservés aux personnes de confiance.
@@ -825,7 +885,9 @@ Le bandeau reprend `ToastContainer` et propose « Rafraîchir » ou « Plus tard
 « Plus tard » masque la notification pour cette session. Les pages déjà ouvertes avant l'installation de ce
 patch doivent être rafraîchies une première fois pour pouvoir recevoir les prochaines notifications.
 Les nouveaux messages sont traduits ; le haut et le bas sorabe utilisent provisoirement l'anglais.
-Le bandeau décrit aussi les fonctionnalités et correctifs ajoutés depuis le front chargé.
+Le bandeau décrit aussi les fonctionnalités et correctifs ajoutés depuis le front chargé, chacun suivi
+de son auteur en plus discret (« … — Hervé », `Components/ReleaseNoteItem.svelte`), le même nom public que
+dans « Outils → Nouveautés » ; une ligne sans auteur s'affiche sans tiret.
 « Outils → Nouveautés » ouvre l'historique complet, accessible sans droit d'édition, avec
 type, date, heure et auteur. Les textes sont les sujets français des commits publics `feat(front):`
 et `fix(front):` depuis `v1.32.6`, du plus récent au plus ancien ; les dates sont celles des
@@ -1537,6 +1599,45 @@ d'heure) à ±2 min. La nuit, un voile bleu nuit
 - **Choix personnel** dans Paramètres → Thème → Cycle jour/nuit : heure du serveur (défaut), heure de mon ordinateur
   (horloge et fuseau du poste : la date et l'heure affichées par le poste sont lues comme une heure de Paris, puis
   éclairées par le soleil de Paris de ce jour-là ; un poste qui affiche 22 h voit la nuit de Paris à 22 h), ou désactivé. La clé `nightMode` est mémorisée ; l’ancienne préférence `disableNight` est conservée.
+- **Jour dans le monde** (menu de l'horloge) : « Matin », « Midi » et « Soir » se lisent à la **hauteur du soleil**,
+  pas à une heure (18 h 30 solaire, c'est la nuit noire d'un hiver de Paris et le plein jour d'un été de Reykjavik) ;
+  `worldCityOf` de `WorldDaylight.ts`, calcul du jeu (`sunPositionAt`, `trueSolarMinutes`) :
+  - **Matin** : la ville dont le soleil est le plus près de **+10°** parmi celles où il est à plus de 2° et monte
+    (une heure ou plus avant le midi solaire vrai) ; **Soir** : **+8°** parmi celles où il descend (une heure ou plus
+    après). À ces hauteurs les ombres du soleil sont entières (elles s'effacent de 6° à 2°) et au plus long (un objet
+    en jette six à sept fois sa hauteur, coupée à la longueur réglée), dans une lumière dorée (le soleil blanchit de 5°
+    à 35°) ; le soir est un peu plus bas, plus chaud. Sous 2° plus d'ombres : ni matin ni soir. Sans ville dans la
+    bonne phase (jamais vu avec la liste), la plus proche en hauteur dont le soleil va dans le bon sens, puis la plus
+    proche en hauteur. La ville affichée est gardée tant que son soleil reste à 6° de la cible et dans la bonne phase
+    (soir gardé de 14° jusqu'à 2°, jamais après le coucher) : environ un changement de ville par heure.
+  - **Midi** : la ville la plus proche de son midi solaire vrai, gardée tant qu'elle en est à 50 min au plus (toujours
+    à moins d'une heure).
+  - **Villes du nord** (PR « lieux du ciel du monde ») : avec la liste d'origine (37 villes), mesuré minute par
+    minute (21 mars, juin, septembre, novembre, décembre 2026), le soleil retenu n'était entre 2° et 16° que 81 à 96 %
+    du temps le matin et 80 à 97 % le soir, avec des pires cas à 45° (matin du 21 juin, Anchorage à 19:41 UTC) et 36°
+    (soir du 21 novembre, Honolulu à 00:40 UTC). Cause mesurée : pas les deux océans en soi, mais la **latitude**. En
+    été boréal le soleil d'une ville à 50-65° N passe 10° en montant des heures avant celui d'une ville tempérée de même
+    longitude ; en hiver boréal il descend à 8° tôt l'après-midi. Il manquait donc des villes du nord dans le Pacifique
+    Nord, en Extrême-Orient russe et à Terre-Neuve ; aucune ville du sud (Papeete, Apia, Ushuaïa, Sainte-Hélène…) n'a
+    été retenue par la recherche. Ajoutées : **Unalaska** (53,89 N, 166,53 O, `America/Anchorage`), **St. John's**
+    (47,56 N, 52,71 O, `America/St_Johns`), **Khabarovsk** (48,48 N, 135,08 E, `Asia/Vladivostok`),
+    **Petropavlovsk-Kamtchatski** (53,02 N, 158,65 E, `Asia/Kamchatka`), **Anadyr** (64,73 N, 177,52 E,
+    `Asia/Anadyr`) ; coordonnées de Wikipédia, fuseaux de la base tz (`zone1970.tab`). Après, minute par minute le 6
+    et le 21 de chaque mois : au moins **97,0 %** du temps entre 2° et 16° pour chaque jour et chaque moment, pire cas
+    **20,2°**. Ce qui reste : les matins d'équinoxe vers 16 h UTC (Vancouver ~19°), le soir de juin vers 11 h 30 UTC
+    (Katmandou ~20°), quelques nuits UTC de novembre et février (Bangkok ~20°). Un test garde la couverture (le 6 et
+    le 21 de chaque mois, au quart d'heure : 95 % au moins, 21° au plus). Effets : l'**heure choisie** et **Midi**
+    peuvent tomber sur ces villes (ex. 18 h 30 le 21 juin à 06:00 UTC : Unalaska au lieu d'Auckland) ; un **point
+    cliqué** près d'elles porte leur nom et leur fuseau.
+  - **Heure choisie** : inchangée, la ville dont l'**heure solaire vraie** est la plus proche (avec l'équation du
+    temps, ±16 min selon la saison), gardée à 50 min près. **Point cliqué** sur la carte : inchangé ; le menu dit
+    alors « Ciel de … (point choisi sur la carte) », surligné, puisqu'aucun moment n'est enfoncé. La carte du monde du menu s'ombre avec le voile du jeu lui-même
+  (`worldShadeAt` = `nightOpacityAt` vu de chaque point) : plein jour jusqu'à −0,833°, assombrie jusqu'à −6°, nuit
+  au-delà. Dessinée pixel par pixel (240 × 120) : environ 7 ms par dessin (mesuré en conteneur Linux sur un Mac), une
+  fois par seconde tant que le menu est ouvert en mode monde.
+- **Mode Basique** : il coupe le cycle (plein jour). Le menu de l'horloge le dit en une ligne et surligne le mode
+  effectif, « Désactivé », pas le mode enregistré ; celui-ci revient en quittant le Basique (`effectiveNightModeStore`,
+  lu aussi par `NightManager`). Le panneau du ciel du monde est masqué tant que le Basique s'applique.
 - **Pas de nuit** en mode édition ou lorsque le cycle est désactivé.
 - **Recette locale** : `?nightAt=21:00` force l'heure de Paris du jour courant (soleil de ce jour), seulement en
   développement (`import.meta.env.DEV`).
@@ -1751,7 +1852,25 @@ commandes de l'autre ; cette version ne comporte pas de verrou côté serveur.
 
 L'outil « Corbeille » (raccourci `5`) est supprimé : chaque outil a sa propre suppression.
 
-- **Carte** : sa gomme n'efface que les sols et murs de la couche carte (un geste = une entrée d'annulation). Ce que le geste touche au départ décide : parti d'un mur (ou d'une porte, d'une fenêtre), il efface les segments de la ligne de ce mur (rangée d'un mur horizontal, colonne d'un vertical), de la case de départ à celle d'arrivée, avec leurs portes et fenêtres, sans toucher aux sols ; parti d'un sol, il n'efface que les sols survolés, jamais un mur traversé. Un clic efface ce qui est sous le curseur (porte ou fenêtre d'abord, puis le mur). Un mur vertical se vise à 10 px de part et d'autre de son axe (`ERASER_VERTICAL_HIT_WIDTH`). Pendant le glisser, ce qui partira est en rouge.
+- **Carte** : une seule gomme (« Gomme ») pour toute la couche carte, au niveau choisi : sols, murs, portes, fenêtres,
+  dalles de palier, escaliers et rampes (un geste = une entrée d'annulation ; l'ancienne « Gomme de palier » est
+  retirée). **Ce qui est entouré en rouge au survol est exactement ce que le clic efface**, à sa vraie place et avec sa
+  vraie forme : l'escalier ou la rampe entier, la porte, la fenêtre ou le mur avec toute sa hauteur (un mur haut se
+  prend aussi par son haut), la dalle à son altitude, la case de sol. Règle commune à l'aperçu et à l'action :
+  `MapLayer/MapLayerTarget.ts` (`eraseTargetUnder`, `erasePlan`, `applyErase`) ; la cible est désignée par ce qui ne
+  change pas d'une lecture de la carte à l'autre (niveau et première marche d'un escalier, segment d'un mur, case d'une
+  dalle) et retrouvée sur la carte relue juste avant l'enregistrement. Priorité sous le pointeur : escalier ou rampe,
+  puis porte, fenêtre, mur, puis dalle, puis sol (`ERASE_PRIORITY`). Ce que le geste touche au départ décide : parti
+  d'un escalier, il l'efface (sa trémie est rebouchée) ; parti d'un mur (ou d'une porte, d'une fenêtre), il efface les
+  segments de la ligne de ce mur (rangée d'un mur horizontal, colonne d'un vertical), de la case de départ à celle
+  d'arrivée, avec leurs portes et fenêtres, sans toucher aux sols ; ailleurs, sur un palier il retire les dalles du
+  rectangle, au sol il n'efface que les sols survolés, jamais un mur traversé. Un mur vertical se vise à 10 px de part
+  et d'autre de son axe (`ERASER_VERTICAL_HIT_WIDTH`). Pendant le glisser, ce qui partira est en rouge. La gomme suit
+  le niveau choisi dès que la salle a les paliers, même sans les murs d'étage ; en « Auto », un escalier sous le
+  pointeur donne son niveau de départ, même là où son image passe sur un palier plus haut.
+  Couleurs de l'outil Carte : rouge = sera effacé (ou refusé), blanc = sera pris et déplacé (fenêtre, escalier, rampe),
+  bleu = sélection du mode Hauteur, vert = sera posé ou modifié. Une fenêtre haute se prend aussi par son haut ; une
+  porte haute déjà posée est entourée sur toute sa hauteur en mode Porte.
 - **Objets** : un bouton « Gomme » (à bascule) supprime l'objet cliqué ou survolé le bouton enfoncé ; un bouton « Supprimer »
   dans le panneau de l'objet sélectionné le supprime (la touche Suppr reste). Les sols et murs de la couche carte
   n'en font jamais partie : ils se gomment avec l'outil Carte, qui garde leurs raccords cohérents.
@@ -2161,6 +2280,8 @@ prend que l'eau au-dessus (trop-plein). À chaque pas, l'un et l'autre sont limi
 au niveau (`heldFlow` de `WaterGrid.ts`) ; un puits à niveau ne prend que dans son disque, il n'aspire pas le plan
 d'eau. Un lac reste ainsi plein quelle que soit la météo, sans déborder. Sans `level`, rien ne change. Le repère de
 l'outil Relief écrit le niveau après le débit (« +60 m³/h → −0.5 m »).
+Le panneau enregistre la propriété entière à chaque changement (`onSetProperty`) : décocher « Tenir un niveau »
+retire bien le niveau de la carte (une fusion le gardait, corrigé le 2026-11-20).
 
 **Modèle** (`libs/map-editor/src/Terrain/`, lu à l'identique par `back` et par le front). Le relief est un champ
 facultatif du WAM (`terrain` : hauteurs par cellule de 16 px, 0 au sol, négatif creusé, par blocs de 16 × 16 ; absent =
@@ -2242,14 +2363,14 @@ la pose de la boisson (`LandLifeView`, calculé par le navigateur à partir du p
 rien à la vie des antilopes : elles ne cherchent pas l'herbe et n'ont pas faim sans elle. Rien sur le fil.
 
 **Neige en altitude** (`Terrain/SnowLine.ts`). La neige tient sur les monts à partir d'une altitude qui dépend de la
-saison du calendrier de Paris : 96 px (3 cases) en hiver, 160 px au printemps et en automne, 224 px en été ; fine à
+saison du lieu de la carte (Paris sans lieu, saisons inversées au sud) : 96 px (3 cases) en hiver, 160 px au printemps et en automne, 224 px en été ; fine à
 la limite, complète 32 px plus haut (`snowCover`). Le navigateur la dessine en voile blanc sur le sol et l'herbe,
 sous les ombres des pentes, dehors seulement (`TerrainView`, `snowAlpha`) ; on y marche moins vite (85 % sous une
 couverture complète, `snowPace` dans `GroundPace.ts`) ; le serveur y fait mourir l'herbe, à l'allure de la soif sous
 une couverture complète (`Meadow.step`). Tout se calcule à partir du relief et de la saison : rien dans la carte ni
 sur le fil, aucun réglage. Indépendante de la neige de la météo (qui blanchit toute la carte) et du thème personnel.
 
-**Altitude de l'avatar.** Sur une carte qui a un relief, la pile des étages sous l'horloge dit l'altitude de
+**Altitude de l'avatar.** Sur une carte qui a un relief, la pile des étages, à gauche de l'horloge (dessous sur un écran de moins de 768 px), dit l'altitude de
 l'avatar, en mètres (une case d'altitude ≈ 1,10 m, `metresOf`) : la hauteur du relief sous ses pieds quand il est au
 sol (négative dans un creux, positive sur un mont), l'altitude de son palier quand il est en hauteur
 (`Floors/AvatarAltitude.ts`, `avatarAltitudeStore`). La pile s'affiche donc aussi sur une carte sans étage dès qu'elle
@@ -2358,6 +2479,41 @@ mode « toujours » sur l'eau et « coupé » ailleurs ; `isCanoeAfloat`). Vites
 fois plus en pagayant fort (touche de course) ; le courant l'emporte moitié moins qu'un nageur. Pas de canoë à
 terre, dans une piscine (on y nage), sur un palier, en suivi, ni pour un costume qui n'est pas humain ; la roue
 d'actions ne propose rien pour lui. Dessiné en code (`Vehicle/CanoeArtwork.ts`), comme les autres véhicules.
+
+**Altitude de l'avion.** L'avion d'Amine (PR #379) décolle seul en avançant jusqu'à l'altitude de croisière
+(`AIRPLANE_ALTITUDE`, 1024) et survole tout sans collision. Le pilote règle maintenant l'altitude :
+**ESPACE maintenu monte**, **CTRL maintenu descend**, en douceur (pleine vitesse 480 par seconde en 0,4 s, autant pour
+s'arrêter), entre 64 (`AIRPLANE_MIN_FLIGHT_ALTITUDE`) et 2048 (`AIRPLANE_MAX_ALTITUDE`) ; relâchée, l'altitude tient
+(`AirplaneFlight.cruise`). Le sol ne s'atteint que par un atterrissage, sur un terrain dégagé comme tout atterrissage :
+V, ou CTRL tenu au plancher de 64 (l'avion se pose et reste garé). **Lâcher les flèches pose toujours l'avion**, comme
+dans la #379, quelle que soit l'altitude réglée (la #401 la tenait sur place, retiré à la demande de l'utilisateur) :
+dès qu'aucune touche de vol (flèches, ESPACE, CTRL) n'est tenue, plané et recherche d'un sol dégagé, depuis l'altitude
+où se trouve l'avion (environ 1,4 s depuis 1024, 2,3 s depuis 2048 : descente bornée à 900 par seconde, sans saut).
+ESPACE seul, flèches lâchées, fait monter tant qu'il est tenu (décollage sur place compris) puis l'avion se pose au
+relâcher ; pendant le plané ESPACE et CTRL ne font rien. Reprendre les flèches annule l'atterrissage et l'avion revient
+à l'altitude réglée ; ESPACE, flèches tenues, annule un atterrissage commencé seul (CTRL au plancher), pas celui
+demandé par V. Chaque vol repart à la croisière.
+- **ESPACE** (`spaceClimbs`, `Vehicle/AirplaneAltitudeKeys.ts`) : en vol, il monte toujours (rien du sol n'est à portée,
+  comme avant). Au sol dans l'avion garé, il décolle seulement si rien d'autre ne le demande : une invite (siège,
+  porte, animal…), un objet sélectionné à côté, le Nerf ou la canne en main gardent la priorité. L'indice de l'avion
+  lui-même (« [V] pour descendre ») ne compte pas. Décidé à l'appui de la touche (`GameSceneUserInputHandler`), lu à
+  chaque image tant qu'elle est tenue (`UserInputEvent.Climb`) ; le relâchement n'active rien.
+- **CTRL** (`UserInputEvent.Descend`) : en vol seulement, hors éditeur, pas dans un champ de saisie, rien quand les
+  entrées sont coupées. En vol, les déplacements tenus avec CTRL continuent de diriger (le filtre `ctrlKey` de
+  `getEventListForGameTick` les laisse passer) et Ctrl + Z, Q, S, D, A, W ou une flèche ne déclenchent pas le
+  raccourci du navigateur quand il peut être empêché. Limites : Chrome ne laisse pas empêcher Ctrl + W (ferme
+  l'onglet), Linux quitte parfois sur Ctrl + Q, et macOS garde Ctrl + flèche pour changer de bureau (la page ne la
+  reçoit pas). Au sol, CTRL reste un modificateur comme avant.
+- **Rendu** : vu de dessus, l'avion grossit en montant, autour de son centre, de 1 au sol à 1,5 à la croisière et 2 à
+  2048, par seizièmes (`airplaneScale` : une image de pixel art agrandie à chaque image scintille ; filtre au plus
+  proche du jeu, pas de flou). Le pilote, le cockpit et les feux suivent la même échelle ; le nom monte au-dessus des
+  ailes. L'avion est dessiné au-dessus de son ombre de 40 px à la croisière, 80 au plus haut (`airplaneLift`).
+  L'ombre d'Amine reste telle quelle (plus petite et plus pâle en montant, au sol sous l'avion). Profondeur
+  inchangée : au-dessus des toits et du voile de nuit (`AIRPLANE_RENDER_DEPTH`).
+- **Partage** : l'altitude voyage déjà dans la variable de véhicule (`_avatarAirVehicle`, `_avatarVehicle`), bornée
+  de 0 à 2048 et refusée si elle n'est pas un nombre fini (`readVehicleState`) ; chacun en déduit la taille, donc rien
+  de géant ni de NaN. Envoyée au plus toutes les 200 ms tant qu'elle seule change, et lissée par chaque navigateur.
+  Aucun changement du protocole ni du `back`. Un client d'avant la borne à 1024 et la dessine sans agrandir.
 
 **`back` calcule** (`TerrainWaterManager`) : dix pas par seconde, avec la pluie sur les cellules creusées (et le
 ruissellement), l'évaporation des cellules mouillées par temps sec seulement, l'eau bue par le sol plat, les sources
@@ -2501,6 +2657,135 @@ murs). Pas de mode Rivière tracée. Relief au sol et dehors seulement. Animaux 
 Pas de courant qui pousse l'avatar. Un geste immense part en plusieurs commandes (autant d'annulations). Les valeurs
 par défaut du rythme sont à doser avec le tableau de bord. `play`, `back` et `map-storage` se déploient ensemble.
 
+## Eau à inertie (à l'essai)
+
+Réglage de carte `settings.water.inertia` (interrupteur « Eau à inertie (à l'essai) » du panneau Relief,
+`UpdateWaterSettingMessage.inertia`, champ 8, facultatif), **coupé par défaut : sans lui rien ne change**, l'eau
+avance de proche en proche (un cinquième de l'écart de niveau par pas, `WaterGrid.flow`).
+
+Activé, chaque passage entre deux cellules garde son **débit** d'un pas à l'autre (`WaterGrid.flowWithInertia`,
+`flowEast` et `flowSouth`). Le débit accélère avec l'écart des surfaces et la hauteur d'eau qui passe (gravité à
+l'échelle de la carte : une case fait 1,095 m de côté, une cellule 0,55 m, un pixel d'eau 3,4 cm ; une vague court
+à 2,4 m/s sous 60 cm d'eau, 4,4 m/s sous 2 m), et une cellule ne donne jamais plus que ce qu'elle a. L'eau a donc
+de l'élan : des vagues courent, cassent, rebondissent et noient les rives. Une eau profonde clapote plusieurs
+minutes avant de se calmer.
+
+Murs et bord de la grille sont ceux de l'eau d'avant. Sources, puits, pluie, drains et les échanges lointains des
+cartes accélérées ne changent pas : ils posent ou retirent de l'eau, l'inertie la fait ensuite courir. Les débits ne
+sont ni envoyés aux navigateurs ni sauvegardés : le courant senti par les avatars reste déduit de la pente, et
+l'eau repart immobile après un redémarrage du serveur.
+
+### Ce qui retient l'eau : quatre réglages (`settings.water.waves`)
+
+Une seule équation partout, mais ce qui freine l'eau dépend de la case. Curseurs du panneau Relief quand l'inertie
+est activée ; `UpdateWaterSettingMessage.waveRoughness`, `waveDamping`, `waveBreaking`, `waveMomentum`, champs 9 à
+12, facultatifs.
+
+- **Frottement du sol** (`roughness`, × 0 à 10, 1 par défaut et en réel) : frottement de Manning. La part de débit
+  perdue par seconde vaut le carré de la rugosité du sol × la vitesse de l'eau / sa profondeur à la puissance 4/3 :
+  presque rien sous une houle au large, fort sous une lame d'eau rapide sur la terre. La rugosité vient du sol
+  peint sur chaque case (`soilRoughness` : argile 0,022, sable 0,025, terre, gravier et case non peinte 0,03,
+  rocher 0,04, prairie 0,045).
+- **Amorti** (`damping`, 0 à 1 par seconde, 0,02 par défaut, 0 en réel) : perte de débit uniforme, ce qui calme un
+  lac dérangé ; 0,02 est le minimum qui garde le calcul calme. Plus haut, les vagues s'éteignent avant la rive.
+- **Déferlement** (`breaking`, × 0 à 5, 1 par défaut et en réel) : un front dont la surface tombe de plus d'un
+  dixième de l'eau qui passe perd son débit en proportion ; une houle douce n'est pas touchée.
+- **Élan emporté** (`momentum`, 0 à 1, 1 par défaut et en réel) : l'eau emporte sa vitesse avec elle (advection
+  prise en amont). Mesuré : fronts plus nets, lac dérangé bien plus calme (crête de 31 px au lieu de 39 dans un
+  bassin de 30 px), mais vagues qui grossissent moins en approchant du rivage qu'à 0.
+
+**Terre émergée et cuvettes.** Le déferlement et l'élan emporté n'agissent que dans les cuvettes du relief (lac,
+étang, mer : cases dont le sol est sous leur niveau de débordement, `WaterGrid.hollow`). Sur la terre émergée, le
+front d'une crue est une lame qui avance, pas une vague qui casse : seul le frottement du sol la retient. Mesuré
+sur le tsunami d'une comète de 24 cases dans un lac de 120 cellules de rayon : 165 cellules d'inondation (90 m),
+sous 28 à 34 px d'eau sur les 60 premières, masse conservée (46 cellules seulement quand ces deux termes
+agissaient aussi sur la terre).
+
+**Hauteur d'eau.** Sous inertie, une vague n'est pas coupée à la hauteur maximale de l'eau de la carte (18 px par
+défaut) mais à la plus haute qu'une carte puisse régler (256 px) ; sources et pluie restent limitées par le
+réglage.
+
+### Vitesse et cadence : trois réglages
+
+- **Vitesse d'écoulement** (`settings.water.flowPace`, × 0,1 à 2, 1 par défaut et en réel, champ 15) : combien de
+  fois sa vitesse réelle l'eau s'écoule (le temps que l'eau vit à chaque pas est multiplié d'autant : vagues, crues
+  et courants). À 1 : 2,2 cases par seconde sous 60 cm d'eau, 4 sous 2 m. Repère : l'avatar marche à 5,6 cases par
+  seconde, soit 6,2 m/s, 4,4 fois plus vite qu'un piéton. Pluie, sources et puits suivent « Vitesse de l'eau »,
+  pas ce réglage.
+- **Finesse du calcul** (`settings.water.precision`, 1 à 8, 3 par défaut, champ 13) : le plus de mouvements de
+  l'eau par pas (10 pas par seconde). L'eau ne franchit jamais plus d'une demi-cellule par mouvement, et une vague
+  ne court pas plus vite que ce que ces mouvements supportent : à 3, vague à 5,8 m/s au plus (celle de 100 px de
+  fond) et torrent à 8 m/s ; à 8, 15 et 16 m/s. Sans ces bornes, un seul trou profond ou une seule source forte
+  alourdissait chaque pas de toute la carte (mesuré : `back` à 100 % d'un cœur). Chaque mouvement de plus coûte
+  autant de calcul.
+- **Envois aux joueurs** (`settings.water.updates`, 1 à 10 par seconde, 1 par défaut, champ 14,
+  `stepsBetweenUpdates`) : quand l'eau bouge ; au moins 5 sous une averse, un drain ou pendant trente secondes
+  après une comète. Le fondu du navigateur dure le temps réel entre deux états (`TerrainWater.glideMs`), l'eau y
+  est dessinée cinq fois par seconde au plus. Une cellule dont l'eau a bougé de moins d'un quart de pixel n'est pas
+  renvoyée (jamais une cellule qui s'assèche ou se mouille) ; un état complet toutes les trente secondes remet tout
+  d'aplomb.
+
+### Comète, météore brûlant et drain sous inertie
+
+- **Comète : impact physique seul.** Elle ne pose plus son onde anneau par anneau (`ImpactWave`) : l'eau du cratère
+  et celle qu'elle apporte sont jetées en bourrelet autour du cratère (jusqu'à une fois et demie son rayon,
+  au-dessus du niveau des crues s'il le faut, `strikeWater`), et l'eau fait elle-même la vague. Les cercles
+  dessinés par le navigateur ne le sont plus. Sans inertie, la comète est celle d'avant.
+- **Météore brûlant et drain** : ils retirent de l'eau comme avant ; le trou se referme par une vraie vague.
+
+### Bouton « Réaliste » et aides du panneau
+
+Le bouton « Réaliste » (en tête des réglages de la carte) remet tous les réglages de l'eau sur leurs valeurs
+physiques (`REALISTIC_WATER_SETTINGS` : vitesse 1, inertie activée, vagues par défaut, vitesse d'écoulement 1,
+finesse 3, 5 envois par seconde, hauteur d'eau à 256 px, ruissellement 10, évaporation 0,2 mm/h, absorption 5 mm/h,
+vidange 300 mm/h). Seul l'amorti (0,02) n'est pas physique.
+
+Chaque réglage a une aide d'une ligne qui finit par sa valeur réelle ; le détail (chiffres, mesures) est replié
+dessous, sous « En savoir plus ».
+
+### Limites connues
+
+- **Courant senti plus faible entre une source et un puits** : un lac est plus plat sous inertie, et le courant
+  des avatars et des canoës est encore déduit de la pente.
+- **Puits fort plus efficace** : à la vitesse 1, un puits qui demande plus que son disque vide un lac environ
+  2,5 fois plus vite (mesuré avant les réglages des vagues).
+- **Trop-plein** (puits qui tient un niveau) et puits à grand disque : l'eau converge et forme une bosse, le
+  trop-plein fait descendre le lac sous son niveau. Non corrigé.
+- La rugosité de la prairie vient du sol peint, pas de l'herbe qui y pousse.
+- Rien n'a été jugé à l'écran par un agent : allure des vagues, bourrelet de la comète, rives.
+
+### Coûts mesurés (conteneur Linux sur Mac, hors jeu)
+
+- **Calcul** : 30 à 33 ms par pas sur une grille de 600 × 600 sous l'eau, quelle que soit sa profondeur ; 22 ms
+  sur la carte d'équipe locale rejouée (100 000 cellules sous l'eau), contre 4 ms sans inertie ; `back` local vers
+  29 % d'un cœur.
+- **Réseau** (grille de 480 × 320) : une carte au repos coûte 0,3 Ko par envoi (les cellules inchangées ne pèsent
+  rien) ; un lac calme avec une source, 2 Ko/s à 5 envois par seconde ; un tsunami, 45 à 63 Ko par envoi, soit
+  258 Ko/s à 5 envois et 450 Ko/s à 10, par joueur. N'envoyer que la zone qui change n'apporterait rien, et un
+  autre encodage 25 % au mieux pendant un tsunami : non faits.
+
+
+## Visualisation des flux d'eau
+
+Entrée « Visualisation » du menu des applications (sous « Catastrophe ») : un panneau sous l'horloge
+(`VisualisationPanel.svelte`, `visualisationPanelStore`) avec une tuile « Flux d'eau » (`waterFlowOverlayStore`).
+Pour soi seul, pour la session ; l'affichage reste quand le panneau est fermé. Indisponible en mode basique.
+
+Par-dessus la carte (`Terrain/WaterFlowOverlay.ts`, dix dessins par seconde, au-dessus du voile de nuit) :
+
+- **une flèche là où l'eau court** : sens, vitesse par la longueur et la couleur (échelle de 0 à 3 m/s et plus,
+  `FLOW_SPEED_SCALE`), point qui file le long de la flèche. Une flèche par bloc de cellules, plus gros vu de loin,
+  3 000 au plus ;
+- **une teinte là où le niveau change** : bleue quand il monte, magenta quand il baisse ;
+- **une étiquette sur les 8 plus grosses masses d'eau en vue** (`Terrain/WaterMasses.ts`) : volume en m³, surface
+  en m², profondeur moyenne en m, puis ce qu'elle gagne ou perd en m³ par minute.
+
+Tout est lu des profondeurs que le navigateur reçoit déjà (`TerrainWater.settled` garde l'état d'avant et le temps
+entre les deux) : rien n'est demandé au serveur. Limites : les vitesses sont **estimées** d'après la pente de la
+surface (`steadyFlowSpeed`, selon le modèle d'eau, les réglages des vagues, la rugosité du sol et la vitesse
+d'écoulement de la carte), pas mesurées : une vague qui passe sous inertie ne s'y lit pas ; les masses ignorent
+les murs. Coût non mesurable en images par seconde dans le navigateur de test.
+
 ## Vie aquatique (poissons et dauphins)
 
 Conception et plan dans le dépôt d'infra, `docs/superpowers/{specs,plans}/2026-11-18-vie-aquatique*`.
@@ -2554,8 +2839,8 @@ genre, position en pixels de carte) et les garde dans Redis (`aquatic-life:<sall
 `AquaticLifeView.ts` les dessine (images faites en code) juste au-dessus de l'eau. Une erreur dans un pas arrête la
 vie de la salle, pas l'eau ni la salle.
 
-**Limites.** Eau du relief du sol seulement (ni piscines d'objets, ni étages). Pas de recherche de chemin : un animal
-qui bute sur un obstacle en allant vers sa cible erre 3 s puis reprend. Les animaux sont dessinés par-dessus l'eau,
+**Limites.** Eau du relief du sol seulement (ni piscines d'objets, ni étages). Un animal qui bute sur un obstacle en allant vers sa cible cherche un chemin (voir « Chemin » à la
+section des ponts) ; sans chemin, il erre 3 s puis reprend. Les animaux sont dessinés par-dessus l'eau,
 sans passer derrière les objets. `play`, `back` et `map-storage` se déploient ensemble.
 
 
@@ -2782,6 +3067,129 @@ Les arbres `Nature:tree-*` se balancent avec le vent de la météo de la carte (
 - Même pose pour tous (heure du serveur, identifiant de l'arbre). Rien en mode édition, ni avec la météo masquée ou le
   mouvement réduit.
 
+### Neige : une pluie par temps froid
+
+Depuis le 2026-11-21 la neige n'est plus une météo : c'est la forme que prend une précipitation quand l'air est assez
+froid, décision de l'utilisateur (« la neige est de la pluie en condition de température et d'hygrométrie propice,
+donc pas un mode »). Ce qui précède et suit dans ce document sur la tuile Neige, la neige du mode Automatique, la
+couverture de neige au sol et les arbres qui blanchissent décrit l'état d'avant.
+
+- **Plus de mode Neige.** La tuile Neige et la case Neige des « Temps possibles » ont disparu. Le mode Automatique ne
+  tire plus de neige : la part qu'elle avait est passée à la pluie (`SEASON_WEIGHTS` : pluie 45 % en hiver, 32 % au
+  printemps, 12 % en été, 35 % en automne ; autant de précipitations qu'avant). Le programme de toutes les cartes en
+  Automatique change une fois (la graine dépend des temps possibles). En mode Réel les codes WMO de neige (71 à 77,
+  85, 86) sont une précipitation comme la pluie, avec son intensité (`precipitation` d'Open-Meteo, en eau).
+- **Cartes existantes.** `WeatherType.Snow` reste dans l'énumération, dépréciée, pour lire les anciennes cartes et les
+  anciens onglets ; `precipitationWeather` la lit comme une pluie partout (ciel, panneau, bureau, serveur). Une neige
+  envoyée par un ancien onglet est enregistrée en pluie, `snow` est retiré des temps possibles à l'enregistrement.
+  `lastSnow` n'est plus écrit ni lu (champ gardé dans le schéma).
+- **Règle** (`libs/map-editor/src/Weather/Precipitation.ts`, pure, commune au serveur et au navigateur) :
+  `snowShare(température, humidité)` rend la part de neige, de 0 à 1, d'après la température du thermomètre mouillé
+  (ajustement de Stull 2011, J. Appl. Meteor. Climatol. 50, valable de −20 à 50 °C et de 5 à 99 %) : neige à 0,5 °C et
+  moins, pluie à 1,5 °C et plus, mélange linéaire entre les deux, moitié-moitié à 1,0 °C (seuil à 50 % sur terre de Sims
+  et Liu 2015 et de Behrangi et al. 2018 ; la largeur du mélange est un choix). Au-delà de 4 °C d'air la neige cède,
+  plus rien à 6 °C (choix : l'ajustement n'est plus fiable en air très sec). Exemples : 2 °C et 40 % → thermomètre
+  mouillé −2,3 °C, neige ; 2 °C et 95 % → 1,45 °C, pluie (5 % de flocons) ; 1 °C et 99 % → 71 % de neige ; 0 °C →
+  neige ; 3 °C et 70 % → neige ; 5 °C et 90 % → pluie.
+- **D'où viennent la température et l'humidité** (`Weather/PrecipitationAir.ts` `precipitationAirNow`,
+  règle pure `drawnPrecipitationAir`) : la forme suit **la source de la précipitation dessinée** (décision de
+  l'utilisateur, 2026-11-21 : l'affichage d'un joueur doit être cohérent avec le ciel et la météo qu'il voit).
+  Précipitation de la carte (joueur qui suit le serveur, tout mode d'horloge autre que « Jour dans le monde ») : la
+  température et l'humidité réglées à la main dans Catastrophe → Météo (pour toute la salle), sinon l'air réel du lieu
+  de la carte (Paris sans lieu), **quelle que soit la météo de la carte** : une carte en Pluie fixe ou en Automatique
+  neige quand il fait réellement assez froid à son lieu ; la forme est la même pour tous ces joueurs (« forme commune :
+  oui ») et ce sont les sources du serveur, dans le même ordre (`FireConditionsManager.air`). Précipitation
+  personnelle (joueur en « Jour dans le monde », qui voit la météo de sa ville à la place de celle de la carte, #392,
+  `showsChosenPlaceWeather`) : l'air de **sa ville** au même quart d'heure (température et humidité de sa frise), ni
+  celui de la carte ni celui réglé à la main dans la salle ; son écran et son bandeau personnel disent donc la même
+  chose, et le givre suit la même ville (`Weather/Frost.ts`). Tant que rien n'est connu (frise pas encore reçue,
+  humidité absente), il pleut, toujours. Rien ne dépend du calendrier. Les conditions de feu de la salle, elles,
+  restent douces hors météo Réelle : elles ne servent plus à la forme de la pluie. Un éditeur qui essaie une météo ou
+  un lieu dans le panneau des réglages voit, pour lui seul et le temps de l'essai, la météo de la carte essayée et la
+  forme que donne l'air du lieu essayé, même s'il suit une ville.
+- **Rendu.** Quand il pleut, la part de neige devient des flocons (`snowflakes`, les mêmes que l'ancienne neige,
+  d'autant plus nombreux que la précipitation est forte : `snowfall`), le reste des gouttes : pluie et flocons mêlés
+  dans le mélange. Les flocons sont emportés par le vent de la carte. Le voile sombre et les nuages gris de la pluie
+  restent. Son : une chute à moitié neigeuse ou plus a l'ambiance feutrée de la neige, sinon la pluie, moins forte à
+  proportion. Bandeau : une pluie dont au moins la moitié tombe en neige est nommée « Neige », d'après la température
+  et l'humidité réelles prévues au lieu pour chaque quart d'heure (maintenant, +1 h, +4 h), ou d'après les conditions
+  réglées à la main pour « maintenant ».
+- **Sol et arbres.** La neige qui tombe tient au sol depuis le lot « Neige au sol » (section suivante) : le sol
+  blanchit case par case et les arbres avec la couverture moyenne de la carte. Le décor de neige uni (`Christmas/` :
+  sol uni, calottes, empreintes) reste débranché. Le givre et le gel de #392 sont inchangés. La neige des hauteurs du relief (`Terrain/SnowLine.ts`)
+  est inchangée ; elle suit l'altitude et la saison, pas la température.
+- **Serveur.** L'eau du relief et l'humidité du pré ne reçoivent que la part liquide (`liquidRainRate`,
+  `fallThrough`, air lu par `FireConditionsManager.air` : réglé à la main, sinon réel au lieu de la carte dans tous
+  les modes ; le serveur a sa propre frise Open-Meteo, un léger écart avec celle des navigateurs est possible) : ce qui tombe en neige n'apporte pas d'eau tout de suite : elle tient au sol et rend cette eau en fondant
+  (section suivante).
+- **Limites.** Rien n'est lissé dans le temps (la forme suit les conditions du quart d'heure) ; le thermomètre mouillé
+  au sol ignore une couche chaude en altitude (une pluie verglaçante réelle est dessinée en neige) ; les flaques se
+  remplissent encore sous la neige.
+  `play`, `back` et `map-storage` se déploient ensemble.
+
+**Sol gelé** (2026-11-21, `Weather/SoilFrost.ts`, champ facultatif `soilFrost` de `MeadowStepInput`). Le gel fige
+l'eau du sol, il ne l'enlève pas. Avant, par −10 °C le pré séchait aussi vite que par 15 °C, et pendant une neige
+(qui n'apporte pas d'eau) l'herbe mourait de soif. Le serveur lit le gel dans le même air que la forme de la pluie
+(`fallThrough`, `FireConditionsManager.air` : réglé à la main, sinon réel au lieu de la carte quelle que soit sa météo,
+Paris sans lieu) : `soilFrost(température)` vaut 1 à −1 °C et moins, 0 à +1 °C et plus, et monte en ligne droite
+entre les deux (pas de bascule à 0 °C qui clignote). Air inconnu (température ou humidité absente) : pas de gel.
+Sur la part gelée du sol :
+- l'humidité ne baisse plus (ni évaporation, ni dessèchement par le vent chaud) et ne se répand plus aux voisines ni
+  ne descend les pentes ;
+- l'herbe dort : elle ne meurt pas de soif et ne pousse pas ; elle ne jaunit ni ne reverdit (`dryness` figée) ;
+- rien ne repousse après un feu : le compte à rebours des cendres (braises comprises) reprend au dégel.
+
+Inchangés : la pluie liquide encore absorbée (à −1 °C presque tout tombe en neige), le sol trempé sous l'eau qui
+repose, les berges (`drinkFromBanks` ne fait que remonter l'humidité), la noyade, la neige des hauteurs (saison et
+altitude), le feu en cours, le départ spontané (le danger est nul par ce froid), le broutage. Pas de manteau neigeux
+ni de fonte dans ce lot (voir la #417). Rien côté navigateur. `back` seul change de comportement.
+
+### Neige au sol : elle s'accumule, blanchit, fond et rend son eau
+
+Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus : le serveur le garde case par case.
+
+- **Faire neiger.** Deux gestes : régler le froid dans Catastrophe → Météo (0 °C ou moins, ou quelques degrés par air
+  sec), puis lancer l'averse. Il n'y a pas de catastrophe « Neige » : la forme suit l'air, comme pour la pluie de la
+  carte. La pluie de la carte par temps froid s'accumule de la même façon, sur toute la carte.
+- **Modèle** (`libs/map-editor/src/Terrain/Snow.ts`, champ `snow` de `Meadow`). Une couche par case de 32 px, en
+  millimètres d'équivalent en eau, de 0 à 600 mm, dehors seulement. Sol tout blanc à partir de 15 mm.
+  - Fonte : `max(0, T) × 0,2 × (1 + vent / 20) × (0,5 + humidité / 100)` mm/h ; la pluie qui tombe dessus en fait
+    fondre un dixième de son volume par °C au-dessus de 0.
+  - Sublimation : `0,02 × vent × (1 − humidité / 100)` mm/h, à toute température, sans eau.
+  - Le temps de la neige court 600 fois plus vite que le réel (`THAW_SPEED`) : 15 mm fondent en une minute environ à
+    10 °C sans vent. Constante à régler à l'essai.
+  - Le feu fait fondre la neige autour de lui, même par temps de gel (`Meadow.warm`) : une case en feu chauffe sa
+    case et les huit voisines (15 mm par seconde à pleine flamme), un arbre en feu deux cases autour de son pied, la
+    catastrophe « feu » 60 mm par touche sous son disque. Cette fonte ne mouille pas le sol (le feu le sèche) ; son
+    eau va quand même à l'eau du relief. À l'inverse une neige qui tombe plus vite qu'elle ne fond étouffe le feu :
+    case en feu éteinte dès qu'il y reste de la neige, arbre éteint sous une couverture pleine (15 mm).
+  - Sur une eau libre, la neige fond aussitôt en eau quand l'air est au-dessus de 0 °C (ou inconnu) ; à 0 °C et
+    moins elle tient sur l'eau, comme sur une glace. Une case enneigée ne prend pas feu ; l'herbe y dort (elle ne
+    meurt pas de soif et ne pousse pas), à la différence de la neige des hauteurs, sous laquelle elle meurt.
+- **Eau de fonte.** Ce qui fond humidifie le sol de sa case comme la même pluie le ferait, et est versé dans l'eau du
+  relief, millimètre pour millimètre (`PX_PER_MM`, `TerrainWaterManager.pour`), compté avec la pluie dans le bilan. Hors de la grille d'eau, le sol est humidifié et le
+  reste est perdu. La neige de la pluie de la carte s'accumule à la vitesse de l'eau de la carte (`water.speed`),
+  sans le ruissellement (`runoff`) : elle tient où elle tombe.
+- **Averse à l'écran.** Par temps froid, l'averse tombe en flocons au lieu de gouttes (`downpourFlakes`, mélange des
+  deux dans l'entre-deux, nuage plus clair, sol qui pâlit au lieu de s'assombrir), d'après l'air de la salle
+  (`roomPrecipitationAir` : réglage manuel, sinon lieu de la carte), le même pour tous les joueurs et pour le serveur,
+  même pour qui suit sa propre ville : une catastrophe est celle de la salle.
+- **Averse.** `MeadowManager.soak` pose la part de neige à chaque annonce de l'averse (toutes les 200 ms), la part
+  liquide seule va à l'eau (`pourDownpours`). Un météore brûlant vaporise la neige de son cratère (perdue).
+- **Annonce.** `MeadowMessage.snow` (champ 8) : un octet par case (`snowByte`, racine carrée pour garder de la finesse
+  près de zéro), gzip, vide quand aucune neige ne tient. Annoncé toutes les 2 s tant que la neige tombe ou fond.
+  Gardé dans Redis avec le pré. Une carte dont l'herbe est coupée garde sa neige (`Meadow.stepSnowAlone`).
+- **Navigateur.** `MeadowState` lit la neige ; `TerrainView` l'envoie au canal neige du sol en shader (le plus fort
+  de la neige des hauteurs et de la neige tombée), avec un repli en voile blanc sans shader. La marche ralentit
+  (`groundPace`, comme la neige des hauteurs) et les arbres blanchissent avec la couverture moyenne de la carte.
+- **Deux modes** (`Weather/GroundSource.ts`). Un joueur qui suit le temps du serveur voit la neige du serveur. Un
+  joueur qui suit sa propre ville (météo personnelle de #392) n'en voit rien et ne la ralentit pas : son monde reste
+  local. L'eau, elle, est commune : il peut voir monter une eau de fonte sans avoir vu la neige.
+- **Limites.** La glace reste celle de #392 (personnelle, côté navigateur) : le serveur ne la connaît pas. La neige
+  tient sur l'eau dès 0 °C, même là où cette glace n'a pas encore gagné l'eau profonde à l'écran. Pas de neige locale en météo personnelle. Pas
+  d'empreintes dans la neige tombée. Sur une carte sans relief ni grille d'eau, l'eau de fonte ne fait qu'humidifier
+  le sol. `play` et `back` se déploient ensemble.
+
 ### Arbres : feuilles d'automne et neige
 
 Les arbres qui se balancent (`Nature:tree-*`, `Nature/TreeSway.ts`) réagissent à la saison qu'ils affichent
@@ -2835,8 +3243,72 @@ n'est pas reçue, Auto n'affiche rien (`Seasonal/SeasonalTheme.ts`). `SeasonalTh
   par les pas (3-4 feuilles de 5×3 px tous les 24 px en marche, 5-6 tous les 16 px en course, 120 au plus). Palette `#c8642a`, `#d9a23b`,
   `#9b3d23`, `#7a5a2e` ; aucune image ajoutée.
 
+**Brouillard vu de loin** (2026-11-20, signalé en beta sur la carte d'équipe : dézoomé au maximum, les bâtiments
+restaient en pleines couleurs dans une carte délavée, lampes et piste de danse comprises). En dézoomant, le brouillard
+passe aussi sur les bâtiments (pièces, murs, paliers), aux mêmes zooms que les nuages sur les toits
+(`cloudsOverRoofs` : rien au-dessus de 0,7 pixel d'écran par pixel de carte, plein à 0,45, fondu linéaire entre les
+deux) ; plein, il a l'épaisseur du dehors (voile 0,6 et plaques, plus léger la nuit). La pièce où se tiennent les pieds
+de l'avatar reste nette à tous les zooms (`farFogCells`, option `avatarRoom` : `OutdoorGrid.roomAt`), ses murs non.
+Ce voile intérieur est peint dans un second canevas (`DEPTH_FAR_FOG_INDEX`, au-dessus des lumières des lampes, sous les
+cadenas, les bulles et les noms) : les lampes RGB, les lampes de Jam, les torches et le feu à l'intérieur ne le percent
+plus ; la piste de danse et la lumière des fenêtres, plus bas, sont voilées comme le sol. Vu de près, rien ne change.
+Limites : le brouillard du dehors reste sous les lumières (une lampe dehors le perce comme avant) ; pluie et neige
+gardent leur voile au dehors seul.
+
+**Thème saisonnier** (« Paramètres → Ambiance → Thème saisonnier ») : Auto, Automne, Aucun (Noël retiré, voir plus bas). Réglage perso
+(`seasonalTheme` dans le navigateur), appliqué sans recharger. Il remplace « Thème de Noël » (repris une fois :
+Toujours → Auto depuis le retrait de Noël, Jamais → Aucun) et « Sol extérieur » (effacé). Auto suit la saison du lieu
+de la carte (Paris sans lieu), revérifiée chaque minute : automne du 1er septembre au 30 novembre au nord, du 1er mars
+au 31 mai au sud ; tant que l'heure du serveur
+n'est pas reçue, Auto n'affiche rien (`Seasonal/SeasonalTheme.ts`). `SeasonalThemeManager` crée le décor du thème
+(`SeasonalDecor`), le masque pendant l'édition et le reconstruit quand un mur ou un objet change.
+
+**Thème Noël retiré** le 2026-11-20, à la demande de l'utilisateur (« la neige est une résultante des conditions
+météo, ce n'est pas un script ») : son sol de neige uni cachait la texture des tuiles. Plus de choix « Noël » (un choix
+enregistré, l'ancien réglage « Toujours » et la commande « christmas: always » de l'app de bureau valent Auto), Auto
+ne passe plus en hiver, et rien de ce que le thème forçait ne s'affiche : flocons et météo Neige pour soi
+(`effectiveWeather` retiré), sol uni, calottes, empreintes, arbres en image d'hiver (`forcedTreeSeason`) et neige sur
+les arbres. Le code du décor de neige (`Christmas/` : `ChristmasDecor`, `SnowGround`, calottes, empreintes) reste :
+débranché depuis le 2026-11-21 (voir « Neige : une pluie par temps froid ») et modifié par la PR #392 ;
+`SeasonalTheme.Christmas` n'y est plus que le nom de ce décor.
+
+- **Noël** (`Christmas/ChristmasDecor.ts`) : la météo affichée pour soi devient Neige (flocons et son de la météo
+  existante), le sol extérieur se couvre de neige bleutée, les objets dehors portent une neige épaisse sur leur bord du
+  haut, les sols posés dehors sont givrés, et chaque joueur laisse des empreintes (une tous les 16 px en marche, une
+  trace en course, fondu en 45 s, 400 au plus). Les arbres saisonniers prennent leur image d'hiver, sans neige ajoutée.
+- **Automne** (`Autumn/`) : la météo de la carte est gardée ; l'herbe prend la texture d'automne d'Amine, les arbres
+  leur image d'automne ; feuilles au sol venues des arbres (voir ci-dessous), feuilles qui tombent du feuillage
+  (`Nature/TreeLeafFall.ts`), tas de feuilles au pied des objets là où le sol porte des feuilles (arbres
+  compris), feuilles soulevées par les pas au même endroit (3-4 feuilles de 5×3 px tous les 24 px en marche, 5-6 tous
+  les 16 px en course, 120 au plus). Palette `#c8642a`, `#d9a23b`, `#9b3d23`, `#7a5a2e` ; aucune image ajoutée.
+
+**Feuilles au sol venues des arbres** (`Autumn/LeafDensity.ts`, pur ; avant : une feuille par carré de 48 px partout
+dehors, lacs, océan et piscines compris, signalé par l'utilisateur). Seuls les arbres qui se balancent et perdent leurs
+feuilles en sont la source (`keepsLeavesInAutumn` de `Nature/TreeLeafFall.ts`, même règle que les feuilles qui
+tombent : un arbre dont l'image d'automne est celle d'été n'en perd pas, soit les sapins sombres et clairs, cyprès,
+saules, palmiers, arbres nus et la famille `winter-auto-`). Écart connu : les « Sapin enneigé » et le « Palmier
+enneigé » (`snow-evergreen-`) ont une image d'automne propre et perdent donc des feuilles, comme avant pour celles qui
+tombent. Autour du pied de
+chaque arbre, un ovale de feuilles le plus dense au pied (90 % des carrés de 16 px en fin d'automne, un quart de cela
+le 1er septembre) qui s'éclaircit jusqu'à son bord : 72 px de rayon (ou les trois quarts de la largeur de l'arbre) en
+fin d'automne, la moitié au début ; chaque palier de vent l'allonge de 75 % sous le vent et le raccourcit de 12 % au
+vent (tempête : quatre fois plus loin sous le vent). Le vent est celui de la carte (vent réel du lieu, brise de
+10 km/h du nord-ouest sinon), arrondi à 16 directions et 5 paliers (0 sous 5 km/h, 1 dès 5, 2 dès 15, 3 dès 30, 4 dès
+50) pour que les feuilles ne bougent pas à chaque variation du vent réel ; l'avancée de l'automne par trentièmes. Les
+arbres se cumulent. Rien sur l'eau du relief à partir de 2 px (dernier état du serveur, le même pour tous), ni dans
+les piscines du sol, ni sur le tapis d'un arbre de rive (`isGroundUnderWater` de `Water/WaterZones.ts`) ; pas de
+feuilles flottantes. Tas de feuilles dès 15 % de densité au pied de l'objet, feuilles soulevées dès 10 %. Coût : la
+densité de la zone dessinée est calculée en un passage où chaque arbre ne visite que les carrés qu'il atteint
+(`leafDensityField`), seulement quand la vue sort de sa marge, que les arbres, le vent arrondi ou l'avancée de
+l'automne changent ; mesuré hors jeu : 5 à 10 ms pour 400 arbres sur une zone de 1 650 × 930 à 6 000 × 3 400 px (sans
+le dessin). Quand l'eau du relief change (chaque seconde), au plus toutes les 5 s, seules les feuilles déjà tirées sont
+relues sur leur sol, et la couche n'est redessinée que si l'une d'elles est atteinte ou quittée par l'eau
+(`LeafScatterLayer.refreshGround`). Rien de loin (`seenFromFar`). Front seul.
+
 Empreintes et feuilles soulevées sont calculées par chaque navigateur depuis les positions déjà reçues : rien sur le
-réseau. « Afficher la météo » coupé retire aussi ce qui tombe (flocons de Noël, feuilles) ; le reste suit le thème.
+réseau. « Afficher la météo » coupé retire aussi les flocons de Noël ; le reste suit le thème. Plus aucune feuille ne
+tombe du ciel (2026-11-20 : la boucle météo en semait partout dehors, mer et lacs compris, sans rapport avec les
+arbres, `leafParticles` retiré) : en automne, toutes les feuilles viennent des arbres.
 Sans thème, la neige de la carte tient sur l'herbe pour tout le monde (elle était réservée à « Suivre la saison et la
 météo »).
 
@@ -2927,7 +3399,7 @@ civil, et seulement levée de 2° au moins), bleu froid, 0,3 au plus × lumière
 éteints, jamais deux jeux d'ombres nets. Lumière de la phase (`moonPhaseLight`) : « Réaliste » (défaut), loi de
 Krisciunas & Schaefer 1991 (PASP 103, éq. 8-9, d'après Allen 1976), un quartier ≈ 9 % de la pleine lune ; « Linéaire »,
 la fraction éclairée. La météo de la carte l'atténue sans cacher les ombres (`skyWeatherFactor` : ciel couvert 35 %,
-neige 50 %, pluie et brouillard 30 %, orage 15 %) ; la neige du thème de Noël, décor personnel, n'atténue rien ; météo
+pluie, en gouttes ou en flocons, et brouillard 30 %, orage 15 %) ; météo
 masquée ou nuages coupés : ciel clair. Une lune brillante éclaircit le
 voile de nuit d'un cinquième (30 % au plus avec une intensité réglée plus haut, `moonlitNightOpacity`), rien par
 nouvelle lune.
@@ -3101,10 +3573,11 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   pile des étages de la carte, l'étage courant en blanc après « ▶ » (`FloorLevelsStore.ts`). Éditeur ouvert ou carte
   sans palier : rien de tout cela.
 - **Escaliers courts** (`-v2`) : nouveaux escaliers posés par le mode Escalier quand le catalogue de la salle les a
-  (`mapLayerShortStairsAvailableStore`, les anciens sinon) : **une case au sol** vers le nord, l'est et l'ouest
-  (`stairRun(…, short)`), la longueur habituelle vers le sud (l'avatar y descend l'écran : il faut une longueur
-  supérieure à la hauteur). Dessin éclairé d'en haut, nez de marche, rampes sur un flanc vide (profils est et ouest).
-  Les escaliers déjà posés gardent nom, longueur et dessin.
+  (`mapLayerShortStairsAvailableStore`, les anciens sinon) : **une case au sol** vers le nord (`stairRun(…, short)`),
+  la longueur habituelle vers le sud (l'avatar y descend l'écran : il faut une longueur supérieure à la hauteur).
+  Dessin éclairé d'en haut, nez de marche. **Vers l'est et l'ouest, l'éditeur pose les anciens escaliers**
+  (`newStairIsShort`) : sur une case, vu de profil, un escalier n'est que quelques piliers raides. Les escaliers déjà
+  posés (dont les `-v2` est et ouest d'une case) gardent nom, longueur et dessin.
 - **Éditeur** (`MapLayerFloorEditing.ts`, `FloorOperations.ts`) :
   - « Niveau » : choisi à la main ; pipette par Alt+clic, Cmd+clic ou le bouton « Prendre le niveau sous le
     pointeur » ; le nom du niveau suit le pointeur (un même point de l'écran est une case de chaque niveau).
@@ -3113,7 +3586,11 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
     posé), direction, largeur, flanc vide. La trémie est découpée dans le palier d'arrivée et rebouchée au retrait.
     Aperçu : rond = première marche, flèche = arrivée, bleu = dalles d'arrivée, orange = pas de dalle à l'arrivée,
     rouge = dalles retirées pour la trémie. Un escalier posé sans arrivée garde ses cases d'arrivée barrées d'orange.
-  - « Gomme de palier » : rectangle pour les dalles, clic sur un escalier qui part du niveau courant.
+  - Un escalier ou une rampe déjà posé est entouré en blanc au survol, en mode Escalier : le glisser le déplace (même
+    forme, même niveau ; trémie quittée rebouchée, nouvelle trémie découpée, une seule annulation). Un clic dessus ne
+    fait rien.
+  - Plus de « Gomme de palier » : la Gomme de l'outil Carte efface aussi dalles et escaliers (voir « Gommes et
+    suppression dans l'éditeur »).
   - Les pièces de palier sont réservées à l'outil Carte (`isMapLayerPrefab`) : les autres outils ne les prennent pas.
 - **Altitude partagée** (`Floors/FloorProtocol.ts`) : variable de joueur `_floorZ`, publique et non sauvegardée
   (patron de la torche) ; exacte sur un palier, par pas de 4 px et au plus toutes les 150 ms sur un escalier ; un
@@ -3142,9 +3619,8 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
 - **Escalier à flanc vide** (`-vide`) : un avatar du niveau de départ passe dessous là où la hauteur libre atteint
   40 px ; ailleurs, et pour un flanc plein, l'escalier bloque comme avant.
 - **Sélecteur de niveau commun** (`FloorLevelPicker.svelte`, en haut du panneau Carte et du panneau Objets ; choix
-  partagé `mapEditorPlacementLevelStore`) : une ligne Auto · pipette · Sol · paliers posés, une ligne Niveau − / +
-  (n'importe quel niveau, une case de mur à la fois, avec ou sans dalles : `steppableLevels`) et Palier − / + (palier
-  posé suivant ou précédent). **Auto** suit le palier dessiné sous le pointeur, le sol ailleurs. Dans l'outil Carte, un
+  partagé `mapEditorPlacementLevelStore`) : une ligne Auto · pipette · Sol · paliers posés, des flèches vers le
+  niveau au-dessus ou en dessous (voir « Éditeur : choisir un niveau »). **Auto** suit le palier dessiné sous le pointeur, le sol ailleurs. Dans l'outil Carte, un
   clic en mode Porte, Fenêtre ou Hauteur sur un mur d'un autre niveau passe à ce niveau (`levelOfWallAt`).
 - **Profondeurs** : les bandes des paliers commencent au-dessus de tout le sol, objets « au-dessus des avatars »
   compris (un arbre derrière une maison est caché par son étage), et restent sous les calques de recouvrement.
@@ -3347,13 +3823,33 @@ sécheresse de l'air doivent être là toutes les deux ; le vent double ce qu'el
 conditions s'apaisent, et vaut 0 sous l'eau ou sans herbe. Elle est annoncée avec le pré (`MeadowMessage.dryness`) et
 sauvegardée avec lui ; un pré sauvegardé avant ce lot se recharge, vert.
 
+**Berges vertes (correctif du 2026-11-21).** Signalé en beta par une canicule (36 °C, 20 %, 26 km/h) : toute l'herbe
+était jaune jusqu'au bord de l'eau. Deux causes : la cible de sécheresse suivait `danger × (1 − humidité)`, si bien
+qu'une herbe encore assez humide pour pousser (humidité 0,26 au bord, 0,25 étant le seuil de pousse) était peinte en
+paille à 69 % ; et le dessèchement accéléré (×20 au danger maximal) vidait le sol voisin de l'eau dès la deuxième
+case. Désormais la sécheresse tend vers `danger × soif`, la soif allant de 0 au seuil de pousse
+(`GROWING_MOISTURE[0]`) à 1 au seuil de mort (`DRY_MOISTURE`) : l'air ne sèche que l'herbe que le sol laisse
+assoiffée. Et le sol le long de l'eau libre boit par en dessous (nappe, remontée capillaire) : à 1, 2 et 3 cases d'une
+eau posée au sol il garde au moins 0,8, 0,5 et 0,17 d'humidité (`BANK_MOISTURE`, `Meadow.drinkFromBanks`, de proche en
+proche, dehors). Mesuré par la bibliothèque à 36 °C / 20 % / 26 km/h : sécheresse 0 / 0 / 0,44 aux cases 1 à 3, puis
+0,93 dès la 4ᵉ (avant : 0,69 / 0,87 / 0,92 / 0,93). Le guide de séchage du CFA (Victoria) note à 90 % « some green in
+wetter areas such as roadside and river valleys ». Au-delà de la bande, le feu court comme avant ; la berge verte le
+freine (chance de propagation des herbes vertes). Changement voulu : une herbe humide (sol à 0,25 et plus) ne jaunit
+plus sous un danger modéré.
+
 **À l'écran.**
 - Le widget « Catastrophe » a deux onglets. L'onglet **« Météo »** : interrupteur « Manuel » (coupé, les curseurs
   montrent les conditions réelles, grisés), curseurs de température, d'humidité, de vent, provenance du vent par les
   huit points de la rose, trois seuils (réglables même hors manuel) et l'indicateur de danger (faible, modéré, fort,
   extrême). Un geste envoie la demande au serveur, quatre fois par seconde au plus pendant un glisser ; l'annonce du
   serveur déplace les curseurs de tous sans rien renvoyer.
-- L'herbe sèche est peinte en **paille** par-dessus le vert, d'autant plus qu'elle est sèche.
+- L'herbe sèche est peinte en **paille** par-dessus le vert, d'autant plus qu'elle est sèche. Couleur revue le
+  2026-11-21 (avant `#e0c24a`, jaune moutarde saturé à 71 %) : les guides de séchage du CFA (Victoria) et de la FESA
+  (Australie-Occidentale) disent « straw » puis « bleached » à 90-100 %, et leurs photos mesurées (moyenne des zones
+  au soleil) donnent des blonds gris de 26 à 34 % de saturation (`#bcae8a`, `#c0ad95`, `#c2ae83`). Le shader du sol
+  (`GroundSplat`) mêle par grandes plaques un blond délavé `#c0a870` et un kaki sec `#a99b66`, grain de ±7 % ; le
+  repli sans shader (`STRAW_COLOR`) prend leur milieu `#b4a16b`. Écart avec le sable (`#e1cd96`) : ΔE ≥ 15 composé
+  sur l'herbe (avant 31), avec l'argile ≥ 17.
 - En manuel, le **vent de toute la scène** (nuages, arbres, pluie penchée) est celui de la salle.
 - Le bandeau météo affiche l'**humidité** pour « Maintenant » et, en manuel, la température et le vent de la salle
   avec la mention « manuel ».
@@ -3394,6 +3890,24 @@ ce lot dessine le feu. Rien ne change côté serveur ni sur le fil.
 Limites : pas de son, la lueur n'éclaire pas la nuit comme une lampe (elle ne perce pas le voile). Les arbres
 brûlent depuis le lot 4, ci-dessous.
 
+## Feu de végétation : la repousse après le feu
+
+Une case brûlée est verte de nouveau en **5 minutes** au plus (`AFTER_FIRE_SECONDS` de
+`libs/map-editor/src/Terrain/Meadow.ts`), quels que soient l'heure, la saison, l'humidité et l'altitude : c'est un
+jeu, pas une forêt. Avant, la cendre ne partait qu'avec l'herbe qui repoussait, de jour seulement, à 40 % de sa vitesse
+en automne et pas du tout en hiver : en automne de nuit une case restait noire jusqu'au matin.
+
+- La cendre d'une case éteinte reste entière 15 % de ce temps (45 s, le temps des braises que dessine le navigateur),
+  puis part régulièrement ; l'herbe revient avec elle jusqu'à un pré plein (`1 − cendre`), même là où il n'y en avait
+  qu'une litière sèche. Ensuite l'herbe suit ses règles habituelles (soif, noyade, saison).
+- Elle repousse partout où l'herbe peut pousser : pas sous l'eau, sous la neige des hauteurs, sur le sable, le rocher,
+  le gravier, un sol de l'outil Carte ni dedans. Là, la cendre part quand même, sans herbe.
+- Une case rebrûle dès que la moitié de sa cendre est partie (un peu moins de 3 min après son feu), comme avant à
+  mi-repousse : une case en cendres reste un coupe-feu pendant un incendie.
+- Une carte dont l'herbe pousse plus vite que 5 min (réglage « pré plein en … min ») repousse aussi vite qu'elle.
+- Aucun réglage nouveau, rien sur le fil : bibliothèque et `back` seulement. Le compte à rebours de la cendre entière
+  n'est pas gardé : après un redémarrage de `back`, la cendre part aussitôt.
+
 ## Feu de végétation : les arbres brûlent, les animaux fuient (lot 4)
 
 Les arbres du catalogue nature (`Nature:tree-…`, ceux qui se balancent au vent) prennent feu, lancent des braises
@@ -3407,9 +3921,9 @@ serveur seul décide ; `play` (front et pusher) et `back` se déploient ensemble
   brûle 90 s (`TREE_BURN_SECONDS`) et rallume l'herbe sous lui.
 - Un arbre en plein feu lance des braises sous le vent (8 par arbre, 40 en vol par salle au plus), qui allument un
   foyer plus loin (`emberReachTiles`). L'eau à son pied et une forte pluie l'éteignent.
-- Ce qui a brûlé reste noir la moitié du temps de repousse de l'herbe de la carte (5 min par défaut pour un arbre
-  entièrement brûlé, moins s'il a été éteint avant), puis l'arbre reverdit seul. Un arbre ni en feu ni brûlé n'est
-  pas regardé.
+- Un arbre entièrement brûlé est vert de nouveau en 5 min au plus (`AFTER_FIRE_SECONDS`, moins si l'herbe de la
+  carte pousse plus vite) : noir la première moitié, il reverdit dans la seconde, de jour comme de nuit, en toute
+  saison ; éteint avant, il revient d'autant plus vite. Un arbre ni en feu ni brûlé n'est pas regardé.
 - La catastrophe « Feu » allume aussitôt les arbres sous le patch (`TreeFire.ignite`).
 
 **Serveur** : `MeadowManager` fait avancer les arbres après le pré, à son pas de 2 s, et les garde dans Redis avec
@@ -3451,6 +3965,9 @@ droite, sans recherche de chemin ; un lion ou un tigre revient autour de son arb
 
 ## Catastrophes : le météore
 
+Sur une carte dont l'eau a de l'inertie, la comète ne lance plus l'onde décrite ici : elle jette l'eau de son
+cratère en bourrelet et l'eau fait elle-même la vague (voir « Eau à inertie »).
+
 > Depuis le 2026-11-20 la tuile de cette section s'appelle **« Comète »** dans le widget (elle apporte de l'eau et
 > lance une onde ; elle est dessinée en bleu glace). Son code garde ses noms (`CATASTROPHE_METEOR`, `Meteor.ts`,
 > `MeteorView`). La tuile « Météore » est désormais le météore brûlant décrit plus bas (« Catastrophes : le météore
@@ -3460,8 +3977,11 @@ Conception et plan dans le dépôt d'infra, `docs/superpowers/{specs,plans}/2026
 le météore, qui ne touche que l'eau du relief.
 
 **En jeu.** Le menu des applications a un bouton « Catastrophe » qui montre ou cache un petit widget sous l'horloge
-(fermé à chaque chargement de page ; absent dans l'éditeur). Dans le widget, la tuile « Météore » **arme** le tir
-(un second clic sur la tuile le désarme ; fermer le widget ou ouvrir l'éditeur aussi) : le curseur devient un viseur
+(fermé à chaque chargement de page). Il reste utilisable quand l'éditeur de carte est ouvert : tant qu'une
+catastrophe est armée, l'éditeur met son outil de côté (aucun outil choisi, panneau de l'outil masqué) et le reprend
+dès qu'elle est désarmée ; choisir un outil désarme la catastrophe (`CatastropheToolPause.ts`,
+`MapEditorModeManager`). Dans le widget, la tuile « Météore » **arme** le tir
+(un second clic sur la tuile le désarme ; fermer le widget aussi) : le curseur devient un viseur
 et un **clic gauche sur la carte** (ou un toucher bref) lance le météore à cet endroit. **Échap** annule. Le glisser
 de la carte reste libre : seul un clic qui n'est pas un glissé tire, et il ne fait alors ni marcher, ni activer, ni
 choisir quoi que ce soit. Rien n'est tiré hors de la carte ni quand les commandes sont suspendues. Armé, le tir
@@ -3540,47 +4060,160 @@ avec 8 px apportés par cellule du cratère). Pas de son. Rien n'a été vu à l
 cette section : widget, viseur, chute, éclair et gerbe ne sont validés que par les tests ; l'effet sur l'eau en jeu
 n'est pas vu.
 
-## Ponts de l'outil Carte
+## Pont posé en un geste
 
-Un pont est un **tablier posé case par case** par un éditeur de la carte. Tout ce qui marche le traverse à sec :
-antilopes, lions et tigres (simulés par le serveur), animaux promeneurs (jungle, chiens, chats, canards) et avatars.
-L'eau coule dessous sans changement.
+Outil Carte, groupe des paliers, mode **« Pont »** : presser sur la berge de départ, glisser jusqu'à la berge
+d'arrivée, relâcher. Le tablier et une montée à chaque bout sont posés d'un coup, en une seule annulation
+(`BridgeBuilder.ts` : `planBridge`, `bridgeFits`, `layBridge` ; aperçu vert, rouge quand c'est refusé).
 
-**Dans l'éditeur.** Outil Carte, groupe « Plateformes », mode **« Pont »** : maintenir le bouton et peindre les
-cases. La gomme de l'outil efface un pont avant le sol de la même case. Au sol seulement. Le mode est grisé (avec une
-explication au survol) tant que le catalogue de la salle n'a pas les pièces.
+- **Largeur** 1 à 6 cases, centrée sur la case de départ ; au-delà de 2, les montées sont posées côte à côte.
+- **Style** : *Bois* (dalles `dalle-bois`, rampes) ou *Béton* (dalles `dalle-pierre-grise`, escaliers pleins : il
+  n'existe pas de rampe en béton).
+- **Hauteur** : *Basse* (20 px) ou *Haute* (52 px, le dessus de murs de 2 cases).
+- Le pont est **droit**, est-ouest ou nord-sud : il suit le côté le plus long du geste, sur la rangée (ou la colonne)
+  du départ. Les deux points sont lus au sol, quel que soit le niveau choisi dans le sélecteur.
+- Refusé en entier, avec un message : trop court (il faut au moins une case de tablier entre les deux montées), hors
+  de la carte, ou sur un escalier qui part du sol. Les murs ne sont pas regardés.
+- Sans les pièces des ponts dans le catalogue de la salle : béton, hauteur haute, sans choix.
+- Le pont est fait des pièces ordinaires des paliers : il se retouche et s'efface ensuite pièce par pièce (gomme).
+  Un test vérifie que le serveur y lit un pont (cases à sec pour les animaux).
 
-**Dans la carte.** Aucun changement de format ni de protocole : un pont est fait d'entités ordinaires de la collection
-**`Carte Ponts`** (catalogue privé publié par le repo d'infra, `tools/build_bridge_prefabs.py`). Seize pièces
-`pont-bois-<m>` : `m` est le masque des voisines qui sont du pont aussi (1 nord, 2 est, 4 sud, 8 ouest) ; chaque bord
-sans voisine porte une lisse. L'outil recalcule les pièces voisines à chaque case peinte ou effacée
-(`MapLayerModel.setBridge`, `computePlacements`). Les pièces sont dessinées à la profondeur fixe 0,8
-(`MAP_LAYER_BRIDGE_DEPTH`) : au-dessus de l'eau du relief (0,65) et de son écume (0,66), qui cachent un sol de l'outil
-Carte, et sous les objets de sol et les personnages. **Ne jamais renommer un identifiant publié.**
+## Éditeur : choisir un niveau
 
-**La règle, lue partout** (`libs/map-editor/src/Terrain/Bridges.ts`) : `bridgeTilesOf(wam)` donne les cases de pont ;
-sur une case de pont, la hauteur d'eau vue par ce qui marche est 0 (`dryOnBridges`).
+Le sélecteur de niveau de l'éditeur (`FloorLevelPicker.svelte`) propose **tous les niveaux où l'on peut construire**,
+avec ou sans dalles : le sol, le niveau 1 des ponts (20 px, quand le catalogue de la salle a leurs pièces), les dessus
+des murs de 2, 3 et 4 cases, les dessus des murs posés sur un étage, et tout étage déjà construit. Avant, seuls le sol
+et les étages qui avaient des dalles étaient listés : le niveau d'un pont pas encore posé ne se choisissait qu'en
+dépliant « Ajuster la hauteur ».
 
-- Serveur, vie de la terre (`AquaticLifeManager.readLand`) : les deux rives deviennent une seule terre, relue quand
-  un pont est posé ou retiré. Troupeaux et meutes se mêlent, les lions traversent pour chasser.
-- Serveur, pré : rien ne pousse sous un tablier (`pavedTilesOf`).
-- Navigateur (`TerrainWater.setBridges`, relu deux fois par seconde au plus par `GameScene.refreshBridges`) : sur un
-  pont, pas de nage, pas de courant, le canoë se range ; une case de pont n'est jamais « mouillée » pour les animaux
-  promeneurs.
-- Eau, poissons, averse, drain, météore, dessin de l'eau : inchangés, le pont n'existe pas pour eux.
+- Chaque niveau porte le nom de sa hauteur, qui ne change pas : « Niveau 1 », « Niveau 2 »… Un niveau qui a des
+  dalles porte en plus son nom dans le jeu : « Niveau 2 · Étage 1 ».
+- Les flèches (« Niveau au-dessus », « Niveau en dessous ») vont au niveau d'à côté, construit ou non : ceux de la
+  liste et, au-dessus des murs de 2 cases, une case de mur à la fois jusqu'à 10 cases plus haut (`steppableLevels`),
+  pour commencer un étage ou un pont là où rien n'existe encore ; la flèche du bas finit au sol. Même règle pour un
+  objet ou une zone sélectionnés. Le repli « Ajuster la hauteur » et ses boutons « Niveau − / + », qui faisaient la
+  même chose, sont retirés. Dans l'outil Carte, Page précédente / Page suivante changent toujours de niveau dans les
+  modes des paliers.
+- Passer en mode **Escalier** sur un étage qu'aucun étage construit ne surmonte ramène le niveau édité à celui d'où
+  un escalier y monte (le sol sous un tablier qu'on vient de poser), et l'escalier vise l'étage quitté
+  (`stairBaseBelow`). Pas en « auto ».
+- La liste des niveaux offerts est tenue par l'outil Carte : dans un autre outil ouvert sans être passé par lui, elle
+  se réduit au sol et aux étages construits.
 
-**Saisons.** Pour la neige et les feuilles d'automne, un tablier est un sol (`FLOOR_COLLECTIONS`) : la neige givre
-toute sa surface au lieu de poser une calotte sur le bord de chaque dalle, et aucun tas de feuilles ne se forme au
-pied des dalles.
+## Ponts : un palier bas, des traverses et des rampes
 
-**À savoir.** Un pont est toujours à sec, même sous une crue. On y entre et on en sort par n'importe quel bord (pas
-de collision). On peut pêcher depuis un pont. Un lion ou un tigre peut prendre un poisson qui passe sous le tablier
-(pour lui la case est à sec). Le pont ne brûle pas et un météore ne le casse pas. Une seule matière : le bois. Pas de
-pièce d'angle rentrant : dans un coude, la lisse s'arrête au bord de la case.
+Un pont est un **palier en plein air** : des dalles posées au-dessus d'une rivière, avec une rampe ou un escalier à
+chaque bout. Il remplace le mode « Pont » et les pièces `Carte Ponts` (PR #377), retirés du jeu : les pièces
+`pont-bois-…` déjà posées sur une carte restent des objets ordinaires, sans effet, à effacer avec l'outil Objets.
 
-**Limites.** Un navigateur resté sur une version d'avant voit les pièces sous l'eau et y nage ; un pont posé sur une
-carte dont `back` est plus ancien ne réunit pas les terres. `play` et `back` se déploient ensemble.
+**Dans l'éditeur** (outil Carte, groupe « Plateformes »).
+- **Niveau 1** : un palier bas, à 20 px du sol (le haut d'un mur d'une case, `LOW_FLOOR_ELEVATION`). Proposé dans
+  le sélecteur de niveau quand le catalogue de la salle a les pièces des ponts.
+- Mode **Dalles**, interrupteur **« Traverses en bois »** : la dalle `dalle-bois`.
+- Mode **Escalier**, interrupteur **« Rampe en bois »** : une rampe de planches (`rampe-<n|e|s|o>-l<1|2>-<h1…h4|m1|m2>`),
+  qui se pose et se monte comme un escalier de même hauteur ; toujours longue (une case par case montée, une de plus
+  vers le sud), flanc toujours ouvert. Les escaliers ordinaires montent aussi au niveau 1 (`escalier-…-h1`).
+- Les deux interrupteurs sont grisés tant que le catalogue `Carte Paliers` de la salle n'a pas ces pièces.
+- Pour un pont : niveau 1, peindre les dalles au-dessus de l'eau, puis revenir au sol et poser une rampe à chaque
+  bout, son haut contre le tablier.
 
+**Visibilité.** Un étage **en plein air** (aucune pièce de la carte sous ses dalles) n'est pas l'étage d'un
+bâtiment : il reste toujours affiché, même quand l'avatar est dans une pièce ailleurs, sauf s'il est dessiné
+par-dessus la pièce où se trouve l'avatar. Un avatar qui passe dessous se voit à travers les dalles autour de lui.
+Un avatar qui marche sur un étage en plein air est dehors comme au sol : pas de voile sombre sur le paysage, les
+étages des bâtiments restent affichés (`aboveLevelShows` : `openAir`, `coversRoom` ; `FloorSpike.fade`).
+Dans l'éditeur, un étage en plein air reste affiché quel que soit l'étage édité (les étages d'un bâtiment, eux, sont
+cachés sauf celui qu'on édite) : à 60 % d'opacité quand il est au-dessus de l'étage édité, pour viser son bord en
+posant une rampe au sol et voir ce qu'on peint dessous (`editorLevelAlpha`, `EDITOR_OPEN_AIR_ABOVE_ALPHA`).
+
+**Les animaux.** `libs/map-editor/src/Terrain/Bridges.ts`, `bridgesOf(wam)` : un pont est fait des escaliers et
+rampes **posés au sol** et des dalles de l'étage que chacun atteint, de proche en proche. Un étage qu'aucun escalier
+du sol n'atteint n'est pas un pont (un toit, l'étage d'un bâtiment sans accès du sol).
+- Serveur : sur les cases du sol sous un pont, l'eau vaut 0 pour ce qui marche (`dryOnBridges`,
+  `AquaticLifeManager.readLand`) : les deux rives sont une seule terre pour antilopes, lions et tigres, relue quand
+  un pont change. Le serveur lit les noms et les places des pièces ; un test du front vérifie qu'il lit un pont là
+  où l'éditeur le pose.
+- Navigateur, animaux du serveur (antilopes, lions, tigres) : un animal au-dessus d'un pont est dessiné à la hauteur
+  du tablier (une part de cette hauteur le long d'une rampe), par-dessus les dalles (`Bridges.elevationAt`,
+  `LandLifeView`).
+- Navigateur, animaux promeneurs (canards, chiens, chats, jungle) et compagnons : ils marchent vraiment sur le
+  tablier, par ses rampes, comme sur tout palier (voir « Animaux sur les étages, les escaliers et les ponts »).
+- Avatar : rien de particulier, il marche sur les dalles comme sur tout palier (ni nage ni courant en hauteur) ;
+  au sol sous le tablier, il nage comme ailleurs.
+
+**Chemin.** Un animal du serveur arrêté sur sa ligne droite (l'eau, un mur) cherche un chemin jusqu'à sa cible et le
+suit : un animal de la terre contourne la rivière par un pont, un poisson contourne une île (`Swim.ts`, `findRoute` :
+recherche de proche en proche sur 8 000 cellules au plus, soit environ 45 cellules autour de lui, puis chemin
+redressé). Sa cible n'est abandonnée que s'il n'y a pas de chemin ; il ne recherche alors pas avant 4 s. Le chemin
+n'est ni sauvegardé ni envoyé aux navigateurs. Un animal qui se promène ne vise jamais plus loin que 6 cellules : il
+ne traverse une rivière large que pour une proie, un partenaire, son groupe, l'eau à boire ou une fuite.
+
+**Limites.** Les animaux du serveur vivent à plat : un animal qui arrive par la berge sous le tablier monte dessus
+d'un coup, et un lion peut prendre un poisson qui passe dessous. Un lion ou un tigre du serveur apprivoisé qui suit son
+maître sur un pont est dessiné sous les dalles.
+Les dalles d'un palier ne reçoivent ni pluie ni nuages. Pas de garde-corps propre au pont (ceux des paliers). Bois
+seul. L'herbe pousse sous un tablier.
+
+## Animaux sur les étages, les escaliers et les ponts (lot 1 : promeneurs et compagnons)
+
+Conception d'ensemble (toutes les familles d'animaux, lots suivants) dans le dépôt d'infra :
+`docs/superpowers/specs/2026-11-20-animaux-altitude-design.md`.
+
+**Pour qui joue.** Les animaux qui se promènent tout seuls (canards, chiens, chats posés sur la carte, lions et
+tigres de la jungle) montent et descendent les escaliers et les rampes, marchent sur les dalles des paliers et
+traversent une rivière par un pont. Un animal apprivoisé suit son maître à l'étage. On apprivoise et on relâche un
+animal depuis son propre étage seulement. Le compagnon d'origine de WorkAdventure (celui du profil) n'est plus
+dessiné sous les dalles quand son joueur est à l'étage. Sur une carte sans palier, rien ne change : mêmes promenades.
+
+**Modèle.** Un point d'une promenade (`Point` de `Wander/WanderSchedule.ts`) est l'endroit où sont les pieds **sur le
+sol** (`x`, `y`) et, avec `z`, la hauteur à laquelle ils se tiennent (absent au sol). À l'écran, ce qui est à `z` est
+dessiné `z` pixels plus au nord, dans la bande de profondeur de son altitude (`floorDepth`), comme un avatar.
+
+- `MapEditor/MapLayer/FloorPath.ts` : le parcours case par case et par les escaliers des avatars (double-clic) est
+  sorti en `floorRoute` ; `floorPath` s'en sert, les animaux aussi.
+- `Wander/WanderFloors.ts` (`wanderFloorsOf`) : les étages vus par les animaux. `levelsAt(case)` : les altitudes où
+  l'on peut se tenir (une dalle, pas sous un escalier de l'étage, pas sur un meuble ni dans une piscine de
+  l'étage) ; `route(de, vers)` : les points à suivre, pied puis tête de chaque escalier, à 12 cases au plus autour
+  des deux bouts. Ne dépend que de la carte : tous les navigateurs trouvent le même chemin.
+- `WanderSchedule` : une destination tirée au sort tombe sur le sol ou sur un des étages au-dessus de sa case
+  (tirage supplémentaire seulement quand il y a plusieurs choix : sur une carte sans palier, la suite des tirages est
+  celle d'avant) ; l'altitude est interpolée le long du trajet (un escalier monte de son pied à sa tête).
+- `WanderingCharactersManager` : lit le modèle des paliers déjà lu pour les avatars (`FloorSpike.walkContext()`),
+  et refait les promenades quand il change. Trajet : celui du sol d'abord, comme avant ; s'il n'y en a pas (une
+  rivière) ou si un bout est en hauteur, celui des étages. Les cases du sol sous un escalier posé au sol sont
+  fermées ; l'eau sous un tablier redevient de l'eau (le tablier se prend par ses rampes) ; un objet posé en hauteur
+  n'arrête plus les animaux du sol, il occupe sa case de son étage ; les murs d'un étage arrêtent. Le nid d'un animal
+  posé sur un palier est sur ce palier.
+- Affichage : un animal sur un étage se montre et s'estompe avec cet étage comme un joueur (`floorOccupants`,
+  branché sur `FloorSpike`) ; plus bas que l'avatar, il est sous le voile des étages du dessous (par sa profondeur).
+- Portes : au sol il ouvre les portes du sol, sur un étage celles de cet étage (`forEachRaisedDoorOpener`,
+  `UpperDoors`).
+- Jungle (`outdoorWanderMap`) : un étage au-dessus du dehors est en plein air (le tablier d'un pont), les lions et
+  tigres y passent ; jamais l'étage d'un bâtiment.
+- Compagnons (`JungleCompanionFollower`, `JungleCompanions`) : la piste du maître garde son altitude, le compagnon a
+  à chaque endroit celle que son maître y avait ; invite « apprivoiser / relâcher » seulement à moins de 6 px
+  d'altitude d'écart (`SAME_FLOOR_PX`, comme les bulles), rien en vol.
+
+**Un compagnon ne vole pas.** Quand son maître décolle en avion, le compagnon s'arrête où il est, au sol, et se
+repose (`JungleCompanionFollower.poseAt(…, flying)` : ni piste ni saut pendant le vol). Quand le maître s'est posé,
+le compagnon demande un chemin au sol jusqu'à lui (celui des animaux promeneurs, escaliers et ponts compris,
+`seekWayBack`), le parcourt quelle que soit la distance, puis suit comme avant ; sans chemin (une île, un toit) il
+attend sur place et redemande toutes les 2 s (`WAY_BACK_RETRY_MS`). Vaut pour les promeneurs apprivoisés
+(`JungleCompanions`) et, à l'écran, pour les lions et tigres apprivoisés du serveur (`LandCompanions` ; le serveur
+gardait déjà l'animal à sa dernière place au sol, `leadTamed`). Le vol du maître est lu sur le joueur
+(`Character.isFlying`, déjà partagé) : aucun protocole. Le compagnon d'origine de WorkAdventure reste aussi au sol
+pendant le vol (`Companion.setTarget`) ; à l'atterrissage il marche droit vers son joueur s'il est près, et se
+retrouve à côté de lui s'il est loin (règle des téléportations, inchangée). Limite : un joueur qui n'a pas vu où un
+compagnon a été laissé (maître sorti de sa vue pendant le vol) ne le voit pas jusqu'à l'atterrissage, puis au pied
+du maître ; un lion du serveur est alors montré là où le serveur le garde.
+
+**Limites (lot 1).** Les animaux du serveur (antilopes, lions, tigres de la vie de la terre, apprivoisés compris)
+restent au sol, avec le pont « à plat » d'avant : lot 2, avec protocole. Sur un étage ou un pont, un animal ne fuit
+ni les avatars ni le feu, et n'est pas vu par les capteurs de présence ; il ne s'assoit que sur les sièges du sol.
+Un escalier de deux cases de large se prend par sa file du pied. Un animal passe sous un escalier à flanc vide
+seulement par le contour (les cases sous l'escalier lui sont fermées). Les places de côté d'un groupe de compagnons
+peuvent dépasser du bord d'un palier. Le chemin par les étages avance case par case (pas de diagonale). Pas d'ombre
+vérifiée sur un tablier. Rien de cela n'a été vu à l'écran par un agent.
 
 ## Catastrophes : le météore brûlant
 
@@ -3626,6 +4259,16 @@ ensemble.
 `play/src/front/Phaser/Game/Catastrophe/{MeteorFall,MeteorView}.ts`, `Stores/CatastropheStore.ts`,
 `Phaser/UserInput/GameSceneUserInputHandler.ts`, `Components/Catastrophe/CatastrophePanel.svelte`, icône `comet` de
 `PixelIcons.ts`, i18n `actionbar` et `menu` (fr, en).
+
+## Catastrophes : la flamme du feu qu'on tient
+
+La catastrophe « feu » ne montrait rien quand rien ne prenait sous le pointeur (herbe verte ou mouillée, neige, sol
+nu). Le serveur annonce maintenant chaque touche de feu à la salle (`CatastropheMessage`, genre `CATASTROPHE_FIRE`,
+un identifiant par joueur, 500 ms de vie : `FIRE_PATCH_LASTS_MS`), et chaque navigateur dessine des flammes qui
+vacillent sur le disque, au-dessus d'une lueur, tant que le joueur garde le clic (`Catastrophe/FireTorch.ts` pour
+les flammes, `FireTorchView.ts` pour le dessin, lumière ajoutée). La flamme suit le pointeur et s'éteint au relâchement.
+Ce qui prend feu reste le feu du pré, dessiné ailleurs. Coupée avec l'effet « feu » ; mouvement réduit : flammes fixes.
+Un navigateur d'avant ce lot dessine une comète pour chaque touche : `play` et `back` se déploient ensemble.
 
 ## Catastrophes : le drain
 
@@ -3703,3 +4346,64 @@ sur toute la carte, un voile et des gouttes sur toute la vue. En mouvement rédu
 une carte ; pas de son ; l'averse des autres suit leur pointeur avec le retard du réseau. `play` et `back` se
 déploient ensemble.
 
+
+## Sol en shader, météo personnelle et gel de l'eau
+
+**Sol.** Les sols du relief, l'herbe, la neige des hauteurs, l'ombrage du relief, la paille, les cendres, la lueur
+du feu et l'eau sont dessinés par deux shaders (`Terrain/GroundSplat.ts`) au lieu de couches empilées. Une seule
+petite texture de données (un pixel par case, cinq paquets RVB : six sols ; herbe, neige, eau ; creusé, surélevé,
+cendre ; paille, feu, dehors) est envoyée à la carte graphique ; les textures des sols ne sont jamais redessinées.
+Les sols se mélangent par leur hauteur (la luminosité de leur texture), leurs bords sont courbés par un bruit fixé à
+la carte puis coupés net au pixel (pixel art, aucun fondu) ; les poids sont lissés 1-2-1 avant l'envoi pour que les
+bords ne suivent pas l'escalier des cases. L'herbe pousse en touffes (seuil sur la texture et un bruit), les cendres
+s'effacent par plaques. L'eau a sa couleur de sa profondeur, une surface animée en continu, une écume de rive et le
+sol mouillé autour. Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
+(`TexturedGround`). Textures : `resources/terrain/ground-*.png` (générées, 4 tons nets ; `ground-ice.png` dans le
+style des patinoires).
+
+**Météo personnelle.** Le bandeau météo devient une pastille : la ville du serveur (globe) avec l'icône du temps et
+une flèche du vent ; un clic ouvre le bulletin, sous la pastille. Dès 768 px de large, la pastille météo et la pile des
+étages sont sur la ligne de l'horloge, à sa gauche (météo, étages, horloge) ; en dessous, empilées sous l'horloge. Un joueur qui suit un lieu du monde sur son horloge (mode « monde »,
+`worldCityStore`, nommé d'après la ville la plus proche) voit aussi sa ville (ordinateur), et le jeu dessine pour lui
+seul la météo de ce lieu (`ChosenPlaceWeather`, route `real-weather` du pusher) ; les autres gardent celle du
+serveur.
+
+**Gel.** À partir de l'air du lieu affiché (`Weather/Frost.ts`), pour ce joueur seul, rien n'est envoyé :
+givre au sol d'après la vapeur de l'air (voir « Givre » ci-dessous) ; l'eau gèle des hauts-fonds vers le fond entre 0 et -15 °C (toute gelée au-delà), en glace de
+patinoire ; le sol se mouille sous la pluie et sèche en cinq minutes ; tout avance en deux minutes environ, rien ne
+saute. La neige au sol reste celle d'avant : seulement quand il neige. **Dehors seulement** : `OutdoorGrid` (ce qui
+est fermé par des murs) ne gèle jamais. Sur l'eau gelée on patine (logique des patinoires), on n'y nage plus et le
+courant ne porte plus ; les poissons s'y figent, l'écume et les tourbillons s'arrêtent. Les **piscines** dehors
+gèlent comme des hauts-fonds et deviennent des patinoires, sauf si leur **eau chaude** est allumée : nouvelle clé
+d'état d'objet `hot` (`ENTITY_STATE_KEYS`, défaut « non », `entityStateDefault`), commandée par un interrupteur
+(« Il agit sur : l'eau chaude des piscines », cibles choisies pour une piscine dehors) ; chauffée, elle fume dans le
+froid et ne gèle jamais.
+
+**Givre** (2026-11-21, `libs/map-editor/src/Weather/HoarFrost.ts` `hoarFrost`, remplace la rampe « blanc à −10 °C »
+de #392). La gelée blanche est un dépôt de la vapeur de l'air sur une surface plus froide que le point de givrage de
+cet air : il faut un sol sous 0 °C **et** un air assez humide ; par air sec il gèle sans blanchir (gelée noire), et
+l'air très froid porte peu de vapeur. Calcul : pression de vapeur de l'air d'après son humidité relative à l'eau
+(celle d'Open-Meteo et de la salle), comparée à la saturation sur la glace à la température du sol (formes de Magnus
+de l'OMM, WMO-No. 8 annexe 4.B : eau 17,62 / 243,12, glace 22,46 / 272,62, 6,112 hPa) ; givre = excès de vapeur sur
+0,25 hPa (choix : sol tout blanc à 0,25 hPa d'excès). Sol plus froid que l'air de 0,8 °C par vent calme (choix, sous
+les 1 à 3 °C de l'herbe par nuit claire et calme, FAO Snyder et de Melo-Abreu 2005, ch. 2), de jour comme de nuit et
+par tout ciel : ni la nuit ni la nébulosité ne sont lues (les conditions réglées à la main n'en ont pas) ; le vent
+ramène le sol à la température de l'air, en entier jusqu'à 7 km/h, plus rien à 18 km/h (choix). Vent inconnu = calme ;
+**humidité inconnue = pas de givre**. Exemples : −2 °C et 95 % → 0,70 ; −2 °C et 40 % → 0 ; −15 °C et 70 % → 0 ;
++1 °C et 100 % → 0 (sol à +0,2 °C) ; −2 °C, 95 % et 40 km/h → 0 ; −30 °C et 95 % → 0,54. Sources, dans le même ordre
+que la température : ville suivie par le joueur (« Jour dans le monde » : température, humidité et vent de sa frise),
+sinon conditions réglées à la main dans la salle, sinon air réel du lieu de la carte. Limites : un vrai givre de nuit
+claire sous un air à +1 °C n'est pas rendu, et le givre se forme aussi de jour au soleil ; le shader le pose sur tout
+le sol dehors du relief, quel que soit le sol (l'eau a son propre shader).
+
+**Piscines codées.** Une piscine est peinte au sol avec l'outil **Relief**, mode **Piscine** : ses cases gardent un sol
+de piscine (codes 7 à 14, `libs/map-editor/src/Terrain/Pools.ts`), un par style. Jusqu'à 8 styles par carte, dans
+`settings.pools` (message `UpdatePoolSettingMessage`) : couleur de l'eau, couleur de la margelle, profondeur, 0 à 2
+échelles, eau chaude. Le shader de l'eau les dessine (`poolColor`) : margelle par érosion de la forme
+(`poolAround`), carrelage vu à travers l'eau, couleur selon la profondeur. On y nage (`WaterZones.paintedPoolRectangles`,
+la profondeur du style), les échelles se posent sur le bord haut (`Terrain/PoolLadders.ts`). Les anciennes
+piscines-images (objets avec eau) sont redessinées de la même façon, image cachée (`Terrain/ImagePools.ts` ;
+`?classicPools` ou `localStorage.classicPools = "1"` pour revoir l'image), et retirées du catalogue ; « Convertir en
+piscine modifiable » dans l'éditeur d'objets la remplace par une piscine peinte (`MapEditor/PoolConversion.ts`).
+**Gel** : une piscine gèle en surface comme une eau calme de 32 px, quelle que soit sa profondeur
+(`POOL_ICE_DEPTH_PX`), soit vers -8 °C ; jamais dedans (`OutdoorGrid`) ni chauffée.

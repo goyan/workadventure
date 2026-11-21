@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { quantizeWind } from "../../../../../src/front/Phaser/Game/Autumn/LeafDensity";
 import { LeafScatterLayer } from "../../../../../src/front/Phaser/Game/Autumn/LeafScatterLayer";
 
 describe("LeafScatterLayer", () => {
@@ -20,17 +21,22 @@ describe("LeafScatterLayer", () => {
         const scene = { add: { graphics: () => graphics }, cameras: { main: camera } } as unknown as Phaser.Scene;
         const layer = new LeafScatterLayer(scene);
         const view = { x: 0, y: 0, width: 480, height: 480 };
-        expect(layer.update(view, () => true, false)).toBe(true);
+        const sources = {
+            trees: [{ x: 240, y: 240, width: 64 }],
+            wind: quantizeWind(undefined, undefined),
+            progress: 1,
+        };
+        expect(layer.update(view, () => true, sources, false)).toBe(true);
         const near = graphics.fillRect.mock.calls.length;
         expect(near).toBeGreaterThan(0);
         camera.zoom = 0.3;
-        expect(layer.update(view, () => true, false)).toBe(true);
+        expect(layer.update(view, () => true, sources, false)).toBe(true);
         expect(graphics.clear).toHaveBeenCalledTimes(2);
         expect(graphics.fillRect.mock.calls.length).toBe(near);
         // Nothing more to do while it stays far.
-        expect(layer.update(view, () => true, false)).toBe(false);
+        expect(layer.update(view, () => true, sources, false)).toBe(false);
         camera.zoom = 1;
-        expect(layer.update(view, () => true, false)).toBe(true);
+        expect(layer.update(view, () => true, sources, false)).toBe(true);
         expect(graphics.fillRect.mock.calls.length).toBe(near * 2);
     });
 });

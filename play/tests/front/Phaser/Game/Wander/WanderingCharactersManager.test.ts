@@ -5,11 +5,13 @@ import { isBrave } from "../../../../../src/front/Phaser/Game/Wander/WanderFear"
 import type { Entity } from "../../../../../src/front/Phaser/ECS/Entity";
 import type { GameScene } from "../../../../../src/front/Phaser/Game/GameScene";
 import { WanderingCharactersManager } from "../../../../../src/front/Phaser/Game/Wander/WanderingCharactersManager";
-import type { Point } from "../../../../../src/front/Phaser/Game/Wander/WanderSchedule";
+import type { Point, WanderPose } from "../../../../../src/front/Phaser/Game/Wander/WanderSchedule";
 import type * as WanderScheduleModule from "../../../../../src/front/Phaser/Game/Wander/WanderSchedule";
 import { JUNGLE_RADIUS_TILES } from "../../../../../src/front/Phaser/Game/Jungle/JunglePlan";
 import type { JungleAnimal } from "../../../../../src/front/Phaser/Game/Jungle/JunglePlan";
 import { mapEditorModeStore } from "../../../../../src/front/Stores/MapEditorStore";
+import { floorDepth } from "../../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorDepth";
+import { FloorModel } from "../../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorModel";
 
 vi.mock("phaser", () => ({
     Loader: { Events: { FILE_LOAD_ERROR: "loaderror" } },
@@ -48,7 +50,16 @@ vi.mock("../../../../../src/front/Phaser/Game/Wander/WanderSchedule", async (imp
             schedules.push({ entityId, map, radiusTiles });
         }
         poseAt() {
-            return walk.pose ?? { x: this.nest.x, y: this.nest.y, direction: "down", moving: false, pausedMs: 0 };
+            return (
+                walk.pose ?? {
+                    x: this.nest.x,
+                    y: this.nest.y,
+                    direction: "down",
+                    moving: false,
+                    pausedMs: 0,
+                    ...(this.nest.z ? { z: this.nest.z } : {}),
+                }
+            );
         }
         setNest(nest: Point): void {
             this.nest = nest;
@@ -109,9 +120,17 @@ function makeSprite() {
 function makeScene(
     properties: { type: string }[] = [],
     image: { width: number; height: number; frameTotal: number } = { width: 96, height: 128, frameTotal: 13 },
-    options: { withDuck?: boolean; sheetLoaded?: boolean; drinkInterval?: number } = {},
+    options: {
+        withDuck?: boolean;
+        sheetLoaded?: boolean;
+        drinkInterval?: number;
+        /** The raised floors of the map, as the floors of the avatars read them. */
+        floors?: { model: FloorModel };
+        /** The altitude the duck was put at. */
+        duckElevation?: number;
+    } = {},
 ) {
-    const { withDuck = true, sheetLoaded = true, drinkInterval } = options;
+    const { withDuck = true, sheetLoaded = true, drinkInterval, floors, duckElevation = 0 } = options;
     // The water of the relief: pixels of water by cell of 16 px ("column,row"), and its version.
     const water = { depths: {} as Record<string, number>, version: 0 };
     const entity = {
@@ -123,8 +142,14 @@ function makeScene(
         visible: true,
         active: true,
         texture: { key: "duck-entity.png" },
-        getPrefab: () => ({ imagePath: "duck-entity.png", tags: [], wander: { sheetPath: SHEET } }),
-        getElevation: () => 0,
+        getPrefab: () => ({
+            collectionName: "Animaux",
+            id: "Animaux:duck:Default:Down",
+            imagePath: "duck-entity.png",
+            tags: [],
+            wander: { sheetPath: SHEET },
+        }),
+        getElevation: () => duckElevation,
         getEntityData: () => ({ properties }),
         setVisible: (visible: boolean) => {
             entity.visible = visible;
@@ -145,6 +170,7 @@ function makeScene(
     let update: () => void = () => {};
     let loadError: (file: { key: string }) => void = () => {};
     const scene = {
+        floorSpike: { walkContext: () => (floors ? { model: floors.model, state: { elevation: 0 } } : undefined) },
         getGameMapFrontWrapper: () => ({
             getTileDimensions: () => ({ width: 32, height: 32 }),
             getSharedCollisionGrid: () => Array.from({ length: 10 }, () => Array.from({ length: 10 }, () => 0)),
@@ -155,9 +181,11 @@ function makeScene(
         getLifeFire: () => (burning.size > 0 ? fire : undefined),
         getTerrainWater: () => ({
             version: () => water.version,
+            relief: () => undefined,
             coveredArea: () => ({ x: 0, y: 0, width: 320, height: 320 }),
             walkerSettledDepthAt: (x: number, y: number) =>
                 water.depths[`${Math.floor(x / 16)},${Math.floor(y / 16)}`] ?? 0,
+            settledDepthAt: (x: number, y: number) => water.depths[`${Math.floor(x / 16)},${Math.floor(y / 16)}`] ?? 0,
         }),
         getGameMap: () => ({
             getWamFile: () => ({ getWam: () => ({ settings: drinkInterval ? { life: { drinkInterval } } : {} }) }),
@@ -665,6 +693,171 @@ describe("WanderingCharactersManager", () => {
             scene.update();
             expect(scene.sprite.angle).toBe(0);
             expect(scene.sprite.scaleY).toBe(1);
+        });
+    });
+
+    describe("raised floors", () => {
+        const LION: JungleAnimal = { id: "jungle:tree-1", sheetPath: SHEET, nest: { x: 48, y: 48 } };
+        const centre = (x: number, y: number): Point => ({ x: x * 32 + 16, y: y * 32 + 16 });
+        const standing = (x: number, y: number, z: number): WanderPose => ({
+            x,
+            y,
+            z,
+            direction: "down",
+            moving: false,
+            pausedMs: 0,
+        });
+
+        /** A bridge: a ramp going east on the tile (3, 5), a deck at 20 px over (4..6, 5), a ramp going west on (7, 5). */
+        function bridge(): FloorModel {
+            const model = new FloorModel();
+            for (let x = 4; x <= 6; x++) model.setSlab(20, x, 5, "bois");
+            model.addStair({ direction: "e", width: 1, rise: 20, open: true, ramp: true }, { x: 3, y: 5 }, 0);
+            model.addStair({ direction: "o", width: 1, rise: 20, open: true, ramp: true }, { x: 7, y: 5 }, 0);
+            return model;
+        }
+
+        function raisedOpeners(target: WanderingCharactersManager): (Point & { elevation: number })[] {
+            const positions: (Point & { elevation: number })[] = [];
+            target.forEachRaisedDoorOpener((position, elevation) => positions.push({ ...position, elevation }));
+            return positions;
+        }
+
+        afterEach(() => {
+            schedules.length = 0;
+        });
+
+        it("draws a character on a raised floor its altitude further north, among what stands on that floor", () => {
+            const scene = makeScene();
+            manager = scene.manager;
+            // Its feet are over the point (100, 200) of the ground, 52 px up.
+            walk.pose = standing(100, 200, 52);
+            scene.reconcile();
+            scene.update();
+            expect(scene.sprite.visible).toBe(true);
+            expect({ x: scene.sprite.x, y: scene.sprite.y }).toEqual({ x: 100, y: 148 });
+            expect(scene.sprite.depth).toBe(floorDepth(52, 148));
+            // Back on the ground: sorted by its feet, as ever.
+            walk.pose = standing(100, 200, 0);
+            scene.update();
+            expect({ x: scene.sprite.x, y: scene.sprite.y }).toEqual({ x: 100, y: 200 });
+            expect(scene.sprite.depth).toBe(200);
+        });
+
+        it("opens the doors of its own floor, and is not sensed on the ground", () => {
+            const scene = makeScene();
+            manager = scene.manager;
+            walk.pose = standing(100, 200, 52);
+            scene.reconcile();
+            scene.update();
+            expect(openers(manager)).toEqual([]);
+            expect(raisedOpeners(manager)).toEqual([{ x: 100, y: 132, elevation: 52 }]);
+            const sensed: Point[] = [];
+            manager.forEachWalker((position) => sensed.push(position));
+            expect(sensed).toEqual([]);
+        });
+
+        it("tells the floors where it stands, to show and fade with its floor like a player", () => {
+            const scene = makeScene();
+            manager = scene.manager;
+            walk.pose = standing(100, 200, 52);
+            scene.reconcile();
+            scene.update();
+            const occupants = [...manager.floorOccupants()];
+            expect(occupants).toHaveLength(1);
+            expect(occupants[0].isOnFloor(52)).toBe(true);
+            expect(occupants[0].isOnFloor(0)).toBe(false);
+            expect(occupants[0].isOnFloor(84)).toBe(false);
+            // As for a player: its middle, its feet 12 px lower.
+            expect({ x: occupants[0].x, y: occupants[0].y }).toEqual({ x: 100, y: 136 });
+            // The same one at each call: the floors remember whom they faded.
+            expect([...manager.floorOccupants()][0]).toBe(occupants[0]);
+        });
+
+        it("the nest of an animal put on a raised floor is on that floor, under its image", () => {
+            const scene = makeScene([], undefined, { duckElevation: 52 });
+            manager = scene.manager;
+            scene.reconcile();
+            scene.update();
+            // Its image is at (64, 64) on the screen: its middle over the point (80, 132) of the ground, 52 px up.
+            expect({ x: scene.sprite.x, y: scene.sprite.y }).toEqual({ x: 80, y: 80 });
+            expect(scene.sprite.depth).toBe(floorDepth(52, 80));
+        });
+
+        it("a wild animal on a raised floor does not run from the avatars of the ground", () => {
+            const scene = makeScene([], undefined, { withDuck: false });
+            manager = scene.manager;
+            const brave = Array.from({ length: 400 }, (_, i) => i * DAY_MS).find((now) => !isBrave(LION.id, now)) ?? 0;
+            vi.spyOn(Date, "now").mockReturnValue(brave);
+            walk.pose = standing(100, 200, 52);
+            manager.setFreeCharacters([LION], manager.getWanderMap());
+            scene.update();
+            scene.avatars.push({ x: 104, y: 150 });
+            scene.update();
+            scene.update();
+            expect({ x: scene.sprite.x, y: scene.sprite.y }).toEqual({ x: 100, y: 148 });
+            vi.restoreAllMocks();
+        });
+
+        it("a led character is drawn at the altitude its lead tells", () => {
+            const scene = makeScene([], undefined, { withDuck: false });
+            manager = scene.manager;
+            manager.setFreeCharacters([LION], manager.getWanderMap());
+            manager.setCharacterLead(LION.id, { poseAt: () => standing(300, 400, 84) });
+            scene.update();
+            expect({ x: scene.sprite.x, y: scene.sprite.y }).toEqual({ x: 300, y: 316 });
+            expect(scene.sprite.depth).toBe(floorDepth(84, 316));
+            expect(manager.characterPose(LION.id)).toEqual({ x: 300, y: 316, moving: false, z: 84 });
+            expect(raisedOpeners(manager)).toEqual([{ x: 300, y: 300, elevation: 84 }]);
+        });
+
+        it("tells the map the raised floors, and closes the ground under the stairs", () => {
+            const scene = makeScene([], undefined, { withDuck: false, floors: { model: bridge() } });
+            manager = scene.manager;
+            const map = manager.getWanderMap();
+            expect(map.levelsAt?.({ x: 5, y: 5 })).toEqual([20]);
+            expect(map.levelsAt?.({ x: 5, y: 6 })).toEqual([]);
+            expect(map.isWalkable({ x: 3, y: 5 })).toBe(false);
+            expect(map.isWalkable({ x: 7, y: 5 })).toBe(false);
+            expect(map.isWalkable({ x: 2, y: 5 })).toBe(true);
+            // Under the deck, the ground is still the ground.
+            expect(map.isWalkable({ x: 5, y: 5 })).toBe(true);
+        });
+
+        it("finds a way over a bridge when the ground gives none, and to a raised floor", async () => {
+            const scene = makeScene([], undefined, { withDuck: false, floors: { model: bridge() } });
+            manager = scene.manager;
+            const map = manager.getWanderMap();
+            // The pathfinding of the ground finds nothing here (see the mock).
+            const over = await map.findPath(centre(1, 5), centre(9, 5));
+            expect(over[0]).toEqual(centre(1, 5));
+            expect(over.at(-1)).toEqual(centre(9, 5));
+            expect(over.filter((point) => point.z === 20).length).toBeGreaterThanOrEqual(4);
+            const up = await map.findPath(centre(1, 5), { ...centre(5, 5), z: 20 });
+            expect(up.at(-1)).toEqual({ ...centre(5, 5), z: 20 });
+        });
+
+        it("a map without raised floors tells none, and finds no way but the one of the ground", async () => {
+            const scene = makeScene([], undefined, { withDuck: false });
+            manager = scene.manager;
+            const map = manager.getWanderMap();
+            expect(map.levelsAt?.({ x: 5, y: 5 })).toEqual([]);
+            expect(await map.findPath(centre(1, 5), centre(9, 5))).toEqual([]);
+        });
+
+        it("floors that change make every character walk again", () => {
+            const floors = { model: bridge() };
+            const scene = makeScene([], undefined, { floors });
+            manager = scene.manager;
+            scene.reconcile();
+            scene.reconcile();
+            const before = walk.resets;
+            scene.reconcile();
+            expect(walk.resets).toBe(before);
+            // The map editor laid a slab: the floors of the avatars read a new model.
+            floors.model = bridge();
+            scene.reconcile();
+            expect(walk.resets).toBe(before + 1);
         });
     });
 });

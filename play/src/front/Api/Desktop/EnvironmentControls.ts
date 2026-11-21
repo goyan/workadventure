@@ -1,6 +1,12 @@
 import { get } from "svelte/store";
 import { z } from "zod";
-import { AutoWeather, DEFAULT_AUTO_WEATHER, Weather, WeatherType } from "@workadventure/map-editor";
+import {
+    AutoWeather,
+    DEFAULT_AUTO_WEATHER,
+    precipitationWeather,
+    Weather,
+    WeatherType,
+} from "@workadventure/map-editor";
 import { desktopGraphicsMetricsRequestedStore, perfStatsStore } from "../../Stores/PerfStore";
 import {
     applyGraphicsQuality,
@@ -112,7 +118,6 @@ export const desktopEnvironmentRequestSchema = z.discriminatedUnion("setting", [
 
 /** What an older desktop app shows in its three-choice Christmas control. */
 function legacyChristmasMode(mode: SeasonalThemeMode): LegacyChristmasMode {
-    if (mode === SeasonalThemeMode.Christmas) return "always";
     if (mode === SeasonalThemeMode.Auto) return "auto";
     return "never";
 }
@@ -121,7 +126,8 @@ function legacyChristmasMode(mode: SeasonalThemeMode): LegacyChristmasMode {
 export function desktopWeatherMode(weather: WeatherType | undefined): WeatherType {
     if (weather === WeatherType.Real) return WeatherType.Automatic;
     if (weather === WeatherType.Cloudy || weather === WeatherType.Fog) return WeatherType.Clear;
-    return weather ?? WeatherType.Clear;
+    // A map saved with a snow: the rain it now is.
+    return precipitationWeather(weather ?? WeatherType.Clear);
 }
 
 /** The same settings and editing rights as the web controls, read without opening their panels. */
@@ -137,9 +143,9 @@ export function readDesktopEnvironment(busy = false, error = ""): DesktopEnviron
         appearance: { palette: get(retroPaletteStore), font: get(uiFontStore) },
         // Keep the legacy values for older desktop clients; modern clients use the raw map fields below.
         weather: desktopWeatherMode(scene.getGameMap().getWamFile()?.getWam().settings?.weather),
-        displayWeather: desktopWeatherMode(scene.getDesktopWeather()),
+        displayWeather: desktopWeatherMode(scene.getMapWeather()),
         mapWeather: scene.getGameMap().getWamFile()?.getWam().settings?.weather ?? WeatherType.Clear,
-        mapDisplayWeather: scene.getDesktopWeather(),
+        mapDisplayWeather: scene.getMapWeather(),
         weatherAuto: scene.getGameMap().getWamFile()?.getWam().settings?.weatherAuto ?? DEFAULT_AUTO_WEATHER,
         clouds: get(cloudsShownStore),
         cloudsHeight: get(cloudsHeightStore),

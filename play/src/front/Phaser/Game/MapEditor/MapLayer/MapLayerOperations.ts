@@ -61,11 +61,6 @@ export function modelFromPlacedPrefabs(items: Iterable<PlacedPrefabLike>): MapLa
                     model.setFloor(item.x / size, item.y / size, piece.family);
                 }
                 break;
-            case "bridge":
-                if (item.x % size === 0 && item.y % size === 0) {
-                    model.setBridge(item.x / size, item.y / size);
-                }
-                break;
             case "window":
             case "facade": {
                 // The sprite fills the tile row of its line, raised by the height of the wall, and may start left of
@@ -327,15 +322,6 @@ export function applyFloor(
     }
 }
 
-/** Lays the deck of a bridge on the tiles of the map among `cells`. */
-export function applyBridge(model: MapLayerModel, cells: readonly Point[], bounds: MapBounds): void {
-    for (const cell of cells) {
-        if (inBounds(cell, bounds)) {
-            model.setBridge(cell.x, cell.y);
-        }
-    }
-}
-
 export function applyWalls(
     model: MapLayerModel,
     edges: readonly WallEdgeRef[],
@@ -416,8 +402,7 @@ export function eraseAt(
         return false;
     }
     const cell = cellAt(worldX, worldY);
-    // The deck of a bridge lies over the floor of its tile: it goes first.
-    if (!model.removeBridge(cell.x, cell.y)) model.removeFloor(cell.x, cell.y);
+    model.removeFloor(cell.x, cell.y);
     return false;
 }
 
@@ -426,7 +411,6 @@ export type EraseTarget =
     | { kind: "door"; door: DoorRef }
     | { kind: "window"; wall: WallEdgeRef }
     | { kind: "wall"; wall: WallEdgeRef }
-    | { kind: "bridge"; cell: Point }
     | { kind: "floor"; cell: Point };
 
 export function eraseTargetAt(
@@ -444,7 +428,6 @@ export function eraseTargetAt(
             : { kind: "wall", wall };
     }
     const cell = cellAt(worldX, worldY);
-    if (model.hasBridge(cell.x, cell.y)) return { kind: "bridge", cell };
     return model.getFloor(cell.x, cell.y) ? { kind: "floor", cell } : undefined;
 }
 
@@ -477,21 +460,20 @@ export function eraseWallsAlong(model: MapLayerModel, start: Point, end: Point):
     }
 }
 
-/** Removes the floors an eraser drag started on a floor passes over: its straight line and the tiles visited; walls stay. */
-export function eraseFloorsAlong(model: MapLayerModel, start: Point, end: Point, path: readonly Point[]): void {
+/** The tiles an eraser drag passes over: its straight line, then the tiles visited (some more than once). */
+export function floorCellsAlong(start: Point, end: Point, path: readonly Point[]): Point[] {
+    const cells: Point[] = [];
     // Steps shorter than a tile, so no tile of the line is jumped over.
     const steps = Math.max(1, Math.ceil(Math.hypot(end.x - start.x, end.y - start.y) / 8));
-    // The deck of a bridge goes first, and the floor under it stays, however many times the drag visits its tile.
-    const unbridged = new Set<string>();
-    const erase = (cell: Point): void => {
-        const key = `${cell.x},${cell.y}`;
-        if (model.removeBridge(cell.x, cell.y)) unbridged.add(key);
-        else if (!unbridged.has(key)) model.removeFloor(cell.x, cell.y);
-    };
     for (let step = 0; step <= steps; step++) {
-        erase(cellAt(start.x + ((end.x - start.x) * step) / steps, start.y + ((end.y - start.y) * step) / steps));
+        cells.push(cellAt(start.x + ((end.x - start.x) * step) / steps, start.y + ((end.y - start.y) * step) / steps));
     }
-    for (const cell of path) erase(cell);
+    return [...cells, ...path];
+}
+
+/** Removes the floors an eraser drag started on a floor passes over: its straight line and the tiles visited; walls stay. */
+export function eraseFloorsAlong(model: MapLayerModel, start: Point, end: Point, path: readonly Point[]): void {
+    for (const cell of floorCellsAlong(start, end, path)) model.removeFloor(cell.x, cell.y);
 }
 
 /** Pixel rectangle of a door itself: its opening along the wall (the swinging leaves are not counted). */

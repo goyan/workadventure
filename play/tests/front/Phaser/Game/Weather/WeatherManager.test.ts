@@ -9,6 +9,8 @@ const sounds = vi.hoisted(() => ({ update: vi.fn() }));
 const surface = vi.hoisted(() => ({
     /** How many times the canvas of the clouds was painted again. */
     begins: 0,
+    /** The depth each block surface was made at, in order. */
+    depths: [] as number[],
     graphics: undefined as
         | undefined
         | {
@@ -21,52 +23,67 @@ vi.mock("../../../../../src/front/Phaser/Game/Weather/BlockSurface", () => {
     let canvas: Cells = { x: 0, y: 0, columns: 0, rows: 0 };
     let size = 1;
     return {
-        createBlockSurface: () => ({
-            begin(view: { x: number; y: number; width: number; height: number }, resolution: number): Cells {
-                surface.begins++;
-                size = resolution;
-                canvas = {
-                    x: Math.floor(view.x / resolution) * resolution,
-                    y: Math.floor(view.y / resolution) * resolution,
-                    columns: Math.ceil(view.width / resolution) + 1,
-                    rows: Math.ceil(view.height / resolution) + 1,
-                };
-                return canvas;
-            },
-            // Each painted cell as a rectangle of the map, by level, like the blocks drawn before the canvas.
-            paintField(
-                field: Cells,
-                levels: Uint8Array,
-                outdoor: Uint8Array,
-                shift: { columns: number; rows: number },
-                color: number,
-                alphaOf: (level: number) => number,
-            ): void {
-                const columnOffset = Math.round((canvas.x - field.x) / size) - shift.columns;
-                const lineOffset = Math.round((canvas.y - field.y) / size) - shift.rows;
-                for (let level = 1; level <= 8; level++) {
-                    let styled = false;
-                    for (let line = 0; line < canvas.rows; line++) {
-                        for (let column = 0; column < canvas.columns; column++) {
-                            if (!outdoor[line * canvas.columns + column]) continue;
-                            const fieldLine = line + lineOffset;
-                            const fieldColumn = column + columnOffset;
-                            if (fieldLine < 0 || fieldLine >= field.rows || fieldColumn < 0) continue;
-                            if (fieldColumn >= field.columns) continue;
-                            if (levels[fieldLine * field.columns + fieldColumn] !== level) continue;
-                            if (!styled) surface.graphics?.fillStyle(color, alphaOf(level));
-                            styled = true;
-                            surface.graphics?.fillRect(canvas.x + column * size, canvas.y + line * size, size, size);
+        createBlockSurface: (_scene: unknown, depth: number) => {
+            surface.depths.push(depth);
+            return {
+                begin(view: { x: number; y: number; width: number; height: number }, resolution: number): Cells {
+                    surface.begins++;
+                    size = resolution;
+                    canvas = {
+                        x: Math.floor(view.x / resolution) * resolution,
+                        y: Math.floor(view.y / resolution) * resolution,
+                        columns: Math.ceil(view.width / resolution) + 1,
+                        rows: Math.ceil(view.height / resolution) + 1,
+                    };
+                    return canvas;
+                },
+                // Each painted cell as a rectangle of the map, by level, like the blocks drawn before the canvas.
+                paintField(
+                    field: Cells,
+                    levels: Uint8Array,
+                    outdoor: Uint8Array,
+                    shift: { columns: number; rows: number },
+                    color: number,
+                    alphaOf: (level: number) => number,
+                ): void {
+                    const columnOffset = Math.round((canvas.x - field.x) / size) - shift.columns;
+                    const lineOffset = Math.round((canvas.y - field.y) / size) - shift.rows;
+                    for (let level = 1; level <= 8; level++) {
+                        let styled = false;
+                        for (let line = 0; line < canvas.rows; line++) {
+                            for (let column = 0; column < canvas.columns; column++) {
+                                if (!outdoor[line * canvas.columns + column]) continue;
+                                const fieldLine = line + lineOffset;
+                                const fieldColumn = column + columnOffset;
+                                if (fieldLine < 0 || fieldLine >= field.rows || fieldColumn < 0) continue;
+                                if (fieldColumn >= field.columns) continue;
+                                if (levels[fieldLine * field.columns + fieldColumn] !== level) continue;
+                                if (!styled) surface.graphics?.fillStyle(color, alphaOf(level));
+                                styled = true;
+                                surface.graphics?.fillRect(
+                                    canvas.x + column * size,
+                                    canvas.y + line * size,
+                                    size,
+                                    size,
+                                );
+                            }
                         }
                     }
-                }
-            },
-            end(): void {},
-            hide(): void {},
-            destroy(): void {},
-        }),
+                },
+                end(): void {},
+                hide(): void {},
+                destroy(): void {},
+            };
+        },
     };
 });
+const ground = vi.hoisted(() => ({ update: vi.fn(), destroy: vi.fn() }));
+vi.mock("../../../../../src/front/Phaser/Game/Weather/SnowGround", () => ({
+    SnowGround: class {
+        public update = ground.update;
+        public destroy = ground.destroy;
+    },
+}));
 vi.mock("../../../../../src/front/Stores/MapEditorStore", () => ({ mapEditorModeStore: writable(false) }));
 vi.mock("../../../../../src/front/Phaser/Game/Weather/WeatherSounds", () => ({
     WeatherSounds: class {
@@ -85,6 +102,8 @@ const { SeasonalTheme, SeasonalThemeMode } =
     await import("../../../../../src/front/Phaser/Game/Seasonal/SeasonalTheme");
 const { seasonalThemeModeStore } = await import("../../../../../src/front/Stores/SeasonalThemeStore");
 const { OutdoorGrid } = await import("../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid");
+const { DEPTH_DOOR_LOCK_INDEX, DEPTH_LAMP_LIGHT_INDEX } =
+    await import("../../../../../src/front/Phaser/Game/DepthIndexes");
 const { NIGHT_CLOUD_COLOR } = await import("../../../../../src/front/Phaser/Game/Weather/Clouds");
 
 let manager: InstanceType<typeof WeatherManager> | undefined;
@@ -95,6 +114,8 @@ afterEach(() => {
     sounds.update.mockClear();
     manager?.destroy();
     manager = undefined;
+    ground.update.mockClear();
+    ground.destroy.mockClear();
     weatherEffectsEnabledStore.set(true);
     cloudsShownStore.set(true);
     cloudsHeightStore.set(0);
@@ -145,9 +166,13 @@ describe("weather rendering lifecycle", () => {
         expect(scene.markDirty.mock.calls).toHaveLength(1);
         manager.update(40, new Date(40));
         expect(scene.markDirty.mock.calls).toHaveLength(2);
+        // A map saved with a snow rains like any rain: no flake without the cold.
+        const drops = graphics.lineTo.mock.calls.length;
         wam.settings = { weather: WeatherType.Snow };
         manager.update(80, new Date(80));
-        expect(graphics.fillRect.mock.calls).toContainEqual([expect.any(Number), expect.any(Number), 2, 2]);
+        expect(graphics.lineTo.mock.calls.length).toBeGreaterThan(drops);
+        expect(graphics.fillRect.mock.calls).not.toContainEqual([expect.any(Number), expect.any(Number), 2, 2]);
+        expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Rain);
         wam.settings = { weather: WeatherType.Clear };
         manager.update(90, new Date(90));
         expect(graphics.setVisible.mock.lastCall).toEqual([false]);
@@ -155,6 +180,44 @@ describe("weather rendering lifecycle", () => {
         manager = undefined;
         // The weather and the puddles each have their graphics.
         expect(graphics.destroy.mock.calls).toHaveLength(2);
+        expect(ground.destroy).toHaveBeenCalledOnce();
+    });
+
+    it("lets the rain fall as flakes in the cold of the room, as both in a sleet, and tells the sounds", () => {
+        const flake = [expect.any(Number), expect.any(Number), 2, 2];
+        const drawn = (snow: number | undefined, weather = WeatherType.Rain) => {
+            const { scene, graphics, wam } = fixture();
+            wam.settings = { weather };
+            manager?.destroy();
+            manager = new WeatherManager(scene, snow === undefined ? {} : { snowShare: () => snow });
+            manager.update(0, new Date(0));
+            return {
+                drops: graphics.lineTo.mock.calls.length,
+                flakes: graphics.fillRect.mock.calls.filter(([, , width, height]) => width === 2 && height === 2)
+                    .length,
+                graphics,
+            };
+        };
+        const rain = drawn(undefined);
+        expect(rain.drops).toBeGreaterThan(0);
+        expect(rain.flakes).toBe(0);
+        expect(sounds.update.mock.lastCall?.[5]).toBe(0);
+        const snow = drawn(1);
+        expect(snow.drops).toBe(0);
+        expect(snow.flakes).toBeGreaterThan(0);
+        expect(snow.graphics.fillRect.mock.calls).toContainEqual(flake);
+        // The weather stays a rain: only its form changed.
+        expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Rain);
+        expect(sounds.update.mock.lastCall?.[5]).toBe(1);
+        const sleet = drawn(0.5);
+        expect(sleet.drops).toBeGreaterThan(0);
+        expect(sleet.drops).toBeLessThan(rain.drops);
+        expect(sleet.flakes).toBeGreaterThan(0);
+        expect(sleet.flakes).toBeLessThan(snow.flakes);
+        // Nothing falls from a clear sky or a fog, however cold.
+        expect(drawn(1, WeatherType.Clear).flakes).toBe(0);
+        expect(sounds.update.mock.lastCall?.[5]).toBe(0);
+        expect(drawn(1, WeatherType.Fog).flakes).toBe(0);
     });
 
     it("draws nothing and asks no redraw while no outside is in view", () => {
@@ -192,27 +255,16 @@ describe("weather rendering lifecycle", () => {
         expect(blocksPerSecond(64)).toBe(6);
     });
 
-    it("moves the leaves 15 times a second, the rain 30 times", () => {
-        const { scene, graphics, wam } = fixture();
-        wam.settings = { weather: WeatherType.Clear };
-        manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Autumn });
-        manager.update(0, new Date(0));
-        manager.update(40, new Date(40));
-        expect(graphics.clear.mock.calls).toHaveLength(1);
-        manager.update(70, new Date(70));
-        expect(graphics.clear.mock.calls).toHaveLength(2);
-    });
-
     it("changes graphics and sounds together at the shared server boundary", () => {
         const { scene, graphics, wam } = fixture();
         wam.settings = { weather: WeatherType.Automatic };
-        // Find, on the real schedule, a rainy slot, a later snowy one, then the first dry slot after that.
+        // Find, on the real schedule, a rainy slot, then the first slot without rain after it.
         const slot = 30 * 60 * 1000;
         let t = Date.parse("2026-01-05T00:00:00Z");
         const next = (weather: (typeof WeatherType)[keyof typeof WeatherType] | "dry"): number => {
             while (
                 weather === "dry"
-                    ? autoWeatherAt(new Date(t)) === WeatherType.Snow
+                    ? autoWeatherAt(new Date(t)) === WeatherType.Rain
                     : autoWeatherAt(new Date(t)) !== weather
             ) {
                 t += slot;
@@ -221,7 +273,6 @@ describe("weather rendering lifecycle", () => {
             return t;
         };
         const rainy = next(WeatherType.Rain);
-        const snowy = next(WeatherType.Snow);
         const dry = next("dry");
         expect(slotStart(new Date(dry)).getTime()).toBe(dry);
         manager = new WeatherManager(scene);
@@ -230,12 +281,10 @@ describe("weather rendering lifecycle", () => {
         manager.update(40, new Date(rainy));
         expect(graphics.lineTo.mock.calls.length).toBeGreaterThan(0);
         expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Rain);
-        manager.update(80, new Date(snowy));
-        expect(graphics.fillRect.mock.calls).toContainEqual([expect.any(Number), expect.any(Number), 2, 2]);
-        expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Snow);
         manager.update(120, new Date(dry));
         expect(sounds.update.mock.lastCall?.[0]).toBe(autoWeatherAt(new Date(dry)));
-        expect(sounds.update.mock.lastCall?.[0]).not.toBe(WeatherType.Snow);
+        expect(sounds.update.mock.lastCall?.[0]).not.toBe(WeatherType.Rain);
+        expect(ground.update.mock.lastCall?.[2]).toBe(true);
     });
 
     it("hands the map's automatic settings to the schedule and the sounds", () => {
@@ -255,29 +304,33 @@ describe("weather rendering lifecycle", () => {
         weatherEffectsEnabledStore.set(false);
         manager.update(1, new Date(1));
         expect(graphics.setVisible.mock.lastCall).toEqual([false]);
+        expect(ground.update.mock.lastCall?.[2]).toBe(true);
         weatherEffectsEnabledStore.set(true);
         manager.update(2, new Date(2));
         expect(graphics.setVisible.mock.lastCall).toEqual([true]);
         mapEditorModeStore.set(true);
         manager.update(3, new Date(3));
         expect(graphics.setVisible.mock.lastCall).toEqual([false]);
+        expect(ground.update.mock.lastCall?.[2]).toBe(false);
     });
 
-    it("keeps the rain sounds for the autumn theme", () => {
+    it("draws green grass without a theme, also on a map saved with a snow", () => {
+        const { scene, wam } = fixture();
+        wam.settings = { weather: WeatherType.Snow, weatherStartedAt: 123 };
+        manager = new WeatherManager(scene);
+        const date = new Date(456);
+        manager.update(0, date);
+        expect(ground.update).toHaveBeenLastCalledWith(0, date, true, false);
+    });
+
+    it("passes the autumn ground for the autumn theme", () => {
         const { scene, wam } = fixture();
         wam.settings = { weather: WeatherType.Rain };
         manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Autumn });
         manager.update(0, new Date(0));
+        expect(ground.update.mock.lastCall?.[2]).toBe(true);
+        expect(ground.update.mock.lastCall?.[3]).toBe(true);
         expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Rain);
-    });
-
-    it("draws snow when christmas is active on a clear map", () => {
-        const { scene, graphics, wam } = fixture();
-        wam.settings = { weather: WeatherType.Clear };
-        manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Christmas });
-        manager.update(0, new Date(0));
-        expect(graphics.fillRect.mock.calls).toContainEqual([expect.any(Number), expect.any(Number), 2, 2]);
-        expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Snow);
     });
 
     describe("storm", () => {
@@ -335,51 +388,29 @@ describe("weather rendering lifecycle", () => {
         }
     });
 
-    it("draws falling leaves on a clear map", () => {
+    // In autumn the leaves come from the trees (Nature/TreeLeafFall, Autumn/LeafScatterLayer): none fall from the sky.
+    it("draws nothing on a clear map in autumn", () => {
         const { scene, graphics, wam } = fixture();
         wam.settings = { weather: WeatherType.Clear };
         manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Autumn });
-        manager.update(0, new Date(0));
-        const leaves = graphics.fillRect.mock.calls.filter(
-            ([, , width, height]) => (width === 4 && height === 3) || (width === 3 && height === 4),
-        );
-        expect(leaves.length).toBeGreaterThan(0);
-        expect(graphics.setVisible.mock.lastCall).toEqual([true]);
-    });
-
-    it("keeps falling leaves outdoors only", () => {
-        const { scene, graphics, wam } = fixture();
-        wam.settings = { weather: WeatherType.Clear };
-        scene.cameras.main.worldView.width = 320;
-        scene.cameras.main.worldView.height = 320;
-        const grid = OutdoorGrid.fromWalls(320, 320, 32, [
-            { x: 64, y: 64, width: 160, height: 32 },
-            { x: 64, y: 192, width: 160, height: 32 },
-            { x: 64, y: 96, width: 32, height: 96 },
-            { x: 192, y: 96, width: 32, height: 96 },
-        ]);
-        manager = new WeatherManager(scene, { outdoorGrid: () => grid, seasonalTheme: () => SeasonalTheme.Autumn });
-        for (let time = 0; time < 20_000; time += 1000) manager.update(time, new Date(time));
-        expect(graphics.fillRect.mock.calls.length).toBeGreaterThan(0);
-        for (const [x, y] of graphics.fillRect.mock.calls) expect(grid.isOutdoorAt(x, y)).toBe(true);
-    });
-
-    it("stops falling leaves with the weather switch", () => {
-        const { scene, graphics, wam } = fixture();
-        wam.settings = { weather: WeatherType.Clear };
-        manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Autumn });
-        manager.update(0, new Date(0));
-        weatherEffectsEnabledStore.set(false);
-        manager.update(100, new Date(100));
-        expect(graphics.setVisible.mock.lastCall).toEqual([false]);
-    });
-
-    it("draws no leaves without the autumn theme", () => {
-        const { scene, graphics, wam } = fixture();
-        wam.settings = { weather: WeatherType.Clear };
-        manager = new WeatherManager(scene);
-        manager.update(0, new Date(0));
+        for (let time = 0; time < 2000; time += 100) manager.update(time, new Date(time));
         expect(graphics.fillRect.mock.calls).toHaveLength(0);
+        expect(graphics.setVisible.mock.calls).not.toContainEqual([true]);
+        expect(scene.markDirty.mock.calls).toHaveLength(0);
+    });
+
+    it("draws the same rain in autumn as without a theme", () => {
+        const draw = (theme?: (typeof SeasonalTheme)[keyof typeof SeasonalTheme]) => {
+            const { scene, graphics, wam } = fixture();
+            wam.settings = { weather: WeatherType.Rain };
+            manager = new WeatherManager(scene, { seasonalTheme: () => theme });
+            manager.update(0, new Date(0));
+            const rects = graphics.fillRect.mock.calls.map((call) => [...call]);
+            manager.destroy();
+            manager = undefined;
+            return rects;
+        };
+        expect(draw(SeasonalTheme.Autumn)).toEqual(draw(undefined));
     });
 
     describe("fog", () => {
@@ -518,6 +549,88 @@ describe("weather rendering lifecycle", () => {
             expect(scene.markDirty.mock.calls).toHaveLength(4);
         });
 
+        // Seen from far, bright rooms and their lamps stood out of a map washed by the fog (the team map in the beta).
+        describe("seen from far", () => {
+            const covers = (graphics: ReturnType<typeof fixture>["graphics"], x: number, y: number) =>
+                graphics.fillRect.mock.calls.some(
+                    ([left, top, width, height]) => left <= x && x < left + width && top <= y && y < top + height,
+                );
+            // Two closed rooms, the avatar in the first one.
+            const twoRooms = () => {
+                const { scene, graphics, wam } = fixture();
+                wam.settings = { weather: WeatherType.Fog };
+                scene.cameras.main.worldView.width = 640;
+                scene.cameras.main.worldView.height = 320;
+                const grid = OutdoorGrid.fromWalls(640, 320, 32, [
+                    { x: 64, y: 64, width: 160, height: 32 },
+                    { x: 64, y: 192, width: 160, height: 32 },
+                    { x: 64, y: 96, width: 32, height: 96 },
+                    { x: 192, y: 96, width: 32, height: 96 },
+                    { x: 352, y: 64, width: 160, height: 32 },
+                    { x: 352, y: 192, width: 160, height: 32 },
+                    { x: 352, y: 96, width: 32, height: 96 },
+                    { x: 480, y: 96, width: 32, height: 96 },
+                ]);
+                return { scene, graphics, grid };
+            };
+
+            it("passes over the other buildings, never over the room the avatar stands in", () => {
+                const { scene, graphics, grid } = twoRooms();
+                scene.cameras.main.zoom = 0.3;
+                manager = new WeatherManager(scene, {
+                    outdoorGrid: () => grid,
+                    avatarRoom: () => grid.roomAt(144, 144),
+                });
+                manager.update(0, new Date(0));
+                expect(covers(graphics, 432, 144)).toBe(true);
+                expect(covers(graphics, 144, 144)).toBe(false);
+                // The veil over the buildings as thick as outdoors.
+                expect(fogFill(graphics).some(([, alpha]) => Math.abs((alpha ?? 0) - 0.6) < 1e-9)).toBe(true);
+            });
+
+            it("leaves the rooms clear seen from close", () => {
+                const { scene, graphics, grid } = twoRooms();
+                scene.cameras.main.zoom = 1;
+                manager = new WeatherManager(scene, { outdoorGrid: () => grid, avatarRoom: () => undefined });
+                manager.update(0, new Date(0));
+                expect(covers(graphics, 432, 144)).toBe(false);
+                expect(covers(graphics, 144, 144)).toBe(false);
+            });
+
+            it("thickens over the buildings as the camera rises, with no jump", () => {
+                const veilOverRoom = (zoom: number) => {
+                    const { scene, graphics, grid } = twoRooms();
+                    scene.cameras.main.zoom = zoom;
+                    manager?.destroy();
+                    manager = new WeatherManager(scene, { outdoorGrid: () => grid });
+                    manager.update(0, new Date(0));
+                    const order = graphics.fillStyle.mock.invocationCallOrder;
+                    // The style last set before the rectangle drawn over the centre of the second room.
+                    const index = graphics.fillRect.mock.calls.findIndex(
+                        ([left, top, width, height]) =>
+                            left <= 432 && 432 < left + width && top <= 144 && 144 < top + height,
+                    );
+                    if (index < 0) return 0;
+                    const at = graphics.fillRect.mock.invocationCallOrder[index];
+                    const style = order.filter((call) => call < at).length - 1;
+                    return graphics.fillStyle.mock.calls[style][1] ?? 0;
+                };
+                const middle = veilOverRoom(0.575);
+                expect(veilOverRoom(0.7)).toBe(0);
+                expect(middle).toBeGreaterThan(0.2);
+                expect(middle).toBeLessThan(0.4);
+                expect(veilOverRoom(0.45)).toBeCloseTo(0.6, 5);
+            });
+
+            it("lies over the lights of the lamps", () => {
+                surface.depths.length = 0;
+                const { scene } = fixture();
+                manager = new WeatherManager(scene);
+                expect(surface.depths).toContain(DEPTH_LAMP_LIGHT_INDEX + 10);
+                expect(Math.max(...surface.depths)).toBeLessThan(DEPTH_DOOR_LOCK_INDEX);
+            });
+        });
+
         it("keeps the sound of fine weather", () => {
             const { scene, wam } = fixture();
             wam.settings = { weather: WeatherType.Fog };
@@ -526,31 +639,10 @@ describe("weather rendering lifecycle", () => {
             expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Fog);
         });
 
-        it("shows the Christmas snow rather than the map fog", () => {
+        it("draws the flakes of a cold rain in autumn, with no leaf falling from the sky", () => {
             const { scene, graphics, wam } = fixture();
-            wam.settings = { weather: WeatherType.Fog };
-            manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Christmas });
-            manager.update(0, new Date(0));
-            expect(graphics.fillRect.mock.calls).toContainEqual([expect.any(Number), expect.any(Number), 2, 2]);
-            expect(fogFill(graphics)).toHaveLength(0);
-        });
-
-        it("lets the autumn leaves fall through the fog", () => {
-            const { scene, graphics, wam } = fixture();
-            wam.settings = { weather: WeatherType.Fog };
-            manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Autumn });
-            manager.update(0, new Date(0));
-            const leaves = graphics.fillRect.mock.calls.filter(
-                ([, , width, height]) => (width === 4 && height === 3) || (width === 3 && height === 4),
-            );
-            expect(leaves.length).toBeGreaterThan(0);
-            expect(fogFill(graphics).length).toBeGreaterThan(0);
-        });
-
-        it("stops the falling leaves while it snows", () => {
-            const { scene, graphics, wam } = fixture();
-            wam.settings = { weather: WeatherType.Snow };
-            manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Autumn });
+            wam.settings = { weather: WeatherType.Rain };
+            manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Autumn, snowShare: () => 1 });
             manager.update(0, new Date("2026-01-12T12:00:00Z"));
             const leaves = graphics.fillRect.mock.calls.filter(
                 ([, , width, height]) => (width === 4 && height === 3) || (width === 3 && height === 4),

@@ -79,6 +79,13 @@
         return Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : fallback;
     }
 
+    /** What the switch acts on: the light of the lamps, or the hot water of the pools (it never freezes). */
+    function setKey(key: "on" | "hot"): void {
+        if (property.key === key) return;
+        property.key = key;
+        onchange?.();
+    }
+
     function setMode(mode: "zone" | "ids"): void {
         if (property.targets.mode === mode) return;
         // On a lamp the chosen lamps start with the lamp itself.
@@ -302,6 +309,27 @@
                 </div>
                 <p class="m-0 mb-3 text-sm text-white/70">{labels.hoursParis()}</p>
             {/if}
+            <p class="m-0 mb-1 text-sm">{labels.acts()}</p>
+            <label class="flex items-center gap-2 text-sm mb-1">
+                <input
+                    type="radio"
+                    name="switch-key-{property.id}"
+                    data-testid="switchKeyOn"
+                    checked={property.key === "on"}
+                    onchange={() => setKey("on")}
+                />
+                {labels.keyOn()}
+            </label>
+            <label class="flex items-center gap-2 text-sm mb-3">
+                <input
+                    type="radio"
+                    name="switch-key-{property.id}"
+                    data-testid="switchKeyHot"
+                    checked={property.key === "hot"}
+                    onchange={() => setKey("hot")}
+                />
+                {labels.keyHot()}
+            </label>
             <p class="m-0 mb-1 text-sm">{labels.commands()}</p>
             <label class="flex items-center gap-2 text-sm mb-1">
                 <input

@@ -12,7 +12,6 @@ import {
     mapLayerGlazedDoorHeightsAvailableStore,
     mapLayerGlazedDoorsAvailableStore,
     mapLayerDoorsAvailableStore,
-    mapLayerBridgesAvailableStore,
     mapLayerHeightRequestStore,
     mapLayerHeightSelectionStore,
     mapLayerFloorFamilyStore,
@@ -30,10 +29,10 @@ import {
     mapLayerFloorsAvailableStore,
     mapLayerGlassSlabsAvailableStore,
     mapLayerShortStairsAvailableStore,
+    mapLayerBridgePiecesAvailableStore,
     mapLayerPickLevelStore,
     mapLayerLevelStore,
     mapLayerLevelsStore,
-    isWallLevelMode,
     mapLayerUpperWallsAvailableStore,
     usesLevel,
 } from "../../../../Stores/MapLayerStore";
@@ -47,16 +46,12 @@ import { MapDragPointerCapture } from "../../../UserInput/MapDragPointerCapture"
 import {
     MAP_LAYER_DOOR_COLLECTION,
     MAP_LAYER_FLOOR_COLLECTION,
-    MAP_LAYER_BRIDGE_COLLECTION,
-    bridgePrefabName,
     MAP_LAYER_FLOOR_FAMILIES,
     MAP_LAYER_TILE_SIZE,
     MAP_LAYER_WALL_HEIGHTS,
     MAP_LAYER_WALL_TINTS,
     MAP_LAYER_WALL_COLLECTION,
     MAP_LAYER_WINDOW_COLLECTION,
-    WALL_HALF,
-    WALL_THICKNESS,
     doorPrefabName,
     facadePrefabName,
     floorPrefabName,
@@ -71,10 +66,11 @@ import { applyHeight, buildHeightPicker, selectionHeight } from "../MapLayer/Map
 import type { HeightPicker, HeightTarget } from "../MapLayer/MapLayerHeightEdit";
 import type { MapLayerPlacement, PlacedMapLayerEntity } from "../MapLayer/MapLayerAutotile";
 import type { MapLayerModel } from "../MapLayer/MapLayerModel";
+import { FloorModel } from "../MapLayer/FloorModel";
+import type { MapLayerMode } from "../../../../Stores/MapLayerStore";
 import {
     applyDoorPlan,
     applyFloor,
-    applyBridge,
     applyRoom,
     applyWalls,
     applyWindows,
@@ -83,12 +79,6 @@ import {
     cellsBetween,
     doorPixelRect,
     doorUnderPoint,
-    ERASER_VERTICAL_HIT_WIDTH,
-    eraseAt,
-    eraseFloorsAlong,
-    eraseTargetAt,
-    eraseWallsAlong,
-    wallEdgesToErase,
     floodFillCells,
     lineWallEdges,
     modelFromPlacedPrefabs,
@@ -97,7 +87,7 @@ import {
     vertexAt,
     windowEdgesBetween,
 } from "../MapLayer/MapLayerOperations";
-import type { DoorHeightSetting, DoorPlanOptions, MapBounds, Point } from "../MapLayer/MapLayerOperations";
+import type { DoorHeightSetting, DoorPlan, DoorPlanOptions, MapBounds, Point } from "../MapLayer/MapLayerOperations";
 import {
     MAP_LAYER_FLOOR_SLAB_COLLECTION,
     SLAB_GLASS_FAMILY,
@@ -105,6 +95,16 @@ import {
     stairPrefabName,
 } from "../MapLayer/MapLayerFloors";
 import { stepLevel, steppableLevels } from "../MapLayer/FloorOperations";
+import {
+    applyErase,
+    erasePlan,
+    eraseTargetUnder,
+    isWallLayerRef,
+    stairImageUnderPoint,
+    windowTargetUnder,
+} from "../MapLayer/MapLayerTarget";
+import type { TargetScene } from "../MapLayer/MapLayerTarget";
+import type { Rect } from "../../Outdoor/OutdoorGrid";
 import { FLOOR_PREVIEW_DEPTH } from "../MapLayer/FloorDepth";
 import { levelItems, levelOfWallAt, levelPlacedKey, levelPlacements, upperPrefabOf } from "../MapLayer/MapLayerLevels";
 import type { LevelPlaced } from "../MapLayer/MapLayerLevels";
@@ -118,6 +118,10 @@ function availableHeight(chosen: WallHeight, available: readonly WallHeight[]): 
 
 /** The walls, doors and windows selected in the height mode. */
 const HEIGHT_SELECTION_COLOR = 0x3b82f6;
+/** What a click or a drag of the eraser removes. */
+const ERASE_COLOR = 0xff3b30;
+/** What a press grabs, to move it: a placed window. */
+const GRAB_COLOR = 0xffffff;
 
 /** Above every entity, those of the raised floors too: the preview must stay readable over them. */
 const PREVIEW_DEPTH = FLOOR_PREVIEW_DEPTH;
@@ -137,6 +141,10 @@ interface Gesture {
     baseModel: MapLayerModel;
     /** In the window mode, a press on a placed window moves it: the tile of that window. */
     movedWindow?: Point;
+    /** The tile pressed when a window was grabbed (by its foot, its pane or its lintel): the window follows its moves. */
+    grabCell?: Point;
+    /** In the eraser mode, the map read when the gesture starts, for the preview of what it removes. */
+    eraseScene?: TargetScene;
     /** In the height mode, what the drag picks, read from the model of the start of the gesture. */
     picker?: HeightPicker;
 }
@@ -236,7 +244,12 @@ export class MapLayerEditorTool extends MapEditorTool {
             this.redraw();
         });
         // The selection belongs to the height mode: choosing another mode lets it go.
+        let previousMode: MapLayerMode | undefined;
         this.unsubscribeMode = mapLayerModeStore.subscribe((mode) => {
+            // The eraser starts on "auto": it removes what is drawn under the pointer, whatever its level. A level
+            // chosen afterwards in the panel restricts it to that level.
+            if (mode === "erase" && previousMode !== "erase") mapEditorPlacementLevelStore.set("auto");
+            previousMode = mode;
             if (mode !== "height" && this.heightSelection.length > 0) {
                 this.setHeightSelection([], undefined);
                 this.redraw();
@@ -292,10 +305,7 @@ export class MapLayerEditorTool extends MapEditorTool {
             mapLayerPickLevelStore.set(false);
         }
         // Page Up and Page Down change the floor being edited, in the modes of the raised floors.
-        if (
-            (event.key === "PageUp" || event.key === "PageDown") &&
-            usesLevel(get(mapLayerModeStore), get(mapLayerUpperWallsAvailableStore))
-        ) {
+        if ((event.key === "PageUp" || event.key === "PageDown") && this.modeUsesLevel(get(mapLayerModeStore))) {
             event.preventDefault();
             // One level up or down: a level chosen, any level (with or without slabs).
             mapEditorPlacementLevelStore.set(
@@ -319,7 +329,6 @@ export class MapLayerEditorTool extends MapEditorTool {
         mapLayerCatalogAvailableStore.set(undefined);
         // The doors of the previous room must not stay available while this room's catalogs are checked.
         mapLayerDoorsAvailableStore.set(false);
-        mapLayerBridgesAvailableStore.set(false);
         mapLayerGlazedDoorsAvailableStore.set(false);
         mapLayerWindowsAvailableStore.set(false);
         mapLayerWallHeightsAvailableStore.set([1]);
@@ -368,14 +377,16 @@ export class MapLayerEditorTool extends MapEditorTool {
             ),
         );
         mapLayerShortStairsAvailableStore.set(shortStair !== undefined);
-        if (slab === undefined && isFloorMode(get(mapLayerModeStore))) mapLayerModeStore.set("wall");
-        // The bridges are optional too: without their catalog the mode is disabled.
-        const bridge = await manager.getEntityPrefab(
-            MAP_LAYER_BRIDGE_COLLECTION,
-            mapLayerPrefabId(MAP_LAYER_BRIDGE_COLLECTION, bridgePrefabName(0)),
+        // The pieces of the bridges (slab of wood, ramps, low floor) came last.
+        const ramp = await manager.getEntityPrefab(
+            MAP_LAYER_FLOOR_SLAB_COLLECTION,
+            mapLayerPrefabId(
+                MAP_LAYER_FLOOR_SLAB_COLLECTION,
+                stairPrefabName({ direction: "n", width: 1, rise: 20, open: true, ramp: true }),
+            ),
         );
-        mapLayerBridgesAvailableStore.set(bridge !== undefined);
-        if (bridge === undefined && get(mapLayerModeStore) === "bridge") mapLayerModeStore.set("wall");
+        mapLayerBridgePiecesAvailableStore.set(ramp !== undefined);
+        if (slab === undefined && isFloorMode(get(mapLayerModeStore))) mapLayerModeStore.set("wall");
         // The doors are optional: a room whose catalogs do not have them keeps the floors and the walls.
         const door = await manager.getEntityPrefab(
             MAP_LAYER_DOOR_COLLECTION,
@@ -494,9 +505,20 @@ export class MapLayerEditorTool extends MapEditorTool {
      * which have their own modes).
      */
     private editedLevel(): number {
-        return isWallLevelMode(get(mapLayerModeStore)) && get(mapLayerUpperWallsAvailableStore)
+        return this.modeUsesLevel(get(mapLayerModeStore)) && !isFloorMode(get(mapLayerModeStore))
             ? get(mapLayerLevelStore)
             : 0;
+    }
+
+    /**
+     * Whether a mode edits the level chosen in the panel. The eraser does as soon as the room has raised floors: it
+     * removes their slabs and stairs too, even where the walls of the raised floors are not in the catalogs.
+     */
+    private modeUsesLevel(mode: MapLayerMode): boolean {
+        return (
+            usesLevel(mode, get(mapLayerUpperWallsAvailableStore)) ||
+            (mode === "erase" && get(mapLayerFloorsAvailableStore))
+        );
     }
 
     /**
@@ -533,7 +555,14 @@ export class MapLayerEditorTool extends MapEditorTool {
     /** With the level on "auto": the level edited is the floor drawn under the pointer, the ground elsewhere. */
     private followPointerLevel(pointer: Phaser.Input.Pointer): void {
         if (get(mapEditorPlacementLevelStore) !== "auto" || !this.floorEditing) return;
-        const level = this.floorEditing.levelAt({ x: pointer.worldX, y: pointer.worldY });
+        // The eraser and the stair mode take a stair under the pointer: the level is the floor it starts from, even
+        // where its image is drawn over a higher floor.
+        const mode = get(mapLayerModeStore);
+        const stair =
+            mode === "erase" || mode === "stair"
+                ? stairImageUnderPoint(this.floorEditing.previewModel(), pointer.worldX, pointer.worldY)
+                : undefined;
+        const level = stair?.base ?? this.floorEditing.levelAt({ x: pointer.worldX, y: pointer.worldY });
         if (level !== get(mapLayerLevelStore)) this.setLevel(level);
     }
 
@@ -581,18 +610,13 @@ export class MapLayerEditorTool extends MapEditorTool {
         return this.canDraw() && !this.gesture && !this.placedModeUnavailable();
     }
 
-    /** The door, window or bridge mode in a room whose catalogs do not have them: a click draws nothing. */
+    /** The door or window mode in a room whose catalogs do not have them: a click draws nothing. */
     private placedModeUnavailable(): boolean {
-        return this.unavailableStatus() !== undefined;
-    }
-
-    /** What to tell about the mode when the catalogs of the room do not have its pieces. */
-    private unavailableStatus(): "doorsUnavailable" | "windowsUnavailable" | "bridgesUnavailable" | undefined {
         const mode = get(mapLayerModeStore);
-        if (mode === "door" && !get(mapLayerDoorsAvailableStore)) return "doorsUnavailable";
-        if (mode === "window" && !get(mapLayerWindowsAvailableStore)) return "windowsUnavailable";
-        if (mode === "bridge" && !get(mapLayerBridgesAvailableStore)) return "bridgesUnavailable";
-        return undefined;
+        return (
+            (mode === "door" && !get(mapLayerDoorsAvailableStore)) ||
+            (mode === "window" && !get(mapLayerWindowsAvailableStore))
+        );
     }
 
     private handlePointerDown(pointer: Phaser.Input.Pointer): void {
@@ -606,9 +630,8 @@ export class MapLayerEditorTool extends MapEditorTool {
         ) {
             return;
         }
-        const unavailable = this.unavailableStatus();
-        if (unavailable) {
-            mapLayerStatusStore.set(unavailable);
+        if (this.placedModeUnavailable()) {
+            mapLayerStatusStore.set(get(mapLayerModeStore) === "door" ? "doorsUnavailable" : "windowsUnavailable");
             return;
         }
         mapLayerStatusStore.set(undefined);
@@ -626,17 +649,20 @@ export class MapLayerEditorTool extends MapEditorTool {
         const world = this.worldOf(pointer);
         const baseModel = this.readModel();
         const startCell = cellAt(world.x, world.y);
+        const mode = get(mapLayerModeStore);
+        const scene =
+            mode === "erase" || mode === "window" ? this.sceneOf(baseModel, this.floorEditing?.readModel()) : undefined;
+        const grabbed = mode === "window" && scene ? windowTargetUnder(scene, this.screenOf(world)) : undefined;
         this.gesture = {
             pointerId: pointer.id,
             startWorld: world,
             currentWorld: world,
             path: [startCell],
             baseModel,
-            movedWindow:
-                get(mapLayerModeStore) === "window" && baseModel.hasWindow(startCell.x, startCell.y)
-                    ? startCell
-                    : undefined,
-            picker: get(mapLayerModeStore) === "height" ? buildHeightPicker(baseModel) : undefined,
+            movedWindow: grabbed?.ref.kind === "window" ? { x: grabbed.ref.edge.x, y: grabbed.ref.edge.y } : undefined,
+            grabCell: grabbed ? startCell : undefined,
+            picker: mode === "height" ? buildHeightPicker(baseModel) : undefined,
+            eraseScene: mode === "erase" ? scene : undefined,
         };
         // Filling reacts to the click itself.
         this.redraw();
@@ -688,6 +714,13 @@ export class MapLayerEditorTool extends MapEditorTool {
                 gesture.baseModel,
             );
             this.redraw();
+            return;
+        }
+        if (mode === "erase") {
+            this.gesture = undefined;
+            this.pointerCapture?.release();
+            this.clearPreview();
+            this.commitErase(gesture);
             return;
         }
         const operation = this.buildOperation(gesture);
@@ -749,10 +782,21 @@ export class MapLayerEditorTool extends MapEditorTool {
         );
     }
 
+    /** The segment a moved window is dropped on: it follows the pointer from the tile it was grabbed by. */
+    private windowDropCell(gesture: Gesture): Point | undefined {
+        const from = gesture.movedWindow;
+        if (!from) return undefined;
+        const end = cellAt(gesture.currentWorld.x, gesture.currentWorld.y);
+        const grab = gesture.grabCell ?? from;
+        return { x: from.x + end.x - grab.x, y: from.y + end.y - grab.y };
+    }
+
     /** A moved window released on its own segment: nothing to do, nothing to explain. */
     private droppedInPlace(gesture: Gesture): boolean {
-        const end = cellAt(gesture.currentWorld.x, gesture.currentWorld.y);
-        return gesture.movedWindow !== undefined && end.x === gesture.movedWindow.x && end.y === gesture.movedWindow.y;
+        const drop = this.windowDropCell(gesture);
+        return (
+            gesture.movedWindow !== undefined && drop?.x === gesture.movedWindow.x && drop.y === gesture.movedWindow.y
+        );
     }
 
     private cancelGesture(): void {
@@ -788,8 +832,6 @@ export class MapLayerEditorTool extends MapEditorTool {
                 return (model, bounds) => applyRoom(model, startCell, endCell, tint, family, bounds, wallHeight);
             case "floorBrush":
                 return (model, bounds) => applyFloor(model, path, family, bounds);
-            case "bridge":
-                return (model, bounds) => applyBridge(model, path, bounds);
             case "floorRectangle":
                 return (model, bounds) => applyFloor(model, rectangleCells(startCell, endCell), family, bounds);
             case "floorFill":
@@ -815,11 +857,12 @@ export class MapLayerEditorTool extends MapEditorTool {
             }
             case "window": {
                 const from = gesture.movedWindow;
-                if (from) {
+                const drop = this.windowDropCell(gesture);
+                if (from && drop) {
                     if (this.droppedInPlace(gesture)) return undefined;
-                    return moveWindow(gesture.baseModel.clone(), from, endCell)
+                    return moveWindow(gesture.baseModel.clone(), from, drop)
                         ? (model) => {
-                              moveWindow(model, from, endCell);
+                              moveWindow(model, from, drop);
                           }
                         : undefined;
                 }
@@ -836,25 +879,13 @@ export class MapLayerEditorTool extends MapEditorTool {
                 // The height mode selects on pointer up; a height is applied from the panel.
                 return undefined;
             case "slab":
-            case "slabErase":
             case "stair":
+            case "bridge":
                 // The floors have their own model: see MapLayerFloorEditing.
                 return undefined;
-            case "erase": {
-                // What the press starts on decides what is erased: from a wall, the walls of its line (floors stay);
-                // from a floor, the floors passed over (walls stay).
-                const walls = wallEdgesToErase(gesture.baseModel, worldPath.start, worldPath.end);
-                if (walls === undefined) {
-                    return (model) => eraseFloorsAlong(model, worldPath.start, worldPath.end, path);
-                }
-                if (walls.length <= 1) {
-                    // A click: what is under the cursor, a door or a window before its wall.
-                    return (model) => {
-                        eraseAt(model, worldPath.start.x, worldPath.start.y, new Set(), ERASER_VERTICAL_HIT_WIDTH);
-                    };
-                }
-                return (model) => eraseWallsAlong(model, worldPath.start, worldPath.end);
-            }
+            case "erase":
+                // The eraser removes walls and raised floors alike: see commitErase.
+                return undefined;
         }
     }
 
@@ -864,14 +895,18 @@ export class MapLayerEditorTool extends MapEditorTool {
         this.scene.input.setDefaultCursor(cursor);
     }
 
-    /** In the window mode, a hand over a placed window (it can be dragged), a closed hand while it is moved. */
+    /** A hand over a placed window or stair (it can be dragged), a closed hand while it is moved. */
     private wantedCursor(): string {
+        if (get(mapLayerModeStore) === "stair") {
+            // A placed stair can be grabbed and moved too.
+            if (this.gesture) return this.floorEditing?.hasStairAt(this.gesture.startWorld) ? "grabbing" : "";
+            return this.hover && this.floorEditing?.hasStairAt(this.hover) ? "grab" : "";
+        }
         if (get(mapLayerModeStore) !== "window" || !get(mapLayerWindowsAvailableStore)) return "";
         if (this.gesture) return this.gesture.movedWindow ? "grabbing" : "";
-        if (!this.hover) return "";
-        this.hoverModel ??= this.readModel();
-        const cell = cellAt(this.hover.x, this.hover.y);
-        return this.hoverModel.hasWindow(cell.x, cell.y) ? "grab" : "";
+        const scene = this.hoverScene();
+        if (!this.hover || !scene) return "";
+        return windowTargetUnder(scene, this.screenOf(this.hover)) ? "grab" : "";
     }
 
     private redraw(): void {
@@ -907,23 +942,11 @@ export class MapLayerEditorTool extends MapEditorTool {
                     }
                     this.hoverModel ??= this.readModel();
                     const cell = cellAt(this.hover.x, this.hover.y);
-                    if (this.hoverModel.hasWindow(cell.x, cell.y)) {
+                    const scene = this.hoverScene();
+                    const placed = scene ? windowTargetUnder(scene, this.screenOf(this.hover)) : undefined;
+                    if (placed) {
                         // A placed window: it can be grabbed and moved, not set again.
-                        graphics
-                            .fillStyle(0xffffff, 0.2)
-                            .fillRect(
-                                cell.x * MAP_LAYER_TILE_SIZE,
-                                cell.y * MAP_LAYER_TILE_SIZE,
-                                MAP_LAYER_TILE_SIZE,
-                                MAP_LAYER_TILE_SIZE,
-                            )
-                            .lineStyle(2, 0xffffff, 0.9)
-                            .strokeRect(
-                                cell.x * MAP_LAYER_TILE_SIZE,
-                                cell.y * MAP_LAYER_TILE_SIZE,
-                                MAP_LAYER_TILE_SIZE,
-                                MAP_LAYER_TILE_SIZE,
-                            );
+                        this.drawOutline(graphics, placed.outline, GRAB_COLOR, 0.2);
                     } else {
                         this.drawWindowPreview(graphics, this.hoverModel, cell, cell);
                     }
@@ -934,9 +957,8 @@ export class MapLayerEditorTool extends MapEditorTool {
                         graphics.lineStyle(2, 0xffffff, 0.9).strokeRect(rect.x, rect.y, rect.width, rect.height);
                     }
                 } else if (mode === "erase") {
-                    // What the eraser would remove under the cursor is highlighted in red: a door, a wall or a floor.
-                    this.hoverModel ??= this.readModel();
-                    this.drawEraseHover(graphics, this.hoverModel, this.hover);
+                    // What a click of the eraser removes under the cursor, outlined in red where it is drawn.
+                    this.drawEraseHover(graphics, this.hover);
                 } else if (mode === "wall" || mode === "room") {
                     const vertex = vertexAt(this.hover.x, this.hover.y);
                     graphics.fillStyle(0xffffff, 0.8).fillCircle(vertex.x * size, (vertex.y + 1) * size, 4);
@@ -962,6 +984,19 @@ export class MapLayerEditorTool extends MapEditorTool {
         }
         if (get(mapLayerModeStore) === "door") {
             this.drawDoorPreview(graphics, gesture.baseModel, gesture.currentWorld);
+            this.scene.markDirty();
+            return;
+        }
+        if (get(mapLayerModeStore) === "erase") {
+            if (gesture.eraseScene) {
+                const plan = erasePlan(
+                    gesture.eraseScene,
+                    this.screenOf(gesture.startWorld),
+                    this.screenOf(gesture.currentWorld),
+                    gesture.path,
+                );
+                this.drawOutline(graphics, plan.outline, ERASE_COLOR, 0.35);
+            }
             this.scene.markDirty();
             return;
         }
@@ -1025,8 +1060,27 @@ export class MapLayerEditorTool extends MapEditorTool {
      */
     private drawDoorPreview(graphics: Phaser.GameObjects.Graphics, model: MapLayerModel, world: Point): void {
         const plan = planDoorAt(model, world.x, world.y, this.doorHeightSetting(), this.doorPlanOptions());
-        const { x, y, width, height } = doorPixelRect(plan.door);
+        const { x, y, width, height } = this.placedDoorRect(model, plan) ?? doorPixelRect(plan.door);
         graphics.fillStyle(plan.action !== "invalid" ? 0x2ecc71 : 0xff3b30, 0.45).fillRect(x, y, width, height);
+    }
+
+    /**
+     * A placed horizontal door that a click changes, where it is drawn: its two leaves over their whole height (a high
+     * door is drawn higher than its opening at the foot of the wall). Undefined for anything else.
+     */
+    private placedDoorRect(model: MapLayerModel, plan: DoorPlan): Rect | undefined {
+        if (plan.action !== "update" || plan.door.orientation !== "h") return undefined;
+        const placed = model.getDoorOn("h", plan.door.x, plan.door.y);
+        if (!placed || (placed.height ?? 1) === 1) return undefined;
+        const rects = buildHeightPicker(model).rects([
+            { kind: "door", door: { orientation: placed.orientation, x: placed.x, y: placed.y } },
+        ]);
+        if (rects.length === 0) return undefined;
+        const left = Math.min(...rects.map((rect) => rect.x));
+        const top = Math.min(...rects.map((rect) => rect.y));
+        const right = Math.max(...rects.map((rect) => rect.x + rect.width));
+        const bottom = Math.max(...rects.map((rect) => rect.y + rect.height));
+        return { x: left, y: top, width: right - left, height: bottom - top };
     }
 
     /** The height setting of the doors: Auto, or the chosen height (one the catalogs lack goes back to 1 in the plan). */
@@ -1069,52 +1123,67 @@ export class MapLayerEditorTool extends MapEditorTool {
     private drawWindowMovePreview(graphics: Phaser.GameObjects.Graphics, gesture: Gesture): void {
         const size = MAP_LAYER_TILE_SIZE;
         const from = gesture.movedWindow;
-        if (!from) return;
-        const end = cellAt(gesture.currentWorld.x, gesture.currentWorld.y);
+        const end = this.windowDropCell(gesture);
+        if (!from || !end) return;
         graphics.lineStyle(2, 0xffffff, 0.8).strokeRect(from.x * size, from.y * size, size, size);
         if (this.droppedInPlace(gesture)) return;
         const valid = moveWindow(gesture.baseModel.clone(), from, end);
         graphics.fillStyle(valid ? 0x2ecc71 : 0xff3b30, 0.45).fillRect(end.x * size, end.y * size, size, size);
     }
 
-    /** The thing the eraser would remove under the cursor, in red; a white outline of the tile when there is nothing. */
-    private drawEraseHover(graphics: Phaser.GameObjects.Graphics, model: MapLayerModel, world: Point): void {
+    /** What a click of the eraser removes under the cursor, in red; a white outline of the tile when there is nothing. */
+    private drawEraseHover(graphics: Phaser.GameObjects.Graphics, world: Point): void {
         const size = MAP_LAYER_TILE_SIZE;
-        const target = eraseTargetAt(model, world.x, world.y, ERASER_VERTICAL_HIT_WIDTH);
+        const scene = this.hoverScene();
+        const target = scene ? eraseTargetUnder(scene, this.screenOf(world)) : undefined;
         if (!target) {
             const cell = cellAt(world.x, world.y);
             graphics.lineStyle(2, 0xffffff, 0.8).strokeRect(cell.x * size, cell.y * size, size, size);
             return;
         }
-        let rect: { x: number; y: number; width: number; height: number };
-        switch (target.kind) {
-            case "door":
-                rect = doorPixelRect(target.door);
-                break;
-            case "wall":
-                rect =
-                    target.wall.orientation === "h"
-                        ? { x: target.wall.x * size, y: target.wall.y * size, width: size, height: size }
-                        : {
-                              x: target.wall.x * size - WALL_HALF,
-                              y: target.wall.y * size + WALL_THICKNESS,
-                              width: WALL_THICKNESS,
-                              height: size - WALL_THICKNESS,
-                          };
-                break;
-            case "window":
-                rect = { x: target.wall.x * size, y: target.wall.y * size, width: size, height: size };
-                break;
-            case "bridge":
-            case "floor":
-                rect = { x: target.cell.x * size, y: target.cell.y * size, width: size, height: size };
-                break;
+        this.drawOutline(graphics, target.outline, ERASE_COLOR, 0.4);
+    }
+
+    /**
+     * Outlines rectangles of the screen (the targets of MapLayerTarget) on the preview, which is drawn as high as the
+     * level edited.
+     */
+    private drawOutline(
+        graphics: Phaser.GameObjects.Graphics,
+        rects: readonly Rect[],
+        color: number,
+        fill: number,
+    ): void {
+        const level = this.editedLevel();
+        for (const rect of rects) {
+            graphics
+                .fillStyle(color, fill)
+                .fillRect(rect.x, rect.y + level, rect.width, rect.height)
+                .lineStyle(2, color, 0.9)
+                .strokeRect(rect.x, rect.y + level, rect.width, rect.height);
         }
-        graphics
-            .fillStyle(0xff3b30, 0.4)
-            .fillRect(rect.x, rect.y, rect.width, rect.height)
-            .lineStyle(2, 0xff3b30, 0.9)
-            .strokeRect(rect.x, rect.y, rect.width, rect.height);
+    }
+
+    /** A point of the level edited (as if on the ground) where it is drawn on the screen. */
+    private screenOf(world: Point): Point {
+        return { x: world.x, y: world.y - this.editedLevel() };
+    }
+
+    /** The map of the level edited as the targets read it. */
+    private sceneOf(walls: MapLayerModel, floors: FloorModel | undefined, level = this.editedLevel()): TargetScene {
+        return { walls, picker: buildHeightPicker(walls), floors: floors ?? new FloorModel(), level };
+    }
+
+    /** The map for the hover previews: read again after an edit (the raised floors a few times per second). */
+    private hoverScene(): TargetScene | undefined {
+        if (!this.floorEditing) return undefined;
+        const picker = this.getHoverPicker();
+        return {
+            walls: this.hoverModel ?? this.readModel(),
+            picker,
+            floors: this.floorEditing.previewModel(),
+            level: this.editedLevel(),
+        };
     }
 
     private fillPlacement(graphics: Phaser.GameObjects.Graphics, placement: MapLayerPlacement): void {
@@ -1129,30 +1198,36 @@ export class MapLayerEditorTool extends MapEditorTool {
         this.scene.markDirty();
     }
 
+    /**
+     * The commands that make the walls, doors and windows of a level match a model of it; undefined when that would
+     * touch too many entities.
+     */
+    private wallCommands(model: MapLayerModel, level: number): FrontCommand[] | undefined {
+        const wamFile = this.scene.getGameMap().getWamFile();
+        if (!wamFile) return [];
+        const diff = diffPlacements(this.readPlacedEntities(level), levelPlacements(computePlacements(model), level));
+        if (diff.toCreate.length + diff.toDelete.length > MAX_ENTITIES_PER_OPERATION) return undefined;
+        return buildMapLayerCommands(wamFile, this.scene.getGameMapFrontWrapper().getEntitiesManager(), diff);
+    }
+
     /** Commits an edit as one undo step. `done` runs once the map has been changed. */
     private commit(operation: MapLayerOperation, done?: () => void): void {
-        const wamFile = this.scene.getGameMap().getWamFile();
-        if (!wamFile) return;
-        const entitiesManager = this.scene.getGameMapFrontWrapper().getEntitiesManager();
+        if (!this.scene.getGameMap().getWamFile()) return;
         const bounds = this.getBounds();
         const level = this.editedLevel();
 
         // The factory runs inside the command queue, right before execution: it reads the current state of the map.
-        const factory = (): readonly FrontCommand[] => {
+        this.execute(() => {
             const model = this.readModel(level);
             if (operation(model, bounds) === "fillTooLarge") {
                 mapLayerStatusStore.set("fillTooLarge");
                 return [];
             }
-            const diff = diffPlacements(
-                this.readPlacedEntities(level),
-                levelPlacements(computePlacements(model), level),
-            );
-            if (diff.toCreate.length + diff.toDelete.length > MAX_ENTITIES_PER_OPERATION) {
+            const commands = this.wallCommands(model, level);
+            if (commands === undefined) {
                 mapLayerStatusStore.set("tooLarge");
                 return [];
             }
-            const commands = buildMapLayerCommands(wamFile, entitiesManager, diff);
             if (level === 0) return commands;
             // On a raised floor, the floor of a room is slabs: laid with its walls, in the same undo step.
             const floors = [...model.getFloors()];
@@ -1167,13 +1242,56 @@ export class MapLayerEditorTool extends MapEditorTool {
                 return [];
             }
             return [...commands, ...slabs];
-        };
+        }, done);
+    }
 
+    /**
+     * Commits an eraser gesture as one undo step: what `erasePlan` finds on the map read again just before the commit,
+     * with the same start, end and path as the preview, so it removes what was outlined.
+     */
+    private commitErase(gesture: Gesture): void {
+        if (!this.scene.getGameMap().getWamFile()) return;
+        const level = this.editedLevel();
+        const start = this.screenOf(gesture.startWorld);
+        const end = this.screenOf(gesture.currentWorld);
+        const path = [...gesture.path];
+        this.execute(() => {
+            const walls = this.readModel(level);
+            const plan = erasePlan(this.sceneOf(walls, this.floorEditing?.readModel(), level), start, end, path);
+            const wallRefs = plan.refs.filter(isWallLayerRef);
+            const floorRefs = plan.refs.filter((ref) => !isWallLayerRef(ref));
+            const commands: FrontCommand[] = [];
+            if (wallRefs.length > 0 && applyErase(wallRefs, walls, undefined)) {
+                const wallCommands = this.wallCommands(walls, level);
+                if (wallCommands === undefined) {
+                    mapLayerStatusStore.set("tooLarge");
+                    return [];
+                }
+                commands.push(...wallCommands);
+            }
+            if (floorRefs.length > 0) {
+                const floorCommands = this.floorEditing?.commandsFor((floors) => {
+                    applyErase(floorRefs, undefined, floors);
+                });
+                if (floorCommands === undefined) {
+                    mapLayerStatusStore.set("tooLarge");
+                    return [];
+                }
+                commands.push(...floorCommands);
+            }
+            return commands;
+        });
+    }
+
+    /** Runs the commands of `factory` as one undo step; `done` runs once the map has been changed. */
+    private execute(factory: () => readonly FrontCommand[], done?: () => void): void {
         this.forgetHoverModel();
         this.mapEditorModeManager
             .executeCommands(factory)
             .then(() => {
                 this.forgetHoverModel();
+                // The eraser removes slabs and stairs too: the previews read the raised floors again.
+                this.floorEditing?.forgetPreviewModel();
                 this.floorEditing?.refreshLevels();
                 done?.();
             })

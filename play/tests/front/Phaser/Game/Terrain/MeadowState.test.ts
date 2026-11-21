@@ -1,3 +1,4 @@
+import { snowByte } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
 import { grassAlpha, MeadowState, mottledCover } from "../../../../../src/front/Phaser/Game/Terrain/MeadowState";
 
@@ -47,5 +48,25 @@ describe("MeadowState", () => {
         expect(grassAlpha(0)).toBe(0);
         expect(grassAlpha(255)).toBeCloseTo(0.75);
         expect(grassAlpha(128)).toBeLessThan(grassAlpha(255));
+    });
+
+    it("holds the snow lying on each tile, none from a server that tells none", () => {
+        const meadow = new MeadowState();
+        const state = { width: 2, height: 1, grass: new Uint8Array(2), moisture: new Uint8Array(2) };
+        meadow.receive({ ...state, snow: Uint8Array.from([snowByte(15), 0]) });
+        expect(meadow.hasSnow()).toBe(true);
+        expect(meadow.snowAt(0, 0)).toBeGreaterThan(14);
+        expect(meadow.snowAt(0, 0)).toBeLessThan(16);
+        expect(meadow.snowAt(1, 0)).toBe(0);
+        expect(meadow.snowAt(5, 5)).toBe(0);
+        expect(meadow.snowCoverAt(10, 10)).toBeCloseTo(1, 1);
+        expect(meadow.meanSnowCover()).toBeCloseTo(0.5, 1);
+        // An empty field, or one of another size: no snow.
+        for (const snow of [undefined, new Uint8Array(0), new Uint8Array(5)]) {
+            meadow.receive({ ...state, snow });
+            expect(meadow.hasSnow()).toBe(false);
+            expect(meadow.snowAt(0, 0)).toBe(0);
+            expect(meadow.meanSnowCover()).toBe(0);
+        }
     });
 });

@@ -1,4 +1,4 @@
-import { FootprintLayer } from "../Christmas/FootprintLayer";
+import { FootprintLayer, TINTED_PRINTS } from "../Christmas/FootprintLayer";
 import type { PrintStyle } from "../Christmas/FootprintLayer";
 import { FootprintTrail, type WalkerSample } from "../Christmas/FootprintTrail";
 import type { Cover } from "./Pixel/MaterialField";
@@ -38,7 +38,7 @@ export class GroundFootprints {
         private readonly onBridge: (x: number, y: number) => boolean = () => false,
     ) {
         this.trail = new FootprintTrail((x, y) => !this.onBridge(x, y) && this.surfaceAt(x, y) !== undefined);
-        this.layer = new FootprintLayer(scene);
+        this.layer = new FootprintLayer(scene, TINTED_PRINTS);
     }
 
     /** Lays the prints of the walkers (none while the map is edited: an empty list) and fades the old ones. */

@@ -14,7 +14,7 @@ interface PileTexture {
     height: number;
 }
 
-/** A small mound of leaves at the foot of each object placed outdoors, trees included. */
+/** A small mound of leaves at the foot of each object placed outdoors where the trees dropped leaves, trees included. */
 export class LeafPiles {
     /** Pile texture per entity frame, or undefined when its pixels cannot be read or it has no base. */
     private readonly textures = new Map<string, PileTexture | undefined>();
@@ -27,7 +27,12 @@ export class LeafPiles {
         private readonly readPixels: (entity: SnowEntity) => AlphaMask | undefined,
     ) {}
 
-    rebuild(entities: Iterable<SnowEntity>, grid: OutdoorGrid): void {
+    /** `hasLeavesAt`: whether leaves lie at a point of the map (by default, everywhere outdoors). */
+    rebuild(
+        entities: Iterable<SnowEntity>,
+        grid: OutdoorGrid,
+        hasLeavesAt: (x: number, y: number) => boolean = () => true,
+    ): void {
         this.clear();
         for (const entity of entities) {
             if (!entity.visible || entity.texture.key === MISSING_TEXTURE) continue;
@@ -38,7 +43,9 @@ export class LeafPiles {
                 isRaisedFloorCollection(collectionName)
             )
                 continue;
-            if (!grid.isOutdoorAt(entity.x + entity.displayWidth / 2, entity.y + entity.displayHeight - 1)) continue;
+            const footX = entity.x + entity.displayWidth / 2;
+            const footY = entity.y + entity.displayHeight - 1;
+            if (!grid.isOutdoorAt(footX, footY) || !hasLeavesAt(footX, footY)) continue;
             const pile = this.pileTexture(entity);
             if (!pile) continue;
             const scaleX = entity.displayWidth / entity.frame.width;

@@ -1,6 +1,7 @@
 import { gunzipSync, gzipSync } from "node:zlib";
 import {
     advanceImpactWave,
+    strikeWater,
     CELL_AREA_M2,
     CELL_LITRES_PER_PX,
     DEFAULT_WATER_SETTINGS,
@@ -11,10 +12,14 @@ import {
     landWallsOf,
     LITRES_PER_M3,
     meteorShape,
+    liquidRainRate,
+    PX_PER_MM,
+    snowShareOf,
     rainRateAt,
     startImpactWave,
     ratesOf,
     stepInputOf,
+    stepsBetweenUpdates,
     TERRAIN_CELL,
     TILE_PX,
     WATER_MESSAGE_MS,
@@ -26,6 +31,7 @@ import {
 } from "@workadventure/map-editor";
 import type {
     Downpour,
+    PrecipitationAir,
     Drain,
     ImpactWave,
     TerrainData,
@@ -41,10 +47,18 @@ import type { RainTimelineService } from "./Services/RainTimelineService";
 
 /** The room is told the water once a second (every tenth step), what changed only. */
 const STEPS_PER_MESSAGE = WATER_MESSAGE_MS / WATER_STEP_MS;
-/** A whole state is sent again this often, so a browser that lost its place finds it again. */
-const MESSAGES_PER_FULL_STATE = 30;
+/** A whole state is sent again this often (half a minute), so a browser that lost its place finds it again. */
+const STEPS_PER_FULL_STATE = 300;
+/**
+ * A cell whose water changed by less than this many eighths of a pixel (a quarter of a pixel) since the room was
+ * last told is not told again: a lake that barely ripples costs next to no network (measured: three to four times
+ * less on a calm lake). Never for a cell that dries or gets wet, and the whole state puts everything right.
+ */
+const UNTOLD_EIGHTHS = 2;
 /** While the wave of an impact runs, the room is told five times a second: a wave seen once a second would jump. */
 const WAVE_STEPS_PER_MESSAGE = 2;
+/** After an impact on a water with inertia, the room is told that often for this long (half a minute). */
+const IMPACT_STIRRED_STEPS = 300;
 /** The water is saved every half minute while it changes. */
 const STEPS_PER_SAVE = 300;
 
@@ -81,6 +95,8 @@ export class TerrainWaterManager {
     private toldAtStep = 0;
     /** The waves of the impacts still running. */
     private waves: ImpactWave[] = [];
+    /** The step until which the room is told often: the real wave of an impact on a water with inertia. */
+    private stirredUntilStep = 0;
     /** The downpours falling on the map now, asked at each step: none until the catastrophes of the room say. */
     private downpours: () => readonly Downpour[] = () => [];
     /** The drains open on the map now, asked at each step: none until the catastrophes of the room say. */
@@ -90,13 +106,16 @@ export class TerrainWaterManager {
     private moving = true;
     /** How hard it rains (mm an hour), read once a second. */
     private rainRate = 0;
+    /** The air the rain of the map falls through: the conditions of the room, once it gives them. */
+    private air: () => PrecipitationAir | undefined = () => undefined;
     /** What the room was last told, to send only what changed since. */
     private sentBytes: Uint8Array | undefined;
     private sentRates = false;
     private seq = 0;
     /** Counts the changes of the water (a step that moved it, a new grid): what lives in it reads it again then. */
     private version = 0;
-    private messagesSinceFull = 0;
+    /** The step the room was last told a whole state at. */
+    private fullAtStep = -Infinity;
     private changedSinceSave = false;
 
     constructor(
@@ -192,6 +211,14 @@ export class TerrainWaterManager {
         }
     }
 
+    /**
+     * The temperature and the humidity the rain of the map falls through (the conditions of the room): in the cold it
+     * falls as snow, which brings no water (see liquidRainRate).
+     */
+    public fallThrough(air: () => PrecipitationAir | undefined): void {
+        this.air = air;
+    }
+
     /** One step of the water (ten a second), and once a second the room is told. */
     public step(): void {
         const grid = this.grid;
@@ -209,13 +236,14 @@ export class TerrainWaterManager {
             // Only a map in real weather has a timeline to read.
             const slots =
                 settings?.weather === WeatherType.Real ? this.rain.slotsFor(settings.weatherLocation) : undefined;
-            this.rainRate = rainRateAt(settings, this.now(), slots);
+            // What falls as snow lies where it fell: only the rain runs to the hollows and soaks the soil.
+            this.rainRate = liquidRainRate(rainRateAt(settings, this.now(), slots), this.air());
         }
         this.steps++;
         // Both each step: a downpour goes on raining while the wave of a meteor runs.
         const raining = this.pourDownpours(grid);
         const draining = this.takeDrains(grid);
-        const waving = this.waves.length > 0 || raining || draining;
+        const waving = this.waves.length > 0 || raining || draining || this.steps < this.stirredUntilStep;
         if (this.waves.length > 0) this.advanceWaves(grid);
         const pouring = this.rainRate > 0 || this.objects.some((object) => object.litresPerMinute > 0);
         if (this.moving || pouring) {
@@ -230,7 +258,9 @@ export class TerrainWaterManager {
             this.sums.absorptionPx += tally.absorptionPx;
             this.sums.lostPx += tally.lostPx;
         }
-        if (this.steps % STEPS_PER_MESSAGE === 0 || (waving && this.steps % WAVE_STEPS_PER_MESSAGE === 0)) {
+        // As often as the map asks while the water moves, and at least five times a second under a wave.
+        const between = stepsBetweenUpdates(settings?.water?.updates);
+        if (this.steps % between === 0 || (waving && this.steps % Math.min(between, WAVE_STEPS_PER_MESSAGE) === 0)) {
             this.tell(grid);
         }
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
@@ -248,7 +278,10 @@ export class TerrainWaterManager {
     private pourDownpours(grid: WaterGrid): boolean {
         const falling = this.downpours();
         if (falling.length === 0) return false;
-        const px = (DOWNPOUR_PX_PER_SECOND * WATER_STEP_MS) / 1000;
+        // In the cold of the room a downpour falls as snow: that part lies on the ground (MeadowManager) and brings
+        // no water until it melts.
+        const px = ((DOWNPOUR_PX_PER_SECOND * WATER_STEP_MS) / 1000) * (1 - snowShareOf(this.air()));
+        if (px <= 0) return false;
         let laid = 0;
         for (const downpour of falling) {
             laid += grid.rainOn(
@@ -265,6 +298,28 @@ export class TerrainWaterManager {
             this.changedSinceSave = true;
         }
         return laid > 0;
+    }
+
+    /**
+     * The water of a snow that melted on a tile (`mm` of water) is poured on the cells of that tile, as a rain:
+     * counted with the rain, nothing in a wall nor over the highest level. Returns the mm that were poured: none
+     * outside the grid of the water.
+     */
+    public pour(tileX: number, tileY: number, mm: number): number {
+        const grid = this.grid;
+        if (!grid || !Number.isFinite(mm) || mm <= 0 || !Number.isFinite(tileX) || !Number.isFinite(tileY)) return 0;
+        const cells = TILE_PX / TERRAIN_CELL;
+        let laid = 0;
+        for (let y = 0; y < cells; y++) {
+            for (let x = 0; x < cells; x++)
+                laid += grid.rainOn(tileX * cells + x, tileY * cells + y, 0, mm * PX_PER_MM);
+        }
+        if (laid <= 0) return 0;
+        this.sums.rainPx += laid;
+        this.moving = true;
+        this.version++;
+        this.changedSinceSave = true;
+        return laid / (cells * cells * PX_PER_MM);
     }
 
     /** The catastrophes of the room say which drains are open. */
@@ -314,17 +369,29 @@ export class TerrainWaterManager {
 
     /**
      * A meteor lands at a point of the map (pixels), its crater `radiusTiles` wide: its water is thrown out, and a wave carries it to
-     * the shores, step after step. The room is told at once. Nothing on a map without water.
+     * the shores, step after step. On a map whose water has inertia the water is thrown up in a rim around the
+     * crater and makes its own wave. The room is told at once. Nothing on a map without water.
      */
     public strike(x: number, y: number, radiusTiles: number): void {
         const grid = this.grid;
         if (!grid) return;
-        const started = startImpactWave(
-            grid,
-            Math.floor(x / TERRAIN_CELL),
-            Math.floor(y / TERRAIN_CELL),
-            meteorShape(radiusTiles),
-        );
+        const shape = meteorShape(radiusTiles);
+        const cellX = Math.floor(x / TERRAIN_CELL);
+        const cellY = Math.floor(y / TERRAIN_CELL);
+        if (this.room.getWam()?.settings?.water?.inertia === true) {
+            // A water with inertia makes its own wave: the impact only throws the water of the crater around it.
+            const struck = strikeWater(grid, cellX, cellY, shape);
+            if (!struck) return;
+            this.sums.sourcesPx += struck.addedPx;
+            this.sums.lostPx += struck.lostPx;
+            this.stirredUntilStep = this.steps + IMPACT_STIRRED_STEPS;
+            this.moving = true;
+            this.version++;
+            this.changedSinceSave = true;
+            this.tell(grid);
+            return;
+        }
+        const started = startImpactWave(grid, cellX, cellY, shape);
         if (!started) return;
         this.waves.push(started.wave);
         this.sums.sourcesPx += started.addedPx;
@@ -382,14 +449,26 @@ export class TerrainWaterManager {
         const anyRate = Object.values(rates).some((rate) => rate > 0);
         const bytes = grid.writeDepths();
         const previous = this.sentBytes;
-        const full = !previous || previous.length !== bytes.length || this.messagesSinceFull >= MESSAGES_PER_FULL_STATE;
-        let changed = full;
+        // A whole state when the room knows none (or another grid), and again every half minute.
+        const full =
+            !previous || previous.length !== bytes.length || this.steps - this.fullAtStep >= STEPS_PER_FULL_STATE;
         let payload = bytes;
-        if (!full) {
-            payload = new Uint8Array(bytes.length);
-            for (let index = 0; index < bytes.length; index++) {
-                payload[index] = bytes[index] ^ previous[index];
-                if (payload[index] !== 0) changed = true;
+        let changed = !previous || previous.length !== bytes.length;
+        if (previous && previous.length === bytes.length) {
+            // What barely changed since the room was told is not told again; a whole state tells it as it is.
+            const told = full ? Uint8Array.from(bytes) : bytes;
+            for (let index = 0; index < bytes.length; index += 2) {
+                const now = bytes[index] | (bytes[index + 1] << 8);
+                const before = previous[index] | (previous[index + 1] << 8);
+                if (now === before) continue;
+                if (now !== 0 && before !== 0 && Math.abs(now - before) < UNTOLD_EIGHTHS) {
+                    told[index] = previous[index];
+                    told[index + 1] = previous[index + 1];
+                } else changed = true;
+            }
+            if (!full) {
+                payload = new Uint8Array(bytes.length);
+                for (let index = 0; index < bytes.length; index++) payload[index] = bytes[index] ^ previous[index];
             }
         }
         // Still water: nothing to say, but for the rates going back to nothing.
@@ -398,7 +477,7 @@ export class TerrainWaterManager {
         if (previous === undefined && !anyRate && grid.totalPx() === 0) return;
         this.sentBytes = bytes;
         this.sentRates = anyRate;
-        this.messagesSinceFull = full ? 0 : this.messagesSinceFull + 1;
+        if (full) this.fullAtStep = this.steps;
         this.seq++;
         this.room.sendSubMessageToRoom({
             message: {

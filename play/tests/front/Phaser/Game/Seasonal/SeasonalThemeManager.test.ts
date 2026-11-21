@@ -4,6 +4,22 @@ import { writable } from "svelte/store";
 import { mockDeep } from "vitest-mock-extended";
 
 vi.mock("../../../../../src/front/Stores/MapEditorStore", () => ({ mapEditorModeStore: writable(false) }));
+const frostPrints = vi.hoisted(() => ({ created: 0, destroyed: 0, frost: [] as number[] }));
+vi.mock("@wa/front/Phaser/Game/Weather/FrostPrints", () => ({
+    FrostPrints: class {
+        constructor() {
+            frostPrints.created++;
+        }
+        update(_time: number, _walkers: unknown[], frost: number) {
+            frostPrints.frost.push(frost);
+            return false;
+        }
+        setVisible() {}
+        destroy() {
+            frostPrints.destroyed++;
+        }
+    },
+}));
 
 const { mapEditorModeStore } = await import("../../../../../src/front/Stores/MapEditorStore");
 const { seasonalThemeModeStore } = await import("../../../../../src/front/Stores/SeasonalThemeStore");
@@ -38,6 +54,7 @@ function setup(
         version?: () => number;
         entities?: () => { visible: boolean; texture?: { key: string }; getPrefab?: () => { seasonal?: unknown } }[];
         mapSnowCoverage?: () => number;
+        frost?: () => number;
     } = {},
 ) {
     markDirty = vi.fn();
@@ -48,6 +65,7 @@ function setup(
         markDirty,
         serverDate: options.serverDate ?? (() => new Date("2026-07-14T12:00:00Z")),
         mapSnowCoverage: options.mapSnowCoverage,
+        frost: options.frost,
         createDecor: (theme) => {
             events.push(`${theme}:create`);
             const decor = fakeDecor(theme);
@@ -68,6 +86,7 @@ function decorOf(theme: Theme): ReturnType<typeof fakeDecor> {
 
 beforeEach(() => {
     events.length = 0;
+    Object.assign(frostPrints, { created: 0, destroyed: 0, frost: [] });
     decors = [];
     mapEditorModeStore.set(false);
     seasonalThemeModeStore.set(SeasonalThemeMode.Auto);
@@ -79,20 +98,26 @@ afterEach(() => {
 
 describe("SeasonalThemeManager", () => {
     it("creates the decor of the active theme and draws it", () => {
-        seasonalThemeModeStore.set(SeasonalThemeMode.Christmas);
+        seasonalThemeModeStore.set(SeasonalThemeMode.Autumn);
         setup().update(0, walking);
-        expect(events).toEqual(["christmas:create", "christmas:ground", "christmas:objects"]);
-        expect(manager?.activeTheme()).toBe(SeasonalTheme.Christmas);
+        expect(events).toEqual(["autumn:create", "autumn:ground", "autumn:objects"]);
+        expect(manager?.activeTheme()).toBe(SeasonalTheme.Autumn);
     });
 
-    it("switches decor without leftovers", () => {
-        seasonalThemeModeStore.set(SeasonalThemeMode.Christmas);
+    it("removes the decor without leftovers when the theme goes", () => {
+        seasonalThemeModeStore.set(SeasonalThemeMode.Autumn);
         setup().update(0, walking);
         events.length = 0;
-        seasonalThemeModeStore.set(SeasonalThemeMode.Autumn);
+        seasonalThemeModeStore.set(SeasonalThemeMode.None);
         manager?.update(16, walking);
-        expect(events.slice(0, 2)).toEqual(["christmas:destroy", "autumn:create"]);
-        expect(manager?.activeTheme()).toBe(SeasonalTheme.Autumn);
+        expect(events).toEqual(["autumn:destroy"]);
+        expect(manager?.activeTheme()).toBeUndefined();
+    });
+
+    it("shows no scripted snow in auto in December", () => {
+        setup({ serverDate: () => new Date("2026-12-24T10:00:00Z") }).update(0, walking);
+        expect(manager?.activeTheme()).toBeUndefined();
+        expect(events).toEqual([]);
     });
 
     it("waits for server time in auto, then follows it at once", () => {
@@ -107,15 +132,15 @@ describe("SeasonalThemeManager", () => {
     });
 
     it("checks the calendar again every minute", () => {
-        let date = new Date("2026-11-30T22:59:00Z");
+        let date = new Date("2026-08-31T21:59:00Z");
         setup({ serverDate: () => date });
         manager?.update(0, walking);
-        date = new Date("2026-11-30T23:00:30Z");
+        date = new Date("2026-08-31T22:00:30Z");
         manager?.update(30_000, walking);
-        expect(manager?.activeTheme()).toBe(SeasonalTheme.Autumn);
+        expect(manager?.activeTheme()).toBeUndefined();
         manager?.update(60_000, walking);
-        expect(manager?.activeTheme()).toBe(SeasonalTheme.Christmas);
-        expect(events).toContain("autumn:destroy");
+        expect(manager?.activeTheme()).toBe(SeasonalTheme.Autumn);
+        expect(events).toContain("autumn:create");
     });
 
     it("hides the decor while editing, forgets walkers, and rebuilds objects after", () => {
@@ -199,32 +224,6 @@ describe("SeasonalThemeManager", () => {
     });
 
     describe("map snow", () => {
-        it("tells how much snow lies on the ground: the map snow, all of it under the Christmas theme", () => {
-            setup({ serverDate: october, mapSnowCoverage: () => 0.4 }).update(0, walking);
-            expect(manager?.groundSnow()).toBeCloseTo(0.4);
-            manager?.destroy();
-            setup({ serverDate: october }).update(0, walking);
-            expect(manager?.groundSnow()).toBe(0);
-            manager?.destroy();
-            seasonalThemeModeStore.set(SeasonalThemeMode.Christmas);
-            setup().update(0, walking);
-            expect(manager?.groundSnow()).toBe(1);
-        });
-
-        it("gives the season of the ground: the one of the chosen theme, else the one of the calendar", () => {
-            seasonalThemeModeStore.set(SeasonalThemeMode.None);
-            setup({ serverDate: october }).update(0, walking);
-            expect(manager?.groundSeason(Season.Spring)).toBe(Season.Spring);
-            manager?.destroy();
-            seasonalThemeModeStore.set(SeasonalThemeMode.Autumn);
-            setup().update(0, walking);
-            expect(manager?.groundSeason(Season.Spring)).toBe(Season.Autumn);
-            manager?.destroy();
-            seasonalThemeModeStore.set(SeasonalThemeMode.Christmas);
-            setup().update(0, walking);
-            expect(manager?.groundSeason(Season.Spring)).toBe(Season.Winter);
-        });
-
         it("fades the Christmas decor in with the map snow", () => {
             setup({ serverDate: october, mapSnowCoverage: () => 0.4 }).update(0, walking);
             expect(events.slice(0, 6)).toEqual([
@@ -256,14 +255,6 @@ describe("SeasonalThemeManager", () => {
             expect(decorOf(SeasonalTheme.Christmas).destroy).toHaveBeenCalledTimes(1);
             expect(decorOf(SeasonalTheme.Autumn).destroy).not.toHaveBeenCalled();
             expect(decorOf(SeasonalTheme.Autumn).setAlpha).toHaveBeenLastCalledWith(1);
-        });
-
-        it("keeps a single Christmas decor with the Christmas theme", () => {
-            seasonalThemeModeStore.set(SeasonalThemeMode.Christmas);
-            setup({ mapSnowCoverage: () => 0.5 }).update(0, walking);
-            manager?.update(16, walking);
-            expect(events.filter((event) => event.endsWith(":create"))).toEqual(["christmas:create"]);
-            for (const call of decors[0].setAlpha.mock.calls) expect(call[0]).toBe(1);
         });
 
         it("shows the snow decor alone without a theme decor, and does not crash", () => {
@@ -324,6 +315,23 @@ describe("SeasonalThemeManager", () => {
             manager = undefined;
             expect(decorOf(SeasonalTheme.Christmas).destroy).toHaveBeenCalledTimes(1);
             expect(decorOf(SeasonalTheme.Autumn).destroy).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe("footprints on the frost", () => {
+        it("leaves footprints on the frosted ground, as strong as the frost, gone when it thaws", () => {
+            let frost = 0.64;
+            setup({ frost: () => frost }).update(0, walking);
+            expect(frostPrints.created).toBe(1);
+            expect(frostPrints.frost).toEqual([0.6]);
+            frost = 0;
+            manager?.update(16, walking);
+            expect(frostPrints.destroyed).toBe(1);
+        });
+
+        it("leaves none of its own under the snow, which leaves its footprints", () => {
+            setup({ frost: () => 1, mapSnowCoverage: () => 0.5 }).update(0, walking);
+            expect(frostPrints.created).toBe(0);
         });
     });
 });

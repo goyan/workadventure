@@ -31,6 +31,13 @@ export const effectShownStores: Readonly<Record<EffectName, Writable<boolean>>> 
  */
 export const detailedFlamesStore = createPersistedSwitchStore("fireDetailedFlames", true);
 
+/**
+ * The relief seen in 3/4, its ground in pixel art (ReliefTiles), as this person wants it. Off by default: the ground,
+ * the relief and the water are then drawn flat by the other engine (TerrainView), which alone draws the painted pools,
+ * the ice and the frost. Never in the map editor nor in Basique, whatever this says (projectionShown).
+ */
+export const pixelReliefStore = createPersistedSwitchStore("terrainPixelRelief", false);
+
 /** Shown when its own switch wants it and Basique does not apply. */
 export function isEffectShown(name: EffectName): boolean {
     return get(effectShownStores[name]) && !isBasicActive();

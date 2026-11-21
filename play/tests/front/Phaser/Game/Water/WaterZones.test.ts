@@ -5,6 +5,7 @@ import {
     findDiveTarget,
     getWaterRectangles,
     intersectsWater,
+    isGroundUnderWater,
     isPointInWater,
     isWithinOneTileOfWater,
     segmentCrossesWater,
@@ -94,5 +95,14 @@ describe("getWaterRectangles on a map with raised floors", () => {
         const scene = sceneWithTwoPools();
         expect(getWaterRectangles(scene, 24)).toEqual([]);
         expect(getWaterRectangles(scene, 116)).toEqual([]);
+    });
+
+    it("tells the ground under water: the relief from 2 px, or a pool of the ground", () => {
+        const scene = sceneWithTwoPools();
+        const lake = { walkerSettledDepthAt: (x: number) => (x < 0 ? 5 : x < 10 ? 1 : 0) };
+        expect(isGroundUnderWater(scene, lake, -20, 0)).toBe(true);
+        expect(isGroundUnderWater(scene, lake, 5, 0)).toBe(false);
+        expect(isGroundUnderWater(scene, lake, 70, 70)).toBe(true);
+        expect(isGroundUnderWater(scene, lake, 200, 200)).toBe(false);
     });
 });

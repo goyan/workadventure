@@ -294,7 +294,8 @@ export const RgbLampPropertyData = PropertyBase.extend({
  * The states an object of the map may have, kept by the server (never in the WAM): a lamp is `on` or not. A closed
  * list: a new kind of object that can be switched (a shutter that is `open`) adds its key here.
  */
-export const ENTITY_STATE_KEYS = ["on"] as const;
+/** The states an object may be switched in: lit ("on"), and the hot water of a pool ("hot", that never freezes). */
+export const ENTITY_STATE_KEYS = ["on", "hot"] as const;
 /** A switch commands at most this many objects. */
 export const SWITCH_MAX_TARGETS = 200;
 
@@ -859,6 +860,11 @@ export enum WeatherType {
     /** The weather at the place of the map (Paris by default), from Open-Meteo through the pusher (else Automatic). */
     Real = "real",
     Rain = "rain",
+    /**
+     * @deprecated No longer a weather of its own: snow is a precipitation falling in cold air (Weather/Precipitation.ts).
+     * Kept so that maps saved with it and older clients are still read; shown and stored as a rain
+     * (precipitationWeather), and nothing produces it any more.
+     */
     Snow = "snow",
     Storm = "storm",
 }
@@ -878,8 +884,13 @@ export type AutoWeatherSettings = z.infer<typeof AutoWeather>;
 
 export const DEFAULT_AUTO_WEATHER: AutoWeatherSettings = {
     frequency: "normal",
-    include: [WeatherType.Rain, WeatherType.Snow, WeatherType.Storm, WeatherType.Fog],
+    include: [WeatherType.Rain, WeatherType.Storm, WeatherType.Fog],
 };
+
+/** The weather a saved or sent one stands for: a snow (maps and clients from before) is a rain. */
+export function precipitationWeather(weather: WeatherType): WeatherType {
+    return weather === WeatherType.Snow ? WeatherType.Rain : weather;
+}
 
 /** Where the map is: its real weather and its day/night follow this place (Paris when absent). */
 /** Whether this is a time zone the clock knows (an IANA name, like "Europe/Paris"). */
@@ -915,8 +926,14 @@ export const TERRAIN_CELL = 16;
 export const TERRAIN_CHUNK = 16;
 /** The lowest height a cell can have, in pixels of altitude: 8 tiles under the ground. */
 export const TERRAIN_MIN_HEIGHT = -256;
-/** The largest number a soil is kept as in a map (see Terrain/Soils.ts). */
-export const TERRAIN_MAX_SOIL = 6;
+/** The pools of a map are painted as soils: the styles of pool after the six soils (see Terrain/Pools.ts). */
+export const MAX_POOL_STYLES = 8;
+/** How many ladders can be put by hand on the pools of a map. */
+export const MAX_POOL_LADDERS = 200;
+/** The key "x,y" of a cell of the relief. */
+export const POOL_LADDER_CELL = /^-?\d+,-?\d+$/;
+/** The largest number a soil is kept as in a map: the six soils (see Terrain/Soils.ts), then the pool styles. */
+export const TERRAIN_MAX_SOIL = 6 + MAX_POOL_STYLES;
 /** The highest height a cell can have, in pixels of altitude: 8 tiles over the ground. */
 export const TERRAIN_MAX_HEIGHT = 256;
 /**
@@ -960,6 +977,51 @@ export const DEFAULT_WATER_SETTINGS = {
     maxSurface: 18,
     indoorDrain: 300,
 } as const;
+/**
+ * How the water with inertia makes its waves, on a map that says nothing: the friction of the ground as its soils
+ * give it, a slight damping, waves that break and water that carries its momentum.
+ */
+export const DEFAULT_WAVE_SETTINGS = { roughness: 1, damping: 0.02, breaking: 1, momentum: 1 } as const;
+/** The bounds of each of them. */
+export const WAVE_BOUNDS = {
+    roughness: [0, 10],
+    damping: [0, 1],
+    breaking: [0, 5],
+    momentum: [0, 1],
+} as const satisfies Record<keyof typeof DEFAULT_WAVE_SETTINGS, readonly [number, number]>;
+/**
+ * How finely the water of a map is computed and how often its players are told, on a map that says nothing: up to
+ * three moves of the water with inertia a step, and the room told once a second while it moves.
+ */
+export const DEFAULT_WATER_PACE = { precision: 3, updates: 1 } as const;
+/** The bounds of each of them. */
+export const WATER_PACE_BOUNDS = { precision: [1, 8], updates: [1, 10] } as const;
+/**
+ * How fast the water with inertia flows next to reality: 1 as in reality for the scale of the map (a tile is about
+ * 1.10 m wide), less to see it spread slower. From a tenth of its real pace to twice.
+ */
+export const DEFAULT_FLOW_PACE = 1;
+export const FLOW_PACE_BOUNDS = [0.1, 2] as const;
+
+/**
+ * The water of a map as in reality (the "Realistic" button of the relief tool): it goes at its real pace, has
+ * inertia and makes its waves as the ground and its depth make them, and no flood is cut short. The damping is the
+ * only figure that is not physical (0 in reality): the least that keeps the computation calm.
+ */
+export const REALISTIC_WATER_SETTINGS = {
+    runoff: 10,
+    evaporation: 0.2,
+    speed: 1,
+    absorption: 5,
+    current: 1,
+    maxSurface: 256,
+    indoorDrain: 300,
+    inertia: true,
+    waves: DEFAULT_WAVE_SETTINGS,
+    precision: DEFAULT_WATER_PACE.precision,
+    updates: 5,
+    flowPace: DEFAULT_FLOW_PACE,
+} as const;
 /** The fastest the floors of the rooms of a map may drain, in mm an hour. */
 export const MAX_WATER_INDOOR_DRAIN = 10000;
 /** The strongest current a map may set: twice the usual one. */
@@ -999,7 +1061,49 @@ export const WaterSettings = z.object({
      * the floor (sinks) take it faster. 0 keeps the water inside.
      */
     indoorDrain: z.number().min(0).max(MAX_WATER_INDOOR_DRAIN).default(DEFAULT_WATER_SETTINGS.indoorDrain),
+    /**
+     * Whether the water has inertia (on trial): it keeps its flow from a step to the next, so waves run and a lake
+     * levels as fast as its depth allows. Absent or false: the water creeps from cell to cell.
+     */
+    inertia: z.boolean().optional(),
+    /**
+     * How the water with inertia makes its waves (absent: DEFAULT_WAVE_SETTINGS):
+     * - `roughness`: how many times the friction of the ground its soils give (Manning). It grows with the speed
+     *   of the water and falls with its depth: next to nothing under a swell at sea, strong under a sheet of water
+     *   that runs on land. 0: no such friction.
+     * - `damping`: the share of its flow the water loses a second whatever its depth and its speed: what calms a
+     *   lake that was stirred.
+     * - `breaking`: how hard a wave whose front is steep for the water it runs in loses its flow (0: waves never
+     *   break).
+     * - `momentum`: the share of its momentum the water carries along (0: each passage keeps its own flow only;
+     *   1: a wave throws itself up a shore, and runs back).
+     */
+    /**
+     * How finely the water with inertia is computed: the most moves it makes in a step (3 when absent). More
+     * moves let a deep water carry its waves faster and a torrent run faster, for as many times the computation.
+     */
+    precision: z.number().int().min(WATER_PACE_BOUNDS.precision[0]).max(WATER_PACE_BOUNDS.precision[1]).optional(),
+    /**
+     * How many times a second the players are told the water while it moves (once when absent). More often, a
+     * wave is seen running instead of fading from a place to the next, for as much more network.
+     */
+    updates: z.number().int().min(WATER_PACE_BOUNDS.updates[0]).max(WATER_PACE_BOUNDS.updates[1]).optional(),
+    /**
+     * How fast the water with inertia flows next to reality (1 when absent): its waves, its floods and its
+     * currents all go that many times their real speed. What comes in and goes out (rain, sources, sinks) follows
+     * `speed`, not this.
+     */
+    flowPace: z.number().min(FLOW_PACE_BOUNDS[0]).max(FLOW_PACE_BOUNDS[1]).optional(),
+    waves: z
+        .object({
+            roughness: z.number().min(WAVE_BOUNDS.roughness[0]).max(WAVE_BOUNDS.roughness[1]),
+            damping: z.number().min(WAVE_BOUNDS.damping[0]).max(WAVE_BOUNDS.damping[1]),
+            breaking: z.number().min(WAVE_BOUNDS.breaking[0]).max(WAVE_BOUNDS.breaking[1]),
+            momentum: z.number().min(WAVE_BOUNDS.momentum[0]).max(WAVE_BOUNDS.momentum[1]),
+        })
+        .optional(),
 });
+export type WaveSettings = NonNullable<z.infer<typeof WaterSettings>["waves"]>;
 export type WaterSettings = z.infer<typeof WaterSettings>;
 
 /**
@@ -1151,14 +1255,37 @@ export const LifeSettings = z.object({
 export type LifeSettings = z.infer<typeof LifeSettings>;
 
 /**
- * The last snow of the map once another weather took its place: its ground melts from `endedAt`. Without `startedAt`,
- * a snow from before its start was kept: its ground was full.
+ * @deprecated Written by maps that had a snow weather; read so that they still load, used by nothing.
  */
 export const LastSnow = z.object({
     startedAt: z.number().finite().nonnegative().optional(),
     endedAt: z.number().finite().nonnegative(),
 });
 export type LastSnow = z.infer<typeof LastSnow>;
+
+/** A colour of a pool, `#rrggbb`. */
+const PoolColor = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+/**
+ * A style of pool of the map (see Terrain/Pools.ts): the colour of its water and of its coping, how deep it is (map
+ * pixels: the clearer the shallower, and the sooner it freezes), and whether its water is hot (it never freezes).
+ */
+export const PoolStyle = z.object({
+    water: PoolColor,
+    coping: PoolColor,
+    depthPx: z.number().min(8).max(160),
+    hot: z.boolean(),
+    /** Ladders along its top edge: none, one in its middle, or two at its quarters (one only on a short edge). */
+    ladders: z.number().int().min(0).max(2).default(2),
+});
+export type PoolStyle = z.infer<typeof PoolStyle>;
+/**
+ * The lighting of a map. `energySaving`: its lamps standing outdoors go out by day, while the sky gives light enough
+ * (see Lamps/EnergySaving.ts in play). Absent from a map saved before it existed: off.
+ */
+export const LightingSettings = z.object({
+    energySaving: z.boolean().default(false),
+});
+export type LightingSettings = z.infer<typeof LightingSettings>;
 
 export const WAMSettings = z.object({
     weather: Weather.optional().catch(undefined),
@@ -1175,6 +1302,14 @@ export const WAMSettings = z.object({
     water: WaterSettings.optional().catch(undefined),
     life: LifeSettings.optional().catch(undefined),
     meadow: MeadowSettings.optional().catch(undefined),
+    /** The styles of the pools painted on the map, by their number. Fail open: a broken list draws default pools. */
+    pools: z.array(PoolStyle).max(MAX_POOL_STYLES).optional().catch(undefined),
+    /**
+     * The ladders put by hand on the pools, by the cell of the top edge each stands on ("x,y"). The top edge of a pool
+     * with none gets the ladders of its style.
+     */
+    poolLadders: z.array(z.string().regex(POOL_LADDER_CELL)).max(MAX_POOL_LADDERS).optional().catch(undefined),
+    lighting: LightingSettings.optional().catch(undefined),
 });
 
 export const WAMFileFormat = z.object({

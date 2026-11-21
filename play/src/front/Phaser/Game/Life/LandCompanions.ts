@@ -12,6 +12,16 @@ export interface LandCompanionWorld {
     /** The feet of a player this client sees (the local one, or a remote one in view); undefined otherwise. */
     playerFeet(userId: number): Point | undefined;
     playerInWater(userId: number): boolean;
+    /**
+     * Whether a player this client sees flies (in a plane). A companion does not fly: it stays on the ground where it
+     * was, and walks back to its master once they landed.
+     */
+    playerFlying?(userId: number): boolean;
+    /**
+     * A way on the ground between two places (see Point), [] when there is none: the one a companion walks back to
+     * a master who landed. Without it, it walks straight to them.
+     */
+    groundPath?(from: Point, to: Point): Promise<Point[]>;
     editorOpen(): boolean;
     /** Whether the local player stands on the ground, where the animals are. */
     playerOnGround(): boolean;
@@ -92,7 +102,8 @@ export class LandCompanions {
 
     /**
      * Where a tamed animal is shown: behind its master; "hidden" while they are out of view (it went with them);
-     * undefined for a free animal, shown where the server says.
+     * undefined for a free animal, shown where the server says. While its master flies it stays on the ground where
+     * it was (the server keeps it there too), and walks back to them once they landed.
      */
     public poseOf(animalId: number, nowMs: number): WanderPose | "hidden" | undefined {
         const entry = this.followers.get(animalId);
@@ -103,13 +114,25 @@ export class LandCompanions {
             entry.follower = undefined;
             return "hidden";
         }
+        const flying = this.world.playerFlying?.(entry.owner) ?? false;
+        // Nobody here saw where it was left on the ground: shown where the server keeps it (its last place there).
+        if (!entry.follower && flying) return undefined;
         entry.follower ??= new JungleCompanionFollower(feet, nowMs);
-        return entry.follower.poseAt(
+        const pose = entry.follower.poseAt(
             nowMs,
             feet,
             !this.world.playerInWater(entry.owner),
             this.slots.get(animalId) ?? 0,
+            flying,
         );
+        if (!flying) {
+            entry.follower.seekWayBack(
+                nowMs,
+                feet,
+                (from, to) => this.world.groundPath?.(from, to) ?? Promise.resolve([to]),
+            );
+        }
+        return pose;
     }
 
     /** How many animals of the land follow the local player. */

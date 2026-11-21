@@ -180,7 +180,6 @@ export function skyLightAt(
 const OVERCAST_DIMMING = 0.65;
 const BAD_WEATHER_LIGHT: Partial<Record<WeatherType, number>> = {
     [WeatherType.Rain]: 0.3,
-    [WeatherType.Snow]: 0.5,
     [WeatherType.Storm]: 0.15,
     [WeatherType.Fog]: 0.3,
 };
@@ -188,7 +187,7 @@ const BAD_WEATHER_LIGHT: Partial<Record<WeatherType, number>> = {
 /**
  * The share of the direct light of the sky that reaches the ground, for the weather shown (effective, after the
  * automatic and real weathers are resolved) and the cloudiness of a clear sky (0 to 1): all of it under a clear sky,
- * 35 % under an overcast one, half in the snow, 30 % in the rain or the fog, 15 % in a storm.
+ * 35 % under an overcast one, 30 % in the rain (whether it falls as drops or as flakes) or the fog, 15 % in a storm.
  */
 export function skyWeatherFactor(weather: WeatherType, cloudiness: number): number {
     return BAD_WEATHER_LIGHT[weather] ?? 1 - OVERCAST_DIMMING * clamp01(cloudiness);

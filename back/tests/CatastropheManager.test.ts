@@ -5,6 +5,7 @@ import {
     DOWNPOURS_PER_ROOM,
     DRAIN_LASTS_MS,
     DRAINS_PER_ROOM,
+    FIRE_PATCH_LASTS_MS,
     METEOR_FALL_MS,
     METEORS_PER_ROOM,
 } from "@workadventure/map-editor";
@@ -309,6 +310,39 @@ describe("a patch of fire", () => {
             { x: 320, y: 160, radiusTiles: 8 },
             { x: 320, y: 160, radiusTiles: 2 },
         ]);
+    });
+
+    it("shows the room the flame of each player who holds it, one flame a player", () => {
+        const told: {
+            id: number;
+            kind: CatastropheKind;
+            x: number;
+            y: number;
+            radiusTiles: number;
+            impactInMs: number;
+        }[] = [];
+        const room = {
+            sendSubMessageToRoom: (message: SubToPusherRoomMessage): void => {
+                if (message.message?.$case === "catastropheMessage") told.push(message.message.catastropheMessage);
+            },
+        };
+        const manager = new CatastropheManager(
+            room,
+            () => MAP,
+            () => undefined,
+            () => undefined,
+            () => 1_000_000,
+        );
+        expect(manager.request(1, FIRE, 320, 160, 3, false)).toBe(true);
+        expect(manager.request(1, FIRE, 352, 160, 3, false)).toBe(true);
+        expect(manager.request(2, FIRE, 64, 64, 999, false)).toBe(true);
+        // Refused: nothing is shown.
+        expect(manager.request(3, FIRE, -5, 64, 2, false)).toBe(false);
+        expect(told.map((flame) => flame.kind)).toEqual([FIRE, FIRE, FIRE]);
+        expect(told[0]).toMatchObject({ x: 320, y: 160, radiusTiles: 3, impactInMs: FIRE_PATCH_LASTS_MS });
+        expect(told[1]).toMatchObject({ id: told[0].id, x: 352 });
+        expect(told[2].id).not.toBe(told[0].id);
+        expect(told[2].radiusTiles).toBe(8);
     });
 
     it("is refused outside the map, for numbers that are not, and after five in a second for a player", () => {

@@ -4,7 +4,8 @@ import type { Point, WanderMap } from "../Wander/WanderSchedule";
 /**
  * The map the jungle animals walk on: the one of the placed animals, cut down to the outdoors. A path that goes
  * through a building (in by a door, out by another) is no path, so they never enter one nor open its doors. No
- * `seats`: jungle animals never sit on furniture.
+ * `seats`: jungle animals never sit on furniture. The points are where the feet are on the ground (see Point): a deck
+ * over the outdoors is outdoors, a storey over a room is not.
  */
 export function outdoorWanderMap(
     base: WanderMap,
@@ -47,6 +48,12 @@ export function outdoorWanderMap(
             }
             return staysOutdoor(previous, to) ? path : [];
         },
+        // A raised floor over the outdoors is in the open air (the deck of a bridge): they walk it. The storeys of a
+        // building stand over its rooms: never.
+        levelsAt: (tile) =>
+            isOutdoor(tile.x * tileSize + tileSize / 2, tile.y * tileSize + tileSize / 2)
+                ? (base.levelsAt?.(tile) ?? [])
+                : [],
         // They drink like the others, at the shores that are outdoors.
         shores: () => (base.shores?.() ?? []).filter(isOutdoorPoint),
         drinkIntervalMs: () => base.drinkIntervalMs?.(),

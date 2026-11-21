@@ -21,6 +21,7 @@ function createScene() {
                     alpha: 1,
                     visible: true,
                     flipX: false,
+                    tint: undefined as number | undefined,
                     destroyed: false,
                     setDepth: () => image,
                     setPosition: (nextX: number, nextY: number) => {
@@ -40,6 +41,14 @@ function createScene() {
                         image.flipX = flip;
                         return image;
                     },
+                    setTint: (tint: number) => {
+                        image.tint = tint;
+                        return image;
+                    },
+                    clearTint: () => {
+                        image.tint = undefined;
+                        return image;
+                    },
                     destroy: () => {
                         image.destroyed = true;
                     },
@@ -55,6 +64,7 @@ type SceneOfView = ConstructorParameters<typeof AquaticLifeView>[0];
 
 function createView(
     shown = { value: true },
+    frozen = { value: false },
     dropAt?: (x: number, y: number) => number,
     hiddenAt?: (x: number, y: number) => boolean,
 ) {
@@ -66,13 +76,29 @@ function createView(
         life,
         () => shown.value,
         () => false,
+        () => frozen.value,
         dropAt,
         hiddenAt,
     );
-    return { view, life, images, markDirty, shown };
+    return { view, life, images, markDirty, shown, frozen };
 }
 
 describe("AquaticLifeView", () => {
+    it("stops an animal caught in the ice, pale and blue, and lets it swim on once the water thaws", () => {
+        const { view, life, images, frozen } = createView();
+        life.receive([{ id: 1, kind: 0, x: 100, y: 50 }], 0);
+        view.update(0);
+        frozen.value = true;
+        life.receive([{ id: 1, kind: 0, x: 60, y: 50 }], 1000);
+        view.update(1500);
+        expect(images[0]).toMatchObject({ x: 100, y: 50, tint: 0xbfe0f0 });
+        expect(images[0].alpha).toBeCloseTo(0.45);
+        frozen.value = false;
+        view.update(2000);
+        expect(images[0]).toMatchObject({ x: 60, y: 50, tint: undefined });
+        expect(images[0].alpha).toBeCloseTo(0.7);
+    });
+
     it("draws an image for each animal, where it is, turned towards where it goes", () => {
         const { view, life, images } = createView();
         life.receive([{ id: 1, kind: 0, x: 100, y: 50 }], 0);
@@ -84,7 +110,7 @@ describe("AquaticLifeView", () => {
     });
 
     it("draws a fish of a lake at the bottom of a hollow on the water drawn lower", () => {
-        const { view, life, images } = createView({ value: true }, () => 30);
+        const { view, life, images } = createView({ value: true }, { value: false }, () => 30);
         life.receive([{ id: 1, kind: 0, x: 100, y: 50 }], 0);
         view.update(0);
         expect(images[0]).toMatchObject({ x: 100, y: 80 });
@@ -93,6 +119,7 @@ describe("AquaticLifeView", () => {
     it("does not draw a fish of the part of a lake that the south rim of its hollow hides", () => {
         const { view, life, images } = createView(
             { value: true },
+            { value: false },
             () => 30,
             (_x, y) => y > 100,
         );
@@ -110,7 +137,7 @@ describe("AquaticLifeView", () => {
     it("does not look at the water under an animal far out of the screen", () => {
         const dropAt = vi.fn(() => 30);
         const hiddenAt = vi.fn(() => false);
-        const { view, life, images } = createView({ value: true }, dropAt, hiddenAt);
+        const { view, life, images } = createView({ value: true }, { value: false }, dropAt, hiddenAt);
         life.receive(
             [
                 { id: 1, kind: 0, x: 900, y: 900 },
@@ -127,7 +154,7 @@ describe("AquaticLifeView", () => {
 
     it("still places an animal out of the screen whose water is drawn in it (a lake on a mount, south of the view)", () => {
         const dropAt = vi.fn(() => -120);
-        const { view, life, images } = createView({ value: true }, dropAt);
+        const { view, life, images } = createView({ value: true }, { value: false }, dropAt);
         life.receive([{ id: 1, kind: 0, x: 100, y: 300 }], 0);
         view.update(0);
         expect(images[0]).toMatchObject({ x: 100, y: 180 });
@@ -136,7 +163,7 @@ describe("AquaticLifeView", () => {
     it("asks ten times a second at most whether the rim of its hollow hides an animal", () => {
         const hidden = { value: false };
         const hiddenAt = vi.fn(() => hidden.value);
-        const { view, life, images } = createView({ value: true }, () => 0, hiddenAt);
+        const { view, life, images } = createView({ value: true }, { value: false }, () => 0, hiddenAt);
         life.receive([{ id: 1, kind: 0, x: 100, y: 50 }], 0);
         for (const now of [0, 16, 33, 50, 66, 83]) view.update(now);
         expect(hiddenAt).toHaveBeenCalledTimes(1);

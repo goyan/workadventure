@@ -19,8 +19,6 @@ export type RealWeatherState =
           since: number;
           /** End of the run when known, for a fog to fade out. */
           until?: number;
-          /** When a snow just before this weather stopped, for the ground to melt. */
-          snowMeltFrom?: number;
           /** Clouds of a clear sky, 0 to 1, faded in from those of the quarter hour before. */
           cloudiness?: number;
           /** Cloud cover of a rain or a storm, 0 to 1: how dense its grey or dark clouds are. */
@@ -67,7 +65,6 @@ export function realWeatherStateAt(forecast: RealForecastState, date: Date | und
     if (!date) return { status: "pending" };
     const now = realWeatherAt(forecast.slots, date.getTime());
     if (!now) return { status: "unavailable" };
-    const snowMeltFrom = now.before === WeatherType.Snow && now.weather !== WeatherType.Snow ? now.since : undefined;
     // White clouds belong to a clear sky: those of the quarter hour before count only if it was clear too.
     const weatherBefore = now.slotAt === now.since ? now.before : now.weather;
     const clearBefore = weatherBefore === WeatherType.Clear ? now.cloudinessBefore : 0;
@@ -85,7 +82,6 @@ export function realWeatherStateAt(forecast: RealForecastState, date: Date | und
         weather: now.weather,
         since: now.since,
         until: now.until,
-        snowMeltFrom,
         ...(cloudiness > 0 ? { cloudiness } : {}),
         ...(raining && now.cloudiness > 0 ? { cloudCover: now.cloudiness } : {}),
         ...(windFrom !== undefined ? { windFrom } : {}),
@@ -98,7 +94,7 @@ export function realWeatherStateAt(forecast: RealForecastState, date: Date | und
 
 /**
  * The map weather settings with "real" replaced by what it shows: the weather of the quarter hour under way, begun at
- * the start of its run (so fog and snow fade in); clear until the first answer, so no drawn weather flashes on load; the seasonal
+ * the start of its run (so a fog fades in); clear until the first answer, so no drawn weather flashes on load; the seasonal
  * draw with the map's Auto settings while the weather service is unavailable. Other modes are returned untouched.
  */
 export function withRealWeather(
@@ -106,14 +102,13 @@ export function withRealWeather(
     real: RealWeatherState,
 ): MapSnowSettings | undefined {
     if (settings?.weather !== WeatherType.Real) return settings;
-    const { weatherAuto, weatherLocation, lastSnow } = settings;
+    const { weatherAuto, weatherLocation } = settings;
     switch (real.status) {
         case "known":
             return {
                 weather: real.weather,
                 weatherStartedAt: real.since,
                 weatherEndsAt: real.until,
-                snowMeltFrom: real.snowMeltFrom,
                 cloudiness: real.cloudiness,
                 cloudCover: real.cloudCover,
                 windFrom: real.windFrom,
@@ -123,10 +118,9 @@ export function withRealWeather(
                 rainDryFrom: real.rainDryFrom,
                 weatherAuto,
                 weatherLocation,
-                lastSnow,
             };
         case "unavailable":
-            return { weather: WeatherType.Automatic, weatherAuto, weatherLocation, lastSnow };
+            return { weather: WeatherType.Automatic, weatherAuto, weatherLocation };
         default:
             return { weather: WeatherType.Clear, weatherAuto, weatherLocation };
     }

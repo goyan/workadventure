@@ -39,11 +39,13 @@ import {
     listeningZoneJamKey,
     type Season,
     seasonAt,
+    snowShareOf,
     type WAMFileFormat,
     WAMSettingsUtils,
     WeatherType,
-    bridgeTilesOf,
+    bridgesOf,
 } from "@workadventure/map-editor";
+import type { Bridges, WeatherLocation } from "@workadventure/map-editor";
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
 import Debug from "debug";
 import { asError } from "catch-unknown";
@@ -51,6 +53,7 @@ import { AirplaneSounds, AIRPLANE_SOUND } from "@wa/front/Phaser/Vehicle/Airplan
 import { SkateboardSounds, SKATEBOARD_SOUNDS } from "@wa/front/Phaser/Vehicle/SkateboardSounds";
 import { Vehicle } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { AIRPLANE_IMAGE_URL, AIRPLANE_SOURCE_TEXTURE } from "@wa/front/Phaser/Vehicle/AirplaneArtwork";
+import { GROUND_TEXTURE_URLS } from "@wa/front/Phaser/Game/Terrain/TexturedGround";
 import { textMessageStore } from "@wa/front/Stores/TypeMessageStore/TextMessageStore";
 import { connectionManager } from "@wa/front/Connection/ConnectionManager";
 import { urlManager } from "@wa/front/Url/UrlManager";
@@ -287,12 +290,12 @@ import {
     jungleVolumeStore,
     notificationSoundVolumeStore,
 } from "@wa/front/Stores/SoundEffectsStore";
+import { waterCycleNow } from "@wa/front/Phaser/Game/Weather/Frost";
 import { karaokeSingerActiveStore } from "../../Karaoke/KaraokeGameStore";
 import type { TileBarriers } from "../../Utils/TileBarriers";
 import { nerfEquippedStore } from "../../Stores/NerfStore";
 import { torchEquippedStore } from "../../Stores/TorchStore";
 import { rodEquippedStore } from "../../Stores/FishingStore";
-import { mapSnowShownStore } from "../../Stores/SeasonalThemeStore";
 import { aquaticLifeShownStore, cloudsShownStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
 import { skyShadowCategoriesStore } from "../../Stores/SkyLightStore";
 import type { SkyShadowCategories } from "../../Stores/SkyLightStore";
@@ -305,9 +308,10 @@ import {
     terrainWaterStatsStore,
 } from "../../Stores/TerrainEditorStore";
 import { jungleEnabledStore } from "../../Stores/JungleStore";
-import { isEffectShown } from "../../Stores/EffectsStore";
+import { isEffectShown, pixelReliefStore } from "../../Stores/EffectsStore";
 import { fireConditionsStore } from "../../Stores/FireConditionsStore";
 import { isBasicActive } from "../../Stores/BasicModeStore";
+import { waterFlowOverlayStore } from "../../Stores/VisualisationStore";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -317,20 +321,23 @@ import { floorPath } from "./MapEditor/MapLayer/FloorPath";
 import { levelUnderPoint } from "./MapEditor/MapLayer/FloorOperations";
 import { levelItems } from "./MapEditor/MapLayer/MapLayerLevels";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
-import { effectiveWeather, weatherAtTime } from "./Weather/WeatherFrame";
+import { weatherAtTime } from "./Weather/WeatherFrame";
 import { setRoomConditions, shownWeatherSettings } from "./Weather/RealWeatherClient";
 import { isSwayingTree, TreeSway } from "./Nature/TreeSway";
 import { TreePoseTextures } from "./Nature/TreePoses";
 import { TreeSeasonEffects } from "./Nature/TreeSeasonEffects";
 import { avatarAltitude, pointerAltitude } from "./Floors/AvatarAltitude";
 import { FloorSpike } from "./Floors/FloorSpike";
+import type { FloorOccupant } from "./Floors/FloorSpike";
 import { FLOOR_Z_VARIABLE, decodeFloorZ } from "./Floors/FloorProtocol";
 import { UpperDoors } from "./Floors/UpperDoors";
 import type { RaisedCharacter } from "./Floors/UpperDoors";
 import { wallBarriers } from "./MapEditor/MapLayer/MapLayerBarriers";
 import { readMapLayerEntityStates } from "./MapEditor/MapLayer/MapLayerSync";
 import { autumnProgress } from "./Nature/TreeLeafFall";
-import { mapSnowCoverage } from "./Weather/SnowCover";
+import { isGroundUnderWater } from "./Water/WaterZones";
+import { followsServerGround, snowCoverHere, snowCoverOfMap } from "./Weather/GroundSource";
+import { precipitationAirNow, roomPrecipitationAir } from "./Weather/PrecipitationAir";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
 import { gameManager } from "./GameManager";
 import { EmoteManager } from "./EmoteManager";
@@ -381,6 +388,9 @@ import { WeatherManager } from "./Weather/WeatherManager";
 import { TerrainWater } from "./Terrain/TerrainWater";
 import { AquaticLife } from "./Life/AquaticLife";
 import { AquaticLifeView } from "./Life/AquaticLifeView";
+import { isOnFrozenWater, isPoolFrozen } from "./Ice/FrozenWater";
+import { FrozenPoolsView } from "./Ice/FrozenPoolsView";
+import { getFrozenPoolRectangles } from "./Water/WaterZones";
 import { LandLifeView } from "./Life/LandLifeView";
 import { GullLifeView, isGullKind } from "./Life/GullLifeView";
 import { LandCompanions } from "./Life/LandCompanions";
@@ -397,9 +407,11 @@ import { ReliefTiles } from "./Terrain/ReliefTiles";
 import type { BlockPaintPool } from "./Terrain/BlockPaintPool";
 import { createBlockPaintPool } from "./Terrain/BlockPaintWorkers";
 import { hiddenBehindRim, projectionShown, shiftAt } from "./Terrain/ReliefProjection";
+import { TerrainView } from "./Terrain/TerrainView";
 import { CharacterDrops } from "./Terrain/CharacterDrops";
 import { avatarDrop, surfaceDropAt, waterDepthAtPoint } from "./Terrain/AvatarDrop";
 import { WaterFlowView } from "./Terrain/WaterFlowView";
+import { WaterFlowOverlay } from "./Terrain/WaterFlowOverlay";
 import { gunzip } from "./Terrain/WaterStateCodec";
 import { MeadowState } from "./Terrain/MeadowState";
 import { entityOutdoorRect, OutdoorTracker } from "./Outdoor/OutdoorTracker";
@@ -408,11 +420,13 @@ import { joinedUserId } from "./Jungle/JungleCompanions";
 import { InteractionPrompt } from "./Water/InteractionPrompt";
 import type { OutdoorGrid } from "./Outdoor/OutdoorGrid";
 import { SeasonalThemeManager } from "./Seasonal/SeasonalThemeManager";
-import { forcedTreeSeason, SeasonalTheme } from "./Seasonal/SeasonalTheme";
+import type { SeasonalTheme } from "./Seasonal/SeasonalTheme";
+import { forcedTreeSeason } from "./Seasonal/SeasonalTheme";
 import type { WalkerSample } from "./Christmas/FootprintTrail";
 import { NightManager } from "./Night/NightManager";
 import { PerfMonitor } from "./Perf/PerfMonitor";
 import { skyWeatherFactor } from "./Night/SkyLight";
+import { mapDaylightAt } from "./Lamps/MapDaylight";
 import { SkyShadowManager } from "./SkyShadows/SkyShadowManager";
 import { SkyWindowLightManager } from "./SkyShadows/SkyWindowLightManager";
 import { SkyMovingShadows } from "./SkyShadows/SkyMovingShadows";
@@ -434,6 +448,7 @@ import { TreeFireState } from "./Fire/TreeFireState";
 import { TreeFireView } from "./Fire/TreeFireView";
 import { DownpourView } from "./Catastrophe/DownpourView";
 import { DrainView } from "./Catastrophe/DrainView";
+import { FireTorchView } from "./Catastrophe/FireTorchView";
 import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
 import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
 import { CoffeeManager } from "./Coffee/CoffeeManager";
@@ -561,7 +576,6 @@ export class GameScene extends DirtyScene {
     private localVolumeStoreUnsubscriber: Unsubscriber | undefined;
     private unsubscribers: Unsubscriber[] = [];
     /** Whether the map snow shows for this person (trees, Christmas decor): read once per change, not at every image. */
-    private mapSnowShown = true;
     private storesSubscribed = false;
     private entityPermissions: EntityPermissions | undefined;
     private entityPermissionsDeferred: Deferred<EntityPermissions> = new Deferred();
@@ -613,6 +627,8 @@ export class GameScene extends DirtyScene {
     private readonly terrainWater = new TerrainWater();
     /** When the bridges of the map were last read, in ms of the game. */
     private bridgesReadAt = -Infinity;
+    /** The bridges of the map: decks one walks up to from the ground (see bridgesOf). */
+    private bridges: Bridges | undefined;
     /** The grass and the moisture of the soil of the map, as the server tells them. */
     private readonly meadow = new MeadowState();
     private meadowSubscription: Subscription | undefined;
@@ -626,9 +642,12 @@ export class GameScene extends DirtyScene {
     private treeFireView: TreeFireView | undefined;
     private downpourView: DownpourView | undefined;
     private drainView: DrainView | undefined;
+    private fireTorchView: FireTorchView | undefined;
     private catastropheSubscription: Subscription | undefined;
     /** The animals of the water of the relief, as the server tells them. */
     private readonly aquaticLife = new AquaticLife();
+    /** The ice of the frozen pools and the steam of the heated ones, in the cold. */
+    private frozenPoolsView: FrozenPoolsView | undefined;
     private aquaticLifeView: AquaticLifeView | undefined;
     private readonly gullLife = new AquaticLife(isGullKind);
     private gullLifeView: GullLifeView | undefined;
@@ -649,11 +668,14 @@ export class GameScene extends DirtyScene {
     private waterGlints: WaterGlints | undefined;
     /** The relief seen in 3/4: the dug ground drawn lower, its faces, its water. */
     private reliefTiles: ReliefTiles | undefined;
+    /** The other engine of the ground: flat, by shaders (the pools, the ice, the frost). It draws unless the relief is shown in 3/4. */
+    private terrainView: TerrainView | undefined;
     /** The workers that paint the blocks of the terrain off the thread of the game; none where there is no Worker. */
     private blockPainters: BlockPaintPool | undefined;
     /** The characters drawn lower in the hollows of the relief, while the image is drawn. */
     private characterDrops: CharacterDrops | undefined;
     private waterFlowView: WaterFlowView | undefined;
+    private waterFlowOverlay: WaterFlowOverlay | undefined;
     private terrainWaterQueue: Promise<void> = Promise.resolve();
     private skyShadowManager: SkyShadowManager | undefined;
     private skyWindowLightManager: SkyWindowLightManager | undefined;
@@ -806,6 +828,8 @@ export class GameScene extends DirtyScene {
     //hook preload scene
     preload(): void {
         this.load.image(AIRPLANE_SOURCE_TEXTURE, AIRPLANE_IMAGE_URL);
+        // The ground textures of the relief (soils, grass, snow): ready before its first drawing.
+        for (const url of GROUND_TEXTURE_URLS) this.load.image(url, url);
         //initialize frame event of scripting API
         this.listenToIframeEvents();
 
@@ -1755,10 +1779,16 @@ export class GameScene extends DirtyScene {
         this.reliefTiles = undefined;
         this.blockPainters?.destroy();
         this.blockPainters = undefined;
+        this.terrainView?.destroy();
+        this.terrainView = undefined;
         this.characterDrops?.destroy();
         this.characterDrops = undefined;
         this.waterFlowView?.destroy();
         this.waterFlowView = undefined;
+        this.frozenPoolsView?.destroy();
+        this.frozenPoolsView = undefined;
+        this.waterFlowOverlay?.destroy();
+        this.waterFlowOverlay = undefined;
         this.aquaticLifeView?.destroy();
         this.aquaticLifeView = undefined;
         this.gullLifeView?.destroy();
@@ -1813,6 +1843,8 @@ export class GameScene extends DirtyScene {
         this.downpourView = undefined;
         this.drainView?.destroy();
         this.drainView = undefined;
+        this.fireTorchView?.destroy();
+        this.fireTorchView = undefined;
         rodEquippedStore.set(false);
         this._coffeeManager?.destroy();
         this._coffeeManager = undefined;
@@ -1941,13 +1973,25 @@ export class GameScene extends DirtyScene {
     }
 
     /**
-     * The bridges of the map are read again twice a second at most: an editor lays or erases one, and what walks
-     * (the avatars, the wandering animals) crosses the water there, or no longer.
+     * The bridges of the map are read again twice a second at most: an editor lays or erases one, and the animals
+     * cross the water there, or no longer. An avatar walks on their slabs as on any raised floor.
      */
     private refreshBridges(time: number): void {
         if (time - this.bridgesReadAt < 500) return;
         this.bridgesReadAt = time;
-        this.terrainWater.setBridges(bridgeTilesOf(this.getGameMap().getWamFile()?.getWam()));
+        this.bridges = bridgesOf(this.getGameMap().getWamFile()?.getWam());
+        this.terrainWater.setBridges(this.bridges.tiles);
+    }
+
+    /** Who shows and fades with the raised floor they stand on: the other players, and the animals that walk around. */
+    private *floorOccupants(): Generator<FloorOccupant> {
+        yield* this.MapPlayersByKey.values();
+        if (this.wanderingCharactersManager) yield* this.wanderingCharactersManager.floorOccupants();
+    }
+
+    /** How high over the ground an animal walks above a point of the ground (map pixels): 0 off the bridges. */
+    public getBridgeElevationAt(x: number, y: number): number {
+        return this.bridges?.elevationAt(x, y) ?? 0;
     }
 
     /** The floor tiles of the map layer laid on the ground. */
@@ -2065,10 +2109,7 @@ export class GameScene extends DirtyScene {
      */
     private skyWeatherFactor(): number {
         if (!get(weatherEffectsEnabledStore) || isBasicActive()) return 1;
-        const theme = this.getSeasonalTheme();
-        const cloudiness =
-            theme === SeasonalTheme.Christmas || !get(cloudsShownStore) ? 0 : (this.shownWeather()?.cloudiness ?? 0);
-        // The weather of the map, not the snow of the Christmas theme: a personal decor dims no light.
+        const cloudiness = get(cloudsShownStore) ? (this.shownWeather()?.cloudiness ?? 0) : 0;
         return skyWeatherFactor(this.getMapWeather(), cloudiness);
     }
 
@@ -2296,6 +2337,10 @@ export class GameScene extends DirtyScene {
         this.wanderingCharactersManager?.forEachDoorOpener((position) =>
             characters.push({ ...position, silent: true }),
         );
+        // The ones on a raised floor open the doors of that floor.
+        this.wanderingCharactersManager?.forEachRaisedDoorOpener((position, elevation) =>
+            raised.push({ character: { ...position, silent: true }, elevation }),
+        );
         const locks = this._knockManager?.getDoorLocks();
         this.doorAnimator.update(time, characters, listener, locks);
         this.upperDoors ??= new UpperDoors(
@@ -2355,10 +2400,12 @@ export class GameScene extends DirtyScene {
             this._torchManager?.update(time);
             this._fishingManager?.update(time);
             this.meteorView?.update(time);
+            this.terrainView?.setWaterRings(this.meteorView?.waterRings(time) ?? []);
             this.fireView?.update(time);
             this.treeFireView?.update(time);
             this.downpourView?.update(time);
             this.drainView?.update(time);
+            this.fireTorchView?.update(time);
             this.nightManager?.update(time);
             this.lampManager?.update(time);
             this.gameSwitches?.update(time);
@@ -2374,7 +2421,7 @@ export class GameScene extends DirtyScene {
             this.seasonalThemeManager?.update(time, () => this.seasonalWalkers());
             this.gameMapFrontWrapper
                 .getEntitiesManager()
-                .updateSeason(time, serverDate, forcedTreeSeason(this.getSeasonalTheme()), this.mapSnowShown);
+                .updateSeason(time, serverDate, forcedTreeSeason(this.getSeasonalTheme()));
             this.weatherManager?.update(
                 time,
                 serverDate,
@@ -2393,43 +2440,44 @@ export class GameScene extends DirtyScene {
             pointer?.updateWorldPoint(this.cameras.main);
             // The ground drawn under the pointer: down in a hollow when the relief is seen in 3/4.
             const pointed = pointer && { x: pointer.worldX, y: pointer.worldY };
-            pointerAltitudeStore.set(
-                pointerAltitude(terrain, pointed && (this.reliefTiles?.groundPointAt(pointed) ?? pointed)),
-            );
-            // The relief is drawn in 3/4 out of the editor; flat in it, to dig and place where one aims.
-            const projected = projectionShown({
-                chosen: true,
-                editorOpen: get(mapEditorModeStore),
-                basic: isBasicActive(),
-            });
-            // Nothing of it in the basic mode; flat while the map is edited.
-            this.mapGroundLayout?.refresh(time);
-            this.reliefTiles?.setHidden(isBasicActive());
-            this.reliefTiles?.setProjected(!get(mapEditorModeStore));
-            this.reliefTiles?.update(time);
+            pointerAltitudeStore.set(pointerAltitude(terrain, pointed && this.groundPointUnder(pointed)));
+            // One engine draws the ground: the relief in 3/4 where the player chose it (never in the editor nor in
+            // Basique), the flat one else (nothing in Basique).
+            const projected = this.pixelReliefShown();
+            this.terrainView?.update(time);
+            if (this.reliefTiles) {
+                this.mapGroundLayout?.refresh(time);
+                this.reliefTiles.setHidden(!projected);
+                this.reliefTiles.update(time);
+            }
             this.waterGlints?.update(time);
-            // The footprints: none laid while the map is edited, none shown in the basic mode.
-            this.groundFootprints?.setVisible(!isBasicActive());
-            if (this.groundFootprints?.update(time, get(mapEditorModeStore) ? [] : this.seasonalWalkers())) {
+            // The footprints of the terrain: none laid nor shown while the relief is not seen in 3/4.
+            this.groundFootprints?.setVisible(projected);
+            if (this.groundFootprints?.update(time, projected ? this.seasonalWalkers() : [])) {
                 this.markDirty();
             }
-            // Every character drawn as low as the ground (or the water) under it, in a hollow.
-            if (this.reliefTiles) {
-                const relief = this.terrainWater.relief();
-                const dropOf = (character: { x: number; y: number; getFloorZ(): number }): number =>
-                    avatarDrop(
-                        relief,
-                        character,
-                        waterDepthAtPoint((x, y) => this.terrainWater.depthAt(x, y, time), character.x, character.y),
-                        character.getFloorZ(),
-                        !projected,
-                        this.terrainWater.isBridgeAt(character.x, character.y),
-                    );
-                if (this.CurrentPlayer) this.CurrentPlayer.setGroundDrop(dropOf(this.CurrentPlayer));
-                for (const remote of this.MapPlayersByKey.values()) remote.setGroundDrop(dropOf(remote));
-            }
+            // Every character drawn as low as the ground (or the water) under it, in a hollow; at its place when the
+            // relief is not seen in 3/4.
+            const relief = this.terrainWater.relief();
+            const dropOf = (character: { x: number; y: number; getFloorZ(): number }): number =>
+                projected
+                    ? avatarDrop(
+                          relief,
+                          character,
+                          waterDepthAtPoint((x, y) => this.terrainWater.depthAt(x, y, time), character.x, character.y),
+                          character.getFloorZ(),
+                          false,
+                          // A bridge is a raised floor: who walks on its deck is on a floor (no drop), who is
+                          // under it is on the ground, in its water.
+                          false,
+                      )
+                    : 0;
+            if (this.CurrentPlayer) this.CurrentPlayer.setGroundDrop(dropOf(this.CurrentPlayer));
+            for (const remote of this.MapPlayersByKey.values()) remote.setGroundDrop(dropOf(remote));
             this.waterFlowView?.update(time);
+            this.waterFlowOverlay?.update(time);
             this.aquaticLifeView?.update(time);
+            this.frozenPoolsView?.update(time);
             this.gullLifeView?.update(time);
             this.landCompanions?.update(time);
             this.landLifeView?.update(time);
@@ -3057,12 +3105,13 @@ export class GameScene extends DirtyScene {
                 // The dryness, the fire and the ash are empty from a server that does not know them.
                 const read = (bytes: Uint8Array): Promise<Uint8Array> =>
                     bytes.length > 0 ? gunzip(bytes) : Promise.resolve(new Uint8Array(0));
-                const [grass, moisture, dryness, fire, ash] = await Promise.all([
+                const [grass, moisture, dryness, fire, ash, snow] = await Promise.all([
                     gunzip(message.grass),
                     gunzip(message.moisture),
                     read(message.dryness),
                     read(message.fire),
                     read(message.ash),
+                    read(message.snow),
                 ]);
                 this.meadow.receive({
                     width: message.width,
@@ -3072,18 +3121,27 @@ export class GameScene extends DirtyScene {
                     dryness,
                     fire,
                     ash,
+                    snow,
                 });
             })
             .catch((error: unknown) => console.warn("A state of the meadow of the map could not be read", error));
     }
 
     /**
-     * The season of the ground of the map, by the calendar of Paris like the meadow of the server (not the personal
+     * The season of the ground of the map, by the calendar of its place like the meadow of the server (not the personal
      * theme: the snow of the heights slows everyone alike). Unknown until the time of the server is.
      */
     public getGroundSeason(): Season | undefined {
         const date = this.nightManager?.serverDate();
-        return date && Number.isFinite(date.getTime()) ? seasonAt(date) : undefined;
+        return date && Number.isFinite(date.getTime()) ? seasonAt(date, this.getMapPlace()) : undefined;
+    }
+
+    /**
+     * The place saved with the map (Paris without one): its seasons and its day, the same for every player and for the
+     * server. Not the place a person tries in the weather settings, nor the city of the sky of the world they follow.
+     */
+    public getMapPlace(): WeatherLocation | undefined {
+        return this.getGameMap().getWamFile()?.getWam().settings?.weatherLocation;
     }
 
     /** The meadow of the map, for what reads its grass and the moisture of its soil. */
@@ -3136,38 +3194,125 @@ export class GameScene extends DirtyScene {
 
     /**
      * How much lower the surface of the water under a point is drawn (a lake at the bottom of a hollow, in 3/4): fish,
-     * floats and glints lie on it. Nothing on a bridge nor while the map is edited.
+     * floats and glints lie on it. Nothing on a bridge, nor while the relief is not shown in 3/4.
      */
     public surfaceDropAt(x: number, y: number): number {
+        return this.pixelReliefShown() ? this.surfaceDropIn34(x, y) : 0;
+    }
+
+    /** The same, the relief being shown in 3/4 (asked many times for one point by hiddenOnWater). */
+    private surfaceDropIn34(x: number, y: number): number {
         const now = this.time.now;
         return surfaceDropAt(
             this.terrainWater.relief(),
             waterDepthAtPoint((pointX, pointY) => this.terrainWater.depthAt(pointX, pointY, now), x, y),
             x,
             y,
-            this.terrainWater.isBridgeAt(x, y),
-            get(mapEditorModeStore),
+            // The water under the deck of a bridge (a raised floor) is drawn as low as the rest of its lake.
+            false,
+            false,
         );
     }
 
     /** Whether a point of the water is hidden by the south rim of its hollow, as the relief is drawn in 3/4. */
     public hiddenOnWater(x: number, y: number): boolean {
-        if (get(mapEditorModeStore)) return false;
+        if (!this.pixelReliefShown()) return false;
         return hiddenBehindRim(
             this.terrainWater.relief(),
             x,
             y,
-            (pointX, pointY) => this.surfaceDropAt(pointX, pointY),
+            (pointX, pointY) => this.surfaceDropIn34(pointX, pointY),
             this.terrainWater.deepest(),
         );
     }
 
-    /** The drawing of the relief, for the editor to show the bottom through the water while it is edited. */
+    /** The relief in 3/4, for its footprints, its clicks and its tests. */
     public getReliefTiles(): ReliefTiles | undefined {
         return this.reliefTiles;
     }
 
+    /** The flat drawing of the relief, for the editor to show the bottom through the water while it is edited. */
+    public getTerrainView(): TerrainView | undefined {
+        return this.terrainView;
+    }
+
+    /**
+     * Whether the relief is shown in 3/4 now, its ground in pixel art (ReliefTiles): the player chose it, the map is
+     * not edited and Basique does not apply. Else the flat engine draws (TerrainView), and nothing is drawn lower nor
+     * higher than its place.
+     */
+    public pixelReliefShown(): boolean {
+        return projectionShown({
+            chosen: get(pixelReliefStore),
+            editorOpen: get(mapEditorModeStore),
+            basic: isBasicActive(),
+        });
+    }
+
+    /** The point of the ground drawn under a point of the map: itself, unless the relief is shown in 3/4. */
+    public groundPointUnder(point: { x: number; y: number }): { x: number; y: number } {
+        return this.pixelReliefShown() ? (this.reliefTiles?.groundPointAt(point) ?? point) : point;
+    }
+
+    /** The season the relief in 3/4 is drawn in: the one of the theme this person forces (as their trees), else the map's. */
+    private pixelGroundSeason(): Season | undefined {
+        return forcedTreeSeason(this.getSeasonalTheme()) ?? this.getGroundSeason();
+    }
+
+    /** The relief in 3/4 and what goes with it: its blocks and their workers, the glints of its water, its footprints. */
+    private createPixelRelief(): void {
+        this.blockPainters = createBlockPaintPool();
+        this.reliefTiles = new ReliefTiles(this, {
+            relief: () => this.terrainWater.relief(),
+            water: this.terrainWater,
+            meadow: this.meadow,
+            season: () => this.pixelGroundSeason(),
+            // The snow that fell, as the other engine shows it: none of the server's for who follows a weather of
+            // their own (GroundSource).
+            snowCoverAt: (x, y) => this.getSnowCoverAt(x, y),
+            groundVersion: () => (followsServerGround() ? 1 : 0),
+            layout: this.mapGroundLayout,
+            snowLineSeason: () => this.getGroundSeason(),
+            // Far out, the blocks are drawn no finer than the screen shows them.
+            screenScale: () => this.cameras.main.zoom,
+            // The rest of the map is drawn ahead, coarse: zooming out shows the ground at once.
+            mapSize: () => ({ width: this.Map.widthInPixels, height: this.Map.heightInPixels }),
+            // Painted by workers, off the thread of the game.
+            painters: this.blockPainters,
+        });
+        this.waterGlints = new WaterGlints(this, {
+            waterAt: (x, y) => this.terrainWater.depthAt(x, y, this.time.now),
+            dropAt: (x, y) => this.surfaceDropAt(x, y),
+            hiddenAt: (x, y) => this.hiddenOnWater(x, y),
+            season: () => this.pixelGroundSeason(),
+            reducedMotion: () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+            shown: () => this.pixelReliefShown(),
+        });
+        this.groundFootprints = new GroundFootprints(
+            this,
+            (x, y) => footprintSurface(this.reliefTiles?.coverAt(x, y, this.time.now) ?? "none"),
+            // As low as the ground is drawn.
+            (x, y) => (this.pixelReliefShown() ? shiftAt(this.terrainWater.relief(), x, y) : 0),
+            (x, y) => this.terrainWater.isBridgeAt(x, y),
+        );
+    }
+
     /** Whether a point of the map (pixels) is in or near an open drain: the current carries no avatar there. */
+    /** Whether the water of the relief is frozen there for this player (FrozenWater.ts): skated on, not swum in. */
+    public isFrozenWaterAt(x: number, y: number): boolean {
+        return isOnFrozenWater(this, { x, y });
+    }
+
+    /** Whether a pool of the ground is frozen for this player (FrozenWater.ts): its water is no water then. */
+    public isPoolFrozen(pool: { x: number; y: number; width: number; height: number; entityId?: string }): boolean {
+        return isPoolFrozen(this, pool);
+    }
+
+    /** Whether the water of this object (a pool) is frozen for this player: one walks onto its ice. */
+    public isPoolEntityFrozen(entityId: string): boolean {
+        return getFrozenPoolRectangles(this).some((pool) => pool.entityId === entityId);
+    }
+
     public isDrainCalm(x: number, y: number): boolean {
         return this.drainView?.calms(x, y) ?? false;
     }
@@ -3182,11 +3327,17 @@ export class GameScene extends DirtyScene {
         const serverDate = this.nightManager?.serverDate();
         const settings = shownWeatherSettings(this.getGameMap().getWamFile()?.getWam().settings, serverDate);
         const configured = settings?.weather ?? WeatherType.Clear;
-        return weatherAtTime(configured, serverDate, settings?.weatherAuto);
+        return weatherAtTime(configured, serverDate, settings?.weatherAuto, settings?.weatherLocation);
     }
 
-    public getDesktopWeather(): WeatherType {
-        return effectiveWeather(this.getMapWeather(), this.getSeasonalTheme());
+    /**
+     * How much daylight the sky of the map gives at an instant (daylightOf), the same for everyone: the sun of the place
+     * of the map (Paris when it has none) and the weather of the map at that instant, its clouds included. Nothing
+     * personal: neither the night turned off nor the computer clock, neither the seasonal theme nor the clouds hidden,
+     * nor the weather of the city a player follows on their clock. The energy saving of the lamps follows it (LampManager).
+     */
+    public mapDaylightAt(at: number): number {
+        return mapDaylightAt(this.getGameMap().getWamFile()?.getWam().settings, new Date(at));
     }
 
     /** The map weather as it is shown now, with its wind. */
@@ -3194,11 +3345,27 @@ export class GameScene extends DirtyScene {
         return shownWeatherSettings(this.getGameMap().getWamFile()?.getWam().settings, this.nightManager?.serverDate());
     }
 
-    /** How much the map snow covers the ground for this person, 0 to 1: drawn as the Christmas decor fading in. */
+    /**
+     * The share of the precipitation shown that falls as snow, 0 to 1, from the temperature and the humidity of the
+     * air it falls through (precipitationAirNow). Rain while they are not known.
+     */
+    public getSnowShare(): number {
+        return snowShareOf(
+            precipitationAirNow(this.getGameMap().getWamFile()?.getWam().settings, this.nightManager?.serverDate()),
+        );
+    }
+
+    /**
+     * How much snow lies on the map for this player, 0 to 1 (the snow the server keeps, see GroundSource): the trees
+     * and the ice whiten with it.
+     */
     public getMapSnowCoverage(): number {
-        const serverDate = this.nightManager?.serverDate();
-        const settings = shownWeatherSettings(this.getGameMap().getWamFile()?.getWam().settings, serverDate);
-        return mapSnowCoverage(this.mapSnowShown, settings, serverDate);
+        return snowCoverOfMap(this.meadow);
+    }
+
+    /** How much the snow that fell whitens the ground at a point of the map for this player, 0 to 1: it slows the walk. */
+    public getSnowCoverAt(x: number, y: number): number {
+        return snowCoverHere(this.meadow, x, y);
     }
 
     public getGameMap(): GameMap {
@@ -3876,7 +4043,15 @@ export class GameScene extends DirtyScene {
                 this.weatherManager = new WeatherManager(this, {
                     outdoorGrid: () => this.getOutdoorGrid(),
                     raisedCover: () => this.raisedWeatherCover(),
+                    // Seen from far the fog passes over the buildings, never over the avatar's room (at its feet).
+                    avatarRoom: () => {
+                        const player = this.CurrentPlayer;
+                        return player
+                            ? this.getOutdoorGrid()?.roomAt(player.x, player.y + CHARACTER_BODY_OFFSET_Y)
+                            : undefined;
+                    },
                     seasonalTheme: () => this.getSeasonalTheme(),
+                    snowShare: () => this.getSnowShare(),
                 });
                 // The ground outdoors in pixel art, its relief and the water of its hollows: the soils, the meadow, the
                 // grass tiles of the map and the snow of the winter, in the season of the theme.
@@ -3895,44 +4070,26 @@ export class GameScene extends DirtyScene {
                         height: this.Map.height * this.Map.tileHeight,
                     }),
                 });
-                this.reliefTiles?.destroy();
-                this.blockPainters?.destroy();
-                this.blockPainters = createBlockPaintPool();
-                this.reliefTiles = new ReliefTiles(this, {
-                    relief: () => this.terrainWater.relief(),
-                    water: this.terrainWater,
-                    meadow: this.meadow,
-                    season: () =>
-                        this.seasonalThemeManager?.groundSeason(this.getGroundSeason()) ?? this.getGroundSeason(),
-                    snowCoverAt: () => this.seasonalThemeManager?.groundSnow() ?? 0,
-                    groundVersion: () => Math.round((this.seasonalThemeManager?.groundSnow() ?? 0) * 10),
-                    layout: this.mapGroundLayout,
-                    snowLineSeason: () => this.getGroundSeason(),
-                    // Far out, the blocks are drawn no finer than the screen shows them.
-                    screenScale: () => this.cameras.main.zoom,
-                    // The rest of the map is drawn ahead, coarse: zooming out shows the ground at once.
-                    mapSize: () => ({ width: this.Map.widthInPixels, height: this.Map.heightInPixels }),
-                    // Painted by workers, off the thread of the game.
-                    painters: this.blockPainters,
-                });
-                this.waterGlints?.destroy();
-                this.waterGlints = new WaterGlints(this, {
-                    waterAt: (x, y) => this.terrainWater.depthAt(x, y, this.time.now),
-                    dropAt: (x, y) => this.surfaceDropAt(x, y),
-                    hiddenAt: (x, y) => this.hiddenOnWater(x, y),
-                    season: () =>
-                        this.seasonalThemeManager?.groundSeason(this.getGroundSeason()) ?? this.getGroundSeason(),
-                    reducedMotion: () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
-                    shown: () => !isBasicActive(),
-                });
-                this.groundFootprints?.destroy();
-                this.groundFootprints = new GroundFootprints(
+                // The ground, the relief and the water of its hollows, flat: unless the relief is shown in 3/4.
+                this.terrainView?.destroy();
+                this.terrainView = new TerrainView(
                     this,
-                    (x, y) => footprintSurface(this.reliefTiles?.coverAt(x, y, this.time.now) ?? "none"),
-                    // As low as the ground is drawn: in 3/4 out of the editor.
-                    (x, y) => (get(mapEditorModeStore) ? 0 : shiftAt(this.terrainWater.relief(), x, y)),
-                    (x, y) => this.terrainWater.isBridgeAt(x, y),
+                    this.terrainWater,
+                    undefined,
+                    this.meadow,
+                    () => this.getGroundSeason(),
+                    () => this.pixelReliefShown(),
                 );
+                this.reliefTiles?.destroy();
+                this.reliefTiles = undefined;
+                this.blockPainters?.destroy();
+                this.blockPainters = undefined;
+                this.waterGlints?.destroy();
+                this.waterGlints = undefined;
+                this.groundFootprints?.destroy();
+                this.groundFootprints = undefined;
+                // The relief in 3/4, in pixel art: only for who chose it (nothing of it is made else).
+                if (get(pixelReliefStore)) this.createPixelRelief();
                 this.characterDrops?.destroy();
                 this.characterDrops = new CharacterDrops(this, () => [
                     ...(this.CurrentPlayer ? [this.CurrentPlayer] : []),
@@ -3944,6 +4101,18 @@ export class GameScene extends DirtyScene {
                     water: this.terrainWater,
                     wam: () => this.getGameMap().getWamFile()?.getWam(),
                     view: () => this.cameras.main.worldView,
+                    isFrozenAt: (x, y) => isOnFrozenWater(this, { x, y }),
+                });
+                this.frozenPoolsView?.destroy();
+                this.frozenPoolsView = new FrozenPoolsView(this);
+                // The flows of that water drawn over the map, for whoever asked (apps menu, "Visualisation").
+                this.waterFlowOverlay?.destroy();
+                this.waterFlowOverlay = new WaterFlowOverlay(this, {
+                    water: this.terrainWater,
+                    inertia: () => this.getGameMap().getWamFile()?.getWam().settings?.water?.inertia === true,
+                    waves: () => this.getGameMap().getWamFile()?.getWam().settings?.water?.waves,
+                    pace: () => this.getGameMap().getWamFile()?.getWam().settings?.water?.flowPace,
+                    shown: () => get(waterFlowOverlayStore) && !isBasicActive(),
                 });
                 // The fish and the dolphins of that water.
                 this.aquaticLifeView?.destroy();
@@ -3952,6 +4121,7 @@ export class GameScene extends DirtyScene {
                     this.aquaticLife,
                     () => get(aquaticLifeShownStore) && !isBasicActive(),
                     () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+                    (x, y) => isOnFrozenWater(this, { x, y }),
                     (x, y) => this.surfaceDropAt(x, y),
                     (x, y) => this.hiddenOnWater(x, y),
                 );
@@ -3981,6 +4151,10 @@ export class GameScene extends DirtyScene {
                         return player ? feetOf(player) : undefined;
                     },
                     playerInWater: (userId) => playerOf(userId)?.isInWater() ?? false,
+                    // A tamed lion does not fly: left on the ground, it walks back to its master who landed.
+                    playerFlying: (userId) => playerOf(userId)?.isFlying() ?? false,
+                    groundPath: (from, to) =>
+                        this.wanderingCharactersManager?.getWanderMap().findPath(from, to) ?? Promise.resolve([to]),
                     editorOpen: () => get(mapEditorModeStore),
                     playerOnGround: () => this.CurrentPlayer.isNearGround(),
                     shown: () => get(jungleEnabledStore),
@@ -4003,6 +4177,7 @@ export class GameScene extends DirtyScene {
                     (species) => this.gameJungle?.sheetOf(species),
                     (animal, now) => companions.poseOf(animal.id, now),
                     (x, y) => this.meadow.coverAt(x, y) >= GRAZING_COVER,
+                    (x, y) => this.getBridgeElevationAt(x, y),
                 );
                 // The shadows of the sun and of the moon, outdoors. One set at a time.
                 this.skyShadowManager?.destroy();
@@ -4097,7 +4272,7 @@ export class GameScene extends DirtyScene {
                             mapLayerBuiltLevelsStore.set(levels);
                             floorLevelsBuiltStore.set(levels);
                         },
-                        () => this.MapPlayersByKey.values(),
+                        () => this.floorOccupants(),
                         (x, y) => this.getOutdoorGrid()?.roomAt(x, y),
                     );
                     if (this.floorToRestore !== undefined) this.floorSpike.restore(this.floorToRestore);
@@ -4107,14 +4282,14 @@ export class GameScene extends DirtyScene {
                 this.treeSeasonEffects = new TreeSeasonEffects(this, {
                     trees: () => this.swayingTrees(),
                     season: () => this.gameMapFrontWrapper.getEntitiesManager().getSeason(),
-                    autumnProgress: () => autumnProgress(this.nightManager?.serverDate() ?? new Date(Number.NaN)),
+                    autumnProgress: () =>
+                        autumnProgress(this.nightManager?.serverDate() ?? new Date(Number.NaN), this.getMapPlace()),
                     windSpeed: () => this.shownWeather()?.windSpeed,
                     windFrom: () => this.shownWeather()?.windFrom,
-                    // The Christmas theme shows its snow whatever the map weather.
-                    snowCoverage: () =>
-                        this.getSeasonalTheme() === SeasonalTheme.Christmas ? 1 : this.getMapSnowCoverage(),
+                    snowCoverage: () => this.getMapSnowCoverage(),
                     enabled: () => !get(mapEditorModeStore) && get(weatherEffectsEnabledStore) && !isBasicActive(),
                     isOutdoor: (x, y) => this.getOutdoorGrid()?.isOutdoorAt(x, y) ?? true,
+                    isWet: (x, y) => isGroundUnderWater(this, this.terrainWater, x, y),
                     view: () => this.cameras.main.worldView,
                 });
                 this.seasonalThemeManager?.destroy();
@@ -4124,7 +4299,21 @@ export class GameScene extends DirtyScene {
                     entities: () => this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(),
                     markDirty: () => this.markDirty(),
                     serverDate: () => this.nightManager?.serverDate(),
-                    mapSnowCoverage: () => this.getMapSnowCoverage(),
+                    place: () => this.getMapPlace(),
+                    leafConditions: () => {
+                        const weather = this.shownWeather();
+                        return {
+                            windSpeed: weather?.windSpeed,
+                            windFrom: weather?.windFrom,
+                            progress: autumnProgress(
+                                this.nightManager?.serverDate() ?? new Date(Number.NaN),
+                                this.getMapPlace(),
+                            ),
+                        };
+                    },
+                    isWet: (x, y) => isGroundUnderWater(this, this.terrainWater, x, y),
+                    waterVersion: () => this.terrainWater.version(),
+                    frost: () => waterCycleNow(this.getGameMap().getWamFile()?.getWam().settings).frost,
                 });
                 // Same: one event subscription and one timer at a time.
                 this._knockManager?.destroy();
@@ -4387,6 +4576,8 @@ export class GameScene extends DirtyScene {
             this,
             (x, y) => this.terrainWater.depthAt(x, y, this.time.now) >= METEOR_WET_DEPTH_PX,
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+            () => this.getGameMap().getWamFile()?.getWam().settings?.water?.inertia === true,
+            () => this.terrainView?.drawsWaterRings() === true && !this.pixelReliefShown(),
         );
         this.meteorView = meteorView;
         // The flames of the tiles on fire, laid by the wind of the scene.
@@ -4411,6 +4602,14 @@ export class GameScene extends DirtyScene {
         const downpourView = new DownpourView(
             this,
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+            // In the cold of the room a downpour falls as snow, for everyone as for the server.
+            () =>
+                snowShareOf(
+                    roomPrecipitationAir(
+                        this.getGameMap().getWamFile()?.getWam().settings,
+                        this.nightManager?.serverDate(),
+                    ),
+                ),
         );
         this.downpourView = downpourView;
         this.drainView?.destroy();
@@ -4419,9 +4618,16 @@ export class GameScene extends DirtyScene {
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
         );
         this.drainView = drainView;
+        this.fireTorchView?.destroy();
+        const fireTorchView = new FireTorchView(
+            this,
+            () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+        );
+        this.fireTorchView = fireTorchView;
         this.catastropheSubscription = this.connection?.catastropheMessageStream.subscribe((message) => {
             if (message.kind === CatastropheKind.CATASTROPHE_DOWNPOUR) downpourView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_DRAIN) drainView.report(message, this.time.now);
+            else if (message.kind === CatastropheKind.CATASTROPHE_FIRE) fireTorchView.report(message, this.time.now);
             else meteorView.add(message, this.time.now);
         });
         this.karaokeSpotlight?.destroy();
@@ -4641,11 +4847,6 @@ export class GameScene extends DirtyScene {
             },
         ];
 
-        this.unsubscribers.push(
-            mapSnowShownStore.subscribe((shown) => {
-                this.mapSnowShown = shown;
-            }),
-        );
         // While the map is edited the charred trees show their plain image: drawn again when the editor opens or closes.
         this.unsubscribers.push(mapEditorModeStore.subscribe(() => this.showTreeFireImages(this.treeFire.marked())));
 

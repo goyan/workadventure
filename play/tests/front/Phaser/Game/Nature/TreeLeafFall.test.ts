@@ -113,4 +113,12 @@ describe("autumnProgress", () => {
         expect(autumnProgress(new Date("2026-07-14T10:00:00+02:00"))).toBe(0.5);
         expect(autumnProgress(new Date(Number.NaN))).toBe(0.5);
     });
+
+    it("piles the leaves up through the autumn of the south at a map of Sydney", () => {
+        const sydney = { latitude: -33.87, timezone: "Australia/Sydney" };
+        expect(autumnProgress(new Date("2026-03-01T02:00:00Z"), sydney)).toBeLessThan(0.05);
+        expect(autumnProgress(new Date("2026-04-15T02:00:00Z"), sydney)).toBeCloseTo(0.5, 1);
+        expect(autumnProgress(new Date("2026-05-31T02:00:00Z"), sydney)).toBeGreaterThan(0.95);
+        expect(autumnProgress(new Date("2026-10-16T02:00:00Z"), sydney)).toBe(0.5);
+    });
 });

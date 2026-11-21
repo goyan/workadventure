@@ -84,7 +84,14 @@ export function sharedVehicleState(variables: ReadonlyMap<string, unknown> | und
 export const SKATEBOARD_TEXTURE = "avatar-skateboard";
 export const ELECTRIC_UNICYCLE_TEXTURE = "avatar-electric-unicycle";
 export const CANOE_TEXTURE = "avatar-canoe";
+/** The cruise altitude: where a plane climbs by itself on taking off, until its pilot chooses another one. */
 export const AIRPLANE_ALTITUDE = 1024;
+/** The highest a pilot can climb (space key), twice the cruise altitude. */
+export const AIRPLANE_MAX_ALTITUDE = 2048;
+/** The lowest a pilot can come down (control key) and still fly: the ground is reached by a landing only. */
+export const AIRPLANE_MIN_FLIGHT_ALTITUDE = 64;
+/** How many steps the size of a plane takes from the ground to the highest altitude (pixel art scaled by steps). */
+const AIRPLANE_SCALE_STEPS = 16;
 /** Reserved sky level keeps floor-bound areas and conversations away from airborne players. */
 export const AIRPLANE_AREA_LEVEL = 2000;
 /**
@@ -93,6 +100,24 @@ export const AIRPLANE_AREA_LEVEL = 2000;
  */
 export const AIRPLANE_VISUAL_LIFT = 40;
 export const AIRPLANE_RENDER_DEPTH = 1_100_000;
+
+function airplaneHeight(altitude: number): number {
+    return Number.isFinite(altitude) ? Math.max(0, Math.min(AIRPLANE_MAX_ALTITUDE, altitude)) : 0;
+}
+
+/**
+ * How big a plane is drawn, seen from above: its size on the ground, growing as it climbs (closer to the eye) to
+ * twice it at the highest altitude. By sixteenths: a pixel art sprite scaled at every frame shimmers.
+ */
+export function airplaneScale(altitude: number): number {
+    const steps = Math.round((airplaneHeight(altitude) / AIRPLANE_MAX_ALTITUDE) * AIRPLANE_SCALE_STEPS);
+    return 1 + steps / AIRPLANE_SCALE_STEPS;
+}
+
+/** How high a plane is drawn above its shadow (whole pixels): AIRPLANE_VISUAL_LIFT at the cruise altitude. */
+export function airplaneLift(altitude: number): number {
+    return Math.round((airplaneHeight(altitude) / AIRPLANE_ALTITUDE) * AIRPLANE_VISUAL_LIFT);
+}
 export const DEFAULT_VEHICLE_COLOR = "#39404f";
 export const VEHICLE_SPEED_FACTOR = 3.75;
 /** Faster than the skateboard; the physics steps follow the fastest vehicle (vehiclePhysicsFps). */
@@ -189,7 +214,7 @@ export function readVehicleState(value: unknown): VehicleState {
             ? {
                   altitude:
                       "altitude" in value && typeof value.altitude === "number" && Number.isFinite(value.altitude)
-                          ? Math.max(0, Math.min(AIRPLANE_ALTITUDE, value.altitude))
+                          ? Math.max(0, Math.min(AIRPLANE_MAX_ALTITUDE, value.altitude))
                           : AIRPLANE_ALTITUDE,
               }
             : {}),

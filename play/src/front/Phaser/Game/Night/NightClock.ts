@@ -1,4 +1,4 @@
-import { sunPositionAt as librarySunPositionAt } from "@workadventure/map-editor";
+import { SUNRISE_ELEVATION, sunPositionAt as librarySunPositionAt } from "@workadventure/map-editor";
 import type { SunPosition } from "@workadventure/map-editor";
 import { PARIS_LATITUDE, PARIS_LONGITUDE } from "../../../../common/RealWeather";
 import type { MapPlace } from "../../../../common/RealWeather";
@@ -13,8 +13,9 @@ export const NIGHT_DARKNESS_MAX = 0.95;
 const PARIS = { latitude: PARIS_LATITUDE, longitude: PARIS_LONGITUDE };
 
 // Geometric elevations of the sun's centre. Sunrise and sunset: the upper limb on the horizon, with the standard
-// refraction (34′) and the sun's semi-diameter (16′) already counted. Civil twilight: 6° below the horizon.
-const SUNSET_ELEVATION = -0.833;
+// refraction (34′) and the sun's semi-diameter (16′) already counted, the same threshold as the meadow of the back.
+// Civil twilight: 6° below the horizon.
+const SUNSET_ELEVATION = SUNRISE_ELEVATION;
 const CIVIL_TWILIGHT_ELEVATION = -6;
 
 const NIGHT_AT_PATTERN = /^(\d{1,2}):(\d{2})$/;
@@ -92,6 +93,10 @@ export type { SunPosition } from "@workadventure/map-editor";
 export function sunForClouds(sun: SunPosition | undefined, nightDisabled: boolean): SunPosition | undefined {
     return nightDisabled && sun && sun.elevation < 2 ? undefined : sun;
 }
+
+// The sun itself is computed in the map editor library, shared with the back (the meadow grows by day): one code.
+export { solarTermsAt, trueSolarMinutes } from "@workadventure/map-editor";
+export type { SolarTerms } from "@workadventure/map-editor";
 
 /** Where the sun is seen from a place (Paris by default): see sunPositionAt of the map editor library. */
 export function sunPositionAt(date: Date, place: MapPlace = PARIS): SunPosition {

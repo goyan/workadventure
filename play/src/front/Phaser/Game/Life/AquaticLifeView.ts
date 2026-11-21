@@ -21,6 +21,9 @@ const NEAR_PX = Math.max(MAX_DROP, MAX_RISE) + MARGIN_PX;
  * relief all the way south of it, and an animal swims a few pixels in that time.
  */
 const HIDDEN_CHECK_MS = 100;
+/** Caught in the ice: paler, blue, still. */
+const FROZEN_ALPHA = 0.45;
+const FROZEN_TINT = 0xbfe0f0;
 
 /**
  * Draws the animals of the water of the relief: an image each, where AquaticLife says, turned towards where it
@@ -40,6 +43,8 @@ export class AquaticLifeView {
         private readonly life: AquaticLife,
         private readonly isShown: () => boolean,
         private readonly reducedMotion: () => boolean,
+        /** Whether the water is frozen there for this player (Frost.ts): the animal stops under the ice. */
+        private readonly isFrozenAt: (x: number, y: number) => boolean = () => false,
         /** How much lower the surface of the water is drawn at a point: a lake at the bottom of a hollow, in 3/4. */
         private readonly dropAt: (x: number, y: number) => number = () => 0,
         /** Whether a point of the water is hidden by the south rim of its hollow (3/4): its animals are not drawn. */
@@ -74,12 +79,14 @@ export class AquaticLifeView {
             // A bright fish on dark water is told apart down to a single pixel: not drawn under it only.
             if (!distinguishable(this.scene, animal.kind >> 1 === 1 ? DOLPHIN_PX : FISH_PX, 1)) continue;
             seen.add(animal.id);
+            let image = this.images.get(animal.id);
+            // Under the ice everything at sea stops where it was: it moves on again once the water thaws.
+            const frozen = this.isFrozenAt(image?.x ?? animal.x, image?.y ?? animal.y);
             // Far from the view (most of the animals of a map): left where it swims, nothing asked of the relief.
             const isNear = near(animal.x, animal.y);
-            const x = Math.round(animal.x);
-            const y = Math.round(animal.y + (isNear ? this.dropAt(animal.x, animal.y) : 0));
-            const alpha = animal.alpha * AQUATIC_ALPHA;
-            let image = this.images.get(animal.id);
+            const x = frozen && image ? image.x : Math.round(animal.x);
+            const y = frozen && image ? image.y : Math.round(animal.y + (isNear ? this.dropAt(animal.x, animal.y) : 0));
+            const alpha = animal.alpha * (frozen ? FROZEN_ALPHA : AQUATIC_ALPHA);
             if (!image) {
                 image = this.scene.add.image(x, y, ensureAquaticTexture(this.scene, animal.kind));
                 image.setDepth(AQUATIC_DEPTH);
@@ -91,7 +98,9 @@ export class AquaticLifeView {
             image.setPosition(x, y);
             image.setVisible(!isNear || !this.isHidden(animal.id, animal.x, animal.y, now));
             image.setAlpha(alpha);
-            image.setFlipX(animal.facingLeft);
+            if (frozen) image.setTint(FROZEN_TINT);
+            else image.clearTint();
+            if (!frozen) image.setFlipX(animal.facingLeft);
         }
         for (const [id, image] of this.images) {
             if (seen.has(id)) continue;

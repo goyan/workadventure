@@ -1,9 +1,10 @@
 import * as Phaser from "phaser";
 import { isTreePrefab } from "@workadventure/map-editor";
 import { distinguishable } from "../Weather/ScreenScale";
+import { BREEZE_KMH } from "./TreeLeafFall";
 import { POSE_PAD, treePose } from "./TreePoses";
 
-export { swayAmplitude, swayFrequency, treeSwayAngle } from "./TreePoses";
+export { swayAmplitude, treeSwayAngle } from "./TreePoses";
 
 /**
  * Trees of the nature catalogue: the ones that sway in the wind, and whose snow and leaves follow the season. A tree
@@ -34,8 +35,6 @@ export interface TreeSwayOptions {
     reducedMotion?: boolean;
 }
 
-/** Wind of the light breeze the trees sway in without a real weather (Automatic or fixed weathers). */
-const BREEZE_KMH = 10;
 /** The pose of the trees is looked at 15 times a second; the map is only drawn again when one changed. */
 const SWAY_FRAME_MS = 1000 / 15;
 const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;

@@ -4,7 +4,7 @@ import { asError } from "catch-unknown";
 import { get } from "svelte/store";
 import { v4 as uuidv4 } from "uuid";
 import type { WAMEntityData } from "@workadventure/map-editor";
-import { SLAB_GLASS_FAMILY } from "../MapLayer/MapLayerFloors";
+import { SLAB_GLASS_FAMILY, SLAB_WOOD_FAMILY, newStairIsShort } from "../MapLayer/MapLayerFloors";
 import { FLOOR_PREVIEW_DEPTH } from "../MapLayer/FloorDepth";
 import { mapEditorPlacementLevelStore } from "../../../../Stores/MapEditorStore";
 import {
@@ -21,6 +21,12 @@ import {
     mapLayerStairOpenStore,
     mapLayerStairWidthStore,
     mapLayerShortStairsAvailableStore,
+    mapLayerBridgePiecesAvailableStore,
+    mapLayerSlabWoodStore,
+    mapLayerStairRampStore,
+    mapLayerBridgeHeightStore,
+    mapLayerBridgeStyleStore,
+    mapLayerBridgeWidthStore,
     mapLayerStatusStore,
 } from "../../../../Stores/MapLayerStore";
 import { LL } from "../../../../../i18n/i18n-svelte";
@@ -31,20 +37,25 @@ import type { FrontCommand } from "../Commands/FrontCommand";
 import type { MapEditorModeManager } from "../MapEditorModeManager";
 import { MAP_LAYER_TILE_SIZE } from "../MapLayer/MapLayerCatalog";
 import { FloorModel, stairImagePosition } from "../MapLayer/FloorModel";
+import { stairOutline } from "../MapLayer/MapLayerTarget";
+import { bridgeFits, layBridge, planBridge } from "../MapLayer/BridgeBuilder";
+import type { BridgeSpec } from "../MapLayer/BridgeBuilder";
 import {
     applySlabs,
     availableLevels,
     canPlaceStair,
     computeFloorPlacements,
+    canMoveStair,
     diffFloorPlacements,
-    eraseSlabs,
     floorCellAt,
     floorPlacementKey,
     levelUnderPoint,
+    moveStair,
     placeStair,
+    stairUnderPoint,
     stairTargets,
-    removeStairAt,
     stairArrivalCells,
+    stairBaseBelow,
     stairHasArrival,
     stairRiseBetween,
     stairTarget,
@@ -66,7 +77,8 @@ import { MAX_ENTITIES_PER_OPERATION } from "../MapLayer/MapLayerSync";
 
 const OK_COLOR = 0x22c55e;
 const REFUSED_COLOR = 0xef4444;
-const ERASE_COLOR = 0xf97316;
+/** A placed stair the pointer would grab: the one a drag moves. */
+const GRAB_COLOR = 0xffffff;
 /** The tiles one steps onto at the top of a stair: with a slab, and without one. */
 const ARRIVAL_COLOR = 0x3b82f6;
 const PREVIEW_MODEL_MS = 300;
@@ -86,6 +98,8 @@ export class MapLayerFloorEditing {
     /** The floors read from the map for the previews, kept a short while: the pointer moves often. */
     private cached: { model: FloorModel; at: number } | undefined;
     private unsubscribeMode: (() => void) | undefined;
+    /** Why the last bridge was refused, for the message of the panel. */
+    private bridgeRefusal: "tooShort" | "blocked" | undefined;
 
     constructor(
         private readonly scene: GameScene,
@@ -101,6 +115,17 @@ export class MapLayerFloorEditing {
             .setVisible(false);
         // Slabs are laid above the ground: choosing that mode on the ground goes to a floor, a built one if any.
         this.unsubscribeMode = mapLayerModeStore.subscribe((mode) => {
+            // A stair chosen on a floor with nothing built above it: the stair that goes up to that floor is the one
+            // wanted. The level goes down to where it starts from, and the stair aims at the floor just left.
+            if (mode === "stair" && get(mapEditorPlacementLevelStore) !== "auto") {
+                const level = get(mapLayerLevelStore);
+                const base = stairBaseBelow(level, get(mapLayerBuiltLevelsStore), get(mapLayerLevelsStore));
+                if (base !== undefined) {
+                    mapLayerStairTargetStore.set(level);
+                    mapEditorPlacementLevelStore.set(base);
+                }
+                return;
+            }
             if (mode !== "slab" || get(mapLayerLevelStore) !== 0) return;
             // (Unless the level follows the pointer: the slabs then go where a floor is drawn.)
             if (get(mapEditorPlacementLevelStore) === "auto") return;
@@ -121,12 +146,17 @@ export class MapLayerFloorEditing {
     }
 
     /** The floors of the map for the previews: read again at most a few times per second, and after an edit. */
-    private previewModel(): FloorModel {
+    public previewModel(): FloorModel {
         const now = performance.now();
         if (!this.cached || now - this.cached.at > PREVIEW_MODEL_MS) {
             this.cached = { model: this.readModel(), at: now };
         }
         return this.cached.model;
+    }
+
+    /** The floors have been edited elsewhere (the eraser of the map tool): the previews read them again. */
+    public forgetPreviewModel(): void {
+        this.cached = undefined;
     }
 
     public readModel(): FloorModel {
@@ -167,12 +197,12 @@ export class MapLayerFloorEditing {
             if (!(elevation > 0)) continue;
             const prefab = entity.getPrefab();
             const piece = parseAnyLevelPrefab(prefab.collectionName, prefab.id);
-            if (piece && piece.kind !== "floor" && piece.kind !== "bridge" && piece.height >= 2) {
+            if (piece && piece.kind !== "floor" && piece.height >= 2) {
                 const height = FLOOR_WALL_HEIGHTS.find((candidate) => candidate === piece.height);
                 if (height) wallTops.push(elevation + floorElevation(height));
             }
         }
-        const levels = availableLevels(model, wallTops);
+        const levels = availableLevels(model, wallTops, get(mapLayerBridgePiecesAvailableStore));
         mapLayerLevelsStore.set(levels);
         mapLayerBuiltLevelsStore.set(model.getLevels());
     }
@@ -181,6 +211,12 @@ export class MapLayerFloorEditing {
     public pickLevel(world: Point): void {
         // A level picked on the map is a level chosen: the panel shows it selected.
         mapEditorPlacementLevelStore.set(levelUnderPoint(this.readModel(), world.x, world.y));
+    }
+
+    /** Whether a placed stair is under this point, whatever the floor it starts from: it can be grabbed and moved. */
+    public hasStairAt(world: Point): boolean {
+        const level = get(mapLayerLevelStore);
+        return stairUnderPoint(this.previewModel(), level, world.x, world.y) !== undefined;
     }
 
     /** The floor drawn under a point of the screen (the ground where there is none), from the floors last read. */
@@ -194,14 +230,33 @@ export class MapLayerFloorEditing {
         const reachable = stairTargets(level, get(mapLayerLevelsStore));
         const target = stairTarget(reachable, get(mapLayerBuiltLevelsStore), get(mapLayerStairTargetStore));
         const rise = target === undefined ? undefined : stairRiseBetween(level, target);
-        if (rise === undefined) return undefined;
+        // The stairs of 20 px came with the pieces of the bridges.
+        if (rise === undefined || (rise === 20 && !get(mapLayerBridgePiecesAvailableStore))) return undefined;
+        const direction = get(mapLayerStairDirectionStore);
+        if (get(mapLayerStairRampStore) && get(mapLayerBridgePiecesAvailableStore)) {
+            return { direction, width: get(mapLayerStairWidthStore), rise, open: true, ramp: true };
+        }
         return {
-            direction: get(mapLayerStairDirectionStore),
+            direction,
             width: get(mapLayerStairWidthStore),
             rise,
             open: get(mapLayerStairOpenStore),
-            // New stairs are short, when the catalog of the room has them.
-            ...(get(mapLayerShortStairsAvailableStore) ? { short: true } : {}),
+            ...(newStairIsShort(direction, get(mapLayerShortStairsAvailableStore)) ? { short: true } : {}),
+        };
+    }
+
+    /**
+     * The bridge the mode would lay between two points of the screen, read on the ground. Without the pieces of the
+     * bridges in the catalog of the room, one of concrete, high: the pieces every room with raised floors has.
+     */
+    private bridgeSpec(start: Point, end: Point): BridgeSpec {
+        const pieces = get(mapLayerBridgePiecesAvailableStore);
+        return {
+            from: floorCellAt(start.x, start.y, 0),
+            to: floorCellAt(end.x, end.y, 0),
+            width: get(mapLayerBridgeWidthStore),
+            style: pieces ? get(mapLayerBridgeStyleStore) : "concrete",
+            height: pieces ? get(mapLayerBridgeHeightStore) : 52,
         };
     }
 
@@ -210,26 +265,45 @@ export class MapLayerFloorEditing {
         const level = get(mapLayerLevelStore);
         const from = floorCellAt(start.x, start.y, level);
         const to = floorCellAt(end.x, end.y, level);
+        if (mode === "bridge") {
+            const spec = this.bridgeSpec(start, end);
+            return (model, bounds) => {
+                const refusal = layBridge(model, spec, bounds);
+                if (refusal) this.bridgeRefusal = refusal;
+                return refusal === undefined;
+            };
+        }
         if (mode === "slab") {
             // Of glass when the switch is on and the catalog has the glass slab; else of the floor chosen.
             const family =
-                get(mapLayerSlabGlassStore) && get(mapLayerGlassSlabsAvailableStore)
-                    ? SLAB_GLASS_FAMILY
-                    : get(mapLayerFloorFamilyStore);
+                get(mapLayerSlabWoodStore) && get(mapLayerBridgePiecesAvailableStore)
+                    ? SLAB_WOOD_FAMILY
+                    : get(mapLayerSlabGlassStore) && get(mapLayerGlassSlabsAvailableStore)
+                      ? SLAB_GLASS_FAMILY
+                      : get(mapLayerFloorFamilyStore);
             return (model, bounds) => {
                 applySlabs(model, level, from, to, family, bounds);
                 return true;
             };
         }
-        if (mode === "slabErase") {
-            return (model) => {
-                // A click on a stair that starts from this level removes it; slabs are removed by rectangles.
-                if (from.x === to.x && from.y === to.y && removeStairAt(model, level, to)) return true;
-                eraseSlabs(model, level, from, to);
-                return true;
-            };
-        }
         if (mode === "stair") {
+            // A press on a stair already placed moves it, with its own shape: the panel sets the next one only.
+            if (stairUnderPoint(this.readModel(), level, start.x, start.y)) {
+                // A click on a stair, not a drag: nothing to move, nothing to explain.
+                if (from.x === to.x && from.y === to.y) return undefined;
+                return (model, bounds) => {
+                    const picked = stairUnderPoint(model, level, start.x, start.y);
+                    return (
+                        picked !== undefined &&
+                        moveStair(
+                            model,
+                            picked,
+                            { x: picked.foot.x + to.x - from.x, y: picked.foot.y + to.y - from.y },
+                            bounds,
+                        )
+                    );
+                };
+            }
             const shape = this.stairShape();
             return (model, bounds) => shape !== undefined && placeStair(model, shape, to, level, bounds);
         }
@@ -266,6 +340,11 @@ export class MapLayerFloorEditing {
             this.label?.setVisible(false);
             return;
         }
+        if (mode === "bridge") {
+            this.label?.setVisible(false);
+            this.drawBridge(graphics, placedModel, start ?? current, current);
+            return;
+        }
         const levelName =
             level === 0
                 ? get(LL).mapEditor.mapLayer.floorLevel.ground()
@@ -276,16 +355,35 @@ export class MapLayerFloorEditing {
             .setVisible(true);
         const to = floorCellAt(current.x, current.y, level);
         if (mode === "stair") {
-            const shape = this.stairShape();
+            // Over a placed stair, a press grabs it (a drag moves it, a click does nothing): that stair is outlined,
+            // not a new one.
+            const hovered = start ? undefined : stairUnderPoint(placedModel, level, current.x, current.y);
+            if (hovered) {
+                const outline = stairOutline(hovered);
+                graphics.fillStyle(GRAB_COLOR, 0.2);
+                graphics.fillRect(outline.x, outline.y, outline.width, outline.height);
+                graphics.lineStyle(2, GRAB_COLOR, 0.9);
+                graphics.strokeRect(outline.x, outline.y, outline.width, outline.height);
+                return;
+            }
+            // A gesture that starts on a placed stair moves it: the preview is that stair, at the tile reached.
+            const picked = start ? stairUnderPoint(placedModel, level, start.x, start.y) : undefined;
+            const shape = picked?.shape ?? this.stairShape();
             if (!shape) return;
             const model = placedModel;
-            const fits = canPlaceStair(model, shape, to, level, this.getBounds());
+            const origin = start ? floorCellAt(start.x, start.y, level) : to;
+            const target = picked ? { x: picked.foot.x + to.x - origin.x, y: picked.foot.y + to.y - origin.y } : to;
+            // A stair moved stays on the floor it starts from, which may not be the one being edited.
+            const base = picked?.base ?? level;
+            const fits = picked
+                ? canMoveStair(model, picked, target, this.getBounds())
+                : canPlaceStair(model, shape, target, base, this.getBounds());
             const color = fits ? OK_COLOR : REFUSED_COLOR;
-            const top = level + shape.rise;
-            const ground = stairGroundBox(shape, to);
+            const top = base + shape.rise;
+            const ground = stairGroundBox(shape, target);
             // Where the stair will show.
-            const image = stairImagePosition(shape, to, level);
-            const box = stairScreenBox(shape, to);
+            const image = stairImagePosition(shape, target, base);
+            const box = stairScreenBox(shape, target);
             graphics.fillStyle(color, 0.3);
             graphics.fillRect(image.x, image.y, box.width, box.height);
             graphics.lineStyle(2, color, 1);
@@ -363,11 +461,43 @@ export class MapLayerFloorEditing {
         const y = Math.min(from.y, to.y) * size - level;
         const width = (Math.abs(to.x - from.x) + 1) * size;
         const height = (Math.abs(to.y - from.y) + 1) * size;
-        const color = mode === "slabErase" ? ERASE_COLOR : OK_COLOR;
-        graphics.fillStyle(color, 0.3);
+        graphics.fillStyle(OK_COLOR, 0.3);
         graphics.fillRect(x, y, width, height);
-        graphics.lineStyle(2, color, 1);
+        graphics.lineStyle(2, OK_COLOR, 1);
         graphics.strokeRect(x, y, width, height);
+    }
+
+    /** The bridge a gesture from `start` to `current` would lay: its deck and its ways up, red when it is refused. */
+    private drawBridge(graphics: Phaser.GameObjects.Graphics, model: FloorModel, start: Point, current: Point): void {
+        const size = MAP_LAYER_TILE_SIZE;
+        const spec = this.bridgeSpec(start, current);
+        const plan = planBridge(spec);
+        if (plan === "tooShort") {
+            // Nothing to lay yet: the tile under the pointer, where the bridge would start.
+            graphics.lineStyle(2, REFUSED_COLOR, 1);
+            graphics.strokeRect(spec.to.x * size, spec.to.y * size, size, size);
+            return;
+        }
+        const color = bridgeFits(model, plan, this.getBounds()) ? OK_COLOR : REFUSED_COLOR;
+        const { a, b } = plan.deck;
+        const deck = {
+            x: a.x * size,
+            y: a.y * size - plan.level,
+            width: (b.x - a.x + 1) * size,
+            height: (b.y - a.y + 1) * size,
+        };
+        graphics.fillStyle(color, 0.3);
+        graphics.fillRect(deck.x, deck.y, deck.width, deck.height);
+        graphics.lineStyle(2, color, 1);
+        graphics.strokeRect(deck.x, deck.y, deck.width, deck.height);
+        for (const { shape, foot } of plan.ways) {
+            const image = stairImagePosition(shape, foot, 0);
+            const box = stairScreenBox(shape, foot);
+            graphics.fillStyle(color, 0.45);
+            graphics.fillRect(image.x, image.y, box.width, box.height);
+            graphics.lineStyle(2, color, 1);
+            graphics.strokeRect(image.x, image.y, box.width, box.height);
+        }
     }
 
     /**
@@ -410,7 +540,7 @@ export class MapLayerFloorEditing {
         return commands;
     }
 
-    /** Applies the gesture as one undo step. */
+    /** Applies the gesture of a floor mode as one undo step. */
     public commit(start: Point, end: Point): void {
         this.graphics?.clear();
         if (get(mapLayerModeStore) === "slab" && get(mapLayerLevelStore) === 0) {
@@ -421,6 +551,7 @@ export class MapLayerFloorEditing {
         const wamFile = this.scene.getGameMap().getWamFile();
         if (!operation || !wamFile) return;
         const stairMode = get(mapLayerModeStore) === "stair";
+        this.bridgeRefusal = undefined;
         /** Whether the stair just placed leads nowhere yet. */
         let stairLeadsNowhere = false;
 
@@ -435,6 +566,9 @@ export class MapLayerFloorEditing {
             });
             if (refused) {
                 if (stairMode) mapLayerStatusStore.set("stairInvalid");
+                if (this.bridgeRefusal) {
+                    mapLayerStatusStore.set(this.bridgeRefusal === "tooShort" ? "bridgeTooShort" : "bridgeBlocked");
+                }
                 return [];
             }
             if (commands === undefined) {

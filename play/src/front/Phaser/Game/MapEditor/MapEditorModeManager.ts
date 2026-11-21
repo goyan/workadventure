@@ -25,7 +25,9 @@ import { gameManager } from "../GameManager";
 import { isInsidePersonalAreaStore, personalAreaDataStore } from "../../../Stores/PersonalDeskStore";
 import { analyticsClient } from "../../../Administration/AnalyticsClient";
 import { warningMessageStore } from "../../../Stores/ErrorStore";
+import { armedCatastropheStore, disarmCatastrophe } from "../../../Stores/CatastropheStore";
 import { isTextEditingTarget } from "./isTextEditingTarget";
+import { toolPauseFor } from "./CatastropheToolPause";
 import { EditorToolName } from "./EditorToolName";
 import { editorToolForKey } from "./EditorToolShortcuts";
 import { AreaEditorTool } from "./Tools/AreaEditorTool";
@@ -107,6 +109,9 @@ export class MapEditorModeManager {
     private currentCommandIndex: number;
 
     private mapEditorModeUnsubscriber: Unsubscriber | undefined;
+    private armedCatastropheUnsubscriber: Unsubscriber | undefined;
+    /** The tool put aside while a catastrophe is armed in the editor: taken back when it is disarmed. */
+    private toolBeforeCatastrophe: EditorToolName | undefined;
 
     private readonly selectionEditorTool: SelectionEditorTool;
 
@@ -146,6 +151,7 @@ export class MapEditorModeManager {
         this.lastlyUsedTool = undefined;
 
         this.subscribeToStores();
+        this.subscribeToArmedCatastrophe();
         this.subscribeToGameMapFrontWrapperEvents();
 
         this.currentRunningCommand = this.scene.getGameMapFrontWrapper().initializedPromise.promise;
@@ -735,6 +741,11 @@ export class MapEditorModeManager {
         if (this.activeTool === tool) {
             return;
         }
+        if (tool !== undefined) {
+            // Picking a tool takes the pointer back from an armed catastrophe.
+            this.toolBeforeCatastrophe = undefined;
+            disarmCatastrophe();
+        }
         if (tool === EditorToolName.WAMSettingsEditor) {
             this.toolBeforeWamSettings = this.activeTool;
         }
@@ -834,7 +845,8 @@ export class MapEditorModeManager {
                 mapEditorSnapEnabledStore.set(true);
             }
             if (!this.active) {
-                this.lastlyUsedTool = get(mapEditorSelectedToolStore);
+                this.lastlyUsedTool = get(mapEditorSelectedToolStore) ?? this.toolBeforeCatastrophe;
+                this.toolBeforeCatastrophe = undefined;
                 this.equipTool(undefined);
                 return;
             }
@@ -850,6 +862,22 @@ export class MapEditorModeManager {
         });
     }
 
+    /** An armed catastrophe owns the click on the map: the tool is put aside meanwhile, and taken back after. */
+    private subscribeToArmedCatastrophe(): void {
+        this.armedCatastropheUnsubscriber = armedCatastropheStore.subscribe((armed) => {
+            if (!this.active) return;
+            const pause = toolPauseFor(armed !== undefined, this.activeTool, this.toolBeforeCatastrophe);
+            this.toolBeforeCatastrophe = pause.paused;
+            if (pause.equip === undefined) return;
+            if (pause.equip === null) {
+                this.equipTool(undefined);
+                return;
+            }
+            // equipTool forgets the tool put aside: this one is it.
+            this.equipTool(pause.equip);
+        });
+    }
+
     private subscribeToGameMapFrontWrapperEvents(): void {
         for (const tool of Object.values(this.editorTools)) {
             tool.subscribeToGameMapFrontWrapperEvents(this.scene.getGameMapFrontWrapper());
@@ -858,6 +886,7 @@ export class MapEditorModeManager {
 
     private unsubscribeFromStores(): void {
         this.mapEditorModeUnsubscriber?.();
+        this.armedCatastropheUnsubscriber?.();
     }
 
     public get currentlyActiveTool(): MapEditorTool | undefined {

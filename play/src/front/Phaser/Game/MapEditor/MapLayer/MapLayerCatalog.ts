@@ -6,8 +6,6 @@
  * infrastructure repository: never rename an identifier once a catalog has been published.
  */
 
-import { BRIDGE_COLLECTION } from "@workadventure/map-editor";
-
 export const MAP_LAYER_TILE_SIZE = 32;
 
 /**
@@ -16,15 +14,7 @@ export const MAP_LAYER_TILE_SIZE = 32;
  */
 export const MAP_LAYER_FLOOR_DEPTH = 0.5;
 
-/**
- * Depth of the bridges: over the water of the relief (0.65) and its foam (0.66), which hide a floor, and under the
- * objects of the floor and everything sorted by its y.
- */
-export const MAP_LAYER_BRIDGE_DEPTH = 0.8;
-
 export const MAP_LAYER_FLOOR_COLLECTION = "Carte Sols";
-/** The bridges: decks laid tile by tile over the water of the relief, that everything that walks crosses dry. */
-export const MAP_LAYER_BRIDGE_COLLECTION = BRIDGE_COLLECTION;
 export const MAP_LAYER_WALL_COLLECTION = "Carte Murs";
 export const MAP_LAYER_DOOR_COLLECTION = "Carte Portes";
 /** Windows: a facade whose face has a see-through glass, on one segment of a horizontal wall. */
@@ -65,7 +55,6 @@ export const MAP_LAYER_COLLECTIONS: readonly string[] = [
     MAP_LAYER_WINDOW_COLLECTION,
     MAP_LAYER_FLOOR_SLAB_COLLECTION,
     ...MAP_LAYER_UPPER_COLLECTIONS,
-    MAP_LAYER_BRIDGE_COLLECTION,
 ];
 
 export const MAP_LAYER_FLOOR_FAMILIES = [
@@ -173,14 +162,6 @@ export function mapLayerPrefabId(collectionName: string, name: string): string {
     return `${collectionName}:${name}:Default:Down`;
 }
 
-/**
- * The piece of a tile of a bridge: `mask` tells which of its neighbours are bridge too (1 north, 2 east, 4 south,
- * 8 west), so that the piece draws a rail on each side that is free.
- */
-export function bridgePrefabName(mask: number): string {
-    return `pont-bois-${mask}`;
-}
-
 export function floorPrefabName(family: FloorFamily, variant: FloorVariant): string {
     return `sol-${family}-${variant}`;
 }
@@ -248,7 +229,6 @@ export function doorPrefabName(
  */
 export type MapLayerPiece =
     | { kind: "floor"; family: FloorFamily; variant: FloorVariant }
-    | { kind: "bridge" }
     | { kind: "facade"; tint: WallTint; ends: FacadeEnds; height: WallHeight }
     | { kind: "window"; tint: WallTint; ends: FacadeEnds; height: WallHeight }
     | { kind: "vertical"; tint: WallTint; height: WallHeight }
@@ -272,7 +252,6 @@ const HEIGHT = "(?:-h([2-4]))?";
 const FLOOR_NAME = new RegExp(`^sol-(${MAP_LAYER_FLOOR_FAMILIES.join("|")})-(uni|ombre)$`);
 const FACADE_NAME = new RegExp(`^facade-(${TINTS})-(mid|left|right|single)${HEIGHT}$`);
 const WINDOW_NAME = new RegExp(`^fenetre-(${TINTS})-(mid|left|right|single)${HEIGHT}$`);
-const BRIDGE_NAME = /^pont-bois-(\d|1[0-5])$/;
 const VERTICAL_NAME = new RegExp(`^mur-vertical-(${TINTS})${HEIGHT}$`);
 const END_NAME = new RegExp(`^bout-(${TINTS})${HEIGHT}$`);
 const LINTEL_NAME = new RegExp(`^linteau-(${TINTS})-(mid|left|right|single)-h([2-4])-o([1-3])$`);
@@ -298,9 +277,6 @@ export function parseMapLayerPrefab(collectionName: string, prefabId: string): M
         return match
             ? { kind: "floor", family: match[1] as FloorFamily, variant: match[2] as FloorVariant }
             : undefined;
-    }
-    if (collectionName === MAP_LAYER_BRIDGE_COLLECTION) {
-        return BRIDGE_NAME.test(name) ? { kind: "bridge" } : undefined;
     }
     if (collectionName === MAP_LAYER_WALL_COLLECTION) {
         const vertical = VERTICAL_NAME.exec(name);
@@ -391,7 +367,7 @@ export function isMapLayerPrefab(collectionName: string, prefabId: string): bool
  * under its wall would. The other pieces are their own.
  */
 export function groundPieceOf(piece: MapLayerPiece): MapLayerPiece {
-    if (piece.kind === "floor" || piece.kind === "bridge") return piece;
+    if (piece.kind === "floor") return piece;
     if (piece.kind === "lintel") return { kind: "facade", tint: piece.tint, ends: piece.ends, height: 1 };
     return { ...piece, height: 1 };
 }
@@ -415,7 +391,7 @@ export function mapLayerGroundRect(
     x: number,
     y: number,
 ): { x: number; y: number; width: number; height: number } {
-    const rise = piece.kind === "floor" || piece.kind === "bridge" ? 0 : wallRise(piece.height);
+    const rise = piece.kind === "floor" ? 0 : wallRise(piece.height);
     return { x, y: y + rise, ...mapLayerPieceSize(groundPieceOf(piece)) };
 }
 
@@ -440,7 +416,6 @@ export function mapLayerPieceSize(piece: MapLayerPiece): { width: number; height
                 height: lintelHeight(piece.height, piece.opening),
             };
         case "floor":
-        case "bridge":
             return { width: MAP_LAYER_TILE_SIZE, height: MAP_LAYER_TILE_SIZE };
         case "door":
             return {

@@ -1,5 +1,5 @@
 import { gunzipSync } from "node:zlib";
-import { cellKey, CELL_LITRES_PER_PX, WeatherType, withHeights } from "@workadventure/map-editor";
+import { cellKey, CELL_LITRES_PER_PX, PX_PER_MM, WeatherType, withHeights } from "@workadventure/map-editor";
 import type { TerrainData, WAMFileFormat } from "@workadventure/map-editor";
 import type { SubToPusherRoomMessage, TerrainWaterMessage } from "@workadventure/messages";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -148,6 +148,22 @@ describe("TerrainWaterManager", () => {
         expect(manager.getGrid()?.depthAt(15, 15)).toBe(0);
         expect(sent).toHaveLength(1);
         expect(sent[0].stats?.sources).toBeGreaterThan(0);
+    });
+
+    it("a strike on a water with inertia throws a rim around its crater, and the room sees the real wave five times a second", () => {
+        const wam = wamWith(wideLake);
+        if (wam.settings?.water) wam.settings.water.inertia = true;
+        const { manager, sent, steps } = createHarness({ wam });
+        manager.mapChanged();
+        fillWithWater(manager);
+        manager.strike(240, 240, 4);
+        // The crater (8 cells around the cell 15, 15) is empty, the rim next to it stands over the water around.
+        expect(manager.getGrid()?.depthAt(15, 15)).toBe(0);
+        expect(manager.getGrid()?.depthAt(15 + 10, 15)).toBeGreaterThan(8);
+        expect(sent[0].stats?.sources).toBeGreaterThan(0);
+        const afterImpact = sent.length;
+        steps(4);
+        expect(sent.length - afterImpact).toBe(2);
     });
 
     it("the wave of a strike goes on step after step, and the room sees it five times a second", () => {
@@ -360,6 +376,51 @@ describe("TerrainWaterManager", () => {
         expect(sent).toHaveLength(told);
     });
 
+    it("tells the room as often as the map asks while the water moves", () => {
+        const count = (updates?: number): number => {
+            const wam = wamWith(wideLake);
+            if (wam.settings?.water && updates !== undefined) wam.settings.water.updates = updates;
+            wam.entities.spring = sourceAt(15, 15, 600000);
+            const { manager, sent, steps } = createHarness({ wam });
+            manager.mapChanged();
+            steps(20);
+            return sent.length;
+        };
+        // Two seconds: once a second for a map that says nothing, five and ten times for those that ask.
+        expect(count()).toBe(2);
+        expect(count(5)).toBe(10);
+        expect(count(10)).toBe(20);
+    });
+
+    it("does not tell again a cell whose water barely changed, and puts it right at the next whole state", () => {
+        const { manager, sent, steps } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        fillWithWater(manager);
+        steps(10);
+        const grid = manager.getGrid();
+        if (!grid) throw new Error("no grid");
+        // An eighth of a pixel more over one cell: under what is worth telling.
+        const nudge = (eighths: number): void => {
+            const bytes = grid.writeDepths();
+            const index = (20 * grid.bounds.width + 20) * 2;
+            bytes[index] += eighths;
+            grid.readDepths(bytes);
+        };
+        // The room is first told what moved, then that nothing comes in or goes out any more.
+        manager["tell"](grid);
+        manager["tell"](grid);
+        const before = depthsAfter(sent).at(grid.bounds.x + 20, grid.bounds.y + 20);
+        nudge(1);
+        const told = sent.length;
+        manager["tell"](grid);
+        expect(sent).toHaveLength(told);
+        // Half a pixel more: told.
+        nudge(4);
+        manager["tell"](grid);
+        expect(sent).toHaveLength(told + 1);
+        expect(depthsAfter(sent).at(grid.bounds.x + 20, grid.bounds.y + 20)).toBeCloseTo(before + 5 / 8, 5);
+    });
+
     it("fills the hollows with the rain of the map, and counts it", () => {
         const { manager, sent, steps } = createHarness({ wam: wamWith(lake, WeatherType.Rain) });
         manager.mapChanged();
@@ -369,6 +430,24 @@ describe("TerrainWaterManager", () => {
         expect(sent[0].stats?.rain).toBeCloseTo(0.0594, 4);
         expect(depthsAfter(sent).at(1, 1)).toBeGreaterThanOrEqual(0);
         expect(sent[0].stats?.stock).toBeGreaterThan(0);
+    });
+
+    it("fills nothing with a rain that falls as snow in the cold of the room, and half as much with a mix", () => {
+        const rainOf = (air: { temperature: number; humidity: number } | undefined): number => {
+            const { manager, sent, steps } = createHarness({ wam: wamWith(lake, WeatherType.Rain) });
+            manager.fallThrough(() => air);
+            manager.mapChanged();
+            steps(10);
+            manager.stop();
+            return sent[0]?.stats?.rainRate ?? 0;
+        };
+        expect(rainOf(undefined)).toBe(2);
+        expect(rainOf({ temperature: 20, humidity: 60 })).toBe(2);
+        expect(rainOf({ temperature: -2, humidity: 80 })).toBe(0);
+        // 1.2 °C in saturated air: a wet bulb of about 1 °C, half rain, half snow.
+        const mixed = rainOf({ temperature: 1.2, humidity: 99 });
+        expect(mixed).toBeGreaterThan(0.8);
+        expect(mixed).toBeLessThan(1.2);
     });
 
     // A relief edited under the water keeps it where it was.
@@ -569,5 +648,39 @@ describe("TerrainWaterManager", () => {
         manager.mapChanged();
         steps(10);
         expect(rain.slotsFor).toHaveBeenCalledWith(place);
+    });
+});
+
+describe("the snow and the water of the relief", () => {
+    it("a downpour that falls as snow in the cold of the room brings no water", () => {
+        const { manager, steps } = createHarness({ wam: wamWith(wideLake) });
+        manager.fallThrough(() => ({ temperature: -5, humidity: 50 }));
+        manager.mapChanged();
+        manager.setDownpours(() => [{ id: 1, x: 240, y: 240, radiusTiles: 2, wholeMap: false }]);
+        steps(10);
+        expect(manager.getGrid()?.depthAt(15, 15)).toBe(0);
+        manager.stop();
+    });
+
+    it("pours the water of a melted snow on the four cells of its tile, counted with the rain", () => {
+        const { manager, sent, steps } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        // The snow that makes a pixel of water.
+        const mm = 1 / PX_PER_MM;
+        expect(manager.pour(7, 7, mm)).toBeCloseTo(mm);
+        const grid = manager.getGrid();
+        for (const [x, y] of [
+            [14, 14],
+            [15, 14],
+            [14, 15],
+            [15, 15],
+        ]) {
+            expect(grid?.depthAt(x, y)).toBeCloseTo(1);
+        }
+        expect(manager.pour(5000, 5000, mm)).toBe(0);
+        expect(manager.pour(7, 7, Number.NaN)).toBe(0);
+        steps(10);
+        expect(sent.at(-1)?.stats?.rain).toBeGreaterThan(0);
+        manager.stop();
     });
 });

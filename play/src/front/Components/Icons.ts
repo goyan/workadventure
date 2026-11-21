@@ -174,13 +174,13 @@ export { default as IconShovel } from "~icons/tabler/shovel";
 export { default as IconFish } from "~icons/tabler/fish";
 export { default as IconDroplet } from "~icons/tabler/droplet";
 export { default as IconBrush } from "~icons/tabler/brush";
-export { default as IconBuildingBridge } from "~icons/tabler/building-bridge";
 export { default as IconEraser } from "~icons/tabler/eraser";
 export { default as IconBucket } from "~icons/tabler/bucket";
 export { default as IconRectangle } from "~icons/tabler/rectangle";
 export { default as IconHome } from "~icons/tabler/home";
 export { default as IconHandStop } from "~icons/tabler/hand-stop";
 export { default as IconStairs } from "~icons/tabler/stairs";
+export { default as IconBuildingBridge } from "~icons/tabler/building-bridge";
 export { default as IconColorPicker } from "~icons/tabler/color-picker";
 
 // The map editor build kit: its tools and the categories of objects, one picture each.
@@ -201,6 +201,7 @@ export { default as IconBulb } from "~icons/tabler/bulb";
 export { default as IconPlant } from "~icons/tabler/plant";
 export { default as IconBox } from "~icons/tabler/box";
 export { default as IconDeviceDesktop } from "~icons/tabler/device-desktop";
+export { default as IconWorld } from "~icons/tabler/world";
 export { default as IconCategory } from "~icons/tabler/category-2";
 export { default as IconLayersSubtract } from "~icons/tabler/layers-subtract";
 export { default as IconRipple } from "~icons/tabler/ripple";

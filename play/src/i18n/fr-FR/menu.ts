@@ -106,6 +106,12 @@ const menu: DeepPartial<Translation["menu"]> = {
             title: "Ambiance",
             description: "Ce que vous voyez sur la carte. Rien ne change pour les autres.",
         },
+        mapLighting: {
+            title: "Éclairage de la carte",
+            energySaving: "Économie d’énergie",
+            energySavingHint:
+                "Les lampes posées dehors s’éteignent le jour quand le ciel éclaire assez, et se rallument à la tombée du jour ou sous un gros orage, pour tous les joueurs.",
+        },
         mapWeather: {
             title: "Météo de la carte",
             description:
@@ -115,11 +121,9 @@ const menu: DeepPartial<Translation["menu"]> = {
             label: "Thème saisonnier",
             auto: "Auto",
             autumn: "Automne",
-            christmas: "Hiver",
             none: "Aucun",
-            hintAuto: "Automne de septembre à novembre, hiver de décembre à février.",
-            hintAutumn: "Feuilles au sol et feuilles qui tombent, dehors.",
-            hintChristmas: "Hiver : la neige remplace le sol extérieur et la météo de la carte.",
+            hintAuto: "Automne de septembre à novembre.",
+            hintAutumn: "Feuilles qui tombent des arbres et feuilles à leur pied, dehors.",
             hintNone: "Aucun décor saisonnier.",
         },
         perfCounter: "Afficher le compteur de performances (images par seconde) près de la barre d'actions",
@@ -141,6 +145,18 @@ const menu: DeepPartial<Translation["menu"]> = {
             computer: "Heure de mon ordinateur",
             disabled: "Désactivé",
             always: "Toujours nuit",
+            world: "Jour dans le monde",
+            worldHelp:
+                "Le ciel d’une ville du monde où le soleil se lève, est au plus haut ou se couche, ou à l’heure choisie, à l’heure du serveur. Clique sur la carte pour un autre point.",
+            morning: "Matin",
+            noon: "Midi",
+            evening: "Soir",
+            custom: "Heure choisie",
+            worldCity: "Ciel de {city}",
+            worldPointCity: "Ciel de {city} (point choisi sur la carte)",
+            skyMenu: "Ciel et heure",
+            basicOff:
+                "Le mode Basique coupe le cycle jour/nuit : plein jour. Ton choix ({mode}) reviendra quand tu le quitteras.",
             disable: "Désactiver la nuit",
             darkness: "Obscurité de la nuit : {percent} %",
             darknessLight: "Claire",

@@ -3,7 +3,8 @@ import type { BaseTranslation } from "../i18n-types";
 const woka: BaseTranslation = {
     vehicle: {
         myVehicle: "My vehicles",
-        airHint: "Air: press {key} to activate or deactivate your airplane.",
+        airHint:
+            "Air: press {key} to activate or deactivate your airplane. In flight, hold Space to climb and Ctrl to descend.",
         landingBlocked: "Cannot land here. Move to a clear spot.",
         airplane: "Airplane",
         media: { air: "Air", land: "Land", water: "Water" },

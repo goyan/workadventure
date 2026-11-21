@@ -1,5 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
-import { UpdateWAMSettingCommand, WeatherType, WAMFileFormat as WamSchema, type WAMFileFormat } from "../src";
+import { describe, expect, it } from "vitest";
+import {
+    precipitationWeather,
+    UpdateWAMSettingCommand,
+    WeatherType,
+    WAMFileFormat as WamSchema,
+    type WAMFileFormat,
+} from "../src";
 
 describe("WAM Setting", () => {
     const defaultWamFile: WAMFileFormat = {
@@ -43,38 +49,49 @@ describe("WAM Setting", () => {
         expect(WamSchema.parse({ ...wam, settings: { weather: "invalid" } }).settings?.weather).toBeUndefined();
     });
 
-    it("keeps a snow chosen again going, and keeps a stopped snow so that its ground melts", async () => {
+    it("stores a snow sent by an older client as a rain: the snow is no weather of its own any more", async () => {
         const wam: WAMFileFormat = { ...defaultWamFile, settings: {} };
-        const setWeather = (weather: string, startedAt?: number): Promise<void> =>
+        const setWeather = (weather: string, startedAt?: number, autoInclude: string[] = []): Promise<void> =>
             new UpdateWAMSettingCommand(wam, {
                 message: {
                     $case: "updateWeatherSettingMessage",
-                    updateWeatherSettingMessage: { weather, startedAt, autoInclude: [] },
+                    updateWeatherSettingMessage: {
+                        weather,
+                        startedAt,
+                        autoInclude,
+                        ...(autoInclude.length > 0 ? { autoFrequency: "normal" } : {}),
+                    },
                 },
             }).execute();
         await setWeather(WeatherType.Snow, 1_000);
-        await setWeather(WeatherType.Snow, 5_000);
+        expect(wam.settings?.weather).toBe(WeatherType.Rain);
         expect(wam.settings?.weatherStartedAt).toBe(1_000);
-        expect(wam.settings?.lastSnow).toBeUndefined();
+        // Chosen again, it starts again like any weather; stopped, it leaves no snow to melt.
+        await setWeather(WeatherType.Snow, 5_000);
+        expect(wam.settings?.weatherStartedAt).toBe(5_000);
         await setWeather(WeatherType.Clear, 9_000);
         expect(wam.settings?.weatherStartedAt).toBe(9_000);
-        expect(wam.settings?.lastSnow).toEqual({ startedAt: 1_000, endedAt: 9_000 });
-        await setWeather(WeatherType.Rain, 12_000);
-        expect(wam.settings?.lastSnow).toEqual({ startedAt: 1_000, endedAt: 9_000 });
-        expect(WamSchema.parse(wam).settings?.lastSnow).toEqual({ startedAt: 1_000, endedAt: 9_000 });
+        expect(wam.settings?.lastSnow).toBeUndefined();
+        await setWeather(WeatherType.Automatic, 12_000, [WeatherType.Rain, WeatherType.Snow, WeatherType.Fog]);
+        expect(wam.settings?.weatherAuto?.include).toEqual([WeatherType.Rain, WeatherType.Fog]);
     });
 
-    it("starts a snow chosen by this client at its own time until the server stamps it, never full at once", async () => {
-        vi.spyOn(Date, "now").mockReturnValue(42_000);
-        const wam: WAMFileFormat = { ...defaultWamFile, settings: { weather: WeatherType.Clear } };
-        await new UpdateWAMSettingCommand(wam, {
-            message: {
-                $case: "updateWeatherSettingMessage",
-                updateWeatherSettingMessage: { weather: WeatherType.Snow, autoInclude: [] },
+    it("still reads a map saved with a snow, and shows it as a rain", () => {
+        const saved = WamSchema.parse({
+            ...defaultWamFile,
+            settings: {
+                weather: "snow",
+                weatherStartedAt: 1_000,
+                lastSnow: { startedAt: 1, endedAt: 2 },
+                weatherAuto: { frequency: "normal", include: ["rain", "snow"] },
             },
-        }).execute();
-        expect(wam.settings?.weatherStartedAt).toBe(42_000);
-        vi.restoreAllMocks();
+        });
+        expect(saved.settings?.weather).toBe(WeatherType.Snow);
+        expect(saved.settings?.weatherAuto?.include).toEqual(["rain", "snow"]);
+        expect(precipitationWeather(WeatherType.Snow)).toBe(WeatherType.Rain);
+        for (const weather of Object.values(WeatherType)) {
+            if (weather !== WeatherType.Snow) expect(precipitationWeather(weather)).toBe(weather);
+        }
     });
 
     it("stores the settings of the meadow within their bounds, and reads a map that has none as on", async () => {
@@ -103,6 +120,44 @@ describe("WAM Setting", () => {
         });
         expect(wam.settings?.weather).toBe(WeatherType.Rain);
         expect(WamSchema.parse(wam).settings?.meadow?.enabled).toBe(false);
+    });
+
+    it("stores the energy saving of the lamps, off for a map that has none, without touching the weather", async () => {
+        const wam: WAMFileFormat = {
+            ...defaultWamFile,
+            settings: { weather: WeatherType.Snow, weatherStartedAt: 1_000 },
+        };
+        expect(WamSchema.parse(wam).settings?.lighting?.energySaving ?? false).toBe(false);
+        const send = (energySaving: boolean): Promise<void> =>
+            new UpdateWAMSettingCommand(wam, {
+                message: {
+                    $case: "updateLightingSettingMessage",
+                    updateLightingSettingMessage: { energySaving },
+                },
+            }).execute();
+        await send(true);
+        expect(wam.settings?.lighting).toEqual({ energySaving: true });
+        expect(WamSchema.parse(wam).settings?.lighting?.energySaving).toBe(true);
+        expect(wam.settings?.weather).toBe(WeatherType.Snow);
+        expect(wam.settings?.weatherStartedAt).toBe(1_000);
+        await send(false);
+        expect(WamSchema.parse(wam).settings?.lighting?.energySaving).toBe(false);
+        expect(
+            WamSchema.parse({ ...defaultWamFile, settings: { lighting: { energySaving: "yes" } } }).settings?.lighting,
+        ).toBeUndefined();
+    });
+
+    it("stores the hand ladders of the pools, once each, and drops a cell that is not one", async () => {
+        const wam: WAMFileFormat = { ...defaultWamFile, settings: {} };
+        const send = (cells: string[]): Promise<void> =>
+            new UpdateWAMSettingCommand(wam, {
+                message: { $case: "updatePoolLaddersSettingMessage", updatePoolLaddersSettingMessage: { cells } },
+            }).execute();
+        await send(["3,4", "3,4", "-2,7", "nope"]);
+        expect(wam.settings?.poolLadders).toEqual(["3,4", "-2,7"]);
+        expect(WamSchema.parse(wam).settings?.poolLadders).toEqual(["3,4", "-2,7"]);
+        await send([]);
+        expect(wam.settings?.poolLadders).toBeUndefined();
     });
 
     it("accepts fog as map weather", () => {

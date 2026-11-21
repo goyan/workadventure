@@ -23,6 +23,7 @@ import { UsernameDisplay } from "@wa/front/Phaser/Components/UsernameDisplay";
 import { findSeatUnderFeet } from "@wa/front/Phaser/Player/Seat";
 import {
     BODY_CENTER_OFFSET_Y,
+    getFrozenPoolRectangles,
     getWaterRectangles,
     isDeepTerrainWater,
     isPointInWater,
@@ -40,7 +41,8 @@ import {
     AIRPLANE_ALTITUDE,
     AIRPLANE_AREA_LEVEL,
     AIRPLANE_RENDER_DEPTH,
-    AIRPLANE_VISUAL_LIFT,
+    airplaneLift,
+    airplaneScale,
     isCanoeAfloat,
     readVehicleState,
     sharedVehicleState,
@@ -55,7 +57,12 @@ import type { TorchFlameShape } from "@wa/front/Phaser/Game/Torch/TorchFlameShap
 import { decodeNerfHearts } from "@wa/front/Phaser/Game/Nerf/NerfProtocol";
 import { heartsDropped } from "@wa/front/Phaser/Game/Nerf/NerfHearts";
 import { NERF_BLINK_ALPHA, NERF_BLINK_TINT, nerfBlinkTinted } from "@wa/front/Phaser/Game/Nerf/NerfBlink";
-import { cardinalVehicleHeading, vehicleHeading } from "@wa/front/Phaser/Vehicle/VehicleFrames";
+import {
+    cardinalVehicleHeading,
+    vehicleHeading,
+    VEHICLE_FEET_Y,
+    VEHICLE_FRAME_SIZE,
+} from "@wa/front/Phaser/Vehicle/VehicleFrames";
 import { isBasicActive } from "@wa/front/Stores/BasicModeStore";
 import { normalizeUserName } from "../../Connection/LocalUserUtils";
 import { floorDepth, GROUND_DEPTH_SCALE } from "../Game/MapEditor/MapLayer/FloorDepth";
@@ -213,6 +220,7 @@ export abstract class Character extends Container implements OutlineableInterfac
             {
                 lift: this.flightLift,
                 altitude: Math.min(1, this.displayedFlightAltitude / AIRPLANE_ALTITUDE),
+                scale: this.flightScale,
                 groundDepth: floorDepth(this.floorZ, this.y + 16),
             },
         );
@@ -452,7 +460,15 @@ export abstract class Character extends Container implements OutlineableInterfac
         // Basique hides the water of the relief: here nobody swims nor floats in it (the pools of the map remain).
         if (this.floorZ >= 2 || isBasicActive()) return false;
         const body = { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y };
-        return isDeepTerrainWater(this.scene.getTerrainWater?.(), body, this.scene.time.now);
+        // Frozen, it is skated on, not swum in.
+        if (this.scene.isFrozenWaterAt?.(body.x, body.y)) return false;
+        // By the cell under the body, or as the water is drawn when the relief is shown in 3/4.
+        return isDeepTerrainWater(
+            this.scene.getTerrainWater?.(),
+            body,
+            this.scene.time.now,
+            this.scene.pixelReliefShown?.() === true,
+        );
     }
 
     /**
@@ -462,10 +478,11 @@ export abstract class Character extends Container implements OutlineableInterfac
      */
     protected waterCurrentPush(walkSpeed: number): CurrentVector {
         const water = this.floorZ < 2 && !isBasicActive() ? this.scene?.getTerrainWater?.() : undefined;
-        // The current runs under the deck of a bridge, not over it.
-        if (!water || water.isBridgeAt(this.x, this.y + BODY_CENTER_OFFSET_Y)) return { x: 0, y: 0 };
+        if (!water) return { x: 0, y: 0 };
         // A drain of the catastrophes pulls the water, never who is in it.
         if (this.scene.isDrainCalm?.(this.x, this.y + BODY_CENTER_OFFSET_Y)) return { x: 0, y: 0 };
+        // Under the ice, the current carries nobody.
+        if (this.scene.isFrozenWaterAt?.(this.x, this.y + BODY_CENTER_OFFSET_Y)) return { x: 0, y: 0 };
         const strength =
             this.scene.getGameMap().getWamFile()?.getWam().settings?.water?.current ?? DEFAULT_WATER_SETTINGS.current;
         return currentPush(water, this.x, this.y + BODY_CENTER_OFFSET_Y, this.scene.time.now, strength, walkSpeed);
@@ -478,8 +495,12 @@ export abstract class Character extends Container implements OutlineableInterfac
     protected isOnIceHere(): boolean {
         // The ice is on the ground too.
         if (!this.scene || this.floorZ > 0) return false;
+        const body = { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y };
+        // A rink of the map, or the water of the relief frozen by the cold.
         return (
-            isOnIce(getIceRectangles(this.scene), { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y }) &&
+            (isOnIce(getIceRectangles(this.scene), body) ||
+                isPointInWater(getFrozenPoolRectangles(this.scene), body) ||
+                this.scene.isFrozenWaterAt?.(body.x, body.y) === true) &&
             !this.isSwimmingHere()
         );
     }
@@ -781,7 +802,9 @@ export abstract class Character extends Container implements OutlineableInterfac
     }
 
     protected updateUsernameDisplayPosition(x = this.x, y = this.y): void {
-        this.usernameDisplay?.setPosition(x, y + playerNameY - this.flightLift + this.groundDrop);
+        // Over a plane drawn bigger as it climbs: the name keeps above its wings.
+        const wings = Math.round((this.flightScale - 1) * (VEHICLE_FRAME_SIZE / 2));
+        this.usernameDisplay?.setPosition(x, y + playerNameY - this.flightLift - wings + this.groundDrop);
     }
 
     public setVideoBubbleVisible(visible: boolean): void {
@@ -938,7 +961,12 @@ export abstract class Character extends Container implements OutlineableInterfac
 
     /** How high the plane is drawn above its shadow: its altitude, brought down to a few pixels (whole ones). */
     private get flightLift(): number {
-        return Math.round(Math.min(1, this.displayedFlightAltitude / AIRPLANE_ALTITUDE) * AIRPLANE_VISUAL_LIFT);
+        return airplaneLift(this.displayedFlightAltitude);
+    }
+
+    /** How big the plane is drawn: bigger as it climbs, closer to the eye looking from above. */
+    private get flightScale(): number {
+        return airplaneScale(this.displayedFlightAltitude);
     }
 
     public get visualY(): number {
@@ -967,11 +995,17 @@ export abstract class Character extends Container implements OutlineableInterfac
     private updateAirplanePilot(): void {
         if (this.isInAirplane() && this.vehicleEffect) {
             const cockpit = this.vehicleEffect.getPilotAnchor();
+            // The pilot grows with the plane, around its centre (see VehicleEffect).
+            const scale = this.flightScale;
+            const centreY = VEHICLE_FEET_Y - this.flightLift;
             for (const sprite of this.sprites.values()) {
                 sprite
                     .setCrop(0, 0, 32, 16)
-                    .setScale(0.75)
-                    .setPosition(cockpit.x - 32, cockpit.y - 10 - this.flightLift);
+                    .setScale(0.75 * scale)
+                    .setPosition(
+                        Math.round((cockpit.x - 32) * scale),
+                        Math.round(centreY + (cockpit.y - 10 - VEHICLE_FEET_Y) * scale),
+                    );
             }
             this.airplanePoseApplied = true;
         } else if (this.airplanePoseApplied) {

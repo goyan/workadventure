@@ -361,6 +361,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             actionButtonLabel: "Actionner l'interrupteur",
             turnOn: "Allumer",
             turnOff: "Éteindre",
+            acts: "Il agit sur :",
+            keyOn: "La lumière des lampes",
+            keyHot: "L’eau chaude des piscines (elle ne gèle jamais)",
             commands: "Commande :",
             modeZone: "Les lampes de cette pièce",
             modeIds: "Lampes choisies",
@@ -683,7 +686,29 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         soil: "Sol",
         soilHint:
             "Peignez un sol sur la carte. Rocher et argile gardent l'eau ; sable et gravier la boivent, même dans un creux ; terre et prairie boivent une crue comme le sol d'origine. « Sol d'origine » efface la peinture.",
+        pool: "Piscine",
         soilErase: "Sol d'origine (effacer)",
+        pools: {
+            title: "Piscines",
+            hint: "Tracez une piscine en glissant : rectangle ou ellipse, ou au pinceau pour une forme libre. Un clic sur une piscine la sélectionne : changez son style ou supprimez-la. Chaque style a ses couleurs, sa profondeur, ses échelles et son eau chaude. L'outil Échelle pose une échelle sur le bord haut de la piscine cliquée, un second clic la retire.",
+            pool: "Piscine {number}",
+            add: "+ Nouvelle piscine",
+            water: "Eau",
+            coping: "Margelle",
+            depth: "Profondeur : {depth} px",
+            ladders: "Échelles",
+            hot: "Eau chaude (ne gèle jamais, fume dans le froid)",
+            tool: "Outil",
+            tools: {
+                rectangle: "Rectangle",
+                ellipse: "Ellipse",
+                brush: "Pinceau",
+                eraser: "Gomme",
+                ladder: "Échelle",
+            },
+            selected: "Piscine sélectionnée : {cells} cases. Choisissez un style pour la repeindre.",
+            delete: "Supprimer",
+        },
         hoverSoil: "Sol sous le curseur : {soil}",
         meadow: {
             title: "Herbe de la carte",
@@ -722,6 +747,19 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         forceAuto: "Force automatique (un huitième du diamètre)",
         force: "Force (épaisseur enlevée par passage)",
         mapSettings: "Réglages de la carte",
+        realistic: "Réaliste",
+        realisticHint: "Remet tous les réglages de l'eau sur leurs valeurs physiques.",
+        more: "En savoir plus",
+        realisticDetail:
+            "Vitesse 1, eau à inertie, vagues selon le sol et la profondeur, vitesse d'écoulement 1, 5 envois par seconde, hauteur d'eau non plafonnée (256 px), ruissellement 10, évaporation 0,2 mm/h, absorption 5 mm/h, vidange 300 mm/h. Seul l'amorti (0,02) n'est pas physique.",
+        inertiaDetail:
+            "Une comète y jette l'eau de son cratère en bourrelet et l'eau fait elle-même la vague. Sur la terre émergée, seule la rugosité du sol retient la crue. Une eau profonde clapote plusieurs minutes avant de se calmer.",
+        flowPaceDetail:
+            "Une case fait 1,10 m de côté : à 1, une vague court à 2,2 cases par seconde sous 60 cm d'eau, 4 sous 2 m. Repère : l'avatar marche à 5,6 cases par seconde, quatre fois plus vite qu'un piéton. Pluie, sources et puits suivent « Vitesse de l'eau », pas ce réglage.",
+        precisionDetail:
+            "Nombre maximal de mouvements de l'eau par pas (10 pas par seconde). À 3, une vague court au plus à 5,8 m/s et un torrent à 8 m/s ; à 8, 15 et 16 m/s. En réel, une vague court à 7,7 m/s sous 6 m d'eau.",
+        updatesDetail:
+            "Nombre d'envois par seconde quand l'eau bouge. Mesuré pendant un tsunami : environ 45 Ko par envoi et par joueur, soit 450 Ko/s à 10 ; presque rien sur une eau calme. Sous une averse, un drain ou après une comète : au moins 5.",
         maxDepth: "Profondeur et hauteur maximales (cases)",
         runoff: "Ruissellement (terrain qui alimente un creux)",
         evaporation: "Évaporation par temps sec",
@@ -748,18 +786,50 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         current: "Force du courant (0 : les avatars ne sont pas emportés)",
         maxSurface: "Hauteur maximale de l'eau au-dessus du sol",
+        inertia: "Eau à inertie (à l'essai)",
+        flowPace: "Vitesse d'écoulement",
+        flowPaceHint: "Ralentit ou accélère tout ce qui coule : vagues, crues, courants. En réel : 1.",
+        precision: "Finesse du calcul de l'eau",
+        precisionHint:
+            "Plus haut : vagues et torrents plus rapides possibles, calcul plus lourd pour le serveur. 3 par défaut.",
+        updates: "Envois de l'eau aux joueurs",
+        updatesHint: "Plus haut : on voit les vagues courir au lieu de se fondre, au prix du réseau. 1 par défaut.",
+        waves: {
+            roughness: "Frottement du sol",
+            roughnessHint:
+                "Freine l'eau rapide ou peu profonde, selon le sol peint. Plus haut : les vagues montent moins loin. En réel : 1.",
+            damping: "Amorti de l'eau",
+            dampingHint:
+                "Calme l'eau partout, quelle que soit sa profondeur. Plus haut : les vagues s'éteignent avant la rive. En réel : 0.",
+            breaking: "Déferlement des vagues",
+            breakingHint:
+                "Fait casser les vagues trop raides, dans les lacs seulement. 0 : elles ne cassent jamais. En réel : 1.",
+            momentum: "Élan emporté par l'eau",
+            momentumHint:
+                "L'eau emporte sa vitesse : fronts nets, lac vite calme. 0 : vagues plus hautes au rivage, clapotis long. En réel : 1.",
+            roughnessDetail:
+                "Frottement de Manning : il grandit avec la vitesse de l'eau et faiblit avec sa profondeur, presque nul sous une houle au large. Rugosités des sols : argile 0,022, sable 0,025, terre et gravier 0,03, rocher 0,04, prairie 0,045.",
+            dampingDetail:
+                "Part de son débit que l'eau perd chaque seconde. 0,02 par défaut : le minimum qui garde le calcul calme ; une houle traverse encore un lac.",
+            breakingDetail:
+                "Un front dont la surface tombe de plus d'un dixième de l'eau où il court perd son débit. Sans effet sur la terre émergée, où une crue est une lame qui avance.",
+            momentumDetail:
+                "Sans effet sur la terre émergée. À 0, chaque passage entre deux cellules ne garde que son propre débit.",
+        },
         real: {
+            inertia:
+                "L'eau garde son élan : des vagues courent, cassent et noient les rives. Coupé : l'eau avance de proche en proche. En réel : activée.",
             maxDepth: "En réel : une case fait environ 1,10 m. Mare : 1 case ; étang : 2 à 3 ; lac : 4 et plus.",
             runoff: "En réel : le terrain qui alimente une mare fait 5 à 20 fois sa surface ; 0 pour un bassin maçonné.",
             evaporation: "En réel : 0,05 mm/h en hiver, 0,1 à 0,3 mm/h en été (3 à 6 mm par jour).",
             absorption: "En réel : argile 1 à 5 mm/h, pelouse 5 à 15, sable 20 à 30 ; sol gorgé d'eau ou bitume : 0.",
             indoorDrain:
                 "Les sols des pièces fermées par des murs (portes fermées) évacuent l'eau entrée. 300 mm/h par défaut : une pièce inondée sèche en deux minutes environ ; des grilles d'évacuation posées au sol vont plus vite ; 0 garde l'eau à l'intérieur. Un bassin creusé à l'intérieur garde son eau.",
-            speed: "En réel : 1. À cette vitesse, une pluie de 10 mm/h met des heures à remplir un étang.",
+            speed: "En réel : 1. À cette vitesse, une pluie de 10 mm/h met des heures à remplir un étang. 60 par défaut.",
             maxSurface:
-                "18 px par défaut : juste de quoi nager, sous les étages. Plus haut, une crue ou la vague d'un météore noie le sol en profondeur (une case = 32 px), étages compris au-delà de 52 px ; sous une forte pluie accélérée, l'eau peut s'empiler.",
+                "18 px par défaut : de quoi nager, sous les étages (52 px). Plus haut, une crue noie le sol en profondeur. En réel : aucun plafond (256 px).",
             current:
-                "À 1, le courant le plus fort emporte au quart de la vitesse de la marche : on lui résiste en marchant. Rien dans une eau au repos ni sous un quart de case d'eau.",
+                "À 1, le courant le plus fort emporte au quart de la vitesse de la marche. Réglage de jeu : 1 par défaut.",
         },
         paceHint:
             "Les creux se remplissent avec la pluie de la carte et sèchent par beau temps. Une source ou un puits s'ajoute à n'importe quel objet depuis ses propriétés.",
@@ -778,14 +848,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Pinceau de sol",
             floorRectangle: "Rectangle de sol",
             floorFill: "Remplir un sol",
-            bridge: "Pont",
             door: "Porte",
             window: "Fenêtre",
             height: "Hauteur",
             erase: "Gomme",
             slab: "Dalles de palier",
-            slabErase: "Gomme de palier",
             stair: "Escalier",
+            bridge: "Pont",
         },
         hints: {
             wall: "Glissez pour tracer un mur droit.",
@@ -793,15 +862,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Maintenez le bouton et peignez les dalles de sol.",
             floorRectangle: "Glissez un rectangle pour le remplir de sol.",
             floorFill: "Cliquez dans une pièce fermée pour la remplir.",
-            bridge: "Maintenez le bouton et peignez le tablier d’un pont, case par case. Tout ce qui marche le traverse à sec ; l’eau coule dessous.",
             door: "Cliquez sur un mur pour transformer deux de ses segments en porte. Elle s’ouvre quand quelqu’un s’approche.",
             window: "Cliquez ou glissez le long d’un mur horizontal pour y poser des fenêtres. On voit à travers. Glissez une fenêtre posée pour la déplacer.",
             height: "Cliquez sur un mur, une porte ou une fenêtre (ou glissez le long d’un mur) pour le sélectionner, puis choisissez sa hauteur.",
-            erase: "Partez d’un mur et glissez le long pour effacer ses segments (portes et fenêtres comprises), ou partez d’un sol pour effacer des sols. Un clic efface ce qui est sous le curseur. Les objets restent.",
+            erase: "Un clic efface ce qui est entouré en rouge : escalier ou rampe, porte, fenêtre, mur, dalle de palier ou sol. En choisissant la gomme, le niveau passe sur « Auto » : elle efface ce qui est sous le curseur, quel que soit son niveau. Choisissez un niveau pour n’effacer que sur celui-là. Partez d’un mur et glissez le long pour effacer ses segments (portes et fenêtres comprises) ; sur un palier, glissez un rectangle pour retirer ses dalles ; au sol, partez d’un sol pour effacer les sols survolés. Les objets restent.",
             slab: "Choisissez un niveau, puis glissez un rectangle pour poser les dalles d’un palier.",
-            slabErase:
-                "Glissez un rectangle pour retirer des dalles du niveau, ou cliquez sur un escalier qui en part.",
-            stair: "Cliquez sur la case de la première marche, au niveau d’où part l’escalier. Survolez la carte pour voir où il arrive.",
+            stair: "Cliquez sur la case de la première marche, au niveau d’où part l’escalier. Survolez la carte pour voir où il arrive. Un escalier ou une rampe déjà posé est entouré en blanc au survol : glissez-le pour le déplacer.",
+            bridge: "Cliquez la berge de départ, glissez jusqu’à la berge d’arrivée et relâchez : le tablier et une montée à chaque bout sont posés d’un coup. Le pont est droit, est-ouest ou nord-sud.",
         },
         floors: "Sol",
         floorGuide: {
@@ -820,18 +887,30 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             refused: "Ne tient pas ici",
             deadEnd: "Un escalier posé qui ne mène nulle part",
         },
+        bridge: {
+            width: "Largeur",
+            narrower: "Moins large",
+            wider: "Plus large",
+            tiles: "{count} case{{s}}",
+            style: "Style",
+            height: "Hauteur",
+            low: "Basse",
+            high: "Haute",
+            concreteOnly:
+                "Cette salle n’a pas les pièces des ponts en bois : pont en béton, à hauteur de murs de 2 cases.",
+            styles: {
+                wood: "Bois",
+                concrete: "Béton",
+            },
+        },
         floorLevel: {
-            adjust: "Ajuster la hauteur",
             areaTitle: "Niveau de cette zone",
             objectTitle: "Niveau de cet objet",
             auto: "Auto",
             autoHint: "Le palier sous le pointeur, le sol s’il n’y en a pas",
-            levelUp: "Niveau +",
-            levelDown: "Niveau −",
-            floorUp: "Palier +",
-            floorDown: "Palier −",
-            levelStepHint: "Une case de mur plus haut ou plus bas : n’importe quel niveau, avec ou sans dalles",
-            floorStepHint: "Au palier posé suivant ou précédent",
+            floorUp: "Niveau au-dessus",
+            floorDown: "Niveau en dessous",
+            floorStepHint: "Au niveau suivant ou précédent de la liste",
             from: "Part du",
             levelHint: "Dessus des murs de {height} cases",
             groundHint: "Le sol de la carte",
@@ -856,8 +935,14 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             target: "Monte jusqu’à",
             noTarget: "Aucun palier atteignable depuis ce niveau : posez d’abord ses dalles.",
             openSide: "Flanc vide",
+            ramp: "Rampe en bois",
+            rampHint:
+                "Une rampe de planches au lieu de marches : avec des dalles en traverses de bois, elle fait un pont que les animaux empruntent. Grisé si le catalogue de la salle n’a pas les rampes.",
         },
         walls: "Style de mur",
+        woodSlab: "Traverses en bois",
+        woodSlabHint:
+            "Le tablier d’un pont : posé au niveau 1 au-dessus d’une rivière, avec une rampe à chaque bout. Grisé si le catalogue de la salle n’a pas la dalle en bois.",
         glassSlab: "Dalles en verre",
         glassSlabHint:
             "Des dalles transparentes : on voit à travers ce qui est sous le palier. Grisé si le catalogue de la salle n’a pas la dalle en verre.",
@@ -888,11 +973,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             doorsUnavailable: "Cette salle n’a pas de catalogue de portes : les portes ne sont pas disponibles.",
             windowInvalid: "Une fenêtre se pose sur un mur horizontal libre (ni porte ni fenêtre). Cliquez sur un mur.",
             windowsUnavailable: "Cette salle n’a pas de catalogue de fenêtres : les fenêtres ne sont pas disponibles.",
-            bridgesUnavailable: "Cette salle n’a pas de catalogue de ponts : les ponts ne sont pas disponibles.",
             slabOnGround: "Choisissez d’abord un niveau au-dessus du sol : le sol se dessine avec les modes de sol.",
             stairNoArrival:
                 "Escalier posé, mais il ne mène encore nulle part : posez des dalles du niveau d’arrivée sur les cases orange.",
             stairInvalid: "L’escalier ne tient pas ici : il sort de la carte ou croise un autre escalier.",
+            bridgeTooShort:
+                "Pont trop court : il faut au moins une case de tablier entre les deux montées. Glissez plus loin.",
+            bridgeBlocked: "Le pont ne tient pas ici : il sort de la carte ou croise un escalier.",
             failed: "La modification n'a pas pu être appliquée.",
         },
         families: {
@@ -1000,6 +1087,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             searchPlaceholder: "Rechercher",
             backToSelectObject: "Retour à la sélection d'objet",
         },
+        convertPool: "Convertir en piscine modifiable (forme, couleurs, échelles)",
         deleteButton: "Supprimer",
         deleteCustomEntity: {
             title: "Supprimer « {name} » ?",
@@ -1160,7 +1248,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 stormy: "Agitée",
                 include: "Temps possibles",
                 stormHint: "l'après-midi, surtout l'été",
-                snowHint: "de novembre à mars",
                 fogHint: "le matin",
                 now: "{season} · Maintenant : {weather} jusqu'à {time}",
                 then: "puis {weather} à {time}",
@@ -1172,7 +1259,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 autumn: "Automne",
             },
             fixed: {
-                snowHint: "Hors novembre–mars, elle tombe en pluie.",
+                rainHint:
+                    "Par temps froid elle tombe en neige : selon la température et l'humidité réelles au lieu de la carte, ou réglées dans Catastrophe → Météo.",
                 fogHint: "Toute la journée.",
             },
             previewHint: "Aperçu pour vous seul. Sauvegarder l'applique à tout le monde.",

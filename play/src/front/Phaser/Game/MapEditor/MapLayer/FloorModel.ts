@@ -90,6 +90,7 @@ export class FloorModel {
                 rise: piece.rise,
                 open: piece.open,
                 ...(piece.short ? { short: true } : {}),
+                ...(piece.ramp ? { ramp: true } : {}),
             };
             const foot = stairFootFromImage(shape, item.x, item.y, elevation);
             if (foot) model.addStair(shape, foot, elevation);

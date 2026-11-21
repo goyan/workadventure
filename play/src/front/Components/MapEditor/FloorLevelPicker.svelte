@@ -1,6 +1,5 @@
 <script lang="ts">
     import FloorLevelStack from "../Floors/FloorLevelStack.svelte";
-    import { floorLevelName } from "../../Stores/FloorLevelsStore";
     import { LL } from "../../../i18n/i18n-svelte";
     import { mapEditorPlacementLevelStore } from "../../Stores/MapEditorStore";
     import {
@@ -9,7 +8,8 @@
         mapLayerLevelsStore,
         mapLayerPickLevelStore,
     } from "../../Stores/MapLayerStore";
-    import { stepLevel, steppableLevels } from "../../Phaser/Game/MapEditor/MapLayer/FloorOperations";
+    import { steppableLevels } from "../../Phaser/Game/MapEditor/MapLayer/FloorOperations";
+    import { floorLevelTiles } from "../../Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
     import { IconChevronDown, IconChevronUp, IconColorPicker } from "@wa-icons";
 
     interface Props {
@@ -28,15 +28,29 @@
     // The level the map editor works on, the same for the map tool and the objects: "auto" follows the floor drawn
     // under the pointer, a number is that level (0: the ground), whatever is drawn there.
     let choice = $derived<"auto" | number>(objectLevel ?? $mapEditorPlacementLevelStore);
-    // In "auto", the level last found under the pointer: where the stepping buttons start from.
+    // In "auto", the level last found under the pointer: where the arrows start from.
     let current = $derived(choice === "auto" ? $mapLayerLevelStore : choice);
-    // The ground, the floors that have slabs, and the level chosen when it is none of them.
+    // Every level one can build on: the ground, the levels offered (with or without slabs: the one of a bridge is
+    // chosen before its deck is laid), the floors that have slabs, and the level chosen when it is none of them.
     let chips = $derived(
-        [...new Set([0, ...$mapLayerBuiltLevelsStore, ...(choice === "auto" ? [] : [choice])])].sort((a, b) => a - b),
+        [
+            ...new Set([
+                0,
+                ...$mapLayerLevelsStore,
+                ...$mapLayerBuiltLevelsStore,
+                ...(choice === "auto" ? [] : [choice]),
+            ]),
+        ].sort((a, b) => a - b),
     );
 
-    // The same names as the floors of the game: "Sol", "Étage 1", "Étage 2"…
-    const label = (level: number): string => floorLevelName($LL, level, $mapLayerBuiltLevelsStore);
+    // A name that does not change as floors are built: the height of the level ("Niveau 2"), then its name in the
+    // game when it has slabs ("Étage 1").
+    function label(level: number): string {
+        if (level <= 0) return $LL.mapEditor.mapLayer.floorLevel.ground();
+        const name = $LL.mapEditor.mapLayer.floorLevel.level({ height: floorLevelTiles(level) });
+        const rank = [...$mapLayerBuiltLevelsStore].sort((a, b) => a - b).indexOf(level) + 1;
+        return rank > 0 ? `${name} · ${$LL.mapEditor.mapLayer.floorLevel.storey({ rank })}` : name;
+    }
 
     function choose(level: "auto" | number): void {
         if (forObject) {
@@ -47,23 +61,18 @@
         mapEditorPlacementLevelStore.set(level);
     }
 
-    /** One level up or down: any level, one per tile of wall, with or without slabs. */
-    function stepByLevel(delta: 1 | -1): void {
-        choose(stepLevel(steppableLevels($mapLayerLevelsStore), current, delta));
-    }
+    // Where the arrows go: the levels of the list and, above the walls of 2 tiles, one level per tile of wall, so that
+    // a floor or a bridge can be started where nothing is built yet.
+    let steps = $derived([...new Set([...chips, ...steppableLevels($mapLayerLevelsStore)])].sort((a, b) => a - b));
 
-    /** To the next floor that has slabs, up or down; the ground under the lowest one. */
+    /** To the next level up or down, with or without slabs; the ground under the lowest one. */
     function stepByFloor(delta: 1 | -1): void {
-        const built = $mapLayerBuiltLevelsStore;
         const next =
             delta === 1
-                ? (built.find((level) => level > current) ?? current)
-                : ([...built].reverse().find((level) => level < current) ?? 0);
+                ? (steps.find((level) => level > current) ?? current)
+                : ([...steps].reverse().find((level) => level < current) ?? 0);
         choose(next);
     }
-
-    const chipClass = (selected: boolean): string =>
-        `px-2 py-1 rounded text-xs ${selected ? "bg-secondary" : "bg-white/10 hover:bg-white/20"}`;
 </script>
 
 <section class="level-bar flex shrink-0 flex-col gap-2 text-white" data-testid="floorLevelPicker">
@@ -99,7 +108,7 @@
             type="button"
             class="build-slot sm"
             aria-label={$LL.mapEditor.mapLayer.floorLevel.floorUp()}
-            disabled={!$mapLayerBuiltLevelsStore.some((level) => level > current)}
+            disabled={!steps.some((level) => level > current)}
             data-testid="floorUp"
             onclick={() => stepByFloor(1)}
         >
@@ -119,27 +128,6 @@
             </button>
         {/if}
     </div>
-    <details class="text-xs">
-        <summary class="cursor-pointer opacity-60 hover:opacity-100">
-            {$LL.mapEditor.mapLayer.floorLevel.adjust()}
-        </summary>
-        <div class="mt-2 flex items-center gap-2">
-            <button
-                type="button"
-                class={chipClass(false)}
-                title={$LL.mapEditor.mapLayer.floorLevel.levelStepHint()}
-                data-testid="floorLevelDown"
-                onclick={() => stepByLevel(-1)}>{$LL.mapEditor.mapLayer.floorLevel.levelDown()}</button
-            >
-            <button
-                type="button"
-                class={chipClass(false)}
-                title={$LL.mapEditor.mapLayer.floorLevel.levelStepHint()}
-                data-testid="floorLevelUp"
-                onclick={() => stepByLevel(1)}>{$LL.mapEditor.mapLayer.floorLevel.levelUp()}</button
-            >
-        </div>
-    </details>
     {#if $mapLayerPickLevelStore && !forObject}
         <p class="m-0 text-xs opacity-80">{$LL.mapEditor.mapLayer.floorLevel.pickArmed()}</p>
     {/if}

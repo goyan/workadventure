@@ -128,6 +128,30 @@ describe("UpdateTerrainCommand", () => {
         }).execute();
         expect(wam.settings?.water?.indoorDrain).toBe(0);
     });
+
+    it("keeps the inertia of the water until a client says otherwise, and writes nothing for a water that creeps", async () => {
+        const wam = emptyWam();
+        const send = (inertia?: boolean): Promise<unknown> =>
+            new UpdateWAMSettingCommand(wam, {
+                message: {
+                    $case: "updateWaterSettingMessage",
+                    updateWaterSettingMessage: {
+                        runoff: 4,
+                        evaporation: 0.5,
+                        ...(inertia === undefined ? {} : { inertia }),
+                    },
+                },
+            }).execute();
+        await send();
+        expect(wam.settings?.water).not.toHaveProperty("inertia");
+        await send(true);
+        expect(wam.settings?.water?.inertia).toBe(true);
+        // An older client says nothing of it: the map keeps its water with inertia.
+        await send();
+        expect(wam.settings?.water?.inertia).toBe(true);
+        await send(false);
+        expect(wam.settings?.water).not.toHaveProperty("inertia");
+    });
 });
 
 describe("UpdateTerrainCommand, soils", () => {

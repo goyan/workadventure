@@ -1,5 +1,6 @@
-import type { Season } from "@workadventure/map-editor";
 import { get, type Unsubscriber, derived } from "svelte/store";
+import type { SeasonPlace } from "@workadventure/map-editor";
+import { FrostPrints } from "@wa/front/Phaser/Game/Weather/FrostPrints";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { seasonalThemeModeStore } from "../../../Stores/SeasonalThemeStore";
 import { AutumnDecor } from "../Autumn/AutumnDecor";
@@ -8,8 +9,8 @@ import type { WalkerSample } from "../Christmas/FootprintTrail";
 import type { AlphaMask, SnowEntity } from "../Christmas/SnowCaps";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { basicActiveStore } from "../../../Stores/BasicModeStore";
-import type { SeasonalDecor, SeasonalDecorDeps } from "./SeasonalDecor";
-import { activeSeasonalTheme, forcedTreeSeason, SeasonalTheme, SeasonalThemeMode } from "./SeasonalTheme";
+import type { LeafConditions, SeasonalDecor, SeasonalDecorDeps } from "./SeasonalDecor";
+import { activeSeasonalTheme, SeasonalTheme, SeasonalThemeMode } from "./SeasonalTheme";
 import { readFrameAlpha } from "./readFrameAlpha";
 
 /** The calendar is checked again every minute, so the theme changes at midnight without a reload. */
@@ -26,6 +27,8 @@ const MISSING_TEXTURE = "__MISSING";
  * 40 times rather than at every frame.
  */
 const SNOW_ALPHA_STEPS = 40;
+/** The footprints on the frost fade with it by steps of a tenth. */
+const FROST_ALPHA_STEPS = 10;
 
 export interface SeasonalThemeDeps {
     outdoorGrid: () => OutdoorGrid | undefined;
@@ -34,10 +37,20 @@ export interface SeasonalThemeDeps {
     /** The scene only redraws when told to. */
     markDirty: () => void;
     serverDate: () => Date | undefined;
+    /** The place of the map, whose season the automatic theme follows (Paris without one). */
+    place?: () => SeasonPlace | undefined;
     createDecor?: (theme: SeasonalTheme) => SeasonalDecor | undefined;
     readPixels?: (entity: SnowEntity) => AlphaMask | undefined;
     /** How much the map snow covers the ground, 0 to 1; 0 when the map snow is not shown. */
     mapSnowCoverage?: () => number;
+    /** The wind of the map and the date, for the leaves of autumn. */
+    leafConditions?: () => LeafConditions;
+    /** Whether a point is under water: nothing seasonal lies there. */
+    isWet?: (x: number, y: number) => boolean;
+    /** Changes when the water does. */
+    waterVersion?: () => number;
+    /** How frosted the ground is for this player, 0 to 1 (Weather/Frost.ts): footprints show on it. */
+    frost?: () => number;
 }
 
 interface ActiveDecor {
@@ -56,7 +69,7 @@ interface ActiveDecor {
 
 /**
  * The personal seasonal theme outdoors: picks the theme, and creates, shows, hides and destroys its decor. The map snow
- * is a second, Christmas decor fading in over the theme one as the snow builds up, and out as it melts.
+ * is a second, snow decor (Christmas/) fading in over the theme one as the snow builds up, and out as it melts.
  */
 export class SeasonalThemeManager {
     private readonly unsubscribers: Unsubscriber[] = [];
@@ -65,8 +78,10 @@ export class SeasonalThemeManager {
     private theme: SeasonalTheme | undefined;
     private lastCheck = -Infinity;
     private active: ActiveDecor | undefined;
-    /** The Christmas decor of the map snow, when it lies and the theme decor is not already Christmas. */
+    /** The snow decor of the map snow, while it lies. */
     private snow: ActiveDecor | undefined;
+    /** The footprints on the frosted ground, while it is frosted and neither the snow nor Christmas leaves its own. */
+    private frostPrints: FrostPrints | undefined;
 
     constructor(
         private readonly scene: Phaser.Scene,
@@ -89,19 +104,6 @@ export class SeasonalThemeManager {
         );
     }
 
-    /** How much snow lies on the ground outdoors (0 to 1): all of it under the Christmas theme, else the map snow. */
-    groundSnow(): number {
-        return this.theme === SeasonalTheme.Christmas ? 1 : this.snowAlpha();
-    }
-
-    /**
-     * The season the ground is drawn in: the one of the theme shown (autumn, winter), else the one of the calendar.
-     * One source for the ground, as the seasonal trees.
-     */
-    groundSeason(calendar: Season | undefined): Season | undefined {
-        return forcedTreeSeason(this.theme) ?? calendar;
-    }
-
     activeTheme(): SeasonalTheme | undefined {
         return this.theme;
     }
@@ -109,14 +111,13 @@ export class SeasonalThemeManager {
     update(time: number, walkers: () => WalkerSample[]): void {
         if (time - this.lastCheck >= DATE_CHECK_MS) {
             const serverDate = this.deps.serverDate();
-            this.theme = activeSeasonalTheme(this.mode, serverDate);
+            this.theme = activeSeasonalTheme(this.mode, serverDate, this.deps.place?.());
             // Without the server time, auto has no theme yet: ask again next frame rather than in a minute.
             if (serverDate || this.mode !== SeasonalThemeMode.Auto) this.lastCheck = time;
         }
         if (this.active && this.active.theme !== this.theme) this.removeDecor();
         const snowAlpha = this.snowAlpha();
-        // The Christmas theme already shows its snow, fully.
-        const snowDecor = snowAlpha > 0 && this.theme !== SeasonalTheme.Christmas;
+        const snowDecor = snowAlpha > 0;
         if (!snowDecor) this.removeSnowDecor();
         const grid = this.deps.outdoorGrid();
         if (!grid) return;
@@ -132,12 +133,36 @@ export class SeasonalThemeManager {
             const snow = this.snow ?? (this.snow = this.createDecor(SeasonalTheme.Christmas));
             this.drive(snow, grid, time, visible, snowAlpha, walkerSamples);
         }
+        this.driveFrostPrints(time, visible, snowAlpha > 0 || this.theme === SeasonalTheme.Christmas, walkerSamples);
+    }
+
+    private driveFrostPrints(time: number, visible: boolean, snowPrints: boolean, walkers: () => WalkerSample[]): void {
+        const frost = snowPrints ? 0 : Math.round((this.deps.frost?.() ?? 0) * FROST_ALPHA_STEPS) / FROST_ALPHA_STEPS;
+        if (frost <= 0) {
+            if (this.frostPrints) {
+                this.frostPrints.destroy();
+                this.frostPrints = undefined;
+                this.deps.markDirty();
+            }
+            return;
+        }
+        const prints =
+            this.frostPrints ??
+            (this.frostPrints = new FrostPrints(
+                this.scene,
+                (x, y) => this.deps.outdoorGrid()?.isOutdoorAt(x, y) ?? false,
+                (x, y) => this.deps.isWet?.(x, y) ?? false,
+            ));
+        prints.setVisible(visible);
+        if (prints.update(time, walkers(), frost)) this.deps.markDirty();
     }
 
     destroy(): void {
         for (const unsubscribe of this.unsubscribers) unsubscribe();
         this.removeDecor();
         this.removeSnowDecor();
+        this.frostPrints?.destroy();
+        this.frostPrints = undefined;
     }
 
     /** The map snow cover, by steps of a fortieth; any snow shows at least one step. */
@@ -225,6 +250,9 @@ export class SeasonalThemeManager {
         const deps: SeasonalDecorDeps = {
             isOutdoor: (x, y) => this.deps.outdoorGrid()?.isOutdoorAt(x, y) ?? false,
             readPixels: this.deps.readPixels ?? readFrameAlpha(this.scene),
+            leafConditions: this.deps.leafConditions,
+            isWet: this.deps.isWet,
+            waterVersion: this.deps.waterVersion,
         };
         return theme === SeasonalTheme.Christmas
             ? new ChristmasDecor(this.scene, deps)

@@ -9,6 +9,7 @@ import {
     parisSlotComputations,
     PERSISTENCE,
     scheduleComputations,
+    SEASON_WEIGHTS,
     slotStart,
     STORM_HOURS,
 } from "../../../../../src/front/Phaser/Game/Weather/WeatherSchedule";
@@ -92,8 +93,9 @@ describe("seasonal weather schedule", () => {
         const clear = [winter, spring, summer, autumn].map((samples) => share(samples, WeatherType.Clear));
         expect(Math.max(...clear)).toBe(clear[2]);
 
-        expect(year.filter((s) => s.month >= 4 && s.month <= 10 && s.weather === WeatherType.Snow)).toHaveLength(0);
-        expect(share(winter, WeatherType.Snow)).toBeGreaterThan(share(autumn, WeatherType.Snow));
+        // The share the snow had went to the rain: it rains most in winter (45 %), least in summer (12 %).
+        expect(share(winter, WeatherType.Rain)).toBeGreaterThan(share(autumn, WeatherType.Rain));
+        expect(share(autumn, WeatherType.Rain)).toBeGreaterThan(share(summer, WeatherType.Rain));
 
         expect(share(summer, WeatherType.Storm)).toBeGreaterThan(share(spring, WeatherType.Storm));
         expect(share(spring, WeatherType.Storm)).toBeGreaterThan(share(autumn, WeatherType.Storm));
@@ -103,10 +105,21 @@ describe("seasonal weather schedule", () => {
         expect(year.filter((s) => s.hour >= 11 && s.weather === WeatherType.Fog)).toHaveLength(0);
     });
 
-    it("never snows from April to October", () => {
-        const snowy = simulate(400, { frequency: "stormy", include: [WeatherType.Snow] });
-        expect(snowy.some((s) => s.weather === WeatherType.Snow)).toBe(true);
-        expect(snowy.filter((s) => s.month >= 4 && s.month <= 10 && s.weather === WeatherType.Snow)).toHaveLength(0);
+    it("never draws a snow: a precipitation is a rain, the cold alone makes it snow", () => {
+        expect(SEASON_WEIGHTS).toEqual({
+            winter: { clear: 45, rain: 45, storm: 0, fog: 10 },
+            spring: { clear: 55, rain: 32, storm: 8, fog: 5 },
+            summer: { clear: 70, rain: 12, storm: 15, fog: 3 },
+            autumn: { clear: 45, rain: 35, storm: 5, fog: 15 },
+        });
+        expect(year.some((s) => s.weather === WeatherType.Snow)).toBe(false);
+        // A map saved when snow could be asked for: it counts for nothing.
+        const snowOnly = simulate(400, { frequency: "stormy", include: [WeatherType.Snow] });
+        expect(snowOnly.every((s) => s.weather === WeatherType.Clear)).toBe(true);
+        const withSnow = simulate(60, { frequency: "normal", include: [WeatherType.Rain, WeatherType.Snow] });
+        const without = simulate(60, { frequency: "normal", include: [WeatherType.Rain] });
+        expect(withSnow.map((s) => s.weather)).toEqual(without.map((s) => s.weather));
+        expect(DEFAULT_AUTO_WEATHER.include).not.toContain(WeatherType.Snow);
     });
 
     it("storms only from 13:00 to 21:00", () => {
@@ -129,13 +142,10 @@ describe("seasonal weather schedule", () => {
         for (const fog of fogs) expect(fog.hour).toBeLessThan(11);
     });
 
-    it("never goes straight between snow and storm", () => {
-        const stormy = simulate(400, { frequency: "stormy", include: [WeatherType.Snow, WeatherType.Storm] });
+    it("starts a storm only after a clear sky or a rain", () => {
+        const stormy = simulate(400, { frequency: "stormy", include: [WeatherType.Fog, WeatherType.Storm] });
         for (const samples of [year, stormy]) {
             for (let i = 1; i < samples.length; i++) {
-                const pair = [samples[i - 1].weather, samples[i].weather];
-                expect(pair).not.toEqual([WeatherType.Snow, WeatherType.Storm]);
-                expect(pair).not.toEqual([WeatherType.Storm, WeatherType.Snow]);
                 if (samples[i].weather === WeatherType.Storm) {
                     expect([WeatherType.Clear, WeatherType.Rain, WeatherType.Storm]).toContain(samples[i - 1].weather);
                 }

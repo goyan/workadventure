@@ -1,21 +1,29 @@
 import { gunzipSync } from "node:zlib";
 import { WeatherType } from "@workadventure/map-editor";
-import type { WAMFileFormat } from "@workadventure/map-editor";
+import type { PrecipitationAir, SnowWeather, WAMFileFormat } from "@workadventure/map-editor";
 import type { MeadowMessage, SubToPusherRoomMessage } from "@workadventure/messages";
 import { describe, expect, it, vi } from "vitest";
 import { MeadowManager } from "../src/Model/MeadowManager";
 import type { VariablesRepositoryInterface } from "../src/Services/Repository/VariablesRepositoryInterface";
 
-function wamWith(weather: WeatherType, meadow?: NonNullable<WAMFileFormat["settings"]>["meadow"]): WAMFileFormat {
+type Settings = NonNullable<WAMFileFormat["settings"]>;
+
+function wamWith(
+    weather: WeatherType,
+    meadow?: Settings["meadow"],
+    weatherLocation?: Settings["weatherLocation"],
+): WAMFileFormat {
     return {
         version: "2.1.0",
         mapUrl: "map.tmj",
         areas: [],
         entityCollections: [],
         entities: {},
-        settings: { weather, meadow },
+        settings: weatherLocation ? { weather, meadow, weatherLocation } : { weather, meadow },
     };
 }
+
+const SYDNEY = { name: "Sydney", latitude: -33.87, longitude: 151.21, timezone: "Australia/Sydney" };
 
 function createHarness({
     weather = WeatherType.Rain,
@@ -28,7 +36,9 @@ function createHarness({
     danger = undefined as (() => number) | undefined,
     wind = { windFrom: 0, windSpeed: 0 },
     random = () => 1,
+    place = undefined as Settings["weatherLocation"],
 }: {
+    place?: Settings["weatherLocation"];
     danger?: () => number;
     wind?: { windFrom: number; windSpeed: number };
     random?: () => number;
@@ -48,7 +58,7 @@ function createHarness({
             return Promise.resolve(1);
         }),
     } satisfies VariablesRepositoryInterface;
-    const wam = wamWith(weather, meadow);
+    const wam = wamWith(weather, meadow, place);
     const room = {
         getWam: () => wam,
         sendSubMessageToRoom: (message: SubToPusherRoomMessage): void => {
@@ -103,6 +113,47 @@ describe("MeadowManager", () => {
         autumnDawn.manager.stop();
     });
 
+    it("grows grass in the summer of the place: in January in Sydney, not in its winter of July", () => {
+        // January 15, 2:00 UTC: 13:00 in Sydney, a summer noon; in Paris a winter night.
+        const summer = createHarness({ place: SYDNEY, now: Date.UTC(2026, 0, 15, 2) });
+        summer.manager.mapChanged();
+        summer.steps(400);
+        expect(grassOf(summer.sent[summer.sent.length - 1]).some((cover) => cover > 0)).toBe(true);
+        summer.manager.stop();
+        // July 15, 2:00 UTC: noon in Sydney, in its winter: the grass sleeps.
+        const winter = createHarness({ place: SYDNEY, now: Date.UTC(2026, 6, 15, 2) });
+        winter.manager.mapChanged();
+        winter.steps(400);
+        const told = winter.sent;
+        expect(told.length === 0 || grassOf(told[told.length - 1]).every((cover) => cover === 0)).toBe(true);
+        winter.manager.stop();
+        // A winter noon in Paris: nothing grows, as before.
+        const paris = createHarness({ now: Date.UTC(2026, 0, 15, 11) });
+        paris.manager.mapChanged();
+        paris.steps(400);
+        const parisTold = paris.sent;
+        expect(parisTold.length === 0 || grassOf(parisTold[parisTold.length - 1]).every((cover) => cover === 0)).toBe(
+            true,
+        );
+        paris.manager.stop();
+    });
+
+    it("grows no grass at 7:30 in Paris in November, before sunrise, and grows it at noon", () => {
+        // November 21, 6:30 UTC: 7:30 in Paris, inside the old 7 to 19 window but before the 8:08 sunrise.
+        const early = createHarness({ now: Date.UTC(2026, 10, 21, 6, 30) });
+        early.manager.mapChanged();
+        early.steps(400);
+        const told = early.sent;
+        expect(told.length === 0 || grassOf(told[told.length - 1]).every((cover) => cover === 0)).toBe(true);
+        early.manager.stop();
+        // Same day, 11:00 UTC: noon in Paris.
+        const noon = createHarness({ now: Date.UTC(2026, 10, 21, 11) });
+        noon.manager.mapChanged();
+        noon.steps(400);
+        expect(grassOf(noon.sent[noon.sent.length - 1]).some((cover) => cover > 0)).toBe(true);
+        noon.manager.stop();
+    });
+
     it("grows grass under the rain of the map, by tiles, and tells the room when it changed", () => {
         // 16 × 8 cells of the relief: 8 × 4 tiles.
         const { manager, sent, steps } = createHarness();
@@ -118,6 +169,55 @@ describe("MeadowManager", () => {
         // A player who joins is given the same state.
         expect(grassOf(manager.snapshot() ?? last)).toEqual(grass);
         manager.stop();
+    });
+
+    it("leaves the soil dry under a rain that falls as snow in the cold of the room", () => {
+        const snowy = createHarness();
+        snowy.manager.fallThrough(() => ({ temperature: -2, humidity: 80 }));
+        snowy.manager.mapChanged();
+        snowy.steps(400);
+        // Nothing soaked the soil: no grass, a dry ground. The room is told the snow that lies on it instead.
+        expect(snowy.sent.length).toBeGreaterThan(0);
+        for (const message of snowy.sent) {
+            expect(grassOf(message).every((cover) => cover === 0)).toBe(true);
+            expect(new Uint8Array(gunzipSync(message.moisture)).every((moisture) => moisture === 0)).toBe(true);
+            expect(message.snow.length).toBeGreaterThan(0);
+        }
+        snowy.manager.stop();
+        // The same rain in mild air grows the grass.
+        const mild = createHarness();
+        mild.manager.fallThrough(() => ({ temperature: 20, humidity: 60 }));
+        mild.manager.mapChanged();
+        mild.steps(400);
+        expect(grassOf(mild.sent[mild.sent.length - 1]).every((cover) => cover > 0)).toBe(true);
+        mild.manager.stop();
+    });
+
+    it("keeps the water of a soil frozen by the cold of the room, and dries it in a milder air", () => {
+        const moistureOf = (message: MeadowMessage): Uint8Array => new Uint8Array(gunzipSync(message.moisture));
+        const after = (temperature: number): { moisture: Uint8Array; wet: Uint8Array; grass: Uint8Array } => {
+            let air = { temperature: 20, humidity: 60 };
+            const harness = createHarness();
+            harness.manager.fallThrough(() => air);
+            harness.manager.mapChanged();
+            // A rain in mild air wets the soil and grows the grass, then the sky clears and the air turns.
+            harness.steps(400);
+            const wet = harness.manager.snapshot();
+            if (!wet) throw new Error("no meadow");
+            harness.wam.settings = { ...harness.wam.settings, weather: WeatherType.Clear };
+            air = { temperature, humidity: 60 };
+            harness.steps(900);
+            const now = harness.manager.snapshot();
+            harness.manager.stop();
+            if (!now) throw new Error("no meadow");
+            return { moisture: moistureOf(now), wet: moistureOf(wet), grass: grassOf(now) };
+        };
+        const frozen = after(-5);
+        // Half an hour of frost: not a drop lost, and the grass is still there.
+        expect(frozen.moisture).toEqual(frozen.wet);
+        expect(frozen.grass.every((cover) => cover > 0)).toBe(true);
+        const mild = after(5);
+        expect(mild.moisture.every((moisture, index) => moisture < mild.wet[index])).toBe(true);
     });
 
     it("says nothing of a dry and bare map, nor twice the same state", () => {
@@ -338,5 +438,128 @@ describe("MeadowManager", () => {
         );
         grazed.manager.stop();
         free.manager.stop();
+    });
+});
+
+describe("the snow of the MeadowManager", () => {
+    const snowOf = (message: MeadowMessage | undefined): Uint8Array =>
+        message && message.snow.length > 0 ? new Uint8Array(gunzipSync(message.snow)) : new Uint8Array(8 * 4);
+    const cold: SnowWeather = { temperature: -5, humidity: 100, windSpeed: 0 };
+    const warm: SnowWeather = { temperature: 10, humidity: 50, windSpeed: 0 };
+    /** A room whose air can be changed, with a spy on the water its melted snow is poured into. */
+    const snowHarness = (options: Parameters<typeof createHarness>[0] = {}) => {
+        const harness = createHarness({ weather: WeatherType.Clear, ...options });
+        const air: { now: SnowWeather | undefined } = { now: cold };
+        const pour = vi.fn((_tileX: number, _tileY: number, mm: number) => mm);
+        harness.manager.fallThrough((): PrecipitationAir | undefined => air.now);
+        harness.manager.snowUnder(() => air.now);
+        harness.manager.pourWith(pour);
+        return { ...harness, air, pour };
+    };
+    // The middle of the tile (4, 2) of a map of 8 × 4 tiles.
+    const downpour = { x: 4 * 32 + 16, y: 2 * 32 + 16, radiusTiles: 1, wholeMap: false };
+    const centre = 2 * 8 + 4;
+
+    it("lays the snow of a downpour that falls in the cold, under it only", () => {
+        const { manager, sent, steps } = snowHarness();
+        manager.mapChanged();
+        manager.soak(downpour);
+        steps(1);
+        const snow = snowOf(sent.at(-1));
+        expect(snow[centre]).toBeGreaterThan(0);
+        expect(snow[centre + 1]).toBeGreaterThan(0);
+        expect(snow[0]).toBe(0);
+        expect(manager.snapshot()?.snow.length).toBeGreaterThan(0);
+        manager.stop();
+    });
+
+    it("lays no snow under a downpour in mild air, nor in an air that is not known", () => {
+        for (const now of [warm, undefined]) {
+            const { manager, sent, steps, air } = snowHarness();
+            air.now = now;
+            manager.mapChanged();
+            manager.soak(downpour);
+            steps(5);
+            expect(snowOf(sent.at(-1)).every((byte) => byte === 0)).toBe(true);
+            manager.stop();
+        }
+    });
+
+    it("lays the rain of the map as snow on every tile in the cold", () => {
+        const { manager, sent, steps } = snowHarness({ weather: WeatherType.Rain });
+        manager.mapChanged();
+        steps(10);
+        expect(snowOf(sent.at(-1)).every((byte) => byte > 0)).toBe(true);
+        manager.stop();
+    });
+
+    it("pours the water of the snow that melts, and none while it freezes", () => {
+        const { manager, sent, steps, air, pour } = snowHarness();
+        manager.mapChanged();
+        manager.soak(downpour);
+        steps(5);
+        expect(pour).not.toHaveBeenCalled();
+        const before = snowOf(sent.at(-1))[centre];
+        air.now = warm;
+        steps(5);
+        expect(pour).toHaveBeenCalled();
+        expect(pour.mock.calls.every(([, , mm]) => mm > 0)).toBe(true);
+        expect(snowOf(sent.at(-1))[centre]).toBeLessThan(before);
+        manager.stop();
+    });
+
+    it("keeps the snow falling and melting on a map that turned its grass off", () => {
+        const { manager, sent, steps, air, pour } = snowHarness({
+            meadow: { enabled: false, growMinutes: 10, thirstMinutes: 20, moistureHold: 1 },
+        });
+        manager.mapChanged();
+        steps(1);
+        manager.soak(downpour);
+        steps(1);
+        expect(snowOf(sent.at(-1))[centre]).toBeGreaterThan(0);
+        air.now = warm;
+        steps(3);
+        expect(pour).toHaveBeenCalled();
+        manager.stop();
+    });
+
+    it("brings the snow back after a restart", async () => {
+        const first = snowHarness();
+        first.manager.mapChanged();
+        first.manager.soak(downpour);
+        first.steps(1);
+        first.manager.stop();
+        expect(first.store.snow).toBeDefined();
+        const second = snowHarness({ saved: first.store });
+        await second.manager.restore();
+        second.manager.mapChanged();
+        second.steps(5);
+        expect(snowOf(second.sent.at(-1))[centre]).toBeGreaterThan(0);
+        second.manager.stop();
+    });
+
+    it("melts the snow under the fire a player sets, in the cold too", () => {
+        const { manager, sent, steps, pour } = snowHarness();
+        manager.mapChanged();
+        manager.soak(downpour);
+        steps(1);
+        const before = snowOf(sent.at(-1))[centre];
+        expect(before).toBeGreaterThan(0);
+        manager.ignite(downpour.x, downpour.y, 1);
+        steps(1);
+        expect(snowOf(sent.at(-1))[centre]).toBe(0);
+        expect(pour).toHaveBeenCalled();
+        manager.stop();
+    });
+
+    it("has the snow of the crater of a fireball gone at once", () => {
+        const { manager, sent, steps } = snowHarness();
+        manager.mapChanged();
+        manager.soak(downpour);
+        steps(1);
+        manager.scorch(downpour.x, downpour.y, 1, 7);
+        steps(1);
+        expect(snowOf(sent.at(-1))[centre]).toBe(0);
+        manager.stop();
     });
 });

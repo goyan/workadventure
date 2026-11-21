@@ -75,4 +75,24 @@ describe("outdoorWanderMap", () => {
     it("has no seats", () => {
         expect("seats" in outdoorWanderMap(baseMap(), isOutdoor, 32)).toBe(false);
     });
+
+    it("the floors in the open air are walked (the deck of a bridge), not the storeys of a building", () => {
+        const base: WanderMap = { ...baseMap(), levelsAt: () => [20] };
+        const map = outdoorWanderMap(base, isOutdoor, 32);
+        expect(map.levelsAt?.({ x: 2, y: 3 })).toEqual([20]);
+        expect(map.levelsAt?.({ x: 12, y: 3 })).toEqual([]);
+        // A map without floors tells none.
+        expect(outdoorWanderMap(baseMap(), isOutdoor, 32).levelsAt?.({ x: 2, y: 3 })).toEqual([]);
+    });
+
+    it("a path over a deck stays a path: it is looked at where it stands on the ground", async () => {
+        const overDeck = [
+            { x: 16, y: 48 },
+            { x: 48, y: 48, z: 20 },
+            { x: 80, y: 48, z: 20 },
+        ];
+        expect(
+            await outdoorWanderMap(baseMap(overDeck), isOutdoor, 32).findPath({ x: 0, y: 0 }, { x: 0, y: 0 }),
+        ).toEqual(overDeck);
+    });
 });

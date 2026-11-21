@@ -1,10 +1,11 @@
 import { FadingPool } from "./FadingPool";
 import { FOOTPRINT_FADE_MS, FOOTPRINT_MAX, type FootprintMark } from "./FootprintTrail";
 
-const STEP_TEXTURE = "ground-step";
-const TRAIL_TEXTURE = "ground-trail";
-/** The prints are drawn white and tinted with the colour of their ground (snow by default). */
-const SNOW_TINT = 0xb4bedb;
+const STEP_TEXTURE = "xmas-step";
+const TRAIL_TEXTURE = "xmas-trail";
+const PRINT_COLOR = "#b4bedb";
+/** The colour of a layer whose prints are tinted one by one with the colour of their ground (`styleAt`). */
+export const TINTED_PRINTS = "#ffffff";
 const START_ALPHA = 0.5;
 const TRAIL_WIDTH_PX = 4;
 /** Prints sit just below the avatar walking on them (its depth is its y, its feet are 8 px lower). */
@@ -28,13 +29,25 @@ export class FootprintLayer {
     /** The strength each print was laid with (its ground). */
     private readonly strength = new WeakMap<Phaser.GameObjects.Image, number>();
 
-    constructor(private readonly scene: Phaser.Scene) {
-        this.createTexture(STEP_TEXTURE, 6, 4, (context) => {
+    private readonly stepTexture: string;
+    private readonly trailTexture: string;
+
+    /** `color`: the colour of the prints, blue grey in the snow by default. */
+    constructor(
+        private readonly scene: Phaser.Scene,
+        private readonly color = PRINT_COLOR,
+    ) {
+        const suffix = color === PRINT_COLOR ? "" : `-${color}`;
+        this.stepTexture = `${STEP_TEXTURE}${suffix}`;
+        this.trailTexture = `${TRAIL_TEXTURE}${suffix}`;
+        this.createTexture(this.stepTexture, 6, 4, (context) => {
             context.beginPath();
             context.ellipse(3, 2, 3, 2, 0, 0, Math.PI * 2);
             context.fill();
         });
-        this.createTexture(TRAIL_TEXTURE, 1, TRAIL_WIDTH_PX, (context) => context.fillRect(0, 0, 1, TRAIL_WIDTH_PX));
+        this.createTexture(this.trailTexture, 1, TRAIL_WIDTH_PX, (context) =>
+            context.fillRect(0, 0, 1, TRAIL_WIDTH_PX),
+        );
     }
 
     /** Number of footprints on the map. */
@@ -46,20 +59,23 @@ export class FootprintLayer {
         this.now = Math.max(this.now, now);
         for (const mark of marks) {
             const at = mark.kind === "step" ? { x: mark.x, y: mark.y } : { x: mark.x1, y: mark.y1 };
-            const style = styleAt?.(at.x, at.y) ?? { tint: SNOW_TINT, alpha: START_ALPHA, drop: 0 };
+            // Without a style, the print has the colour of its layer, laid where it falls.
+            const style = styleAt?.(at.x, at.y);
+            const drop = style?.drop ?? 0;
+            const strength = style?.alpha ?? START_ALPHA;
             const image =
                 mark.kind === "step"
-                    ? this.scene.add.image(mark.x, mark.y + style.drop, STEP_TEXTURE).setRotation(mark.angle)
+                    ? this.scene.add.image(mark.x, mark.y + drop, this.stepTexture).setRotation(mark.angle)
                     : this.scene.add
-                          .image(mark.x1, mark.y1 + style.drop, TRAIL_TEXTURE)
+                          .image(mark.x1, mark.y1 + drop, this.trailTexture)
                           .setOrigin(0, 0.5)
                           .setDisplaySize(Math.hypot(mark.x2 - mark.x1, mark.y2 - mark.y1), TRAIL_WIDTH_PX)
                           .setRotation(Math.atan2(mark.y2 - mark.y1, mark.x2 - mark.x1));
             const feetY = mark.kind === "step" ? mark.y : Math.max(mark.y1, mark.y2);
-            image.setDepth(feetY + style.drop - DEPTH_BELOW_FEET);
-            image.setTint(style.tint);
-            this.strength.set(image, style.alpha);
-            image.setAlpha(style.alpha * this.alpha);
+            image.setDepth(feetY + drop - DEPTH_BELOW_FEET);
+            if (style) image.setTint(style.tint);
+            this.strength.set(image, strength);
+            image.setAlpha(strength * this.alpha);
             image.setVisible(this.visible);
             this.pool.add(image, now)?.destroy();
         }
@@ -102,7 +118,7 @@ export class FootprintLayer {
         const canvas = this.scene.textures.createCanvas(key, width, height);
         const context = canvas?.getContext();
         if (!canvas || !context) return;
-        context.fillStyle = "#ffffff";
+        context.fillStyle = this.color;
         paint(context);
         canvas.refresh();
     }

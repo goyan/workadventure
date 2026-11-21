@@ -106,7 +106,7 @@ function groundRectFor(
     x: number,
     y: number,
 ): { x: number; y: number; width: number; height: number } | undefined {
-    if (piece === undefined || piece.kind === "floor" || piece.kind === "bridge") return undefined;
+    if (piece === undefined || piece.kind === "floor") return undefined;
     if (piece.kind === "lintel") {
         return { x, y, width: 0, height: 0 };
     }

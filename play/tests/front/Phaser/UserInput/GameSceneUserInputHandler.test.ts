@@ -142,6 +142,8 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
         Object.defineProperty(scene, "input", { configurable: true, value: { setDefaultCursor } });
         scene.Map = mock<Phaser.Tilemaps.Tilemap>({ widthInPixels: 1504, heightInPixels: 1184 });
         scene.getCameraManager.mockReturnValue(cameraManager);
+        // The relief is not shown in 3/4: the ground is drawn where it is.
+        scene.groundPointUnder.mockImplementation((point) => point);
         scene.getActivatablesManager.mockReturnValue(activatablesManager);
         scene.getGameMapFrontWrapper.mockReturnValue(
             mock<GameMapFrontWrapper>({ getTileDimensions: () => ({ width: 32, height: 32 }) }),
@@ -180,9 +182,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
 
     it("walks to the ground drawn under the click, down in a hollow of the relief seen in 3/4", () => {
         // The click lands on the floor of a hollow drawn 64 px lower than its place.
-        scene.getReliefTiles.mockReturnValue({
-            groundPointAt: (point: { x: number; y: number }) => ({ x: point.x, y: point.y - 64 }),
-        } as never);
+        scene.groundPointUnder.mockImplementation((point) => ({ x: point.x, y: point.y - 64 }));
         handler.handlePointerUpEvent(pointer(2, 1), []);
 
         expect(scene.moveTo.mock.calls).toEqual([[{ x: 480, y: 576 }, true, undefined]]);
@@ -712,6 +712,95 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
         });
     });
 
+    describe("the space and control keys in the airplane", () => {
+        const key = (type: "keydown" | "keyup", init: KeyboardEventInit): KeyboardEvent =>
+            new KeyboardEvent(type, { cancelable: true, ...init });
+        const space = (type: "keydown" | "keyup"): KeyboardEvent => key(type, { code: "Space", key: " " });
+        const textCallback = vi.fn();
+
+        function inAirplane(flying: boolean, ownPrompt = false): void {
+            Object.assign(scene.CurrentPlayer, {
+                isInAirplane: () => true,
+                isFlying: () => flying,
+                isAirplanePromptShown: () => ownPrompt,
+                handlePressSpacePlayerTextCallback: textCallback,
+            });
+        }
+
+        afterEach(() => {
+            activatablesManager.getSelectedActivatableObject.mockReset();
+            activatablesManager.isSelectingByDistanceEnabled.mockReset();
+        });
+
+        it("climbs with space in flight, and nothing of the ground answers the press", () => {
+            inAirplane(true);
+            const down = handler.handleKeyDownEvent(space("keydown"));
+            expect(handler.isClimbPressed()).toBe(true);
+            expect(down.defaultPrevented).toBe(true);
+            handler.handleKeyUpEvent(space("keyup"));
+            expect(textCallback).not.toHaveBeenCalled();
+        });
+
+        it("takes off with space on the ground, even with the airplane's own hint shown", () => {
+            inAirplane(false, true);
+            handler.addSpaceEventListener(vi.fn());
+            handler.handleKeyDownEvent(space("keydown"));
+            expect(handler.isClimbPressed()).toBe(true);
+            handler.handleKeyUpEvent(space("keyup"));
+            expect(textCallback).not.toHaveBeenCalled();
+        });
+
+        it("leaves space to another prompt or to an object next to the avatar on the ground", () => {
+            inAirplane(false);
+            const prompt = vi.fn();
+            handler.addSpaceEventListener(prompt);
+            handler.handleKeyDownEvent(space("keydown"));
+            expect(handler.isClimbPressed()).toBe(false);
+            handler.removeSpaceEventListener(prompt);
+
+            activatablesManager.getSelectedActivatableObject.mockReturnValue(
+                mock<ActivatableInterface>({ isActivatable: () => true }),
+            );
+            activatablesManager.isSelectingByDistanceEnabled.mockReturnValue(true);
+            handler.handleKeyDownEvent(space("keydown"));
+            expect(handler.isClimbPressed()).toBe(false);
+        });
+
+        it("leaves space alone on foot, in the map editor and in a field", () => {
+            Object.assign(scene.CurrentPlayer, { isInAirplane: () => false, isFlying: () => false });
+            handler.handleKeyDownEvent(space("keydown"));
+            expect(handler.isClimbPressed()).toBe(false);
+
+            inAirplane(true);
+            mapEditorModeStore.set(true);
+            handler.handleKeyDownEvent(space("keydown"));
+            expect(handler.isClimbPressed()).toBe(false);
+            mapEditorModeStore.set(false);
+
+            const field = document.createElement("input");
+            document.body.appendChild(field);
+            const typing = space("keydown");
+            field.dispatchEvent(typing);
+            handler.handleKeyDownEvent(typing);
+            expect(handler.isClimbPressed()).toBe(false);
+            field.remove();
+        });
+
+        it("takes control for the descent in flight only, out of the editor", () => {
+            inAirplane(true);
+            expect(handler.isAltitudeKeysActive()).toBe(true);
+            const save = handler.handleKeyDownEvent(key("keydown", { code: "KeyS", key: "s", ctrlKey: true }));
+            expect(save.defaultPrevented).toBe(true);
+            mapEditorModeStore.set(true);
+            expect(handler.isAltitudeKeysActive()).toBe(false);
+            mapEditorModeStore.set(false);
+            inAirplane(false);
+            expect(handler.isAltitudeKeysActive()).toBe(false);
+            const ground = handler.handleKeyDownEvent(key("keydown", { code: "KeyS", key: "s", ctrlKey: true }));
+            expect(ground.defaultPrevented).toBe(false);
+        });
+    });
+
     describe("an armed catastrophe", () => {
         const launch = vi.fn();
 
@@ -937,6 +1026,15 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 expect(remove).toHaveBeenCalled();
             });
 
+            it("rains in the map editor too", () => {
+                mapEditorModeStore.set(true);
+                armDownpour();
+                handler.handlePointerDownEvent(held(), []);
+                expect(launch).toHaveBeenCalledTimes(1);
+                expect(launch.mock.calls[0][0]).toBe(CatastropheKind.CATASTROPHE_DOWNPOUR);
+                mapEditorModeStore.set(false);
+            });
+
             it("does not rain with the right button", () => {
                 armDownpour();
                 const right = pointer(2, 1);
@@ -946,15 +1044,18 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             });
         });
 
-        it("nothing is launched with the right button, in the editor, or unarmed", () => {
+        it("launches in the map editor too", () => {
+            mapEditorModeStore.set(true);
+            arm();
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+            expect(launch).toHaveBeenCalledTimes(1);
+            mapEditorModeStore.set(false);
+        });
+
+        it("nothing is launched with the right button or unarmed", () => {
             arm();
             handler.handlePointerUpEvent(pointer(2, 1), []);
             expect(launch).not.toHaveBeenCalled();
-
-            mapEditorModeStore.set(true);
-            handler.handlePointerUpEvent(pointer(0, 1), []);
-            expect(launch).not.toHaveBeenCalled();
-            mapEditorModeStore.set(false);
 
             catastrophePanelStore.set(false);
             handler.handlePointerUpEvent(pointer(0, 1), []);

@@ -1975,6 +1975,56 @@
                   "minimum": 0,
                   "maximum": 10000,
                   "default": 300
+                },
+                "inertia": {
+                  "type": "boolean"
+                },
+                "precision": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 8
+                },
+                "updates": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10
+                },
+                "flowPace": {
+                  "type": "number",
+                  "minimum": 0.1,
+                  "maximum": 2
+                },
+                "waves": {
+                  "type": "object",
+                  "properties": {
+                    "roughness": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 10
+                    },
+                    "damping": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "breaking": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 5
+                    },
+                    "momentum": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "roughness",
+                    "damping",
+                    "breaking",
+                    "momentum"
+                  ],
+                  "additionalProperties": false
                 }
               },
               "additionalProperties": false
@@ -2101,6 +2151,16 @@
                   "minimum": 0.25,
                   "maximum": 8,
                   "default": 1
+                }
+              },
+              "additionalProperties": false
+            },
+            "lighting": {
+              "type": "object",
+              "properties": {
+                "energySaving": {
+                  "type": "boolean",
+                  "default": false
                 }
               },
               "additionalProperties": false

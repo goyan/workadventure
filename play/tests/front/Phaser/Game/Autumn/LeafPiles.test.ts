@@ -57,7 +57,6 @@ describe("LeafPiles", () => {
                 entity(0, 0, "Carte Portes"),
                 entity(0, 0, "Infogène Murs fins"),
                 entity(0, 0, "Carte Sols"),
-                entity(0, 0, "Carte Ponts"),
                 entity(0, 0, "Infogène Sols"),
                 entity(128, 128),
             ],
@@ -104,5 +103,21 @@ describe("LeafPiles", () => {
         piles.rebuild([entity(32, 0)], grid);
         const next = scene.add.image.mock.results[1].value as DeepMockProxy<Phaser.GameObjects.Image>;
         expect(next.setAlpha.mock.lastCall).toEqual([0.6]);
+    });
+});
+
+describe("LeafPiles where the leaves lie", () => {
+    it("piles only the objects standing where the trees dropped leaves", () => {
+        const { scene, piles } = setup();
+        piles.rebuild([entity(0, 0), entity(256, 0)], grid, (x) => x < 128);
+        expect(scene.add.image.mock.calls).toHaveLength(1);
+        expect(scene.add.image.mock.calls[0][0]).toBeLessThan(128);
+    });
+
+    it("asks where the foot of the object stands", () => {
+        const { piles } = setup();
+        const hasLeavesAt = vi.fn(() => false);
+        piles.rebuild([entity(0, 0)], grid, hasLeavesAt);
+        expect(hasLeavesAt).toHaveBeenCalledWith(16, 31);
     });
 });

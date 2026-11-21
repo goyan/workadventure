@@ -2,8 +2,11 @@ import { PARIS_LATITUDE, PARIS_LONGITUDE } from "./RealWeather";
 import type { MapPlace } from "./RealWeather";
 
 const DEG = Math.PI / 180;
-/** The sun has risen when its centre is this high (degrees): the refraction and its half disc, as almanacs count. */
-const SUNRISE_ELEVATION = -0.833;
+/**
+ * The sun has risen when its centre is this high (degrees): the refraction and its half disc, as almanacs count. The
+ * night veil of the front starts at the same elevation.
+ */
+export const SUNRISE_ELEVATION = -0.833;
 
 /** Where the sun is, in degrees: elevation above the horizon, azimuth from the north, clockwise. */
 export interface SunPosition {
@@ -11,11 +14,16 @@ export interface SunPosition {
     azimuth: number;
 }
 
-/**
- * Where the sun is seen from a place: geometric elevation above the horizon and azimuth, both in degrees, the azimuth
- * from the north, clockwise (90 = east). Azimuth by Meeus 13.5, valid at any longitude and latitude.
- */
-export function sunPositionAt(date: Date, place: MapPlace): SunPosition {
+/** What the sun is at an instant, wherever it is seen from. */
+export interface SolarTerms {
+    /** Declination of the sun, in radians. */
+    declination: number;
+    /** Equation of time, in minutes: how far the true solar time runs ahead of the mean one. */
+    equationOfTime: number;
+}
+
+/** The terms of the sun that depend on the instant alone (NOAA, Meeus), shared by every place seen at that instant. */
+export function solarTermsAt(date: Date): SolarTerms {
     const julianDay = date.getTime() / 86_400_000 + 2_440_587.5;
     const t = (julianDay - 2_451_545) / 36_525; // Julian centuries since J2000.0
 
@@ -41,10 +49,31 @@ export function sunPositionAt(date: Date, place: MapPlace): SunPosition {
             4 * eccentricity * y * Math.sin(meanAnomaly * DEG) * Math.cos(2 * meanLongitude * DEG) -
             0.5 * y * y * Math.sin(4 * meanLongitude * DEG) -
             1.25 * eccentricity * eccentricity * Math.sin(2 * meanAnomaly * DEG));
+    return { declination, equationOfTime };
+}
 
+/** The true solar time at a longitude, in minutes, not brought back into the day. */
+function unwrappedSolarMinutes(date: Date, equationOfTime: number, longitude: number): number {
     const utcMinutes = (((date.getTime() / 60_000) % 1440) + 1440) % 1440;
-    const trueSolarMinutes = utcMinutes + equationOfTime + 4 * place.longitude;
-    const hourAngle = (trueSolarMinutes / 4 - 180) * DEG;
+    return utcMinutes + equationOfTime + 4 * longitude;
+}
+
+/**
+ * The true solar time at a longitude, in minutes since midnight (720: the sun at its highest), with the equation of
+ * time: the time the sun of the game keeps.
+ */
+export function trueSolarMinutes(date: Date, longitude: number): number {
+    const minutes = unwrappedSolarMinutes(date, solarTermsAt(date).equationOfTime, longitude);
+    return ((minutes % 1440) + 1440) % 1440;
+}
+
+/**
+ * Where the sun is seen from a place: geometric elevation above the horizon and azimuth, both in degrees, the azimuth
+ * from the north, clockwise (90 = east). Azimuth by Meeus 13.5, valid at any longitude and latitude.
+ */
+export function sunPositionAt(date: Date, place: MapPlace): SunPosition {
+    const { declination, equationOfTime } = solarTermsAt(date);
+    const hourAngle = (unwrappedSolarMinutes(date, equationOfTime, place.longitude) / 4 - 180) * DEG;
 
     const latitude = place.latitude * DEG;
     const cosZenith =

@@ -3,7 +3,6 @@ import * as Phaser from "phaser";
 import type { EntityData, WAMEntityData } from "@workadventure/map-editor";
 import {
     Season,
-    WeatherType,
     AreaDataProperties,
     EntityDataProperties,
     EntityDimensions,
@@ -24,12 +23,10 @@ import { FLOOR_PREVIEW_DEPTH } from "../MapEditor/MapLayer/FloorDepth";
 import type { PlacedFloorPiece } from "../MapEditor/MapLayer/FloorModel";
 import { mapEditorPlacementLevelStore } from "../../../Stores/MapEditorStore";
 import { placementElevation } from "../Floors/FloorPlacement";
-import { weatherAtTime } from "../Weather/WeatherFrame";
-import { shownWeatherSettings } from "../Weather/RealWeatherClient";
-import { mapSnowCoverage } from "../Weather/SnowCover";
 import { entityPlacementBlockerStore } from "../../../Stores/MapEditorStore";
 import { getTileCollisionGrid, reverseCollisionGrid } from "../../../Utils/EntityHitbox";
 import { actionsMenuStore } from "../../../Stores/ActionsMenuStore";
+import { armedCatastropheStore } from "../../../Stores/CatastropheStore";
 import {
     mapEditorEntityEraserStore,
     mapEditorEntityModeStore,
@@ -106,9 +103,7 @@ const DIMMED_MAP_LAYER_TINT = 0x808080;
 export class EntitiesManager extends EventEmitter {
     private season = Season.Summer;
     private nextSeasonCheck = 0;
-    private lastSnowKey: string | undefined;
     private lastForcedSeason: Season | undefined;
-    private lastMapSnow = true;
     private lastOutdoorVersion = -1;
     /** How much the map snow covers the ground, which the trees under snow follow (Entity.setSeason). */
     private snowCover = 1;
@@ -253,44 +248,29 @@ export class EntitiesManager extends EventEmitter {
     }
 
     /**
-     * Follow shared weather each minute, and apply a live editor change immediately. The personal seasonal theme
-     * colours nature for this person only; shared snow cover takes priority over it, unless `mapSnow` is false
-     * (weather hidden, or a theme chosen rather than auto: see mapSnowShown).
+     * Follow the calendar each minute. The personal seasonal theme colours nature for this person only; a snow cover
+     * shared by the map takes priority over it.
      */
-    /** The season the seasonal trees show: the calendar, the snow of the map or the personal theme. */
+    /** The season the seasonal trees show: the calendar of the place of the map, its snow or the personal theme. */
     public getSeason(): Season {
         return this.season;
     }
 
-    public updateSeason(time: number, serverDate: Date | undefined, forcedSeason?: Season, mapSnow = true): void {
+    public updateSeason(time: number, serverDate: Date | undefined, forcedSeason?: Season): void {
         if (!serverDate || !Number.isFinite(serverDate.getTime())) return;
-        const settings = shownWeatherSettings(this.scene.getGameMap().getWamFile()?.getWam().settings, serverDate);
-        const configured = settings?.weather ?? WeatherType.Clear;
         const outdoorVersion = this.scene.getOutdoorVersion();
         const outdoorsChanged = outdoorVersion !== this.lastOutdoorVersion;
-        // A snow chosen again, or one that stops, changes the ground without changing the weather's name.
-        const snowKey = `${configured}:${settings?.weatherStartedAt}:${settings?.lastSnow?.endedAt}`;
-        if (
-            time < this.nextSeasonCheck &&
-            snowKey === this.lastSnowKey &&
-            forcedSeason === this.lastForcedSeason &&
-            mapSnow === this.lastMapSnow &&
-            !outdoorsChanged
-        )
-            return;
-        this.lastSnowKey = snowKey;
+        if (time < this.nextSeasonCheck && forcedSeason === this.lastForcedSeason && !outdoorsChanged) return;
         this.lastForcedSeason = forcedSeason;
-        this.lastMapSnow = mapSnow;
         this.lastOutdoorVersion = outdoorVersion;
-        const coverage = mapSnowCoverage(mapSnow, settings, serverDate);
+        // The snow lying on the map (the one the server keeps, see GroundSource): the trees whiten with it.
+        const coverage = this.scene.getMapSnowCoverage?.() ?? 0;
         // While the snow settles or melts, the trees follow the ground every few seconds rather than every minute.
         this.nextSeasonCheck =
             coverage > 0 && coverage < 1 ? time + SETTLING_CHECK_MS : time + 60_000 - (serverDate.getTime() % 60_000);
-        const weatherSeason = treeSeasonAt(
-            serverDate,
-            mapSnow ? weatherAtTime(configured, serverDate, settings?.weatherAuto) : WeatherType.Clear,
-            coverage,
-        );
+        // The calendar of the place of the map: its seasons turn over in the south.
+        const place = this.scene.getGameMap().getWamFile()?.getWam().settings?.weatherLocation;
+        const weatherSeason = treeSeasonAt(serverDate, coverage, place);
         // Snow cover takes priority over autumn's personal colour palette, just as it does on the ground.
         const season = weatherSeason === Season.Winter ? Season.Winter : (forcedSeason ?? weatherSeason);
         // The trees whiten with the ground (a snow just begun leaves them green); a chosen winter theme, at once.
@@ -608,6 +588,11 @@ export class EntitiesManager extends EventEmitter {
             }
             // A right click (Ctrl+click on a Mac) drops the object being placed: it does not open the one under it.
             if (pointer.button !== 0 || pointer.rightButtonDown()) {
+                return;
+            }
+
+            // An armed catastrophe takes the click, in the map editor too: the object under it is not picked.
+            if (get(armedCatastropheStore) !== undefined) {
                 return;
             }
 

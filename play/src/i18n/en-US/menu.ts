@@ -105,6 +105,12 @@ const menu: BaseTranslation = {
             title: "Ambiance",
             description: "What you see on the map. Nothing changes for others.",
         },
+        mapLighting: {
+            title: "Map lighting",
+            energySaving: "Energy saving",
+            energySavingHint:
+                "Lamps placed outdoors go out by day while the sky gives light enough, and come back at dusk or under a heavy storm, for every player.",
+        },
         mapWeather: {
             title: "Map weather",
             description:
@@ -114,11 +120,9 @@ const menu: BaseTranslation = {
             label: "Seasonal theme",
             auto: "Auto",
             autumn: "Autumn",
-            christmas: "Winter",
             none: "None",
-            hintAuto: "Autumn from September to November, winter from December to February.",
-            hintAutumn: "Leaves on the ground and falling leaves, outdoors.",
-            hintChristmas: "Winter: snow replaces the outdoor ground and the map weather.",
+            hintAuto: "Autumn from September to November.",
+            hintAutumn: "Leaves falling from the trees and lying at their feet, outdoors.",
             hintNone: "No seasonal decor.",
         },
         perfCounter: "Show the performance counter (images a second) next to the action bar",
@@ -140,6 +144,18 @@ const menu: BaseTranslation = {
             computer: "My computer time",
             disabled: "Off",
             always: "Always night",
+            world: "Daytime somewhere",
+            worldHelp:
+                "The sky of a city of the world where the sun is rising, at its highest or setting, or at the chosen time, at the server time. Click on the map for another point.",
+            morning: "Morning",
+            noon: "Noon",
+            evening: "Evening",
+            custom: "Chosen time",
+            worldCity: "Sky of {city}",
+            worldPointCity: "Sky of {city} (point chosen on the map)",
+            skyMenu: "Sky and time",
+            basicOff:
+                "Basic mode turns the day/night cycle off: full daylight. Your choice ({mode}) comes back when you leave it.",
             disable: "Turn off night mode",
             darkness: "Darkness of the night: {percent:number}%",
             darknessLight: "Light",

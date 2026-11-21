@@ -1,8 +1,6 @@
-import { WeatherType } from "@workadventure/map-editor";
-import type { AutoWeatherSettings } from "@workadventure/map-editor";
-import { snowPossibleAt } from "../Nature/SeasonClock";
-import { SeasonalTheme } from "../Seasonal/SeasonalTheme";
-import { hash01, leafColor } from "../Autumn/LeafPalette";
+import { precipitationWeather, WeatherType } from "@workadventure/map-editor";
+import type { AutoWeatherSettings, SeasonPlace } from "@workadventure/map-editor";
+import { hash01 } from "../Autumn/LeafPalette";
 import { autoWeatherAt, slotStart } from "./WeatherSchedule";
 
 export interface WeatherView {
@@ -43,52 +41,41 @@ export interface WeatherParticle {
     length: number;
 }
 
+/** A flake falls this many map pixels a second: far slower than a drop, so the wind carries it further sideways. */
+const FLAKE_SPEED = 18;
+/** Sideways pixels a flake is carried for one pixel down, for a rain leaning by 1 (see rainLean). */
+const FLAKE_DRIFT = 3;
+
 /**
- * The snowflakes, a field fixed to world coordinates, so camera movement never drags them along. The rain and the
- * storm have their own drops (Rain.ts); no other weather falls.
+ * How many of the flakes show, 0 to 1, for a precipitation of this intensity (0 to 1, rainIntensity) of which `snow`
+ * (0 to 1, snowShare) falls as snow: none in a rain, some among the drops of a sleet, a thick fall for a heavy
+ * precipitation in the cold.
  */
-export function weatherParticles(weather: WeatherType, epoch: number, view: WeatherView): WeatherParticle[] {
-    if (weather !== WeatherType.Snow) return [];
+export function snowfall(intensity: number, snow: number): number {
+    if (!(snow > 0) || !(intensity > 0)) return 0;
+    return Math.min(1, snow * (0.3 + 0.7 * intensity));
+}
+
+/**
+ * The snowflakes of a precipitation falling as snow, a field fixed to world coordinates, so camera movement never
+ * drags them along: `amount` (0 to 1, snowfall) says which of them show, always the same ones first; `lean` carries
+ * them with the wind as it leans the rain (rainLean). The drops of the rain are apart (Rain.ts).
+ */
+export function snowflakes(epoch: number, view: WeatherView, amount: number, lean = 0): WeatherParticle[] {
+    if (!(amount > 0)) return [];
     const cellSize = Math.max(64, Math.ceil(Math.sqrt((view.width * view.height) / 350)));
-    const speed = 18;
     const time = epoch / 1000;
     const particles: WeatherParticle[] = [];
     for (let row = Math.floor(view.y / cellSize) - 1; row <= Math.ceil((view.y + view.height) / cellSize); row++) {
         for (let col = Math.floor(view.x / cellSize) - 1; col <= Math.ceil((view.x + view.width) / cellSize); col++) {
+            // Which flakes show is drawn apart from where they are: a light fall is not a corner of a thick one.
+            if (hash01(col, row, 83) >= amount) continue;
             const seed = Math.abs(Math.sin(col * 127.1 + row * 311.7) * 43758.5453) % 1;
+            const fallen = (seed * cellSize + time * FLAKE_SPEED) % cellSize;
             particles[particles.length] = {
-                x: col * cellSize + seed * cellSize + Math.sin(time + seed * 20) * 5,
-                y: row * cellSize + ((seed * cellSize + time * speed) % cellSize),
+                x: col * cellSize + seed * cellSize + Math.sin(time + seed * 20) * 5 + lean * FLAKE_DRIFT * fallen,
+                y: row * cellSize + fallen,
                 length: 2,
-            };
-        }
-    }
-    return particles;
-}
-
-export interface LeafParticle {
-    x: number;
-    y: number;
-    color: number;
-    /** 3×4 instead of 4×3: the leaf turns as it sways. */
-    vertical: boolean;
-}
-
-/** Leaves fall slower than snow, sway, and drift with a light wind; about three times fewer than snowflakes. */
-export function leafParticles(epoch: number, view: WeatherView): LeafParticle[] {
-    const snowCell = Math.max(64, Math.ceil(Math.sqrt((view.width * view.height) / 350)));
-    const cellSize = Math.round(snowCell * Math.sqrt(3));
-    const time = epoch / 1000;
-    const particles: LeafParticle[] = [];
-    for (let row = Math.floor(view.y / cellSize) - 1; row <= Math.ceil((view.y + view.height) / cellSize); row++) {
-        for (let col = Math.floor(view.x / cellSize) - 1; col <= Math.ceil((view.x + view.width) / cellSize); col++) {
-            const seed = hash01(col, row);
-            const sway = (time * 2 * Math.PI) / 3 + seed * 20;
-            particles[particles.length] = {
-                x: col * cellSize + ((seed * cellSize + time * 6) % cellSize) + Math.sin(sway) * 8,
-                y: row * cellSize + ((hash01(col, row, 1) * cellSize + time * 12) % cellSize),
-                color: leafColor(hash01(col, row, 2)),
-                vertical: Math.cos(sway) > 0,
             };
         }
     }
@@ -173,21 +160,19 @@ export function lightningBolt(
     return undefined;
 }
 
-/** The seasonal schedule is shared by every client: same Paris date and settings, same weather. */
+/** The seasonal schedule is shared by every client: same date, settings and place of the map, same weather. */
 export function weatherAtTime(
     configured: WeatherType,
     serverDate: Date | undefined,
     auto?: AutoWeatherSettings,
+    place?: SeasonPlace,
 ): WeatherType {
     // A cloudy sky is a clear one: its clouds are drawn apart (cloudiness), never as rain.
     if (configured === WeatherType.Cloudy) return WeatherType.Clear;
-    if (configured === WeatherType.Snow) {
-        if (!serverDate || !Number.isFinite(serverDate.getTime())) return WeatherType.Clear;
-        return snowPossibleAt(serverDate) ? WeatherType.Snow : WeatherType.Rain;
-    }
-    if (configured !== WeatherType.Automatic) return configured;
+    // A map saved with a snow: a rain, which the cold alone turns to snow (snowShare).
+    if (configured !== WeatherType.Automatic) return precipitationWeather(configured);
     if (!serverDate || !Number.isFinite(serverDate.getTime())) return WeatherType.Clear;
-    return autoWeatherAt(serverDate, auto);
+    return autoWeatherAt(serverDate, auto, place);
 }
 
 /** Weather only falls outdoors: particles above an indoor cell are not drawn. No grid means no filtering. */
@@ -196,11 +181,6 @@ export function keepOutdoorParticles<T extends { x: number; y: number }>(
     isOutdoor: ((x: number, y: number) => boolean) | undefined,
 ): T[] {
     return isOutdoor ? particles.filter((particle) => isOutdoor(particle.x, particle.y)) : particles;
-}
-
-/** The personal Christmas theme shows snow, whatever the map weather; autumn keeps the map weather. */
-export function effectiveWeather(weather: WeatherType, theme: SeasonalTheme | undefined): WeatherType {
-    return theme === SeasonalTheme.Christmas ? WeatherType.Snow : weather;
 }
 
 const SLOT_MS = 30 * 60 * 1000;
@@ -217,6 +197,7 @@ export function fogStrength(
     auto?: AutoWeatherSettings,
     startedAt?: number,
     endsAt?: number,
+    place?: SeasonPlace,
 ): number {
     if (configured === WeatherType.Fog) {
         if (startedAt === undefined || !Number.isFinite(date.getTime())) return 1;
@@ -227,13 +208,13 @@ export function fogStrength(
     }
     if (configured !== WeatherType.Automatic) return 0;
     const time = date.getTime();
-    if (!Number.isFinite(time) || autoWeatherAt(date, auto) !== WeatherType.Fog) return 0;
+    if (!Number.isFinite(time) || autoWeatherAt(date, auto, place) !== WeatherType.Fog) return 0;
     const start = slotStart(date).getTime();
     let strength = 1;
-    if (autoWeatherAt(new Date(start - 1), auto) !== WeatherType.Fog) {
+    if (autoWeatherAt(new Date(start - 1), auto, place) !== WeatherType.Fog) {
         strength = Math.min(strength, (time - start) / FOG_FADE_MS);
     }
-    if (autoWeatherAt(new Date(start + SLOT_MS), auto) !== WeatherType.Fog) {
+    if (autoWeatherAt(new Date(start + SLOT_MS), auto, place) !== WeatherType.Fog) {
         strength = Math.min(strength, (start + SLOT_MS - time) / FOG_FADE_MS);
     }
     return Math.max(0, Math.min(1, strength));
@@ -391,6 +372,31 @@ export function outdoorCells(area: CellArea, size: number, runs: readonly Weathe
             outdoor.fill(1, line * area.columns + left, line * area.columns + right);
     }
     return outdoor;
+}
+
+/**
+ * The cells of `area` the fog passes over once the map is seen from far (see WeatherManager): 1 for each cell that is
+ * not outdoors (rooms, walls, raised floors), but the cells of the room the avatar stands in, kept clear at every zoom.
+ * `roomAt` is read at the centre of each cell; `keptRoom` undefined (the avatar outdoors) covers the whole inside.
+ */
+export function farFogCells(
+    area: CellArea,
+    size: number,
+    outdoor: Uint8Array,
+    roomAt: (x: number, y: number) => number | undefined,
+    keptRoom: number | undefined,
+): Uint8Array {
+    const cells = new Uint8Array(area.columns * area.rows);
+    for (let line = 0; line < area.rows; line++) {
+        const centreY = area.y + (line + 0.5) * size;
+        for (let column = 0; column < area.columns; column++) {
+            const cell = line * area.columns + column;
+            if (outdoor[cell]) continue;
+            if (keptRoom !== undefined && roomAt(area.x + (column + 0.5) * size, centreY) === keptRoom) continue;
+            cells[cell] = 1;
+        }
+    }
+    return cells;
 }
 
 /**

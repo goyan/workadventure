@@ -349,6 +349,9 @@ const mapEditor: BaseTranslation = {
             actionButtonLabel: "Use the switch",
             turnOn: "Turn on",
             turnOff: "Turn off",
+            acts: "It acts on:",
+            keyOn: "The light of the lamps",
+            keyHot: "The hot water of the pools (it never freezes)",
             commands: "Commands:",
             modeZone: "The lamps of this room",
             modeIds: "Chosen lamps",
@@ -672,7 +675,29 @@ const mapEditor: BaseTranslation = {
         soil: "Soil",
         soilHint:
             'Paint a soil on the map. Rock and clay keep the water; sand and gravel drink it, in a hollow too; earth and meadow drink a flood like the ground of the map. "Ground of the map" wipes the paint.',
+        pool: "Pool",
         soilErase: "Ground of the map (wipe)",
+        pools: {
+            title: "Pools",
+            hint: "Drag to draw a pool: a rectangle or an ellipse, or the brush for a free shape. Click a pool to select it: change its style or delete it. Each style has its colours, depth, ladders and hot water. The Ladder tool puts a ladder on the top edge of the pool clicked, a second click takes it off.",
+            pool: "Pool {number}",
+            add: "+ New pool",
+            water: "Water",
+            coping: "Coping",
+            depth: "Depth: {depth} px",
+            ladders: "Ladders",
+            hot: "Hot water (never freezes, steams in the cold)",
+            tool: "Tool",
+            tools: {
+                rectangle: "Rectangle",
+                ellipse: "Ellipse",
+                brush: "Brush",
+                eraser: "Eraser",
+                ladder: "Ladder",
+            },
+            selected: "Selected pool: {cells} cells. Pick a style to repaint it.",
+            delete: "Delete",
+        },
         hoverSoil: "Soil under the pointer: {soil}",
         meadow: {
             title: "Grass of the map",
@@ -711,6 +736,19 @@ const mapEditor: BaseTranslation = {
         forceAuto: "Automatic force (an eighth of the diameter)",
         force: "Force (thickness taken off by a stroke)",
         mapSettings: "Map settings",
+        realistic: "Realistic",
+        realisticHint: "Sets every setting of the water back to its physical value.",
+        more: "Learn more",
+        realisticDetail:
+            "Speed 1, water with inertia, waves as the ground and the depth make them, pace of the flow 1, 5 tellings a second, water height not capped (256 px), runoff 10, evaporation 0.2 mm/h, absorption 5 mm/h, drainage 300 mm/h. Only the damping (0.02) is not physical.",
+        inertiaDetail:
+            "A comet throws the water of its crater up in a rim there, and the water itself makes the wave. On dry land only the roughness of the ground holds back a flood. Deep water rocks for minutes before it calms down.",
+        flowPaceDetail:
+            "A tile is 1.10 m wide: at 1, a wave runs at 2.2 tiles a second in 60 cm of water, 4 in 2 m. For scale: the avatar walks at 5.6 tiles a second, four times faster than a walker. Rain, sources and sinks follow the speed of the water, not this.",
+        precisionDetail:
+            "The most moves of the water in a step (10 steps a second). At 3, a wave runs at 5.8 m/s at most and a torrent at 8 m/s; at 8, 15 and 16 m/s. In reality a wave runs at 7.7 m/s in 6 m of water.",
+        updatesDetail:
+            "How many tellings a second while the water moves. Measured during a tsunami: about 45 KB a telling and a player, 450 KB/s at 10; next to nothing on calm water. Under a downpour, a drain or after a comet: 5 at least.",
         maxDepth: "Maximum depth and height (tiles)",
         runoff: "Runoff (ground feeding a hollow)",
         evaporation: "Evaporation in dry weather",
@@ -737,18 +775,48 @@ const mapEditor: BaseTranslation = {
         },
         current: "Strength of the current (0: avatars are not carried)",
         maxSurface: "Highest water over the ground",
+        inertia: "Water with inertia (on trial)",
+        flowPace: "Pace of the flow",
+        flowPaceHint: "Slows down or speeds up all that flows: waves, floods, currents. In reality: 1.",
+        precision: "Fineness of the computation of the water",
+        precisionHint:
+            "Higher: faster waves and torrents are possible, heavier computation for the server. 3 by default.",
+        updates: "Tellings of the water to the players",
+        updatesHint: "Higher: waves are seen running instead of fading, for more network. 1 by default.",
+        waves: {
+            roughness: "Friction of the ground",
+            roughnessHint:
+                "Holds back fast or shallow water, by the painted soil. Higher: waves run less far up. In reality: 1.",
+            damping: "Damping of the water",
+            dampingHint:
+                "Calms the water everywhere, whatever its depth. Higher: waves die out before the shore. In reality: 0.",
+            breaking: "Breaking of the waves",
+            breakingHint: "Makes waves that are too steep break, in lakes only. 0: they never break. In reality: 1.",
+            momentum: "Momentum carried by the water",
+            momentumHint:
+                "The water carries its speed: sharp fronts, a lake soon calm. 0: higher waves at the shore, long rocking. In reality: 1.",
+            roughnessDetail:
+                "Manning's friction: it grows with the speed of the water and falls with its depth, next to nothing under a swell at sea. Roughness of the soils: clay 0.022, sand 0.025, earth and gravel 0.03, rock 0.04, meadow 0.045.",
+            dampingDetail:
+                "The share of its flow the water loses each second. 0.02 by default: the least that keeps the computation calm; a swell still crosses a lake.",
+            breakingDetail:
+                "A front whose surface drops more than a tenth of the water it runs in loses its flow. No effect on dry land, where a flood is a sheet that advances.",
+            momentumDetail: "No effect on dry land. At 0, each passage between two cells keeps its own flow only.",
+        },
         real: {
+            inertia:
+                "The water keeps its momentum: waves run, break and flood the shores. Off: the water creeps from cell to cell. In reality: on.",
             maxDepth: "In reality: a tile is about 1.10 m. Pond: 1 tile; large pond: 2 to 3; lake: 4 and more.",
             runoff: "In reality: the ground feeding a pond is 5 to 20 times its surface; 0 for a built basin.",
             evaporation: "In reality: 0.05 mm/h in winter, 0.1 to 0.3 mm/h in summer (3 to 6 mm a day).",
             absorption: "In reality: clay 1 to 5 mm/h, lawn 5 to 15, sand 20 to 30; soaked ground or asphalt: 0.",
             indoorDrain:
                 "The floors of the rooms closed by walls (doors closed) drain the water that came in. 300 mm/h by default: a flooded room is dry in about two minutes; floor drains take it faster; 0 keeps the water inside. A pool dug indoors keeps its water.",
-            speed: "In reality: 1. At that speed a rain of 10 mm/h takes hours to fill a pond.",
+            speed: "In reality: 1. At that speed a rain of 10 mm/h takes hours to fill a pond. 60 by default.",
             maxSurface:
-                "18 px by default: just enough to swim, under the upper floors. Higher, a flood or the wave of a meteor drowns the ground deep (a tile is 32 px), upper floors too beyond 52 px; under a hard rain on a fast map the water may pile up.",
+                "18 px by default: enough to swim, under the upper floors (52 px). Higher, a flood drowns the ground deep. In reality: no cap (256 px).",
             current:
-                "At 1 the hardest current carries at a quarter of the walking speed: one resists it by walking. Nothing in still water nor under a quarter of a tile of water.",
+                "At 1 the hardest current carries at a quarter of the walking speed. A setting of the game: 1 by default.",
         },
         paceHint:
             "Hollows fill with the rain of the map and dry in fine weather. A source or a sink is added to any object from its properties.",
@@ -767,14 +835,13 @@ const mapEditor: BaseTranslation = {
             floorBrush: "Floor brush",
             floorRectangle: "Floor rectangle",
             floorFill: "Floor fill",
-            bridge: "Bridge",
             door: "Door",
             window: "Window",
             height: "Height",
             erase: "Eraser",
             slab: "Floor slabs",
-            slabErase: "Floor eraser",
             stair: "Stair",
+            bridge: "Bridge",
         },
         hints: {
             wall: "Drag to draw a straight wall.",
@@ -782,14 +849,13 @@ const mapEditor: BaseTranslation = {
             floorBrush: "Hold the button and paint floor tiles.",
             floorRectangle: "Drag a rectangle to fill it with the floor.",
             floorFill: "Click inside a closed room to fill it.",
-            bridge: "Hold the button and paint the deck of a bridge, tile by tile. Everything that walks crosses it dry; the water runs under it.",
             door: "Click on a wall to turn two of its segments into a door. It opens when someone comes near.",
             window: "Click or drag along a horizontal wall to put windows in it. You can see through them. Drag a placed window to move it.",
             height: "Click a wall, a door or a window (or drag along a wall) to select it, then choose its height.",
-            erase: "Start on a wall and drag along it to erase its segments (doors and windows included), or start on a floor to erase floors. A click erases what is under the cursor. Objects are kept.",
+            erase: "A click erases what is outlined in red: a stair or a ramp, a door, a window, a wall, a slab or a floor. Choosing the eraser sets the level to “Auto”: it erases what is under the pointer, whatever its level. Choose a level to erase on that level only. Start on a wall and drag along it to erase its segments (doors and windows included); on a raised floor, drag a rectangle to remove its slabs; on the ground, start on a floor to erase the floors passed over. Objects are kept.",
             slab: "Choose a level, then drag a rectangle to lay the slabs of a raised floor.",
-            slabErase: "Drag a rectangle to remove slabs of the level, or click a stair that starts from it.",
-            stair: "Click the tile of the first step, on the level the stair starts from. Hover the map to see where it arrives.",
+            stair: "Click the tile of the first step, on the level the stair starts from. Hover over the map to see where it arrives. A stair or a ramp already placed is outlined in white on hover: drag it to move it.",
+            bridge: "Click the bank it starts from, drag to the bank it reaches and release: the deck and a way up at each end are laid at once. The bridge is straight, east-west or north-south.",
         },
         floors: "Floor",
         floorGuide: {
@@ -808,18 +874,30 @@ const mapEditor: BaseTranslation = {
             refused: "Does not fit here",
             deadEnd: "A placed stair that leads nowhere",
         },
+        bridge: {
+            width: "Width",
+            narrower: "Narrower",
+            wider: "Wider",
+            tiles: "{count} tile{{s}}",
+            style: "Style",
+            height: "Height",
+            low: "Low",
+            high: "High",
+            concreteOnly:
+                "This room does not have the pieces of the wooden bridges: a concrete bridge, as high as walls of 2 tiles.",
+            styles: {
+                wood: "Wood",
+                concrete: "Concrete",
+            },
+        },
         floorLevel: {
-            adjust: "Adjust height",
             areaTitle: "Level of this area",
             objectTitle: "Level of this object",
             auto: "Auto",
             autoHint: "The raised floor under the pointer, the ground where there is none",
-            levelUp: "Level +",
-            levelDown: "Level −",
-            floorUp: "Floor +",
-            floorDown: "Floor −",
-            levelStepHint: "One tile of wall up or down: any level, with or without slabs",
-            floorStepHint: "To the next or the previous floor that has slabs",
+            floorUp: "Level above",
+            floorDown: "Level below",
+            floorStepHint: "To the next or previous level of the list",
             from: "Starts from",
             levelHint: "Top of walls {height} tiles high",
             groundHint: "The ground of the map",
@@ -844,8 +922,14 @@ const mapEditor: BaseTranslation = {
             target: "Goes up to",
             noTarget: "No floor in reach of a stair from this level: lay its slabs first.",
             openSide: "Open side",
+            ramp: "Wooden ramp",
+            rampHint:
+                "A ramp of planks instead of steps: with slabs of wooden sleepers it makes a bridge the animals take. Disabled when the catalog of the room does not have the ramps.",
         },
         walls: "Wall style",
+        woodSlab: "Wooden sleepers",
+        woodSlabHint:
+            "The deck of a bridge: laid at level 1 over a river, with a ramp at each end. Disabled when the catalog of the room does not have the wooden slab.",
         glassSlab: "Glass slabs",
         glassSlabHint:
             "See-through slabs: what is under the floor shows through them. Greyed out when the catalog of the room has no glass slab.",
@@ -876,12 +960,14 @@ const mapEditor: BaseTranslation = {
             doorsUnavailable: "This room has no door catalog: doors are not available.",
             windowInvalid: "A window goes on a free horizontal wall (no door, no window yet). Click on a wall.",
             windowsUnavailable: "This room has no window catalog: windows are not available.",
-            bridgesUnavailable: "This room has no bridge catalog: bridges are not available.",
             slabOnGround:
                 "Choose a level above the ground first: the floors of the ground are drawn with the floor modes.",
             stairNoArrival:
                 "Stair placed, but it leads nowhere yet: lay slabs of the level it reaches on the orange tiles.",
             stairInvalid: "The stair does not fit here: it leaves the map or crosses another stair.",
+            bridgeTooShort:
+                "Bridge too short: at least one tile of deck is needed between its two ways up. Drag further.",
+            bridgeBlocked: "The bridge does not fit here: it leaves the map or crosses a stair.",
             failed: "The change could not be applied.",
         },
         families: {
@@ -988,6 +1074,7 @@ const mapEditor: BaseTranslation = {
             searchPlaceholder: "Search",
             backToSelectObject: "Back to select object",
         },
+        convertPool: "Turn into a pool to edit (shape, colours, ladders)",
         deleteButton: "Delete",
         deleteCustomEntity: {
             title: "Delete “{name}”?",
@@ -1145,7 +1232,6 @@ const mapEditor: BaseTranslation = {
                 stormy: "Stormy",
                 include: "Possible weather",
                 stormHint: "in the afternoon, mostly in summer",
-                snowHint: "from November to March",
                 fogHint: "in the morning",
                 now: "{season} · Now: {weather} until {time}",
                 then: "then {weather} at {time}",
@@ -1157,7 +1243,8 @@ const mapEditor: BaseTranslation = {
                 autumn: "Autumn",
             },
             fixed: {
-                snowHint: "Outside November–March, it falls as rain.",
+                rainHint:
+                    "In cold air it falls as snow: by the real temperature and humidity at the place of the map, or the ones set in Catastrophe → Weather.",
                 fogHint: "All day long.",
             },
             previewHint: "Preview for you only. Save to show it to everyone.",

@@ -4,7 +4,8 @@ import type { Translation } from "../i18n-types";
 const woka: DeepPartial<Translation["woka"]> = {
     vehicle: {
         myVehicle: "Mes véhicules",
-        airHint: "Air : appuyez sur {key} pour activer ou désactiver votre avion.",
+        airHint:
+            "Air : appuyez sur {key} pour activer ou désactiver votre avion. En vol, maintenez Espace pour monter et Ctrl pour descendre.",
         landingBlocked: "Atterrissage impossible ici. Déplacez-vous vers un endroit dégagé.",
         airplane: "Avion",
         media: { air: "Air", land: "Terre", water: "Eau" },

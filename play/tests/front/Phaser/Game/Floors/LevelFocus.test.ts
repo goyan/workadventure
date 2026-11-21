@@ -3,6 +3,7 @@ import {
     LEVEL_FADE_MS,
     VEIL_ALPHA,
     aboveLevelShows,
+    EDITOR_OPEN_AIR_ABOVE_ALPHA,
     editorLevelAlpha,
     currentLevels,
     stairCoversAvatar,
@@ -88,6 +89,17 @@ describe("a floor above the avatar", () => {
         });
     });
 
+    it("always shows a floor in the open air (the deck of a bridge), with a window around an avatar under it", () => {
+        const deck = { raised: false, hidesAvatar: false, openAir: true };
+        expect(aboveLevelShows({ ...deck, indoors: false })).toEqual({ alpha: 1 });
+        // From a room far away, and from under its slabs.
+        expect(aboveLevelShows({ ...deck, indoors: true })).toEqual({ alpha: 1 });
+        expect(aboveLevelShows({ ...deck, indoors: false, underFloor: true })).toEqual({ alpha: 1, window: true });
+        expect(aboveLevelShows({ ...deck, indoors: false, hidesAvatar: true })).toEqual({ alpha: 1, window: true });
+        // Drawn over the room the avatar is in, it would hide the room.
+        expect(aboveLevelShows({ ...deck, indoors: true, coversRoom: true })).toEqual({ alpha: 0 });
+    });
+
     it("leaves the floors under the avatar clearly darker", () => {
         expect(VEIL_ALPHA).toBe(0.7);
     });
@@ -143,6 +155,15 @@ describe("construction level visibility", () => {
         expect([52, 104, 156].map((level) => editorLevelAlpha(level, 104))).toEqual([0, 1, 0]);
         expect(editorLevelAlpha(52, 0)).toBe(0);
         expect(editorLevelAlpha(52, 84)).toBe(0);
+    });
+    it("keeps a floor in the open air in view, seen through when it is above the platform edited", () => {
+        expect(editorLevelAlpha(52, 0, true)).toBe(EDITOR_OPEN_AIR_ABOVE_ALPHA);
+        expect(editorLevelAlpha(20, 0, true)).toBe(EDITOR_OPEN_AIR_ABOVE_ALPHA);
+        expect(editorLevelAlpha(52, 52, true)).toBe(1);
+        expect(editorLevelAlpha(52, 116, true)).toBe(1);
+        expect(editorLevelAlpha(52, Number.POSITIVE_INFINITY, true)).toBe(1);
+        expect(EDITOR_OPEN_AIR_ABOVE_ALPHA).toBeGreaterThan(0.3);
+        expect(EDITOR_OPEN_AIR_ABOVE_ALPHA).toBeLessThan(1);
     });
     it("keeps the whole building available in automatic mode", () => {
         expect(editorLevelAlpha(52, Number.POSITIVE_INFINITY)).toBe(1);

@@ -1,5 +1,12 @@
 <script lang="ts">
-    import { DEFAULT_AUTO_WEATHER, Season, Weather, WeatherType } from "@workadventure/map-editor";
+    import {
+        calendarTimeZone,
+        DEFAULT_AUTO_WEATHER,
+        precipitationWeather,
+        Season,
+        Weather,
+        WeatherType,
+    } from "@workadventure/map-editor";
     import type { AutoWeatherFrequency, AutoWeatherSettings, WeatherLocation } from "@workadventure/map-editor";
     import { onDestroy } from "svelte";
     import { get } from "svelte/store";
@@ -17,20 +24,22 @@
     import WeatherTiles from "./WeatherTiles.svelte";
     import { weatherLook, weatherName as sharedWeatherName } from "./WeatherName";
 
-    type BadWeather = WeatherType.Rain | WeatherType.Storm | WeatherType.Snow | WeatherType.Fog;
-    const BAD_WEATHERS: BadWeather[] = [WeatherType.Rain, WeatherType.Storm, WeatherType.Snow, WeatherType.Fog];
+    // No snow to choose: a rain falls as snow when the air of the map is cold enough (snowShare).
+    type BadWeather = WeatherType.Rain | WeatherType.Storm | WeatherType.Fog;
+    const BAD_WEATHERS: BadWeather[] = [WeatherType.Rain, WeatherType.Storm, WeatherType.Fog];
 
     const settings = gameManager.getCurrentGameScene().getGameMap().getWamFile()?.getWam().settings;
     const initialAuto: AutoWeatherSettings = settings?.weatherAuto ?? DEFAULT_AUTO_WEATHER;
     // Server time when the panel opens, the preview is computed from it.
     const openedAt = gameManager.getCurrentGameScene().getServerDate() ?? new Date();
 
-    let weather = $state<WeatherType>(settings?.weather ?? WeatherType.Clear);
+    // A map saved with a snow shows, and is saved again, as the rain it now is.
+    const savedWeather = precipitationWeather(settings?.weather ?? WeatherType.Clear);
+    let weather = $state<WeatherType>(savedWeather);
     let frequency = $state<AutoWeatherFrequency>(initialAuto.frequency);
     let included = $state<Record<BadWeather, boolean>>({
         [WeatherType.Rain]: initialAuto.include.includes(WeatherType.Rain),
         [WeatherType.Storm]: initialAuto.include.includes(WeatherType.Storm),
-        [WeatherType.Snow]: initialAuto.include.includes(WeatherType.Snow),
         [WeatherType.Fog]: initialAuto.include.includes(WeatherType.Fog),
     });
 
@@ -47,7 +56,7 @@
 
     // What is being tried shows at once, for this person only, until the panel closes (weatherPreviewStore).
     let saved = $state.raw({
-        weather: settings?.weather ?? WeatherType.Clear,
+        weather: savedWeather,
         frequency: initialAuto.frequency,
         include: BAD_WEATHERS.filter((w) => initialAuto.include.includes(w)).join(),
         clouds: initialAuto.clouds !== false,
@@ -80,7 +89,6 @@
         { value: WeatherType.Cloudy, label: $LL.mapEditor.settings.weather.cloudy(), icon: WeatherType.Cloudy },
         { value: WeatherType.Rain, label: $LL.mapEditor.settings.weather.rain(), icon: WeatherType.Rain },
         { value: WeatherType.Storm, label: $LL.mapEditor.settings.weather.storm(), icon: WeatherType.Storm },
-        { value: WeatherType.Snow, label: $LL.mapEditor.settings.weather.snow(), icon: WeatherType.Snow },
         { value: WeatherType.Fog, label: $LL.mapEditor.settings.weather.fog(), icon: WeatherType.Fog },
         { value: WeatherType.Real, label: $LL.mapEditor.settings.weather.real(), icon: WeatherType.Real },
     ]);
@@ -108,20 +116,23 @@
         }
     }
 
-    const timeFormat = new Intl.DateTimeFormat("fr-FR", {
-        timeZone: "Europe/Paris",
-        hour: "2-digit",
-        minute: "2-digit",
-        hourCycle: "h23",
-    });
+    // The schedule, its season and its hours are those of the place chosen in this panel: its times are read on its clock.
+    const timeFormat = $derived(
+        new Intl.DateTimeFormat("fr-FR", {
+            timeZone: calendarTimeZone(location),
+            hour: "2-digit",
+            minute: "2-digit",
+            hourCycle: "h23",
+        }),
+    );
 
     const preview = $derived.by(() => {
         if (weather !== WeatherType.Automatic) return [];
         const auto: AutoWeatherSettings = { frequency, include: autoInclude };
-        const changes = autoWeatherChanges(openedAt, auto, 2);
+        const changes = autoWeatherChanges(openedAt, auto, 2, location);
         const lines: string[] = [];
-        const season = seasonName(seasonAt(openedAt));
-        const current = weatherName(autoWeatherAt(openedAt, auto));
+        const season = seasonName(seasonAt(openedAt, location));
+        const current = weatherName(autoWeatherAt(openedAt, auto, location));
         const first = changes[0];
         lines.push(
             first
@@ -205,11 +216,6 @@
                 dataTestId="map-weather-include-storm"
             />
             <InputCheckbox
-                bind:value={included[WeatherType.Snow]}
-                label={`${$LL.mapEditor.settings.weather.snow()} (${$LL.mapEditor.settings.weather.auto.snowHint()})`}
-                dataTestId="map-weather-include-snow"
-            />
-            <InputCheckbox
                 bind:value={included[WeatherType.Fog]}
                 label={`${$LL.mapEditor.settings.weather.fog()} (${$LL.mapEditor.settings.weather.auto.fogHint()})`}
                 dataTestId="map-weather-include-fog"
@@ -225,8 +231,8 @@
                 <div>{line}</div>
             {/each}
         </div>
-    {:else if weather === WeatherType.Snow}
-        <p class="text-sm text-white/60">{$LL.mapEditor.settings.weather.fixed.snowHint()}</p>
+    {:else if weather === WeatherType.Rain || weather === WeatherType.Storm}
+        <p class="text-sm text-white/60">{$LL.mapEditor.settings.weather.fixed.rainHint()}</p>
     {:else if weather === WeatherType.Fog}
         <p class="text-sm text-white/60">{$LL.mapEditor.settings.weather.fixed.fogHint()}</p>
     {:else if weather === WeatherType.Real}

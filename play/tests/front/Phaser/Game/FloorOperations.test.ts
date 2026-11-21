@@ -3,17 +3,22 @@ import { FloorModel } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer
 import {
     applySlabs,
     availableLevels,
+    canMoveStair,
     canPlaceStair,
     computeFloorPlacements,
     diffFloorPlacements,
     eraseSlabs,
     floorCellAt,
     levelUnderPoint,
+    moveStair,
     placeStair,
     reachableLevels,
     removeStairAt,
     stairArrivalCells,
+    stairAt,
+    stairBaseBelow,
     stairHasArrival,
+    stairUnderPoint,
     stairTarget,
     stairTargets,
     stepLevel,
@@ -150,6 +155,65 @@ describe("floor operations", () => {
         expect(removeStairAt(model, 0, { x: 5, y: 5 })).toBe(false);
     });
 
+    it("moves a placed stair: the well it leaves is closed, the well of its new place is cut", () => {
+        const model = new FloorModel();
+        applySlabs(model, 52, { x: 4, y: 2 }, { x: 9, y: 6 }, "moquette-olive", BOUNDS);
+        placeStair(model, north, { x: 5, y: 6 }, 0, BOUNDS);
+        const stair = stairAt(model, 0, { x: 5, y: 5 });
+        expect(stair).toBeDefined();
+        if (!stair) return;
+        expect(moveStair(model, stair, { x: 8, y: 6 }, BOUNDS)).toBe(true);
+        expect(model.getStairs()).toHaveLength(1);
+        expect(model.getStairs()[0]?.foot).toEqual({ x: 8, y: 6 });
+        expect(model.getStairs()[0]?.shape).toEqual(north);
+        // The old well is a floor again, the new one is a hole.
+        expect(model.slabAt(52, 5, 5)).toBe("moquette-olive");
+        expect(model.hasSlab(52, 8, 5)).toBe(false);
+    });
+
+    it("refuses to move a stair out of the map or over another stair, and changes nothing", () => {
+        const model = new FloorModel();
+        placeStair(model, north, { x: 5, y: 6 }, 0, BOUNDS);
+        placeStair(model, north, { x: 9, y: 6 }, 0, BOUNDS);
+        const stair = stairAt(model, 0, { x: 5, y: 6 });
+        if (!stair) throw new Error("stair expected");
+        expect(canMoveStair(model, stair, { x: 9, y: 6 }, BOUNDS)).toBe(false);
+        expect(moveStair(model, stair, { x: 9, y: 6 }, BOUNDS)).toBe(false);
+        expect(moveStair(model, stair, { x: 5, y: -4 }, BOUNDS)).toBe(false);
+        expect(model.getStairs().map((placed) => placed.foot)).toEqual([
+            { x: 5, y: 6 },
+            { x: 9, y: 6 },
+        ]);
+        // A stair does not block itself: one tile further is fine.
+        expect(moveStair(model, stair, { x: 6, y: 6 }, BOUNDS)).toBe(true);
+    });
+
+    it("finds a stair under a point of its image, above the tiles it stands on", () => {
+        const model = new FloorModel();
+        placeStair(model, north, { x: 5, y: 6 }, 0, BOUNDS);
+        const stair = model.getStairs()[0];
+        if (!stair) throw new Error("stair expected");
+        // On its foot.
+        expect(stairUnderPoint(model, 0, 5 * 32 + 10, 6 * 32 + 10)).toBe(stair);
+        // On the top of its image: further north than its tiles by its rise.
+        expect(stairUnderPoint(model, 0, 5 * 32 + 10, stair.ground.y - 40)).toBe(stair);
+        // Beside it: nothing.
+        expect(stairUnderPoint(model, 0, 7 * 32 + 10, 6 * 32 + 10)).toBeUndefined();
+        // While another floor is edited, it is still the one under the pointer.
+        expect(stairUnderPoint(model, 52, 5 * 32 + 10, 6 * 32 + 10)).toBe(stair);
+    });
+
+    it("takes the stair of the floor edited before the one of another floor under the same point", () => {
+        const model = new FloorModel();
+        expect(placeStair(model, north, { x: 5, y: 6 }, 0, BOUNDS)).toBe(true);
+        // One floor up, on the tiles drawn where the foot of the first one is.
+        const upper = floorCellAt(5 * 32 + 10, 6 * 32 + 10, 52);
+        expect(placeStair(model, north, upper, 52, BOUNDS)).toBe(true);
+        const [low, high] = model.getStairs();
+        expect(stairUnderPoint(model, 0, 5 * 32 + 10, 6 * 32 + 10)).toBe(low);
+        expect(stairUnderPoint(model, 52, 5 * 32 + 10, 6 * 32 + 10)).toBe(high);
+    });
+
     it("offers the floors of the walls of 2, 3 and 4, and the ones already on the map", () => {
         const model = new FloorModel();
         expect(availableLevels(model)).toEqual([52, 84, 116]);
@@ -157,6 +221,8 @@ describe("floor operations", () => {
         expect(availableLevels(model)).toEqual([52, 84, 104, 116]);
         // The tops of walls standing on a floor are offered too: a floor over the floor.
         expect(availableLevels(new FloorModel(), [136, 52])).toEqual([52, 84, 116, 136]);
+        // The low floor of the bridges, when the catalog of the room has its pieces.
+        expect(availableLevels(new FloorModel(), [], true)).toEqual([20, 52, 84, 116]);
     });
 
     it("sends a stair to the floor asked, else to one that has slabs, else to the first in reach", () => {
@@ -220,8 +286,9 @@ describe("floor operations", () => {
         expect(reachableLevels(52, levels)).toEqual([84, 116]);
         expect(reachableLevels(84, levels)).toEqual([116]);
         expect(reachableLevels(116, levels)).toEqual([]);
-        // No stair goes up 20 px.
-        expect(reachableLevels(84, [104, 116])).toEqual([116]);
+        // 20 px up: the stairs of the low floor.
+        expect(reachableLevels(84, [104, 116])).toEqual([104, 116]);
+        expect(reachableLevels(0, [20, 52])).toEqual([20, 52]);
     });
 
     it("offers a stair the levels one or two tiles up from any floor, built or not", () => {
@@ -233,5 +300,24 @@ describe("floor operations", () => {
         expect(stairTargets(0, levels)).toEqual([52, 84, 116]);
         // A level that walls standing on a floor give (116 + 52) is offered with them.
         expect(stairTargets(116, [...levels, 168])).toEqual([148, 168, 180]);
+    });
+});
+
+describe("the level the stair mode goes down to", () => {
+    const LEVELS = [20, 52, 84, 116];
+    it("is the ground under a deck just laid, with nothing built above it", () => {
+        expect(stairBaseBelow(52, [52], LEVELS)).toBe(0);
+        expect(stairBaseBelow(20, [20], LEVELS)).toBe(0);
+    });
+    it("is the highest built floor a stair reaches it from", () => {
+        expect(stairBaseBelow(116, [52, 116], LEVELS)).toBe(52);
+    });
+    it("is none on the ground, nor on a floor a stair leaves for a built one", () => {
+        expect(stairBaseBelow(0, [52], LEVELS)).toBeUndefined();
+        expect(stairBaseBelow(52, [52, 84], LEVELS)).toBeUndefined();
+        expect(stairBaseBelow(52, [52, 116], LEVELS)).toBeUndefined();
+    });
+    it("is none when no stair reaches the floor", () => {
+        expect(stairBaseBelow(180, [180], [...LEVELS, 180])).toBeUndefined();
     });
 });

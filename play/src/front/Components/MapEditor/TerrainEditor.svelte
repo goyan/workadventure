@@ -5,14 +5,24 @@
         DEFAULT_WATER_SETTINGS,
         MAX_WATER_CURRENT,
         MAX_WATER_INDOOR_DRAIN,
+        FLOW_PACE_BOUNDS,
         MAX_WATER_MAX_SURFACE,
+        REALISTIC_WATER_SETTINGS,
+        WATER_PACE_BOUNDS,
+        WAVE_BOUNDS,
         MAX_WATER_SPEED,
+        MAX_POOL_STYLES,
         MEADOW_BOUNDS,
+        DEFAULT_POOL_STYLE,
+        poolSoilCode,
+        poolStyleOf,
         SOILS,
         soilCode,
         soilName,
         TILE_PX,
     } from "@workadventure/map-editor";
+    import { POOL_TOOLS } from "@wa/front/Phaser/Game/Terrain/PoolShapes";
+    import { commitSoils } from "@wa/front/Phaser/Game/Terrain/TerrainStroke";
     import { LL } from "../../../i18n/i18n-svelte";
     import { executeUpdateTerrain, executeUpdateWAMSettings } from "../../Phaser/Game/MapEditor/Commands/Facades";
     import { readTerrainMapSettings } from "../../Phaser/Game/Terrain/TerrainMapSettings";
@@ -23,6 +33,7 @@
         terrainHoverHeightStore,
         terrainHoverMeadowStore,
         terrainHoverSoilStore,
+        selectedPoolStore,
     } from "../../Stores/TerrainEditorStore";
     import { SOIL_TINTS } from "../../Phaser/Game/Terrain/TerrainShading";
     import InputSwitch from "../Input/InputSwitch.svelte";
@@ -33,7 +44,7 @@
     const MAX_DIAMETER_TILES = 12;
     const MAX_FORCE_PX = 64;
     // Filling up to the ground only is what flattening towards the level of the ground does: no button of its own.
-    const MODES = ["dig", "raise", "flatten", "smooth", "soil"] as const;
+    const MODES = ["dig", "raise", "flatten", "smooth", "soil", "pool"] as const;
 
     // What the map says now; each slider below writes its change back to the map, for every editor.
     const saved = readTerrainMapSettings();
@@ -45,6 +56,75 @@
     let current = $state(saved.current);
     let maxSurface = $state(saved.maxSurface);
     let indoorDrain = $state(saved.indoorDrain);
+    let inertia = $state(saved.inertia);
+    let waveRoughness = $state(saved.waves.roughness);
+    let waveDamping = $state(saved.waves.damping);
+    let waveBreaking = $state(saved.waves.breaking);
+    let waveMomentum = $state(saved.waves.momentum);
+    let precision = $state(saved.precision);
+    let updates = $state(saved.updates);
+    let flowPace = $state(saved.flowPace);
+
+    // The styles of the pools of the map: a pool is painted as a soil of its style (Terrain/Pools.ts).
+    let pools = $state(saved.pools);
+    const chosenPool = $derived(poolStyleOf($terrainBrushStore.soil ?? 0));
+
+    /** The pool mode paints a pool: the first one when the brush held a soil. */
+    function chooseMode(mode: (typeof MODES)[number]): void {
+        terrainBrushStore.update((brush) => ({
+            ...brush,
+            mode,
+            soil: mode === "pool" && poolStyleOf(brush.soil ?? 0) === undefined ? poolSoilCode(0) : brush.soil,
+        }));
+    }
+
+    function savePools(): void {
+        executeUpdateWAMSettings({
+            $case: "updatePoolSettingMessage",
+            updatePoolSettingMessage: { pools: pools.map((pool) => ({ ...pool })) },
+        }).catch((error: unknown) => console.error("The pools could not be saved", error));
+    }
+
+    /** A new pool, turquoise by default, chosen at once to be painted. */
+    function addPool(): void {
+        if (pools.length >= MAX_POOL_STYLES) return;
+        pools = [...pools, { ...DEFAULT_POOL_STYLE }];
+        savePools();
+        terrainBrushStore.update((brush) => ({ ...brush, soil: poolSoilCode(pools.length - 1) }));
+    }
+
+    function choosePool(style: number): void {
+        // A pool the map has no style for yet is given the default one, so that its settings show.
+        if (style >= pools.length) {
+            pools = [...pools, { ...DEFAULT_POOL_STYLE }];
+            savePools();
+        }
+        terrainBrushStore.update((brush) => ({ ...brush, soil: poolSoilCode(style) }));
+        const selected = $selectedPoolStore;
+        if (selected && selected.style !== style) {
+            paintSelectedPool(poolSoilCode(style));
+            selectedPoolStore.set({ ...selected, style });
+        }
+    }
+
+    /** The pool picked on the map painted whole with this soil: another style, or 0 to remove it. */
+    function paintSelectedPool(code: number): void {
+        const selected = $selectedPoolStore;
+        if (!selected) return;
+        commitSoils(new Map(selected.cells.map((key) => [key, code])), (soils) =>
+            executeUpdateTerrain(new Map(), undefined, soils),
+        ).catch((error: unknown) => console.error("The pool could not be changed", error));
+    }
+
+    function deleteSelectedPool(): void {
+        paintSelectedPool(0);
+        selectedPoolStore.set(undefined);
+    }
+
+    function setPool(style: number, change: Partial<(typeof pools)[number]>): void {
+        pools = pools.map((pool, index) => (index === style ? { ...pool, ...change } : pool));
+        savePools();
+    }
 
     let diameterTiles = $state($terrainBrushStore.diameterTiles);
     let forceAuto = $state($terrainBrushStore.forcePx === undefined);
@@ -65,10 +145,36 @@
         }));
     }
 
+    /** Every setting of the water back to what it is in reality, and saved. */
+    function setRealistic(): void {
+        ({ runoff, evaporation, speed, absorption, current, maxSurface, indoorDrain, inertia } =
+            REALISTIC_WATER_SETTINGS);
+        waveRoughness = REALISTIC_WATER_SETTINGS.waves.roughness;
+        waveDamping = REALISTIC_WATER_SETTINGS.waves.damping;
+        waveBreaking = REALISTIC_WATER_SETTINGS.waves.breaking;
+        waveMomentum = REALISTIC_WATER_SETTINGS.waves.momentum;
+        precision = REALISTIC_WATER_SETTINGS.precision;
+        updates = REALISTIC_WATER_SETTINGS.updates;
+        flowPace = REALISTIC_WATER_SETTINGS.flowPace;
+        saveWater();
+    }
+
     function saveWater(): void {
         executeUpdateWAMSettings({
             $case: "updateWaterSettingMessage",
-            updateWaterSettingMessage: { runoff, evaporation, speed, absorption, current, maxSurface, indoorDrain },
+            updateWaterSettingMessage: {
+                runoff,
+                evaporation,
+                speed,
+                absorption,
+                current,
+                maxSurface,
+                indoorDrain,
+                inertia,
+                updates,
+                // The waves only matter to the water with inertia: a map without it keeps what it had.
+                ...(inertia ? { waveRoughness, waveDamping, waveBreaking, waveMomentum, precision, flowPace } : {}),
+            },
         }).catch((error: unknown) => console.error("The pace of the water could not be saved", error));
     }
 
@@ -91,6 +197,14 @@
     }
 </script>
 
+<!-- What a setting does in detail (figures, measures), folded under its one-line hint. -->
+{#snippet more(text: string)}
+    <details class="retro-hint m-0" data-testid="terrain-more">
+        <summary class="cursor-pointer select-none underline">{$LL.mapEditor.terrain.more()}</summary>
+        {text}
+    </details>
+{/snippet}
+
 <!-- Like the panel of the Map tool: it scrolls when it is taller than the room the editor leaves it. -->
 <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3" data-testid="terrain-editor">
     <span class="retro-title">{$LL.mapEditor.terrain.title()}</span>
@@ -101,7 +215,7 @@
                 class="btn btn-sm {$terrainBrushStore.mode === mode ? 'btn-secondary' : 'btn-light btn-ghost'}"
                 aria-pressed={$terrainBrushStore.mode === mode}
                 data-testid="terrain-mode-{mode}"
-                onclick={() => terrainBrushStore.update((brush) => ({ ...brush, mode }))}
+                onclick={() => chooseMode(mode)}
             >
                 {$LL.mapEditor.terrain[mode]()}
             </button>
@@ -170,6 +284,132 @@
                 {$LL.mapEditor.terrain.soilErase()}
             </button>
         </div>
+    {:else if $terrainBrushStore.mode === "pool"}
+        <span class="retro-title mt-2">{$LL.mapEditor.terrain.pools.title()}</span>
+        <p class="retro-hint m-0">{$LL.mapEditor.terrain.pools.hint()}</p>
+        <div class="grid grid-cols-4 gap-1" role="radiogroup" aria-label={$LL.mapEditor.terrain.pools.tool()}>
+            {#each POOL_TOOLS as tool (tool)}
+                <button
+                    type="button"
+                    role="radio"
+                    class="btn btn-sm {($terrainBrushStore.poolTool ?? 'rectangle') === tool
+                        ? 'btn-secondary'
+                        : 'btn-light btn-ghost'}"
+                    aria-checked={($terrainBrushStore.poolTool ?? "rectangle") === tool}
+                    data-testid="terrain-pool-tool-{tool}"
+                    onclick={() => terrainBrushStore.update((brush) => ({ ...brush, poolTool: tool }))}
+                >
+                    {$LL.mapEditor.terrain.pools.tools[tool]()}
+                </button>
+            {/each}
+        </div>
+        {#if $selectedPoolStore}
+            <div class="flex items-center justify-between gap-2" data-testid="terrain-pool-selected">
+                <span class="text-sm text-white">
+                    {$LL.mapEditor.terrain.pools.selected({ cells: $selectedPoolStore.cells.length })}
+                </span>
+                <button
+                    type="button"
+                    class="btn btn-sm btn-danger"
+                    data-testid="terrain-pool-delete"
+                    onclick={deleteSelectedPool}
+                >
+                    {$LL.mapEditor.terrain.pools.delete()}
+                </button>
+            </div>
+        {/if}
+        <div class="grid grid-cols-2 gap-2" role="radiogroup" aria-label={$LL.mapEditor.terrain.pools.title()}>
+            {#each pools.length > 0 ? pools : [DEFAULT_POOL_STYLE] as pool, index (index)}
+                <button
+                    type="button"
+                    role="radio"
+                    class="btn btn-sm justify-start gap-2 {chosenPool === index
+                        ? 'btn-secondary'
+                        : 'btn-light btn-ghost'}"
+                    aria-checked={chosenPool === index}
+                    data-testid="terrain-pool-{index}"
+                    onclick={() => choosePool(index)}
+                >
+                    <span
+                        class="inline-block h-4 w-4 shrink-0 rounded border-2"
+                        style:background={pool.water}
+                        style:border-color={pool.coping}
+                    ></span>
+                    {$LL.mapEditor.terrain.pools.pool({ number: index + 1 })}
+                </button>
+            {/each}
+            {#if pools.length < MAX_POOL_STYLES}
+                <button
+                    type="button"
+                    class="btn btn-sm btn-light btn-ghost col-span-2"
+                    data-testid="terrain-pool-add"
+                    onclick={addPool}
+                >
+                    {$LL.mapEditor.terrain.pools.add()}
+                </button>
+            {/if}
+        </div>
+        {#if chosenPool !== undefined && pools[chosenPool]}
+            {@const pool = pools[chosenPool]}
+            <div class="flex flex-col gap-2" data-testid="terrain-pool-settings">
+                <label class="flex items-center justify-between gap-2 text-sm">
+                    {$LL.mapEditor.terrain.pools.water()}
+                    <input
+                        type="color"
+                        value={pool.water}
+                        data-testid="terrain-pool-water"
+                        onchange={(event) => setPool(chosenPool, { water: event.currentTarget.value })}
+                    />
+                </label>
+                <label class="flex items-center justify-between gap-2 text-sm">
+                    {$LL.mapEditor.terrain.pools.coping()}
+                    <input
+                        type="color"
+                        value={pool.coping}
+                        data-testid="terrain-pool-coping"
+                        onchange={(event) => setPool(chosenPool, { coping: event.currentTarget.value })}
+                    />
+                </label>
+                <label class="flex flex-col gap-1 text-sm">
+                    {$LL.mapEditor.terrain.pools.depth({ depth: Math.round(pool.depthPx) })}
+                    <input
+                        type="range"
+                        min="8"
+                        max="160"
+                        step="8"
+                        value={pool.depthPx}
+                        data-testid="terrain-pool-depth"
+                        onchange={(event) => setPool(chosenPool, { depthPx: Number(event.currentTarget.value) })}
+                    />
+                </label>
+                <div
+                    class="flex items-center justify-between gap-2 text-sm"
+                    role="radiogroup"
+                    aria-label={$LL.mapEditor.terrain.pools.ladders()}
+                >
+                    {$LL.mapEditor.terrain.pools.ladders()}
+                    <span class="flex gap-1">
+                        {#each [0, 1, 2] as count (count)}
+                            <button
+                                type="button"
+                                role="radio"
+                                class="btn btn-sm {pool.ladders === count ? 'btn-secondary' : 'btn-light btn-ghost'}"
+                                aria-checked={pool.ladders === count}
+                                data-testid="terrain-pool-ladders-{count}"
+                                onclick={() => setPool(chosenPool, { ladders: count })}>{count}</button
+                            >
+                        {/each}
+                    </span>
+                </div>
+                <InputSwitch
+                    id="terrain-pool-hot"
+                    value={pool.hot}
+                    label={$LL.mapEditor.terrain.pools.hot()}
+                    labelPosition="right"
+                    onchange={() => setPool(chosenPool, { hot: !pool.hot })}
+                />
+            </div>
+        {/if}
     {/if}
     {#if $terrainHoverHeightStore !== undefined}
         <p class="m-0 text-sm text-white" role="status" data-testid="terrain-hover-height">
@@ -266,6 +506,13 @@
     <TerrainWaterDashboard {evaporation} {absorption} />
 
     <span class="retro-title mt-2">{$LL.mapEditor.terrain.mapSettings()}</span>
+    <div data-testid="terrain-water-realistic">
+        <button type="button" class="btn btn-sm btn-light btn-ghost w-full" onclick={setRealistic}>
+            {$LL.mapEditor.terrain.realistic()}
+        </button>
+        <p class="retro-hint m-0">{$LL.mapEditor.terrain.realisticHint()}</p>
+        {@render more($LL.mapEditor.terrain.realisticDetail())}
+    </div>
     <div data-testid="terrain-max-depth">
         <RangeSlider
             id="terrain-max-depth"
@@ -377,6 +624,124 @@
             buttonShape="square"
         />
         <p class="retro-hint m-0">{$LL.mapEditor.terrain.real.maxSurface()}</p>
+    </div>
+    <div data-testid="terrain-inertia">
+        <InputSwitch
+            id="terrain-inertia"
+            bind:value={inertia}
+            label={$LL.mapEditor.terrain.inertia()}
+            labelPosition="right"
+            onchange={saveWater}
+        />
+        <p class="retro-hint m-0">{$LL.mapEditor.terrain.real.inertia()}</p>
+        {@render more($LL.mapEditor.terrain.inertiaDetail())}
+    </div>
+    {#if inertia}
+        <div data-testid="terrain-wave-roughness">
+            <RangeSlider
+                id="terrain-wave-roughness"
+                label={$LL.mapEditor.terrain.waves.roughness()}
+                unit="×"
+                min={WAVE_BOUNDS.roughness[0]}
+                max={WAVE_BOUNDS.roughness[1]}
+                step={0.1}
+                bind:value={waveRoughness}
+                onchange={saveWater}
+                buttonShape="square"
+            />
+            <p class="retro-hint m-0">{$LL.mapEditor.terrain.waves.roughnessHint()}</p>
+            {@render more($LL.mapEditor.terrain.waves.roughnessDetail())}
+        </div>
+        <div data-testid="terrain-wave-damping">
+            <RangeSlider
+                id="terrain-wave-damping"
+                label={$LL.mapEditor.terrain.waves.damping()}
+                unit="/s"
+                min={WAVE_BOUNDS.damping[0]}
+                max={WAVE_BOUNDS.damping[1]}
+                step={0.01}
+                bind:value={waveDamping}
+                onchange={saveWater}
+                buttonShape="square"
+            />
+            <p class="retro-hint m-0">{$LL.mapEditor.terrain.waves.dampingHint()}</p>
+            {@render more($LL.mapEditor.terrain.waves.dampingDetail())}
+        </div>
+        <div data-testid="terrain-wave-breaking">
+            <RangeSlider
+                id="terrain-wave-breaking"
+                label={$LL.mapEditor.terrain.waves.breaking()}
+                unit="×"
+                min={WAVE_BOUNDS.breaking[0]}
+                max={WAVE_BOUNDS.breaking[1]}
+                step={0.1}
+                bind:value={waveBreaking}
+                onchange={saveWater}
+                buttonShape="square"
+            />
+            <p class="retro-hint m-0">{$LL.mapEditor.terrain.waves.breakingHint()}</p>
+            {@render more($LL.mapEditor.terrain.waves.breakingDetail())}
+        </div>
+        <div data-testid="terrain-wave-momentum">
+            <RangeSlider
+                id="terrain-wave-momentum"
+                label={$LL.mapEditor.terrain.waves.momentum()}
+                unit="×"
+                min={WAVE_BOUNDS.momentum[0]}
+                max={WAVE_BOUNDS.momentum[1]}
+                step={0.05}
+                bind:value={waveMomentum}
+                onchange={saveWater}
+                buttonShape="square"
+            />
+            <p class="retro-hint m-0">{$LL.mapEditor.terrain.waves.momentumHint()}</p>
+            {@render more($LL.mapEditor.terrain.waves.momentumDetail())}
+        </div>
+        <div data-testid="terrain-flow-pace">
+            <RangeSlider
+                id="terrain-flow-pace"
+                label={$LL.mapEditor.terrain.flowPace()}
+                unit="×"
+                min={FLOW_PACE_BOUNDS[0]}
+                max={FLOW_PACE_BOUNDS[1]}
+                step={0.05}
+                bind:value={flowPace}
+                onchange={saveWater}
+                buttonShape="square"
+            />
+            <p class="retro-hint m-0">{$LL.mapEditor.terrain.flowPaceHint()}</p>
+            {@render more($LL.mapEditor.terrain.flowPaceDetail())}
+        </div>
+        <div data-testid="terrain-precision">
+            <RangeSlider
+                id="terrain-precision"
+                label={$LL.mapEditor.terrain.precision()}
+                unit=""
+                min={WATER_PACE_BOUNDS.precision[0]}
+                max={WATER_PACE_BOUNDS.precision[1]}
+                step={1}
+                bind:value={precision}
+                onchange={saveWater}
+                buttonShape="square"
+            />
+            <p class="retro-hint m-0">{$LL.mapEditor.terrain.precisionHint()}</p>
+            {@render more($LL.mapEditor.terrain.precisionDetail())}
+        </div>
+    {/if}
+    <div data-testid="terrain-updates">
+        <RangeSlider
+            id="terrain-updates"
+            label={$LL.mapEditor.terrain.updates()}
+            unit="/s"
+            min={WATER_PACE_BOUNDS.updates[0]}
+            max={WATER_PACE_BOUNDS.updates[1]}
+            step={1}
+            bind:value={updates}
+            onchange={saveWater}
+            buttonShape="square"
+        />
+        <p class="retro-hint m-0">{$LL.mapEditor.terrain.updatesHint()}</p>
+        {@render more($LL.mapEditor.terrain.updatesDetail())}
     </div>
     <p class="retro-hint m-0">{$LL.mapEditor.terrain.paceHint()}</p>
 

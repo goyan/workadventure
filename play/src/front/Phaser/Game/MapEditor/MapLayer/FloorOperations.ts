@@ -4,12 +4,14 @@ import { slabImagePosition, stairImagePosition } from "./FloorModel";
 import type { FloorModel, PlacedStair } from "./FloorModel";
 import {
     FLOOR_WALL_HEIGHTS,
+    LOW_FLOOR_ELEVATION,
     MAP_LAYER_FLOOR_SLAB_COLLECTION,
     STAIR_RISES,
     floorElevation,
     slabPrefabName,
     stairGroundBox,
     stairPrefabName,
+    stairScreenBox,
 } from "./MapLayerFloors";
 import type { StairRise, StairShape, TilePoint } from "./MapLayerFloors";
 import type { MapBounds } from "./MapLayerOperations";
@@ -179,7 +181,7 @@ export function placeStair(
  * tile of the well gets the slab of a neighbour, when the floor reaches it.
  */
 export function removeStairAt(model: FloorModel, level: number, cell: TilePoint): boolean {
-    const stair = model.getStairs().find((candidate) => candidate.base === level && covers(candidate, cell));
+    const stair = stairAt(model, level, cell);
     if (!stair) return false;
     model.removeStair(stair);
     const well = stairCells(stair.shape, stair.foot);
@@ -199,12 +201,67 @@ export function removeStairAt(model: FloorModel, level: number, cell: TilePoint)
     return true;
 }
 
+/** The stair that starts from this floor and covers this tile, if any. */
+export function stairAt(model: FloorModel, level: number, cell: TilePoint): PlacedStair | undefined {
+    return model.getStairs().find((candidate) => candidate.base === level && covers(candidate, cell));
+}
+
+/**
+ * The stair under a point of the screen, whatever the floor it starts from: the one whose tiles are there, else the
+ * one whose image is (its top is drawn further north than the tiles it stands on). A stair that starts from `level`,
+ * the floor being edited, comes before the ones of the other floors.
+ */
+export function stairUnderPoint(
+    model: FloorModel,
+    level: number,
+    worldX: number,
+    worldY: number,
+): PlacedStair | undefined {
+    // The last one placed is drawn over the others.
+    const stairs = [...model.getStairs()].reverse();
+    const onTiles = (stair: PlacedStair) => covers(stair, floorCellAt(worldX, worldY, stair.base));
+    const onImage = (stair: PlacedStair) => {
+        const image = stairImagePosition(stair.shape, stair.foot, stair.base);
+        const box = stairScreenBox(stair.shape, stair.foot);
+        return worldX >= image.x && worldX < image.x + box.width && worldY >= image.y && worldY < image.y + box.height;
+    };
+    const edited = stairs.filter((stair) => stair.base === level);
+    const others = stairs.filter((stair) => stair.base !== level);
+    return edited.find(onTiles) ?? edited.find(onImage) ?? others.find(onTiles) ?? others.find(onImage);
+}
+
+/**
+ * Whether a placed stair can have its foot on another tile: inside the map, and not over another stair that starts
+ * from the same floor (itself does not count).
+ */
+export function canMoveStair(model: FloorModel, stair: PlacedStair, foot: TilePoint, bounds: MapBounds): boolean {
+    const cells = stairCells(stair.shape, foot);
+    if (!cells.every((cell) => inBounds(cell, bounds))) return false;
+    return !model
+        .getStairs()
+        .some((other) => other !== stair && other.base === stair.base && cells.some((cell) => covers(other, cell)));
+}
+
+/**
+ * Moves a placed stair, same shape, so that its foot is on another tile: the well it leaves is closed like a removal
+ * does, the well of the new place is cut. Nothing changes when it does not fit.
+ */
+export function moveStair(model: FloorModel, stair: PlacedStair, foot: TilePoint, bounds: MapBounds): boolean {
+    if (!canMoveStair(model, stair, foot, bounds)) return false;
+    if (foot.x === stair.foot.x && foot.y === stair.foot.y) return true;
+    const { shape, base } = stair;
+    if (!removeStairAt(model, base, stair.foot)) return false;
+    return placeStair(model, shape, foot, base, bounds);
+}
+
 /**
  * The floors the editor offers above the ground: the ones on the walls of 2, 3 and 4 tiles, the ones already on the
- * map, and `wallTops`, the tops of the walls standing on a floor (a floor over the floor).
+ * map, and `wallTops`, the tops of the walls standing on a floor (a floor over the floor). With `low`, the low floor
+ * of the bridges too (the catalog of the room has its ramps and stairs).
  */
-export function availableLevels(model: FloorModel, wallTops: readonly number[] = []): number[] {
+export function availableLevels(model: FloorModel, wallTops: readonly number[] = [], low = false): number[] {
     const levels = new Set<number>(FLOOR_WALL_HEIGHTS.map((height) => floorElevation(height)));
+    if (low) levels.add(LOW_FLOOR_ELEVATION);
     for (const level of model.getLevels()) levels.add(level);
     for (const level of wallTops) levels.add(level);
     return [...levels].sort((a, b) => a - b);
@@ -240,6 +297,20 @@ export function stairTarget(
 ): number | undefined {
     if (asked !== undefined && reachable.includes(asked)) return asked;
     return reachable.find((level) => built.includes(level)) ?? reachable[0];
+}
+
+/**
+ * The level the stair mode goes down to when it is chosen on a floor no stair would leave for a built one: the
+ * stair wanted is then the one that goes up to this floor (a deck just laid needs its ramps). The highest level a
+ * stair reaches it from, among the ground and the floors that have slabs; undefined when this floor is fine, or when
+ * no stair reaches it.
+ */
+export function stairBaseBelow(level: number, built: readonly number[], levels: readonly number[]): number | undefined {
+    if (level <= 0) return undefined;
+    if (stairTargets(level, levels).some((target) => built.includes(target))) return undefined;
+    return [0, ...built]
+        .filter((base) => base < level && stairRiseBetween(base, level) !== undefined)
+        .sort((a, b) => b - a)[0];
 }
 
 /**

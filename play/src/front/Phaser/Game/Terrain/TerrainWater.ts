@@ -15,6 +15,20 @@ export interface WaterState {
     depths: Uint8Array;
 }
 
+/** The last state of the water and the one before it, over the grid the server simulates. */
+export interface SettledWater {
+    /** The rectangle of the grid, in cells of the relief. */
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    /** Pixels of water over each cell, row by row: now, and one state earlier. */
+    depths: Float32Array;
+    before: Float32Array;
+    /** The seconds between the two states; Infinity when there is only one. */
+    seconds: number;
+}
+
 /** A film of water thinner than this is not drawn: what a flood leaves behind would speckle the ground. */
 const SHOWN_PX = 0.5;
 /**
@@ -22,6 +36,8 @@ const SHOWN_PX = 0.5;
  * apart) shows as well at five drawings a second as at ten, and each drawing paints the whole view.
  */
 const GLIDE_DRAW_MS = 200;
+/** The shortest glide between two states: the server never tells the water more often than every step. */
+const SHORTEST_GLIDE_MS = 100;
 
 /**
  * The water of the relief as this browser shows it: the depth of the water over each cell of the grid the server
@@ -39,8 +55,14 @@ export class TerrainWater {
     private from = new Float32Array(0);
     private to = new Float32Array(0);
     private at = -Infinity;
+    /** The state before the last one, and the time between the two (ms): how fast the water rises and falls. */
+    private before = new Float32Array(0);
+    private betweenMs = Infinity;
+    private receivedAt = -Infinity;
     private wet = false;
     private changes = 0;
+    /** How many of those changes were states of the water received. */
+    private states = 0;
     private bridges: ReadonlySet<string> = new Set();
     /** The deepest water shown, now or while it glides to its last state (px). */
     private deepestDepth = 0;
@@ -92,7 +114,7 @@ export class TerrainWater {
             if (to[index] > 0) wet = true;
         }
         if (sameGrid && this.bytes) {
-            // From where the water is shown now.
+            // From where the water is shown now, at the pace of the glide that was going on.
             const shown = new Float32Array(cells);
             const share = this.share(now);
             for (let index = 0; index < cells; index++) {
@@ -100,11 +122,17 @@ export class TerrainWater {
             }
             this.from = shown;
             this.at = now;
+            // Only then the pace of the new glide: the time the server took between the two states.
+            this.before = this.to;
+            this.betweenMs = Math.max(100, now - this.receivedAt);
         } else {
             // The first state, or another grid (the relief was edited): shown at once.
             this.from = to;
             this.at = -Infinity;
+            this.before = to;
+            this.betweenMs = Infinity;
         }
+        this.receivedAt = now;
         this.to = to;
         this.grid = { x: state.x, y: state.y, width: state.width, height: state.height };
         this.bytes = bytes;
@@ -114,6 +142,7 @@ export class TerrainWater {
         for (let index = 0; index < cells; index++) deepest = Math.max(deepest, this.from[index], to[index]);
         this.deepestDepth = deepest;
         this.changes++;
+        this.states++;
     }
 
     /** The deepest water of the map (px), as shown or gliding: how much higher a lake on a mount draws its surface. */
@@ -140,6 +169,20 @@ export class TerrainWater {
         const row = Math.floor(y / TERRAIN_CELL) - this.grid.y;
         if (column < 0 || row < 0 || column >= this.grid.width || row >= this.grid.height) return 0;
         return this.to[row * this.grid.width + column];
+    }
+
+    /**
+     * The last state the server sent, cell by cell, with the one before it and the seconds between the two: what
+     * the water holds and how fast it rises or falls (the view of the flows of the water). The arrays are those of
+     * this object: read, never written.
+     */
+    public settled(): SettledWater {
+        return {
+            ...this.grid,
+            depths: this.to,
+            before: this.before,
+            seconds: this.betweenMs / 1000,
+        };
     }
 
     /**
@@ -218,11 +261,22 @@ export class TerrainWater {
 
     /** Changes when what is shown changed: the relief, a state, and five times a second while the water glides. */
     public drawKey(now: number): string {
-        const gliding = now < this.at + WATER_MESSAGE_MS + GLIDE_DRAW_MS;
-        return gliding ? `${this.changes}:${Math.floor(now / GLIDE_DRAW_MS)}` : `${this.changes}`;
+        const gliding = now < this.at + this.glideMs() + GLIDE_DRAW_MS;
+        // While it glides the water is drawn five times a second, however often the server tells it: a state
+        // received does not ask for a drawing of its own.
+        return gliding ? `${this.changes - this.states}:${Math.floor(now / GLIDE_DRAW_MS)}` : `${this.changes}`;
     }
 
+    /**
+     * How far the water has glided from the state before to the last one. The glide lasts as long as the server
+     * took between the two (a second, or less on a map told more often, or under a wave): gliding for a second
+     * to a state that came a fifth of a second after the one before would leave the water a second late.
+     */
     private share(now: number): number {
-        return Math.max(0, Math.min(1, (now - this.at) / WATER_MESSAGE_MS));
+        return Math.max(0, Math.min(1, (now - this.at) / this.glideMs()));
+    }
+
+    private glideMs(): number {
+        return Math.min(WATER_MESSAGE_MS, Math.max(SHORTEST_GLIDE_MS, this.betweenMs));
     }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isDaylightAt, sunPositionAt } from "../src/Weather/SunPosition";
+import { isDaylightAt, SUNRISE_ELEVATION, sunPositionAt } from "../src/Weather/SunPosition";
 
 const PARIS = { latitude: 48.8566, longitude: 2.3522 };
 const SYDNEY = { latitude: -33.8688, longitude: 151.2093 };
@@ -19,6 +19,19 @@ describe("the sun of a place", () => {
         expect(isDaylightAt(new Date("2026-12-21T07:00:00Z"), PARIS)).toBe(false);
         expect(isDaylightAt(new Date("2026-12-21T12:00:00Z"), PARIS)).toBe(true);
         expect(isDaylightAt(new Date("2026-12-21T16:30:00Z"), PARIS)).toBe(false);
+    });
+
+    it("keeps the night in the old 7 to 19 window of the grass: 7:30 in November, 6:30 and 21:00 in June", () => {
+        // Paris, November 21: the sun rises at 8:08 (UTC+1), so 7:30 is still night, noon is day.
+        expect(isDaylightAt(new Date("2026-11-21T06:30:00Z"), PARIS)).toBe(false);
+        expect(isDaylightAt(new Date("2026-11-21T11:00:00Z"), PARIS)).toBe(true);
+        // Paris, June 21 (UTC+2): day at 6:30 and at 21:00, before the 21:58 sunset.
+        expect(isDaylightAt(new Date("2026-06-21T04:30:00Z"), PARIS)).toBe(true);
+        expect(isDaylightAt(new Date("2026-06-21T19:00:00Z"), PARIS)).toBe(true);
+    });
+
+    it("starts the day at the elevation the night veil of the front ends at", () => {
+        expect(SUNRISE_ELEVATION).toBe(-0.833);
     });
 
     it("follows the place of the map: noon in Paris is night in Sydney", () => {

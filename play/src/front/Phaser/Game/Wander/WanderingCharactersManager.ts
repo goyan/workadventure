@@ -15,6 +15,12 @@ import { JUNGLE_RADIUS_TILES } from "../Jungle/JunglePlan";
 import type { JungleAnimal } from "../Jungle/JunglePlan";
 import { getSolidRectangles } from "../../../Utils/EntityHitbox";
 import { placeAtDepth } from "../DepthSort";
+import { floorDepth } from "../MapEditor/MapLayer/FloorDepth";
+import type { FloorModel } from "../MapEditor/MapLayer/FloorModel";
+import { parseFloorPiece } from "../MapEditor/MapLayer/MapLayerFloors";
+import { wallBarriers } from "../MapEditor/MapLayer/MapLayerBarriers";
+import { levelItems } from "../MapEditor/MapLayer/MapLayerLevels";
+import type { LevelPlaced } from "../MapEditor/MapLayer/MapLayerLevels";
 import { effectShownStores } from "../../../Stores/EffectsStore";
 import { blockRectangles, sameGrids, withAreaBorders } from "./WanderCollisions";
 import type { WanderRectangle } from "./WanderCollisions";
@@ -22,6 +28,8 @@ import { drinkStance } from "./WanderDrink";
 import { RADIUS_TILES, WanderSchedule } from "./WanderSchedule";
 import type { Point, Shore, WanderDirection, WanderMap, WanderPose } from "./WanderSchedule";
 import { blockWetTiles, changedTiles, shoresOf, wetTilesOf } from "./WanderWater";
+import { wanderFloorsOf } from "./WanderFloors";
+import type { WanderFloors } from "./WanderFloors";
 import { fearedPoint, fleeTarget, isBrave, straightRunIsClear } from "./WanderFear";
 import type { WetTiles } from "./WanderWater";
 import {
@@ -67,6 +75,19 @@ export interface WanderLead {
     poseAt(nowMs: number): WanderPose | undefined;
 }
 
+/** From this altitude on, a character stands on a raised floor or a stair: off the ground (as for the avatars). */
+const RAISED_FROM_PX = 2;
+/** The point the floors read for a player is this far over its feet (see FloorSpike). */
+const OCCUPANT_FEET_OFFSET_Y = 12;
+
+/** A character as the raised floors show it: it fades with the floor it stands on, like a player (see FloorSpike). */
+export interface WanderFloorOccupant {
+    readonly x: number;
+    readonly y: number;
+    isOnFloor(elevation: number): boolean;
+    setAlpha(alpha: number): unknown;
+}
+
 interface WanderingCharacter {
     /** Undefined for a free character (a jungle animal): no object of the map stands for it. */
     entity: Entity | undefined;
@@ -91,6 +112,13 @@ interface WanderingCharacter {
     fleeing: boolean;
     /** Whether the sprite is drawn in a drinking stance (turned or squeezed): undone when it stops drinking. */
     inStance: boolean;
+    /**
+     * How high over the ground it stands where it is shown, on a raised floor or a stair: 0 on the ground. Its
+     * sprite is drawn that much further north than its feet are on the ground.
+     */
+    z: number;
+    /** What the raised floors fade it by (see floorOccupants): made once. */
+    occupant?: WanderFloorOccupant;
     /** Where a wild animal runs to, away from an avatar it fears (see WanderFear); undefined when it is calm. */
     scaredTo?: Point;
 }
@@ -119,6 +147,9 @@ export class WanderingCharactersManager {
     private shores: Shore[] = [];
     private drinkIntervalMs: number = DEFAULT_LIFE_SETTINGS.drinkInterval * 1000;
     private lastUpdateMs = 0;
+    // The raised floors of the map as the avatars walk them (see FloorSpike), and what the characters walk of them.
+    private floorModel: FloorModel | undefined;
+    private floors: WanderFloors | undefined;
     private readonly pathfindingManager: PathfindingManager;
     private readonly tileDimensions: { width: number; height: number };
     private isEditorMode = false;
@@ -142,6 +173,7 @@ export class WanderingCharactersManager {
         this.map = {
             isWalkable: (tile) => this.isWalkable(tile),
             findPath: (from, to) => this.findPath(from, to),
+            levelsAt: (tile) => this.floors?.levelsAt(tile) ?? [],
             seats: () => getSeats(this.scene).map((seat) => seat.feet),
             shores: () => this.shores,
             drinkIntervalMs: () => this.drinkIntervalMs,
@@ -164,18 +196,56 @@ export class WanderingCharactersManager {
     public forEachDoorOpener(callback: (position: Point) => void): void {
         for (const character of this.characters.values()) {
             // Free characters stay outdoors: they open no door, unless they follow a master (who went through it).
-            if ((character.entity || character.lead) && character.sprite?.visible) {
+            // The doors of the ground are opened from the ground only.
+            if ((character.entity || character.lead) && character.sprite?.visible && character.z < RAISED_FROM_PX) {
                 callback(character.opener);
             }
         }
     }
 
-    /** Calls the callback with the position of each visible character, free ones included: the presence sensors sense them. */
+    /**
+     * The same for the characters on a raised floor, with its altitude: they open the doors of their own floor (see
+     * UpperDoors). The position is where they are drawn, as for a player.
+     */
+    public forEachRaisedDoorOpener(callback: (position: Point, elevation: number) => void): void {
+        for (const character of this.characters.values()) {
+            if ((character.entity || character.lead) && character.sprite?.visible && character.z >= RAISED_FROM_PX) {
+                callback(character.opener, character.z);
+            }
+        }
+    }
+
+    /**
+     * Calls the callback with the position of each visible character on the ground, free ones included: the presence
+     * sensors sense them. (The sensors do not sense the animals of the raised floors yet.)
+     */
     public forEachWalker(callback: (position: Point) => void): void {
         for (const character of this.characters.values()) {
-            if (character.sprite?.visible) {
+            if (character.sprite?.visible && character.z < RAISED_FROM_PX) {
                 callback(character.opener);
             }
+        }
+    }
+
+    /**
+     * The characters shown now, as the raised floors fade them: one on a floor that is hidden or seen through shows
+     * as its floor does, like a player. The same object for a character at each call.
+     */
+    public *floorOccupants(): Generator<WanderFloorOccupant> {
+        for (const character of this.characters.values()) {
+            const sprite = character.sprite;
+            if (!sprite?.visible) continue;
+            character.occupant ??= {
+                get x() {
+                    return sprite.x;
+                },
+                get y() {
+                    return sprite.y - OCCUPANT_FEET_OFFSET_Y;
+                },
+                isOnFloor: (elevation) => Math.abs(character.z - elevation) < RAISED_FROM_PX,
+                setAlpha: (alpha) => sprite.setAlpha(alpha),
+            };
+            yield character.occupant;
         }
     }
 
@@ -229,6 +299,7 @@ export class WanderingCharactersManager {
                     radiusTiles: JUNGLE_RADIUS_TILES,
                     fleeing: false,
                     inStance: false,
+                    z: 0,
                 });
                 this.loadSheet(animal.sheetPath);
             } else if (character.entity) {
@@ -275,13 +346,17 @@ export class WanderingCharactersManager {
         return [...placed, ...free];
     }
 
-    /** Where a tamable character (see tameableCharacters) is shown, undefined while it is not. */
-    public characterPose(id: string): { x: number; y: number; moving: boolean } | undefined {
+    /**
+     * Where a tamable character (see tameableCharacters) is shown, undefined while it is not; with `z` on a raised
+     * floor or a stair: it is drawn that much further north than its feet are on the ground.
+     */
+    public characterPose(id: string): { x: number; y: number; moving: boolean; z?: number } | undefined {
         const character = this.tameable(id);
         if (!character?.sprite?.visible) {
             return undefined;
         }
-        return { x: character.sprite.x, y: character.sprite.y, moving: character.moving };
+        const pose = { x: character.sprite.x, y: character.sprite.y, moving: character.moving };
+        return character.z > 0 ? { ...pose, z: character.z } : pose;
     }
 
     /**
@@ -340,10 +415,14 @@ export class WanderingCharactersManager {
     /**
      * The nest is where the character stands, in the coordinates of the pathfinding: the "feet" of a character standing
      * on a tile are at the center of that tile. An entity is positioned by its top-left corner (origin 0), so the
-     * center of its image is on the tile where it was put.
+     * center of its image is on the tile where it was put. One put on a raised floor is drawn its altitude further
+     * north than the ground it stands over: its nest is on that floor (see Point).
      */
     private static nestOf(entity: Entity): Point {
-        return { x: entity.x + entity.displayWidth / 2, y: entity.y + entity.displayHeight / 2 };
+        const z = entity.getElevation();
+        const x = entity.x + entity.displayWidth / 2;
+        const y = entity.y + entity.displayHeight / 2;
+        return z > 0 ? { x, y: y + z, z } : { x, y };
     }
 
     private reconcile(): void {
@@ -374,14 +453,19 @@ export class WanderingCharactersManager {
                     schedule: new WanderSchedule(entityId, nest, this.map),
                     sprite: undefined,
                     hasPose: false,
-                    opener: { x: nest.x, y: nest.y - WANDER_FRAME_SIZE / 2 },
+                    opener: { x: nest.x, y: nest.y - (nest.z ?? 0) - WANDER_FRAME_SIZE / 2 },
                     moving: false,
                     radiusTiles: RADIUS_TILES,
                     fleeing: false,
                     inStance: false,
+                    z: nest.z ?? 0,
                 });
                 this.loadSheet(sheetPath);
-            } else if (character.nest.x !== nest.x || character.nest.y !== nest.y) {
+            } else if (
+                character.nest.x !== nest.x ||
+                character.nest.y !== nest.y ||
+                (character.nest.z ?? 0) !== (nest.z ?? 0)
+            ) {
                 character.nest = nest;
                 character.schedule.setNest(nest);
                 // Hidden until its first pose around the new nest, instead of showing it at its old place for a frame.
@@ -402,6 +486,7 @@ export class WanderingCharactersManager {
      */
     private refreshMap(): void {
         const gameMapFrontWrapper = this.scene.getGameMapFrontWrapper();
+        const floorsChanged = this.refreshFloors();
         const dryGrid = blockRectangles(
             gameMapFrontWrapper.getSharedCollisionGrid(),
             this.collisionRectangles(),
@@ -417,6 +502,7 @@ export class WanderingCharactersManager {
         const first = this.collisionGrid === undefined || this.barriers === undefined || this.dryGrid === undefined;
         const mapChanged =
             first ||
+            floorsChanged ||
             this.dryGrid === undefined ||
             this.barriers === undefined ||
             !sameGrids(dryGrid, this.dryGrid) ||
@@ -456,6 +542,81 @@ export class WanderingCharactersManager {
     }
 
     /**
+     * Reads the raised floors of the map again when the floors of the avatars read new ones (see FloorSpike: a slab, a
+     * stair, a wall or a piece of furniture of a raised floor laid, moved or removed): the slabs and the stairs the
+     * characters walk, the walls of each floor, and the tiles its furniture and its pools fill. A map without a slab
+     * has no floors: the characters walk the ground, as ever.
+     * @returns whether the floors changed (every character then computes its walk again)
+     */
+    private refreshFloors(): boolean {
+        const model = this.scene.floorSpike?.walkContext()?.model;
+        if (model === this.floorModel) {
+            return false;
+        }
+        this.floorModel = model;
+        // The water under a bridge is read as it is from now on (see refreshWater), or as before without floors.
+        this.waterVersion = undefined;
+        if (!model) {
+            this.floors = undefined;
+            return true;
+        }
+        const tile = this.tileDimensions;
+        const placed: LevelPlaced[] = [];
+        const filled = new Map<number, Set<string>>();
+        const fill = (level: number, rectangle: WanderRectangle): void => {
+            let tiles = filled.get(level);
+            if (!tiles) filled.set(level, (tiles = new Set()));
+            // Where it stands on the ground: its altitude further south than where it is drawn.
+            const top = rectangle.y + level;
+            for (let x = Math.floor(rectangle.x / tile.width); x * tile.width < rectangle.x + rectangle.width; x++) {
+                for (let y = Math.floor(top / tile.height); y * tile.height < top + rectangle.height; y++) {
+                    tiles.add(`${x},${y}`);
+                }
+            }
+        };
+        for (const entity of this.scene.getGameMapFrontWrapper().getEntitiesManager().getEntities().values()) {
+            const prefab = entity.getPrefab();
+            const elevation = entity.getElevation();
+            placed.push({
+                x: entity.x,
+                y: entity.y,
+                collectionName: prefab.collectionName,
+                prefabId: prefab.id,
+                elevation,
+            });
+            if (
+                elevation <= 0 ||
+                isMapLayerPrefab(prefab.collectionName, prefab.id) ||
+                parseFloorPiece(prefab.collectionName, prefab.id)
+            ) {
+                continue;
+            }
+            const solid = getSolidRectangles({ x: entity.x, y: entity.y }, prefab, tile.width);
+            for (const rectangle of getPrefabCollisionRectangles({ x: entity.x, y: entity.y }, solid)) {
+                fill(elevation, rectangle);
+            }
+        }
+        for (const level of model.getLevels()) {
+            for (const rectangle of getWaterRectangles(this.scene, level)) fill(level, rectangle);
+        }
+        // The walls of each raised floor, read when a walk first goes there (a door opens for whoever comes near).
+        const walls = new Map<number, TileBarriers>();
+        const wallsOf = (level: number): TileBarriers => {
+            let found = walls.get(level);
+            if (!found) walls.set(level, (found = wallBarriers(levelItems(placed, level))));
+            return found;
+        };
+        this.floors = wanderFloorsOf({
+            model,
+            groundWalkable: (point) => this.isWalkable(point),
+            blocked: (level, from, to) =>
+                level === 0 ? (this.barriers?.blocksMove(from, to) ?? false) : wallsOf(level).blocksMove(from, to),
+            occupied: (level, point) => filled.get(level)?.has(`${point.x},${point.y}`) ?? false,
+        });
+        return true;
+    }
+
+    /**
      * Reads the water of the relief again when the server told a new state. Returns the tiles that became wet or
      * dry since the last time: none most of the time, a lake at rest keeps its shores.
      */
@@ -471,7 +632,8 @@ export class WanderingCharactersManager {
             dryGrid.length,
             this.tileDimensions.width,
             water.coveredArea(),
-            (x, y) => water.walkerSettledDepthAt(x, y),
+            // With raised floors, the water under a deck is water: the deck is walked on its own floor, by its ramps.
+            (x, y) => (this.floors ? water.settledDepthAt(x, y) : water.walkerSettledDepthAt(x, y)),
             this.wet,
         );
         const changes = changedTiles(this.wet, wet);
@@ -493,7 +655,12 @@ export class WanderingCharactersManager {
      * walls between tiles (getWallBarriers).
      */
     private collisionRectangles(): WanderRectangle[] {
-        return WanderingCharactersManager.collisionRectanglesOf(this.scene);
+        const rectangles = WanderingCharactersManager.collisionRectanglesOf(this.scene);
+        // A stair standing on the ground fills its tiles: it is walked up from its foot, by the floors (WanderFloors).
+        for (const stair of this.floorModel?.getStairs() ?? []) {
+            if (stair.base === 0) rectangles.push(stair.ground);
+        }
+        return rectangles;
     }
 
     /** The thin collisions of objects and water, which animals never enter. */
@@ -502,6 +669,10 @@ export class WanderingCharactersManager {
         const gameMapFrontWrapper = scene.getGameMapFrontWrapper();
         const cellSize = gameMapFrontWrapper.getTileDimensions().width;
         for (const entity of gameMapFrontWrapper.getEntitiesManager().getEntities().values()) {
+            // What stands on a raised floor stops whoever is on that floor only (see refreshFloors).
+            if (entity.getElevation() > 0) {
+                continue;
+            }
             const prefab = entity.getPrefab();
             // The same rectangles as the players: none for the animals themselves, the grid of an object off the grid.
             const solid = getSolidRectangles({ x: entity.x, y: entity.y }, prefab, cellSize);
@@ -619,7 +790,12 @@ export class WanderingCharactersManager {
             const sprite = character.sprite;
             if (sprite && !this.isEditorMode) {
                 const lead = character.lead;
+                // A pose tells where the feet are on the ground and how high over it (see Point): on a raised floor
+                // or a stair, the sprite is drawn that much further north, among what stands that high.
                 const pose = lead ? lead.poseAt(now) : character.schedule.poseAt(now);
+                const poseZ = pose?.z ?? 0;
+                // Fear and flight are for the ground: a character on a raised floor keeps to its walk.
+                const shownRaised = character.z >= RAISED_FROM_PX;
                 if (lead && !pose) {
                     // Led out of view: not shown, rather than left where it was last seen.
                     character.hasPose = false;
@@ -630,12 +806,17 @@ export class WanderingCharactersManager {
                 }
                 const onItsWalk = !lead && character.hasPose && sprite.visible && !this.isEditorMode;
                 // The wild ones fear the avatars, unless brave today; a pet put on the map does not.
-                const fearful = onItsWalk && !character.entity && !isBrave(id, now);
+                const fearful = onItsWalk && !shownRaised && !character.entity && !isBrave(id, now);
+                if (character.fleeing && (shownRaised || poseZ >= RAISED_FROM_PX)) {
+                    // No run in a straight line to or from a raised floor: it is on its walk at once.
+                    character.fleeing = false;
+                }
                 if (fearful) {
                     threats ??= this.scene.avatarFeetOnGround();
                 }
                 if (
                     onItsWalk &&
+                    !shownRaised &&
                     (fearful || fire || character.scaredTo) &&
                     this.runFromThreats(character, sprite, fearful ? threats : undefined, fire, frameMs)
                 ) {
@@ -655,12 +836,14 @@ export class WanderingCharactersManager {
                     const stance = pose.drinking
                         ? drinkStance(pose.direction, pose.pausedMs, REDUCED_MOTION)
                         : undefined;
+                    const feetY = pose.y - poseZ;
                     const x = pose.x + (stance?.dx ?? 0);
-                    const y = pose.y + (stance?.dy ?? 0);
+                    const y = feetY + (stance?.dy ?? 0);
+                    character.z = poseZ;
                     if (sprite.x !== x || sprite.y !== y) {
                         sprite.setPosition(x, y);
                         character.opener.x = pose.x;
-                        character.opener.y = pose.y - WANDER_FRAME_SIZE / 2;
+                        character.opener.y = feetY - WANDER_FRAME_SIZE / 2;
                         changed = true;
                     }
                     if (stance) {
@@ -681,14 +864,14 @@ export class WanderingCharactersManager {
                     // On a seat, drawn like a seated player: over the chair (behind it when it shows its back).
                     // A led character goes where it is led, never onto a seat.
                     const seat =
-                        pose.moving || lead || pose.drinking
+                        pose.moving || lead || pose.drinking || poseZ >= RAISED_FROM_PX
                             ? undefined
                             : getSeats(this.scene).find(
                                   (candidate) =>
                                       Math.abs(candidate.feet.x - pose.x) < 1 &&
                                       Math.abs(candidate.feet.y - pose.y) < 1,
                               );
-                    const depth = seat?.depth ?? pose.y;
+                    const depth = seat?.depth ?? floorDepth(poseZ, feetY);
                     if (sprite.depth !== depth) {
                         placeAtDepth(sprite, depth);
                         changed = true;
@@ -757,8 +940,12 @@ export class WanderingCharactersManager {
             if (character.scaredTo) {
                 character.scaredTo = undefined;
                 const pose = character.schedule.poseAt(Date.now());
-                if (pose && straightRunIsClear(feet, pose, walkable)) character.fleeing = true;
-                else character.hasPose = false;
+                // Back to a walk on the ground at a run; to one on a raised floor, it appears there.
+                if (pose && (pose.z ?? 0) < RAISED_FROM_PX && straightRunIsClear(feet, pose, walkable)) {
+                    character.fleeing = true;
+                } else {
+                    character.hasPose = false;
+                }
             }
             return false;
         }
@@ -801,6 +988,8 @@ export class WanderingCharactersManager {
             character.inStance = false;
         }
         sprite.setPosition(x, y);
+        // Only on the ground (see update).
+        character.z = 0;
         placeAtDepth(sprite, y);
         character.opener.x = x;
         character.opener.y = y - WANDER_FRAME_SIZE / 2;
@@ -833,7 +1022,20 @@ export class WanderingCharactersManager {
         return type !== undefined && DESTINATION_TILE_TYPES.has(type);
     }
 
+    /**
+     * The walk between two places (see Point). On the ground it is the one of the pathfinding, as on a map without
+     * raised floors; when the ground gives none (a river in between), or when an end stands on a raised floor, the
+     * walk goes through the floors: up and down the stairs and the ramps, over the slabs (see WanderFloors).
+     */
     private async findPath(from: Point, to: Point): Promise<Point[]> {
+        if ((from.z ?? 0) >= RAISED_FROM_PX || (to.z ?? 0) >= RAISED_FROM_PX) {
+            return this.floors?.route(from, to) ?? [];
+        }
+        const path = await this.findGroundPath(from, to);
+        return path.length > 0 || !this.floors ? path : this.floors.route(from, to);
+    }
+
+    private async findGroundPath(from: Point, to: Point): Promise<Point[]> {
         const tileDimensions = this.tileDimensions;
         if (
             Math.floor(from.x / tileDimensions.width) === Math.floor(to.x / tileDimensions.width) &&

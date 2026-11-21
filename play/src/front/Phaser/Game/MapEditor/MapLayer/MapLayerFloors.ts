@@ -29,12 +29,19 @@ export function floorElevation(height: FloorWallHeight): number {
 }
 
 /**
- * How much a stair goes up, in pixels: from the ground to the top of walls of 2, 3 or 4 tiles (52, 84, 116), or
- * between two such tops, 1 or 2 tiles apart (32, 64). The names of the catalogs tell it `h2`..`h4` and `m1`, `m2`.
+ * The low floor: as high as the top of walls of one tile. No room fits under it; it is the deck of a bridge, over a
+ * river or a ditch.
  */
-export const STAIR_RISES = [32, 52, 64, 84, 116] as const;
+export const LOW_FLOOR_ELEVATION = FACADE_FACE_HEIGHT;
+
+/**
+ * How much a stair goes up, in pixels: from the ground to the low floor (20) or to the top of walls of 2, 3 or 4
+ * tiles (52, 84, 116), or between two such tops, 1 or 2 tiles apart (32, 64). The names of the catalogs tell it
+ * `h1`..`h4` and `m1`, `m2`.
+ */
+export const STAIR_RISES = [20, 32, 52, 64, 84, 116] as const;
 export type StairRise = (typeof STAIR_RISES)[number];
-const STAIR_RISE_NAMES: Record<StairRise, string> = { 32: "m1", 52: "h2", 64: "m2", 84: "h3", 116: "h4" };
+const STAIR_RISE_NAMES: Record<StairRise, string> = { 20: "h1", 32: "m1", 52: "h2", 64: "m2", 84: "h3", 116: "h4" };
 
 /** Direction a stair goes up towards ("o" is the west, as in the names of the catalogs). */
 export const STAIR_DIRECTIONS = ["n", "e", "s", "o"] as const;
@@ -54,6 +61,11 @@ export interface StairShape {
      * drawn lit from above. Absent on the stairs placed before them, which keep their run and look.
      */
     short?: boolean;
+    /**
+     * A ramp of wood (`rampe-…`) instead of steps: walked like a stair of the same rise, never short, its side always
+     * open. With slabs of wood it makes a bridge.
+     */
+    ramp?: boolean;
 }
 
 export type FloorPiece = { kind: "slab"; family: SlabFamily } | ({ kind: "stair" } & StairShape);
@@ -71,21 +83,25 @@ export interface PixelBox {
 
 /** A slab of glass: one sees through it what is under the floor. It is no floor of the ground. */
 export const SLAB_GLASS_FAMILY = "verre";
-/** What a slab can be made of: any floor of the ground, or glass. */
-export const SLAB_FAMILIES = [...MAP_LAYER_FLOOR_FAMILIES, SLAB_GLASS_FAMILY] as const;
-export type SlabFamily = FloorFamily | typeof SLAB_GLASS_FAMILY;
+/** A slab of wooden sleepers: the deck of a bridge. It is no floor of the ground either. */
+export const SLAB_WOOD_FAMILY = "bois";
+/** What a slab can be made of: any floor of the ground, glass, or sleepers of wood. */
+export const SLAB_FAMILIES = [...MAP_LAYER_FLOOR_FAMILIES, SLAB_GLASS_FAMILY, SLAB_WOOD_FAMILY] as const;
+export type SlabFamily = FloorFamily | typeof SLAB_GLASS_FAMILY | typeof SLAB_WOOD_FAMILY;
 
 export function slabPrefabName(family: SlabFamily): string {
     return `dalle-${family}`;
 }
 
 export function stairPrefabName(stair: StairShape): string {
+    if (stair.ramp) return `rampe-${stair.direction}-l${stair.width}-${STAIR_RISE_NAMES[stair.rise]}`;
     const version = stair.short ? "-v2" : "";
     return `escalier-${stair.direction}-l${stair.width}-${STAIR_RISE_NAMES[stair.rise]}${version}${stair.open ? "-vide" : ""}`;
 }
 
 const SLAB_NAME = new RegExp(`^dalle-(${SLAB_FAMILIES.join("|")})$`);
-const STAIR_NAME = /^escalier-(n|e|s|o)-l([12])-(h[2-4]|m[12])(-v2)?(-vide)?$/;
+const STAIR_NAME = /^escalier-(n|e|s|o)-l([12])-(h[1-4]|m[12])(-v2)?(-vide)?$/;
+const RAMP_NAME = /^rampe-(n|e|s|o)-l([12])-(h[1-4]|m[12])$/;
 
 /** Reads the meaning of a placed prefab. Returns undefined for anything that is not a slab or a stair. */
 export function parseFloorPiece(collectionName: string, prefabId: string): FloorPiece | undefined {
@@ -101,7 +117,8 @@ export function parseFloorPiece(collectionName: string, prefabId: string): Floor
     const name = prefabId.slice(prefix.length, -suffix.length);
     const family = SLAB_FAMILIES.find((candidate) => candidate === SLAB_NAME.exec(name)?.[1]);
     if (family) return { kind: "slab", family };
-    const stair = STAIR_NAME.exec(name);
+    const ramp = RAMP_NAME.exec(name);
+    const stair = ramp ?? STAIR_NAME.exec(name);
     const direction = STAIR_DIRECTIONS.find((candidate) => candidate === stair?.[1]);
     const rise = STAIR_RISES.find((candidate) => STAIR_RISE_NAMES[candidate] === stair?.[3]);
     if (!stair || !direction || !rise) return undefined;
@@ -110,9 +127,19 @@ export function parseFloorPiece(collectionName: string, prefabId: string): Floor
         direction,
         width: stair[2] === "2" ? 2 : 1,
         rise,
-        open: stair[5] !== undefined,
+        open: ramp !== null || stair[5] !== undefined,
         ...(stair[4] ? { short: true } : {}),
+        ...(ramp ? { ramp: true } : {}),
     };
+}
+
+/**
+ * Whether the editor places a new stair short (-v2), when the catalog of the room has those: going north or south only
+ * (going south it keeps its length, with the new drawing). Going east or west it keeps its length: on one tile, a stair
+ * seen from the side is a few steep pillars.
+ */
+export function newStairIsShort(direction: StairDirection, shortStairsInCatalog: boolean): boolean {
+    return shortStairsInCatalog && (direction === "n" || direction === "s");
 }
 
 /**

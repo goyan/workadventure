@@ -6,6 +6,7 @@
     import type { ApplicationDefinitionInterface } from "@workadventure/messages";
     import { v4 as uuid } from "uuid";
     import type { EntityPrefab, PrefabOverride } from "@workadventure/map-editor";
+    import { paintImagePool } from "@wa/front/Phaser/Game/MapEditor/PoolConversion";
     import {
         mapEditorEntityModeStore,
         mapEditorSelectedEntityPrefabStore,
@@ -155,7 +156,10 @@
         }
     }
 
-    /** Replaces the property whole (updateProperty merges: a list in it, the targets of a switch, would only grow). */
+    /**
+     * Replaces the property whole. updateProperty merges: a list in it (the targets of a switch) would only grow, and
+     * a field taken out (the level a source holds) would stay.
+     */
     function onSetProperty(property: EntityDataProperty) {
         if ($mapEditorSelectedEntityStore) {
             $mapEditorSelectedEntityStore.setProperty($state.snapshot(property));
@@ -315,6 +319,21 @@
             // $mapEditorSelectedEntityStore.delete();
             // mapEditorSelectedEntityStore.set(undefined);
             // mapEditorEntityModeStore.set("ADD");
+        }
+    }
+
+    /** A pool placed as an image, turned into a pool painted with the relief tool: then edited on the map. */
+    let convertingPool = $state(false);
+    async function convertSelectedPool(): Promise<void> {
+        const entity = $mapEditorSelectedEntityStore;
+        if (!entity) return;
+        convertingPool = true;
+        try {
+            if (await paintImagePool(entity)) deleteSelectedEntity();
+        } catch (error) {
+            console.error("The pool could not be converted", error);
+        } finally {
+            convertingPool = false;
         }
     }
 
@@ -518,6 +537,17 @@
             <div class="my-2">
                 <FloorLevelPicker objectLevel={selectedElevation} onObjectLevel={moveToLevel} />
             </div>
+        {/if}
+        {#if ($mapEditorSelectedEntityStore?.getPrefab().water?.length ?? 0) > 0}
+            <button
+                type="button"
+                class="flex flex-row items-center gap-2 p-2 my-2 rounded text-sm bg-secondary"
+                data-testid="convertPoolButton"
+                disabled={convertingPool}
+                onclick={convertSelectedPool}
+            >
+                {$LL.mapEditor.entityEditor.convertPool()}
+            </button>
         {/if}
         <button
             type="button"
@@ -807,7 +837,7 @@
                                     onclose={() => {
                                         onDeleteProperty(property.id);
                                     }}
-                                    onchange={() => onUpdateProperty(properties[i])}
+                                    onchange={() => onSetProperty(properties[i])}
                                 />{/if}
                         {:else if properties[i].type === "lampPropertyData"}
                             {#if $mapEditorSelectedEntityStore?.getPrefab().lamp?.kind !== "dancefloor" && $mapEditorSelectedEntityStore?.getPrefab().lamp?.kind !== "rgb"}
