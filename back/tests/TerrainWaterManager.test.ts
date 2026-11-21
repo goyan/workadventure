@@ -1,5 +1,15 @@
 import { gunzipSync } from "node:zlib";
-import { cellKey, CELL_LITRES_PER_PX, PX_PER_MM, WeatherType, withHeights } from "@workadventure/map-editor";
+import {
+    cellKey,
+    CELL_LITRES_PER_PX,
+    DEFAULT_POOL_STYLE,
+    POOL_FREEBOARD_PX,
+    poolSoilCode,
+    PX_PER_MM,
+    WeatherType,
+    withHeights,
+    withSoils,
+} from "@workadventure/map-editor";
 import type { TerrainData, WAMFileFormat } from "@workadventure/map-editor";
 import type { SubToPusherRoomMessage, TerrainWaterMessage } from "@workadventure/messages";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -681,6 +691,61 @@ describe("the snow and the water of the relief", () => {
         expect(manager.pour(7, 7, Number.NaN)).toBe(0);
         steps(10);
         expect(sent.at(-1)?.stats?.rain).toBeGreaterThan(0);
+        manager.stop();
+    });
+});
+
+describe("the pools of the map in the water of the relief", () => {
+    /** A flat map with a pool of 6 × 4 cells at (20, 20), 48 px deep. */
+    const poolCells: [string, number][] = [];
+    for (let y = 20; y < 24; y++) for (let x = 20; x < 26; x++) poolCells.push([cellKey(x, y), poolSoilCode(0)]);
+    const pooled = (): WAMFileFormat => {
+        const wam = wamWith(withSoils(undefined, new Map(poolCells)));
+        wam.settings = { ...wam.settings, pools: [DEFAULT_POOL_STYLE] };
+        return wam;
+    };
+    const full = DEFAULT_POOL_STYLE.depthPx - POOL_FREEBOARD_PX;
+
+    it("fills a pool by itself up to its rim in a few seconds, and nothing around it", () => {
+        const { manager, sent, steps } = createHarness({ wam: pooled(), mapSize: () => ({ width: 60, height: 60 }) });
+        manager.mapChanged();
+        const grid = manager.getGrid();
+        expect(grid).toBeDefined();
+        expect(grid?.depthAt(22, 22)).toBe(0);
+        // Half of the eight seconds: about half full.
+        steps(40);
+        expect(grid?.depthAt(22, 22)).toBeGreaterThan(full * 0.35);
+        expect(grid?.depthAt(22, 22)).toBeLessThan(full * 0.65);
+        steps(60);
+        expect(grid?.depthAt(22, 22)).toBeCloseTo(full, 0);
+        expect(grid?.depthAt(20, 20)).toBeCloseTo(full, 0);
+        expect(grid?.depthAt(19, 22)).toBe(0);
+        expect(grid?.depthAt(26, 22)).toBe(0);
+        // Full, the pump stops: the water stays at its level.
+        steps(50);
+        expect(grid?.depthAt(22, 22)).toBeCloseTo(full, 0);
+        // What the pump brought is counted with the sources.
+        expect(sent.some((message) => (message.stats?.sources ?? 0) > 0)).toBe(true);
+        manager.stop();
+    });
+
+    it("fills a pool again after it was emptied", () => {
+        const { manager, steps } = createHarness({ wam: pooled(), mapSize: () => ({ width: 60, height: 60 }) });
+        manager.mapChanged();
+        steps(120);
+        const grid = manager.getGrid();
+        // A fireball boils its water away.
+        manager.vaporise(23 * 16, 22 * 16, 4);
+        expect(grid?.depthAt(22, 22)).toBeLessThan(1);
+        steps(120);
+        expect(grid?.depthAt(22, 22)).toBeCloseTo(full, 0);
+        manager.stop();
+    });
+
+    it("keeps a map without relief nor pool without any water to step", () => {
+        const { manager } = createHarness({ wam: wamWith(undefined), mapSize: () => ({ width: 60, height: 60 }) });
+        manager.mapChanged();
+        expect(manager.getGrid()).toBeUndefined();
         manager.stop();
     });
 });

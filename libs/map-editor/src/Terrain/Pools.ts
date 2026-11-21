@@ -1,11 +1,18 @@
-import { MAX_POOL_STYLES, PoolStyle } from "../types";
+import { MAX_POOL_STYLES, PoolStyle, TERRAIN_CHUNK } from "../types";
+import type { TerrainData } from "../types";
 import { MAX_SOIL_CODE } from "./Soils";
+import { cellKey, heightAt, withHeights } from "./TerrainGrid";
 
 /**
  * The pools of a map, painted with the relief tool like the soils, in any shape (the round brush draws their curves):
  * a cell of a pool is kept as a soil numbered after the six soils, one number for each style of pool. The cells of
  * a style that touch one another make one pool. Its look (colours, depth, hot water) is the style's, kept in the
- * settings of the map. A pool holds its water of itself: the water of the relief does not flow into it.
+ * settings of the map.
+ *
+ * Its water is the water of the relief, kept by the server: for the water, a cell of a pool is dug as deep as its
+ * style under the ground it is painted on (poolBasins), and a pump fills it up to its rim (poolCells). So a pool
+ * takes the waves of a comet, boils under a fireball, is emptied by a drain and fills again, freezes as a lake, takes
+ * a flood in and overflows.
  */
 
 /** The style a pool is drawn with when the map says nothing of it: turquoise water, a light coping. */
@@ -41,4 +48,78 @@ export function validPoolStyles(sent: readonly unknown[]): PoolStyle[] {
             return parsed.success ? [parsed.data] : [];
         })
         .slice(0, MAX_POOL_STYLES);
+}
+
+/** A pool emptied is full again in this many seconds, whatever its size: its pump goes by its volume. */
+export const POOL_FILL_SECONDS = 8;
+/** The pump fills a pool up to this many pixels under its rim: its water does not lap over the coping. */
+export const POOL_FREEBOARD_PX = 2;
+
+/** A cell of a pool, as the pump that fills it reads it: how deep its basin is, in pixels. */
+export interface PoolCell {
+    cellX: number;
+    cellY: number;
+    depthPx: number;
+}
+
+/** The cells of the pools of a relief with the depth of their style, read once for a relief and its styles. */
+function readPools(terrain: TerrainData, pools: readonly PoolStyle[] | undefined): PoolCell[] {
+    const cells: PoolCell[] = [];
+    for (const [key, codes] of Object.entries(terrain.soil ?? {})) {
+        const [chunkX, chunkY] = key.split(",").map(Number);
+        for (let index = 0; index < codes.length; index++) {
+            const style = poolStyleOf(codes[index] ?? 0);
+            if (style === undefined) continue;
+            cells.push({
+                cellX: chunkX * TERRAIN_CHUNK + (index % TERRAIN_CHUNK),
+                cellY: chunkY * TERRAIN_CHUNK + Math.floor(index / TERRAIN_CHUNK),
+                depthPx: poolStyleAt(pools, style).depthPx,
+            });
+        }
+    }
+    return cells;
+}
+
+const basinsOf = new WeakMap<
+    TerrainData,
+    { pools: readonly PoolStyle[] | undefined; cells: PoolCell[]; basins: TerrainData }
+>();
+
+function read(terrain: TerrainData, pools: readonly PoolStyle[] | undefined) {
+    const kept = basinsOf.get(terrain);
+    if (kept && kept.pools === pools) return kept;
+    const cells = readPools(terrain, pools);
+    const basins =
+        cells.length > 0
+            ? withHeights(
+                  terrain,
+                  new Map(
+                      cells.map(({ cellX, cellY, depthPx }) => [
+                          cellKey(cellX, cellY),
+                          heightAt(terrain, cellX, cellY) - depthPx,
+                      ]),
+                  ),
+              )
+            : terrain;
+    const made = { pools, cells, basins };
+    basinsOf.set(terrain, made);
+    return made;
+}
+
+/**
+ * The relief as the water reads it: the relief of the map with each cell of a pool dug as deep as its style under
+ * the ground it is painted on. The relief of the map itself is not changed (it is what the editor edits and what is
+ * drawn). The same relief for the same map and the same styles: it is read once. The relief given when it has no
+ * pool.
+ */
+export function poolBasins(
+    terrain: TerrainData | undefined,
+    pools: readonly PoolStyle[] | undefined,
+): TerrainData | undefined {
+    return terrain ? read(terrain, pools).basins : undefined;
+}
+
+/** The cells of the pools of a map with the depth of their basin: what the pump of the server fills. */
+export function poolCells(terrain: TerrainData | undefined, pools: readonly PoolStyle[] | undefined): PoolCell[] {
+    return terrain ? read(terrain, pools).cells : [];
 }

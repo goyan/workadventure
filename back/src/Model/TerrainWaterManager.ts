@@ -13,6 +13,10 @@ import {
     LITRES_PER_M3,
     meteorShape,
     liquidRainRate,
+    POOL_FILL_SECONDS,
+    POOL_FREEBOARD_PX,
+    poolBasins,
+    poolCells,
     PX_PER_MM,
     snowShareOf,
     rainRateAt,
@@ -34,6 +38,7 @@ import type {
     PrecipitationAir,
     Drain,
     ImpactWave,
+    PoolCell,
     TerrainData,
     WaterGridBounds,
     WaterObject,
@@ -99,6 +104,8 @@ export class TerrainWaterManager {
     private stirredUntilStep = 0;
     /** The downpours falling on the map now, asked at each step: none until the catastrophes of the room say. */
     private downpours: () => readonly Downpour[] = () => [];
+    /** The cells of the pools of the map, with the depth of their basin: what the pumps fill at each step. */
+    private pools: readonly PoolCell[] = [];
     /** The drains open on the map now, asked at each step: none until the catastrophes of the room say. */
     private drains: () => readonly Drain[] = () => [];
     private sums: Sums = noSums();
@@ -158,10 +165,13 @@ export class TerrainWaterManager {
     public mapChanged(): void {
         const wam = this.room.getWam();
         this.objects = waterObjectsOf(wam);
+        // For the water, a pool painted on the map is a basin dug in its ground, which a pump fills.
+        const terrain = poolBasins(wam?.terrain, wam?.settings?.pools);
+        this.pools = poolCells(wam?.terrain, wam?.settings?.pools);
         // A map whose size could not be read keeps all its water: an empty size would dry the whole map.
         const size = this.mapSize();
         const bounds = gridBoundsOf(
-            wam?.terrain,
+            terrain,
             this.objects,
             size && size.width > 0 && size.height > 0 ? size : undefined,
         );
@@ -172,17 +182,17 @@ export class TerrainWaterManager {
         const wallsSignature = walls && rooms ? `${walls.signature}#${rooms.signature}` : undefined;
         const sameGrid =
             this.readTerrain !== null &&
-            wam?.terrain === this.readTerrain &&
+            terrain === this.readTerrain &&
             wallsSignature === this.readWalls &&
             sameBounds(bounds, this.grid?.bounds ?? undefined, this.grid !== undefined);
         // A source or a sink may have come or gone: the water is looked at again.
         this.moving = true;
         if (sameGrid) return;
-        this.readTerrain = wam?.terrain;
+        this.readTerrain = terrain;
         this.readWalls = wallsSignature;
         const before = this.grid ?? this.saved;
         this.saved = undefined;
-        this.grid = bounds ? new WaterGrid(wam?.terrain, bounds, undefined, walls, rooms) : undefined;
+        this.grid = bounds ? new WaterGrid(terrain, bounds, undefined, walls, rooms) : undefined;
         this.version++;
         if (this.grid && before) this.grid.takeFrom(before);
         // The cells are not the same any more: the room is told the whole state at its next message.
@@ -242,6 +252,7 @@ export class TerrainWaterManager {
         this.steps++;
         // Both each step: a downpour goes on raining while the wave of a meteor runs.
         const raining = this.pourDownpours(grid);
+        this.pumpPools(grid);
         const draining = this.takeDrains(grid);
         const waving = this.waves.length > 0 || raining || draining || this.steps < this.stirredUntilStep;
         if (this.waves.length > 0) this.advanceWaves(grid);
@@ -264,6 +275,27 @@ export class TerrainWaterManager {
             this.tell(grid);
         }
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
+    }
+
+    /**
+     * The pumps of the pools: each cell of a pool that stands under its level takes what fills an empty pool in
+     * POOL_FILL_SECONDS, so a larger or deeper pool has a stronger pump. Up to a little under the rim, never over it:
+     * a pool too full empties by overflowing. Counted with the sources.
+     */
+    private pumpPools(grid: WaterGrid): void {
+        if (this.pools.length === 0) return;
+        let laid = 0;
+        for (const { cellX, cellY, depthPx } of this.pools) {
+            const missing = depthPx - POOL_FREEBOARD_PX - grid.depthAt(cellX, cellY);
+            if (missing <= 0) continue;
+            const pumped = (depthPx * WATER_STEP_MS) / 1000 / POOL_FILL_SECONDS;
+            laid += grid.rainOn(cellX, cellY, 0, Math.min(missing, pumped));
+        }
+        if (laid <= 0) return;
+        this.sums.sourcesPx += laid;
+        this.moving = true;
+        this.version++;
+        this.changedSinceSave = true;
     }
 
     /** The catastrophes of the room say which downpours are falling. */
