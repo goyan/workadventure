@@ -207,8 +207,9 @@ export function stairAt(model: FloorModel, level: number, cell: TilePoint): Plac
 }
 
 /**
- * The stair that starts from this floor and is under a point of the screen: the one whose tiles are there, else the
- * one whose image is (its top is drawn further north than the tiles it stands on).
+ * The stair under a point of the screen, whatever the floor it starts from: the one whose tiles are there, else the
+ * one whose image is (its top is drawn further north than the tiles it stands on). A stair that starts from `level`,
+ * the floor being edited, comes before the ones of the other floors.
  */
 export function stairUnderPoint(
     model: FloorModel,
@@ -216,15 +217,17 @@ export function stairUnderPoint(
     worldX: number,
     worldY: number,
 ): PlacedStair | undefined {
-    const onTiles = stairAt(model, level, floorCellAt(worldX, worldY, level));
-    if (onTiles) return onTiles;
     // The last one placed is drawn over the others.
-    return [...model.getStairs()].reverse().find((stair) => {
-        if (stair.base !== level) return false;
+    const stairs = [...model.getStairs()].reverse();
+    const onTiles = (stair: PlacedStair) => covers(stair, floorCellAt(worldX, worldY, stair.base));
+    const onImage = (stair: PlacedStair) => {
         const image = stairImagePosition(stair.shape, stair.foot, stair.base);
         const box = stairScreenBox(stair.shape, stair.foot);
         return worldX >= image.x && worldX < image.x + box.width && worldY >= image.y && worldY < image.y + box.height;
-    });
+    };
+    const edited = stairs.filter((stair) => stair.base === level);
+    const others = stairs.filter((stair) => stair.base !== level);
+    return edited.find(onTiles) ?? edited.find(onImage) ?? others.find(onTiles) ?? others.find(onImage);
 }
 
 /**

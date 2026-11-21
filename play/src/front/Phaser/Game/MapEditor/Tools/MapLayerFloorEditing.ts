@@ -213,7 +213,7 @@ export class MapLayerFloorEditing {
         mapEditorPlacementLevelStore.set(levelUnderPoint(this.readModel(), world.x, world.y));
     }
 
-    /** Whether a stair that starts from the level being edited is under this point: it can be grabbed and moved. */
+    /** Whether a placed stair is under this point, whatever the floor it starts from: it can be grabbed and moved. */
     public hasStairAt(world: Point): boolean {
         const level = get(mapLayerLevelStore);
         return stairUnderPoint(this.previewModel(), level, world.x, world.y) !== undefined;
@@ -373,14 +373,16 @@ export class MapLayerFloorEditing {
             const model = placedModel;
             const origin = start ? floorCellAt(start.x, start.y, level) : to;
             const target = picked ? { x: picked.foot.x + to.x - origin.x, y: picked.foot.y + to.y - origin.y } : to;
+            // A stair moved stays on the floor it starts from, which may not be the one being edited.
+            const base = picked?.base ?? level;
             const fits = picked
                 ? canMoveStair(model, picked, target, this.getBounds())
-                : canPlaceStair(model, shape, target, level, this.getBounds());
+                : canPlaceStair(model, shape, target, base, this.getBounds());
             const color = fits ? OK_COLOR : REFUSED_COLOR;
-            const top = level + shape.rise;
+            const top = base + shape.rise;
             const ground = stairGroundBox(shape, target);
             // Where the stair will show.
-            const image = stairImagePosition(shape, target, level);
+            const image = stairImagePosition(shape, target, base);
             const box = stairScreenBox(shape, target);
             graphics.fillStyle(color, 0.3);
             graphics.fillRect(image.x, image.y, box.width, box.height);
