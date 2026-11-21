@@ -376,6 +376,51 @@ describe("TerrainWaterManager", () => {
         expect(sent).toHaveLength(told);
     });
 
+    it("tells the room as often as the map asks while the water moves", () => {
+        const count = (updates?: number): number => {
+            const wam = wamWith(wideLake);
+            if (wam.settings?.water && updates !== undefined) wam.settings.water.updates = updates;
+            wam.entities.spring = sourceAt(15, 15, 600000);
+            const { manager, sent, steps } = createHarness({ wam });
+            manager.mapChanged();
+            steps(20);
+            return sent.length;
+        };
+        // Two seconds: once a second for a map that says nothing, five and ten times for those that ask.
+        expect(count()).toBe(2);
+        expect(count(5)).toBe(10);
+        expect(count(10)).toBe(20);
+    });
+
+    it("does not tell again a cell whose water barely changed, and puts it right at the next whole state", () => {
+        const { manager, sent, steps } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        fillWithWater(manager);
+        steps(10);
+        const grid = manager.getGrid();
+        if (!grid) throw new Error("no grid");
+        // An eighth of a pixel more over one cell: under what is worth telling.
+        const nudge = (eighths: number): void => {
+            const bytes = grid.writeDepths();
+            const index = (20 * grid.bounds.width + 20) * 2;
+            bytes[index] += eighths;
+            grid.readDepths(bytes);
+        };
+        // The room is first told what moved, then that nothing comes in or goes out any more.
+        manager["tell"](grid);
+        manager["tell"](grid);
+        const before = depthsAfter(sent).at(grid.bounds.x + 20, grid.bounds.y + 20);
+        nudge(1);
+        const told = sent.length;
+        manager["tell"](grid);
+        expect(sent).toHaveLength(told);
+        // Half a pixel more: told.
+        nudge(4);
+        manager["tell"](grid);
+        expect(sent).toHaveLength(told + 1);
+        expect(depthsAfter(sent).at(grid.bounds.x + 20, grid.bounds.y + 20)).toBeCloseTo(before + 5 / 8, 5);
+    });
+
     it("fills the hollows with the rain of the map, and counts it", () => {
         const { manager, sent, steps } = createHarness({ wam: wamWith(lake, WeatherType.Rain) });
         manager.mapChanged();

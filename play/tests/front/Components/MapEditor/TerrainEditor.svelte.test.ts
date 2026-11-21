@@ -16,6 +16,9 @@ const { executeUpdateTerrain, executeUpdateWAMSettings, mapSettings } = vi.hoist
         indoorDrain: 300,
         inertia: false,
         waves: { roughness: 1, damping: 0.02, breaking: 1, momentum: 1 },
+        precision: 3,
+        updates: 1,
+        flowPace: 1,
         meadow: { enabled: true, growMinutes: 10, thirstMinutes: 20, moistureHold: 1 },
         life: {
             enabled: false,
@@ -170,11 +173,36 @@ describe("TerrainEditor", () => {
                 waveDamping: 0.02,
                 waveBreaking: 1,
                 waveMomentum: 1,
+                precision: 3,
+                updates: 5,
+                flowPace: 1,
             },
         });
         // The sliders follow, those of the waves now shown.
         expect(byTestId("terrain-speed").querySelector<HTMLInputElement>('input[type="range"]')?.value).toBe("1");
         expect(target.querySelector('[data-testid="terrain-wave-roughness"]')).not.toBeNull();
+    });
+
+    it("sets how often the players are told the water, and how finely the water with inertia is computed", () => {
+        render();
+        expect(target.querySelector('[data-testid="terrain-precision"]')).toBeNull();
+        setRange("terrain-updates", 10);
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: expect.objectContaining({ updates: 10 }),
+        });
+        byTestId("terrain-inertia").querySelector("input")?.click();
+        flushSync();
+        setRange("terrain-precision", 8);
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: expect.objectContaining({ updates: 10, precision: 8 }),
+        });
+        setRange("terrain-flow-pace", 0.5);
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: expect.objectContaining({ flowPace: 0.5 }),
+        });
     });
 
     it("sets the waves of the water with inertia, shown only for it", () => {
@@ -256,6 +284,7 @@ describe("TerrainEditor", () => {
                 maxSurface: 18,
                 indoorDrain: 300,
                 inertia: false,
+                updates: 1,
             },
         });
         setRange("terrain-evaporation", 1);
@@ -270,6 +299,7 @@ describe("TerrainEditor", () => {
                 maxSurface: 18,
                 indoorDrain: 300,
                 inertia: false,
+                updates: 1,
             },
         });
         setRange("terrain-speed", 300);
@@ -284,6 +314,7 @@ describe("TerrainEditor", () => {
                 maxSurface: 18,
                 indoorDrain: 300,
                 inertia: false,
+                updates: 1,
             },
         });
         setRange("terrain-absorption", 20);
@@ -298,6 +329,7 @@ describe("TerrainEditor", () => {
                 maxSurface: 18,
                 indoorDrain: 300,
                 inertia: false,
+                updates: 1,
             },
         });
     });
@@ -319,6 +351,7 @@ describe("TerrainEditor", () => {
                 maxSurface: 120,
                 indoorDrain: 300,
                 inertia: false,
+                updates: 1,
             },
         });
     });
@@ -340,6 +373,7 @@ describe("TerrainEditor", () => {
                 maxSurface: 18,
                 indoorDrain: 300,
                 inertia: false,
+                updates: 1,
             },
         });
     });
@@ -361,6 +395,7 @@ describe("TerrainEditor", () => {
                 maxSurface: 18,
                 indoorDrain: 0,
                 inertia: false,
+                updates: 1,
             },
         });
     });

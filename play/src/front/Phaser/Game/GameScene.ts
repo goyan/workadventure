@@ -3891,6 +3891,7 @@ export class GameScene extends DirtyScene {
                     water: this.terrainWater,
                     inertia: () => this.getGameMap().getWamFile()?.getWam().settings?.water?.inertia === true,
                     waves: () => this.getGameMap().getWamFile()?.getWam().settings?.water?.waves,
+                    pace: () => this.getGameMap().getWamFile()?.getWam().settings?.water?.flowPace,
                     shown: () => get(waterFlowOverlayStore) && !isBasicActive(),
                 });
                 // The fish and the dolphins of that water.

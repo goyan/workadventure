@@ -5,8 +5,10 @@
         DEFAULT_WATER_SETTINGS,
         MAX_WATER_CURRENT,
         MAX_WATER_INDOOR_DRAIN,
+        FLOW_PACE_BOUNDS,
         MAX_WATER_MAX_SURFACE,
         REALISTIC_WATER_SETTINGS,
+        WATER_PACE_BOUNDS,
         WAVE_BOUNDS,
         MAX_WATER_SPEED,
         MAX_POOL_STYLES,
@@ -59,6 +61,9 @@
     let waveDamping = $state(saved.waves.damping);
     let waveBreaking = $state(saved.waves.breaking);
     let waveMomentum = $state(saved.waves.momentum);
+    let precision = $state(saved.precision);
+    let updates = $state(saved.updates);
+    let flowPace = $state(saved.flowPace);
 
     // The styles of the pools of the map: a pool is painted as a soil of its style (Terrain/Pools.ts).
     let pools = $state(saved.pools);
@@ -148,6 +153,9 @@
         waveDamping = REALISTIC_WATER_SETTINGS.waves.damping;
         waveBreaking = REALISTIC_WATER_SETTINGS.waves.breaking;
         waveMomentum = REALISTIC_WATER_SETTINGS.waves.momentum;
+        precision = REALISTIC_WATER_SETTINGS.precision;
+        updates = REALISTIC_WATER_SETTINGS.updates;
+        flowPace = REALISTIC_WATER_SETTINGS.flowPace;
         saveWater();
     }
 
@@ -163,8 +171,9 @@
                 maxSurface,
                 indoorDrain,
                 inertia,
+                updates,
                 // The waves only matter to the water with inertia: a map without it keeps what it had.
-                ...(inertia ? { waveRoughness, waveDamping, waveBreaking, waveMomentum } : {}),
+                ...(inertia ? { waveRoughness, waveDamping, waveBreaking, waveMomentum, precision, flowPace } : {}),
             },
         }).catch((error: unknown) => console.error("The pace of the water could not be saved", error));
     }
@@ -674,7 +683,49 @@
             />
             <p class="retro-hint m-0">{$LL.mapEditor.terrain.waves.momentumHint()}</p>
         </div>
+        <div data-testid="terrain-flow-pace">
+            <RangeSlider
+                id="terrain-flow-pace"
+                label={$LL.mapEditor.terrain.flowPace()}
+                unit="×"
+                min={FLOW_PACE_BOUNDS[0]}
+                max={FLOW_PACE_BOUNDS[1]}
+                step={0.05}
+                bind:value={flowPace}
+                onchange={saveWater}
+                buttonShape="square"
+            />
+            <p class="retro-hint m-0">{$LL.mapEditor.terrain.flowPaceHint()}</p>
+        </div>
+        <div data-testid="terrain-precision">
+            <RangeSlider
+                id="terrain-precision"
+                label={$LL.mapEditor.terrain.precision()}
+                unit=""
+                min={WATER_PACE_BOUNDS.precision[0]}
+                max={WATER_PACE_BOUNDS.precision[1]}
+                step={1}
+                bind:value={precision}
+                onchange={saveWater}
+                buttonShape="square"
+            />
+            <p class="retro-hint m-0">{$LL.mapEditor.terrain.precisionHint()}</p>
+        </div>
     {/if}
+    <div data-testid="terrain-updates">
+        <RangeSlider
+            id="terrain-updates"
+            label={$LL.mapEditor.terrain.updates()}
+            unit="/s"
+            min={WATER_PACE_BOUNDS.updates[0]}
+            max={WATER_PACE_BOUNDS.updates[1]}
+            step={1}
+            bind:value={updates}
+            onchange={saveWater}
+            buttonShape="square"
+        />
+        <p class="retro-hint m-0">{$LL.mapEditor.terrain.updatesHint()}</p>
+    </div>
     <p class="retro-hint m-0">{$LL.mapEditor.terrain.paceHint()}</p>
 
     <span class="retro-title mt-2">{$LL.mapEditor.terrain.meadow.title()}</span>
