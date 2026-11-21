@@ -1,3 +1,4 @@
+import { ICE_BEARS_MM } from "@workadventure/map-editor";
 import { get } from "svelte/store";
 import {
     hoarFrost,
@@ -45,8 +46,20 @@ const ICE_START_C = 0;
 const FULL_ICE_C = -15;
 /** Depth of water (map pixels) that freezes last: deeper freezes with it. */
 export const DEEP_ICE_PX = 64;
-/** A pool freezes from its surface, as still water this deep, whatever the depth of its basin. */
-export const POOL_ICE_DEPTH_PX = 32;
+/**
+ * A pool freezes from its surface, as still water this deep, whatever the depth of its basin: a skin of ice from about
+ * -3 °C (still water outdoors takes a film of ice after a few hours of frost; at 32 px it waited for -8 °C).
+ */
+export const POOL_ICE_DEPTH_PX = 8;
+/**
+ * The ice of a player who follows a place of their own has no history (the server's grows by the frost of the past
+ * days, Ice.ts): its thickness is read from the cold of now, as if it had lasted. It bears a walker (ICE_BEARS_MM)
+ * from -7.5 °C: between the first ice and that, it cracks and gives way under them.
+ */
+export const OWN_ICE_BEARS_AT = 0.5;
+export function ownIceMm(ice: number): number {
+    return (ICE_BEARS_MM * clamp(ice)) / OWN_ICE_BEARS_AT;
+}
 /** How fast it goes towards the weather of now, a share a second of the game clock: about two minutes each way. */
 const ICE_RATE = 1 / 120;
 const FROST_RATE = 1 / 60;

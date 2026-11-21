@@ -1,11 +1,13 @@
 import { ICE_BEARS_MM, ICE_SLIPS_MM } from "@workadventure/map-editor";
 
 /**
- * Whether the ice the server keeps holds someone where they stand, for a thickness in mm: over water deep enough to
- * swim in, only an ice thick enough to bear them (thinner, it gives way: they swim); where they would walk anyway (a
- * puddle, a flooded ground), any ice they can slip on.
+ * The ice under someone, for a thickness of the ice the server keeps in mm: none (open water), thin (it bears them a
+ * moment over deep water, then cracks and gives way, IceBreaks) or solid. Over deep water it bears a walker from
+ * ICE_BEARS_MM; where they would walk anyway (a puddle, a flooded ground) any ice they can slip on holds.
  */
-export function iceHolds(mm: number, deepWater: boolean): boolean {
-    if (!Number.isFinite(mm)) return false;
-    return mm >= (deepWater ? ICE_BEARS_MM : ICE_SLIPS_MM);
+export type IceState = "none" | "thin" | "solid";
+
+export function iceOfThickness(mm: number, deepWater: boolean): IceState {
+    if (mm >= (deepWater ? ICE_BEARS_MM : ICE_SLIPS_MM)) return "solid";
+    return deepWater && mm >= ICE_SLIPS_MM ? "thin" : "none";
 }

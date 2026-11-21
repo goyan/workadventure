@@ -457,6 +457,8 @@ export class GameRoom implements BrothersFinder {
         });
         meadow.pourWith(terrainWater.pour.bind(terrainWater));
         breakIce = meadow.shatter.bind(meadow);
+        // The ice that gives way under a player is the ice the meadow keeps, broken as by a comet.
+        catastrophes.breakIceWith(meadow.shatter.bind(meadow));
         // The animals of the map run from the fire of its grass and of its trees.
         aquaticLife.followFire(() => meadow.lifeFire());
         gameRoom.meadow = meadow;

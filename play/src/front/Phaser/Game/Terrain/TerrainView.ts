@@ -26,6 +26,7 @@ import { paddedView, wellInside } from "../Weather/WeatherFrame";
 import type { WeatherView } from "../Weather/WeatherFrame";
 import { isBasicActive } from "../../../Stores/BasicModeStore";
 import { isEffectShown } from "../../../Stores/EffectsStore";
+import type { IceBreak } from "../Ice/IceBreaks";
 import {
     DEEP_WATER_COLOR,
     deepWaterAlpha,
@@ -879,6 +880,11 @@ export class TerrainView {
     /** Whether the water shader draws the waves of the comets. */
     public drawsWaterRings(): boolean {
         return this.splat !== undefined;
+    }
+
+    /** The cracks and the holes of the ice (IceBreaks.ts): read by the water shader at its next drawing. */
+    public setIceBreaks(breaks: readonly IceBreak[]): void {
+        this.splat?.setBreaks(breaks);
     }
 
     /** What the water reflects (sky, clouds, sun, lamps): read by the water shader at its next drawing. */

@@ -529,3 +529,42 @@ describe("a patch of fire", () => {
         });
     });
 });
+
+describe("ice that gives way", () => {
+    const ICE = CatastropheKind.CATASTROPHE_ICE_BREAK;
+
+    it("breaks the ice a tile around the player, tells the room, and once a second at most for a player", () => {
+        const broken: { x: number; y: number; radiusTiles: number }[] = [];
+        const told: { kind: CatastropheKind; x: number; y: number; radiusTiles: number }[] = [];
+        const clock = { now: 1_000_000 };
+        const room = {
+            sendSubMessageToRoom: (message: SubToPusherRoomMessage): void => {
+                if (message.message?.$case === "catastropheMessage") told.push(message.message.catastropheMessage);
+            },
+        };
+        const manager = new CatastropheManager(
+            room,
+            () => MAP,
+            () => undefined,
+            () => undefined,
+            () => clock.now,
+        );
+        manager.breakIceWith((x, y, radiusTiles) => broken.push({ x, y, radiusTiles }));
+        expect(manager.request(1, ICE, 320, 160, 0, false)).toBe(true);
+        expect(manager.request(1, ICE, 330, 160, 0, false)).toBe(false);
+        expect(manager.request(2, ICE, 330, 160, 0, false)).toBe(true);
+        expect(manager.request(3, ICE, -5, 160, 0, false)).toBe(false);
+        clock.now += 1000;
+        expect(manager.request(1, ICE, 340, 160, 0, false)).toBe(true);
+        expect(broken).toEqual([
+            { x: 320, y: 160, radiusTiles: 1 },
+            { x: 330, y: 160, radiusTiles: 1 },
+            { x: 340, y: 160, radiusTiles: 1 },
+        ]);
+        expect(told.map(({ kind, x, radiusTiles }) => ({ kind, x, radiusTiles }))).toEqual([
+            { kind: ICE, x: 320, radiusTiles: 1 },
+            { kind: ICE, x: 330, radiusTiles: 1 },
+            { kind: ICE, x: 340, radiusTiles: 1 },
+        ]);
+    });
+});

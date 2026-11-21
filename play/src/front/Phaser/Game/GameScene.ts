@@ -392,9 +392,11 @@ import { WeatherManager } from "./Weather/WeatherManager";
 import { TerrainWater } from "./Terrain/TerrainWater";
 import { AquaticLife } from "./Life/AquaticLife";
 import { AquaticLifeView } from "./Life/AquaticLifeView";
-import { isOnFrozenWater, isPoolFrozen } from "./Ice/FrozenWater";
+import { iceUnderfoot, isOnFrozenWater, isPoolFrozen, poolIceState } from "./Ice/FrozenWater";
+import { IceBreaks } from "./Ice/IceBreaks";
+import { followsServerGround } from "./Weather/GroundSource";
 import { FrozenPoolsView } from "./Ice/FrozenPoolsView";
-import { getFrozenPoolRectangles } from "./Water/WaterZones";
+import { BODY_CENTER_OFFSET_Y, getFrozenPoolRectangles, isPointInWater } from "./Water/WaterZones";
 import { LandLifeView } from "./Life/LandLifeView";
 import { GullLifeView, isGullKind } from "./Life/GullLifeView";
 import { LandCompanions } from "./Life/LandCompanions";
@@ -2386,6 +2388,7 @@ export class GameScene extends DirtyScene {
             this._fishingManager?.update(time);
             this.meteorView?.update(time);
             this.terrainView?.setWaterRings(this.meteorView?.waterRings(time) ?? []);
+            this.stepIceBreaks(time);
             this.fireView?.update(time);
             this.treeFireView?.update(time);
             this.downpourView?.update(time);
@@ -3175,6 +3178,33 @@ export class GameScene extends DirtyScene {
     }
 
     /** Whether a point of the map (pixels) is in or near an open drain: the current carries no avatar there. */
+    /** The ice that cracks and gives way under the avatar, and the holes open in it (IceBreaks.ts). */
+    private readonly iceBreaks = new IceBreaks();
+
+    public getIceBreaks(): IceBreaks {
+        return this.iceBreaks;
+    }
+
+    /**
+     * The ice under the avatar, once an image: thin ice cracks under them, then gives way (the room is told when it
+     * is the ice of the server, the same for everyone); the water shader draws the cracks and the holes.
+     */
+    private stepIceBreaks(now: number): void {
+        const foot = { x: this.CurrentPlayer.x, y: this.CurrentPlayer.y + BODY_CENTER_OFFSET_Y };
+        const pool = getFrozenPoolRectangles(this).find((rectangle) => isPointInWater([rectangle], foot));
+        const thin = pool ? poolIceState(this, pool) === "thin" : iceUnderfoot(this, foot) === "thin";
+        const wasActive = this.iceBreaks.active();
+        const broken = this.iceBreaks.step(now, foot, thin);
+        if (broken && followsServerGround()) {
+            this.connection?.emitLaunchCatastrophe(CatastropheKind.CATASTROPHE_ICE_BREAK, broken.x, broken.y, 1);
+        }
+        const active = this.iceBreaks.active();
+        if (active || wasActive) {
+            this.terrainView?.setIceBreaks(this.iceBreaks.shown(now));
+            this.markDirty();
+        }
+    }
+
     /** Whether the water of the relief is frozen there for this player (FrozenWater.ts): skated on, not swum in. */
     public isFrozenWaterAt(x: number, y: number): boolean {
         return isOnFrozenWater(this, { x, y });
@@ -4511,7 +4541,10 @@ export class GameScene extends DirtyScene {
             else if (message.kind === CatastropheKind.CATASTROPHE_DRAIN) drainView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_BALL) ballView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_FIRE) fireTorchView.report(message, this.time.now);
-            else meteorView.add(message, this.time.now);
+            else if (message.kind === CatastropheKind.CATASTROPHE_ICE_BREAK) {
+                // The ice another player broke (or ours, told back): the same hole for everyone.
+                this.iceBreaks.addHole(message.x, message.y, this.time.now);
+            } else meteorView.add(message, this.time.now);
         });
         this.karaokeSpotlight?.destroy();
         this.karaokeSpotlight = new KaraokeSpotlight(this);

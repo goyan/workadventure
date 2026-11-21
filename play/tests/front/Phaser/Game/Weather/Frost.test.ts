@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { SNOW_MAX_MM, THAW_SPEED } from "@workadventure/map-editor";
-import { iceAt, isFrozen, ownSnowAfter, POOL_ICE_DEPTH_PX, towards } from "@wa/front/Phaser/Game/Weather/Frost";
+import { ICE_BEARS_MM } from "@workadventure/map-editor";
+import {
+    iceAt,
+    isFrozen,
+    ownIceMm,
+    ownSnowAfter,
+    POOL_ICE_DEPTH_PX,
+    towards,
+} from "@wa/front/Phaser/Game/Weather/Frost";
 
 describe("Frost", () => {
     it("freezes the water from 0 °C, all of it at -15 °C", () => {
@@ -21,10 +29,18 @@ describe("Frost", () => {
         expect(isFrozen(4, 0)).toBe(false);
     });
 
-    it("freezes a pool from its surface at -10 °C, the deep water of a lake still open", () => {
-        expect(isFrozen(POOL_ICE_DEPTH_PX, iceAt(-10))).toBe(true);
-        expect(isFrozen(POOL_ICE_DEPTH_PX, iceAt(-5))).toBe(false);
+    it("freezes a pool from its surface from about -3 °C, the deep water of a lake still open", () => {
+        expect(isFrozen(POOL_ICE_DEPTH_PX, iceAt(-4))).toBe(true);
+        expect(isFrozen(POOL_ICE_DEPTH_PX, iceAt(-7))).toBe(true);
+        expect(isFrozen(POOL_ICE_DEPTH_PX, iceAt(-2.5))).toBe(false);
         expect(isFrozen(64, iceAt(-10))).toBe(false);
+    });
+
+    it("gives the ice of a player's own place a thickness that bears a walker from -7.5 °C", () => {
+        expect(ownIceMm(iceAt(-4))).toBeLessThan(ICE_BEARS_MM);
+        expect(ownIceMm(iceAt(-7))).toBeLessThan(ICE_BEARS_MM);
+        expect(ownIceMm(iceAt(-7.5))).toBeCloseTo(ICE_BEARS_MM);
+        expect(ownIceMm(iceAt(-12))).toBeGreaterThan(ICE_BEARS_MM);
     });
 
     it("moves towards the weather of now at its own pace each way, never past it", () => {
