@@ -488,28 +488,28 @@ export class MeadowManager {
 
     /** The whole state the room was last told, for a player who joins it. Undefined where nothing ever grew. */
     public snapshot(): MeadowMessage | undefined {
-        if (
-            !this.meadow ||
-            !this.sentGrass ||
-            !this.sentMoisture ||
-            !this.sentDryness ||
-            !this.sentFire ||
-            !this.sentAsh ||
-            !this.sentSnow ||
-            !this.sentIce
-        ) {
+        const meadow = this.meadow;
+        if (!meadow) return undefined;
+        // A room just made has told nothing yet (its first step comes later): its first player gets the meadow as it
+        // is, not a bare ground until the next step. A bare and dry map is still not worth a message.
+        const told = this.sentGrass !== undefined;
+        const grass = this.sentGrass ?? meadow.writeGrass();
+        const moisture = this.sentMoisture ?? meadow.writeMoisture();
+        const snow = this.sentSnow ?? meadow.writeSnow();
+        const ice = this.sentIce ?? meadow.writeIce();
+        if (!told && [grass, moisture, snow, ice].every((field) => field.every((value) => value === 0))) {
             return undefined;
         }
         return {
-            width: this.meadow.width,
-            height: this.meadow.height,
-            grass: gzipSync(this.sentGrass),
-            moisture: gzipSync(this.sentMoisture),
-            dryness: gzipSync(this.sentDryness),
-            fire: gzipSync(this.sentFire),
-            ash: gzipSync(this.sentAsh),
-            snow: snowField(this.sentSnow),
-            ice: snowField(this.sentIce),
+            width: meadow.width,
+            height: meadow.height,
+            grass: gzipSync(grass),
+            moisture: gzipSync(moisture),
+            dryness: gzipSync(this.sentDryness ?? meadow.writeDryness()),
+            fire: gzipSync(this.sentFire ?? meadow.writeFire()),
+            ash: gzipSync(this.sentAsh ?? meadow.writeAsh()),
+            snow: snowField(snow),
+            ice: snowField(ice),
         };
     }
 

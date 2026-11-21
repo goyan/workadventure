@@ -516,6 +516,9 @@ const TALL_WALL = /-h[234](?:[-:]|$)/;
 /** Water this deep, in pixels, makes the ground wet: the burst of a meteor is then water, not dust. */
 const METEOR_WET_DEPTH_PX = 2;
 
+/** How long the map waits, at most, for the meadow and the water sent on joining before it is shown. */
+const FIRST_GROUND_WAIT_MS = 2000;
+
 export class GameScene extends DirtyScene {
     Terrains: Array<Tileset>;
     CurrentPlayer!: Player;
@@ -1355,6 +1358,7 @@ export class GameScene extends DirtyScene {
                         }
 
                         this.joinRoom()
+                            .then(() => this.groundStatesOfJoinApplied())
                             .then(() => {
                                 this.initUserPermissionsOnEntity();
                                 this.hide(false);
@@ -3032,6 +3036,19 @@ export class GameScene extends DirtyScene {
             Date.now(),
         );
         aquaticLifeSpeciesStore.set(message.stats ? this.aquaticLifeSpecies.view(Date.now()) : undefined);
+    }
+
+    /**
+     * The meadow and the water the room sent on joining are unzipped asynchronously: the map waits for them before
+     * being shown, so its grass, snow and water do not pop in after it. Never longer than FIRST_GROUND_WAIT_MS.
+     */
+    private groundStatesOfJoinApplied(): Promise<void> {
+        return Promise.race([
+            Promise.all([this.meadowQueue, this.terrainWaterQueue]).then(() => undefined),
+            new Promise<void>((resolve) => {
+                setTimeout(resolve, FIRST_GROUND_WAIT_MS);
+            }),
+        ]);
     }
 
     private receiveTerrainWater(message: TerrainWaterMessage): void {

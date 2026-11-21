@@ -227,6 +227,7 @@ describe("MeadowManager", () => {
         dry.manager.mapChanged();
         dry.steps(100);
         expect(dry.sent).toEqual([]);
+        expect(dry.manager.snapshot()).toBeUndefined();
         dry.manager.stop();
         // By night nothing grows: once the soil is wet through, the state stops changing.
         const night = createHarness({ now: Date.UTC(2026, 6, 14, 1) });
@@ -396,6 +397,21 @@ describe("MeadowManager", () => {
         const after = grassOf(second.sent[0]);
         expect(after[0]).toBeGreaterThan(0);
         expect(Math.abs(after[0] - before[0])).toBeLessThanOrEqual(2);
+        second.manager.stop();
+    });
+
+    it("gives the meadow it restored to the first player, before its first step", async () => {
+        const first = createHarness();
+        first.manager.mapChanged();
+        first.steps(400);
+        first.manager.stop();
+        const before = grassOf(first.sent[first.sent.length - 1]);
+        const second = createHarness({ saved: first.store });
+        await second.manager.restore();
+        second.manager.mapChanged();
+        const snapshot = second.manager.snapshot();
+        expect(second.sent).toEqual([]);
+        expect(snapshot && grassOf(snapshot)).toEqual(before);
         second.manager.stop();
     });
 
