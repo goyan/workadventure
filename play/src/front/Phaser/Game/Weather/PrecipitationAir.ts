@@ -37,6 +37,22 @@ export function precipitationAirNow(
     return air;
 }
 
+/**
+ * The air of the room, the same for every player whatever weather each follows: the heat and the humidity set by
+ * hand, else the real air at the place of the map. What the server reads too (FireConditionsManager.air), so a
+ * catastrophe of the room, a downpour, is drawn as the server lets it fall: as rain or as snow. Undefined while not
+ * known: it then rains.
+ */
+export function roomPrecipitationAir(
+    settings: MapSnowSettings | undefined,
+    date: Date | undefined,
+): PrecipitationAir | undefined {
+    if (!date) return undefined;
+    const conditions = get(fireConditionsStore);
+    if (conditions?.manual) return { temperature: conditions.temperature, humidity: conditions.humidity };
+    return airAt(shownPlaceTimeline(settings), date.getTime());
+}
+
 function readAir(settings: MapSnowSettings | undefined, date: Date): PrecipitationAir | undefined {
     const { place, state } = chosenWeatherNow();
     if (place) return airAt(state, date.getTime());

@@ -337,7 +337,7 @@ import { readMapLayerEntityStates } from "./MapEditor/MapLayer/MapLayerSync";
 import { autumnProgress } from "./Nature/TreeLeafFall";
 import { isGroundUnderWater } from "./Water/WaterZones";
 import { snowCoverHere, snowCoverOfMap } from "./Weather/GroundSource";
-import { precipitationAirNow } from "./Weather/PrecipitationAir";
+import { precipitationAirNow, roomPrecipitationAir } from "./Weather/PrecipitationAir";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
 import { gameManager } from "./GameManager";
 import { EmoteManager } from "./EmoteManager";
@@ -4385,6 +4385,14 @@ export class GameScene extends DirtyScene {
         const downpourView = new DownpourView(
             this,
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+            // In the cold of the room a downpour falls as snow, for everyone as for the server.
+            () =>
+                snowShareOf(
+                    roomPrecipitationAir(
+                        this.getGameMap().getWamFile()?.getWam().settings,
+                        this.nightManager?.serverDate(),
+                    ),
+                ),
         );
         this.downpourView = downpourView;
         this.drainView?.destroy();

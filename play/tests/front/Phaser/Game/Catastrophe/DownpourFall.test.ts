@@ -4,6 +4,7 @@ import {
     downpourAlpha,
     downpourDropCount,
     downpourDrops,
+    downpourFlakes,
     SPLASH_FROM,
 } from "../../../../../src/front/Phaser/Game/Catastrophe/DownpourFall";
 
@@ -56,5 +57,48 @@ describe("downpourAlpha", () => {
         expect(downpourAlpha(500, 800, 1000)).toBe(1);
         expect(downpourAlpha(5000, 100, 1000)).toBeCloseTo(0.3);
         expect(downpourAlpha(5000, 0, 1000)).toBe(0);
+    });
+});
+
+describe("a downpour that falls as snow", () => {
+    const centre = { x: 1000, y: 500 };
+
+    it("keeps only the share of its drops that falls as rain", () => {
+        const all = downpourDropCount(96);
+        expect(downpourDrops(0, centre, 96, false, 1)).toHaveLength(0);
+        expect(downpourDrops(0, centre, 96, false, 0)).toHaveLength(all);
+        expect(downpourDrops(0, centre, 96, false, 0.5)).toHaveLength(Math.round(all / 2));
+        expect(downpourDrops(0, centre, 96, false, Number.NaN)).toHaveLength(all);
+    });
+
+    it("shows as many flakes as the share of snow, none in a rain", () => {
+        const all = downpourDropCount(96);
+        expect(downpourFlakes(0, centre, 96, 0)).toHaveLength(0);
+        expect(downpourFlakes(0, centre, 96, 1)).toHaveLength(all);
+        expect(downpourFlakes(0, centre, 96, 0.5)).toHaveLength(all - Math.round(all / 2));
+    });
+
+    it("lets each flake fall slowly to its place in the disc, from as high as the drops", () => {
+        const first = downpourFlakes(0, centre, 96, 1);
+        const later = downpourFlakes(200, centre, 96, 1);
+        first.forEach((flake, index) => {
+            expect(Math.hypot(flake.landX - centre.x, (flake.landY - centre.y) * 2)).toBeLessThanOrEqual(96 + 1e-6);
+            expect(later[index].landX).toBe(flake.landX);
+            expect(flake.y).toBeLessThanOrEqual(flake.landY + 1e-6);
+            expect(flake.y).toBeGreaterThanOrEqual(flake.landY - DOWNPOUR_FALL_PX - 1e-6);
+            expect(flake.fall).toBeGreaterThanOrEqual(0);
+            expect(flake.fall).toBeLessThan(1);
+        });
+        // A flake takes several times longer than a drop to come down: in 200 ms none fell half of the way.
+        const moved = first.map((flake, index) => {
+            const turn = later[index].fall - flake.fall;
+            return turn < 0 ? turn + 1 : turn;
+        });
+        expect(Math.max(...moved)).toBeLessThan(0.2);
+        expect(Math.min(...moved)).toBeGreaterThan(0);
+    });
+
+    it("holds its flakes still in reduced motion", () => {
+        expect(downpourFlakes(0, centre, 96, 1, true)).toEqual(downpourFlakes(900, centre, 96, 1, true));
     });
 });

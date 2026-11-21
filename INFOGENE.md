@@ -2965,6 +2965,10 @@ Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus
   relief, millimètre pour millimètre (`PX_PER_MM`, `TerrainWaterManager.pour`), compté avec la pluie dans le bilan. Hors de la grille d'eau, le sol est humidifié et le
   reste est perdu. La neige de la pluie de la carte s'accumule à la vitesse de l'eau de la carte (`water.speed`),
   sans le ruissellement (`runoff`) : elle tient où elle tombe.
+- **Averse à l'écran.** Par temps froid, l'averse tombe en flocons au lieu de gouttes (`downpourFlakes`, mélange des
+  deux dans l'entre-deux, nuage plus clair, sol qui pâlit au lieu de s'assombrir), d'après l'air de la salle
+  (`roomPrecipitationAir` : réglage manuel, sinon lieu de la carte), le même pour tous les joueurs et pour le serveur,
+  même pour qui suit sa propre ville : une catastrophe est celle de la salle.
 - **Averse.** `MeadowManager.soak` pose la part de neige à chaque annonce de l'averse (toutes les 200 ms), la part
   liquide seule va à l'eau (`pourDownpours`). Un météore brûlant vaporise la neige de son cratère (perdue).
 - **Annonce.** `MeadowMessage.snow` (champ 8) : un octet par case (`snowByte`, racine carrée pour garder de la finesse

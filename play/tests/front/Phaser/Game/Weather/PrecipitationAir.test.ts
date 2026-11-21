@@ -21,7 +21,8 @@ vi.mock("../../../../../src/front/Phaser/Game/Weather/RealWeatherClient", () => 
     },
 }));
 
-const { airAt, precipitationAirNow } = await import("../../../../../src/front/Phaser/Game/Weather/PrecipitationAir");
+const { airAt, precipitationAirNow, roomPrecipitationAir } =
+    await import("../../../../../src/front/Phaser/Game/Weather/PrecipitationAir");
 const { fireConditionsStore } = await import("../../../../../src/front/Stores/FireConditionsStore");
 
 const QUARTER = 15 * 60 * 1000;
@@ -89,6 +90,16 @@ describe("precipitationAirNow", () => {
         // Not known yet for that city: a rain, not the air of the map.
         chosen.now = { place: lyon, state: { status: "pending" } };
         expect(read()).toBeUndefined();
+    });
+
+    it("has an air of the room that ignores the city this player follows: a catastrophe is the room's", () => {
+        const room = () => roomPrecipitationAir({ weather: WeatherType.Rain }, new Date(NOW));
+        chosen.now = { place: lyon, state: timeline(20, 50) };
+        map.timeline = timeline(12, 80);
+        expect(room()).toEqual({ temperature: 12, humidity: 80 });
+        fireConditionsStore.set(byHand);
+        expect(room()).toEqual({ temperature: -4, humidity: 70 });
+        expect(roomPrecipitationAir({ weather: WeatherType.Rain }, undefined)).toBeUndefined();
     });
 
     it("is read once a second of the game clock for the same map settings", () => {
