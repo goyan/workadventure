@@ -2927,14 +2927,19 @@ couverture de neige au sol et les arbres qui blanchissent décrit l'état d'avan
   plus rien à 6 °C (choix : l'ajustement n'est plus fiable en air très sec). Exemples : 2 °C et 40 % → thermomètre
   mouillé −2,3 °C, neige ; 2 °C et 95 % → 1,45 °C, pluie (5 % de flocons) ; 1 °C et 99 % → 71 % de neige ; 0 °C →
   neige ; 3 °C et 70 % → neige ; 5 °C et 90 % → pluie.
-- **D'où viennent la température et l'humidité** (`Weather/PrecipitationAir.ts` `precipitationAirNow`, mêmes sources
-  et même ordre que le givre du sol de `Weather/Frost.ts`) : la ville que le joueur suit pour lui seul s'il en a
-  choisi une (météo personnelle), sinon la température et l'humidité réglées à la main dans Catastrophe → Météo
-  (pour toute la salle), sinon l'air réel du lieu de la carte (Paris sans lieu), **quelle que soit la météo de la
-  carte** : une carte en Pluie fixe ou en Automatique neige quand il fait réellement assez froid à son lieu. Les deux
-  dernières sources sont les mêmes pour tous les joueurs de la carte. Tant que rien n'est connu (frise pas encore
-  reçue, humidité absente), il pleut, toujours. Rien ne dépend du calendrier. Les conditions de feu de la salle,
-  elles, restent douces hors météo Réelle : elles ne servent plus à la forme de la pluie.
+- **D'où viennent la température et l'humidité** (`Weather/PrecipitationAir.ts` `precipitationAirNow`) : la
+  température et l'humidité réglées à la main dans Catastrophe → Météo (pour toute la salle), sinon l'air réel du lieu
+  de la carte (Paris sans lieu), **quelle que soit la météo de la carte** : une carte en Pluie fixe ou en Automatique
+  neige quand il fait réellement assez froid à son lieu. **La forme est la même pour tous les joueurs de la carte**
+  (décision de l'utilisateur, 2026-11-21 : « forme commune : oui ») et ce sont les sources du serveur, dans le même
+  ordre (`FireConditionsManager.air`). Elle ne lit jamais la ville qu'un joueur suit pour lui en « Jour dans le
+  monde » : quand ce joueur voit la pluie de sa ville à la place de celle de la carte (#392), cette pluie prend la
+  forme que donne l'air de la carte (des gouttes sont donc possibles alors qu'il fait −5 °C dans sa ville, et son
+  bandeau personnel peut nommer « Neige » ce qui tombe en gouttes ; le givre et le gel du sol, eux, suivent toujours
+  sa ville, `Weather/Frost.ts`). Tant que rien n'est connu (frise pas encore reçue, humidité absente), il pleut,
+  toujours. Rien ne dépend du calendrier. Les conditions de feu de la salle, elles, restent douces hors météo
+  Réelle : elles ne servent plus à la forme de la pluie. Un éditeur qui essaie un autre lieu dans le panneau des
+  réglages voit, pour lui seul et le temps de l'essai, la forme que donne l'air de ce lieu.
 - **Rendu.** Quand il pleut, la part de neige devient des flocons (`snowflakes`, les mêmes que l'ancienne neige,
   d'autant plus nombreux que la précipitation est forte : `snowfall`), le reste des gouttes : pluie et flocons mêlés
   dans le mélange. Les flocons sont emportés par le vent de la carte. Le voile sombre et les nuages gris de la pluie
@@ -2954,8 +2959,7 @@ couverture de neige au sol et les arbres qui blanchissent décrit l'état d'avan
   fonte n'existe pas encore : cette eau est perdue.
 - **Limites.** Rien n'est lissé dans le temps (la forme suit les conditions du quart d'heure) ; le thermomètre mouillé
   au sol ignore une couche chaude en altitude (une pluie verglaçante réelle est dessinée en neige) ; les flaques se
-  remplissent encore sous la neige ; un joueur qui suit sa propre ville voit la forme de la pluie de cette ville, le
-  serveur celle du lieu de la carte.
+  remplissent encore sous la neige.
   `play`, `back` et `map-storage` se déploient ensemble.
 
 **Sol gelé** (2026-11-21, `Weather/SoilFrost.ts`, champ facultatif `soilFrost` de `MeadowStepInput`). Le gel fige

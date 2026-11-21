@@ -1,4 +1,4 @@
-import { WeatherType } from "@workadventure/map-editor";
+import { snowShareOf, WeatherType } from "@workadventure/map-editor";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RealForecastState } from "../../../../../src/front/Phaser/Game/Weather/RealWeather";
 
@@ -81,14 +81,27 @@ describe("precipitationAirNow", () => {
         expect(read()).toEqual({ temperature: -4, humidity: 70 });
     });
 
-    it("is the air of the city this player follows, over everything: their weather is theirs alone", () => {
-        map.timeline = timeline(12, 80);
-        fireConditionsStore.set(byHand);
-        chosen.now = { place: lyon, state: timeline(1, 99) };
-        expect(read()).toEqual({ temperature: 1, humidity: 99 });
-        // Not known yet for that city: a rain, not the air of the map.
-        chosen.now = { place: lyon, state: { status: "pending" } };
+    it("never is the air of the city this player follows: the shape of a precipitation is the same for every player", () => {
+        // A rain on the map at +8 °C while the city this player follows is at -5 °C: drops, as for everyone.
+        map.timeline = timeline(8, 90);
+        chosen.now = { place: lyon, state: timeline(-5, 90) };
+        expect(read()).toEqual({ temperature: 8, humidity: 90 });
+        expect(snowShareOf(read())).toBe(0);
+        chosen.now = { place: undefined, state: { status: "pending" } };
+        expect(snowShareOf(read())).toBe(0);
+        // The city known, the map not yet: a rain, not the air of the city.
+        map.timeline = { status: "pending" };
+        chosen.now = { place: lyon, state: timeline(-5, 90) };
         expect(read()).toBeUndefined();
+        expect(snowShareOf(read())).toBe(0);
+    });
+
+    it("is the cold set by hand in the room for every player, whatever city one of them follows", () => {
+        map.timeline = timeline(8, 90);
+        fireConditionsStore.set({ ...byHand, temperature: -5, humidity: 90 });
+        chosen.now = { place: lyon, state: timeline(20, 40) };
+        expect(read()).toEqual({ temperature: -5, humidity: 90 });
+        expect(snowShareOf(read())).toBe(1);
     });
 
     it("is read once a second of the game clock for the same map settings", () => {
