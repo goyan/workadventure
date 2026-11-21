@@ -464,21 +464,24 @@ describe("WeatherForecastBanner", () => {
         ).toBe("Now -3°");
     });
 
-    it("names a point far from any city by its coordinates on the chip, with the nearest city on the card", () => {
+    it("names a point far from any city by the city it is told against on the chip, with its coordinates on the card", () => {
         chosen.cells = [{ at: NOW.getTime(), weather: "snow", temperature: -34 }];
         render(false);
         chosen.place.store?.set({
-            name: "72° S 170° E",
-            longName: "72° S 170° E · Auckland à 4 000 km",
+            name: "Auckland 4,000 km",
+            longName: "72° S 170° E · Auckland 4,000 km away",
             latitude: -72.4,
             longitude: 170.2,
         });
         flushSync();
-        expect(target.querySelector('[data-testid="weather-chip-local"]')?.textContent?.trim()).toBe("72° S 170° E");
+        // Whole, though English groups thousands with a comma: a point's name is never cut as a town's.
+        expect(target.querySelector('[data-testid="weather-chip-local"]')?.textContent?.trim()).toBe(
+            "Auckland 4,000 km",
+        );
         chip()?.click();
         flushSync();
         expect(target.querySelector('[data-testid="weather-card-local-city"]')?.textContent).toBe(
-            "72° S 170° E · Auckland à 4 000 km",
+            "72° S 170° E · Auckland 4,000 km away",
         );
     });
 

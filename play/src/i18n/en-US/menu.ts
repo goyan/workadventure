@@ -158,6 +158,7 @@ const menu: BaseTranslation = {
             pointEast: "E",
             pointWest: "W",
             pointFar: "{point} · {city} {distance} km away",
+            pointShort: "{city} {distance} km",
             skyMenu: "Sky and time",
             basicOff:
                 "Basic mode turns the day/night cycle off: full daylight. Your choice ({mode}) comes back when you leave it.",
