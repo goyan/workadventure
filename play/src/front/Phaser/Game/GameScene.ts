@@ -311,7 +311,7 @@ import { jungleEnabledStore } from "../../Stores/JungleStore";
 import { isEffectShown } from "../../Stores/EffectsStore";
 import { fireConditionsStore } from "../../Stores/FireConditionsStore";
 import { isBasicActive } from "../../Stores/BasicModeStore";
-import { waterFlowOverlayStore } from "../../Stores/VisualisationStore";
+import { waterFlowMeasuredStore, waterFlowOverlayStore } from "../../Stores/VisualisationStore";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -3028,7 +3028,8 @@ export class GameScene extends DirtyScene {
         this.terrainWaterQueue = this.terrainWaterQueue
             .then(async () => {
                 const depths = await gunzip(message.depths);
-                this.terrainWater.receive({ ...message, depths }, this.time.now);
+                const speeds = message.speeds ? await gunzip(message.speeds) : undefined;
+                this.terrainWater.receive({ ...message, depths, speeds }, this.time.now);
                 if (message.stats) terrainWaterStatsStore.set(message.stats);
             })
             .catch((error: unknown) => console.warn("A state of the water of the relief could not be read", error));
@@ -3046,13 +3047,14 @@ export class GameScene extends DirtyScene {
                 // The dryness, the fire and the ash are empty from a server that does not know them.
                 const read = (bytes: Uint8Array): Promise<Uint8Array> =>
                     bytes.length > 0 ? gunzip(bytes) : Promise.resolve(new Uint8Array(0));
-                const [grass, moisture, dryness, fire, ash, snow] = await Promise.all([
+                const [grass, moisture, dryness, fire, ash, snow, ice] = await Promise.all([
                     gunzip(message.grass),
                     gunzip(message.moisture),
                     read(message.dryness),
                     read(message.fire),
                     read(message.ash),
                     read(message.snow),
+                    read(message.ice),
                 ]);
                 this.meadow.receive({
                     width: message.width,
@@ -3063,6 +3065,7 @@ export class GameScene extends DirtyScene {
                     fire,
                     ash,
                     snow,
+                    ice,
                 });
             })
             .catch((error: unknown) => console.warn("A state of the meadow of the map could not be read", error));
@@ -3917,6 +3920,9 @@ export class GameScene extends DirtyScene {
                     waves: () => this.getGameMap().getWamFile()?.getWam().settings?.water?.waves,
                     pace: () => this.getGameMap().getWamFile()?.getWam().settings?.water?.flowPace,
                     shown: () => get(waterFlowOverlayStore) && !isBasicActive(),
+                    measured: (measured) => {
+                        if (get(waterFlowMeasuredStore) !== measured) waterFlowMeasuredStore.set(measured);
+                    },
                 });
                 // The fish and the dolphins of that water.
                 this.aquaticLifeView?.destroy();

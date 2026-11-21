@@ -816,7 +816,7 @@ const mapEditor: BaseTranslation = {
             maxSurface:
                 "18 px by default: enough to swim, under the upper floors (52 px). Higher, a flood drowns the ground deep. In reality: no cap (256 px).",
             current:
-                "At 1 the hardest current carries at a quarter of the walking speed. A setting of the game: 1 by default.",
+                "How hard the water carries the avatars, never inside a building. With the water with inertia, one is carried at the speed of the water once one loses one's footing. A setting of the game: 1 by default.",
         },
         paceHint:
             "Hollows fill with the rain of the map and dry in fine weather. A source or a sink is added to any object from its properties.",

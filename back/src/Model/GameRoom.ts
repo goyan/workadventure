@@ -363,13 +363,21 @@ export class GameRoom implements BrothersFinder {
         gameRoom.terrainWater = terrainWater;
 
         // The meteors that fall on that water; the map size is passed in pixels.
+        // The ice a comet breaks is kept by the meadow, made further down: it is given there.
+        let breakIce: (x: number, y: number, radiusTiles: number) => void = () => undefined;
         const catastrophes = new CatastropheManager(
             gameRoom,
             gameRoom.mapSizeInPixels.bind(gameRoom),
-            terrainWater.strike.bind(terrainWater),
+            // A comet takes the water of its crater, and breaks the ice on it.
+            (x, y, radiusTiles) => {
+                terrainWater.strike(x, y, radiusTiles);
+                breakIce(x, y, radiusTiles);
+            },
         );
         terrainWater.setDownpours(() => catastrophes.downpours());
         terrainWater.setDrains(() => catastrophes.drains());
+        // A door holds the water while it is closed: it opens for the avatars that stand in its passage.
+        terrainWater.setWalkers(gameRoom.groundAvatarPositions.bind(gameRoom));
         gameRoom.catastrophes = catastrophes;
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => catastrophes.stop());
@@ -447,6 +455,7 @@ export class GameRoom implements BrothersFinder {
             return air ? { ...air, windSpeed: fireConditions.conditions().windSpeed } : undefined;
         });
         meadow.pourWith(terrainWater.pour.bind(terrainWater));
+        breakIce = meadow.shatter.bind(meadow);
         // The animals of the map run from the fire of its grass and of its trees.
         aquaticLife.followFire(() => meadow.lifeFire());
         gameRoom.meadow = meadow;

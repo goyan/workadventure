@@ -481,14 +481,19 @@ export abstract class Character extends Container implements OutlineableInterfac
 
     /**
      * The speed the current of the water of the relief gives the character, in pixels a second: nothing out of the
-     * water, in still or shallow water, on a raised floor, or on a map that set its current to nothing. At its
-     * hardest (and the usual strength) it carries at a quarter of the speed one walks at (`walkSpeed`).
+     * water, in still or shallow water, on a raised floor, inside a building, or on a map that set its current to
+     * nothing. A water with inertia carries at the speed it runs at; else, at its hardest (and the usual strength),
+     * at a quarter of the speed one walks at (`walkSpeed`).
      */
     protected waterCurrentPush(walkSpeed: number): CurrentVector {
         const water = this.floorZ < 2 && !isBasicActive() ? this.scene?.getTerrainWater?.() : undefined;
         if (!water) return { x: 0, y: 0 };
         // A drain of the catastrophes pulls the water, never who is in it.
         if (this.scene.isDrainCalm?.(this.x, this.y + BODY_CENTER_OFFSET_Y)) return { x: 0, y: 0 };
+        // Inside a building the current carries nobody: one is not swept out of a flooded room.
+        if (this.scene.getOutdoorGrid?.()?.isOutdoorAt(this.x, this.y + BODY_CENTER_OFFSET_Y) === false) {
+            return { x: 0, y: 0 };
+        }
         // Under the ice, the current carries nobody.
         if (this.scene.isFrozenWaterAt?.(this.x, this.y + BODY_CENTER_OFFSET_Y)) return { x: 0, y: 0 };
         const strength =

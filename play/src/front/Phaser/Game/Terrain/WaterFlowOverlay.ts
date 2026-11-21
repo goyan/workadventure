@@ -17,6 +17,8 @@ export interface WaterFlowOverlayOptions {
     pace?: () => number | undefined;
     /** Whether the overlay is asked for. */
     shown: () => boolean;
+    /** Told whether the speeds shown are those the server computes, or guessed from the slope of the surface. */
+    measured?: (measured: boolean) => void;
 }
 
 /** Over the night and the lights, so that it reads at any hour; under the names and the interface. */
@@ -85,6 +87,7 @@ export class WaterFlowOverlay {
         if (now - this.lastFrameAt < FRAME_MS) return;
         this.lastFrameAt = now;
         const water = this.options.water.settled();
+        this.options.measured?.(water.speedAt !== undefined);
         const terrain = this.options.water.relief();
         const inertia = this.options.inertia();
         const waves = this.options.waves?.();
@@ -110,8 +113,9 @@ export class WaterFlowOverlay {
             for (let cellX = firstX; cellX < lastX; cellX += size) {
                 const flow = flowOverBlock(water, terrain, cellX, cellY, size, inertia, waves);
                 if (flow.depth <= 0) continue;
-                // What is seen on the map: the real speed of that water, times the pace the map sets for its flow.
-                flow.speed *= pace;
+                // What is seen on the map: the real speed of that water, times the pace the map sets for its flow
+                // (the speeds the server tells are already those seen).
+                if (!water.speedAt) flow.speed *= pace;
                 const left = cellX * TERRAIN_CELL;
                 const top = cellY * TERRAIN_CELL;
                 const rate = Math.abs(flow.rate);
