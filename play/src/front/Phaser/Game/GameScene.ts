@@ -394,6 +394,8 @@ import { MapGroundLayout, GRASS_NAME, mapTileIsGrass } from "./Terrain/MapGround
 import { footprintSurface, GroundFootprints } from "./Terrain/Footprints";
 import { WaterGlints } from "./Terrain/WaterGlints";
 import { ReliefTiles } from "./Terrain/ReliefTiles";
+import type { BlockPaintPool } from "./Terrain/BlockPaintPool";
+import { createBlockPaintPool } from "./Terrain/BlockPaintWorkers";
 import { hiddenBehindRim, projectionShown, shiftAt } from "./Terrain/ReliefProjection";
 import { CharacterDrops } from "./Terrain/CharacterDrops";
 import { avatarDrop, surfaceDropAt, waterDepthAtPoint } from "./Terrain/AvatarDrop";
@@ -647,6 +649,8 @@ export class GameScene extends DirtyScene {
     private waterGlints: WaterGlints | undefined;
     /** The relief seen in 3/4: the dug ground drawn lower, its faces, its water. */
     private reliefTiles: ReliefTiles | undefined;
+    /** The workers that paint the blocks of the terrain off the thread of the game; none where there is no Worker. */
+    private blockPainters: BlockPaintPool | undefined;
     /** The characters drawn lower in the hollows of the relief, while the image is drawn. */
     private characterDrops: CharacterDrops | undefined;
     private waterFlowView: WaterFlowView | undefined;
@@ -1749,6 +1753,8 @@ export class GameScene extends DirtyScene {
         this.waterGlints = undefined;
         this.reliefTiles?.destroy();
         this.reliefTiles = undefined;
+        this.blockPainters?.destroy();
+        this.blockPainters = undefined;
         this.characterDrops?.destroy();
         this.characterDrops = undefined;
         this.waterFlowView?.destroy();
@@ -3886,6 +3892,8 @@ export class GameScene extends DirtyScene {
                     }),
                 });
                 this.reliefTiles?.destroy();
+                this.blockPainters?.destroy();
+                this.blockPainters = createBlockPaintPool();
                 this.reliefTiles = new ReliefTiles(this, {
                     relief: () => this.terrainWater.relief(),
                     water: this.terrainWater,
@@ -3899,6 +3907,8 @@ export class GameScene extends DirtyScene {
                     screenScale: () => this.cameras.main.zoom,
                     // The rest of the map is drawn ahead, coarse: zooming out shows the ground at once.
                     mapSize: () => ({ width: this.Map.widthInPixels, height: this.Map.heightInPixels }),
+                    // Painted by workers, off the thread of the game.
+                    painters: this.blockPainters,
                 });
                 this.waterGlints?.destroy();
                 this.waterGlints = new WaterGlints(this, {

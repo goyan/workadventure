@@ -7,6 +7,8 @@ import type { GroundLayout } from "../../../../../src/front/Phaser/Game/Terrain/
 import { TerrainWater } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
 import type { WaterState } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
 import { MeadowState } from "../../../../../src/front/Phaser/Game/Terrain/MeadowState";
+import { BlockPainter } from "../../../../../src/front/Phaser/Game/Terrain/Pixel/BlockPainter";
+import type { BlockJob } from "../../../../../src/front/Phaser/Game/Terrain/Pixel/BlockPainter";
 import { RAMPS, rampsFor } from "../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
 import type { Rgb } from "../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
 
@@ -28,6 +30,8 @@ function fixture(
         mapSize?: { width: number; height: number };
         /** Drawn with WebGL: the pixels go straight to textures (`painted` holds what each was last sent). */
         webgl?: boolean;
+        /** With workers (fake ones: `pool.flush()` paints what was posted and answers it). */
+        pool?: boolean;
     } = {},
 ) {
     const worldView = { x: 300, y: 300, width: 600, height: 400 };
@@ -107,6 +111,38 @@ function fixture(
         markDirty: vi.fn(),
         ...(options.webgl ? { sys: { game: { renderer } } } : {}),
     };
+    /** Fake workers: two, answered by hand. */
+    const waiting: { job: BlockJob; done: (pixels: Uint8ClampedArray | undefined) => void }[] = [];
+    let broken = false;
+    const pool = {
+        posted: [] as BlockJob[],
+        released: [] as Uint8ClampedArray[],
+        mostInFlight: 0,
+        usable: () => !broken,
+        idle: () => (broken ? 0 : 2 - waiting.length),
+        post: (job: BlockJob, done: (pixels: Uint8ClampedArray | undefined) => void) => {
+            if (waiting.length >= 2) throw new Error("no worker is idle");
+            pool.posted.push(job);
+            waiting.push({ job, done });
+            pool.mostInFlight = Math.max(pool.mostInFlight, waiting.length);
+        },
+        release: (pixels: Uint8ClampedArray) => {
+            pool.released.push(pixels);
+        },
+        check: vi.fn(),
+        /** The workers answer every block they were given, in turn. */
+        flush: () => {
+            const painter = new BlockPainter();
+            const answered = waiting.splice(0);
+            for (const { job, done } of answered) done(painter.paint(job));
+            return answered.length;
+        },
+        /** The workers break down: the blocks in flight come back unpainted. */
+        breakDown: () => {
+            broken = true;
+            for (const { done } of waiting.splice(0)) done(undefined);
+        },
+    };
     const water = new TerrainWater();
     water.setTerrain(terrain);
     let current: TerrainData | undefined = terrain;
@@ -124,6 +160,7 @@ function fixture(
         snowLineSeason: () => options.snowLineSeason,
         screenScale: options.screenScale,
         mapSize: options.mapSize && (() => options.mapSize ?? { width: 0, height: 0 }),
+        painters: options.pool ? pool : undefined,
     });
     // Updates until every block around the view is drawn: a block is drawn over several images, as many as the machine
     // needs (more under the load of the whole suite).
@@ -133,14 +170,28 @@ function fixture(
         for (let frame = 0; frame < 5000 && quiet < 3; frame++) {
             const before = tiles.redraws();
             tiles.update(clock++);
-            quiet = tiles.isDrawing() || tiles.redraws() !== before ? 0 : quiet + 1;
+            const answered = pool.flush();
+            quiet = answered > 0 || tiles.isDrawing() || tiles.redraws() !== before ? 0 : quiet + 1;
         }
     };
     /** Jumps the time of the game: the water has glided to its last state. */
     const skip = (ms: number) => {
         clock += ms;
     };
-    return { tiles, worldView, images, settle, painted, setTerrain, scene, water, clock: () => clock, skip, renderer };
+    return {
+        tiles,
+        worldView,
+        images,
+        settle,
+        painted,
+        setTerrain,
+        scene,
+        water,
+        clock: () => clock,
+        skip,
+        renderer,
+        pool,
+    };
 }
 
 const near = (value: number, expected: number) => expect(Math.abs(value - expected)).toBeLessThanOrEqual(2);
@@ -425,6 +476,113 @@ describe("the blocks of the relief seen in 3/4", () => {
               : same(GRASS_LINE, color)
                 ? "line"
                 : "other";
+
+    describe("the blocks painted by workers", () => {
+        const bytes = (pixels: Uint8ClampedArray | undefined) => Buffer.from(pixels ?? new Uint8ClampedArray(0));
+        const VISIBLE = ["1,1", "2,1", "3,1", "1,2", "2,2", "3,2"];
+        const keyOf = (job: BlockJob) => `${job.blockX},${job.blockY}`;
+
+        it("show the same pixels as painted on the thread of the game", () => {
+            for (const terrain of [floorWithSand(24), mountOnSand(128)]) {
+                const alone = fixture(terrain);
+                alone.settle();
+                const withWorkers = fixture(terrain, undefined, { pool: true });
+                withWorkers.settle();
+                expect(withWorkers.pool.posted.length).toBeGreaterThan(0);
+                for (const block of VISIBLE) {
+                    const expected = alone.painted.get(`relief-block:${block}`);
+                    expect(expected?.length, block).toBe(256 * 256 * 4);
+                    expect(bytes(withWorkers.painted.get(`relief-block:${block}`)).equals(bytes(expected)), block).toBe(
+                        true,
+                    );
+                }
+            }
+        });
+
+        it("are given coarse first, from the middle of the view outwards, never more than the workers idle", () => {
+            const { settle, pool } = fixture(floorWithSand(24), undefined, { pool: true });
+            settle();
+            const fromTheMiddle = ["2,1", "2,2", "1,1", "1,2", "3,1", "3,2"];
+            const order = (texel: number) =>
+                pool.posted.filter((job) => job.texel === texel && fromTheMiddle.includes(keyOf(job))).map(keyOf);
+            expect(order(4)).toEqual(fromTheMiddle);
+            expect(order(1)).toEqual(fromTheMiddle);
+            const lastCoarse = pool.posted.findIndex((job) => job.texel === 4 && keyOf(job) === "3,2");
+            const firstSharp = pool.posted.findIndex((job) => job.texel === 1 && VISIBLE.includes(keyOf(job)));
+            expect(firstSharp).toBeGreaterThan(lastCoarse);
+            expect(pool.mostInFlight).toBe(2);
+        });
+
+        it("are not painted on the thread of the game meanwhile, nor given twice while in flight", () => {
+            const begin = vi.spyOn(BlockPainter.prototype, "begin");
+            const { tiles, pool, setTerrain } = fixture(floorWithSand(24), undefined, { pool: true });
+            for (let frame = 0; frame < 6; frame++) tiles.update(frame);
+            expect(pool.posted).toHaveLength(2);
+            expect(begin).not.toHaveBeenCalled();
+            expect(tiles.isDrawing()).toBe(true);
+            // What they are drawn from changes while they are in flight: they are not given again until they land.
+            setTerrain(floorWithSand(20));
+            for (let frame = 6; frame < 12; frame++) tiles.update(frame);
+            expect(pool.posted).toHaveLength(2);
+            pool.flush();
+            // Landed, not shown yet: still at work.
+            expect(tiles.isDrawing()).toBe(true);
+            begin.mockRestore();
+        });
+
+        it("ignore the answer for a block let go meanwhile: no surface for it, its buffer given back", () => {
+            const { tiles, pool, scene } = fixture(floorWithSand(24), undefined, { pool: true });
+            for (let frame = 0; frame < 3; frame++) tiles.update(frame);
+            expect(pool.posted).toHaveLength(2);
+            tiles.destroy();
+            expect(pool.flush()).toBe(2);
+            tiles.update(10);
+            expect(scene.textures.createCanvas).not.toHaveBeenCalled();
+            expect(pool.released).toHaveLength(2);
+        });
+
+        it("stay hidden when they land drawn in 3/4 after the editor opened, and are drawn again flat", () => {
+            const { tiles, pool, images, settle, scene } = fixture(floorWithSand(24), undefined, { pool: true });
+            for (let frame = 0; frame < 3; frame++) tiles.update(frame);
+            expect(pool.posted.every((job) => job.projected)).toBe(true);
+            tiles.setProjected(false);
+            pool.flush();
+            tiles.update(10);
+            // The two blocks landed are shown, the way they were asked: not the way the relief is shown now.
+            expect(scene.textures.createCanvas).toHaveBeenCalledTimes(2);
+            expect(images.some((image) => image.visible)).toBe(false);
+            settle();
+            expect(images.some((image) => image.visible)).toBe(true);
+            expect(pool.posted[pool.posted.length - 1].projected).toBe(false);
+        });
+
+        it("are painted on the thread of the game once the workers break down: no block left empty", () => {
+            const alone = fixture(floorWithSand(24));
+            alone.settle();
+            const { tiles, pool, settle, painted } = fixture(floorWithSand(24), undefined, { pool: true });
+            for (let frame = 0; frame < 3; frame++) tiles.update(frame);
+            pool.flush();
+            for (let frame = 3; frame < 6; frame++) tiles.update(frame);
+            const posted = pool.posted.length;
+            expect(posted).toBeGreaterThan(2);
+            pool.breakDown();
+            settle();
+            expect(pool.posted).toHaveLength(posted);
+            for (const block of VISIBLE) {
+                const expected = alone.painted.get(`relief-block:${block}`);
+                expect(bytes(painted.get(`relief-block:${block}`)).equals(bytes(expected)), block).toBe(true);
+            }
+            expect(tiles.isDrawing()).toBe(false);
+        });
+
+        it("checks at every image that its workers still answer", () => {
+            const { tiles, pool } = fixture(floorWithSand(24), undefined, { pool: true });
+            tiles.update(0);
+            tiles.update(1);
+            expect(pool.check).toHaveBeenCalledTimes(2);
+            expect(pool.check.mock.calls[0][0]).toEqual(expect.any(Number));
+        });
+    });
 
     describe("the blocks sent straight to the graphics card", () => {
         const bytes = (pixels: Uint8ClampedArray | undefined) => Buffer.from(pixels ?? new Uint8ClampedArray(0));

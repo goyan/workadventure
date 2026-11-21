@@ -64,6 +64,11 @@ export class ReliefTileSchedule {
         return chosen;
     }
 
+    /** A block chosen by toRedraw was not drawn after all (its worker broke down): it is to draw again. */
+    public unmark(key: string): void {
+        this.drawn.delete(key);
+    }
+
     /** A block chosen by toRedraw is drawn from this signature in fact (coarser than asked: it stays to draw again). */
     public mark(key: string, signature: string): void {
         this.drawn.set(key, signature);

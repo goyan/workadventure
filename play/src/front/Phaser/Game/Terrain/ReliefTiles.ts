@@ -1,6 +1,7 @@
 import * as Phaser from "phaser";
 import { heightAt, Season, TERRAIN_CELL, TILE_PX } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
+import type { BlockPainters } from "./BlockPaintPool";
 import type { MeadowState } from "./MeadowState";
 import {
     BLOCK_PX,
@@ -86,6 +87,11 @@ export interface ReliefInputs {
      * or going somewhere shows the ground at once. Absent: only the blocks around the view are drawn.
      */
     mapSize?(): { width: number; height: number };
+    /**
+     * The workers that paint the blocks off the thread of the game (BlockPaintPool). Absent, or once they broke down:
+     * the blocks are painted on the thread of the game, a slice an image.
+     */
+    painters?: BlockPainters;
 }
 
 /** What the flat ground needs to know of the map: its rooms, the floors of the Carte tool, its grass tiles. */
@@ -130,6 +136,10 @@ export class ReliefTiles {
     private job: { key: string; steps: Generator<void, void, void> } | undefined;
     private readonly coverSignatures = new Map<string, string>();
     private readonly waterSignatures = new Map<string, string>();
+    /** The blocks being painted by a worker, by the number of their job: where and how each will be shown. */
+    private readonly flying = new Map<number, { key: string; shown: Shown }>();
+    /** The pixels come back from the workers, shown at the next image. */
+    private readonly landed: { id: number; pixels: Uint8ClampedArray }[] = [];
     /** Paints the blocks on the thread of the game, a slice an image. */
     private readonly painter = new BlockPainter();
     private jobCount = 0;
@@ -193,6 +203,8 @@ export class ReliefTiles {
     public isDrawing(): boolean {
         return (
             this.job !== undefined ||
+            this.flying.size > 0 ||
+            this.landed.length > 0 ||
             this.staleCovers.size > 0 ||
             this.reliefsWaiting ||
             this.aheadAt < this.ahead.length
@@ -258,6 +270,7 @@ export class ReliefTiles {
         const terrain = this.inputs.relief();
         const layout = this.inputs.layout;
         if (this.hidden || (!terrain && !layout)) return;
+        this.showLanded();
         if (terrain !== this.reliefKept) {
             this.reliefKept = terrain;
             this.reliefSignatures.clear();
@@ -331,16 +344,20 @@ export class ReliefTiles {
         const needed = texelFor(this.inputs.screenScale?.() ?? 1);
         this.aheadLooks = 0;
         let picks = 0;
+        const painters = this.inputs.painters;
         for (;;) {
-            if (
-                !this.job &&
-                (picks++ >= PICKS_AN_IMAGE ||
+            if (!this.job) {
+                // The workers paint: the thread of the game only hands them blocks, while one of them is idle.
+                if (painters?.usable() && painters.idle() === 0) break;
+                if (
+                    picks++ >= PICKS_AN_IMAGE ||
                     !(
                         this.pick(nearest, visibleKeys, bases, needed, terrain, now) ||
                         this.drawAhead(around, aroundKeys, shared, terrain, now)
-                    ))
-            ) {
-                break;
+                    )
+                ) {
+                    break;
+                }
             }
             if (this.job?.steps.next().done) this.job = undefined;
             if (performance.now() - start >= DRAW_BUDGET_MS) break;
@@ -468,7 +485,7 @@ export class ReliefTiles {
                 break;
             }
             const key = this.ahead[this.aheadAt++];
-            if (this.blocks.has(key) || aroundKeys.has(key)) continue;
+            if (this.blocks.has(key) || aroundKeys.has(key) || this.keysInFlight().has(key)) continue;
             this.aheadLooks++;
             const base = this.baseOf(key, terrain, now, shared, true);
             // Its relief is read in a next image.
@@ -481,7 +498,7 @@ export class ReliefTiles {
                 continue;
             }
             this.schedule.mark(key, `${base}|t${COARSE_TEXEL}`);
-            this.job = { key, steps: this.drawSteps(key, terrain, now, COARSE_TEXEL) };
+            this.start(key, terrain, now, COARSE_TEXEL);
             return true;
         }
         return false;
@@ -504,9 +521,11 @@ export class ReliefTiles {
         const fresh: string[] = [];
         const shown: string[] = [];
         const rest: string[] = [];
+        const inFlight = this.keysInFlight();
         for (const key of around) {
             const base = bases.get(key);
-            if (base === undefined) continue;
+            // Not read yet, or being painted by a worker: left as it is until its turn, or until it lands.
+            if (base === undefined || inFlight.has(key)) continue;
             const drawn = this.blocks.get(key)?.texel;
             signatures.set(
                 key,
@@ -525,13 +544,62 @@ export class ReliefTiles {
         }
         const texel = !this.blocks.has(key) && visible.has(key) && needed < COARSE_TEXEL ? COARSE_TEXEL : needed;
         this.schedule.mark(key, `${base}|t${texel}`);
-        this.job = { key, steps: this.drawSteps(key, terrain, now, texel) };
+        this.start(key, terrain, now, texel);
         return true;
+    }
+
+    /** The blocks a worker is painting. */
+    private keysInFlight(): ReadonlySet<string> {
+        const keys = new Set<string>();
+        for (const flight of this.flying.values()) keys.add(flight.key);
+        return keys;
+    }
+
+    /**
+     * Starts the drawing of a block: given to a worker while they work (there is an idle one: see update), else painted
+     * on the thread of the game, a slice an image.
+     */
+    private start(key: string, terrain: TerrainData | undefined, now: number, texel: 1 | 2 | 4): void {
+        const painters = this.inputs.painters;
+        if (!painters?.usable()) {
+            this.job = { key, steps: this.drawSteps(key, terrain, now, texel) };
+            return;
+        }
+        const job = this.jobOf(key, terrain, now, texel);
+        const id = job.id;
+        this.flying.set(id, { key, shown: this.shownOf(job) });
+        painters.post(job, (pixels) => {
+            if (pixels) {
+                this.landed.push({ id, pixels });
+                return;
+            }
+            // The workers broke down: the block is to draw again, on the thread of the game.
+            if (this.flying.delete(id)) this.schedule.unmark(key);
+        });
+    }
+
+    /**
+     * Shows the blocks come back from the workers, and hands their buffers back. The answer for a block let go meanwhile
+     * is ignored.
+     */
+    private showLanded(): void {
+        const painters = this.inputs.painters;
+        painters?.check(performance.now());
+        for (const { id, pixels } of this.landed.splice(0)) {
+            const flight = this.flying.get(id);
+            if (flight) {
+                this.flying.delete(id);
+                this.show(flight.key, flight.shown, pixels);
+            }
+            painters?.release(pixels);
+        }
     }
 
     public destroy(): void {
         this.renderer?.off(Phaser.Renderer.Events.RESTORE_WEBGL, this.contextRestored);
         for (const key of [...this.blocks.keys()]) this.drop(key);
+        // What the workers still paint lands for nothing.
+        this.flying.clear();
         this.lookAheadAgain();
     }
 
@@ -599,8 +667,9 @@ export class ReliefTiles {
     }
 
     private drop(key: string): void {
-        // A block left half drawn is not drawn on.
+        // A block left half drawn is not drawn on; one a worker is painting is not shown when it lands.
         if (this.job?.key === key) this.job = undefined;
+        for (const [id, flight] of this.flying) if (flight.key === key) this.flying.delete(id);
         const block = this.blocks.get(key);
         if (!block) return;
         block.surface.destroy();

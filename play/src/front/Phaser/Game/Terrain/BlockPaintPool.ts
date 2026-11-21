@@ -10,6 +10,15 @@ export interface WorkerLike {
     terminate(): void;
 }
 
+/** What the terrain needs of the workers that paint its blocks (BlockPaintPool, or fake ones in the tests). */
+export interface BlockPainters {
+    usable(): boolean;
+    idle(): number;
+    post(job: BlockJob, done: (pixels: Uint8ClampedArray | undefined) => void): void;
+    release(pixels: Uint8ClampedArray): void;
+    check(now: number): void;
+}
+
 /** A worker that has not answered a block for this long is taken as broken down. */
 export const PAINT_TIMEOUT_MS = 5000;
 
@@ -25,7 +34,7 @@ interface Slot {
  * for good: its workers are stopped, the blocks in flight are given back unpainted (`done(undefined)`), and the game
  * paints its blocks itself.
  */
-export class BlockPaintPool {
+export class BlockPaintPool implements BlockPainters {
     private readonly slots: Slot[] = [];
     private started = false;
     private broken = false;
