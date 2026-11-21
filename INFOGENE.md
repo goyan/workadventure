@@ -3186,7 +3186,7 @@ du serveur, la glace est maintenant tenue par le serveur, case par case.
   (9e paquet de `GroundSplat`, 12 paquets au lieu de 8, uniforme `uServerIce`), plus transparente quand elle est
   mince, et la neige posée dessus est celle de la case. `isOnFrozenWater` lit la glace du serveur (`Ice/IceHold.ts`).
   En météo personnelle (pastille 🖥), rien ne change : le gel local de `Frost.ts`.
-- **Température manuelle** jusqu'à −30 °C (au lieu de −10), pour geler un lac vite.
+- **Température manuelle** jusqu'à −30 °C (au lieu de −10), pour geler un lac vite ; aujourd'hui jusqu'à −80 °C (voir « Conditions réglées à la main : les extrêmes »).
 - **Piscines.** Une piscine peinte (outil Relief, mode Piscine) gèle par la glace du serveur comme un lac, d'après
   la profondeur de son style, sauf si son eau est chaude : chauffée, elle ne gèle jamais et fait fondre la neige qui
   y tombe. Le pré relit les styles avec la carte (`Meadow`, tableaux `pool` et `hotPool`). On y patine quand la glace
@@ -3795,8 +3795,8 @@ seuils. Le serveur (`back/src/Model/FireConditionsManager.ts`) les tient pour to
 - Sinon, ou pour ce que la météo réelle ne donne pas : conditions neutres 20 °C, 60 %, 10 km/h du nord-ouest. Une
   carte en météo fixe ou automatique ne sèche donc qu'en manuel.
 
-Le serveur borne toute valeur (température −10 à 50 °C, humidité 0 à 100 %, vent 0 à 120 km/h ; seuils 0 à 50 °C,
-5 à 100 %, 5 à 120 km/h), refuse plus de 5 changements par seconde et par joueur, annonce les conditions à la salle à
+Le serveur borne toute valeur (température −80 à +80 °C, humidité 0 à 100 %, vent 0 à 250 km/h depuis le 2026-11-21,
+voir « Conditions réglées à la main : les extrêmes » ; seuils 0 à 50 °C, 5 à 100 %, 5 à 120 km/h), refuse plus de 5 changements par seconde et par joueur, annonce les conditions à la salle à
 chaque changement (et quand la météo réelle avance) et à l'entrée d'un joueur. Rien n'est enregistré : après un
 redémarrage de `back`, la salle revient aux conditions réelles et aux seuils 30-30-30.
 
@@ -4405,3 +4405,46 @@ piscines-images (objets avec eau) sont redessinées de la même façon, image ca
 piscine modifiable » dans l'éditeur d'objets la remplace par une piscine peinte (`MapEditor/PoolConversion.ts`).
 **Gel** : une piscine gèle en surface comme une eau calme de 32 px, quelle que soit sa profondeur
 (`POOL_ICE_DEPTH_PX`), soit vers -8 °C ; jamais dedans (`OutdoorGrid`) ni chauffée.
+
+## Conditions réglées à la main : les extrêmes
+
+Depuis le 2026-11-21, les conditions réglées à la main dans la salle (Catastrophe → Météo) vont de **−80 à +80 °C**
+pour la température et de **0 à 250 km/h** pour le vent (avant −10 à 50 °C et 0 à 120 km/h) ; l'humidité reste de 0
+à 100 %, les seuils du feu ne changent pas. Les bornes ne vivent qu'à un endroit, `FIRE_CONDITION_BOUNDS`
+(`libs/map-editor/src/Weather/FireConditions.ts`) : le curseur, le serveur (`boundedFireConditions`, une valeur
+au-delà est ramenée à la borne) et le tableau « Météo expliquée » (bornes de ses recherches de seuil) les lisent.
+Chaque curseur de condition a deux boutons − et + qui la déplacent d'un cran (un degré, un point, un km/h), le
+curseur gardant un cran par pixel environ. Le protocole ne change pas (champs `double`).
+
+Ce que donne chaque règle aux extrêmes, figé par `libs/map-editor/tests/WeatherExtremes.test.ts` et
+`play/tests/front/Phaser/Game/Weather/WeatherExtremes.test.ts` :
+
+- **neige ou pluie** : toute précipitation est de la neige par −20 °C et en dessous, de la pluie dès 6 °C. Le
+  thermomètre mouillé (`wetBulbTemperature`) suit l'ajustement de Stull de −20 à 50 °C ; au-delà il est tiré des
+  formules psychrométriques de l'OMM (WMO-No. 8, 2018, annexe 4.B, éq. 4.B.8 et 4.B.9, au niveau de la mer) : Stull
+  donnait −48 °C pour un air à −80 °C et 5 %, l'équation donne −80 °C. Le passage à −20 °C saute de moins de 4 °C
+  (l'erreur de Stull dans un air froid et sec), sans effet sur la neige ;
+- **givre** : les formes de Magnus de l'OMM sont gardées hors de leur domaine annoncé (eau −45 à 60 °C, glace −65 à
+  0 °C) : elles restent à moins de 2,5 % des pressions de vapeur de Murphy et Koop (2005) de −80 à +80 °C, et à 1,5 %
+  des tables de vapeur à 80 °C (474,2 hPa, Wagner et Pruss 2002). Par −80 °C le sol ne blanchit que si l'air est saturé sur la glace ; jamais par +80 °C.
+  Le vent retient le givre en ôtant le refroidissement du sol ; au-delà de 120 km/h (l'ancienne borne, rien ne change
+  en dessous), une tempête l'arrache : il s'efface jusqu'à disparaître à 250 km/h (`FROST_SWEPT_FROM_KMH`,
+  `FROST_SWEPT_KMH`, un choix : le givre de surface est un dépôt fragile d'air calme, UBC « Surface hoar ») ;
+- **sol** gelé tout entier dès −1 °C, **eau** gelée tout entière dès −15 °C (glace du navigateur) ; la glace du
+  serveur (#429) prend le lac jusqu'au fond en quelques pas par −80 °C et 250 km/h sans dépasser son eau, et fond
+  d'environ 108 mm par pas par +80 °C (loi de Stefan intégrée pas à pas : par grand froid et grand vent, le premier
+  pas surestime l'épaisseur, bornée par l'eau et par 1 m) ;
+- **neige au sol** : par +80 °C, un air humide et 250 km/h, elle fond à 324 mm d'eau par heure réelle, environ
+  108 mm par pas de 2 s du jeu (une neige de 600 mm part en une vingtaine de secondes) ; aucune fonte sous 0 °C ;
+- **feu** : danger nul par grand froid, maximal par +80 °C, air sec et grand vent. La tête du feu plafonne toujours à
+  dix cases par pas de 2 s (atteint dès 125 km/h, environ 20 km/h de course, Cheney et Cruz), les braises des arbres
+  à quarante cases (dès 120 km/h) : à 250 km/h le feu ne va pas plus vite qu'à 125 et ne traverse jamais la carte en
+  un pas ; flancs et arrière presque immobiles ;
+- **navigateur** : nuages à 180 px/s au plus (dès 60 km/h), arbres couchés et feuilles au plus fort dès 80 km/h
+  (`TreePoses`, `TreeLeafFall`), feuilles au sol au palier le plus fort dès 50 km/h, pluie penchée d'un pixel par
+  pixel au plus (dès 60 km/h), flammes couchées dès 60 km/h, fumée portée au plus dès 60 km/h : tous plafonnés, rien ne déborde.
+
+Le schéma de la météo réelle (`RealWeatherSlot`) ne borne pas la température et accepte un vent jusqu'à 500 km/h :
+un lieu réel extrême n'est pas rejeté. Rien de ces conditions n'est enregistré ; un ancien `back` ramènerait la
+valeur à ses anciennes bornes (le curseur revient alors sur ce que le serveur annonce) : `play` et `back` vont
+ensemble.

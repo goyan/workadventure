@@ -1,4 +1,5 @@
 import {
+    FIRE_CONDITION_BOUNDS,
     frostPoint,
     RAIN_FROM_WET_BULB,
     SNOW_FULL_MM,
@@ -239,9 +240,8 @@ export function thresholdBetween(from: number, to: number, holds: (value: number
     return on;
 }
 
-/** As cold, as warm, as an air is looked for. */
-const COLDEST_C = -60;
-const WARMEST_C = 30;
+/** As cold, as warm, as an air is looked for: as far as the conditions of a room may be set by hand. */
+const [COLDEST_C, WARMEST_C] = FIRE_CONDITION_BOUNDS.temperature;
 
 function explainForm(air: PrecipitationAir | undefined, owner: AirOwner, audience: Audience): FormExplained {
     const share = snowShareOf(air);

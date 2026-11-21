@@ -136,7 +136,7 @@ describe("FireConditionsManager", () => {
             thresholdHumidity: 1000,
             thresholdWindSpeed: Number.NaN,
         });
-        expect(manager.conditions()).toEqual({ temperature: 50, humidity: 0, windSpeed: 10, windFrom: 315 });
+        expect(manager.conditions()).toEqual({ temperature: 80, humidity: 0, windSpeed: 10, windFrom: 315 });
         expect(manager.thresholds()).toEqual({ temperature: 0, humidity: 100, windSpeed: 30 });
     });
 

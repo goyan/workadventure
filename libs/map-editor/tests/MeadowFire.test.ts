@@ -233,6 +233,21 @@ describe("the fire spreading", () => {
         expect(broken.fireAt(8, 10)).toBe(0);
     });
 
+    it("runs no faster in a storm of 250 km/h than at 125: ten tiles a step at most, never across the map at once", () => {
+        const lucky = { ...night, random: () => 0 };
+        const reach = (windSpeed: number): number[] => {
+            const meadow = prairie(1);
+            meadow.ignite(2, 10, 0);
+            meadow.step({ ...lucky, windFrom: 270, windSpeed });
+            return Array.from({ length: size.width }, (_, x) => meadow.fireAt(x, 10));
+        };
+        const storm = reach(250);
+        expect(storm).toEqual(reach(125));
+        expect(storm[12]).toBeGreaterThan(0);
+        expect(storm.slice(13).every((fire) => fire === 0)).toBe(true);
+        for (const fire of storm) expect(Number.isFinite(fire) && fire >= 0 && fire <= 1).toBe(true);
+    });
+
     it("hardly spreads over green grass", () => {
         const meadow = prairie(0);
         meadow.ignite(10, 10, 0);
