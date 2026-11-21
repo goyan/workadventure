@@ -15,3 +15,6 @@ export const waterFlowOverlayStore = writable<boolean>(false);
  * snow, the frost and the ice they see. For the session; it shows with the panel only.
  */
 export const weatherExplainedStore = writable<boolean>(false);
+
+/** Whether the speeds the flows are drawn with are those the server computes (a water with inertia). */
+export const waterFlowMeasuredStore = writable<boolean>(false);

@@ -89,6 +89,7 @@ const actionbar = {
         totals: "On the whole map: {stock} m³ of water, {area} m² under water",
         noWater: "The server has said nothing yet of the water of this map.",
         estimated: "Speeds estimated from the slope of the surface of the water.",
+        measured: "Speeds computed by the server (water with inertia).",
         weather: {
             button: "Weather explained",
             title: "Why this weather?",

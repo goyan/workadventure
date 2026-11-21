@@ -157,6 +157,21 @@ describe("flowAtCell", () => {
     });
 });
 
+describe("flowAtCell with the speeds the server tells", () => {
+    it("shows the speed of the water as it is, even where its surface is level", () => {
+        // A level lake whose water runs south at 4 cells a second: the slope would say it is still.
+        const lake = { ...state(9, 9, () => 12), speedAt: () => ({ x: 0, y: 4 }) };
+        const flow = flowAtCell(lake, undefined, 4, 4, true);
+        expect(flow.x).toBeCloseTo(0, 5);
+        expect(flow.y).toBeCloseTo(1, 5);
+        // 4 cells a second, a cell being 0.548 m wide.
+        expect(flow.speed).toBeCloseTo(2.19, 2);
+        // At rest for the server: no arrow, whatever the slope.
+        const still = { ...state(20, 5, (x) => 20 - x * 0.6), speedAt: () => ({ x: 0, y: 0 }) };
+        expect(flowAtCell(still, undefined, 10, 2, true).speed).toBe(0);
+    });
+});
+
 describe("flowOverBlock", () => {
     it("is the flow of the cell for a block of one, and a mean over a larger one", () => {
         const water = state(40, 40, (x) => 30 - x * 0.2);
@@ -267,6 +282,34 @@ describe("TerrainWater.settled", () => {
         // Another grid (the relief was edited): the comparison starts again.
         water.receive({ x: 0, y: 0, width: 1, height: 1, seq: 3, full: true, depths: bytesOf([5]) }, 4000);
         expect(water.settled().seconds).toBe(Infinity);
+    });
+});
+
+describe("TerrainWater speeds", () => {
+    const depths = new Uint8Array(8 * 8 * 2);
+
+    it("keeps the speeds of the last state, block by block, and none when the server tells none", () => {
+        const water = new TerrainWater();
+        // 8 by 8 cells from the cell 0, 0: 2 by 2 blocks. The block of the cells 4 to 7, 0 to 3 runs east at
+        // 2.5 cells a second, the one under it runs north at 1.
+        const speeds = Uint8Array.from([0, 0, 10, 0, 0, 0, 0, 252]);
+        water.receive({ x: 0, y: 0, width: 8, height: 8, seq: 1, full: true, depths, speeds }, 0);
+        expect(water.speedAt(5 * 16, 1 * 16)).toEqual({ x: 2.5, y: 0 });
+        expect(water.speedAt(6 * 16, 6 * 16)).toEqual({ x: 0, y: -1 });
+        expect(water.speedAt(1 * 16, 1 * 16)).toEqual({ x: 0, y: 0 });
+        expect(water.settled().speedAt?.(5, 1)).toEqual({ x: 2.5, y: 0 });
+        // Outside the grid: still.
+        expect(water.speedAt(-100, 0)).toEqual({ x: 0, y: 0 });
+        // The next state tells none (the map went back to the water that creeps): none is known any more.
+        water.receive({ x: 0, y: 0, width: 8, height: 8, seq: 2, full: true, depths }, 1000);
+        expect(water.speedAt(5 * 16, 1 * 16)).toBeUndefined();
+        expect(water.settled().speedAt).toBeUndefined();
+        // Speeds of another size than the grid are not trusted.
+        water.receive(
+            { x: 0, y: 0, width: 8, height: 8, seq: 3, full: true, depths, speeds: speeds.slice(0, 4) },
+            2000,
+        );
+        expect(water.speedAt(5 * 16, 1 * 16)).toBeUndefined();
     });
 });
 

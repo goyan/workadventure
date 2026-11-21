@@ -5,6 +5,7 @@
     import { terrainWaterStatsStore } from "../../Stores/TerrainEditorStore";
     import {
         visualisationPanelStore,
+        waterFlowMeasuredStore,
         waterFlowOverlayStore,
         weatherExplainedStore,
     } from "../../Stores/VisualisationStore";
@@ -94,7 +95,11 @@
                         {$LL.actionbar.visualisation.noWater()}
                     </div>
                 {/if}
-                <div class="opacity-60">{$LL.actionbar.visualisation.estimated()}</div>
+                <div class="opacity-60" data-testid="visualisation-water-speeds">
+                    {$waterFlowMeasuredStore
+                        ? $LL.actionbar.visualisation.measured()
+                        : $LL.actionbar.visualisation.estimated()}
+                </div>
             </div>
         {/if}
         {#if explaining}

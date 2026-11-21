@@ -6,6 +6,8 @@ import type { SettledWater } from "./TerrainWater";
 export const FLOW_MIN_DEPTH_PX = 0.5;
 /** A surface that slopes less than this, in pixels a cell, is at rest. */
 export const FLOW_REST_SLOPE = 0.02;
+/** A water the server tells slower than this, in cells a second, is at rest. */
+export const FLOW_REST_SPEED = 0.1;
 /** Ground this much lower than the surface of the water next to it is a drop: the water runs down there. */
 const DROP_PX = 1;
 
@@ -56,6 +58,13 @@ export function flowAtCell(
         if (held >= FLOW_MIN_DEPTH_PX) return ground + held;
         return ground < here - DROP_PX ? ground + held : here;
     };
+    // The server tells how fast this water runs (the water with inertia): shown as it is, a wave going by included.
+    const known = water.speedAt?.(cellX, cellY);
+    if (known) {
+        const speed = Math.hypot(known.x, known.y);
+        if (speed < FLOW_REST_SPEED) return { x: 0, y: 0, speed: 0, depth, rate };
+        return { x: known.x / speed, y: known.y / speed, speed: speed * CELL_METRES, depth, rate };
+    }
     const slopeX = (surface(1, 0) - surface(-1, 0)) / 2;
     const slopeY = (surface(0, 1) - surface(0, -1)) / 2;
     const slope = Math.hypot(slopeX, slopeY);

@@ -299,6 +299,49 @@ describe("the precision of the water with inertia", () => {
     });
 });
 
+describe("the speed of the water told to the browsers", () => {
+    /** A level channel, 5 cells wide, fed at its west end: its water runs east. */
+    const river = (): WaterGrid => {
+        const cells = new Map<string, number>();
+        for (let y = 0; y < 9; y++)
+            for (let x = 0; x < 80; x++) if (x < 2 || y < 2 || y >= 7) cells.set(cellKey(x, y), 250);
+        const grid = new WaterGrid(withHeights(undefined, cells), { x: 0, y: 0, width: 80, height: 9 });
+        grid.setMaxSurface(256);
+        return grid;
+    };
+    const signed = (byte: number): number => (byte << 24) >> 24;
+
+    it("is none for a water that only creeps", () => {
+        const grid = river();
+        for (let step = 0; step < 50; step++) {
+            grid.rainOn(5, 4, 2.9, 0.3);
+            grid.step(still);
+        }
+        expect(grid.writeSpeeds()).toBeUndefined();
+    });
+
+    it("tells, block by block, which way the water with inertia runs and how fast", () => {
+        const grid = river();
+        for (let step = 0; step < 600; step++) {
+            grid.rainOn(5, 4, 2.9, 0.3);
+            grid.step(withWaves());
+        }
+        const speeds = grid.writeSpeeds();
+        // 80 by 9 cells: 20 by 3 blocks of 4 cells a side, two bytes each.
+        expect(speeds).toHaveLength(20 * 3 * 2);
+        if (!speeds) return;
+        // The block in the middle of the channel (column 10, row 1): the water runs east, not across.
+        const at = (1 * 20 + 10) * 2;
+        expect(signed(speeds[at])).toBeGreaterThan(0);
+        expect(Math.abs(signed(speeds[at + 1]))).toBeLessThanOrEqual(1);
+        // A dry block (the bank): nothing.
+        expect(speeds[0]).toBe(0);
+        // Seen at half its real pace, the same water is told half as fast.
+        const slow = grid.writeSpeeds(0.5);
+        expect(signed(slow?.[at] ?? 0)).toBeCloseTo(signed(speeds[at]) / 2, 0);
+    });
+});
+
 describe("the settings of the waves", () => {
     const emptyWam = (): WAMFileFormat => ({
         version: "1.0.0",
