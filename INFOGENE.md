@@ -3580,7 +3580,13 @@ plus sous un danger modéré.
   huit points de la rose, trois seuils (réglables même hors manuel) et l'indicateur de danger (faible, modéré, fort,
   extrême). Un geste envoie la demande au serveur, quatre fois par seconde au plus pendant un glisser ; l'annonce du
   serveur déplace les curseurs de tous sans rien renvoyer.
-- L'herbe sèche est peinte en **paille** par-dessus le vert, d'autant plus qu'elle est sèche.
+- L'herbe sèche est peinte en **paille** par-dessus le vert, d'autant plus qu'elle est sèche. Couleur revue le
+  2026-11-21 (avant `#e0c24a`, jaune moutarde saturé à 71 %) : les guides de séchage du CFA (Victoria) et de la FESA
+  (Australie-Occidentale) disent « straw » puis « bleached » à 90-100 %, et leurs photos mesurées (moyenne des zones
+  au soleil) donnent des blonds gris de 26 à 34 % de saturation (`#bcae8a`, `#c0ad95`, `#c2ae83`). Le shader du sol
+  (`GroundSplat`) mêle par grandes plaques un blond délavé `#c0a870` et un kaki sec `#a99b66`, grain de ±7 % ; le
+  repli sans shader (`STRAW_COLOR`) prend leur milieu `#b4a16b`. Écart avec le sable (`#e1cd96`) : ΔE ≥ 15 composé
+  sur l'herbe (avant 31), avec l'argile ≥ 17.
 - En manuel, le **vent de toute la scène** (nuages, arbres, pluie penchée) est celui de la salle.
 - Le bandeau météo affiche l'**humidité** pour « Maintenant » et, en manuel, la température et le vent de la salle
   avec la mention « manuel ».
