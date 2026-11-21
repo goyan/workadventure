@@ -4496,7 +4496,19 @@ mouillé à 76 % de sa luminance sèche, roche 90 %, herbe 96 % ; la pluie fonce
 un film, l'eau est claire (opacité de 20 % au plus mince) sur le sol foncé ; l'eau profonde et le rivage d'un lac ne
 changent pas. La couronne sombre du shader de l'eau n'ajoute que ce que l'humidité du modèle n'a pas déjà foncé.
 Limites : les tuiles de la carte non peintes comptent comme de la terre (le modèle les traite ainsi), pavés dehors
-compris ; l'humidité est par tuile de 32 px. Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
+compris ; l'humidité est par tuile de 32 px. **Couleur et contour** (2026-11-21, `fix/sol-mouille-couleur`, après un essai en
+dev local : tache terne, bords en marches de tuiles, teinte verte) : la couleur d'un sol peint n'est plus voilée mais
+**approfondie** (`wetColor` / `wetColour`) : luminance réduite selon `WET_REFLECTANCE`, et chaque canal assombri en
+puissance de sa clarté (la lumière traverse plus de grains absorbants dans un sol mouillé, Lekner et Dorf 1988,
+*Applied Optics* 27:1278 ; l'ampleur `WET_DEEPENING` = 0,5 est un choix, les sources ne la chiffrent pas) : la teinte est
+gardée, la saturation monte (sable : 0,33 sec, 0,41 mouillé, mesuré sur le shader). L'humidité, tenue par tuile, est lue
+sur une tuile autour (quatre points) sans paliers, et son bord est courbé par le bruit des bords des sols. Le reflet
+d'un sol trempé est blanc, plus bleu-gris. Sous un film de moins de 1 px, l'eau n'a presque plus de couleur (opacité 5 %
+au plus mince, sa teinte vient avec la profondeur jusqu'à `SHORE_PX`) : on voit le sable mouillé, plus un lavis vert.
+**Canal** : l'humidité est dans le **vert** du paquet 9, dont le rouge est l'écume des vagues (#439) ; les deux
+partageaient le rouge depuis la fusion de #439 et #444 (l'écume effaçait l'humidité, l'humidité moussait les rives).
+**Piscines** : leur bassin est étanche (`Meadow`, `poolTile`) : leur eau ne mouille pas la terrasse par remontée
+capillaire et leurs tuiles ne tiennent pas d'humidité de sol à répandre. Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
 (`TexturedGround`). Textures : `resources/terrain/ground-*.png` (générées, 4 tons nets ; `ground-ice.png` dans le
 style des patinoires).
 

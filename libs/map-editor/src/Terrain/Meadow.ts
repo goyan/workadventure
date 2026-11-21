@@ -227,6 +227,8 @@ export class Meadow {
      * freezes as a lake does, unless it is hot.
      */
     private readonly hotPool: Uint8Array;
+    /** 1 on a tile any cell of which is painted as a pool: its water is held in a watertight basin. */
+    private readonly poolTile: Uint8Array;
     /** The snow the heat of a fire melts on each tile at the next step, in mm of water (see warm): spent there. */
     private readonly heat: Float32Array;
     /** Seconds the ash of a tile that went out still stays whole before it goes; not saved. */
@@ -266,6 +268,7 @@ export class Meadow {
         this.heat = new Float32Array(tiles);
         this.ice = new Float32Array(tiles);
         this.hotPool = new Uint8Array(tiles);
+        this.poolTile = new Uint8Array(tiles);
         this.smoulder = new Float32Array(tiles);
         this.fuel = new Float32Array(tiles);
         this.water = new Float32Array(tiles);
@@ -286,12 +289,14 @@ export class Meadow {
                         height += heightAt(terrain, cellX + x, cellY + y);
                         // A tile any cell of which is painted as a heated pool never freezes.
                         const style = poolStyleOf(soilAt(terrain, cellX + x, cellY + y));
+                        if (style !== undefined) this.poolTile[index] = 1;
                         if (style !== undefined && poolStyleAt(pools, style).hot) this.hotPool[index] = 1;
                     }
                 }
                 this.ground[index] = height / (CELLS_A_TILE * CELLS_A_TILE);
                 const soil = SOIL_LIFE[soilName(soilAt(terrain, cellX, cellY)) ?? "earth"];
-                this.hold[index] = soil.holdSeconds;
+                // A pool's basin is watertight: no moisture of a soil there, none spread to the ground around it.
+                this.hold[index] = this.poolTile[index] ? 0 : soil.holdSeconds;
                 const grows = this.outdoor[index] === 1 && !paved?.has(`${tileX},${tileY}`);
                 this.fertility[index] = grows ? soil.fertility : 0;
             }
@@ -600,7 +605,8 @@ export class Meadow {
         bankReach.fill(0);
         let tail = 0;
         for (let index = 0; index < water.length; index++) {
-            if (outdoor[index] && water[index] >= SOAKED_WATER_PX) {
+            // The water of a pool is held in a watertight basin: it wets no ground around its coping.
+            if (outdoor[index] && water[index] >= SOAKED_WATER_PX && this.poolTile[index] === 0) {
                 bankReach[index] = 1;
                 bankQueue[tail++] = index;
             }
