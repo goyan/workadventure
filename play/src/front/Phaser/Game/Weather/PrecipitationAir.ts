@@ -2,7 +2,6 @@ import { get } from "svelte/store";
 import type { PrecipitationAir } from "@workadventure/map-editor";
 import { realWeatherAt } from "@wa/common/RealWeather";
 import { fireConditionsStore } from "@wa/front/Stores/FireConditionsStore";
-import { chosenWeatherNow } from "./ChosenPlaceWeather";
 import type { RealForecastState } from "./RealWeather";
 import { shownPlaceTimeline } from "./RealWeatherClient";
 import type { MapSnowSettings } from "./SnowCover";
@@ -19,11 +18,11 @@ let memo: { settings: MapSnowSettings | undefined; second: number; air: Precipit
 
 /**
  * The air the precipitation shown to this player falls through, which says whether it is rain or snow (snowShare):
- * the real air of their own city when they follow one (its weather is theirs alone, see ChosenPlaceWeather), else the
- * heat and the humidity set by hand in the room, else the real air at the place of the map (Paris without one),
- * whatever weather the map shows: the same sources, in the same order, as the frost of the ground (Frost.ts), and for
- * the last two the same air for every player of the map. Undefined while none is known: it then rains. Read again
- * once a second of the game clock.
+ * the heat and the humidity set by hand in the room, else the real air at the place of the map (Paris without one),
+ * whatever weather the map shows. The same air for every player of the map, and the one the server goes by for the
+ * water of that precipitation (FireConditionsManager.air): never that of the city a player follows on their clock,
+ * even for the precipitation of that city drawn for them alone (ChosenPlaceWeather). Undefined while none is known: it
+ * then rains. Read again once a second of the game clock.
  */
 export function precipitationAirNow(
     settings: MapSnowSettings | undefined,
@@ -38,8 +37,6 @@ export function precipitationAirNow(
 }
 
 function readAir(settings: MapSnowSettings | undefined, date: Date): PrecipitationAir | undefined {
-    const { place, state } = chosenWeatherNow();
-    if (place) return airAt(state, date.getTime());
     const conditions = get(fireConditionsStore);
     if (conditions?.manual) return { temperature: conditions.temperature, humidity: conditions.humidity };
     return airAt(shownPlaceTimeline(settings), date.getTime());
