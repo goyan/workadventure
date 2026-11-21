@@ -1635,7 +1635,7 @@ d'heure) à ±2 min. La nuit, un voile bleu nuit
     coordonnées pour le soleil et la météo ; il ne porte le **nom** d'une ville de la liste qu'à 150 km d'elle au plus
     (`NAMED_POINT_RADIUS_KM`, distance orthodromique, `nearestCityOf`). Plus loin il se nomme par ses coordonnées,
     en degrés entiers : forme courte « 72° S 170° E » (horloge, pastille météo ; jamais de virgule, que la pastille
-    et le tableau coupent), forme longue « 72° S 170° E (Auckland à 4 000 km) » (`WorldPlace.longName` : menu de
+    et le tableau coupent), forme longue « 72° S 170° E · Auckland à 4 000 km » (sans parenthèses : le tableau le met déjà entre parenthèses, « Ton air (…, −34 °C) » ; `WorldPlace.longName` : menu de
     l'horloge, fiche météo personnelle, « Météo expliquée ») ; ouest « O » en français, « W » en anglais. Avant, un
     clic dans l'océan Austral s'appelait « Auckland » comme le lieu du serveur : deux fiches « Auckland » à 14 °C et
     −34 °C. Son **fuseau** : celui de la ville la plus proche à 1 000 km au plus (`CITY_TIME_ZONE_RADIUS_KM`, heure

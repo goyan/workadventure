@@ -143,15 +143,15 @@ describe("weatherBoardNow", () => {
         chosen.now = {
             place: {
                 name: "72° S 170° E",
-                longName: "72° S 170° E (Auckland 4,000 km away)",
+                longName: "72° S 170° E · Auckland 4,000 km away",
                 latitude: -72.4,
                 longitude: 170.2,
             },
             state: timeline(-34, 69, 15),
         };
         const board = weatherBoardNow(settings, now(), undefined, undefined);
-        expect(board.city).toBe("72° S 170° E (Auckland 4,000 km away)");
-        expect(board.ownAir?.place).toBe("72° S 170° E (Auckland 4,000 km away)");
+        expect(board.city).toBe("72° S 170° E · Auckland 4,000 km away");
+        expect(board.ownAir?.place).toBe("72° S 170° E · Auckland 4,000 km away");
     });
 
     it("says whether something falls for the player, and on the map", () => {

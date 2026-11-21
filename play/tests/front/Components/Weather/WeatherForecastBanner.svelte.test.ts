@@ -469,7 +469,7 @@ describe("WeatherForecastBanner", () => {
         render(false);
         chosen.place.store?.set({
             name: "72° S 170° E",
-            longName: "72° S 170° E (Auckland à 4 000 km)",
+            longName: "72° S 170° E · Auckland à 4 000 km",
             latitude: -72.4,
             longitude: 170.2,
         });
@@ -478,7 +478,7 @@ describe("WeatherForecastBanner", () => {
         chip()?.click();
         flushSync();
         expect(target.querySelector('[data-testid="weather-card-local-city"]')?.textContent).toBe(
-            "72° S 170° E (Auckland à 4 000 km)",
+            "72° S 170° E · Auckland à 4 000 km",
         );
     });
 
