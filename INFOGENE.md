@@ -4373,7 +4373,12 @@ animaux y boivent dès 2 px). Une présence d'eau par case (bleu du paquet 8, 25
 de `SHOWN_PX` de `TerrainWater`) est désormais lue à part de la profondeur : toute eau atteint au moins le bord de sa
 case, l'eau profonde garde son rivage d'avant (`waterShoreLevel`, jumeau TypeScript de la règle du GLSL, testé dans
 `WaterCover.test.ts`). Sous `SHORE_PX` (3 px, ~10 cm), un film est un sol luisant : opacité réduite jusqu'à 60 %,
-sans écume. Les deux replis (`TexturedGround`, canevas) dessinaient déjà toute case mouillée. Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
+sans écume. Les deux replis (`TexturedGround`, canevas) dessinaient déjà toute case mouillée. **Nappe qui ruisselle** :
+une source qui déborde d'un lac court sur un pré en pente en nappe de 6 à 110 mm à 0,2-2 m/s (Manning, `steadyFlowSpeed`,
+pour 28 à 110 L/s sur 1 à 9 m de large), en partie sous `SHOWN_PX` (0,5 px, 17 mm) que `levelsOver` taisait, alors que
+« Flux d'eau » y trace ses flèches (toute profondeur > 0). Une eau qui court (vitesse du bloc non nulle, eau à inertie) est
+dessinée dès `RUNNING_SHOWN_PX` (1/8 px, 4 mm, le pas des profondeurs du serveur), en sol luisant ; une pellicule immobile
+sous 0,5 px (reste d'une crue) reste cachée. Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
 (`TexturedGround`). Textures : `resources/terrain/ground-*.png` (générées, 4 tons nets ; `ground-ice.png` dans le
 style des patinoires).
 
