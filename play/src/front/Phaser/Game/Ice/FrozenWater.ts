@@ -1,10 +1,11 @@
 import { get } from "svelte/store";
-import { ICE_BEARS_MM } from "@workadventure/map-editor";
+import { ICE_BEARS_MM, poolStyleAt, poolStyleOf, soilAt, TERRAIN_CELL } from "@workadventure/map-editor";
+import type { PoolStyle, TerrainData } from "@workadventure/map-editor";
 import { entityStatesManagerStore } from "@wa/front/Stores/EntityStatesStore";
 import type { GameScene } from "@wa/front/Phaser/Game/GameScene";
 import { isFrozen, ownIceMm, POOL_ICE_DEPTH_PX, waterCycleNow } from "@wa/front/Phaser/Game/Weather/Frost";
 import { followsServerGround } from "@wa/front/Phaser/Game/Weather/GroundSource";
-import { SWIM_DEPTH_PX } from "@wa/front/Phaser/Game/Water/WaterZones";
+import { isPoolAt, SWIM_DEPTH_PX } from "@wa/front/Phaser/Game/Water/WaterZones";
 import type { IceBreaks } from "./IceBreaks";
 import { iceOfThickness } from "./IceHold";
 import type { IceState } from "./IceHold";
@@ -32,9 +33,24 @@ export function iceUnderfoot(scene: IceScene, point: { x: number; y: number }): 
     const depth = water.depthAt(point.x, point.y, now);
     const deep = depth >= SWIM_DEPTH_PX;
     if (followsServerGround()) return iceOfThickness(scene.getMeadow?.()?.iceAtPoint(point.x, point.y) ?? 0, deep);
-    const { ice } = waterCycleNow(scene.getGameMap?.()?.getWamFile()?.getWam().settings);
-    if (ice <= 0 || !isFrozen(depth, ice)) return "none";
+    const wam = scene.getGameMap?.()?.getWamFile()?.getWam();
+    const { ice } = waterCycleNow(wam?.settings);
+    // A pool freezes from its surface (POOL_ICE_DEPTH_PX), whatever the depth of its basin, and never with its water
+    // heated: the same rule as its ice drawn and cracked (poolIceState), or one would swim under the ice one sees.
+    const pool = poolStyleUnder(wam, point);
+    if (pool?.hot) return "none";
+    if (ice <= 0 || !isFrozen(pool ? POOL_ICE_DEPTH_PX : depth, ice)) return "none";
     return deep && ownIceMm(ice) < ICE_BEARS_MM ? "thin" : "solid";
+}
+
+/** The style of the pool painted under a point, undefined out of any pool. */
+function poolStyleUnder(
+    wam: { terrain?: TerrainData; settings?: { pools?: readonly PoolStyle[] } } | undefined,
+    point: { x: number; y: number },
+): PoolStyle | undefined {
+    if (!wam?.terrain || !isPoolAt(wam.terrain, point)) return undefined;
+    const code = soilAt(wam.terrain, Math.floor(point.x / TERRAIN_CELL), Math.floor(point.y / TERRAIN_CELL));
+    return poolStyleAt(wam.settings?.pools, poolStyleOf(code) ?? 0);
 }
 
 /** Whether the point is on water of the relief frozen for this player: skated on, nobody swims in it. */
