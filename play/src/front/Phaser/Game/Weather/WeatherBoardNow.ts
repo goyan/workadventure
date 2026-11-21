@@ -2,6 +2,7 @@ import { WeatherType } from "@workadventure/map-editor";
 import type { FireConditionsMessage } from "@workadventure/messages";
 import { get } from "svelte/store";
 import { fireConditionsStore } from "@wa/front/Stores/FireConditionsStore";
+import type { WorldPlace } from "../Night/WorldDaylight";
 import { chosenWeatherNow } from "./ChosenPlaceWeather";
 import { frostAirNow, mapFrostAirNow, timelineAirAt, waterCycleNow } from "./Frost";
 import { precipitationAirNow, roomPrecipitationAir } from "./PrecipitationAir";
@@ -75,14 +76,15 @@ export function weatherBoardNow(
     const epoch = date.getTime();
     const conditions = get(fireConditionsStore);
     const chosen = chosenWeatherNow();
+    // The place followed: a point far from any city says its coordinates, the nearest city and how far (longName).
+    const place: WorldPlace | undefined = chosen.place;
+    const placeName = place ? (place.longName ?? townOf(place.name)) : undefined;
     const cycle = waterCycleNow(settings);
     return explainWeather({
-        city: townOf(chosen.place?.name),
+        city: placeName,
         drawsOwnWeather: showsChosenPlaceWeather(),
         mapAir: mapAirShown(settings, conditions, epoch),
-        ownAir: chosen.place
-            ? { ...timelineAirAt(chosen.state, epoch), byHand: false, place: townOf(chosen.place.name) }
-            : undefined,
+        ownAir: chosen.place ? { ...timelineAirAt(chosen.state, epoch), byHand: false, place: placeName } : undefined,
         precipitationAir: precipitationAirNow(settings, date),
         roomAir: roomPrecipitationAir(settings, date),
         frostAir: frostAirNow(settings, date),

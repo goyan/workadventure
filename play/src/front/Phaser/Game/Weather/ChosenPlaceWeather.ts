@@ -5,6 +5,7 @@ import { derived, readable } from "svelte/store";
 import type { Readable } from "svelte/store";
 import { NightMode, nightModeStore, worldCityStore } from "@wa/front/Stores/NightStore";
 import { REAL_WEATHER_POLL_MS, roundedCoordinate } from "@wa/common/RealWeather";
+import type { WorldPlace } from "../Night/WorldDaylight";
 import type { RealForecastState } from "./RealWeather";
 import { fetchRealWeather } from "./RealWeatherFetch";
 import { weatherForecast } from "./WeatherForecast";
@@ -16,7 +17,7 @@ const debug = Debug("front:chosen-place-weather");
  * The place of this player's own weather: the city (or the point) of the world whose sky they follow
  * (NightMode.World). None while they follow the server: the weather of the map is then theirs too.
  */
-export const chosenPlaceStore: Readable<WeatherLocation | undefined> = derived(
+export const chosenPlaceStore: Readable<WorldPlace | undefined> = derived(
     [nightModeStore, worldCityStore],
     ([mode, city]) => (mode === NightMode.World ? city : undefined),
 );

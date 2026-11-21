@@ -93,6 +93,7 @@ const actionbar = {
         weather: {
             button: "Weather explained",
             title: "Why this weather?",
+            close: "Close “Weather explained”",
             intro: "What you see depends on two airs. This board says which one decides, why, and who sees the same.",
             more: "Learn more",
             airs: {

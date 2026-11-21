@@ -1630,8 +1630,19 @@ d'heure) à ±2 min. La nuit, un voile bleu nuit
     peuvent tomber sur ces villes (ex. 18 h 30 le 21 juin à 06:00 UTC : Unalaska au lieu d'Auckland) ; un **point
     cliqué** près d'elles porte leur nom et leur fuseau.
   - **Heure choisie** : inchangée, la ville dont l'**heure solaire vraie** est la plus proche (avec l'équation du
-    temps, ±16 min selon la saison), gardée à 50 min près. **Point cliqué** sur la carte : inchangé ; le menu dit
-    alors « Ciel de … (point choisi sur la carte) », surligné, puisqu'aucun moment n'est enfoncé. La carte du monde du menu s'ombre avec le voile du jeu lui-même
+    temps, ±16 min selon la saison), gardée à 50 min près. **Point cliqué** sur la carte : le menu dit alors
+    « Ciel de … (point choisi sur la carte) », surligné, puisqu'aucun moment n'est enfoncé. Le point garde ses
+    coordonnées pour le soleil et la météo ; il ne porte le **nom** d'une ville de la liste qu'à 150 km d'elle au plus
+    (`NAMED_POINT_RADIUS_KM`, distance orthodromique, `nearestCityOf`). Plus loin il se nomme par ses coordonnées,
+    en degrés entiers : forme courte « 72° S 170° E » (horloge, pastille météo ; jamais de virgule, que la pastille
+    et le tableau coupent), forme longue « 72° S 170° E (Auckland à 4 000 km) » (`WorldPlace.longName` : menu de
+    l'horloge, fiche météo personnelle, « Météo expliquée ») ; ouest « O » en français, « W » en anglais. Avant, un
+    clic dans l'océan Austral s'appelait « Auckland » comme le lieu du serveur : deux fiches « Auckland » à 14 °C et
+    −34 °C. Son **fuseau** : celui de la ville la plus proche à 1 000 km au plus (`CITY_TIME_ZONE_RADIUS_KM`, heure
+    civile de la région, heure d'été comprise), sinon celui de sa longitude, `Etc/GMT±N` (une heure par 15°, signe
+    inversé : `Etc/GMT-11` = UTC+11) : la ville la plus proche d'un point de l'Antarctique peut être à plusieurs
+    heures de lui. Les cases de la liste sont espacées : la plupart des clics à terre, même en Europe, se nomment
+    désormais par leurs coordonnées. La carte du monde du menu s'ombre avec le voile du jeu lui-même
   (`worldShadeAt` = `nightOpacityAt` vu de chaque point) : plein jour jusqu'à −0,833°, assombrie jusqu'à −6°, nuit
   au-delà. Dessinée pixel par pixel (240 × 120) : environ 7 ms par dessin (mesuré en conteneur Linux sur un Mac), une
   fois par seconde tant que le menu est ouvert en mode monde.
@@ -2726,6 +2737,16 @@ cela change, et la règle dans un « En savoir plus » :
 | Glace sur l'eau | `iceOf(frostAirNow)`, `isFrozen` | comme le givre | comme le givre |
 | Sol gelé | `soilFrostOf(roomPrecipitationAir)` | carte (serveur) | tout le monde |
 | Neige au sol | `MeadowState` reçu du serveur, `snowMeltMmPerHour` | carte (serveur) | ceux qui suivent le serveur |
+
+**Jamais plus bas que la fenêtre.** Le tableau est sous l'horloge, les fiches météo dépliées, le concours de pêche
+et les catastrophes, dans une colonne sans borne basse : une hauteur fixe (60 % de la fenêtre) le faisait sortir de
+l'écran. `WeatherBoardLive` mesure la place qui reste sous ce qui le précède jusqu'au bas de la fenêtre (marge de
+12 px, `weatherBoardFit`) et lui donne cette hauteur, le tableau défilant dedans ; mesure refaite quand la colonne
+ou la fenêtre change de taille, pas à chaque seconde. Avec moins de 240 px de place, il s'ouvre **par-dessus** les
+panneaux du dessous, juste sous la ligne de l'horloge (et ses fiches), fond opaque, avec une croix de fermeture
+(la tuile qui l'a ouvert peut être dessous). La molette au-dessus du tableau le fait défiler, sans zoomer le jeu
+(Phaser ne lit que la molette au-dessus du canevas) ; pas de fermeture par Échap (aucun panneau voisin ne le fait,
+et Échap désarme déjà une catastrophe).
 
 **L'écran du joueur face à la carte du serveur.** Le sujet du tableau est ce que ce joueur voit. Quand il suit une
 ville, la pluie ou la neige, le givre et la glace de son écran sont calculés une seconde fois avec l'air de la carte
@@ -4351,7 +4372,7 @@ style des patinoires).
 **Météo personnelle.** Le bandeau météo devient une pastille : la ville du serveur (globe) avec l'icône du temps et
 une flèche du vent ; un clic ouvre le bulletin, sous la pastille. Dès 768 px de large, la pastille météo et la pile des
 étages sont sur la ligne de l'horloge, à sa gauche (météo, étages, horloge) ; en dessous, empilées sous l'horloge. Un joueur qui suit un lieu du monde sur son horloge (mode « monde »,
-`worldCityStore`, nommé d'après la ville la plus proche) voit aussi sa ville (ordinateur), et le jeu dessine pour lui
+`worldCityStore`, nommé d'après la ville la plus proche, ou par ses coordonnées loin de toute ville) voit aussi sa ville (ordinateur), et le jeu dessine pour lui
 seul la météo de ce lieu (`ChosenPlaceWeather`, route `real-weather` du pusher) ; les autres gardent celle du
 serveur.
 

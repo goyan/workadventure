@@ -220,11 +220,15 @@
                                 data-testid="world-clock-city"
                                 data-point="true"
                             >
-                                {$LL.menu.settings.night.worldPointCity({ city: $worldCityStore.name })}
+                                {$LL.menu.settings.night.worldPointCity({
+                                    city: $worldCityStore.longName ?? $worldCityStore.name,
+                                })}
                             </p>
                         {:else if $worldCityStore}
                             <p class="mt-2 px-1 text-xs" data-testid="world-clock-city">
-                                {$LL.menu.settings.night.worldCity({ city: $worldCityStore.name })}
+                                {$LL.menu.settings.night.worldCity({
+                                    city: $worldCityStore.longName ?? $worldCityStore.name,
+                                })}
                             </p>
                         {/if}
                     </div>
