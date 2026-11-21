@@ -2767,20 +2767,23 @@ Par-dessus la carte (`Terrain/WaterFlowOverlay.ts`, dix dessins par seconde, au-
   secondes, pas le clapot (voir ci-dessous) ;
 - **une étiquette sur les 8 plus grosses masses d'eau en vue** (`Terrain/WaterMasses.ts`) : volume en m³, surface
   en m², profondeur moyenne en m, puis ce qu'elle gagne ou perd en m³ par minute (somme des tendances de ses
-  cellules : elle ne saute pas avec les vagues).
+  cellules : elle ne saute presque plus avec les vagues).
 
 **Tendance plutôt que clapot** (`Terrain/WaterTrend.ts`, alimenté par `TerrainWater.receive`). Le serveur envoie
 l'eau une fois par seconde ; les vagues du modèle à inertie durent 2 à 4 s (mesuré : 2,3 à 3,8 s sous 40 px, jusqu'à
 5 s sous 12 px). L'écart entre deux états d'affilée est donc la pente de la vague du moment : sur une mer qui
 clapote, il changeait de signe une seconde sur deux (26 à 39 fois sur 58) et 80 à 90 % des blocs étaient teintés,
 damier bleu et magenta qui clignotait. S'y ajoutait le seuil (0,02 px/s), sous le plus petit écart que le serveur
-transmet (il ne redit une cellule qu'à partir d'un quart de pixel). Lisser sur 1 s ne changeait rien : la donnée
-arrive déjà à 1 s. La règle, par cellule de la grille (indépendante du zoom et de la caméra) :
+transmet (il ne redit une cellule qu'à partir d'un quart de pixel). Le lissage doit donc durer plus longtemps
+qu'une vague (2 à 4 s), quelle que soit la cadence des états (1 à 10 par seconde, 5 avec le réglage « Réaliste ») :
+lisser sur 1 s ne changeait rien à 1 état par seconde, et pas assez à 5. La règle, par cellule de la grille
+(indépendante du zoom et de la caméra) :
 
 - l'écart de chaque état, rapporté au temps écoulé, passe dans deux filtres exponentiels de 4 s à la suite (résolus
   exactement, quel que soit l'intervalle entre deux états) : une vague de 3 s n'en garde qu'un soixante-dixième ;
 - **zone morte** : aucune teinte sous 0,06 px/s (2 mm/s, 12 cm par minute), ni sous 15 % de l'agitation de l'eau
-  (moyenne quadratique, sur 10 s, de sa vitesse de montée mesurée sur une seconde) : une mer forte cache une montée
+  (moyenne quadratique, sur 10 s, de sa vitesse de montée mesurée sur environ une seconde, quelle que soit la
+  cadence) : une mer forte cache une montée
   lente, jamais ne la montre à l'envers. Rien n'est teinté avant trois secondes d'observation ;
 - **hystérésis** : une teinte reste jusqu'à ce que la tendance retombe sous la moitié de son seuil ;
 - **silence du serveur** (rien ne bouge d'un quart de pixel, il n'envoie plus) : après 2 s sans état, la tendance
@@ -2790,7 +2793,9 @@ Mesuré sur le modèle (bassin de 80 × 80 cellules, 40 px, `WaterGrid` avec ine
 reproduite) : 0 à 2 changements de teinte par minute et par cellule sur mer forte (vagues de 30 à 45 cm), 0 à 2
 sur mer modérée, au lieu d'un changement de signe toutes les une à deux secondes. Une montée de 0,1 px/s sous un
 clapot modéré apparaît en 5 à 11 s, une de 0,5 px/s en 2 à 3 s, une de 1 px/s sur mer forte en 1 à 4 s, puis ne
-s'éteint plus tant qu'elle dure. L'étiquette d'une masse atteint 63 % d'un nouveau débit en 8 à 9 s. Rien n'a été vu
+s'éteint plus tant qu'elle dure. L'étiquette d'une masse atteint 63 % d'un nouveau débit en 8 à 9 s ; sur un
+bassin fermé de 2 400 m³ qui clapote, elle reste à « = » sauf 3 secondes sur 120 (1,2 à 1,6 m³/min, au lieu de
+±1,5 à ±14 m³/min chaque seconde auparavant). Rien n'a été vu
 à l'écran par un agent.
 
 Les **flèches** ne sont pas lissées : elles montrent la vitesse que le serveur calcule, une vague qui passe

@@ -31,8 +31,11 @@ export const HOLD_SHARE = 0.5;
 export const SILENCE_MS = 2000;
 /** Nothing is shown before the agitation of the water was sampled this many times: the waves are not known yet. */
 const FIRST_SAMPLES = 3;
-/** The agitation is sampled over a second at least, whatever the number of states a second the map asks for. */
-const AGITATION_SAMPLE_MS = 1000;
+/**
+ * The agitation is sampled over about a second, whatever the number of states a second the map asks for (1 to 10):
+ * from 0.75 s on, so that states that come 0.8 s apart are each a sample.
+ */
+const AGITATION_SAMPLE_MS = 750;
 /** Two states closer than this are a tenth of a second apart (that of the glide of the water). */
 const SHORTEST_GAP_MS = 100;
 
