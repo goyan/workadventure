@@ -133,7 +133,7 @@
     <div class="relative" bind:this={root}>
         <button
             type="button"
-            class="rounded-full bg-contrast/80 px-3 py-1.5 text-xs tabular-nums backdrop-blur hover:bg-contrast"
+            class="h-8 rounded-full bg-contrast/80 px-3 py-1.5 text-xs tabular-nums backdrop-blur hover:bg-contrast"
             aria-haspopup="dialog"
             aria-expanded={open}
             title={$LL.menu.settings.night.skyMenu()}

@@ -110,7 +110,7 @@
         aria-label={$LL.actionbar.weatherBanner.label()}
         data-testid="weather-banner"
     >
-        <div class="flex items-center gap-1 rounded-full bg-contrast/80 py-1 pe-1 ps-2 text-xs backdrop-blur">
+        <div class="flex h-8 items-center gap-1 rounded-full bg-contrast/80 py-1 pe-1 ps-2 text-xs backdrop-blur">
             <button
                 type="button"
                 class="flex items-center gap-3 rounded-full px-1 hover:bg-white/10"
