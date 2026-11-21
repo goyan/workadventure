@@ -2,8 +2,15 @@ import type { CatastropheMessage } from "@workadventure/messages";
 import { downpourTiles, TILE_PX } from "@workadventure/map-editor";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import { isEffectShown } from "../../../Stores/EffectsStore";
-import { drawFlake, snowTones } from "../Weather/Snowfall";
-import { DOWNPOUR_FALL_PX, downpourAlpha, downpourDrops, downpourFlakes, SPLASH_FROM } from "./DownpourFall";
+import { drawFlake, flakeFadeIn, snowTones } from "../Weather/Snowfall";
+import {
+    DOWNPOUR_FALL_PX,
+    downpourAlpha,
+    downpourDrops,
+    downpourFlakes,
+    FLAKE_FALL_MS,
+    SPLASH_FROM,
+} from "./DownpourFall";
 
 const CLOUD_COLOR = 0x4a5568;
 const CLOUD_LIGHT = 0x718096;
@@ -194,7 +201,7 @@ export class DownpourView {
         if (snow > 0) {
             // A flake fades in as it leaves the cloud, and stays whole down to the ground.
             for (const flake of downpourFlakes(now, centre, radiusPx, snow, reduced)) {
-                const shown = 0.9 * alpha * Math.min(1, flake.fall * 6);
+                const shown = 0.9 * alpha * flakeFadeIn((flake.fall * FLAKE_FALL_MS) / 1000);
                 drawFlake(graphics, flake.x, flake.y, FLAKE_SIZE, shown, FLAKE_TONES);
             }
         }
