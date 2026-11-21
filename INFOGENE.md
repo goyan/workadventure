@@ -2663,8 +2663,8 @@ genre, position en pixels de carte) et les garde dans Redis (`aquatic-life:<sall
 `AquaticLifeView.ts` les dessine (images faites en code) juste au-dessus de l'eau. Une erreur dans un pas arrête la
 vie de la salle, pas l'eau ni la salle.
 
-**Limites.** Eau du relief du sol seulement (ni piscines d'objets, ni étages). Pas de recherche de chemin : un animal
-qui bute sur un obstacle en allant vers sa cible erre 3 s puis reprend. Les animaux sont dessinés par-dessus l'eau,
+**Limites.** Eau du relief du sol seulement (ni piscines d'objets, ni étages). Un animal qui bute sur un obstacle en allant vers sa cible cherche un chemin (voir « Chemin » à la
+section des ponts) ; sans chemin, il erre 3 s puis reprend. Les animaux sont dessinés par-dessus l'eau,
 sans passer derrière les objets. `play`, `back` et `map-storage` se déploient ensemble.
 
 
@@ -3851,9 +3851,15 @@ du sol n'atteint n'est pas un pont (un toit, l'étage d'un bâtiment sans accès
 - Avatar : rien de particulier, il marche sur les dalles comme sur tout palier (ni nage ni courant en hauteur) ;
   au sol sous le tablier, il nage comme ailleurs.
 
+**Chemin.** Un animal du serveur arrêté sur sa ligne droite (l'eau, un mur) cherche un chemin jusqu'à sa cible et le
+suit : un animal de la terre contourne la rivière par un pont, un poisson contourne une île (`Swim.ts`, `findRoute` :
+recherche de proche en proche sur 8 000 cellules au plus, soit environ 45 cellules autour de lui, puis chemin
+redressé). Sa cible n'est abandonnée que s'il n'y a pas de chemin ; il ne recherche alors pas avant 4 s. Le chemin
+n'est ni sauvegardé ni envoyé aux navigateurs. Un animal qui se promène ne vise jamais plus loin que 6 cellules : il
+ne traverse une rivière large que pour une proie, un partenaire, son groupe, l'eau à boire ou une fuite.
+
 **Limites.** Les animaux du serveur vivent à plat : un animal qui arrive par la berge sous le tablier monte dessus
-d'un coup, et un lion peut prendre un poisson qui passe dessous. Pas de recherche de chemin : un animal ne traverse
-que si sa ligne droite suit le pont (animaux du serveur). Un lion ou un tigre du serveur apprivoisé qui suit son
+d'un coup, et un lion peut prendre un poisson qui passe dessous. Un lion ou un tigre du serveur apprivoisé qui suit son
 maître sur un pont est dessiné sous les dalles.
 Les dalles d'un palier ne reçoivent ni pluie ni nuages. Pas de garde-corps propre au pont (ceux des paliers). Bois
 seul. L'herbe pousse sous un tablier.
