@@ -257,7 +257,7 @@ export class MeadowManager {
             rainMmPerHour: this.rainRate,
             // Day from sunrise to sunset at the place of the map, as the game draws its day and night.
             daylight: isDaylightAt(date, settings?.weatherLocation),
-            season: seasonAt(date),
+            season: seasonAt(date, settings?.weatherLocation),
             growSeconds: set.growMinutes * 60,
             thirstSeconds: set.thirstMinutes * 60,
             moistureHold: set.moistureHold,

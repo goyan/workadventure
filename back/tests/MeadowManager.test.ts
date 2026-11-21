@@ -6,16 +6,24 @@ import { describe, expect, it, vi } from "vitest";
 import { MeadowManager } from "../src/Model/MeadowManager";
 import type { VariablesRepositoryInterface } from "../src/Services/Repository/VariablesRepositoryInterface";
 
-function wamWith(weather: WeatherType, meadow?: NonNullable<WAMFileFormat["settings"]>["meadow"]): WAMFileFormat {
+type Settings = NonNullable<WAMFileFormat["settings"]>;
+
+function wamWith(
+    weather: WeatherType,
+    meadow?: Settings["meadow"],
+    weatherLocation?: Settings["weatherLocation"],
+): WAMFileFormat {
     return {
         version: "2.1.0",
         mapUrl: "map.tmj",
         areas: [],
         entityCollections: [],
         entities: {},
-        settings: { weather, meadow },
+        settings: weatherLocation ? { weather, meadow, weatherLocation } : { weather, meadow },
     };
 }
+
+const SYDNEY = { name: "Sydney", latitude: -33.87, longitude: 151.21, timezone: "Australia/Sydney" };
 
 function createHarness({
     weather = WeatherType.Rain,
@@ -28,7 +36,9 @@ function createHarness({
     danger = undefined as (() => number) | undefined,
     wind = { windFrom: 0, windSpeed: 0 },
     random = () => 1,
+    place = undefined as Settings["weatherLocation"],
 }: {
+    place?: Settings["weatherLocation"];
     danger?: () => number;
     wind?: { windFrom: number; windSpeed: number };
     random?: () => number;
@@ -48,7 +58,7 @@ function createHarness({
             return Promise.resolve(1);
         }),
     } satisfies VariablesRepositoryInterface;
-    const wam = wamWith(weather, meadow);
+    const wam = wamWith(weather, meadow, place);
     const room = {
         getWam: () => wam,
         sendSubMessageToRoom: (message: SubToPusherRoomMessage): void => {
@@ -101,6 +111,31 @@ describe("MeadowManager", () => {
         const told = autumnDawn.sent;
         expect(told.length === 0 || grassOf(told[told.length - 1]).every((cover) => cover === 0)).toBe(true);
         autumnDawn.manager.stop();
+    });
+
+    it("grows grass in the summer of the place: in January in Sydney, not in its winter of July", () => {
+        // January 15, 2:00 UTC: 13:00 in Sydney, a summer noon; in Paris a winter night.
+        const summer = createHarness({ place: SYDNEY, now: Date.UTC(2026, 0, 15, 2) });
+        summer.manager.mapChanged();
+        summer.steps(400);
+        expect(grassOf(summer.sent[summer.sent.length - 1]).some((cover) => cover > 0)).toBe(true);
+        summer.manager.stop();
+        // July 15, 2:00 UTC: noon in Sydney, in its winter: the grass sleeps.
+        const winter = createHarness({ place: SYDNEY, now: Date.UTC(2026, 6, 15, 2) });
+        winter.manager.mapChanged();
+        winter.steps(400);
+        const told = winter.sent;
+        expect(told.length === 0 || grassOf(told[told.length - 1]).every((cover) => cover === 0)).toBe(true);
+        winter.manager.stop();
+        // A winter noon in Paris: nothing grows, as before.
+        const paris = createHarness({ now: Date.UTC(2026, 0, 15, 11) });
+        paris.manager.mapChanged();
+        paris.steps(400);
+        const parisTold = paris.sent;
+        expect(parisTold.length === 0 || grassOf(parisTold[parisTold.length - 1]).every((cover) => cover === 0)).toBe(
+            true,
+        );
+        paris.manager.stop();
     });
 
     it("grows no grass at 7:30 in Paris in November, before sunrise, and grows it at noon", () => {
