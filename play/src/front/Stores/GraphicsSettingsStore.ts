@@ -13,6 +13,8 @@ import {
     rainSplashesStore,
     rainPuddlesStore,
     rainCloudsStore,
+    rainbowShownStore,
+    smoothCloudsStore,
 } from "./WeatherStore";
 
 export enum GraphicsQuality {
@@ -36,9 +38,16 @@ export const tileAnimationsDisabledStore = createPersistedSwitchStore(
     localUserStore.getDisableAnimations(),
 );
 
+/** Smooth the borders of the game pixels when the canvas is stretched to the screen (Phaser/Services/SharpUpscale). */
+export const pixelSmoothingStore = createPersistedSwitchStore("pixelSmoothing", true);
+
 export interface GraphicsProfile {
     effects: boolean;
     clouds: boolean;
+    /** The pixels smoothed when the game is stretched to the screen, the clouds by the graphics card, the rainbows. */
+    pixelSmoothing: boolean;
+    smoothClouds: boolean;
+    rainbows: boolean;
     animations: boolean;
     rain: readonly number[];
     lights: Readonly<Record<string, LightSettingValue>>;
@@ -58,6 +67,9 @@ export function graphicsProfile(quality: GraphicsPreset): GraphicsProfile {
     return {
         effects: !low,
         clouds: high,
+        pixelSmoothing: !low,
+        smoothClouds: !low,
+        rainbows: !low,
         animations: !low,
         rain: ultra ? [2, 2, 2, 2, 1] : high ? [1, 1, 1, 1, 0.8] : low ? [0.25, 0, 0, 0, 0] : [0.5, 0.5, 0.25, 0, 0.5],
         lights: {
@@ -114,15 +126,36 @@ export const graphicsQualityStore = derived(
         rainSplashesStore,
         rainPuddlesStore,
         rainCloudsStore,
+        pixelSmoothingStore,
+        smoothCloudsStore,
+        rainbowShownStore,
     ],
-    ([lights, effects, clouds, disabled, ...rain]) =>
+    ([
+        lights,
+        effects,
+        clouds,
+        disabled,
+        rainAmount,
+        rainLean,
+        rainSplashes,
+        rainPuddles,
+        rainClouds,
+        smoothing,
+        smooth,
+        rainbows,
+    ]) =>
         GRAPHICS_PRESETS.find((quality) => {
             const profile = graphicsProfile(quality);
             return (
                 effects === profile.effects &&
                 clouds === profile.clouds &&
                 disabled === !profile.animations &&
-                rain.every((value, index) => value === profile.rain[index]) &&
+                smoothing === profile.pixelSmoothing &&
+                smooth === profile.smoothClouds &&
+                rainbows === profile.rainbows &&
+                [rainAmount, rainLean, rainSplashes, rainPuddles, rainClouds].every(
+                    (value, index) => value === profile.rain[index],
+                ) &&
                 Object.entries(profile.lights).every(([name, value]) => lights[name] === value)
             );
         }) ?? GraphicsQuality.Custom,
@@ -139,6 +172,9 @@ export function applyGraphicsQuality(quality: GraphicsPreset): void {
     for (const [name, value] of Object.entries(profile.lights)) setLightSetting(name, value);
     weatherEffectsEnabledStore.set(profile.effects);
     cloudsShownStore.set(profile.clouds);
+    pixelSmoothingStore.set(profile.pixelSmoothing);
+    smoothCloudsStore.set(profile.smoothClouds);
+    rainbowShownStore.set(profile.rainbows);
     setTileAnimationsDisabled(!profile.animations);
     [rainAmountStore, rainLeanStore, rainSplashesStore, rainPuddlesStore, rainCloudsStore].forEach((store, index) =>
         store.set(profile.rain[index] ?? 0),
