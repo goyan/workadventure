@@ -382,6 +382,22 @@ describe("WeatherForecastBanner", () => {
         expect(shown[0].querySelector('[data-testid="weather-banner-wind-icon"]')).toBeNull();
         expect(target.querySelectorAll('[data-testid="weather-banner-wind-arrow"]')).toHaveLength(1);
     });
+    it("keeps the wind arrow or gusts right before the wind text, on one line apart from the temperature", () => {
+        cells.value = [{ at: NOW.getTime(), weather: "clear", temperature: 46, windSpeed: 53, windFrom: 90 }];
+        render();
+        const text = target.querySelector('[data-testid="weather-banner-wind"]');
+        const group = text?.parentElement;
+        expect(group?.getAttribute("data-testid")).toBe("weather-banner-wind-group");
+        expect(group?.classList.contains("whitespace-nowrap")).toBe(true);
+        expect(group?.firstElementChild?.getAttribute("data-testid")).toBe("weather-banner-wind-arrow");
+        expect(group?.lastElementChild).toBe(text);
+
+        cells.value = [{ at: NOW.getTime(), weather: "clear", temperature: 46, windSpeed: 53 }];
+        nightDate().set(new Date(NOW.getTime() + 1000));
+        flushSync();
+        const gusts = target.querySelector('[data-testid="weather-banner-wind-icon"]');
+        expect(gusts?.parentElement?.getAttribute("data-testid")).toBe("weather-banner-wind-group");
+    });
     it("shows no direction without a wind speed, and the gusts when only the direction is unknown", () => {
         cells.value = [{ at: NOW.getTime(), weather: "rain", windFrom: 315 }];
         render();
