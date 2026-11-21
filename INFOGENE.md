@@ -2697,6 +2697,20 @@ cela change, et la règle dans un « En savoir plus » :
 | Sol gelé | `soilFrostOf(roomPrecipitationAir)` | carte (serveur) | tout le monde |
 | Neige au sol | `MeadowState` reçu du serveur, `snowMeltMmPerHour` | carte (serveur) | ceux qui suivent le serveur |
 
+**L'écran du joueur face à la carte du serveur.** Le sujet du tableau est ce que ce joueur voit. Quand il suit une
+ville, la pluie ou la neige, le givre et la glace de son écran sont calculés une seconde fois avec l'air de la carte
+(`onMap`, ce que voient ceux qui suivent le serveur ; `mapFrostAirNow` pour le givre et la glace) :
+
+- sous les deux airs, un bandeau « Ton écran et la carte, en ce moment » liste les six phénomènes en une ligne
+  chacun (« toi, neige · carte, pluie », pastille « écart », « pareil » ou « serveur ») ;
+- une carte dont le résultat diffère (`differs` : forme ou chute de la précipitation, niveau du givre, stade de la
+  glace) montre « Chez toi » puis « Sur la carte (serveur) », chacun avec sa raison, puis un encadré « Écart » : ce
+  que voient les autres, et ce que le serveur compte réellement (la pluie de la carte remplit l'eau, sa neige
+  s'accumule, rien ne tombe ; le givre et la glace ne sont que dessinés, l'eau du serveur reste liquide) ;
+- sans écart, une seule ligne (« Comme sur la carte… », ou « C'est la météo de la carte… » pour qui suit le serveur) ;
+- les cartes du serveur (averse, sol gelé, neige au sol) disent que l'air du joueur n'y change rien, et ce que le
+  serveur applique à tout le monde (sol gelé ou non, neige non montrée).
+
 Aucune physique n'est recopiée : `Weather/WeatherExplained.ts` (`explainWeather`, pur) reçoit les airs que lisent
 les lecteurs du rendu (`Weather/WeatherBoardNow.ts` les appelle : `precipitationAirNow`, `roomPrecipitationAir`,
 `frostAirNow`, `waterCycleNow`, `fireConditionsStore`, `MeadowState`) et interroge les règles du jeu. Les « il

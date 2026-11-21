@@ -120,6 +120,59 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
                 whereMap: "L'air de la carte se règle dans Catastrophe → Météo.",
                 whereOwn: "Ta ville se choisit dans le menu de l'horloge → Jour dans le monde.",
             },
+            compare: {
+                own: "Chez toi",
+                map: "Sur la carte (serveur)",
+                gap: "Écart",
+                sameAsMap: "Comme sur la carte : l'air de la carte donne le même résultat, pour tout le monde.",
+                mapWeather: "C'est la météo de la carte : la même pour tous ceux qui suivent le serveur.",
+                seen: "Ceux qui suivent le serveur voient autre chose que toi. Sur leur écran : {map}. Sur le tien : {own}.",
+                serverRain:
+                    "Pour le serveur, ce qui tombe sur la carte est de la pluie : elle remplit l'eau et mouille le sol, pour tout le monde, quoi que montre ton écran.",
+                serverSnow:
+                    "Pour le serveur, ce qui tombe sur la carte est de la neige : elle s'accumule au sol sans apporter d'eau, pour tout le monde, quoi que montre ton écran.",
+                serverMix:
+                    "Pour le serveur, ce qui tombe sur la carte est de la neige à {share} % : la pluie apporte de l'eau, la neige reste au sol, pour tout le monde.",
+                serverDry:
+                    "Pour le serveur, rien ne tombe sur la carte : ni eau ni neige ne s'y ajoutent, même s'il pleut ou neige sur ton écran.",
+                frostOnlyDrawn:
+                    "Le givre n'est que dessiné, par chaque navigateur : le serveur n'en tient aucun compte.",
+                iceOnlyDrawn:
+                    "La glace est dessinée par chaque navigateur : tu marches dessus sur ton écran, mais pour le serveur l'eau reste liquide et continue de couler.",
+                soilNotYours: "Ton air ({temperature}) n'y change rien : le sol est celui de la carte.",
+                soilThawed:
+                    "Pour le serveur le sol n'est pas gelé : son eau circule et l'herbe pousse, pour tout le monde, quoi que montre ton écran.",
+                soilFrozen:
+                    "Pour le serveur le sol est gelé : il garde son eau et l'herbe dort, pour tout le monde, quoi que montre ton écran.",
+                summary: "Ton écran et la carte, en ce moment",
+                row: "toi, {own} · carte, {map}",
+                rowAll: "{map}, pour tout le monde",
+                rowHidden: "{map}, tenue par le serveur et non montrée chez toi",
+                differs: "écart",
+                same: "pareil",
+                server: "serveur",
+                short: {
+                    rain: "pluie",
+                    snow: "neige",
+                    mix: "pluie et neige",
+                    dryRain: "rien ne tombe (ce serait de la pluie)",
+                    drySnow: "rien ne tombe (ce serait de la neige)",
+                    dryMix: "rien ne tombe (ce serait pluie et neige)",
+                    noFrost: "pas de givre",
+                    lightFrost: "givre léger",
+                    whiteFrost: "givre",
+                    noIce: "pas de glace",
+                    shallows: "bords de l'eau gelés",
+                    pools: "piscines gelées",
+                    allIce: "toute l'eau gelée",
+                    soilThawed: "pas gelé",
+                    soilPartly: "en partie gelé",
+                    soilFrozen: "gelé",
+                    snowUnknown: "pas encore connue",
+                    snowNone: "aucune",
+                    snowSome: "sur {percent} % de la carte",
+                },
+            },
             decidedBy: {
                 label: "Décidé par",
                 map: "l'air de la carte",
@@ -156,8 +209,6 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
                 rainIf: "Rien ne tombe. Ce serait de la pluie.",
                 snowIf: "Rien ne tombe. Ce serait de la neige.",
                 mixIf: "Rien ne tombe. Ce serait de la neige à {share} %.",
-                ownOnly:
-                    "La pluie ou la neige de ta ville ne tombe que sur ton écran : l'eau, l'herbe et la neige au sol de la carte suivent la météo de la carte.",
             },
             downpour: {
                 title: "Averse de la catastrophe",

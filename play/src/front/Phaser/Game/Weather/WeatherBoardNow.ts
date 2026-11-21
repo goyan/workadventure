@@ -3,7 +3,7 @@ import type { FireConditionsMessage } from "@workadventure/messages";
 import { get } from "svelte/store";
 import { fireConditionsStore } from "@wa/front/Stores/FireConditionsStore";
 import { chosenWeatherNow } from "./ChosenPlaceWeather";
-import { frostAirNow, timelineAirAt, waterCycleNow } from "./Frost";
+import { frostAirNow, mapFrostAirNow, timelineAirAt, waterCycleNow } from "./Frost";
 import { precipitationAirNow, roomPrecipitationAir } from "./PrecipitationAir";
 import {
     mapWeatherSettings,
@@ -86,6 +86,7 @@ export function weatherBoardNow(
         precipitationAir: precipitationAirNow(settings, date),
         roomAir: roomPrecipitationAir(settings, date),
         frostAir: frostAirNow(settings, date),
+        mapFrostAir: mapFrostAirNow(settings, date),
         falling: fallsUnder(shownWeatherSettings(settings, date), date),
         mapFalling: fallsUnder(mapWeatherSettings(settings, date), date),
         drawn: { frost: cycle.frost, ice: cycle.ice },

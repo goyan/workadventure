@@ -34,7 +34,7 @@ vi.mock("../../../../../src/front/Phaser/Game/Weather/RealWeatherClient", () => 
 
 const { nightDateStore } = await import("../../../../../src/front/Stores/NightStore");
 const { fireConditionsStore } = await import("../../../../../src/front/Stores/FireConditionsStore");
-const { frostAirNow, frostOf } = await import("../../../../../src/front/Phaser/Game/Weather/Frost");
+const { frostAirNow, frostOf, mapFrostAirNow } = await import("../../../../../src/front/Phaser/Game/Weather/Frost");
 const { precipitationAirNow, roomPrecipitationAir } =
     await import("../../../../../src/front/Phaser/Game/Weather/PrecipitationAir");
 const { weatherBoardNow } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherBoardNow");
@@ -129,6 +129,12 @@ describe("weatherBoardNow", () => {
         expect(board.precipitation.share).toBe(1);
         expect(board.downpour.share).toBe(snowShareOf(roomPrecipitationAir(settings, date)));
         expect(board.frost.frost).toBe(frostOf(frostAirNow(settings, date)));
+        // ...and the map's side is what a player who follows the server draws.
+        expect(board.frost.onMap?.frost).toBe(frostOf(mapFrostAirNow(settings, date)));
+        expect(board.frost.onMap).toMatchObject({ temperature: 24, windSpeed: 12, reason: "groundWarm" });
+        expect(board.precipitation).toMatchObject({ form: "snow", differs: true });
+        expect(board.precipitation.onMap).toMatchObject({ form: "rain", temperature: 24 });
+        expect(board.ice).toMatchObject({ stage: "shallows", differs: true });
     });
 
     it("says whether something falls for the player, and on the map", () => {

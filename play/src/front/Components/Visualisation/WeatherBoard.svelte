@@ -95,13 +95,24 @@
         return lines;
     }
 
-    const precipitationResult = $derived.by(() => {
-        const { form, falling } = board.precipitation;
-        const flakes = { share: share(board.precipitation.share) };
+    type Precipitation = WeatherBoard["precipitation"];
+    type Frost = WeatherBoard["frost"];
+    type Ice = WeatherBoard["ice"];
+
+    function precipitationResult({ form, falling, share: flakes }: Omit<Precipitation, "differs">): string {
+        const values = { share: share(flakes) };
         if (form === "rain") return falling ? t.precipitation.rainFalling() : t.precipitation.rainIf();
         if (form === "snow") return falling ? t.precipitation.snowFalling() : t.precipitation.snowIf();
-        return falling ? t.precipitation.mixFalling(flakes) : t.precipitation.mixIf(flakes);
-    });
+        return falling ? t.precipitation.mixFalling(values) : t.precipitation.mixIf(values);
+    }
+
+    /** A precipitation in a few words, for the summary and the gap. */
+    function precipitationShort({ form, falling }: Omit<Precipitation, "differs">): string {
+        const short = t.compare.short;
+        if (form === "rain") return falling ? short.rain() : short.dryRain();
+        if (form === "snow") return falling ? short.snow() : short.drySnow();
+        return falling ? short.mix() : short.dryMix();
+    }
 
     const downpourResult = $derived.by(() => {
         const { form } = board.downpour;
@@ -109,15 +120,19 @@
         return form === "snow" ? t.downpour.snow() : t.downpour.mix({ share: share(board.downpour.share) });
     });
 
-    const frostResult = $derived.by(() => {
-        const { level, frost } = board.frost;
+    function frostResult({ level, frost }: Omit<Frost, "differs">): string {
         if (level === "none") return t.frost.none();
         const strength = { percent: share(frost) };
         return level === "light" ? t.frost.light(strength) : t.frost.white(strength);
-    });
+    }
 
-    const frostWhy = $derived.by(() => {
-        const frost = board.frost;
+    function frostShort({ level }: Omit<Frost, "differs">): string {
+        const short = t.compare.short;
+        if (level === "none") return short.noFrost();
+        return level === "light" ? short.lightFrost() : short.whiteFrost();
+    }
+
+    function frostWhy(frost: Omit<Frost, "differs">): string {
         const values = {
             temperature: degreesOr(frost.temperature),
             humidity: frost.humidity === undefined ? t.airs.unknown() : percent(frost.humidity),
@@ -139,7 +154,7 @@
             case "frost":
                 return t.frost.frost(values);
         }
-    });
+    }
 
     const frostChange = $derived.by(() => {
         const { needsHumidity, needsWindUnder, needsAirUnder } = board.frost;
@@ -156,8 +171,8 @@
     const lags = (drawn: number | undefined, target: number): boolean =>
         drawn !== undefined && Math.abs(drawn - target) > 0.05;
 
-    const iceResult = $derived.by(() => {
-        switch (board.ice.stage) {
+    function iceResult({ stage }: Omit<Ice, "differs">): string {
+        switch (stage) {
             case "none":
                 return t.ice.none();
             case "shallows":
@@ -167,11 +182,25 @@
             case "all":
                 return t.ice.all();
         }
-    });
+    }
 
-    const iceWhy = $derived.by(() => {
-        const temperature = { temperature: degreesOr(board.ice.temperature) };
-        switch (board.ice.reason) {
+    function iceShort({ stage }: Omit<Ice, "differs">): string {
+        const short = t.compare.short;
+        switch (stage) {
+            case "none":
+                return short.noIce();
+            case "shallows":
+                return short.shallows();
+            case "pools":
+                return short.pools();
+            case "all":
+                return short.allIce();
+        }
+    }
+
+    function iceWhy(ice: Omit<Ice, "differs">): string {
+        const temperature = { temperature: degreesOr(ice.temperature) };
+        switch (ice.reason) {
             case "unknown":
                 return t.ice.unknown();
             case "warm":
@@ -181,12 +210,18 @@
             case "freezing":
                 return t.ice.freezing(temperature);
         }
-    });
+    }
 
     const soilResult = $derived.by(() => {
         const { reason, frost } = board.soil;
         if (reason === "frozen") return t.soil.frozen();
         return reason === "partly" ? t.soil.partly({ percent: share(frost) }) : t.soil.thawed();
+    });
+
+    const soilShort = $derived.by(() => {
+        const short = t.compare.short;
+        if (board.soil.reason === "frozen") return short.soilFrozen();
+        return board.soil.reason === "partly" ? short.soilPartly() : short.soilThawed();
     });
 
     const soilWhy = $derived.by(() => {
@@ -208,15 +243,20 @@
         }
     });
 
+    // A thin snow somewhere is not "0 %": at least 1 % once any lies.
+    const snowOnMap = $derived(whole.format(Math.max(1, Math.round(board.snow.mapCover * 100))));
+
     const snowResult = $derived.by(() => {
         const snow = board.snow;
         if (!snow.known) return t.snow.unknown();
         if (snow.mapCover <= 0) return t.snow.none();
-        // A thin snow somewhere is not "0 %": at least 1 % once any lies.
-        return t.snow.some({
-            map: whole.format(Math.max(1, Math.round(snow.mapCover * 100))),
-            here: share(snow.hereCover),
-        });
+        return t.snow.some({ map: snowOnMap, here: share(snow.hereCover) });
+    });
+
+    const snowShort = $derived.by(() => {
+        const short = t.compare.short;
+        if (!board.snow.known) return short.snowUnknown();
+        return board.snow.mapCover <= 0 ? short.snowNone() : short.snowSome({ percent: snowOnMap });
     });
 
     const snowTrend = $derived.by(() => {
@@ -242,90 +282,230 @@
         }
     });
 
-    const cards = $derived([
-        {
-            id: "precipitation",
-            title: t.precipitation.title(),
-            owner: board.precipitation.air,
-            audience: board.precipitation.audience,
-            result: precipitationResult,
-            why: [formWhy(board.precipitation)],
-            change: formChange(board.precipitation),
-            notes: board.precipitation.air === "own" ? [t.precipitation.ownOnly()] : [],
-            more: t.form.more(),
-        },
-        {
-            id: "downpour",
-            title: t.downpour.title(),
-            owner: board.downpour.air,
-            audience: board.downpour.audience,
-            result: downpourResult,
-            why: [
-                formWhy(board.downpour),
-                board.follows === "server" || board.city === undefined
-                    ? t.downpour.always()
-                    : `${t.downpour.always()} ${t.downpour.notYours({ city: board.city })}`,
-            ],
-            change: formChange(board.downpour),
-            notes: [],
-            more: t.form.more(),
-        },
-        {
-            id: "frost",
-            title: t.frost.title(),
-            owner: board.frost.air,
-            audience: board.frost.audience,
-            result: frostResult,
-            why: [frostWhy],
-            change: frostChange === undefined ? [] : [frostChange],
-            notes: lags(board.frost.drawn, board.frost.frost)
-                ? [t.frost.drawn({ percent: share(board.frost.drawn ?? 0) })]
-                : [],
-            more: t.frost.more(),
-        },
-        {
-            id: "ice",
-            title: t.ice.title(),
-            owner: board.ice.air,
-            audience: board.ice.audience,
-            result: iceResult,
-            why: [iceWhy],
-            change: [
-                t.ice.ladder({
-                    shallows: under(board.ice.thresholds.shallows),
-                    pools: under(board.ice.thresholds.pools),
-                    all: under(board.ice.thresholds.all),
-                }),
-            ],
-            notes: lags(board.ice.drawn, board.ice.ice) ? [t.ice.drawn()] : [],
-            more: t.ice.more(),
-        },
-        {
-            id: "soil",
-            title: t.soil.title(),
-            owner: board.soil.air,
-            audience: board.soil.audience,
-            result: soilResult,
-            why: [soilWhy, t.soil.effect()],
-            change: [],
-            notes: [],
-            more: t.soil.honest(),
-        },
-        {
-            id: "snow",
-            title: t.snow.title(),
-            owner: board.snow.air,
-            audience: board.snow.audience,
-            result: snowResult,
-            why: snowTrend === undefined ? [] : [snowTrend],
-            change: [],
-            notes:
-                !board.snow.shown && board.city !== undefined
-                    ? [t.snow.hidden({ city: board.city }), t.snow.water()]
-                    : [t.snow.water()],
-            more: t.snow.honest({ times: whole.format(THAW_SPEED) }),
-        },
-    ]);
+    /** Whether this player follows a city of their own: their screen is then set against the map of the server. */
+    const apart = $derived(board.follows !== "server" && board.city !== undefined);
+
+    /** What the server itself counts of what falls on the map, whatever this player's screen shows. */
+    function serverFall(onMap: Omit<Precipitation, "differs">): string {
+        if (!onMap.falling) return t.compare.serverDry();
+        if (onMap.form === "rain") return t.compare.serverRain();
+        return onMap.form === "snow" ? t.compare.serverSnow() : t.compare.serverMix({ share: share(onMap.share) });
+    }
+
+    interface Card {
+        id: string;
+        title: string;
+        owner: AirOwner;
+        audience: Audience;
+        result: string;
+        why: string[];
+        change: string[];
+        notes: string[];
+        more: string;
+        /** The same thing by the air of the map, shown when it is not what this player sees. */
+        onMap?: { result: string; why: string[] };
+        /** What the gap means: who sees what, and what the server itself counts. */
+        gap?: string[];
+        /** No gap: said in one line. */
+        same?: string;
+        /** What the server works out whatever this player's screen shows, for a player who follows a city. */
+        server?: string[];
+    }
+
+    /** One line when the air of the map decides, or gives the same thing as this player's own. */
+    function sameLine(owner: AirOwner, differs: boolean): string | undefined {
+        if (differs) return undefined;
+        return owner === "own" ? t.compare.sameAsMap() : t.compare.mapWeather();
+    }
+
+    const cards = $derived.by((): Card[] => {
+        const { precipitation, frost, ice } = board;
+        return [
+            {
+                id: "precipitation",
+                title: t.precipitation.title(),
+                owner: precipitation.air,
+                audience: precipitation.audience,
+                result: precipitationResult(precipitation),
+                why: [formWhy(precipitation)],
+                change: formChange(precipitation),
+                notes: [],
+                more: t.form.more(),
+                onMap:
+                    precipitation.differs && precipitation.onMap
+                        ? { result: precipitationResult(precipitation.onMap), why: [formWhy(precipitation.onMap)] }
+                        : undefined,
+                gap:
+                    precipitation.differs && precipitation.onMap
+                        ? [
+                              t.compare.seen({
+                                  map: precipitationShort(precipitation.onMap),
+                                  own: precipitationShort(precipitation),
+                              }),
+                              serverFall(precipitation.onMap),
+                          ]
+                        : undefined,
+                same: sameLine(precipitation.air, precipitation.differs),
+                // Even without a gap, the rain of their city brings nothing to the map.
+                server: precipitation.onMap && !precipitation.differs ? [serverFall(precipitation.onMap)] : undefined,
+            },
+            {
+                id: "downpour",
+                title: t.downpour.title(),
+                owner: board.downpour.air,
+                audience: board.downpour.audience,
+                result: downpourResult,
+                why: [formWhy(board.downpour)],
+                change: formChange(board.downpour),
+                notes: [],
+                more: t.form.more(),
+                server:
+                    apart && board.city !== undefined
+                        ? [`${t.downpour.always()} ${t.downpour.notYours({ city: board.city })}`]
+                        : [t.downpour.always()],
+            },
+            {
+                id: "frost",
+                title: t.frost.title(),
+                owner: frost.air,
+                audience: frost.audience,
+                result: frostResult(frost),
+                why: [frostWhy(frost)],
+                change: frostChange === undefined ? [] : [frostChange],
+                notes: lags(frost.drawn, frost.frost) ? [t.frost.drawn({ percent: share(frost.drawn ?? 0) })] : [],
+                more: t.frost.more(),
+                onMap:
+                    frost.differs && frost.onMap
+                        ? { result: frostResult(frost.onMap), why: [frostWhy(frost.onMap)] }
+                        : undefined,
+                gap:
+                    frost.differs && frost.onMap
+                        ? [
+                              t.compare.seen({ map: frostShort(frost.onMap), own: frostShort(frost) }),
+                              t.compare.frostOnlyDrawn(),
+                          ]
+                        : undefined,
+                same: sameLine(frost.air, frost.differs),
+            },
+            {
+                id: "ice",
+                title: t.ice.title(),
+                owner: ice.air,
+                audience: ice.audience,
+                result: iceResult(ice),
+                why: [iceWhy(ice)],
+                change: [
+                    t.ice.ladder({
+                        shallows: under(ice.thresholds.shallows),
+                        pools: under(ice.thresholds.pools),
+                        all: under(ice.thresholds.all),
+                    }),
+                ],
+                notes: lags(ice.drawn, ice.ice) ? [t.ice.drawn()] : [],
+                more: t.ice.more(),
+                onMap:
+                    ice.differs && ice.onMap ? { result: iceResult(ice.onMap), why: [iceWhy(ice.onMap)] } : undefined,
+                gap:
+                    ice.differs && ice.onMap
+                        ? [t.compare.seen({ map: iceShort(ice.onMap), own: iceShort(ice) }), t.compare.iceOnlyDrawn()]
+                        : undefined,
+                same: sameLine(ice.air, ice.differs),
+            },
+            {
+                id: "soil",
+                title: t.soil.title(),
+                owner: board.soil.air,
+                audience: board.soil.audience,
+                result: soilResult,
+                why: [soilWhy, t.soil.effect()],
+                change: [],
+                notes: [],
+                more: t.soil.honest(),
+                server: apart
+                    ? [
+                          ...(board.ownAir?.temperature === undefined
+                              ? []
+                              : [t.compare.soilNotYours({ temperature: degrees(board.ownAir.temperature) })]),
+                          board.soil.frost > 0 ? t.compare.soilFrozen() : t.compare.soilThawed(),
+                      ]
+                    : undefined,
+            },
+            {
+                id: "snow",
+                title: t.snow.title(),
+                owner: board.snow.air,
+                audience: board.snow.audience,
+                result: snowResult,
+                why: snowTrend === undefined ? [] : [snowTrend],
+                change: [],
+                notes: [t.snow.water()],
+                more: t.snow.honest({ times: whole.format(THAW_SPEED) }),
+                server:
+                    !board.snow.shown && board.city !== undefined ? [t.snow.hidden({ city: board.city })] : undefined,
+            },
+        ];
+    });
+
+    /** Where this player's screen and the map part, at a glance: only for a player who follows a city. */
+    const summary = $derived.by(() => {
+        if (!apart) return [];
+        const { precipitation, frost, ice } = board;
+        const against = (own: string, onMap: string | undefined): string =>
+            onMap === undefined ? t.compare.rowAll({ map: own }) : t.compare.row({ own, map: onMap });
+        const downpour =
+            board.downpour.form === "rain"
+                ? t.compare.short.rain()
+                : board.downpour.form === "snow"
+                  ? t.compare.short.snow()
+                  : t.compare.short.mix();
+        return [
+            {
+                id: "precipitation",
+                name: t.precipitation.title(),
+                text: against(
+                    precipitationShort(precipitation),
+                    precipitation.onMap && precipitationShort(precipitation.onMap),
+                ),
+                differs: precipitation.differs,
+                compared: precipitation.onMap !== undefined,
+            },
+            {
+                id: "downpour",
+                name: t.downpour.title(),
+                text: t.compare.rowAll({ map: downpour }),
+                differs: false,
+                compared: false,
+            },
+            {
+                id: "frost",
+                name: t.frost.title(),
+                text: against(frostShort(frost), frost.onMap && frostShort(frost.onMap)),
+                differs: frost.differs,
+                compared: frost.onMap !== undefined,
+            },
+            {
+                id: "ice",
+                name: t.ice.title(),
+                text: against(iceShort(ice), ice.onMap && iceShort(ice.onMap)),
+                differs: ice.differs,
+                compared: ice.onMap !== undefined,
+            },
+            {
+                id: "soil",
+                name: t.soil.title(),
+                text: t.compare.rowAll({ map: soilShort }),
+                differs: false,
+                compared: false,
+            },
+            {
+                id: "snow",
+                name: t.snow.title(),
+                text: t.compare.rowHidden({ map: snowShort }),
+                differs: false,
+                compared: false,
+            },
+        ];
+    });
 </script>
 
 {#snippet airBox(owner: AirOwner, air: ShownAir, name: string, hint: string)}
@@ -381,6 +561,28 @@
         {/if}
     </p>
 
+    {#if summary.length > 0}
+        <div class="flex flex-col gap-0.5 rounded-lg bg-white/10 p-2" data-testid="weather-board-summary">
+            <h3 class="m-0 text-xs font-bold">{t.compare.summary()}</h3>
+            <ul class="m-0 flex list-none flex-col gap-0.5 p-0">
+                {#each summary as row (row.id)}
+                    <li class="flex flex-wrap items-baseline gap-x-1" data-testid="weather-board-summary-{row.id}">
+                        <span class="opacity-80">{row.name} :</span>
+                        <span class={row.differs ? "font-bold" : ""}>{row.text}</span>
+                        <span
+                            class="rounded-full px-1.5 {row.differs
+                                ? 'bg-yellow-400/80 font-bold text-black'
+                                : 'opacity-60 ring-1 ring-white/40'}"
+                            data-differs={row.differs}
+                        >
+                            {row.differs ? t.compare.differs() : row.compared ? t.compare.same() : t.compare.server()}
+                        </span>
+                    </li>
+                {/each}
+            </ul>
+        </div>
+    {/if}
+
     {#each cards as card (card.id)}
         <article
             class="flex flex-col gap-1 rounded-lg border-0 border-s-4 border-solid bg-white/10 p-2 {OWNER_EDGE[
@@ -389,39 +591,75 @@
             data-testid="weather-board-{card.id}"
         >
             <h3 class="m-0 text-xs font-bold uppercase tracking-wide opacity-80">{card.title}</h3>
-            <p class="m-0 text-sm font-bold" data-testid="weather-board-{card.id}-result">{card.result}</p>
-            <div class="flex flex-wrap gap-1">
-                <span
-                    class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 {OWNER_PILL[card.owner]}"
-                    data-testid="weather-board-{card.id}-air"
-                    data-air={card.owner}
-                >
-                    {#if card.owner === "map"}<IconMap width="12" height="12" />{:else}<IconUser
-                            width="12"
-                            height="12"
-                        />{/if}
-                    <span>{t.decidedBy.label()} <b>{ownerName(card.owner)}</b></span>
-                </span>
-                <span
-                    class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 ring-1 ring-white/50"
-                    data-testid="weather-board-{card.id}-audience"
-                    data-audience={card.audience}
-                >
-                    {#if card.audience === "you"}<IconUser width="12" height="12" />{:else}<IconUsers
-                            width="12"
-                            height="12"
-                        />{/if}
-                    <span>{t.seenBy.label()} <b>{audienceName(card.audience)}</b></span>
-                </span>
+            <div data-testid="weather-board-{card.id}-own" class="flex flex-col gap-1">
+                {#if card.onMap}
+                    <div class="font-bold text-yellow-300">{t.compare.own()}</div>
+                {/if}
+                <p class="m-0 text-sm font-bold" data-testid="weather-board-{card.id}-result">{card.result}</p>
+                <div class="flex flex-wrap gap-1">
+                    <span
+                        class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 {OWNER_PILL[card.owner]}"
+                        data-testid="weather-board-{card.id}-air"
+                        data-air={card.owner}
+                    >
+                        {#if card.owner === "map"}<IconMap width="12" height="12" />{:else}<IconUser
+                                width="12"
+                                height="12"
+                            />{/if}
+                        <span>{t.decidedBy.label()} <b>{ownerName(card.owner)}</b></span>
+                    </span>
+                    <span
+                        class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 ring-1 ring-white/50"
+                        data-testid="weather-board-{card.id}-audience"
+                        data-audience={card.audience}
+                    >
+                        {#if card.audience === "you"}<IconUser width="12" height="12" />{:else}<IconUsers
+                                width="12"
+                                height="12"
+                            />{/if}
+                        <span>{t.seenBy.label()} <b>{audienceName(card.audience)}</b></span>
+                    </span>
+                </div>
+                {#each card.why as line (line)}
+                    <p class="m-0">{line}</p>
+                {/each}
+                {#each card.change as line (line)}
+                    <p class="m-0 opacity-80" data-testid="weather-board-{card.id}-change">→ {line}</p>
+                {/each}
+                {#each card.notes as line (line)}
+                    <p class="m-0 opacity-80">{line}</p>
+                {/each}
             </div>
-            {#each card.why as line (line)}
-                <p class="m-0">{line}</p>
-            {/each}
-            {#each card.change as line (line)}
-                <p class="m-0 opacity-80" data-testid="weather-board-{card.id}-change">→ {line}</p>
-            {/each}
-            {#each card.notes as line (line)}
-                <p class="m-0 opacity-80">{line}</p>
+            {#if card.onMap}
+                <div
+                    class="flex flex-col gap-1 border-0 border-t border-solid border-white/20 pt-1"
+                    data-testid="weather-board-{card.id}-map"
+                >
+                    <div class="font-bold text-blue-500">{t.compare.map()}</div>
+                    <p class="m-0 text-sm font-bold" data-testid="weather-board-{card.id}-map-result">
+                        {card.onMap.result}
+                    </p>
+                    {#each card.onMap.why as line (line)}
+                        <p class="m-0">{line}</p>
+                    {/each}
+                </div>
+            {/if}
+            {#if card.gap}
+                <div
+                    class="flex flex-col gap-1 rounded bg-yellow-400/20 p-1.5 ring-1 ring-yellow-400"
+                    data-testid="weather-board-{card.id}-gap"
+                >
+                    <div class="font-bold text-yellow-300">{t.compare.gap()}</div>
+                    {#each card.gap as line (line)}
+                        <p class="m-0">{line}</p>
+                    {/each}
+                </div>
+            {/if}
+            {#if card.same}
+                <p class="m-0 opacity-80" data-testid="weather-board-{card.id}-same">{card.same}</p>
+            {/if}
+            {#each card.server ?? [] as line (line)}
+                <p class="m-0" data-testid="weather-board-{card.id}-server">{line}</p>
             {/each}
             <details>
                 <summary class="cursor-pointer opacity-70 hover:opacity-100">{t.more()}</summary>

@@ -117,12 +117,19 @@ export function iceOf(air: AirNow | undefined): number {
 
 /**
  * The air now at the place shown, the one the frost of the ground goes by: this player's own city, else the map's
- * (the heat, the humidity and the wind set by hand in the room first, as the banner says them). A humidity not known
- * gives no frost: none is made up.
+ * (mapFrostAirNow). A humidity not known gives no frost: none is made up.
  */
 export function frostAirNow(settings: MapSnowSettings | undefined, date: Date): AirNow | undefined {
     const { place, state } = chosenWeatherNow();
     if (place) return timelineAirAt(state, date.getTime());
+    return mapFrostAirNow(settings, date);
+}
+
+/**
+ * The air of the map the frost goes by for every player who follows the server: the heat, the humidity and the wind
+ * set by hand in the room first, as the banner says them, else the real air at the place of the map.
+ */
+export function mapFrostAirNow(settings: MapSnowSettings | undefined, date: Date): AirNow | undefined {
     const conditions = get(fireConditionsStore);
     if (conditions?.manual) {
         return { temperature: conditions.temperature, humidity: conditions.humidity, windSpeed: conditions.windSpeed };

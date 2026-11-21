@@ -62,6 +62,8 @@ export interface WeatherBoardInput {
     roomAir: PrecipitationAir | undefined;
     /** The air the frost and the ice go by (frostAirNow). */
     frostAir: AirNow | undefined;
+    /** The air the frost and the ice go by for who follows the server (mapFrostAirNow). */
+    mapFrostAir: AirNow | undefined;
     /** Whether a precipitation is drawn for this player now. */
     falling: boolean;
     /** Whether the weather of the map is a precipitation now. */
@@ -109,6 +111,17 @@ export interface FormExplained {
 export interface PrecipitationExplained extends FormExplained {
     /** Whether something falls now; else the form is the one a precipitation would have. */
     falling: boolean;
+}
+
+/**
+ * What this player sees, set against what the map (the server) has when they follow a city of their own: the same
+ * thing by the air of the map, as every player who follows the server sees it, and whether the two differ now.
+ */
+export interface AgainstMap<T> {
+    /** By the air of the map; absent when the air of the map already decides for this player. */
+    onMap?: T;
+    /** Whether this player's screen and the map do not show the same thing now. */
+    differs: boolean;
 }
 
 export type FrostLevel = "none" | "light" | "white";
@@ -201,10 +214,10 @@ export interface WeatherBoard {
     city: string | undefined;
     mapAir: ShownAir;
     ownAir: ShownAir | undefined;
-    precipitation: PrecipitationExplained;
+    precipitation: PrecipitationExplained & AgainstMap<PrecipitationExplained>;
     downpour: FormExplained;
-    frost: FrostExplained;
-    ice: IceExplained;
+    frost: FrostExplained & AgainstMap<FrostExplained>;
+    ice: IceExplained & AgainstMap<IceExplained>;
     soil: SoilExplained;
     snow: SnowExplained;
 }
@@ -395,16 +408,33 @@ export function explainWeather(input: WeatherBoardInput): WeatherBoard {
     // The frost and the ice go by the city followed, even while a weather is tried in the map settings (Frost).
     const ground: AirOwner = followsCity ? "own" : "map";
     const seenBy = (owner: AirOwner): Audience => (owner === "own" ? "you" : "serverFollowers");
+    const precipitation = { ...explainForm(input.precipitationAir, sky, seenBy(sky)), falling: input.falling };
+    const frost = explainFrost(input.frostAir, ground, seenBy(ground), input.drawn?.frost);
+    const ice = explainIce(input.frostAir, ground, seenBy(ground), input.drawn?.ice);
+    // What every player who follows the server has, where this player's own air decides for them.
+    const skyOnMap =
+        sky === "own"
+            ? { ...explainForm(input.roomAir, "map", "serverFollowers"), falling: input.mapFalling }
+            : undefined;
+    const frostOnMap =
+        ground === "own" ? explainFrost(input.mapFrostAir, "map", "serverFollowers", undefined) : undefined;
+    const iceOnMap = ground === "own" ? explainIce(input.mapFrostAir, "map", "serverFollowers", undefined) : undefined;
     return {
         follows: !followsCity ? "server" : input.drawsOwnWeather ? "city" : "trial",
         city: input.city,
         mapAir: input.mapAir,
         ownAir: followsCity ? input.ownAir : undefined,
-        precipitation: { ...explainForm(input.precipitationAir, sky, seenBy(sky)), falling: input.falling },
+        precipitation: {
+            ...precipitation,
+            onMap: skyOnMap,
+            differs:
+                skyOnMap !== undefined &&
+                (skyOnMap.falling !== precipitation.falling || skyOnMap.form !== precipitation.form),
+        },
         // The server lets the downpour fall, through the air of the room, for everyone.
         downpour: explainForm(input.roomAir, "map", "everyone"),
-        frost: explainFrost(input.frostAir, ground, seenBy(ground), input.drawn?.frost),
-        ice: explainIce(input.frostAir, ground, seenBy(ground), input.drawn?.ice),
+        frost: { ...frost, onMap: frostOnMap, differs: frostOnMap !== undefined && frostOnMap.level !== frost.level },
+        ice: { ...ice, onMap: iceOnMap, differs: iceOnMap !== undefined && iceOnMap.stage !== ice.stage },
         soil: explainSoil(input.roomAir),
         snow: explainSnow(input),
     };

@@ -18,6 +18,7 @@ function input(changes: Partial<WeatherBoardInput> = {}): WeatherBoardInput {
         precipitationAir: air,
         roomAir: air,
         frostAir: air,
+        mapFrostAir: air,
         falling: false,
         mapFalling: false,
         drawn: undefined,
@@ -36,6 +37,39 @@ const USER_CASE = input({
     precipitationAir: { temperature: -3, humidity: 45 },
     roomAir: { temperature: 24, humidity: 55 },
     frostAir: { temperature: -3, humidity: 45, windSpeed: 40 },
+    mapFrostAir: { temperature: 24, humidity: 55, windSpeed: 12 },
+});
+
+const WARM = { temperature: 24, humidity: 55, windSpeed: 12 };
+const COLD = { temperature: -3, humidity: 95, windSpeed: 2 };
+/** A warm server, and a player who follows a cold and damp city where it snows. */
+const WARM_SERVER_COLD_PLAYER = input({
+    city: "Oslo",
+    drawsOwnWeather: true,
+    mapAir: { ...WARM, byHand: false, place: "Dakar" },
+    ownAir: { ...COLD, byHand: false, place: "Oslo" },
+    precipitationAir: COLD,
+    roomAir: WARM,
+    frostAir: COLD,
+    mapFrostAir: WARM,
+    falling: true,
+    mapFalling: true,
+    snow: { map: 0, here: 0 },
+});
+/** A cold server where it snows, and a player who follows a warm city under a clear sky. */
+const COLD_SERVER_WARM_PLAYER = input({
+    city: "Dakar",
+    drawsOwnWeather: true,
+    mapAir: { ...COLD, byHand: false, place: "Oslo" },
+    ownAir: { ...WARM, byHand: false, place: "Dakar" },
+    precipitationAir: WARM,
+    roomAir: COLD,
+    frostAir: WARM,
+    mapFrostAir: COLD,
+    falling: false,
+    mapFalling: true,
+    snow: { map: 0.6, here: 1 },
+    roomWind: 2,
 });
 
 describe("WeatherBoard", () => {
@@ -95,7 +129,7 @@ describe("WeatherBoard", () => {
         }
     });
 
-    it("reads the case that asked for it without effort: both airs, no frost for me, a rain for everyone", () => {
+    it("reads the case that asked for it: why my screen has no frost, and why the downpour is a rain for all", () => {
         render(USER_CASE);
         expect(text("weather-board-follows")).toBe(
             "Tu suis Auckland : c'est son ciel et sa météo que tu vois, pour toi seul.",
@@ -105,6 +139,26 @@ describe("WeatherBoard", () => {
         expect(text("weather-board-air-own")).toContain("air réel à Auckland");
         expect(text("weather-board-air-own")).toContain("-3 °C");
 
+        // The gaps at a glance, before the cards.
+        expect(text("weather-board-summary")).toContain("Ton écran et la carte, en ce moment");
+        expect(text("weather-board-summary-precipitation")).toBe(
+            "Pluie ou neige ? : toi, rien ne tombe (ce serait de la neige) · carte, rien ne tombe (ce serait de la pluie) écart",
+        );
+        expect(text("weather-board-summary-downpour")).toBe(
+            "Averse de la catastrophe : pluie, pour tout le monde serveur",
+        );
+        expect(text("weather-board-summary-frost")).toBe(
+            "Givre au sol : toi, pas de givre · carte, pas de givre pareil",
+        );
+        expect(text("weather-board-summary-ice")).toBe(
+            "Glace sur l'eau : toi, bords de l'eau gelés · carte, pas de glace écart",
+        );
+        expect(text("weather-board-summary-soil")).toBe("Sol gelé : pas gelé, pour tout le monde serveur");
+        expect(text("weather-board-summary-snow")).toBe(
+            "Neige au sol : pas encore connue, tenue par le serveur et non montrée chez toi serveur",
+        );
+
+        // No frost on my screen: my own air, too dry; the map has none either, so no doubled display.
         expect(text("weather-board-frost-result")).toBe("Pas de givre.");
         expect(find("weather-board-frost-air")?.getAttribute("data-air")).toBe("own");
         expect(text("weather-board-frost-air")).toContain("ton air");
@@ -112,18 +166,144 @@ describe("WeatherBoard", () => {
         expect(text("weather-board-frost")).toContain("-3 °C et 45 % d'humidité : l'air est trop sec");
         expect(text("weather-board-frost")).toContain("Il gèle sans blanchir.");
         expect(text("weather-board-frost-change")).toMatch(/^→ Il givrerait avec plus de \d+ % d'humidité\.$/);
+        expect(find("weather-board-frost-map")).toBeNull();
+        expect(find("weather-board-frost-gap")).toBeNull();
+        expect(text("weather-board-frost-same")).toBe(
+            "Comme sur la carte : l'air de la carte donne le même résultat, pour tout le monde.",
+        );
 
+        // The downpour is a rain: the server lets it fall through its own warm air, for everyone.
         expect(text("weather-board-downpour-result")).toBe("Elle tombe en pluie.");
         expect(find("weather-board-downpour-air")?.getAttribute("data-air")).toBe("map");
         expect(text("weather-board-downpour-audience")).toContain("tout le monde");
         expect(text("weather-board-downpour")).toContain("24 °C et 55 % d'humidité");
-        expect(text("weather-board-downpour")).toContain("elle suit toujours l'air de la carte, pour tout le monde");
-        expect(text("weather-board-downpour")).toContain("Ton air (Auckland) n'y change rien.");
+        expect(text("weather-board-downpour-server")).toBe(
+            "C'est le serveur qui la fait tomber : elle suit toujours l'air de la carte, pour tout le monde. Ton air (Auckland) n'y change rien.",
+        );
 
-        // Their own sky would snow, for them alone; the ground of the server is not theirs to see.
+        // My own sky would snow where the map would rain: both set side by side, then what it means.
+        expect(text("weather-board-precipitation-own")).toContain("Chez toi");
         expect(text("weather-board-precipitation-result")).toBe("Rien ne tombe. Ce serait de la neige.");
         expect(text("weather-board-precipitation-audience")).toContain("toi seul");
+        expect(text("weather-board-precipitation-map")).toContain("Sur la carte (serveur)");
+        expect(text("weather-board-precipitation-map-result")).toBe("Rien ne tombe. Ce serait de la pluie.");
+        expect(text("weather-board-precipitation-map")).toContain("24 °C et 55 % d'humidité");
+        expect(text("weather-board-precipitation-gap")).toContain(
+            "Sur leur écran : rien ne tombe (ce serait de la pluie). Sur le tien : rien ne tombe (ce serait de la neige).",
+        );
+        expect(text("weather-board-precipitation-gap")).toContain("Pour le serveur, rien ne tombe sur la carte");
+
+        // The edges of my water freeze; the water of the server stays liquid.
+        expect(text("weather-board-ice-result")).toBe("Les bords de l'eau sont gelés.");
+        expect(text("weather-board-ice-map-result")).toBe("Pas de glace.");
+        expect(text("weather-board-ice-gap")).toContain("pour le serveur l'eau reste liquide");
+
+        // The soil is the server's: my cold air changes nothing to it.
         expect(find("weather-board-soil-air")?.getAttribute("data-air")).toBe("map");
+        expect(text("weather-board-soil-result")).toBe("Le sol n'est pas gelé.");
+        expect(text("weather-board-soil")).toContain("Ton air (-3 °C) n'y change rien : le sol est celui de la carte.");
+        expect(text("weather-board-soil")).toContain("Pour le serveur le sol n'est pas gelé");
+    });
+
+    it("warm server, cold player: sets my snow, frost and ice against the rain of the map, and says what counts", () => {
+        render(WARM_SERVER_COLD_PLAYER);
+        expect(text("weather-board-summary-precipitation")).toBe("Pluie ou neige ? : toi, neige · carte, pluie écart");
+        expect(text("weather-board-summary-frost")).toBe("Givre au sol : toi, givre · carte, pas de givre écart");
+        expect(text("weather-board-summary-ice")).toBe(
+            "Glace sur l'eau : toi, bords de l'eau gelés · carte, pas de glace écart",
+        );
+
+        expect(text("weather-board-precipitation-result")).toBe("Il neige.");
+        expect(text("weather-board-precipitation-own")).toContain("-3 °C et 95 % d'humidité");
+        expect(text("weather-board-precipitation-map-result")).toBe("Il pleut.");
+        expect(text("weather-board-precipitation-map")).toContain("24 °C et 55 % d'humidité");
+        expect(text("weather-board-precipitation-gap")).toContain(
+            "Ceux qui suivent le serveur voient autre chose que toi. Sur leur écran : pluie. Sur le tien : neige.",
+        );
+        expect(text("weather-board-precipitation-gap")).toContain(
+            "Pour le serveur, ce qui tombe sur la carte est de la pluie : elle remplit l'eau et mouille le sol, pour tout le monde, quoi que montre ton écran.",
+        );
+
+        expect(text("weather-board-frost-result")).toMatch(/^Givre \(\d+ %\) : le sol blanchit\.$/);
+        expect(text("weather-board-frost-map-result")).toBe("Pas de givre.");
+        expect(text("weather-board-frost-map")).toContain("24 °C dans l'air");
+        expect(text("weather-board-frost-gap")).toContain("Sur leur écran : pas de givre. Sur le tien : givre.");
+        expect(text("weather-board-frost-gap")).toContain(
+            "Le givre n'est que dessiné, par chaque navigateur : le serveur n'en tient aucun compte.",
+        );
+
+        expect(text("weather-board-ice-map")).toContain("24 °C : l'eau ne gèle que sous 0 °C.");
+        expect(text("weather-board-downpour-result")).toBe("Elle tombe en pluie.");
+        expect(text("weather-board-soil")).toContain(
+            "Pour le serveur le sol n'est pas gelé : son eau circule et l'herbe pousse",
+        );
+        expect(text("weather-board-snow-result")).toBe("Pas de neige au sol.");
+    });
+
+    it("cold server, warm player: my clear and mild screen against the snow, the frost and the frozen soil of the map", () => {
+        render(COLD_SERVER_WARM_PLAYER);
+        expect(text("weather-board-summary-precipitation")).toBe(
+            "Pluie ou neige ? : toi, rien ne tombe (ce serait de la pluie) · carte, neige écart",
+        );
+        expect(text("weather-board-summary-downpour")).toBe(
+            "Averse de la catastrophe : neige, pour tout le monde serveur",
+        );
+        expect(text("weather-board-summary-frost")).toBe("Givre au sol : toi, pas de givre · carte, givre écart");
+        expect(text("weather-board-summary-soil")).toBe("Sol gelé : gelé, pour tout le monde serveur");
+        expect(text("weather-board-summary-snow")).toBe(
+            "Neige au sol : sur 60 % de la carte, tenue par le serveur et non montrée chez toi serveur",
+        );
+
+        expect(text("weather-board-precipitation-result")).toBe("Rien ne tombe. Ce serait de la pluie.");
+        expect(text("weather-board-precipitation-map-result")).toBe("Il neige.");
+        expect(text("weather-board-precipitation-gap")).toContain(
+            "Sur leur écran : neige. Sur le tien : rien ne tombe",
+        );
+        expect(text("weather-board-precipitation-gap")).toContain(
+            "Pour le serveur, ce qui tombe sur la carte est de la neige : elle s'accumule au sol sans apporter d'eau",
+        );
+
+        expect(text("weather-board-frost-result")).toBe("Pas de givre.");
+        expect(text("weather-board-frost-own")).toContain("24 °C dans l'air");
+        expect(text("weather-board-frost-map-result")).toMatch(/^Givre \(\d+ %\) : le sol blanchit\.$/);
+        expect(text("weather-board-frost-gap")).toContain("Sur leur écran : givre. Sur le tien : pas de givre.");
+
+        expect(text("weather-board-ice-result")).toBe("Pas de glace.");
+        expect(text("weather-board-ice-map-result")).toBe("Les bords de l'eau sont gelés.");
+
+        expect(text("weather-board-downpour-result")).toBe("Elle tombe en neige.");
+        expect(text("weather-board-downpour-server")).toContain("Ton air (Dakar) n'y change rien.");
+
+        expect(text("weather-board-soil-result")).toBe("Le sol est gelé.");
+        expect(text("weather-board-soil")).toContain("Ton air (24 °C) n'y change rien");
+        expect(text("weather-board-soil")).toContain(
+            "Pour le serveur le sol est gelé : il garde son eau et l'herbe dort",
+        );
+
+        expect(text("weather-board-snow-result")).toBe(
+            "De la neige sur 60 % de la carte ; sous ton avatar, le sol est blanc à 100 %.",
+        );
+        expect(text("weather-board-snow")).toContain(
+            "Il neige sur la carte (100 % de flocons) : la couche s'épaissit.",
+        );
+        expect(text("weather-board-snow-server")).toBe(
+            "Tu ne la vois pas : tu suis Dakar, et cette neige est celle de la carte. Reviens au temps du serveur pour la voir.",
+        );
+    });
+
+    it("doubles nothing for a player who follows the server: one line says it is the weather of the map", () => {
+        render(input({ frostAir: COLD, mapFrostAir: COLD, precipitationAir: COLD, roomAir: COLD, falling: true }));
+        expect(find("weather-board-summary")).toBeNull();
+        for (const id of ["precipitation", "frost", "ice"]) {
+            expect(find(`weather-board-${id}-map`)).toBeNull();
+            expect(find(`weather-board-${id}-gap`)).toBeNull();
+            expect(text(`weather-board-${id}-same`)).toBe(
+                "C'est la météo de la carte : la même pour tous ceux qui suivent le serveur.",
+            );
+        }
+        expect(text("weather-board-downpour-server")).toBe(
+            "C'est le serveur qui la fait tomber : elle suit toujours l'air de la carte, pour tout le monde.",
+        );
     });
 
     it("says what is not known rather than leaving a card empty", () => {
@@ -174,7 +354,7 @@ describe("WeatherBoard", () => {
         expect(text("weather-board-snow-result")).toBe(
             "De la neige sur 40 % de la carte ; sous ton avatar, le sol est blanc à 100 %.",
         );
-        expect(text("weather-board-snow")).toContain("Tu ne la vois pas : tu suis Auckland");
+        expect(text("weather-board-snow-server")).toContain("Tu ne la vois pas : tu suis Auckland");
         expect(text("weather-board-snow")).toContain("24 °C sur la carte : elle fond.");
     });
 

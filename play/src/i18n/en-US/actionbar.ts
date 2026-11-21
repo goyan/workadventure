@@ -116,6 +116,58 @@ const actionbar = {
                 whereMap: "The air of the map is set in Disaster → Weather.",
                 whereOwn: "Your city is chosen in the menu of the clock → Daytime somewhere.",
             },
+            compare: {
+                own: "On your screen",
+                map: "On the map (server)",
+                gap: "Gap",
+                sameAsMap: "As on the map: the air of the map gives the same result, for everyone.",
+                mapWeather: "This is the weather of the map: the same for everyone who follows the server.",
+                seen: "Those who follow the server see something else than you. On their screen: {map}. On yours: {own}.",
+                serverRain:
+                    "For the server, what falls on the map is rain: it fills the water and soaks the soil, for everyone, whatever your screen shows.",
+                serverSnow:
+                    "For the server, what falls on the map is snow: it builds up on the ground and brings no water, for everyone, whatever your screen shows.",
+                serverMix:
+                    "For the server, what falls on the map is {share} % snow: the rain brings water, the snow lies on the ground, for everyone.",
+                serverDry:
+                    "For the server, nothing falls on the map: neither water nor snow is added, even if it rains or snows on your screen.",
+                frostOnlyDrawn: "Frost is only drawn, by each browser: the server takes no account of it.",
+                iceOnlyDrawn:
+                    "Ice is drawn by each browser: you walk on it on your screen, but for the server the water stays liquid and keeps flowing.",
+                soilNotYours: "Your air ({temperature}) changes nothing to it: the soil is that of the map.",
+                soilThawed:
+                    "For the server the soil is not frozen: its water moves and the grass grows, for everyone, whatever your screen shows.",
+                soilFrozen:
+                    "For the server the soil is frozen: it keeps its water and the grass lies dormant, for everyone, whatever your screen shows.",
+                summary: "Your screen and the map, right now",
+                row: "you, {own} · map, {map}",
+                rowAll: "{map}, for everyone",
+                rowHidden: "{map}, kept by the server and not shown to you",
+                differs: "gap",
+                same: "same",
+                server: "server",
+                short: {
+                    rain: "rain",
+                    snow: "snow",
+                    mix: "rain and snow",
+                    dryRain: "nothing falls (it would be rain)",
+                    drySnow: "nothing falls (it would be snow)",
+                    dryMix: "nothing falls (it would be rain and snow)",
+                    noFrost: "no frost",
+                    lightFrost: "light frost",
+                    whiteFrost: "frost",
+                    noIce: "no ice",
+                    shallows: "edges of the water frozen",
+                    pools: "pools frozen",
+                    allIce: "all the water frozen",
+                    soilThawed: "not frozen",
+                    soilPartly: "partly frozen",
+                    soilFrozen: "frozen",
+                    snowUnknown: "not known yet",
+                    snowNone: "none",
+                    snowSome: "on {percent} % of the map",
+                },
+            },
             decidedBy: {
                 label: "Decided by",
                 map: "the air of the map",
@@ -153,8 +205,6 @@ const actionbar = {
                 rainIf: "Nothing falls. It would be rain.",
                 snowIf: "Nothing falls. It would be snow.",
                 mixIf: "Nothing falls. It would be {share} % snow.",
-                ownOnly:
-                    "The rain or the snow of your city only falls on your screen: the water, the grass and the snow on the ground of the map follow the weather of the map.",
             },
             downpour: {
                 title: "Downpour of the disaster",

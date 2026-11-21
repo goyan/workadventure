@@ -32,6 +32,7 @@ function input(changes: Partial<WeatherBoardInput> = {}): WeatherBoardInput {
         precipitationAir: air,
         roomAir: air,
         frostAir: air,
+        mapFrostAir: air,
         falling: false,
         mapFalling: false,
         drawn: undefined,
@@ -369,6 +370,7 @@ describe("explainWeather: the case that asked for this board", () => {
             {
                 mapAir: { temperature: 24, humidity: 55, windSpeed: 12, byHand: false, place: "Dakar" },
                 roomAir: { temperature: 24, humidity: 55 },
+                mapFrostAir: { temperature: 24, humidity: 55, windSpeed: 12 },
                 falling: false,
             },
         ),
@@ -394,9 +396,121 @@ describe("explainWeather: the case that asked for this board", () => {
         expect(board.precipitation).toMatchObject({ air: "own", audience: "you", form: "snow" });
     });
 
+    it("says where their screen and the map part: the form of what would fall, not the frost", () => {
+        expect(board.precipitation.differs).toBe(true);
+        expect(board.precipitation.onMap).toMatchObject({ form: "rain", falling: false });
+        // No frost on either side, for two reasons: too dry for them, too warm on the map.
+        expect(board.frost.differs).toBe(false);
+        expect(board.frost.onMap).toMatchObject({ level: "none", reason: "groundWarm" });
+        // The edges of their water freeze at -3 °C; the water of the map does not.
+        expect(board.ice).toMatchObject({ stage: "shallows", differs: true });
+        expect(board.ice.onMap).toMatchObject({ stage: "none" });
+    });
+
     it("shows both airs side by side", () => {
         expect(board.mapAir).toMatchObject({ temperature: 24, place: "Dakar" });
         expect(board.ownAir).toMatchObject({ temperature: -3, place: "Auckland" });
+    });
+});
+
+describe("explainWeather: the player's screen against the map of the server", () => {
+    const cold = { temperature: -3, humidity: 95, windSpeed: 2 };
+    const warm = { temperature: 24, humidity: 55, windSpeed: 12 };
+
+    it("sets nothing against the map for a player who follows the server", () => {
+        const board = explainWeather(
+            input({ frostAir: cold, mapFrostAir: cold, precipitationAir: cold, roomAir: cold }),
+        );
+        expect(board.precipitation.onMap).toBeUndefined();
+        expect(board.frost.onMap).toBeUndefined();
+        expect(board.ice.onMap).toBeUndefined();
+        expect(board.precipitation.differs).toBe(false);
+        expect(board.frost.differs).toBe(false);
+        expect(board.ice.differs).toBe(false);
+    });
+
+    it("warm server, cold player: snow, frost and ice for them alone; rain and a thawed soil on the map", () => {
+        const board = explainWeather(
+            followingCity(cold, {
+                mapAir: { ...warm, byHand: false, place: "Dakar" },
+                roomAir: warm,
+                mapFrostAir: warm,
+                falling: true,
+                mapFalling: true,
+            }),
+        );
+        expect(board.precipitation).toMatchObject({ air: "own", form: "snow", falling: true, differs: true });
+        expect(board.precipitation.onMap).toMatchObject({
+            air: "map",
+            audience: "serverFollowers",
+            form: "rain",
+            falling: true,
+            temperature: 24,
+        });
+        expect(board.frost).toMatchObject({ air: "own", reason: "frost", differs: true });
+        expect(board.frost.onMap).toMatchObject({ air: "map", level: "none", reason: "groundWarm", temperature: 24 });
+        expect(board.ice).toMatchObject({ air: "own", stage: "shallows", differs: true });
+        expect(board.ice.onMap).toMatchObject({ air: "map", stage: "none", reason: "warm" });
+        // What the server works out goes by its own air, whatever the screen of this player shows.
+        expect(board.downpour).toMatchObject({ form: "rain", temperature: 24 });
+        expect(board.soil).toMatchObject({ reason: "thawed", temperature: 24 });
+    });
+
+    it("cold server, warm player: rain and no frost for them alone; snow, frost and a frozen soil on the map", () => {
+        const board = explainWeather(
+            followingCity(warm, {
+                mapAir: { ...cold, byHand: false, place: "Oslo" },
+                roomAir: cold,
+                mapFrostAir: cold,
+                falling: false,
+                mapFalling: true,
+                snow: { map: 0.6, here: 1 },
+            }),
+        );
+        expect(board.precipitation).toMatchObject({ air: "own", form: "rain", falling: false, differs: true });
+        expect(board.precipitation.onMap).toMatchObject({ form: "snow", falling: true });
+        expect(board.frost).toMatchObject({ level: "none", reason: "groundWarm", differs: true });
+        expect(board.frost.onMap).toMatchObject({ reason: "frost" });
+        expect(board.frost.onMap?.frost).toBe(frostOf(cold));
+        expect(board.ice).toMatchObject({ stage: "none", differs: true });
+        expect(board.ice.onMap).toMatchObject({ stage: "shallows" });
+        expect(board.ice.onMap?.ice).toBe(iceOf(cold));
+        expect(board.downpour).toMatchObject({ form: "snow" });
+        expect(board.soil).toMatchObject({ reason: "frozen", temperature: -3 });
+        expect(board.snow).toMatchObject({ shown: false, mapCover: 0.6, trend: "building" });
+    });
+
+    it("says no gap when both airs give the same thing, though they are not the same air", () => {
+        const board = explainWeather(
+            followingCity({ temperature: 15, humidity: 40, windSpeed: 30 }, { roomAir: warm, mapFrostAir: warm }),
+        );
+        expect(board.precipitation.onMap).toBeDefined();
+        expect(board.precipitation.differs).toBe(false);
+        expect(board.frost.differs).toBe(false);
+        expect(board.ice.differs).toBe(false);
+    });
+
+    it("tells a gap when the same nothing falls but would not fall the same", () => {
+        // Nothing falls on either side, yet a downpour launched now is a rain where their own sky would snow.
+        const board = explainWeather(
+            followingCity({ temperature: -3, humidity: 45, windSpeed: 40 }, { roomAir: warm }),
+        );
+        expect(board.precipitation).toMatchObject({ falling: false, form: "snow", differs: true });
+        expect(board.precipitation.onMap).toMatchObject({ falling: false, form: "rain" });
+    });
+
+    it("keeps the frost against the map while a weather is tried, the precipitation being the map's already", () => {
+        const board = explainWeather(
+            followingCity(cold, {
+                drawsOwnWeather: false,
+                precipitationAir: warm,
+                roomAir: warm,
+                mapFrostAir: warm,
+            }),
+        );
+        expect(board.precipitation.onMap).toBeUndefined();
+        expect(board.frost.onMap).toMatchObject({ level: "none" });
+        expect(board.frost.differs).toBe(true);
     });
 });
 
@@ -411,7 +525,9 @@ describe("explainWeather: never another value than the game's", () => {
                 for (const windSpeed of winds) {
                     const air = { temperature, humidity, windSpeed };
                     const falls = humidity === undefined ? undefined : { temperature, humidity };
-                    const board = explainWeather(input({ precipitationAir: falls, roomAir: falls, frostAir: air }));
+                    const board = explainWeather(
+                        input({ precipitationAir: falls, roomAir: falls, frostAir: air, mapFrostAir: air }),
+                    );
                     // Drops or flakes of the sky: GameScene.getSnowShare.
                     expect(board.precipitation.share).toBe(snowShareOf(falls));
                     // The downpour: GameScene, DownpourView.
