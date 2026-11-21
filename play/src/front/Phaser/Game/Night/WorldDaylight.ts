@@ -211,7 +211,7 @@ export interface PointWords {
     south: string;
     east: string;
     west: string;
-    /** The point and the city it is told against, with the distance already written: "72° S 170° E (Auckland à 4 000 km)". */
+    /** The point and the city it is told against, the distance written: "72° S 170° E · Auckland à 4 000 km". */
     far: (point: string, city: string, distance: string) => string;
     /** A number of kilometres written for the player ("4 000"). */
     kilometres: (km: number) => string;
