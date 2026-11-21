@@ -1,5 +1,6 @@
 import { heightAt, TERRAIN_CELL, WeatherType } from "@workadventure/map-editor";
 import type { PrecipitationAir } from "@workadventure/map-editor";
+import { get } from "svelte/store";
 import type { Unsubscriber } from "svelte/store";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import {
@@ -179,7 +180,6 @@ export class WeatherManager {
     private layerClouds: CloudSky | undefined;
     /** The strength of the rainbow drawn this time (0: none). */
     private layerRainbow = 0;
-    private rainbowSpot: { x: number; y: number } | undefined;
     /** The sky the water reflects, worked out at each drawing of the weather (see waterReflection). */
     private reflectedSky: Omit<WaterReflection, "lamps"> = {
         sky: { color: DAY_SKY, share: 0 },
@@ -419,7 +419,7 @@ export class WeatherManager {
         this.layerClouds = undefined;
         this.layerRainbow =
             showWeather && !this.basic && this.rainbowShown
-                ? rainbowStrength(raining, storm, sun?.elevation, settings?.cloudCover)
+                ? rainbowStrength(raining, storm, sun?.elevation, settings?.cloudCover, snow)
                 : 0;
         let outdoor: Uint8Array;
         if (paint || !kept) {
@@ -743,11 +743,13 @@ export class WeatherManager {
         };
     }
 
-    /** Told only when it changes: the store is read by the button next to the clock. */
+    /**
+     * Told only when it changes, against what the store holds (not what this manager last told): a scene made again
+     * destroys its old manager after the new one told its rainbow, and the button by the clock was left without it.
+     */
     private setRainbowSpot(spot: { x: number; y: number } | undefined): void {
-        const kept = this.rainbowSpot;
-        if (kept?.x === spot?.x && kept?.y === spot?.y) return;
-        this.rainbowSpot = spot;
+        const told = get(rainbowSpotStore);
+        if (told?.x === spot?.x && told?.y === spot?.y) return;
         rainbowSpotStore.set(spot);
     }
 

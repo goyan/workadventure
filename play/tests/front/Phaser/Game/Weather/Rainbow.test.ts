@@ -15,6 +15,11 @@ describe("rainbowStrength", () => {
         expect(rainbowStrength(true, false, 39, 0)).toBeCloseTo(0.5);
     });
 
+    it("needs drops of water: none in a snowfall, fainter in a sleet", () => {
+        expect(rainbowStrength(true, false, 20, 0, 1)).toBe(0);
+        expect(rainbowStrength(true, false, 20, 0, 0.5)).toBeCloseTo(0.5);
+    });
+
     it("is fainter in a storm and under a covered sky", () => {
         expect(rainbowStrength(true, true, 20, 0)).toBeCloseTo(0.5);
         expect(rainbowStrength(true, false, 20, 1)).toBeCloseTo(0.4);

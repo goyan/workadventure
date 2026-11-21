@@ -18,13 +18,15 @@ export function rainbowStrength(
     storm: boolean,
     sunElevation: number | undefined,
     cloudCover: number | undefined,
+    /** The share of what falls that falls as snow (0 to 1): a rainbow is made by drops of water, not by flakes. */
+    snowShare = 0,
 ): number {
     if (!raining || sunElevation === undefined) return 0;
     if (sunElevation <= 0 || sunElevation >= RAINBOW_MAX_ELEVATION) return 0;
     const rising = clamp01(sunElevation / FADE_LOW);
     const setting = clamp01((RAINBOW_MAX_ELEVATION - sunElevation) / FADE_HIGH);
     const sunThrough = 1 - COVER_DIMMING * clamp01(cloudCover ?? 0);
-    return rising * setting * sunThrough * (storm ? STORM_FACTOR : 1);
+    return rising * setting * sunThrough * (storm ? STORM_FACTOR : 1) * (1 - clamp01(snowShare));
 }
 
 /**
