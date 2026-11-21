@@ -3156,7 +3156,7 @@ du serveur, la glace est maintenant tenue par le serveur, case par case.
   (9e paquet de `GroundSplat`, 12 paquets au lieu de 8, uniforme `uServerIce`), plus transparente quand elle est
   mince, et la neige posée dessus est celle de la case. `isOnFrozenWater` lit la glace du serveur (`Ice/IceHold.ts`).
   En météo personnelle (pastille 🖥), rien ne change : le gel local de `Frost.ts`.
-- **Température manuelle** jusqu'à −30 °C (au lieu de −10), pour geler un lac vite ; depuis −80 °C (voir « Conditions réglées à la main : les extrêmes »).
+- **Température manuelle** jusqu'à −30 °C (au lieu de −10), pour geler un lac vite ; aujourd'hui jusqu'à −80 °C (voir « Conditions réglées à la main : les extrêmes »).
 - **Piscines.** Une piscine peinte (outil Relief, mode Piscine) gèle par la glace du serveur comme un lac, d'après
   la profondeur de son style, sauf si son eau est chaude : chauffée, elle ne gèle jamais et fait fondre la neige qui
   y tombe. Le pré relit les styles avec la carte (`Meadow`, tableaux `pool` et `hotPool`). On y patine quand la glace
@@ -4396,9 +4396,10 @@ Ce que donne chaque règle aux extrêmes, figé par `libs/map-editor/tests/Weath
   (l'erreur de Stull dans un air froid et sec), sans effet sur la neige ;
 - **givre** : les formes de Magnus de l'OMM sont gardées hors de leur domaine annoncé (eau −45 à 60 °C, glace −65 à
   0 °C) : elles restent à moins de 2,5 % des pressions de vapeur de Murphy et Koop (2005) de −80 à +80 °C, et à 1,5 %
-  des tables de vapeur à 80 °C. Par −80 °C le sol ne blanchit que si l'air est saturé sur la glace ; jamais par +80 °C.
-  Le vent ne retient le givre qu'en ôtant le refroidissement du sol : un air saturé blanchit le sol par grand vent
-  comme avant (rien de changé à 120 km/h) ;
+  des tables de vapeur à 80 °C (474,2 hPa, Wagner et Pruss 2002). Par −80 °C le sol ne blanchit que si l'air est saturé sur la glace ; jamais par +80 °C.
+  Le vent retient le givre en ôtant le refroidissement du sol ; au-delà de 120 km/h (l'ancienne borne, rien ne change
+  en dessous), une tempête l'arrache : il s'efface jusqu'à disparaître à 250 km/h (`FROST_SWEPT_FROM_KMH`,
+  `FROST_SWEPT_KMH`, un choix : le givre de surface est un dépôt fragile d'air calme, UBC « Surface hoar ») ;
 - **sol** gelé tout entier dès −1 °C, **eau** gelée tout entière dès −15 °C (glace du navigateur) ; la glace du
   serveur (#429) prend le lac jusqu'au fond en quelques pas par −80 °C et 250 km/h sans dépasser son eau, et fond
   d'environ 108 mm par pas par +80 °C (loi de Stefan intégrée pas à pas : par grand froid et grand vent, le premier

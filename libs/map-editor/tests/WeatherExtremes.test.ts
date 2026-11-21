@@ -114,8 +114,8 @@ describe("the vapour of the air at the extremes", () => {
         for (const celsius of [-80, -65, -45, -20, 0]) {
             expect(Math.abs(iceSaturationPressure(celsius) / ice(celsius) - 1)).toBeLessThan(0.01);
         }
-        // Over 60 °C, against the steam tables (IAPWS-95): 473.7 hPa at 80 °C.
-        expect(Math.abs(waterSaturationPressure(80) / 473.7 - 1)).toBeLessThan(0.015);
+        // Over 60 °C, against the steam tables (IAPWS-95): 474.2 hPa at 80 °C (Wagner and Pruss 2002).
+        expect(Math.abs(waterSaturationPressure(80) / 474.2 - 1)).toBeLessThan(0.015);
     });
 
     it("gives a frost point as a number for any air with some vapour, under a dry air", () => {
@@ -152,6 +152,15 @@ describe("hoar frost at the extremes", () => {
         expect(hoarFrost({ temperature: -80, humidity: 100, windSpeed: 0 })).toBeGreaterThan(0);
         expect(hoarFrost({ temperature: -80, humidity: 30, windSpeed: 0 })).toBe(0);
         expect(hoarFrost({ temperature: -80, humidity: 0, windSpeed: 0 })).toBe(0);
+    });
+
+    it("is swept away by a storm: whole up to 120 km/h as before, less and less over it, none at 250 km/h", () => {
+        const at = (windSpeed: number) => hoarFrost({ temperature: -10, humidity: 100, windSpeed });
+        expect(at(120)).toBeGreaterThan(0.9);
+        expect(at(120)).toBe(at(60));
+        expect(at(185)).toBeCloseTo(at(120) / 2, 6);
+        expect(at(STRONGEST)).toBe(0);
+        expect(hoarFrost({ temperature: COLDEST, humidity: 100, windSpeed: STRONGEST })).toBe(0);
     });
 
     it("is none in a great heat", () => {

@@ -83,6 +83,14 @@ export const FULL_FROST_SUPERSATURATION = 0.05;
  * the frost of great colds, the excess at which the ground was all white (0.25 hPa).
  */
 export const FULL_FROST_EXCESS_HPA = 0.1;
+/**
+ * Winds (km/h) between which a storm sweeps the frost away: whole up to the first, the strongest the conditions of a
+ * room could be set to before 2026-11-21 (nothing changes under it), none at the second, their strongest now. A choice:
+ * surface hoar is a fragile deposit of calm air (UBC, "Surface hoar": winds under 15 km/h) that a storm tears off as it
+ * forms; under 120 km/h the wind only keeps the ground as warm as the air, as before.
+ */
+export const FROST_SWEPT_FROM_KMH = 120;
+export const FROST_SWEPT_KMH = 250;
 /** Share of its whiteness a frost keeps at least however cold, the deposit being thinner but never none. A choice. */
 export const COLD_FROST_SHARE = 0.5;
 
@@ -116,8 +124,8 @@ export function iceSaturationRatio(air: HoarFrostAir | undefined): number | unde
 /**
  * How white the ground is with hoar frost, 0 to 1: by the supersaturation of the air over the ice of the ground, none
  * under saturation, all white at FULL_FROST_SUPERSATURATION; thinner when the vapour in excess (hPa) is under
- * FULL_FROST_EXCESS_HPA, down to COLD_FROST_SHARE of it. None over a ground at or above zero, none while the
- * temperature or the humidity is not known.
+ * FULL_FROST_EXCESS_HPA, down to COLD_FROST_SHARE of it; swept away by a storm from FROST_SWEPT_FROM_KMH, none at
+ * FROST_SWEPT_KMH. None over a ground at or above zero, none while the temperature or the humidity is not known.
  */
 export function hoarFrost(air: HoarFrostAir | undefined): number {
     const ratio = iceSaturationRatio(air);
@@ -127,5 +135,7 @@ export function hoarFrost(air: HoarFrostAir | undefined): number {
     const white = Math.min(1, (ratio - 1) / FULL_FROST_SUPERSATURATION);
     const excess = vapourPressure(air.temperature, air.humidity) - iceSaturationPressure(surface);
     const thickness = Math.min(1, excess / FULL_FROST_EXCESS_HPA);
-    return white * (COLD_FROST_SHARE + (1 - COLD_FROST_SHARE) * thickness);
+    const wind = air.windSpeed !== undefined && Number.isFinite(air.windSpeed) ? air.windSpeed : 0;
+    const kept = Math.min(1, Math.max(0, (FROST_SWEPT_KMH - wind) / (FROST_SWEPT_KMH - FROST_SWEPT_FROM_KMH)));
+    return white * (COLD_FROST_SHARE + (1 - COLD_FROST_SHARE) * thickness) * kept;
 }
