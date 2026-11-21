@@ -6,9 +6,10 @@ interface Chosen {
     now: { place: { name: string; latitude: number; longitude: number } | undefined; state: RealForecastState };
 }
 const chosen = vi.hoisted((): Chosen => ({ now: { place: undefined, state: { status: "pending" } } }));
-const map = vi.hoisted((): { timeline: RealForecastState; asked: number } => ({
+const map = vi.hoisted((): { timeline: RealForecastState; asked: number; previewing: boolean } => ({
     timeline: { status: "pending" },
     asked: 0,
+    previewing: false,
 }));
 
 vi.mock("../../../../../src/front/Phaser/Game/Weather/ChosenPlaceWeather", () => ({
@@ -19,10 +20,14 @@ vi.mock("../../../../../src/front/Phaser/Game/Weather/RealWeatherClient", () => 
         map.asked++;
         return map.timeline;
     },
+    // As in RealWeatherClient: the weather of the city is drawn while one is followed and nothing is being tried.
+    showsChosenPlaceWeather: () => chosen.now.place !== undefined && !map.previewing,
 }));
 
-const { airAt, precipitationAirNow } = await import("../../../../../src/front/Phaser/Game/Weather/PrecipitationAir");
+const { airAt, drawnPrecipitationAir, precipitationAirNow } =
+    await import("../../../../../src/front/Phaser/Game/Weather/PrecipitationAir");
 const { fireConditionsStore } = await import("../../../../../src/front/Stores/FireConditionsStore");
+const { weatherForecast } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherForecast");
 
 const QUARTER = 15 * 60 * 1000;
 const NOW = Date.UTC(2026, 0, 10, 12);
@@ -43,6 +48,7 @@ const read = () => precipitationAirNow({ weather: WeatherType.Rain }, new Date(N
 beforeEach(() => {
     chosen.now = { place: undefined, state: { status: "pending" } };
     map.timeline = { status: "pending" };
+    map.previewing = false;
     fireConditionsStore.set(undefined);
 });
 afterEach(() => fireConditionsStore.set(undefined));
@@ -81,27 +87,53 @@ describe("precipitationAirNow", () => {
         expect(read()).toEqual({ temperature: -4, humidity: 70 });
     });
 
-    it("never is the air of the city this player follows: the shape of a precipitation is the same for every player", () => {
-        // A rain on the map at +8 °C while the city this player follows is at -5 °C: drops, as for everyone.
+    it("is the air of the city this player follows when the precipitation drawn is that of their city", () => {
+        // A rain on the map at +8 °C while the city this player follows is at -5 °C and damp: flakes for them.
         map.timeline = timeline(8, 90);
         chosen.now = { place: lyon, state: timeline(-5, 90) };
-        expect(read()).toEqual({ temperature: 8, humidity: 90 });
+        expect(read()).toEqual({ temperature: -5, humidity: 90 });
+        expect(snowShareOf(read())).toBeGreaterThan(0);
+        // The other way round: drops for them, whatever the cold of the map.
+        map.timeline = timeline(-5, 90);
+        chosen.now = { place: lyon, state: timeline(8, 90) };
         expect(snowShareOf(read())).toBe(0);
-        chosen.now = { place: undefined, state: { status: "pending" } };
-        expect(snowShareOf(read())).toBe(0);
-        // The city known, the map not yet: a rain, not the air of the city.
-        map.timeline = { status: "pending" };
-        chosen.now = { place: lyon, state: timeline(-5, 90) };
+        // The city not known yet: a rain, never the air of the map in its place.
+        chosen.now = { place: lyon, state: { status: "pending" } };
         expect(read()).toBeUndefined();
         expect(snowShareOf(read())).toBe(0);
+        // Its air not known (no humidity): a rain.
+        chosen.now = { place: lyon, state: timeline(-5) };
+        expect(read()).toBeUndefined();
     });
 
-    it("is the cold set by hand in the room for every player, whatever city one of them follows", () => {
+    it("is named in the banner of the city as it is drawn", () => {
+        map.timeline = timeline(8, 90);
+        chosen.now = { place: lyon, state: timeline(-5, 90) };
+        const date = new Date(NOW + 1000 * ++second);
+        const banner = weatherForecast(
+            { weather: WeatherType.Real, weatherLocation: lyon },
+            date.getTime(),
+            chosen.now.state,
+        );
+        expect(banner[0]?.weather).toBe(WeatherType.Snow);
+        expect(snowShareOf(precipitationAirNow({ weather: WeatherType.Rain }, date))).toBeGreaterThanOrEqual(0.5);
+    });
+
+    it("is the air of the map while a weather is tried in the map settings panel, whatever city is followed", () => {
+        map.timeline = timeline(8, 90);
+        chosen.now = { place: lyon, state: timeline(-5, 90) };
+        map.previewing = true;
+        expect(read()).toEqual({ temperature: 8, humidity: 90 });
+    });
+
+    it("is the cold set by hand in the room for every player who follows the server, not for one who follows a city", () => {
         map.timeline = timeline(8, 90);
         fireConditionsStore.set({ ...byHand, temperature: -5, humidity: 90 });
-        chosen.now = { place: lyon, state: timeline(20, 40) };
         expect(read()).toEqual({ temperature: -5, humidity: 90 });
         expect(snowShareOf(read())).toBe(1);
+        chosen.now = { place: lyon, state: timeline(20, 40) };
+        expect(read()).toEqual({ temperature: 20, humidity: 40 });
+        expect(snowShareOf(read())).toBe(0);
     });
 
     it("is read once a second of the game clock for the same map settings", () => {
@@ -114,5 +146,28 @@ describe("precipitationAirNow", () => {
         expect(map.asked).toBe(before + 1);
         precipitationAirNow(settings, new Date(date.getTime() + 1000));
         expect(map.asked).toBe(before + 2);
+    });
+});
+
+describe("drawnPrecipitationAir", () => {
+    const mapPlace = timeline(8, 90);
+    it("is the air of the map for the precipitation of the map: by hand first, else the real air of its place", () => {
+        expect(drawnPrecipitationAir({ chosenPlace: undefined, byHand: undefined, mapPlace }, NOW)).toEqual({
+            temperature: 8,
+            humidity: 90,
+        });
+        const cold = { temperature: -4, humidity: 70 };
+        expect(drawnPrecipitationAir({ chosenPlace: undefined, byHand: cold, mapPlace }, NOW)).toBe(cold);
+    });
+
+    it("is the air of the city for the precipitation of the city, nothing else even unknown", () => {
+        const cold = { temperature: -4, humidity: 70 };
+        expect(drawnPrecipitationAir({ chosenPlace: timeline(-5, 90), byHand: cold, mapPlace }, NOW)).toEqual({
+            temperature: -5,
+            humidity: 90,
+        });
+        expect(
+            drawnPrecipitationAir({ chosenPlace: { status: "pending" }, byHand: cold, mapPlace }, NOW),
+        ).toBeUndefined();
     });
 });
