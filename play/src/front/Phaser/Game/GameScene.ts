@@ -34,6 +34,7 @@ import {
     GameMap,
     GameMapProperties,
     GRAZING_COVER,
+    heightAt,
     type LifeFire,
     lifeFireOf,
     listeningZoneJamKey,
@@ -41,6 +42,7 @@ import {
     seasonAt,
     snowCoverOf,
     snowShareOf,
+    TERRAIN_CELL,
     type WAMFileFormat,
     WAMSettingsUtils,
     WeatherType,
@@ -442,6 +444,7 @@ import { TreeFireState } from "./Fire/TreeFireState";
 import { TreeFireView } from "./Fire/TreeFireView";
 import { DownpourView } from "./Catastrophe/DownpourView";
 import { DrainView } from "./Catastrophe/DrainView";
+import { BallView } from "./Catastrophe/BallView";
 import { FireTorchView } from "./Catastrophe/FireTorchView";
 import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
 import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
@@ -636,6 +639,7 @@ export class GameScene extends DirtyScene {
     private treeFireView: TreeFireView | undefined;
     private downpourView: DownpourView | undefined;
     private drainView: DrainView | undefined;
+    private ballView: BallView | undefined;
     private fireTorchView: FireTorchView | undefined;
     private catastropheSubscription: Subscription | undefined;
     /** The animals of the water of the relief, as the server tells them. */
@@ -1817,6 +1821,8 @@ export class GameScene extends DirtyScene {
         this.downpourView = undefined;
         this.drainView?.destroy();
         this.drainView = undefined;
+        this.ballView?.destroy();
+        this.ballView = undefined;
         this.fireTorchView?.destroy();
         this.fireTorchView = undefined;
         rodEquippedStore.set(false);
@@ -2379,6 +2385,7 @@ export class GameScene extends DirtyScene {
             this.treeFireView?.update(time);
             this.downpourView?.update(time);
             this.drainView?.update(time);
+            this.ballView?.update(time);
             this.fireTorchView?.update(time);
             this.nightManager?.update(time);
             this.lampManager?.update(time);
@@ -4447,6 +4454,21 @@ export class GameScene extends DirtyScene {
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
         );
         this.drainView = drainView;
+        this.ballView?.destroy();
+        const ballView = new BallView(
+            this,
+            // The ground as the water of the server reads it, and the water it last told.
+            (x, y) => ({
+                groundPx: heightAt(
+                    this.terrainWater.basin(),
+                    Math.floor(x / TERRAIN_CELL),
+                    Math.floor(y / TERRAIN_CELL),
+                ),
+                waterPx: this.terrainWater.settledDepthAt(x, y),
+            }),
+            () => this.terrainWater.version(),
+        );
+        this.ballView = ballView;
         this.fireTorchView?.destroy();
         const fireTorchView = new FireTorchView(
             this,
@@ -4456,6 +4478,7 @@ export class GameScene extends DirtyScene {
         this.catastropheSubscription = this.connection?.catastropheMessageStream.subscribe((message) => {
             if (message.kind === CatastropheKind.CATASTROPHE_DOWNPOUR) downpourView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_DRAIN) drainView.report(message, this.time.now);
+            else if (message.kind === CatastropheKind.CATASTROPHE_BALL) ballView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_FIRE) fireTorchView.report(message, this.time.now);
             else meteorView.add(message, this.time.now);
         });

@@ -17,6 +17,7 @@ describe("PixelIcons", () => {
         expect(Object.keys(PIXEL_ICONS).sort()).toEqual(
             [
                 "airplane",
+                "ball",
                 "bell",
                 "coffee",
                 "comet",
