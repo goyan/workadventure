@@ -200,7 +200,10 @@ export class MeadowManager {
         }
         const walls = landWallsOf(wam);
         const paved = pavedTilesOf(wam);
-        const signature = `${width}x${height}|${walls.signature}|${[...paved].sort().join(";")}`;
+        // The pools freeze by their style (their depth, their hot water): a style changed makes the meadow again.
+        const pools = wam?.settings?.pools;
+        const poolsSignature = (pools ?? []).map((style) => `${style.depthPx}${style.hot ? "h" : ""}`).join(",");
+        const signature = `${width}x${height}|${walls.signature}|${[...paved].sort().join(";")}|${poolsSignature}`;
         if (this.meadow && this.readTerrain === wam?.terrain && this.readSignature === signature) {
             // The ground is the same; a tree may have been planted, moved or removed.
             this.readTrees();
@@ -209,7 +212,7 @@ export class MeadowManager {
         this.readTerrain = wam?.terrain;
         this.readSignature = signature;
         const before = this.meadow;
-        this.meadow = new Meadow({ width, height }, wam?.terrain, walls, paved);
+        this.meadow = new Meadow({ width, height }, wam?.terrain, walls, paved, pools);
         if (before) this.meadow.takeFrom(before);
         else if (this.saved && this.saved.width === width && this.saved.height === height) {
             this.meadow.read(

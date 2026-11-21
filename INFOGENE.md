@@ -3104,8 +3104,12 @@ du serveur, la glace est maintenant tenue par le serveur, case par case.
   mince, et la neige posée dessus est celle de la case. `isOnFrozenWater` lit la glace du serveur (`Ice/IceHold.ts`).
   En météo personnelle (pastille 🖥), rien ne change : le gel local de `Frost.ts`.
 - **Température manuelle** jusqu'à −30 °C (au lieu de −10), pour geler un lac vite.
-- **Limites.** Les piscines gèlent toujours selon la règle de #392 (dès −8 °C, d'après l'air de la salle), pas par
-  la glace du serveur. Pas de glace du serveur dessinée sans shader (repli). La pêche n'est pas refusée sur la glace.
+- **Piscines.** Une piscine peinte (outil Relief, mode Piscine) gèle par la glace du serveur comme un lac, d'après
+  la profondeur de son style, sauf si son eau est chaude : chauffée, elle ne gèle jamais et fait fondre la neige qui
+  y tombe. Le pré relit les styles avec la carte (`Meadow`, tableaux `pool` et `hotPool`). On y patine quand la glace
+  porte (5 cm si l'on y nagerait). Une piscine posée comme image (ancien objet) n'est pas connue du serveur : elle
+  garde la règle de #392 (dès −8 °C) ; la convertir en piscine peinte la fait suivre le serveur.
+- **Limites.** Pas de glace du serveur dessinée sans shader (repli). La pêche n'est pas refusée sur la glace.
   L'eau sous la glace s'évapore encore. La glace est tenue par case de 32 px, l'eau par cellule de 16 px : le bord de
   la glace est lissé par le shader. `play` et `back` se déploient ensemble.
 

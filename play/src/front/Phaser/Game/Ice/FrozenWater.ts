@@ -43,6 +43,13 @@ export function isPoolFrozen(
 ): boolean {
     // A pool painted with the relief tool: its hot water set in its style.
     if (pool.painted?.hot) return false;
+    // For a player who follows the weather of the server, a painted pool has the ice the server keeps on it (the
+    // same for everyone), which bears a skater once thick enough. A pool placed as an image is not known to the
+    // server: it keeps the rule of this player's own cold below.
+    if (pool.painted && followsServerGround()) {
+        const ice = scene.getMeadow?.()?.iceAtPoint(pool.x + pool.width / 2, pool.y + pool.height / 2) ?? 0;
+        return iceHolds(ice, pool.painted.depthPx >= SWIM_DEPTH_PX);
+    }
     const { ice } = waterCycleNow(scene.getGameMap?.()?.getWamFile()?.getWam().settings);
     if (!isFrozen(POOL_ICE_DEPTH_PX, ice)) return false;
     if (scene.getOutdoorGrid?.()?.isOutdoorAt(pool.x + pool.width / 2, pool.y + pool.height / 2) === false)

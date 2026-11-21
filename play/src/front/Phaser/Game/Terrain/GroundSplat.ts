@@ -27,7 +27,7 @@ import type { GroundArea } from "./TexturedGround";
  * grass, the snow and the water; the relief (how deep a cell is dug, how high it is raised, in map pixels) and the
  * ash; the straw and the fire of the meadow, and what is outdoors; the pools (whether a cell is one, how deep, whether
  * hot), the colour of their water and of their coping; the ice the server keeps over the water (its thickness, see
- * iceByte), and three packs to spare.
+ * iceByte) and whether a cell is a pool placed as an image, and three packs to spare.
  */
 const PACKS = 12;
 /** The packs are laid in a grid this many wide (and PACKS / PACKS_ACROSS high): a wide view stays within the size a
@@ -354,8 +354,12 @@ vec4 poolColor(vec2 world, float t) {
     }
     float depthPx = style.g * 255.0;
     float deep = clamp(depthPx / 160.0, 0.0, 1.0);
-    bool frozen = style.b < 0.5 && step(0.5, pack(4.0, world).b) > 0.5 &&
+    bool cold = style.b < 0.5 && step(0.5, pack(4.0, world).b) > 0.5 &&
         uIce >= 0.1 + 0.9 * min(1.0, ${POOL_ICE_DEPTH_PX}.0 / ${DEEP_ICE_PX}.0);
+    // A painted pool has the ice the server keeps on it for a player who follows its weather; a pool placed as an
+    // image (the green of pack 8), which the server does not know, keeps the rule of the cold.
+    vec3 kept = pack(8.0, world);
+    bool frozen = uServerIce > 0.5 && kept.g < 0.5 ? kept.r >= 0.0707 : cold;
     if (frozen) {
         vec3 ice = texture2D(uIceTexture, fract(world / uIceSize)).rgb;
         return vec4(snowOnIce(ice * mix(vec3(1.0), water, 0.15), world), 1.0);
@@ -635,6 +639,7 @@ export class GroundSplat {
             writeColor(data, at(6, cell), style?.water);
             writeColor(data, at(7, cell), style?.coping);
             data[at(8, cell)] = weights.ice?.[cell] ?? 0;
+            data[at(8, cell) + 1] = image ? 255 : 0;
             if (grass || snow || style || data[relief] || data[relief + 1] || data[relief + 2]) any = true;
             if (data[meadow] || data[meadow + 1]) any = true;
         }

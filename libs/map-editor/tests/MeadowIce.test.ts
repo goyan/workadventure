@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { Meadow, MEADOW_STEP_SECONDS } from "../src/Terrain/Meadow";
 import type { MeadowStepInput } from "../src/Terrain/Meadow";
 import type { SnowWeather } from "../src/Terrain/Snow";
+import { DEFAULT_POOL_STYLE, poolSoilCode } from "../src/Terrain/Pools";
+import { cellKey, withSoils } from "../src/Terrain/TerrainGrid";
 import { PX_PER_MM } from "../src/Terrain/WaterInputs";
 import { Season } from "../src/types";
 
@@ -142,5 +144,53 @@ describe("the ice kept", () => {
         expect(next.iceAt(10, 10)).toBeCloseTo(ice);
         meadow.clear();
         expect(meadow.iceAt(10, 10)).toBeCloseTo(ice);
+    });
+});
+
+describe("the pools freezing", () => {
+    /** The four cells of a tile painted as a pool of that style. */
+    const poolAt = (tileX: number, tileY: number, style: number): [string, number][] =>
+        [0, 1].flatMap((y) =>
+            [0, 1].map((x): [string, number] => [cellKey(tileX * 2 + x, tileY * 2 + y), poolSoilCode(style)]),
+        );
+    const terrain = withSoils(undefined, new Map([...poolAt(6, 6, 0), ...poolAt(8, 6, 1)]));
+    const styles = [DEFAULT_POOL_STYLE, { ...DEFAULT_POOL_STYLE, hot: true }];
+    const dry = (weather: SnowWeather | undefined): MeadowStepInput => under(weather, { waterAt: () => 0 });
+
+    it("takes a pool in ice as the water of the relief, though no water of the relief lies in it", () => {
+        const meadow = new Meadow(size, terrain, undefined, undefined, styles);
+        run(meadow, 30, dry(frost));
+        expect(meadow.iceAt(6, 6)).toBeGreaterThan(45);
+        expect(meadow.iceAt(7, 6)).toBe(0);
+        run(meadow, 300, dry(mild));
+        expect(meadow.iceAt(6, 6)).toBe(0);
+    });
+
+    it("never freezes a pool whose water is heated, and melts the snow that falls in it", () => {
+        const meadow = new Meadow(size, terrain, undefined, undefined, styles);
+        run(meadow, 30, dry(frost));
+        expect(meadow.iceAt(8, 6)).toBe(0);
+        meadow.snowOn(8, 6, 0, 20);
+        meadow.step(dry(frost));
+        expect(meadow.snowAt(8, 6)).toBe(0);
+    });
+
+    it("freezes a pool of the default style on a map that keeps no styles", () => {
+        const meadow = new Meadow(size, terrain, undefined);
+        run(meadow, 30, dry(frost));
+        expect(meadow.iceAt(6, 6)).toBeGreaterThan(45);
+        expect(meadow.iceAt(8, 6)).toBeGreaterThan(45);
+    });
+
+    it("lets the snow lie on a frozen pool, and melt in an open one in a mild air", () => {
+        const meadow = new Meadow(size, terrain, undefined, undefined, styles);
+        run(meadow, 30, dry(frost));
+        meadow.snowOn(6, 6, 0, 20);
+        meadow.step(dry(frost));
+        expect(meadow.snowAt(6, 6)).toBeCloseTo(20);
+        const open = new Meadow(size, terrain, undefined, undefined, styles);
+        open.snowOn(6, 6, 0, 20);
+        open.step(dry(mild));
+        expect(open.snowAt(6, 6)).toBe(0);
     });
 });

@@ -1,5 +1,5 @@
 import { gunzipSync } from "node:zlib";
-import { WeatherType } from "@workadventure/map-editor";
+import { cellKey, DEFAULT_POOL_STYLE, poolSoilCode, WeatherType, withSoils } from "@workadventure/map-editor";
 import type { PrecipitationAir, SnowWeather, WAMFileFormat } from "@workadventure/map-editor";
 import type { MeadowMessage, SubToPusherRoomMessage } from "@workadventure/messages";
 import { describe, expect, it, vi } from "vitest";
@@ -656,5 +656,39 @@ describe("the ice of the MeadowManager", () => {
         second.steps(5);
         expect(iceOf(second.sent.at(-1))[centre]).toBeGreaterThan(0);
         second.manager.stop();
+    });
+
+    it("freezes a pool painted on the map, unless its water is heated", () => {
+        const pool = (tileX: number, style: number): [string, number][] =>
+            [0, 1].flatMap((y) =>
+                [0, 1].map((x): [string, number] => [cellKey(tileX * 2 + x, 2 + y), poolSoilCode(style)]),
+            );
+        const harness = createHarness({ weather: WeatherType.Clear });
+        harness.wam.terrain = withSoils(undefined, new Map([...pool(2, 0), ...pool(5, 1)]));
+        harness.wam.settings = {
+            ...harness.wam.settings,
+            pools: [DEFAULT_POOL_STYLE, { ...DEFAULT_POOL_STYLE, hot: true }],
+        };
+        harness.manager.fallThrough(() => frost);
+        harness.manager.snowUnder(() => frost);
+        harness.manager.mapChanged();
+        harness.steps(10);
+        const ice = iceOf(harness.sent.at(-1));
+        // The tile (2, 1) is a pool, the tile (5, 1) a heated one, the tile (0, 0) dry ground.
+        expect(ice[8 + 2]).toBeGreaterThan(0);
+        expect(ice[8 + 5]).toBe(0);
+        expect(ice[0]).toBe(0);
+        // Heating the first pool thaws it: the styles are read again with the map.
+        harness.wam.settings = {
+            ...harness.wam.settings,
+            pools: [
+                { ...DEFAULT_POOL_STYLE, hot: true },
+                { ...DEFAULT_POOL_STYLE, hot: true },
+            ],
+        };
+        harness.manager.mapChanged();
+        harness.steps(2);
+        expect(iceOf(harness.sent.at(-1))[8 + 2]).toBe(0);
+        harness.manager.stop();
     });
 });
