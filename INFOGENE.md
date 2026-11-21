@@ -2451,6 +2451,10 @@ Avatars, poissons, reflets, bouchon et traces montent avec le mont ; un clic sur
 sur un palier, un pont ni dans l'éditeur. **Limites** : un avatar, un objet ou un animal derrière un mont est dessiné
 par-dessus lui (lot 2 du relief). Un clic sur le flanc sud d'un mont donne le mont (son bord quand le flanc est une
 falaise), pas le sol à son pied. Courbes de niveau sur les monts comme dans les trous ; neige aux teintes écartées.
+**Coût des poissons** : savoir si le bord sud de son trou cache un poisson demande de lire le relief jusqu'à 128 px au
+sud de lui ; ce n'est demandé que pour les animaux à portée de la vue (`AquaticLifeView`, `NEAR_PX`), dix fois par
+seconde au plus par animal (`HIDDEN_CHECK_MS`). Avant, c'était pour les 300 animaux de la carte à chaque image : 17 à
+18 % du fil du jeu sur la carte d'équipe (mont de 256 px), mesuré au profileur.
 
 **Chargement du terrain** : un bloc de la vue jamais dessiné est d'abord dessiné **grossier** (un point sur 4 dans
 chaque sens, 16 fois moins cher : `ReliefTileSchedule.COARSE_TEXEL`), puis **net** ; la vue est remplie en quelques

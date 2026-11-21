@@ -107,6 +107,47 @@ describe("AquaticLifeView", () => {
         expect(images.map((image) => image.visible)).toEqual([true, false]);
     });
 
+    it("does not look at the water under an animal far out of the screen", () => {
+        const dropAt = vi.fn(() => 30);
+        const hiddenAt = vi.fn(() => false);
+        const { view, life, images } = createView({ value: true }, dropAt, hiddenAt);
+        life.receive(
+            [
+                { id: 1, kind: 0, x: 900, y: 900 },
+                { id: 2, kind: 0, x: 100, y: 50 },
+            ],
+            0,
+        );
+        view.update(0);
+        expect(images).toHaveLength(2);
+        // The one on screen only.
+        expect(dropAt.mock.calls).toEqual([[100, 50]]);
+        expect(hiddenAt.mock.calls).toEqual([[100, 50]]);
+    });
+
+    it("still places an animal out of the screen whose water is drawn in it (a lake on a mount, south of the view)", () => {
+        const dropAt = vi.fn(() => -120);
+        const { view, life, images } = createView({ value: true }, dropAt);
+        life.receive([{ id: 1, kind: 0, x: 100, y: 300 }], 0);
+        view.update(0);
+        expect(images[0]).toMatchObject({ x: 100, y: 180 });
+    });
+
+    it("asks ten times a second at most whether the rim of its hollow hides an animal", () => {
+        const hidden = { value: false };
+        const hiddenAt = vi.fn(() => hidden.value);
+        const { view, life, images } = createView({ value: true }, () => 0, hiddenAt);
+        life.receive([{ id: 1, kind: 0, x: 100, y: 50 }], 0);
+        for (const now of [0, 16, 33, 50, 66, 83]) view.update(now);
+        expect(hiddenAt).toHaveBeenCalledTimes(1);
+        hidden.value = true;
+        view.update(99);
+        expect(images[0].visible).toBe(true);
+        view.update(100);
+        expect(hiddenAt).toHaveBeenCalledTimes(2);
+        expect(images[0].visible).toBe(false);
+    });
+
     it("asks for the scene to be drawn again only while an animal on screen moves or fades", () => {
         const { view, life, markDirty } = createView();
         life.receive([{ id: 1, kind: 0, x: 100, y: 50 }], 0);
