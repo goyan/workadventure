@@ -3,6 +3,7 @@ import type { WeatherLocation } from "@workadventure/map-editor";
 import { WorldMoment, type WorldPoint } from "@wa/front/Phaser/Game/Night/WorldDaylight";
 import { localUserStore } from "../Connection/LocalUserStore";
 import { NIGHT_DARKNESS_MAX, NIGHT_DARKNESS_MIN, NIGHT_MAX_OPACITY } from "../Phaser/Game/Night/NightClock";
+import { basicActiveStore } from "./BasicModeStore";
 import {
     createPersistedChoiceStore,
     createPersistedNumberStore,
@@ -93,6 +94,12 @@ function createNightModeStore(): Writable<NightMode> {
 }
 
 export const nightModeStore = createNightModeStore();
+
+/** The mode the night really follows now: Basique is the diffuse light of day, whatever the mode chosen and kept. */
+export const effectiveNightModeStore: Readable<NightMode> = derived(
+    [nightModeStore, basicActiveStore],
+    ([mode, basic]) => (basic ? NightMode.Disabled : mode),
+);
 
 /**
  * Realistic lighting, for this player only, off by default: at night the rooms no longer light up on their own when

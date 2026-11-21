@@ -153,6 +153,8 @@ const menu: DeepPartial<Translation["menu"]> = {
             custom: "Heure choisie",
             worldCity: "Ciel de {city}",
             skyMenu: "Ciel et heure",
+            basicOff:
+                "Le mode Basique coupe le cycle jour/nuit : plein jour. Ton choix ({mode}) reviendra quand tu le quitteras.",
             disable: "Désactiver la nuit",
             darkness: "Obscurité de la nuit : {percent} %",
             darknessLight: "Claire",

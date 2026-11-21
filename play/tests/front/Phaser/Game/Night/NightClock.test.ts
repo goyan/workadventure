@@ -257,3 +257,28 @@ describe("forcedSunMinutes", () => {
         }
     });
 });
+
+describe("sunPositionAt, built from solarTermsAt", () => {
+    // Read on the code before the terms that depend on the instant alone were taken out of it: nothing may move.
+    const before: [string, number, number, number, number][] = [
+        ["2026-03-20T06:00:00Z", -33.45, -70.67, -52.61605231228319, 150.39691346717723],
+        ["2026-03-20T06:00:00Z", -31.95, 115.86, 50.94701717613423, 319.823192221064],
+        ["2026-06-21T12:00:00Z", 48.86, 2.35, 64.53407667632632, 184.04394013501314],
+        ["2026-06-21T12:00:00Z", -33.45, -70.67, 1.6268218065799402, 60.28591470307583],
+        ["2026-06-21T12:00:00Z", -31.95, 115.86, -32.987710859470866, 278.8617486042109],
+        ["2026-11-21T16:15:00Z", 48.86, 2.35, -2.4383317110033005, 241.84131820298603],
+        ["2026-11-21T16:15:00Z", -33.45, -70.67, 76.22843381814131, 13.50457007873797],
+        ["2026-11-21T16:15:00Z", -31.95, 115.86, -37.950125555275136, 176.2597670615479],
+        ["2026-12-21T23:30:00Z", 48.86, 2.35, -64.30494103710771, 349.9537953639008],
+        ["2026-12-21T23:30:00Z", -33.45, -70.67, 3.2561432942207063, 243.9025790244948],
+        ["2026-12-21T23:30:00Z", -31.95, 115.86, 27.45987481312782, 101.78186280209121],
+    ];
+
+    it("gives the same sun as before, to the last digit", () => {
+        for (const [iso, latitude, longitude, elevation, azimuth] of before) {
+            const sun = sunPositionAt(new Date(iso), { latitude, longitude });
+            expect(sun.elevation).toBe(elevation);
+            expect(sun.azimuth).toBe(azimuth);
+        }
+    });
+});

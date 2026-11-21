@@ -334,7 +334,9 @@ torches, lampes de Jam, piste de danse et lampes des pièces jamais concernées.
 - **Entrées, les mêmes pour tous** (`GameScene.mapDaylightAt`) : heure du serveur (rien n'est éteint tant qu'elle
   n'est pas connue), soleil du lieu de la carte (Paris par défaut), météo de la carte à cet instant avec ses nuages.
   Rien de personnel : ni « Désactiver la nuit », ni l'horloge de l'ordinateur, ni le thème saisonnier, ni les nuages
-  masqués. Écarts possibles : la personne qui essaie une météo dans le panneau (aperçu) voit les lampes suivre son
+  masqués, ni la météo de la ville suivie sur son horloge (`Lamps/MapDaylight.ts` lit `mapWeatherSettings`, pas
+  `shownWeatherSettings`). Quel que soit son mode d'horloge (« Toujours nuit », « Jour dans le monde »…), chacun voit
+  les lampes de dehors suivre le jour réel de la carte. Écarts possibles : la personne qui essaie une météo dans le panneau (aperçu) voit les lampes suivre son
   essai ; en météo Réelle, un navigateur qui attend encore la réponse du pusher affiche la météo automatique.
 - **Dehors** : pied de l'image de la lampe (milieu du bas), lu sur la grille dehors/dedans (`OutdoorGrid.isOutdoorAt`) ;
   pour une lampe sur un palier, le sol sous elle. Une lampe dont le pied tombe dans un mur (façade) compte comme de
@@ -1582,6 +1584,15 @@ d'heure) à ±2 min. La nuit, un voile bleu nuit
 - **Choix personnel** dans Paramètres → Thème → Cycle jour/nuit : heure du serveur (défaut), heure de mon ordinateur
   (horloge et fuseau du poste : la date et l'heure affichées par le poste sont lues comme une heure de Paris, puis
   éclairées par le soleil de Paris de ce jour-là ; un poste qui affiche 22 h voit la nuit de Paris à 22 h), ou désactivé. La clé `nightMode` est mémorisée ; l’ancienne préférence `disableNight` est conservée.
+- **Jour dans le monde** (menu de l'horloge) : la ville d'un moment (Matin 9 h, Midi 12 h 30, Soir 18 h 30, ou une
+  heure choisie) est celle dont l'**heure solaire vraie** est la plus proche (avec l'équation du temps, `trueSolarMinutes`
+  de `NightClock.ts`, ±16 min selon la saison). La carte du monde du menu s'ombre avec le voile du jeu lui-même
+  (`worldShadeAt` = `nightOpacityAt` vu de chaque point) : plein jour jusqu'à −0,833°, assombrie jusqu'à −6°, nuit
+  au-delà. Dessinée pixel par pixel (240 × 120) : environ 7 ms par dessin (mesuré en conteneur Linux sur un Mac), une
+  fois par seconde tant que le menu est ouvert en mode monde.
+- **Mode Basique** : il coupe le cycle (plein jour). Le menu de l'horloge le dit en une ligne et surligne le mode
+  effectif, « Désactivé », pas le mode enregistré ; celui-ci revient en quittant le Basique (`effectiveNightModeStore`,
+  lu aussi par `NightManager`). Le panneau du ciel du monde est masqué tant que le Basique s'applique.
 - **Pas de nuit** en mode édition ou lorsque le cycle est désactivé.
 - **Recette locale** : `?nightAt=21:00` force l'heure de Paris du jour courant (soleil de ce jour), seulement en
   développement (`import.meta.env.DEV`).

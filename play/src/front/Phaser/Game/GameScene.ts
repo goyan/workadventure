@@ -322,7 +322,7 @@ import { levelUnderPoint } from "./MapEditor/MapLayer/FloorOperations";
 import { levelItems } from "./MapEditor/MapLayer/MapLayerLevels";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
 import { weatherAtTime } from "./Weather/WeatherFrame";
-import { setRoomConditions, shownMapPlace, shownWeatherSettings } from "./Weather/RealWeatherClient";
+import { setRoomConditions, shownWeatherSettings } from "./Weather/RealWeatherClient";
 import { isSwayingTree, TreeSway } from "./Nature/TreeSway";
 import { TreePoseTextures } from "./Nature/TreePoses";
 import { TreeSeasonEffects } from "./Nature/TreeSeasonEffects";
@@ -417,8 +417,7 @@ import type { WalkerSample } from "./Christmas/FootprintTrail";
 import { NightManager } from "./Night/NightManager";
 import { PerfMonitor } from "./Perf/PerfMonitor";
 import { skyWeatherFactor } from "./Night/SkyLight";
-import { sunPositionAt } from "./Night/NightClock";
-import { daylightOf } from "./Lamps/EnergySaving";
+import { mapDaylightAt } from "./Lamps/MapDaylight";
 import { SkyShadowManager } from "./SkyShadows/SkyShadowManager";
 import { SkyWindowLightManager } from "./SkyShadows/SkyWindowLightManager";
 import { SkyMovingShadows } from "./SkyShadows/SkyMovingShadows";
@@ -3153,16 +3152,11 @@ export class GameScene extends DirtyScene {
     /**
      * How much daylight the sky of the map gives at an instant (daylightOf), the same for everyone: the sun of the place
      * of the map (Paris when it has none) and the weather of the map at that instant, its clouds included. Nothing
-     * personal: neither the night turned off nor the computer clock, neither the seasonal theme nor the clouds hidden.
-     * The energy saving of the lamps follows it (LampManager).
+     * personal: neither the night turned off nor the computer clock, neither the seasonal theme nor the clouds hidden,
+     * nor the weather of the city a player follows on their clock. The energy saving of the lamps follows it (LampManager).
      */
     public mapDaylightAt(at: number): number {
-        const date = new Date(at);
-        const mapSettings = this.getGameMap().getWamFile()?.getWam().settings;
-        const settings = shownWeatherSettings(mapSettings, date);
-        const weather = weatherAtTime(settings?.weather ?? WeatherType.Clear, date, settings?.weatherAuto);
-        const sun = sunPositionAt(date, shownMapPlace(mapSettings));
-        return daylightOf(sun.elevation, skyWeatherFactor(weather, settings?.cloudiness ?? 0));
+        return mapDaylightAt(this.getGameMap().getWamFile()?.getWam().settings, new Date(at));
     }
 
     /** The map weather as it is shown now, with its wind. */
