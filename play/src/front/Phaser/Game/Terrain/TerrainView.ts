@@ -134,6 +134,8 @@ interface MeadowLayers extends BlockCanvasArea {
     snow: Uint8Array | undefined;
     /** Whether these layers show the snow of the server (GroundSource): read again when the player changes of weather. */
     server: boolean;
+    /** Whether they were read under the winter theme of this player (all white outdoors). */
+    winter: boolean;
 }
 
 /**
@@ -200,6 +202,8 @@ export class TerrainView {
         private readonly hidden?: () => boolean,
         /** Whether the relief is to be seen in 3/4: drawn so by the shaders, where the graphics card runs them. */
         private readonly oblique?: () => boolean,
+        /** Whether all the ground outdoors is under the snow for this player (the winter theme they chose). */
+        private readonly snowEverywhere?: () => boolean,
     ) {
         // The shaders draw the soils and the grass: the canvas keeps only the shades of the relief, smooth. Without
         // them the mottled grass and the soils are on the canvas: sharp cells, each keeps its own shade.
@@ -247,7 +251,7 @@ export class TerrainView {
         const oblique = this.canProject() && this.oblique?.() === true;
         this.isOblique = oblique;
         this.splat?.setOblique(oblique);
-        const key = `${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}:${this.imagePools.signature}:${this.poolSettingsVersion()}:${followsServerGround()}:${oblique}`;
+        const key = `${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}:${this.imagePools.signature}:${this.poolSettingsVersion()}:${followsServerGround()}:${oblique}:${this.snowEverywhere?.() === true}`;
         const inside = this.drawn !== undefined && stillCovers(this.drawn, screen, oblique, DRAW_MARGIN / 5);
         if (key === this.lastKey && inside) return;
         this.lastKey = key;
@@ -591,7 +595,10 @@ export class TerrainView {
     /** Whether the meadow has anything to draw for this player: grass, a dry ground, or the snow of the server. */
     private meadowShows(): boolean {
         const meadow = this.meadow;
-        return meadow !== undefined && (meadow.hasGrass() || (followsServerGround() && meadow.hasSnow()));
+        return (
+            meadow !== undefined &&
+            (meadow.hasGrass() || (followsServerGround() && meadow.hasSnow()) || this.snowEverywhere?.() === true)
+        );
     }
 
     private meadowOver(canvas: BlockCanvasArea): MeadowLayers | undefined {
@@ -602,11 +609,14 @@ export class TerrainView {
         }
         // The snow of the server is for those who follow its weather (GroundSource).
         const server = followsServerGround();
+        // The winter theme of this player: all white outdoors, whatever fell.
+        const winter = this.snowEverywhere?.() === true;
         const kept = this.meadowLayers;
         if (
             kept &&
             kept.version === meadow.version() &&
             kept.server === server &&
+            kept.winter === winter &&
             kept.x === canvas.x &&
             kept.y === canvas.y &&
             kept.columns === canvas.columns &&
@@ -627,6 +637,7 @@ export class TerrainView {
             fire: undefined,
             snow: undefined,
             server,
+            winter,
         };
         const outdoor = this.scene.getOutdoorGrid?.();
         const cellsATile = TILE_PX / TERRAIN_CELL;
@@ -640,7 +651,7 @@ export class TerrainView {
                 const dryness = meadow.drynessAt(tileX, tileY);
                 const ashes = meadow.ashAt(tileX, tileY);
                 const flames = meadow.fireAt(tileX, tileY);
-                const white = server ? Math.round(snowCoverOf(meadow.snowAt(tileX, tileY)) * 255) : 0;
+                const white = winter ? 255 : server ? Math.round(snowCoverOf(meadow.snowAt(tileX, tileY)) * 255) : 0;
                 if (cover === 0 && dryness === 0 && ashes === 0 && flames === 0 && white === 0) continue;
                 const firstRow = Math.max(0, tileY * cellsATile - top);
                 const lastRow = Math.min(canvas.rows, (tileY + 1) * cellsATile - top);

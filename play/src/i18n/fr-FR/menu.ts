@@ -121,9 +121,12 @@ const menu: DeepPartial<Translation["menu"]> = {
             label: "Thème saisonnier",
             auto: "Auto",
             autumn: "Automne",
+            winter: "Hiver",
             none: "Aucun",
             hintAuto: "Automne de septembre à novembre.",
             hintAutumn: "Feuilles qui tombent des arbres et feuilles à leur pied, dehors.",
+            hintWinter:
+                "Pour toi seul, tant que tu le gardes : il neige, le sol, les arbres et les objets dehors sont enneigés.",
             hintNone: "Aucun décor saisonnier.",
         },
         perfCounter: "Afficher le compteur de performances (images par seconde) près de la barre d'actions",

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { WeatherType } from "@workadventure/map-editor";
+import { SeasonalTheme } from "../../../../../src/front/Phaser/Game/Seasonal/SeasonalTheme";
 import {
     FOG_LEVELS,
     fogBlocks,
@@ -12,6 +13,8 @@ import {
     snowflakes,
     stormFlash,
     weatherAtTime,
+    themedFall,
+    WINTER_SNOWFALL,
 } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
 import { autoWeatherAt, slotStart } from "../../../../../src/front/Phaser/Game/Weather/WeatherSchedule";
 import { OutdoorGrid } from "../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid";
@@ -381,5 +384,43 @@ describe("the automatic weather of a map with a place", () => {
             if (there !== autoWeatherAt(date, auto)) differs++;
         }
         expect(differs).toBeGreaterThan(0);
+    });
+});
+
+describe("what falls for who chose the winter theme", () => {
+    it("is what the map says without the theme", () => {
+        expect(themedFall(undefined, WeatherType.Clear, 0.5, 0)).toEqual({
+            weather: WeatherType.Clear,
+            rain: 0.5,
+            snow: 0,
+        });
+        expect(themedFall(SeasonalTheme.Autumn, WeatherType.Rain, 0.8, 0.3)).toEqual({
+            weather: WeatherType.Rain,
+            rain: 0.8,
+            snow: 0.3,
+        });
+    });
+
+    it("is a light snow under a clear, cloudy or foggy sky", () => {
+        for (const weather of [WeatherType.Clear, WeatherType.Cloudy, WeatherType.Fog]) {
+            expect(themedFall(SeasonalTheme.Christmas, weather, 0.5, 0)).toEqual({
+                weather: WeatherType.Rain,
+                rain: WINTER_SNOWFALL,
+                snow: 1,
+            });
+        }
+    });
+
+    it("is the rain or the storm of the map, as hard, all in flakes", () => {
+        expect(themedFall(SeasonalTheme.Christmas, WeatherType.Rain, 0.8, 0)).toEqual({
+            weather: WeatherType.Rain,
+            rain: 0.8,
+            snow: 1,
+        });
+        expect(themedFall(SeasonalTheme.Christmas, WeatherType.Storm, 0.9, 0.2)).toEqual({
+            weather: WeatherType.Storm,
+            rain: 0.9,
+            snow: 1,
+        });
     });
 });

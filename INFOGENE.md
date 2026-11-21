@@ -3278,13 +3278,28 @@ plus ; la piste de danse et la lumière des fenêtres, plus bas, sont voilées c
 Limites : le brouillard du dehors reste sous les lumières (une lampe dehors le perce comme avant) ; pluie et neige
 gardent leur voile au dehors seul.
 
-**Thème saisonnier** (« Paramètres → Ambiance → Thème saisonnier ») : Auto, Automne, Aucun (Noël retiré, voir plus bas). Réglage perso
+**Thème saisonnier** (« Paramètres → Ambiance → Thème saisonnier ») : Auto, Automne, Hiver, Aucun (Noël retiré puis
+remis sous le nom « Hiver », voir plus bas). Réglage perso
 (`seasonalTheme` dans le navigateur), appliqué sans recharger. Il remplace « Thème de Noël » (repris une fois :
 Toujours → Auto depuis le retrait de Noël, Jamais → Aucun) et « Sol extérieur » (effacé). Auto suit la saison du lieu
 de la carte (Paris sans lieu), revérifiée chaque minute : automne du 1er septembre au 30 novembre au nord, du 1er mars
 au 31 mai au sud ; tant que l'heure du serveur
 n'est pas reçue, Auto n'affiche rien (`Seasonal/SeasonalTheme.ts`). `SeasonalThemeManager` crée le décor du thème
 (`SeasonalDecor`), le masque pendant l'édition et le reconstruit quand un mur ou un objet change.
+
+**Thème « Hiver » remis** le 2026-11-22, à la demande du tech lead (« remets le thème hiver si je veux que ça soit
+permanent », « en mode hiver, je m'attends à ce qu'il neige »), deux jours après le retrait décrit ci-dessous. Choix
+personnel `winter` (`SeasonalThemeMode.Winter`), jamais affiché de lui-même : Auto reste sans hiver, et un `christmas`
+enregistré avant vaut toujours Auto (personne ne retrouve l'hiver sans le choisir). Tant qu'il est choisi, pour ce
+joueur seul : il **neige** quel que soit le temps de la carte (`Weather/WeatherFrame.ts` `themedFall` : tout en
+flocons, à l'intensité de la pluie ou de l'orage de la carte, légère (`WINTER_SNOWFALL` 0,3) sous un ciel d'où rien ne
+tombe ; le ciel se couvre comme sous une pluie) ; tout le **sol dehors est blanc**, avec la texture de neige du moteur
+du sol (`TerrainView`, dépendance `snowEverywhere` ; en repli, les blocs par `snowCoverAt`) : c'est ce qui manquait
+au thème retiré, dont le sol était un blanc uni ; arbres en image d'hiver (`forcedTreeSeason`) et enneigés
+(`GameScene.getMapSnowCoverage` vaut 1), décor de neige de `Christmas/` (calottes, empreintes). Un décor : la marche
+n'est pas ralentie (`getSnowCoverAt` ne change pas), rien ne se pose sur le sol de la carte, les autres ne voient rien.
+Le retrait du 2026-11-20 avait été demandé pour une raison de fond (« la neige est une résultante des conditions
+météo, ce n'est pas un script ») : ce retour la contredit pour qui choisit le thème, à dire dans la PR.
 
 **Thème Noël retiré** le 2026-11-20, à la demande de l'utilisateur (« la neige est une résultante des conditions
 météo, ce n'est pas un script ») : son sol de neige uni cachait la texture des tuiles. Plus de choix « Noël » (un choix

@@ -183,6 +183,22 @@ describe("weather rendering lifecycle", () => {
         expect(ground.destroy).toHaveBeenCalledOnce();
     });
 
+    it("snows for who chose the winter theme, under a clear sky too, and for nobody else", () => {
+        const flakesOf = (theme: (typeof SeasonalTheme)[keyof typeof SeasonalTheme] | undefined) => {
+            const { scene, graphics, wam } = fixture();
+            wam.settings = { weather: WeatherType.Clear };
+            manager?.destroy();
+            manager = new WeatherManager(scene, { seasonalTheme: () => theme });
+            manager.update(0, new Date(0));
+            return graphics.fillRect.mock.calls.filter(([, , width, height]) => width === 2 && height === 2).length;
+        };
+        expect(flakesOf(undefined)).toBe(0);
+        expect(flakesOf(SeasonalTheme.Autumn)).toBe(0);
+        expect(flakesOf(SeasonalTheme.Christmas)).toBeGreaterThan(0);
+        // All of it snow, for the sounds too.
+        expect(sounds.update.mock.lastCall?.[5]).toBe(1);
+    });
+
     it("lets the rain fall as flakes in the cold of the room, as both in a sleet, and tells the sounds", () => {
         const flake = [expect.any(Number), expect.any(Number), 2, 2];
         const drawn = (snow: number | undefined, weather = WeatherType.Rain) => {

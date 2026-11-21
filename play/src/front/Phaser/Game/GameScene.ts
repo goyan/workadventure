@@ -424,8 +424,7 @@ import { joinedUserId } from "./Jungle/JungleCompanions";
 import { InteractionPrompt } from "./Water/InteractionPrompt";
 import type { OutdoorGrid } from "./Outdoor/OutdoorGrid";
 import { SeasonalThemeManager } from "./Seasonal/SeasonalThemeManager";
-import type { SeasonalTheme } from "./Seasonal/SeasonalTheme";
-import { forcedTreeSeason } from "./Seasonal/SeasonalTheme";
+import { forcedTreeSeason, SeasonalTheme } from "./Seasonal/SeasonalTheme";
 import type { WalkerSample } from "./Christmas/FootprintTrail";
 import { NightManager } from "./Night/NightManager";
 import { PerfMonitor } from "./Perf/PerfMonitor";
@@ -3294,8 +3293,9 @@ export class GameScene extends DirtyScene {
             season: () => this.pixelGroundSeason(),
             // The snow that fell, as the other engine shows it: none of the server's for who follows a weather of
             // their own (GroundSource).
-            snowCoverAt: (x, y) => this.getSnowCoverAt(x, y),
-            groundVersion: () => (followsServerGround() ? 1 : 0),
+            // All white for who chose the winter theme.
+            snowCoverAt: (x, y) => (this.winterThemeShown() ? 1 : this.getSnowCoverAt(x, y)),
+            groundVersion: () => (followsServerGround() ? 1 : 0) + (this.winterThemeShown() ? 2 : 0),
             layout: this.mapGroundLayout,
             snowLineSeason: () => this.getGroundSeason(),
             // Far out, the blocks are drawn no finer than the screen shows them.
@@ -3408,7 +3408,15 @@ export class GameScene extends DirtyScene {
      * and the ice whiten with it.
      */
     public getMapSnowCoverage(): number {
-        return snowCoverOfMap(this.meadow);
+        return this.winterThemeShown() ? 1 : snowCoverOfMap(this.meadow);
+    }
+
+    /**
+     * Whether this player chose the winter theme: for them alone it snows, and the ground, the trees and what stands
+     * outdoors are snowy. A decor: the walk is not slowed, nothing lies on the ground of the map.
+     */
+    public winterThemeShown(): boolean {
+        return this.getSeasonalTheme() === SeasonalTheme.Christmas;
     }
 
     /** How much the snow that fell whitens the ground at a point of the map for this player, 0 to 1: it slows the walk. */
@@ -4128,6 +4136,7 @@ export class GameScene extends DirtyScene {
                     () => this.getGroundSeason(),
                     () => this.pixelBlocksShown(),
                     () => this.groundEngine() === "oblique",
+                    () => this.winterThemeShown(),
                 );
                 // The relief in 3/4, in pixel art: only for who chose it (nothing of it is made else).
                 this.pixelRelief?.destroy();

@@ -12,6 +12,7 @@ import {
     STRAW_COLOR,
     strawLevel,
 } from "../../../../../src/front/Phaser/Game/Terrain/MeadowState";
+import { SNOW_COLOR } from "../../../../../src/front/Phaser/Game/Terrain/TerrainShading";
 import { TerrainWater } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
 import type { WaterState } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
 
@@ -306,6 +307,50 @@ describe("TerrainView", () => {
             const view = new TerrainView(scene as unknown as GameScene, water, surface, meadow);
             return { view, water, surface, meadow };
         }
+
+        it("whitens all the ground outdoors for who chose the winter theme, not under a roof, and no more once it is left", () => {
+            const worldView = { x: 0, y: 0, width: 640, height: 480 };
+            const scene = { cameras: { main: { worldView } }, markDirty: vi.fn(), getOutdoorGrid: () => outdoors };
+            const surface = {
+                begin: vi.fn((_view: unknown, _resolution: number) => CANVAS),
+                paintField: vi.fn(),
+                end: vi.fn(),
+                hide: vi.fn(),
+                destroy: vi.fn(),
+            };
+            const water = new TerrainWater();
+            // A map without relief: the snow that fell is painted by this view itself.
+            water.setTerrain(undefined);
+            const meadow = new MeadowState();
+            meadow.receive(meadowState());
+            const winter = { value: false };
+            const view = new TerrainView(
+                scene as unknown as GameScene,
+                water,
+                surface,
+                meadow,
+                undefined,
+                undefined,
+                undefined,
+                () => winter.value,
+            );
+            view.update(0);
+            expect(fieldOf(surface, SNOW_COLOR)).toBeUndefined();
+            winter.value = true;
+            view.update(16);
+            const snow = fieldOf(surface, SNOW_COLOR);
+            if (!snow) throw new Error("no snow painted");
+            const cell = (x: number, y: number) => snow[((y - CANVAS.y) / 16) * CANVAS.columns + (x - CANVAS.x) / 16];
+            // Outdoors, grass or not: all white. Under the roof (x from 96 to 128): none.
+            expect(cell(0, 0)).toBe(255);
+            expect(cell(160, 64)).toBe(255);
+            expect(cell(96, 32)).toBe(0);
+            expect(cell(112, 160)).toBe(0);
+            winter.value = false;
+            const painted = surface.paintField.mock.calls.length;
+            view.update(32);
+            expect(surface.paintField.mock.calls.slice(painted).some((args) => args[4] === SNOW_COLOR)).toBe(false);
+        });
 
         /** The last field painted in a colour, copied (the view may reuse its arrays). */
         function fieldOf(surface: { paintField: { mock: { calls: unknown[][] } } }, color: number) {

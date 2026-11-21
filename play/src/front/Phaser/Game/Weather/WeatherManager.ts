@@ -33,6 +33,7 @@ import {
     snowfall,
     snowflakes,
     stormFlash,
+    themedFall,
     weatherAtTime,
     wellInside,
 } from "./WeatherFrame";
@@ -242,13 +243,19 @@ export class WeatherManager {
         const realFogSince = real ? settings?.weatherStartedAt : undefined;
         const realFogUntil = real ? settings?.weatherEndsAt : undefined;
         const theme = this.options.seasonalTheme?.();
-        const weather = weatherAtTime(configured, serverDate, settings?.weatherAuto, settings?.weatherLocation);
-        const storm = weather === WeatherType.Storm;
+        const mapWeather = weatherAtTime(configured, serverDate, settings?.weatherAuto, settings?.weatherLocation);
         const forcedRain = forcedRainLevel(this.forcedRain, now);
-        const rain = forcedRain ?? rainIntensity(settings?.rainRate, storm);
+        const mapRaining = mapWeather === WeatherType.Storm || mapWeather === WeatherType.Rain;
+        // In cold air the precipitation falls as snow, wholly or among the drops: the weather itself stays a rain. And
+        // it snows for who chose the winter theme, whatever the weather of the map (themedFall).
+        const { weather, rain, snow } = themedFall(
+            theme,
+            mapWeather,
+            forcedRain ?? rainIntensity(settings?.rainRate, mapWeather === WeatherType.Storm),
+            mapRaining ? Math.max(0, Math.min(1, this.options.snowShare?.() ?? 0)) : 0,
+        );
+        const storm = weather === WeatherType.Storm;
         const raining = storm || weather === WeatherType.Rain;
-        // In cold air the precipitation falls as snow, wholly or among the drops: the weather itself stays a rain.
-        const snow = raining ? Math.max(0, Math.min(1, this.options.snowShare?.() ?? 0)) : 0;
         // A forced level (development) soaks the ground as much, so the puddles can be seen at once.
         const wetness = Math.max(mapGroundWetness(settings, serverDate), raining ? (forcedRain ?? 0) : 0);
         this.drawPuddles(this.weatherShown && !this.editing ? wetness : 0);

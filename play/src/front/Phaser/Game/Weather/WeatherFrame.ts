@@ -1,6 +1,7 @@
 import { precipitationWeather, WeatherType } from "@workadventure/map-editor";
 import type { AutoWeatherSettings, SeasonPlace } from "@workadventure/map-editor";
 import { hash01 } from "../Autumn/LeafPalette";
+import { SeasonalTheme } from "../Seasonal/SeasonalTheme";
 import { autoWeatherAt, slotStart } from "./WeatherSchedule";
 
 export interface WeatherView {
@@ -158,6 +159,25 @@ export function lightningBolt(
         if (!isOutdoor || points.every((point) => isOutdoor(point.x, point.y))) return points;
     }
     return undefined;
+}
+
+/** How hard the snow of the winter theme falls under a sky from which nothing falls: a light snow. */
+export const WINTER_SNOWFALL = 0.3;
+
+/**
+ * What falls on the screen of a player: what the map says, unless they chose the winter theme. Then it snows for them,
+ * whatever the weather of the map: all flakes, as hard as its rain or its storm, lightly under a sky from which nothing
+ * falls. A decor of their own: nobody else sees it, nothing of it lies on the ground of the map.
+ */
+export function themedFall(
+    theme: SeasonalTheme | undefined,
+    weather: WeatherType,
+    rain: number,
+    snow: number,
+): { weather: WeatherType; rain: number; snow: number } {
+    if (theme !== SeasonalTheme.Christmas) return { weather, rain, snow };
+    if (weather === WeatherType.Rain || weather === WeatherType.Storm) return { weather, rain, snow: 1 };
+    return { weather: WeatherType.Rain, rain: WINTER_SNOWFALL, snow: 1 };
 }
 
 /** The seasonal schedule is shared by every client: same date, settings and place of the map, same weather. */

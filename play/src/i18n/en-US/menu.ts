@@ -120,9 +120,12 @@ const menu: BaseTranslation = {
             label: "Seasonal theme",
             auto: "Auto",
             autumn: "Autumn",
+            winter: "Winter",
             none: "None",
             hintAuto: "Autumn from September to November.",
             hintAutumn: "Leaves falling from the trees and lying at their feet, outdoors.",
+            hintWinter:
+                "For you alone, for as long as you keep it: it snows, the ground, the trees and the objects outdoors are snowy.",
             hintNone: "No seasonal decor.",
         },
         perfCounter: "Show the performance counter (images a second) next to the action bar",
