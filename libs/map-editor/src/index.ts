@@ -19,6 +19,7 @@ export * from "./GameMap/LayersFlattener";
 export * from "./EntitySound";
 export * from "./EntityStates";
 export * from "./Terrain/Scale";
+export * from "./Terrain/Ice";
 export * from "./Terrain/Meadow";
 export * from "./Terrain/Bridges";
 export * from "./Terrain/Snow";

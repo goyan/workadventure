@@ -130,6 +130,8 @@ interface MeadowLayers extends BlockCanvasArea {
     fire: Uint8Array | undefined;
     /** The snow that fell, as it whitens the ground over the canvas (0 to 255); undefined where none lies. */
     snow: Uint8Array | undefined;
+    /** The ice the server keeps over the water (iceByte); undefined where none is frozen. */
+    ice: Uint8Array | undefined;
     /** Whether these layers show the snow of the server (GroundSource): read again when the player changes of weather. */
     server: boolean;
 }
@@ -173,6 +175,8 @@ export class TerrainView {
     private cycle: WaterCycle | undefined;
     /** The snow of the map, laid on the ice too (in fiftieths: the scene is drawn again only when it shows). */
     private snowOnIce = 0;
+    /** Whether the ice shown is the one the server keeps (GroundSource): the water shader is told when it changes. */
+    private serverIce = false;
     private poolsOf: { terrain: TerrainData | undefined; any: boolean } | undefined;
     private wet = new Uint8Array(0);
     private shore = new Uint8Array(0);
@@ -272,6 +276,7 @@ export class TerrainView {
                     soils: relief.soils,
                     grass: meadow?.grass,
                     snow: thickestSnow(relief.dug ? snowOf(relief.snow) : undefined, snowOf(meadow?.snow)),
+                    ice: meadow?.ice,
                     autumn: this.season?.() === Season.Autumn ? 1 : 0,
                     dug: relief.ground,
                     raised: relief.raised,
@@ -533,7 +538,10 @@ export class TerrainView {
     /** Whether the meadow has anything to draw for this player: grass, a dry ground, or the snow of the server. */
     private meadowShows(): boolean {
         const meadow = this.meadow;
-        return meadow !== undefined && (meadow.hasGrass() || (followsServerGround() && meadow.hasSnow()));
+        return (
+            meadow !== undefined &&
+            (meadow.hasGrass() || (followsServerGround() && (meadow.hasSnow() || meadow.hasIce())))
+        );
     }
 
     private meadowOver(canvas: BlockCanvasArea): MeadowLayers | undefined {
@@ -568,6 +576,7 @@ export class TerrainView {
             ash: undefined,
             fire: undefined,
             snow: undefined,
+            ice: undefined,
             server,
         };
         const outdoor = this.scene.getOutdoorGrid?.();
@@ -583,7 +592,10 @@ export class TerrainView {
                 const ashes = meadow.ashAt(tileX, tileY);
                 const flames = meadow.fireAt(tileX, tileY);
                 const white = server ? Math.round(snowCoverOf(meadow.snowAt(tileX, tileY)) * 255) : 0;
-                if (cover === 0 && dryness === 0 && ashes === 0 && flames === 0 && white === 0) continue;
+                const frozen = server ? meadow.iceByteAt(tileX, tileY) : 0;
+                if (cover === 0 && dryness === 0 && ashes === 0 && flames === 0 && white === 0 && frozen === 0) {
+                    continue;
+                }
                 const firstRow = Math.max(0, tileY * cellsATile - top);
                 const lastRow = Math.min(canvas.rows, (tileY + 1) * cellsATile - top);
                 const firstColumn = Math.max(0, tileX * cellsATile - left);
@@ -604,6 +616,7 @@ export class TerrainView {
                         if (ashes > 0) (layers.ash ??= new Uint8Array(size))[index] = ashes;
                         if (flames > 0) (layers.fire ??= new Uint8Array(size))[index] = flames;
                         if (white > 0) (layers.snow ??= new Uint8Array(size))[index] = white;
+                        if (frozen > 0) (layers.ice ??= new Uint8Array(size))[index] = frozen;
                         // A dry ground yellows with or without grass on it.
                         if (dryness > 0) (layers.straw ??= new Uint8Array(size))[index] = strawLevel(drawn, dryness);
                     }
@@ -747,6 +760,12 @@ export class TerrainView {
         if (snow !== this.snowOnIce) {
             this.snowOnIce = snow;
             this.splat.setSnow(snow);
+            this.scene.markDirty();
+        }
+        const server = followsServerGround();
+        if (server !== this.serverIce) {
+            this.serverIce = server;
+            this.splat.setServerIce(server);
             this.scene.markDirty();
         }
         const cycle = waterCycleNow(this.scene.getGameMap().getWamFile()?.getWam().settings);

@@ -361,7 +361,12 @@
                 more: t.form.more(),
                 server:
                     apart && board.city !== undefined
-                        ? [`${t.downpour.always()} ${t.downpour.notYours({ city: board.city })}`]
+                        ? [
+                              `${t.downpour.always()} ${t.downpour.notYours({
+                                  city: board.city,
+                                  temperature: degreesOr(board.ownAir?.temperature),
+                              })}`,
+                          ]
                         : [t.downpour.always()],
             },
             {

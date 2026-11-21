@@ -212,7 +212,8 @@ const actionbar = {
                 snow: "It falls as snow.",
                 mix: "It falls {share} % as snow.",
                 always: "The server lets it fall: it always goes by the air of the map, for everyone.",
-                notYours: "Your air ({city}) changes nothing to it.",
+                notYours:
+                    "Your air ({city}, {temperature}) changes nothing to it: on your screen too, it falls as on the map.",
             },
             frost: {
                 title: "Frost on the ground",

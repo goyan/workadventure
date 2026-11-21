@@ -87,6 +87,11 @@ describe("the bounds of the conditions", () => {
         expect(kept(81, -1)).toMatchObject({ temperature: 80, windSpeed: 0 });
     });
 
+    it("lets the cold go down far enough to freeze a lake, and no further than -80 °C", () => {
+        expect(boundedFireConditions({ temperature: -25 }, NEUTRAL_FIRE_CONDITIONS).temperature).toBe(-25);
+        expect(boundedFireConditions({ temperature: -90 }, NEUTRAL_FIRE_CONDITIONS).temperature).toBe(-80);
+    });
+
     it("keeps the thresholds within theirs, each still reached by the conditions", () => {
         for (const key of ["temperature", "humidity", "windSpeed"] as const) {
             expect(FIRE_THRESHOLD_BOUNDS[key][0]).toBeGreaterThanOrEqual(FIRE_CONDITION_BOUNDS[key][0]);

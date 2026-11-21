@@ -13,6 +13,7 @@ import { soilFrost } from "../src/Weather/SoilFrost";
 import { rainMeltMm, snowMeltMmPerHour, snowSublimationMmPerHour, THAW_SPEED } from "../src/Terrain/Snow";
 import { fireWindPush } from "../src/Terrain/Meadow";
 import { emberReachTiles } from "../src/Terrain/TreeFire";
+import { ICE_MAX_MM, iceGrowthMmPerDay, iceThawMmPerHour } from "../src/Terrain/Ice";
 
 /**
  * Every rule of the weather that reads the conditions of a room, at the edges of what they may be set to by hand
@@ -211,5 +212,22 @@ describe("the embers of a tree at the extremes", () => {
         expect(emberReachTiles(STRONGEST)).toBe(emberReachTiles(120));
         expect(emberReachTiles(STRONGEST)).toBeLessThanOrEqual(40);
         finite(emberReachTiles(STRONGEST));
+    });
+});
+
+describe("the ice of the water at the extremes", () => {
+    it("thickens as a number in a polar storm, not at all in a great heat, and thaws fast there", () => {
+        for (const humidity of HUMIDITIES) {
+            for (const windSpeed of WINDS) {
+                for (const thickness of [0, 10, ICE_MAX_MM]) {
+                    const growth = iceGrowthMmPerDay(thickness, { temperature: COLDEST, humidity, windSpeed }, 0);
+                    finite(growth);
+                    expect(growth).toBeGreaterThan(0);
+                    expect(iceGrowthMmPerDay(thickness, { temperature: WARMEST, humidity, windSpeed }, 0)).toBe(0);
+                }
+                expect(iceThawMmPerHour({ temperature: COLDEST, humidity, windSpeed })).toBe(0);
+                finite(iceThawMmPerHour({ temperature: WARMEST, humidity, windSpeed }));
+            }
+        }
     });
 });

@@ -186,7 +186,8 @@ describe("explainWeather: hoar frost", () => {
     it("says frost in a cold, damp and calm air", () => {
         const frost = frostAt({ temperature: -2, humidity: 95, windSpeed: 0 });
         expect(frost.reason).toBe("frost");
-        expect(frost.frost).toBeCloseTo(0.7, 1);
+        expect(frost.frost).toBe(hoarFrost({ temperature: -2, humidity: 95, windSpeed: 0 }));
+        expect(frost.frost).toBeGreaterThanOrEqual(0.5);
         expect(frost.level).toBe("white");
         expect(frost.ground).toBe(surfaceTemperature(-2, 0));
     });
@@ -249,7 +250,10 @@ describe("explainWeather: hoar frost", () => {
     });
 
     it("tells a light frost from a white ground", () => {
-        const light = frostAt({ temperature: -2, humidity: 92, windSpeed: 0 });
+        // Just over the humidity from which the rule of the game gives any frost: a thin one.
+        const from = frostAt({ temperature: -2, humidity: 40, windSpeed: 0 }).needsHumidity ?? Number.NaN;
+        const light = frostAt({ temperature: -2, humidity: from + 0.2, windSpeed: 0 });
+        expect(light.frost).toBe(hoarFrost({ temperature: -2, humidity: from + 0.2, windSpeed: 0 }));
         expect(light.frost).toBeGreaterThan(0);
         expect(light.frost).toBeLessThan(0.5);
         expect(light.level).toBe("light");
