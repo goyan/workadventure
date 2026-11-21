@@ -213,8 +213,26 @@ export interface PointWords {
     west: string;
     /** The point and the city it is told against, the distance written: "72° S 170° E · Auckland à 4 000 km". */
     far: (point: string, city: string, distance: string) => string;
+    /** The short name: the city it is told against and how far, "Auckland 4 000 km" (chip, clock). */
+    short: (city: string, distance: string) => string;
     /** A number of kilometres written for the player ("4 000"). */
     kilometres: (km: number) => string;
+}
+
+/**
+ * The most characters of a city in the short name of a point: the chip and the clock share one line with the floors.
+ * "Rio de Janeiro" is kept whole, "Petropavlovsk-Kamtchatski" becomes "Petropavlovsk…".
+ */
+export const SHORT_CITY_NAME_LENGTH = 14;
+
+/** A city name for the short name of a point: cut with an ellipsis past SHORT_CITY_NAME_LENGTH characters. */
+export function shortCityName(name: string): string {
+    const characters = Array.from(name);
+    if (characters.length <= SHORT_CITY_NAME_LENGTH) return name;
+    return `${characters
+        .slice(0, SHORT_CITY_NAME_LENGTH - 1)
+        .join("")
+        .trimEnd()}…`;
 }
 
 /** The nearest city of the list to a point, the great-circle way, and how far it is (km). */
@@ -265,8 +283,8 @@ export function pointTimeZone(
 
 /**
  * The place of a point of the world: its own latitude and longitude for the sun and the weather. Within
- * NAMED_POINT_RADIUS_KM of a city of the list it is named after it; farther it is named by its coordinates, the long
- * name telling the nearest city and how far it is. Its time zone: pointTimeZone.
+ * NAMED_POINT_RADIUS_KM of a city of the list it is named after it; farther its short name is the nearest city and
+ * how far ("Auckland 4 000 km"), its long name adds its coordinates ("72° S 170° E · Auckland à 4 000 km"). Its time zone: pointTimeZone.
  */
 export function placeOfPoint(point: WorldPoint, words: PointWords): WorldPlace {
     const nearest = nearestCityOf(point);
@@ -275,9 +293,11 @@ export function placeOfPoint(point: WorldPoint, words: PointWords): WorldPlace {
         return { name: nearest.city.name, latitude: point.latitude, longitude: point.longitude, timezone };
     }
     const coordinates = pointCoordinates(point, words);
+    const distance = words.kilometres(roundedDistanceKm(nearest.distanceKm));
     return {
-        name: coordinates,
-        longName: words.far(coordinates, nearest.city.name, words.kilometres(roundedDistanceKm(nearest.distanceKm))),
+        // The city speaks to the player more than coordinates; its distance tells it is not the city itself.
+        name: words.short(shortCityName(nearest.city.name), distance),
+        longName: words.far(coordinates, nearest.city.name, distance),
         latitude: point.latitude,
         longitude: point.longitude,
         timezone,

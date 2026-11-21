@@ -4,6 +4,8 @@ import {
     nearestCityOf,
     placeOfPoint,
     pointCoordinates,
+    SHORT_CITY_NAME_LENGTH,
+    shortCityName,
     roundedDistanceKm,
     solarMinutes,
     WORLD_CITIES,
@@ -31,6 +33,7 @@ describe("placeOfPoint", () => {
         east: "E",
         west: "O",
         far: (point, city, distance) => `${point} · ${city} à ${distance} km`,
+        short: (city, distance) => `${city} ${distance} km`,
         kilometres: (km) => new Intl.NumberFormat("fr-FR").format(km),
     };
     const english: PointWords = {
@@ -39,6 +42,7 @@ describe("placeOfPoint", () => {
         east: "E",
         west: "W",
         far: (point, city, distance) => `${point} · ${city} ${distance} km away`,
+        short: (city, distance) => `${city} ${distance} km`,
         kilometres: (km) => new Intl.NumberFormat("en-US").format(km),
     };
 
@@ -52,24 +56,53 @@ describe("placeOfPoint", () => {
         expect(place.timezone).toBe("Pacific/Auckland");
     });
 
-    it("names a point far from any city by its coordinates, the long name telling the nearest city and how far", () => {
+    it("names a point far from any city by the nearest city and how far, the long name adding its coordinates", () => {
         // The Ross Sea, under Auckland: the nearest city of the list is thousands of kilometres away.
         const place = placeOfPoint({ latitude: -72.4, longitude: 170.2 }, french);
         const { city, distanceKm } = nearestCityOf({ latitude: -72.4, longitude: 170.2 });
         expect(distanceKm).toBeGreaterThan(3000);
-        expect(place.name).toBe("72° S 170° E");
-        expect(place.longName).toBe(
-            `72° S 170° E · ${city.name} à ${new Intl.NumberFormat("fr-FR").format(roundedDistanceKm(distanceKm))} km`,
+        const distance = new Intl.NumberFormat("fr-FR").format(roundedDistanceKm(distanceKm));
+        // Short (chip, clock): the city that speaks to the player and how far, never the city alone.
+        expect(place.name).toBe(`${city.name} ${distance} km`);
+        expect(place.name).not.toBe(city.name);
+        // In English, thousands grouped with a comma: "Auckland 4,000 km".
+        expect(placeOfPoint({ latitude: -72.4, longitude: 170.2 }, english).name).toBe(
+            `${city.name} ${new Intl.NumberFormat("en-US").format(roundedDistanceKm(distanceKm))} km`,
         );
-        expect(place.name).not.toContain(city.name);
+        expect(roundedDistanceKm(distanceKm)).toBeGreaterThanOrEqual(1000);
+        // Long (cards, sky menu, weather board): the coordinates too.
+        expect(place.longName).toBe(`72° S 170° E · ${city.name} à ${distance} km`);
     });
 
-    it("writes the west, the north and the rounding the player's way, never a comma in the short name", () => {
-        expect(placeOfPoint({ latitude: 45.6, longitude: -40.4 }, french).name).toBe("46° N 40° O");
-        const english_ = placeOfPoint({ latitude: 45.6, longitude: -40.4 }, english);
-        expect(english_.name).toBe("46° N 40° W");
-        expect(english_.longName).toMatch(/^46° N 40° W · .+ [\d,]+ km away$/);
-        expect(english_.name).not.toContain(",");
+    it("writes the west, the north and the numbers the player's way", () => {
+        const atlantic = { latitude: 45.6, longitude: -40.4 };
+        // Mid-Atlantic, under 1 000 km from St. John's: the distance is rounded to 10 km.
+        const { city, distanceKm } = nearestCityOf(atlantic);
+        expect(distanceKm).toBeGreaterThan(150);
+        const french_ = placeOfPoint(atlantic, french);
+        expect(french_.longName).toMatch(/^46° N 40° O · /);
+        const english_ = placeOfPoint(atlantic, english);
+        expect(english_.longName).toMatch(/^46° N 40° W · .+ km away$/);
+        expect(english_.name).toBe(
+            `${city.name} ${new Intl.NumberFormat("en-US").format(roundedDistanceKm(distanceKm))} km`,
+        );
+        expect(french_.name).toBe(
+            `${city.name} ${new Intl.NumberFormat("fr-FR").format(roundedDistanceKm(distanceKm))} km`,
+        );
+    });
+
+    it("shortens a long city name with an ellipsis in the short name, keeping the distance", () => {
+        // Near Petropavlovsk-Kamtchatski, out at sea: its name is cut, the distance stays.
+        const point = { latitude: 49, longitude: 165 };
+        const { city, distanceKm } = nearestCityOf(point);
+        expect(city.name).toBe("Petropavlovsk-Kamtchatski");
+        expect(distanceKm).toBeGreaterThan(150);
+        const place = placeOfPoint(point, french);
+        expect(place.name).toMatch(/^Petropavlovsk… [\d\u202f ]+ km$/);
+        expect(shortCityName(city.name)).toHaveLength(SHORT_CITY_NAME_LENGTH);
+        expect(place.longName).toContain("Petropavlovsk-Kamtchatski");
+        // Names of the list up to the limit are kept whole.
+        expect(shortCityName("Rio de Janeiro")).toBe("Rio de Janeiro");
     });
 
     it("gives no hemisphere to a rounded 0° nor to 180°", () => {

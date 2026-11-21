@@ -159,6 +159,7 @@ const menu: DeepPartial<Translation["menu"]> = {
             pointEast: "E",
             pointWest: "O",
             pointFar: "{point} · {city} à {distance} km",
+            pointShort: "{city} {distance} km",
             skyMenu: "Ciel et heure",
             basicOff:
                 "Le mode Basique coupe le cycle jour/nuit : plein jour. Ton choix ({mode}) reviendra quand tu le quitteras.",

@@ -454,6 +454,7 @@ function pointWords(): PointWords {
         east: words.pointEast(),
         west: words.pointWest(),
         far: (point, city, distance) => words.pointFar({ point, city, distance }),
+        short: (city, distance) => words.pointShort({ city, distance }),
         kilometres: (km) => kilometres.format(km),
     };
 }

@@ -1662,9 +1662,12 @@ d'heure) à ±2 min. La nuit, un voile bleu nuit
     temps, ±16 min selon la saison), gardée à 50 min près. **Point cliqué** sur la carte : le menu dit alors
     « Ciel de … (point choisi sur la carte) », surligné, puisqu'aucun moment n'est enfoncé. Le point garde ses
     coordonnées pour le soleil et la météo ; il ne porte le **nom** d'une ville de la liste qu'à 150 km d'elle au plus
-    (`NAMED_POINT_RADIUS_KM`, distance orthodromique, `nearestCityOf`). Plus loin il se nomme par ses coordonnées,
-    en degrés entiers : forme courte « 72° S 170° E » (horloge, pastille météo ; jamais de virgule, que la pastille
-    et le tableau coupent), forme longue « 72° S 170° E · Auckland à 4 000 km » (sans parenthèses : le tableau le met déjà entre parenthèses, « Ton air (…, −34 °C) » ; `WorldPlace.longName` : menu de
+    (`NAMED_POINT_RADIUS_KM`, distance orthodromique, `nearestCityOf`). Plus loin, forme courte (horloge, pastille
+    météo) : la ville de repère et sa distance, « Auckland 4 000 km » (« Auckland 4,000 km » en anglais), jamais la
+    ville seule, qui reste réservée à un point à 150 km au plus ; un nom de ville de plus de 14 caractères y est
+    coupé d'une ellipse, la distance gardée (« Petropavlovsk… 12 300 km », `shortCityName`), pour que la ligne de
+    l'horloge tienne. La pastille ne coupe plus à la virgule le nom d'un point (la virgule du séparateur de milliers
+    anglais), seulement celui d'une ville du lieu de la carte. Forme longue, avec les coordonnées en degrés entiers « 72° S 170° E · Auckland à 4 000 km » (sans parenthèses : le tableau le met déjà entre parenthèses, « Ton air (…, −34 °C) » ; `WorldPlace.longName` : menu de
     l'horloge, fiche météo personnelle, « Météo expliquée ») ; ouest « O » en français, « W » en anglais. Avant, un
     clic dans l'océan Austral s'appelait « Auckland » comme le lieu du serveur : deux fiches « Auckland » à 14 °C et
     −34 °C. Son **fuseau** : celui de la ville la plus proche à 1 000 km au plus (`CITY_TIME_ZONE_RADIUS_KM`, heure
