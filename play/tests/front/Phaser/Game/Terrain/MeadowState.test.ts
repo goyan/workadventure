@@ -1,4 +1,4 @@
-import { snowByte } from "@workadventure/map-editor";
+import { iceByte, snowByte } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
 import { grassAlpha, MeadowState, mottledCover } from "../../../../../src/front/Phaser/Game/Terrain/MeadowState";
 
@@ -48,6 +48,24 @@ describe("MeadowState", () => {
         expect(grassAlpha(0)).toBe(0);
         expect(grassAlpha(255)).toBeCloseTo(0.75);
         expect(grassAlpha(128)).toBeLessThan(grassAlpha(255));
+    });
+
+    it("holds the ice over the water of each tile, none from a server that tells none", () => {
+        const meadow = new MeadowState();
+        const state = { width: 2, height: 1, grass: new Uint8Array(2), moisture: new Uint8Array(2) };
+        meadow.receive({ ...state, ice: Uint8Array.from([iceByte(60), 0]) });
+        expect(meadow.hasIce()).toBe(true);
+        expect(meadow.iceAt(0, 0)).toBeGreaterThan(50);
+        expect(meadow.iceAt(0, 0)).toBeLessThan(70);
+        expect(meadow.iceByteAt(0, 0)).toBe(iceByte(60));
+        expect(meadow.iceAt(1, 0)).toBe(0);
+        expect(meadow.iceAtPoint(10, 10)).toBeGreaterThan(50);
+        expect(meadow.iceAtPoint(40, 10)).toBe(0);
+        for (const ice of [undefined, new Uint8Array(0), new Uint8Array(5)]) {
+            meadow.receive({ ...state, ice });
+            expect(meadow.hasIce()).toBe(false);
+            expect(meadow.iceAt(0, 0)).toBe(0);
+        }
     });
 
     it("holds the snow lying on each tile, none from a server that tells none", () => {

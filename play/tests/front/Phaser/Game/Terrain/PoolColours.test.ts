@@ -29,3 +29,14 @@ describe("spreadPoolColours", () => {
         expect([...data.slice(texel(6, far, columns, rows), texel(6, far, columns, rows) + 3)]).toEqual([0, 0, 0]);
     });
 });
+
+describe("the picture of the weights", () => {
+    it("lays its packs four across: the ice of the server is the first of a third row", () => {
+        const columns = 5;
+        const rows = 3;
+        expect(texel(0, 0, columns, rows)).toBe(0);
+        expect(texel(4, 0, columns, rows)).toBe(rows * columns * 4 * 4);
+        expect(texel(8, 0, columns, rows)).toBe(2 * rows * columns * 4 * 4);
+        expect(texel(8, 7, columns, rows)).toBe((2 * rows + 1) * columns * 4 * 4 + 2 * 4);
+    });
+});

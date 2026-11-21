@@ -26,9 +26,10 @@ import type { GroundArea } from "./TexturedGround";
  * The picture of the weights: four packs side by side, each the size of the area (a pixel per cell): six soils, the
  * grass, the snow and the water; the relief (how deep a cell is dug, how high it is raised, in map pixels) and the
  * ash; the straw and the fire of the meadow, and what is outdoors; the pools (whether a cell is one, how deep, whether
- * hot), the colour of their water and of their coping.
+ * hot), the colour of their water and of their coping; the ice the server keeps over the water (its thickness, see
+ * iceByte), and three packs to spare.
  */
-const PACKS = 8;
+const PACKS = 12;
 /** The packs are laid in a grid this many wide (and PACKS / PACKS_ACROSS high): a wide view stays within the size a
  * texture may have on a phone. */
 const PACKS_ACROSS = 4;
@@ -257,7 +258,8 @@ void main() {
         float sheen = step(0.82, fbm(world / 7.0)) * uWet * 0.25;
         outColor.rgb += vec3(0.55, 0.65, 0.75) * sheen * outColor.a;
     }
-    if (uFrost * outdoors > 0.001) {
+    // No frost holds where the ground burns, nor on its ash while it is still warm.
+    if (uFrost * outdoors > 0.001 && fire + ash < 0.02) {
         float rime = step(1.0 - uFrost * 0.9, 0.55 * fbm(world / 9.0) + 0.45 * hash(floor(world) + 7.0));
         float rimeAlpha = rime * 0.8;
         outColor = vec4(vec3(0.9, 0.95, 1.0) * rimeAlpha, rimeAlpha) + outColor * (1.0 - rimeAlpha);
@@ -294,6 +296,9 @@ uniform sampler2D uIceTexture;
 uniform vec2 uIceSize;
 uniform float uIce;
 uniform float uSnow;
+// 1 for a player who follows the weather of the server: the ice and the snow on it are those the server keeps, cell
+// by cell; 0 for one who follows a place of their own: the ice of their own cold (uIce), the snow of their map.
+uniform float uServerIce;
 // The fronts of the waves of the comets fallen into the water (x, y, radius in map pixels, strength 0 to 1).
 uniform vec4 uRing0;
 uniform vec4 uRing1;
@@ -313,9 +318,10 @@ float ringsAt(vec2 world) {
 
 // The snow lying on the ice, in drifts that grow with the snow of the map.
 vec3 snowOnIce(vec3 ice, vec2 world) {
-    if (uSnow <= 0.001) return ice;
+    float snow = mix(uSnow, pack(2.0, world).g, uServerIce);
+    if (snow <= 0.001) return ice;
     float drift = 0.6 * fbm(world / 11.0) + 0.4 * hash(floor(world / 2.0));
-    float covered = step(1.0 - uSnow * 0.95, drift);
+    float covered = step(1.0 - snow * 0.95, drift);
     return mix(ice, vec3(0.95, 0.97, 1.0) * (0.94 + 0.06 * hash(floor(world))), covered);
 }
 
@@ -385,7 +391,10 @@ void main() {
     float depthPx = depth * ${WATER_SCALE_PX}.0;
     float frozenAt = 0.1 + 0.9 * min(1.0, depthPx / ${DEEP_ICE_PX}.0) + (vnoise(world / 14.0) - 0.5) * 0.08;
     float outdoors = step(0.5, pack(4.0, world).b);
-    float frozen = depthPx > 0.0 ? step(frozenAt, uIce) * outdoors : 0.0;
+    // The ice of the server: the root of its thickness over a metre, 0.0707 at the 5 mm one slips on.
+    float kept = pack(8.0, world).r;
+    float keptFrozen = step(0.0707, kept + (vnoise(world / 14.0) - 0.5) * 0.02);
+    float frozen = depthPx > 0.0 ? mix(step(frozenAt, uIce) * outdoors, keptFrozen, uServerIce) : 0.0;
     float still = 1.0 - frozen;
     // The shore: the water of a cell reaches the middle of the next, bent by a noise that drifts slowly (lapping).
     float level = clamp(depth * 12.0, 0.0, 1.0);
@@ -408,7 +417,9 @@ void main() {
         vec3 ice = texture2D(uIceTexture, fract(world / uIceSize)).rgb;
         ice *= 1.0 - 0.12 * clamp(depthPx / 128.0, 0.0, 1.0);
         ice = snowOnIce(ice, world);
-        float iceAlpha = 0.96 * cover;
+        // A thin ice of the server lets the water show through; one that bears a walker (50 mm) is whole.
+        float thick = clamp(kept * kept * 1000.0 / 50.0, 0.0, 1.0);
+        float iceAlpha = mix(0.96, mix(0.6, 0.96, thick), uServerIce) * cover;
         outColor = vec4(ice * iceAlpha, iceAlpha) + outColor * (1.0 - iceAlpha);
     } else if (cover > 0.001) {
         float deep = clamp(depth * ${WATER_SCALE_PX}.0 / 64.0, 0.0, 1.0);
@@ -468,6 +479,8 @@ export interface GroundWeights {
     grass: Uint8Array | undefined;
     /** The snow, 0 to 255; undefined: none. */
     snow: Uint8Array | undefined;
+    /** The ice the server keeps over the water, a byte a cell (iceByte); undefined: none. */
+    ice?: Uint8Array;
     /** 0 in summer, 1 in autumn: the grass yellows. */
     autumn: number;
     /** How deep each cell is dug and how high it is raised, in map pixels (to 255). */
@@ -554,6 +567,7 @@ export class GroundSplat {
                         setUniform("uIceSize", this.sizeOf(GROUND_TEXTURES.ice));
                         setUniform("uIce", this.cycle.ice);
                         setUniform("uSnow", this.snow);
+                        setUniform("uServerIce", this.serverIce ? 1 : 0);
                         for (let index = 0; index < MAX_WATER_RINGS; index++) {
                             const ring = this.rings[index];
                             setUniform(
@@ -578,6 +592,8 @@ export class GroundSplat {
     /** The cycle of the water this player sees (Frost.ts): frost, ice and wet ground. */
     private cycle: WaterCycle = { frost: 0, ice: 0, wet: 0 };
     private snow = 0;
+    /** Whether the ice drawn is the one the server keeps (GroundSource), not the one of this player's own cold. */
+    private serverIce = false;
     private rings: readonly WaterRing[] = [];
 
     /** Lays the grounds over `area` from their weights. Nothing to draw: the ground shader is hidden. */
@@ -618,6 +634,7 @@ export class GroundSplat {
             data[pool + 2] = style?.hot ? 255 : 0;
             writeColor(data, at(6, cell), style?.water);
             writeColor(data, at(7, cell), style?.coping);
+            data[at(8, cell)] = weights.ice?.[cell] ?? 0;
             if (grass || snow || style || data[relief] || data[relief + 1] || data[relief + 2]) any = true;
             if (data[meadow] || data[meadow + 1]) any = true;
         }
@@ -665,6 +682,11 @@ export class GroundSplat {
 
     public hasRings(): boolean {
         return this.rings.length > 0;
+    }
+
+    /** Whether the ice drawn is the one the server keeps, cell by cell (a player who follows its weather). */
+    public setServerIce(serverIce: boolean): void {
+        this.serverIce = serverIce;
     }
 
     /** How much the snow of the map covers the ground, 0 to 1: it lies on the ice too. */
@@ -744,7 +766,18 @@ export class GroundSplat {
  */
 function smoothWeights(data: Uint8ClampedArray, columns: number, rows: number): void {
     const source = data.slice();
-    const channels: readonly (readonly number[])[] = [[0, 1, 2], [0, 1, 2], [0, 1], [0, 1, 2], [0, 1], [0], [], []];
+    // The ice of the server too (pack 8): its edge follows a curve.
+    const channels: readonly (readonly number[])[] = [
+        [0, 1, 2],
+        [0, 1, 2],
+        [0, 1],
+        [0, 1, 2],
+        [0, 1],
+        [0],
+        [],
+        [],
+        [0],
+    ];
     for (let pack = 0; pack < PACKS; pack++) {
         for (const channel of channels[pack] ?? []) {
             for (let row = 0; row < rows; row++) {
