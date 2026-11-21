@@ -28,6 +28,7 @@ export * from "./Terrain/Soils";
 export * from "./Terrain/Pools";
 export * from "./Terrain/TerrainGrid";
 export * from "./Terrain/TerrainBrush";
+export * from "./Terrain/WaterDoors";
 export * from "./Terrain/WaterGrid";
 export * from "./Terrain/WaterInputs";
 export * from "./Terrain/WaterWalls";

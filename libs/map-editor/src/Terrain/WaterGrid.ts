@@ -438,6 +438,8 @@ export class WaterGrid {
      * each side, in the order east, west, south, north.
      */
     private readonly closed: Uint8Array;
+    /** The same sides as the walls alone close them: the doors that are closed are added to them (setClosedDoors). */
+    private readonly wallClosed: Uint8Array;
     /** For the search of a sink: the cells of its queue, and the search that last saw each cell. */
     private readonly queue: Int32Array;
     /** The cells of the basin of a sink, while it is lowered. */
@@ -539,6 +541,35 @@ export class WaterGrid {
                     this.closed[index + width] |= 8;
                 }
             }
+        }
+        this.wallClosed = Uint8Array.from(this.closed);
+    }
+
+    /**
+     * The doors that are closed now: the water does not cross their sides (keys of cellKey, as the walls), on top
+     * of the walls the grid was built with. An open door is simply not told: the water goes through it.
+     */
+    public setClosedDoors(doors: WaterWallSides | undefined): void {
+        const { x, y, width, height } = this.bounds;
+        this.closed.set(this.wallClosed);
+        if (!doors) return;
+        for (const key of doors.east) {
+            const cell = cellOf(key);
+            const column = cell.x - x;
+            const row = cell.y - y;
+            if (column < 0 || row < 0 || column + 1 >= width || row >= height) continue;
+            const index = row * width + column;
+            this.closed[index] |= 1;
+            this.closed[index + 1] |= 2;
+        }
+        for (const key of doors.south) {
+            const cell = cellOf(key);
+            const column = cell.x - x;
+            const row = cell.y - y;
+            if (column < 0 || row < 0 || column >= width || row + 1 >= height) continue;
+            const index = row * width + column;
+            this.closed[index] |= 4;
+            this.closed[index + width] |= 8;
         }
     }
 
