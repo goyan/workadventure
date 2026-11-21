@@ -174,7 +174,7 @@ describe("the altitude in the pilot's hands", () => {
         exitOnLanding: boolean;
         airSteering: boolean;
         pilotAltitude(events: ActiveEventList): -1 | 0 | 1;
-        steerAirplane(x: number, y: number): { x: number; y: number };
+        steerAirplane(x: number, y: number, climb?: -1 | 0 | 1): { x: number; y: number };
     };
     const keys = (...held: UserInputEvent[]): ActiveEventList => {
         const events = new ActiveEventList();
@@ -189,29 +189,105 @@ describe("the altitude in the pilot's hands", () => {
         return state;
     }
 
-    it("lands by itself when the arrows are let go, until the pilot took the altitude in hand", () => {
+    it("lands by itself when the arrows are let go, even after the pilot chose the altitude", () => {
         const untouched = flying();
         untouched.steerAirplane(300, 0);
         untouched.steerAirplane(0, 0);
         expect(untouched.landingRequested).toBe(true);
 
-        const held = flying();
-        held.steerAirplane(300, 0);
-        expect(held.pilotAltitude(keys(UserInputEvent.Climb))).toBe(1);
-        held.steerAirplane(0, 0);
-        expect(held.landingRequested).toBe(false);
+        const climbed = flying();
+        climbed.steerAirplane(300, 0, climbed.pilotAltitude(keys(UserInputEvent.Climb)));
+        climbed.steerAirplane(0, 0, climbed.pilotAltitude(keys()));
+        expect(climbed.landingRequested).toBe(true);
+
+        const descended = flying();
+        descended.steerAirplane(300, 0, descended.pilotAltitude(keys(UserInputEvent.Descend)));
+        descended.steerAirplane(0, 0, descended.pilotAltitude(keys()));
+        expect(descended.landingRequested).toBe(true);
     });
 
-    it("cancels a landing the plane began by itself when climbing, not one the airplane key asked for", () => {
+    it("keeps the chosen altitude while the arrows are held", () => {
         const state = flying();
+        state.steerAirplane(300, 0, state.pilotAltitude(keys(UserInputEvent.Climb)));
+        for (let frame = 0; frame < 30; frame++) {
+            const climb = state.pilotAltitude(keys(UserInputEvent.Climb));
+            state.flight.step(state.steerAirplane(300, 0, climb), 16, climb);
+        }
+        for (let frame = 0; frame < 60; frame++) {
+            const climb = state.pilotAltitude(keys());
+            state.flight.step(state.steerAirplane(300, 0, climb), 16, climb);
+        }
+        const chosen = state.flight.altitude;
+        expect(chosen).toBeGreaterThan(500);
+        for (let frame = 0; frame < 300; frame++) {
+            const climb = state.pilotAltitude(keys());
+            state.flight.step(state.steerAirplane(300, 0, climb), 16, climb);
+        }
+        expect(state.flight.altitude).toBe(chosen);
+        expect(state.landingRequested).toBe(false);
+    });
+
+    it("lands when space or control is let go with the arrows let go, and holds nothing with them alone", () => {
+        const state = flying();
+        state.steerAirplane(300, 0);
+        state.steerAirplane(0, 0, state.pilotAltitude(keys(UserInputEvent.Climb)));
+        // Climbing alone: the plane is still flown, the landing waits for the key to be let go.
+        expect(state.landingRequested).toBe(false);
+        state.steerAirplane(0, 0, state.pilotAltitude(keys()));
+        expect(state.landingRequested).toBe(true);
+        // During the glide space does not cancel the landing.
+        state.steerAirplane(0, 0, state.pilotAltitude(keys(UserInputEvent.Climb)));
+        expect(state.landingRequested).toBe(true);
+    });
+
+    it("cancels a landing when the pilot takes the arrows again", () => {
+        const state = flying();
+        state.steerAirplane(300, 0);
+        state.steerAirplane(0, 0);
+        expect(state.landingRequested).toBe(true);
+        state.steerAirplane(300, 0);
+        expect(state.landingRequested).toBe(false);
+    });
+
+    it("cancels a landing the plane began by itself when climbing with the arrows held, not one the airplane key asked for", () => {
+        const state = flying();
+        state.airSteering = true;
         state.landingRequested = true;
-        state.pilotAltitude(keys(UserInputEvent.Climb));
+        state.steerAirplane(300, 0, state.pilotAltitude(keys(UserInputEvent.Climb)));
         expect(state.landingRequested).toBe(false);
 
         state.landingRequested = true;
         state.exitOnLanding = true;
-        state.pilotAltitude(keys(UserInputEvent.Climb));
+        state.steerAirplane(300, 0, state.pilotAltitude(keys(UserInputEvent.Climb)));
         expect(state.landingRequested).toBe(true);
+    });
+
+    it.each([1024, 2048])("glides down and lands from %i without a jump, in a few seconds", (altitude) => {
+        const state = flying();
+        const player = state as unknown as Player;
+        Object.assign(player, {
+            getBody: () => ({ x: player.x - 8, y: player.y, width: 16, height: 16, offset: { y: 8 } }),
+        });
+        state.flight.cruise = altitude;
+        state.flight.altitude = altitude;
+        for (let frame = 0; frame < 60; frame++) state.flight.step(state.steerAirplane(180, 0), 16);
+        expect(state.flight.altitude).toBe(altitude);
+        let frames = 0;
+        let previous = state.flight.altitude;
+        let biggestDrop = 0;
+        while (state.flight.altitude > 0 && frames < 2000) {
+            const step = state.flight.step(state.steerAirplane(0, 0), 16);
+            player.x += (step.x * 16) / 1000;
+            player.y += (step.y * 16) / 1000;
+            biggestDrop = Math.max(biggestDrop, previous - step.altitude);
+            previous = step.altitude;
+            frames++;
+        }
+        expect(state.flight.altitude).toBe(0);
+        // The shadow and the size follow the altitude: never more than the landing descent in a frame.
+        expect(biggestDrop).toBeLessThanOrEqual(900 * 0.016 + 1e-9);
+        // Measured: 1.4 s from the cruise (1024), 2.3 s from the highest altitude (2048).
+        expect(frames * 16).toBeLessThan(3000);
     });
 
     it("lands, on clear ground as any landing, once come down to the lowest flight level", () => {

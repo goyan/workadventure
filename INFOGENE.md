@@ -2473,9 +2473,14 @@ d'actions ne propose rien pour lui. Dessiné en code (`Vehicle/CanoeArtwork.ts`)
 **ESPACE maintenu monte**, **CTRL maintenu descend**, en douceur (pleine vitesse 480 par seconde en 0,4 s, autant pour
 s'arrêter), entre 64 (`AIRPLANE_MIN_FLIGHT_ALTITUDE`) et 2048 (`AIRPLANE_MAX_ALTITUDE`) ; relâchée, l'altitude tient
 (`AirplaneFlight.cruise`). Le sol ne s'atteint que par un atterrissage, sur un terrain dégagé comme tout atterrissage :
-V, ou CTRL tenu au plancher de 64 (l'avion se pose et reste garé). Dès que le pilote a pris l'altitude en main pendant
-un vol, lâcher les flèches tient l'altitude au lieu d'atterrir (changement voulu du comportement de la #379) ; ESPACE
-annule un atterrissage commencé seul, pas celui demandé par V. Chaque vol repart à la croisière.
+V, ou CTRL tenu au plancher de 64 (l'avion se pose et reste garé). **Lâcher les flèches pose toujours l'avion**, comme
+dans la #379, quelle que soit l'altitude réglée (la #401 la tenait sur place, retiré à la demande de l'utilisateur) :
+dès qu'aucune touche de vol (flèches, ESPACE, CTRL) n'est tenue, plané et recherche d'un sol dégagé, depuis l'altitude
+où se trouve l'avion (environ 1,4 s depuis 1024, 2,3 s depuis 2048 : descente bornée à 900 par seconde, sans saut).
+ESPACE seul, flèches lâchées, fait monter tant qu'il est tenu (décollage sur place compris) puis l'avion se pose au
+relâcher ; pendant le plané ESPACE et CTRL ne font rien. Reprendre les flèches annule l'atterrissage et l'avion revient
+à l'altitude réglée ; ESPACE, flèches tenues, annule un atterrissage commencé seul (CTRL au plancher), pas celui
+demandé par V. Chaque vol repart à la croisière.
 - **ESPACE** (`spaceClimbs`, `Vehicle/AirplaneAltitudeKeys.ts`) : en vol, il monte toujours (rien du sol n'est à portée,
   comme avant). Au sol dans l'avion garé, il décolle seulement si rien d'autre ne le demande : une invite (siège,
   porte, animal…), un objet sélectionné à côté, le Nerf ou la canne en main gardent la priorité. L'indice de l'avion

@@ -121,11 +121,8 @@ export class Player extends Character {
     private exitOnLanding = false;
     private landingRequested = false;
     private airSteering = false;
-    /**
-     * The pilot climbed or came down with the keys during this flight: letting the arrows go then holds the altitude
-     * instead of landing, and the plane lands by the airplane key or by coming down to the lowest flight level.
-     */
-    private pilotHoldsAltitude = false;
+    /** The pilot was flying the plane on the last frame: arrows, climb (space) or descent (control) held. */
+    private airPiloted = false;
     private landingTarget: LandingPoint | undefined;
     /** Where the glide towards `target` started: the altitude falls with the distance left, to 0 on the point. */
     private landingApproach: { target: LandingPoint; distance: number; altitude: number } | undefined;
@@ -380,7 +377,7 @@ export class Player extends Character {
         this.flight.reset(elevation);
         this.landingRequested = false;
         this.airSteering = false;
-        this.pilotHoldsAltitude = false;
+        this.airPiloted = false;
         this.airVehicleActive = true;
         this.swimming = false;
         this.refreshVehicles();
@@ -407,7 +404,7 @@ export class Player extends Character {
         this.landingRequested = false;
         this.landingTarget = undefined;
         this.airSteering = false;
-        this.pilotHoldsAltitude = false;
+        this.airPiloted = false;
         if (this.clearAirVehicleOnLanding) localUserStore.setVehicleForMedium(VehicleMedium.Air, Vehicle.None);
         this.clearAirVehicleOnLanding = false;
         this.refreshVehicles();
@@ -480,14 +477,13 @@ export class Player extends Character {
         this.landingTarget = undefined;
         this.landingApproach = undefined;
         this.airSteering = false;
-        this.pilotHoldsAltitude = false;
+        this.airPiloted = false;
         this.setFlightAltitude(0);
         this.shareFlightLevel();
     }
 
     /**
-     * The climb (space) or descent (control) the pilot asks for. Taking the altitude in hand cancels a landing the
-     * plane began by itself, not one the airplane key asked for. Coming down to the lowest flight level and holding
+     * The climb (space) or descent (control) the pilot asks for. Coming down to the lowest flight level and holding
      * the key lands, on clear ground as any landing: the keys never set the plane down anywhere.
      */
     private pilotAltitude(activeEvents: ActiveEventList): -1 | 0 | 1 {
@@ -496,14 +492,6 @@ export class Player extends Character {
             activeEvents.get(UserInputEvent.Descend) && this.flight.altitude > 0,
         );
         if (climb === 0) return 0;
-        this.pilotHoldsAltitude = true;
-        if (climb > 0 && this.landingRequested && !this.exitOnLanding && !this.clearAirVehicleOnLanding) {
-            this.landingRequested = false;
-            this.landingTarget = undefined;
-            this.landingApproach = undefined;
-            this.flight.landing = false;
-            this.flight.glideAltitude = undefined;
-        }
         if (climb < 0 && !this.landingRequested && this.flight.altitude <= AIRPLANE_MIN_FLIGHT_ALTITUDE) {
             this.landingRequested = true;
             this.nextLandingCheck = 0;
@@ -520,19 +508,38 @@ export class Player extends Character {
         return this.landingZoneClearance()(this.getFeet());
     }
 
-    private steerAirplane(x: number, y: number): LandingPoint {
+    /**
+     * Letting go of every key that flies the plane (arrows, space, control) lands it, whatever altitude the pilot
+     * chose: the keys of the altitude only act while the plane is flown. Taking the arrows again cancels any landing;
+     * climbing with the arrows held cancels a landing the plane began by itself, not one the airplane key asked for.
+     */
+    private steerAirplane(x: number, y: number, climb: -1 | 0 | 1 = 0): LandingPoint {
         const steering = x !== 0 || y !== 0;
+        const piloted = steering || climb !== 0;
         if (steering && !this.airSteering) {
             this.landingRequested = false;
             this.landingTarget = undefined;
             this.flight.landing = false;
             this.clearAirVehicleOnLanding = false;
             this.exitOnLanding = false;
-        } else if (!steering && this.airSteering && this.flight.altitude > 0 && !this.pilotHoldsAltitude) {
+        } else if (
+            steering &&
+            climb > 0 &&
+            this.landingRequested &&
+            !this.exitOnLanding &&
+            !this.clearAirVehicleOnLanding
+        ) {
+            this.landingRequested = false;
+            this.landingTarget = undefined;
+            this.landingApproach = undefined;
+            this.flight.landing = false;
+            this.flight.glideAltitude = undefined;
+        } else if (!piloted && this.airPiloted && this.flight.altitude > 0) {
             this.landingRequested = true;
             this.nextLandingCheck = 0;
         }
         this.airSteering = steering;
+        this.airPiloted = piloted;
         if (!this.landingRequested) {
             this.flight.glideAltitude = undefined;
             return { x, y };
@@ -1102,7 +1109,7 @@ export class Player extends Character {
         y = y * moveAmount;
         if (this.airVehicleActive) {
             const climb = this.pilotAltitude(activeEvents);
-            const wanted = this.steerAirplane(x, y);
+            const wanted = this.steerAirplane(x, y, climb);
             const flight = this.flight.step(wanted, delta, climb);
             x = flight.x;
             y = flight.y;
