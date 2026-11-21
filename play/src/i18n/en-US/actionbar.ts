@@ -233,7 +233,7 @@ const actionbar = {
                     "There would be frost with less than {wind} of wind, or more than {humidity} of humidity.",
                 needsCold: "It would first take an air under {temperature} for the ground to get under 0 °C.",
                 drawn: "On screen: {percent} %. Frost settles and goes in about a minute.",
-                more: "The rule: the frost point. It is the temperature under which the water vapour of the air settles as ice. In a calm the ground is a little colder than the air; the wind wipes that gap out. A very cold air holds little vapour: colder is not whiter.",
+                more: "The rule: the frost point. It is the temperature under which the water vapour of the air settles as ice. In a calm the ground is a little colder than the air; the wind wipes that gap out. A very cold air holds little vapour: the frost is thinner there.",
             },
             ice: {
                 title: "Ice on the water",

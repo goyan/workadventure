@@ -236,7 +236,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
                 needsCalmOrHumidity: "Il givrerait avec moins de {wind} de vent, ou plus de {humidity} d'humidité.",
                 needsCold: "Il faudrait d'abord un air sous {temperature} pour que le sol passe sous 0 °C.",
                 drawn: "À l'écran : {percent} %. Le givre se pose et s'en va en une minute environ.",
-                more: "La règle : le point de givrage. C'est la température sous laquelle la vapeur d'eau de l'air se dépose en glace. Par temps calme le sol est un peu plus froid que l'air ; le vent efface cet écart. Un air très froid contient peu de vapeur : plus froid n'est pas plus blanc.",
+                more: "La règle : le point de givrage. C'est la température sous laquelle la vapeur d'eau de l'air se dépose en glace. Par temps calme le sol est un peu plus froid que l'air ; le vent efface cet écart. Un air très froid contient peu de vapeur : le givre y est plus mince.",
             },
             ice: {
                 title: "Glace sur l'eau",
