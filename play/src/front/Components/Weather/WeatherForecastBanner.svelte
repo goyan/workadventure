@@ -7,6 +7,7 @@
         chosenWeatherStateStore,
     } from "@wa/front/Phaser/Game/Weather/ChosenPlaceWeather";
     import { weatherLook } from "@wa/front/Components/Menu/WeatherName";
+    import { realWeatherAt } from "@wa/common/RealWeather";
     import { compassPointOf, windArrowOf } from "@wa/front/Phaser/Game/Weather/WindDirection";
     import type { WindArrow } from "@wa/front/Phaser/Game/Weather/WindDirection";
     import { LL } from "../../../i18n/i18n-svelte";
@@ -48,9 +49,13 @@
         if (!place || !$nightDateStore || !$weatherBannerStore) return undefined;
         const same = known.place?.latitude === place.latitude && known.place?.longitude === place.longitude;
         const state = same ? known.state : { status: "pending" as const };
+        // The humidity of the quarter hour under way at that city, which its frost goes by; none while not known.
+        const humidity =
+            state.status === "known" ? realWeatherAt(state.slots, $nightDateStore.getTime())?.humidity : undefined;
         return {
             city: place.name.split(",")[0]?.trim() || place.name,
             cells: chosenPlaceForecast(place, state, $nightDateStore),
+            humidity,
         };
     });
 
@@ -148,6 +153,7 @@
                     kind="local"
                     tag={$LL.actionbar.weatherBanner.local()}
                     cells={mine.cells}
+                    now={{ humidity: mine.humidity, manual: false }}
                     testid="weather-card-local"
                 />
             {/if}
