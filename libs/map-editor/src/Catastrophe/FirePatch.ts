@@ -4,6 +4,8 @@ export const FIRE_MAX_TILES = 8;
 export const FIRE_DEFAULT_TILES = 2;
 /** A player sets this many patches of fire a second at most. */
 export const FIRE_PATCHES_PER_SECOND = 5;
+/** The flame a player holds is shown this long after their last patch, in ms: it goes out when they let go. */
+export const FIRE_PATCH_LASTS_MS = 500;
 
 /** The size of a patch within what it may be; the usual one for a size that is not a number. */
 export function fireTiles(radiusTiles: number): number {
