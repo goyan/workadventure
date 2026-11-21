@@ -5,10 +5,14 @@ import { refreshCanvasTexture } from "@wa/front/Phaser/Game/CanvasTextureRefresh
 import { DEEP_ICE_PX, POOL_ICE_DEPTH_PX } from "@wa/front/Phaser/Game/Weather/Frost";
 import type { WaterCycle } from "@wa/front/Phaser/Game/Weather/Frost";
 import type { WaterRing } from "@wa/front/Phaser/Game/Catastrophe/MeteorFall";
+import { MAX_SHOWN_BREAKS } from "../Ice/IceBreaks";
+import type { IceBreak } from "../Ice/IceBreaks";
 import { SHORE_PX } from "./TerrainShading";
 import { WHITECAP_MIN_DEPTH_PX } from "./Whitecaps";
 import { GROUND_TEXTURES } from "./TexturedGround";
 import type { GroundArea } from "./TexturedGround";
+import { NO_WATER_REFLECTION } from "./WaterReflection";
+import type { WaterReflection } from "./WaterReflection";
 
 /**
  * The grounds of the relief drawn on the graphics card, as a game draws its terrain: one picture of the weights of each
@@ -385,6 +389,16 @@ void main() {
 
 const WATER_FRAG = `${COMMON_GLSL}
 uniform float uStrength;
+// What the water reflects (WaterReflection.ts): the sky, the clouds (the thickness texture of CloudLayer), the sun,
+// the lamps at night (the night veil, where it is pierced).
+uniform vec4 uSkyTone;       // colour of the sky, share of it
+uniform sampler2D uCloudTexture;
+uniform vec4 uCloudArea;     // the part of the map the thickness covers
+uniform vec4 uCloudTone;     // colour of the clouds, share of them (0: none)
+uniform vec3 uSun;           // towards the sun on the map, strength of its glint
+uniform sampler2D uLampTexture;
+uniform vec4 uLampArea;      // the part of the map the night veil covers
+uniform float uLampOpacity;  // the opacity of the veil where no lamp shines (0: day)
 uniform sampler2D uIceTexture;
 uniform vec2 uIceSize;
 uniform float uIce;
@@ -410,6 +424,50 @@ float ringAt(vec4 ring, vec2 world) {
 
 float ringsAt(vec2 world) {
     return ringAt(uRing0, world) + ringAt(uRing1, world) + ringAt(uRing2, world) + ringAt(uRing3, world);
+}
+
+// The ice cracked or broken under an avatar (Ice/IceBreaks.ts): x, y, radius (map pixels), phase (0 to 1 while it
+// cracks, 1 just broken to 2 frozen over again).
+uniform vec4 uBreak0;
+uniform vec4 uBreak1;
+uniform vec4 uBreak2;
+uniform vec4 uBreak3;
+
+// The cracks (x) and the open water (y) of one break at a point.
+vec2 breakOf(vec4 b, vec2 world) {
+    if (b.w <= 0.0) return vec2(0.0);
+    vec2 d = world - b.xy;
+    float r = length(d);
+    float cracking = min(b.w, 1.0);
+    float healed = clamp(b.w - 1.0, 0.0, 1.0);
+    float reach = b.z * (0.5 + 1.3 * cracking);
+    if (r > reach + 6.0) return vec2(0.0);
+    float angle = atan(d.y, d.x);
+    float seed = hash(floor(b.xy));
+    // Cracks running out from the point: seven spokes bent by a noise, and a ring where the ice bends.
+    float spoke = abs(fract(angle / 6.28318 * 7.0 + seed * 7.0 + (vnoise(vec2(r / 7.0, seed * 13.0)) - 0.5) * 0.6) - 0.5);
+    float line = 1.0 - smoothstep(0.0, 0.9 / max(r, 2.0) + 0.012, spoke);
+    float ring = 1.0 - smoothstep(0.0, 1.0, abs(r - b.z * 0.55 * (0.4 + cracking)));
+    float crack = max(line, ring * 0.7) * (1.0 - smoothstep(reach - 3.0, reach, r)) * (1.0 - healed);
+    // Open water once broken, its edge ragged, the hole closing as it freezes over.
+    float openR = b.w >= 1.0 ? b.z * (1.0 - healed) : 0.0;
+    float open = 1.0 - step(openR, r + (vnoise(vec2(angle * 3.0, seed * 5.0)) - 0.5) * 6.0);
+    return vec2(crack, open);
+}
+
+vec2 breaksAt(vec2 world) {
+    return max(max(breakOf(uBreak0, world), breakOf(uBreak1, world)), max(breakOf(uBreak2, world), breakOf(uBreak3, world)));
+}
+
+// The ice cracked: dark lines of water seen through it, a light edge along them.
+vec3 crackedIce(vec3 ice, float crack) {
+    return mix(ice, vec3(0.2, 0.31, 0.4), crack * 0.85);
+}
+
+// Broken ice floating in an open hole: pale shards.
+vec3 withShards(vec3 water, vec2 world, float open) {
+    float shard = step(0.8, hash(floor(world / 3.0))) * open;
+    return mix(water, vec3(0.86, 0.93, 0.98), shard * 0.9);
 }
 
 // The snow lying on the ice, in drifts that grow with the snow of the map.
@@ -480,6 +538,8 @@ vec4 poolColor(vec2 world, float t) {
     // image (the green of pack 8), which the server does not know, keeps the rule of the cold.
     vec3 kept = pack(8.0, world);
     bool frozen = uServerIce > 0.5 && kept.g < 0.5 ? kept.r >= 0.0707 : cold;
+    vec2 broken = breaksAt(world);
+    if (broken.y > 0.5) frozen = false;
     // How full the pool is, 0 to 1: a painted pool holds the water of the relief, which the server fills (it may
     // have been emptied); a pool placed as an image is always full.
     float held = pack(2.0, world).b * ${WATER_SCALE_PX}.0;
@@ -489,7 +549,7 @@ vec4 poolColor(vec2 world, float t) {
     float wetness = smoothstep(0.0, 0.06, fill);
     if (frozen && fill > 0.05) {
         vec3 ice = texture2D(uIceTexture, fract(world / uIceSize)).rgb;
-        return vec4(snowOnIce(ice * mix(vec3(1.0), water, 0.15), world), 1.0);
+        return vec4(crackedIce(snowOnIce(ice * mix(vec3(1.0), water, 0.15), world), broken.x), 1.0);
     }
     // The floor tiles, 16 px, seen through the water: the deeper, the more the water's own colour.
     vec2 tile = mod(world, 16.0);
@@ -513,6 +573,33 @@ vec4 poolColor(vec2 world, float t) {
     return vec4(c, 1.0);
 }
 
+// The sky, the clouds, the sun and the lamps mirrored by the water, bent by its waves (ripple, map pixels).
+vec3 reflected(vec3 water, vec2 world, vec2 ripple, float waves) {
+    water = mix(water, uSkyTone.rgb, uSkyTone.a);
+    if (uCloudTone.a > 0.0) {
+        vec2 uv = (world + ripple - uCloudArea.xy) / uCloudArea.zw;
+        if (uv.x > 0.0 && uv.y > 0.0 && uv.x < 1.0 && uv.y < 1.0) {
+            float cloud = smoothstep(0.1, 0.3, texture2D(uCloudTexture, vec2(uv.x, 1.0 - uv.y)).r);
+            water = mix(water, uCloudTone.rgb, cloud * uCloudTone.a);
+        }
+    }
+    if (uSun.z > 0.0) {
+        // A wave facing the sun throws its light back: bright sparks along the crests, towards the sun.
+        float facing = max(0.0, dot(normalize(ripple + vec2(0.0001)), uSun.xy));
+        water += vec3(1.0, 0.94, 0.78) * pow(facing, 6.0) * waves * uSun.z * 0.7;
+    }
+    if (uLampOpacity > 0.0) {
+        // The light of a lamp on the shore stretched down over the water, wavering with it.
+        vec2 uv = (world + vec2(ripple.x * 0.6, ripple.y * 1.6 - 10.0) - uLampArea.xy) / uLampArea.zw;
+        if (uv.x > 0.0 && uv.y > 0.0 && uv.x < 1.0 && uv.y < 1.0) {
+            float veil = texture2D(uLampTexture, vec2(uv.x, 1.0 - uv.y)).a;
+            float lit = clamp(1.0 - veil / uLampOpacity, 0.0, 1.0);
+            water += vec3(1.0, 0.84, 0.58) * lit * (0.25 + 0.35 * waves);
+        }
+    }
+    return water;
+}
+
 // How much water is over a point: 0 dry, 1 at the shore line, more inside.
 float wetAt(vec2 world) {
     return pack(2.0, world).b;
@@ -529,14 +616,20 @@ void main() {
     if (poolEdge > 0.02 && poolEdge <= 0.5) {
         depth = packNearest(5.0, world).r > 0.5 ? 0.0 : packNearest(2.0, world).b;
     }
-    // The ice (Frost.ts): it takes the shallows first, the deep water last; frozen, nothing moves any more.
+    // The ice (Frost.ts): it takes the shallows first, the deep water last; frozen, nothing moves any more. Its ragged
+    // edge never reaches over 1: at the full cold (-15 °C) the deep water freezes whole, as isFrozen says.
     float depthPx = depth * ${WATER_SCALE_PX}.0;
-    float frozenAt = 0.1 + 0.9 * min(1.0, depthPx / ${DEEP_ICE_PX}.0) + (vnoise(world / 14.0) - 0.5) * 0.08;
+    float frozenAt = min(
+        1.0,
+        0.1 + 0.9 * min(1.0, depthPx / ${DEEP_ICE_PX}.0) + (vnoise(world / 14.0) - 0.5) * 0.08
+    );
     float outdoors = step(0.5, pack(4.0, world).b);
     // The ice of the server: the root of its thickness over a metre, 0.0707 at the 5 mm one slips on.
     float kept = pack(8.0, world).r;
     float keptFrozen = step(0.0707, kept + (vnoise(world / 14.0) - 0.5) * 0.02);
     float frozen = depthPx > 0.0 ? mix(step(frozenAt, uIce) * outdoors, keptFrozen, uServerIce) : 0.0;
+    vec2 broken = frozen > 0.5 ? breaksAt(world) : vec2(0.0);
+    frozen *= 1.0 - broken.y;
     float still = 1.0 - frozen;
     // The shore: the water of a cell reaches the middle of the next, bent by a noise that drifts slowly (lapping).
     // However thin, water reaches the edge of its cell: whether a cell holds any (pack 8, blue), apart from how
@@ -571,7 +664,7 @@ void main() {
         // Ice as on the rinks of the map, a little darker over the deep water under it.
         vec3 ice = texture2D(uIceTexture, fract(world / uIceSize)).rgb;
         ice *= 1.0 - 0.12 * clamp(depthPx / 128.0, 0.0, 1.0);
-        ice = snowOnIce(ice, world);
+        ice = crackedIce(snowOnIce(ice, world), broken.x);
         // A thin ice of the server lets the water show through; one that bears a walker (50 mm) is whole.
         float thick = clamp(kept * kept * 1000.0 / 50.0, 0.0, 1.0);
         float iceAlpha = mix(0.96, mix(0.6, 0.96, thick), uServerIce) * cover;
@@ -598,8 +691,10 @@ void main() {
         float lines = 1.0 - smoothstep(0.0, 0.04, abs(n1 - n2));
         water += lines * mix(0.14, 0.07, deep);
         water *= 0.9 + 0.2 * n1;
+        water = reflected(water, world, vec2(n1 - 0.5, n2 - 0.5) * 12.0, lines + 0.3 * n2);
         float glint = step(0.992, hash(floor(world / 2.0) + floor(t * 3.0))) * smoothstep(0.55, 0.7, n2);
         water = mix(water, FOAM, glint * 0.8);
+        water = withShards(water, world, broken.y);
         alpha = max(alpha, glint * 0.8);
 
         // The foam where the water meets the shore: a band that comes and goes, broken by a fine noise.
@@ -643,6 +738,8 @@ void main() {
 let splatCount = 0;
 /** How many waves of comets the water shader draws at once. */
 const MAX_WATER_RINGS = 4;
+/** How many cracks and holes of the ice the water shader draws at once (as IceBreaks.MAX_SHOWN_BREAKS). */
+const MAX_ICE_BREAKS = MAX_SHOWN_BREAKS;
 
 /** What the ground shader is given: the weight of each soil (by its number in the map), the grass, the snow. */
 export interface GroundWeights {
@@ -743,6 +840,14 @@ export class GroundSplat {
                         setUniform("uSnow", this.snow);
                         setUniform("uServerIce", this.serverIce ? 1 : 0);
                         setUniform("uWind", [this.wind.x, this.wind.y, this.wind.share]);
+                        this.setReflectionUniforms(setUniform);
+                        for (let index = 0; index < MAX_ICE_BREAKS; index++) {
+                            const shown = this.breaks[index];
+                            setUniform(
+                                `uBreak${index}`,
+                                shown ? [shown.x, shown.y, shown.radius, shown.phase] : [0, 0, 0, 0],
+                            );
+                        }
                         for (let index = 0; index < MAX_WATER_RINGS; index++) {
                             const ring = this.rings[index];
                             setUniform(
@@ -756,7 +861,7 @@ export class GroundSplat {
                 0,
                 1,
                 1,
-                ["__DEFAULT", GROUND_TEXTURES.ice],
+                ["__DEFAULT", GROUND_TEXTURES.ice, "__DEFAULT", "__DEFAULT"],
             )
             .setOrigin(0)
             .setDepth(waterDepth)
@@ -770,6 +875,12 @@ export class GroundSplat {
     /** Whether the ice drawn is the one the server keeps (GroundSource), not the one of this player's own cold. */
     private serverIce = false;
     private rings: readonly WaterRing[] = [];
+    private breaks: readonly IceBreak[] = [];
+
+    /** The cracks and the holes of the ice: the first MAX_ICE_BREAKS are drawn. */
+    public setBreaks(breaks: readonly IceBreak[]): void {
+        this.breaks = breaks;
+    }
     /** The wind over the water: which way it blows and the share of open water its whitecaps whiten. */
     private wind = { x: 0, y: 1, share: 0 };
 
@@ -857,6 +968,55 @@ export class GroundSplat {
     }
 
     /** The wind over the water: which way it blows (length 1) and the share of open water its whitecaps whiten. */
+    /** What the water reflects; its textures bound again only when they change. */
+    public setReflection(reflection: WaterReflection): void {
+        const before = this.reflection;
+        this.reflection = reflection;
+        // Bound again when a texture changes or is gone: a destroyed texture bound to the shader breaks the drawing
+        // of the whole game (the screen stays black).
+        const gone = (key: string | undefined): boolean => key !== undefined && !this.scene.textures.exists(key);
+        if (
+            before.clouds?.key !== reflection.clouds?.key ||
+            before.lamps?.key !== reflection.lamps?.key ||
+            gone(reflection.clouds?.key) ||
+            gone(reflection.lamps?.key)
+        ) {
+            this.bindWaterTextures();
+        }
+    }
+
+    private reflection: WaterReflection = NO_WATER_REFLECTION;
+
+    private bindWaterTextures(): void {
+        const kept = (key: string | undefined): string =>
+            key !== undefined && this.scene.textures.exists(key) ? key : "__DEFAULT";
+        this.waterShader.setTextures([
+            kept(this.key),
+            GROUND_TEXTURES.ice,
+            kept(this.reflection.clouds?.key),
+            kept(this.reflection.lamps?.key),
+        ]);
+    }
+
+    private setReflectionUniforms(setUniform: (name: string, value: unknown) => void): void {
+        const { sky, clouds, sun, lamps } = this.reflection;
+        const rgb = (color: number): number[] => [
+            ((color >> 16) & 0xff) / 255,
+            ((color >> 8) & 0xff) / 255,
+            (color & 0xff) / 255,
+        ];
+        const area = (rect: { x: number; y: number; width: number; height: number } | undefined): number[] =>
+            rect ? [rect.x, rect.y, rect.width, rect.height] : [0, 0, 1, 1];
+        setUniform("uSkyTone", [...rgb(sky.color), sky.share]);
+        setUniform("uCloudTexture", 2);
+        setUniform("uCloudArea", area(clouds?.area));
+        setUniform("uCloudTone", clouds ? [...rgb(clouds.color), clouds.share] : [0, 0, 0, 0]);
+        setUniform("uSun", [sun.x, sun.y, sun.strength]);
+        setUniform("uLampTexture", 3);
+        setUniform("uLampArea", area(lamps?.area));
+        setUniform("uLampOpacity", lamps?.opacity ?? 0);
+    }
+
     public setWind(wind: { x: number; y: number; share: number }): void {
         this.wind = wind;
     }
@@ -923,7 +1083,7 @@ export class GroundSplat {
             const canvas = this.scene.textures.createCanvas(this.key, width, height);
             canvas?.setFilter(Phaser.Textures.FilterMode.LINEAR);
             this.groundShader.setTextures([this.key, ...SOIL_KEYS, GROUND_TEXTURES.grass, GROUND_TEXTURES.snow]);
-            this.waterShader.setTextures([this.key, GROUND_TEXTURES.ice]);
+            this.bindWaterTextures();
             this.anyWater = false;
         }
         this.area = area;

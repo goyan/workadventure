@@ -23,6 +23,9 @@ import type { Ball, Downpour, Drain } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
 import type { GameRoom } from "./GameRoom";
 
+/** The ice broken around a player who goes through it, in tiles: the hole they fall into. */
+const ICE_BREAK_TILES = 1;
+
 /**
  * The catastrophes of a room: a player launches a meteor at a point of the map, the room is told when it will hit
  * (so every browser draws the fall), and the water takes the impact once the fall is over. Nothing is kept: a
@@ -71,6 +74,10 @@ export class CatastropheManager {
     private ignite: (x: number, y: number, radiusTiles: number) => void = () => undefined;
     /** What a fireball does where it lands: the water and the meadow of the room, given once they are made. */
     private burn: (x: number, y: number, radiusTiles: number, id: number) => void = () => undefined;
+    /** What breaks the ice under a player: given by the room (the ice the meadow keeps), as for the comets. */
+    private breakIce: (x: number, y: number, radiusTiles: number) => void = () => undefined;
+    /** When each player last broke the ice: once a second at most. */
+    private readonly iceBreaks = new Map<number, number>();
     private readonly inFlight = new Set<ReturnType<typeof setTimeout>>();
 
     constructor(
@@ -265,6 +272,46 @@ export class CatastropheManager {
         this.burn = burn;
     }
 
+    /** What breaks the ice is made after the catastrophes of a room (the meadow): it is given here. */
+    public breakIceWith(breakIce: (x: number, y: number, radiusTiles: number) => void): void {
+        this.breakIce = breakIce;
+    }
+
+    /**
+     * The ice gives way under a player (too thin to bear them over deep water: their client felt it crack): it is
+     * broken a tile around the point, and the room sees the hole open. False when refused: outside the map, or more
+     * than once a second for a player.
+     */
+    public iceBreak(userId: number, x: number, y: number): boolean {
+        if (this.stopped) return false;
+        const size = this.mapSize();
+        if (!size || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+        if (x < 0 || y < 0 || x >= size.width || y >= size.height) return false;
+        const now = this.now();
+        if (now - (this.iceBreaks.get(userId) ?? -Infinity) < 1000) return false;
+        this.iceBreaks.set(userId, now);
+        this.room.sendSubMessageToRoom({
+            message: {
+                $case: "catastropheMessage",
+                catastropheMessage: {
+                    id: this.nextId++,
+                    kind: CatastropheKind.CATASTROPHE_ICE_BREAK,
+                    x: Math.round(x),
+                    y: Math.round(y),
+                    impactInMs: 0,
+                    radiusTiles: ICE_BREAK_TILES,
+                    wholeMap: false,
+                },
+            },
+        });
+        try {
+            this.breakIce(x, y, ICE_BREAK_TILES);
+        } catch (error) {
+            console.error("The ice of the map could not be broken", error);
+        }
+        return true;
+    }
+
     /** What a patch of fire lights is made after the catastrophes of a room: it is given here. */
     public igniteWith(ignite: (x: number, y: number, radiusTiles: number) => void): void {
         this.ignite = ignite;
@@ -332,6 +379,7 @@ export class CatastropheManager {
         if (kind === CatastropheKind.CATASTROPHE_FIRE) return this.fire(userId, x, y, radiusTiles);
         if (kind === CatastropheKind.CATASTROPHE_DRAIN) return this.drain(userId, x, y, radiusTiles);
         if (kind === CatastropheKind.CATASTROPHE_BALL) return this.ball(userId, x, y, radiusTiles);
+        if (kind === CatastropheKind.CATASTROPHE_ICE_BREAK) return this.iceBreak(userId, x, y);
         return this.launch(kind, x, y, radiusTiles);
     }
 

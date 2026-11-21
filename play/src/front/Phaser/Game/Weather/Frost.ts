@@ -1,3 +1,4 @@
+import { ICE_BEARS_MM } from "@workadventure/map-editor";
 import { get } from "svelte/store";
 import {
     hoarFrost,
@@ -45,8 +46,20 @@ const ICE_START_C = 0;
 const FULL_ICE_C = -15;
 /** Depth of water (map pixels) that freezes last: deeper freezes with it. */
 export const DEEP_ICE_PX = 64;
-/** A pool freezes from its surface, as still water this deep, whatever the depth of its basin. */
-export const POOL_ICE_DEPTH_PX = 32;
+/**
+ * A pool freezes from its surface, as still water this deep, whatever the depth of its basin: a skin of ice from about
+ * -3 °C (still water outdoors takes a film of ice after a few hours of frost; at 32 px it waited for -8 °C).
+ */
+export const POOL_ICE_DEPTH_PX = 8;
+/**
+ * The ice of a player who follows a place of their own has no history (the server's grows by the frost of the past
+ * days, Ice.ts): its thickness is read from the cold of now, as if it had lasted. It bears a walker (ICE_BEARS_MM)
+ * from -7.5 °C: between the first ice and that, it cracks and gives way under them.
+ */
+export const OWN_ICE_BEARS_AT = 0.5;
+export function ownIceMm(ice: number): number {
+    return (ICE_BEARS_MM * clamp(ice)) / OWN_ICE_BEARS_AT;
+}
 /** How fast it goes towards the weather of now, a share a second of the game clock: about two minutes each way. */
 const ICE_RATE = 1 / 120;
 const FROST_RATE = 1 / 60;
@@ -91,8 +104,73 @@ export function ownSnowAfter(
     return Math.min(SNOW_MAX_MM, Math.max(0, snowMm + gained - lost));
 }
 
+/**
+ * A cycle kept from an absence (the player left the map, or the page was reloaded) moved on by the time away, `seconds`
+ * of the clock of the world: the frost, the ice and the wet towards the air of now at their own pace, the snow of the
+ * city fallen and melted as if the air of now had held all along (the browser knows no weather of the past).
+ */
+export function cycleAfterAbsence(
+    kept: WaterCycle,
+    seconds: number,
+    target: Omit<WaterCycle, "snowMm">,
+    fallingMmPerHour: number,
+    air: AirNow | undefined,
+): WaterCycle {
+    return {
+        frost: towards(kept.frost, target.frost, seconds, FROST_RATE, FROST_RATE),
+        ice: towards(kept.ice, target.ice, seconds, ICE_RATE, ICE_RATE),
+        wet: towards(kept.wet, target.wet, seconds, WET_RATE, DRY_RATE),
+        snowMm: ownSnowAfter(kept.snowMm, seconds, fallingMmPerHour, air),
+    };
+}
+
+/** The cycle of a player's own city, kept in the browser: back on the map, it goes on from there. */
+const OWN_CYCLE_KEY = "ownWaterCycle";
+const OWN_CYCLE_SAVE_MS = 15_000;
+/** Beyond this absence, the kept cycle is too old to go on from: the weather of the city now is taken instead. */
+const OWN_CYCLE_MAX_ABSENCE_S = 7 * 24 * 3600;
+
+interface KeptCycle extends WaterCycle {
+    /** The city it is the cycle of (placeKey). */
+    place: string;
+    /** When it was kept (ms, the clock of the computer). */
+    at: number;
+}
+
+function placeKey(place: { name: string; latitude: number; longitude: number }): string {
+    return `${place.name}@${place.latitude.toFixed(3)},${place.longitude.toFixed(3)}`;
+}
+
+function readKeptCycle(place: string): KeptCycle | undefined {
+    try {
+        const kept: unknown = JSON.parse(localStorage.getItem(OWN_CYCLE_KEY) ?? "null");
+        if (typeof kept !== "object" || kept === null) return undefined;
+        const value = kept as Partial<KeptCycle>;
+        const numbers = [value.frost, value.ice, value.wet, value.snowMm, value.at];
+        if (value.place !== place || !numbers.every((n) => typeof n === "number" && Number.isFinite(n)))
+            return undefined;
+        return value as KeptCycle;
+    } catch {
+        return undefined;
+    }
+}
+
+let lastKept = 0;
+function keepCycle(place: string, kept: WaterCycle): void {
+    const now = Date.now();
+    if (now - lastKept < OWN_CYCLE_SAVE_MS) return;
+    lastKept = now;
+    try {
+        localStorage.setItem(OWN_CYCLE_KEY, JSON.stringify({ ...kept, place, at: now }));
+    } catch {
+        // Storage refused: the cycle starts again from the weather of now next time.
+    }
+}
+
 let cycle: WaterCycle = { frost: 0, ice: 0, wet: 0, snowMm: 0 };
 let lastSecond: number | undefined;
+/** A cycle restored from the browser, held until the weather of its city is known, then moved on by the absence. */
+let restored: KeptCycle | undefined;
 
 /**
  * The water cycle at the game clock, moved on once a second at most (read at each image by the shaders and by each
@@ -123,15 +201,31 @@ export function waterCycleNow(settings: MapSnowSettings | undefined): WaterCycle
               state.status === "known" ? state.slots : undefined,
           )
         : 0;
-    cycle = Number.isFinite(elapsed)
-        ? {
-              frost: towards(cycle.frost, target.frost, elapsed, FROST_RATE, FROST_RATE),
-              ice: towards(cycle.ice, target.ice, elapsed, ICE_RATE, ICE_RATE),
-              wet: towards(cycle.wet, target.wet, elapsed, WET_RATE, DRY_RATE),
-              snowMm: place ? ownSnowAfter(cycle.snowMm, elapsed, falling, air) : 0,
-          }
-        : // The first look at a map: the cycle is already where the weather is. No snow lies yet: it has to fall.
-          { ...target, snowMm: 0 };
+    const city = place ? placeKey(place) : undefined;
+    if (!Number.isFinite(elapsed)) {
+        // The first look at a map: the cycle of the player's city kept from last time, or the weather of now. No
+        // snow lies yet then: it has to fall.
+        restored = city ? readKeptCycle(city) : undefined;
+        cycle = restored
+            ? { frost: restored.frost, ice: restored.ice, wet: restored.wet, snowMm: restored.snowMm }
+            : { ...target, snowMm: 0 };
+    } else if (restored && restored.place === city) {
+        // Held as it was until the air of the city is known, then moved on by the time away.
+        if (state.status === "known") {
+            const away = Math.min(OWN_CYCLE_MAX_ABSENCE_S, Math.max(0, (Date.now() - restored.at) / 1000));
+            cycle = cycleAfterAbsence(cycle, away, target, falling, air);
+            restored = undefined;
+        }
+    } else {
+        restored = undefined;
+        cycle = {
+            frost: towards(cycle.frost, target.frost, elapsed, FROST_RATE, FROST_RATE),
+            ice: towards(cycle.ice, target.ice, elapsed, ICE_RATE, ICE_RATE),
+            wet: towards(cycle.wet, target.wet, elapsed, WET_RATE, DRY_RATE),
+            snowMm: place ? ownSnowAfter(cycle.snowMm, elapsed, falling, air) : 0,
+        };
+    }
+    if (city && !restored) keepCycle(city, cycle);
     return cycle;
 }
 

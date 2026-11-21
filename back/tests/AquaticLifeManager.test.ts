@@ -177,6 +177,36 @@ describe("AquaticLifeManager", () => {
         expect(state).toMatchObject({ animals: [{ bornAt: 1_000_000 }, { bornAt: 1_000_000 }] });
     });
 
+    it("lives the last half hour of a week the room was empty, its fish under the cap of their water", async () => {
+        vi.useFakeTimers();
+        const first = createHarness();
+        first.manager.mapChanged();
+        first.steps(4);
+        first.manager.stop();
+        const before = first.manager.snapshot()?.animals.map((animal) => animal.id) ?? [];
+        expect(before.length).toBeGreaterThan(0);
+
+        const second = createHarness({ saved: first.saved });
+        second.clock.now = first.clock.now + 7 * 24 * 3600 * 1000;
+        await second.manager.restore();
+        second.manager.mapChanged();
+        expect(second.manager.catchingUp()).toBe(true);
+        // A minute of the missed time lived: the fish it kept are alive, not dead of a week they did not live.
+        vi.advanceTimersByTime(500);
+        expect(second.manager.snapshot()?.animals.map((animal) => animal.id)).toEqual(expect.arrayContaining(before));
+        // Half an hour lived at 120 steps a tick: 30 ticks, told once at the end.
+        vi.advanceTimersByTime(30 * 500);
+        expect(second.manager.catchingUp()).toBe(false);
+        const stats = second.sent.at(-1)?.stats;
+        expect(stats?.births).toBeGreaterThan(0);
+        const animals = second.manager.snapshot()?.animals ?? [];
+        expect(animals.length).toBeGreaterThan(0);
+        expect(animals.length).toBeLessThanOrEqual(Math.max(2, stats?.capacity ?? 0));
+        // Saved again at the time it caught up with: a restart now lives nothing twice.
+        const state = JSON.parse(second.saved.state) as { at: number };
+        expect(state.at).toBeGreaterThanOrEqual(second.clock.now);
+    });
+
     it("starts from an empty water when what was saved cannot be read, or the store does not answer", async () => {
         vi.spyOn(console, "error").mockImplementation(() => {});
         const harnesses = [

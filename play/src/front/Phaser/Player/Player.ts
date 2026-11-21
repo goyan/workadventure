@@ -612,7 +612,8 @@ export class Player extends Character {
         }
         if (!isHumanAvatar(this.sprites.keys())) this.airVehicleActive = false;
         const mediumId = activeVehicleMedium({
-            deepWater: this.isOverDeepTerrainWater(),
+            // A pool is no water for a canoe: one swims in it.
+            deepWater: this.isOverDeepTerrainWater() && !this.isInPool(),
             airborne: this.airVehicleActive,
         });
         const medium = vehicleMedia.find((entry) => entry.id === mediumId);

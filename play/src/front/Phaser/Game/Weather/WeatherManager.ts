@@ -1,10 +1,15 @@
 import { heightAt, TERRAIN_CELL, WeatherType } from "@workadventure/map-editor";
 import type { PrecipitationAir } from "@workadventure/map-editor";
+import { get } from "svelte/store";
 import type { Unsubscriber } from "svelte/store";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import {
     cloudsHeightStore,
     cloudsShownStore,
+    rainbowShownStore,
+    waterReflectionsStore,
+    rainbowSpotStore,
+    smoothCloudsStore,
     rainAmountStore,
     rainCloudsStore,
     rainLeanStore,
@@ -17,7 +22,9 @@ import type { GameScene } from "../GameScene";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { SeasonalTheme } from "../Seasonal/SeasonalTheme";
 import type { SunPosition } from "../Night/NightClock";
-import { unlessBasic } from "../../../Stores/BasicModeStore";
+import { basicActiveStore, unlessBasic } from "../../../Stores/BasicModeStore";
+import { NO_WATER_REFLECTION } from "../Terrain/WaterReflection";
+import type { WaterReflection } from "../Terrain/WaterReflection";
 import type { RaisedCover } from "./RaisedCover";
 import {
     farFogCells,
@@ -56,6 +63,7 @@ import {
     cloudLightStep,
     cloudPalette,
     cloudPatches,
+    cumulonimbusPalette,
     cloudShadowOffset,
     cloudSunlight,
     cloudTint,
@@ -71,6 +79,9 @@ import {
 import type { CloudPalette } from "./Clouds";
 import { SnowGround } from "./SnowGround";
 import { createBlockSurface } from "./BlockSurface";
+import { CLOUD_LAYER_MARGIN, CloudLayer } from "./CloudLayer";
+import { rainbowPlacement, rainbowStrength } from "./Rainbow";
+import type { CloudSky } from "./CloudLayer";
 import { screenScale, seenFromFar } from "./ScreenScale";
 import type { BlockCanvasArea, BlockSurface } from "./BlockSurface";
 import { WeatherSounds } from "./WeatherSounds";
@@ -161,6 +172,26 @@ export class WeatherManager {
     private readonly blocks: BlockSurface;
     /** Seen from far, the fog over the buildings: over the lights of the lamps, so that they do not pierce it. */
     private readonly farFog: BlockSurface;
+    /** The clouds of a clear sky drawn by the graphics card; undefined without WebGL. */
+    private readonly cloudLayer: CloudLayer | undefined;
+    private smoothClouds = true;
+    /** What the cloud layer draws this time, gathered while the weather is drawn (see drawSkyLayer). */
+    private layerVeils: readonly { color: number; alpha: number }[] = [];
+    private layerClouds: CloudSky | undefined;
+    /** Whether the cloud layer draws what it holds over the roofs too, seen from far: not the fog (paintFarFog). */
+    private layerOverRoofs = true;
+    /** The strength of the rainbow drawn this time (0: none). */
+    private layerRainbow = 0;
+    /** The sky the water reflects, worked out at each drawing of the weather (see waterReflection). */
+    private reflectedSky: Omit<WaterReflection, "lamps"> = {
+        sky: { color: DAY_SKY, share: 0 },
+        clouds: undefined,
+        sun: { x: 0, y: -1, strength: 0 },
+    };
+    /** Basique hides every effect: the rainbow too. */
+    private basic = false;
+    private rainbowShown = true;
+    private reflectionsShown = true;
     private lastFrameAt = -Infinity;
     private visible = false;
     private readonly sounds: WeatherSounds;
@@ -222,6 +253,10 @@ export class WeatherManager {
             mapEditorModeStore.subscribe((editing) => (this.editing = editing)),
             unlessBasic(weatherEffectsEnabledStore).subscribe((shown) => (this.weatherShown = shown)),
             unlessBasic(cloudsShownStore).subscribe((shown) => (this.cloudsShown = shown)),
+            smoothCloudsStore.subscribe((smooth) => (this.smoothClouds = smooth)),
+            basicActiveStore.subscribe((basic) => (this.basic = basic)),
+            rainbowShownStore.subscribe((shown) => (this.rainbowShown = shown)),
+            waterReflectionsStore.subscribe((shown) => (this.reflectionsShown = shown)),
             cloudsHeightStore.subscribe((height) => (this.cloudsHeight = height)),
             rainAmountStore.subscribe((value) => (this.rainSettings.amount = value)),
             rainLeanStore.subscribe((value) => (this.rainSettings.lean = value)),
@@ -237,6 +272,8 @@ export class WeatherManager {
         // Added after the graphics, at the same depth: above them.
         this.blocks = createBlockSurface(scene, DEPTH_NIGHT_INDEX + 1);
         this.farFog = createBlockSurface(scene, DEPTH_FAR_FOG_INDEX);
+        // Added after the blocks, at the same depth: the clouds over the fog and the veils painted there.
+        this.cloudLayer = CloudLayer.create(scene, DEPTH_NIGHT_INDEX + 1);
     }
 
     /** `sun`: where the sun of the map is (NightManager), for the shadows of the clouds and their fading at dusk. */
@@ -273,6 +310,8 @@ export class WeatherManager {
             if (this.visible) {
                 this.graphics.clear().setVisible(false);
                 this.blocks.hide();
+                this.cloudLayer?.hide();
+                this.setRainbowSpot(undefined);
                 this.farFog.hide();
                 this.blockFrame = undefined;
                 this.visible = false;
@@ -292,7 +331,11 @@ export class WeatherManager {
         // A scroll that has used half of the drawn margin draws again at once, whatever the pace.
         const nearEdge = this.drawn !== undefined && !wellInside(this.drawn, screen, DRAW_MARGIN / 2);
         // Clouds cross a screen in about 30 s: 15 images a second for them to glide (rain and storm already draw 30).
-        if (!nearEdge && now - this.lastFrameAt < 1000 / (falling ? 30 : fogOnly ? 5 : 15)) return;
+        // Drawn by the graphics card, they glide by fractions of a pixel: 30 images a second, as the rain.
+        const cloudRate = this.smoothCloudLayer() ? 30 : 15;
+        // A fog in blocks moves by whole blocks: 5 images a second are enough. Drawn by the graphics card, it glides.
+        const fogRate = this.smoothCloudLayer() ? cloudRate : 5;
+        if (!nearEdge && now - this.lastFrameAt < 1000 / (falling ? 30 : fogOnly ? fogRate : cloudRate)) return;
         this.lastFrameAt = now;
         const view = paddedView(screen, DRAW_MARGIN);
         this.drawn = view;
@@ -342,6 +385,8 @@ export class WeatherManager {
             if (this.visible) {
                 this.graphics.clear().setVisible(false);
                 this.blocks.hide();
+                this.cloudLayer?.hide();
+                this.setRainbowSpot(undefined);
                 this.farFog.hide();
                 this.blockFrame = undefined;
                 this.visible = false;
@@ -374,6 +419,13 @@ export class WeatherManager {
             now - kept.at >= 1000 / blocksPerSecond(size) ||
             !wellInside(kept.view, screen, DRAW_MARGIN / 2);
         let canvas: BlockCanvasArea;
+        this.layerVeils = [];
+        this.layerClouds = undefined;
+        this.layerOverRoofs = true;
+        this.layerRainbow =
+            showWeather && !this.basic && this.rainbowShown
+                ? rainbowStrength(raining, storm, sun?.elevation, settings?.cloudCover, snow)
+                : 0;
         let outdoor: Uint8Array;
         if (paint || !kept) {
             canvas = this.blocks.begin(view, size);
@@ -397,17 +449,25 @@ export class WeatherManager {
         }
         if (showWeather && weather === WeatherType.Fog) {
             const density = fogStrengthNow * (night ? FOG_NIGHT_FACTOR : 1);
-            this.fillVeil(canvas, outdoor, veil, FOG_COLOR, FOG_VEIL_ALPHA * density, paint);
+            this.addVeil(canvas, outdoor, veil, FOG_COLOR, FOG_VEIL_ALPHA * density, paint);
+            if (this.smoothCloudLayer()) {
+                // Smooth, as the clouds: its patches thickened by the graphics card, one flat colour, no shadow. Over
+                // the roofs the fog seen from far (paintFarFog) stays, over the lamps.
+                this.layerClouds = this.fogSky(epoch, view, FOG_PATCH_ALPHA * density);
+                this.layerOverRoofs = false;
+            }
             if (paint) {
                 // The patches stop at the walls: only outdoor cells are painted.
                 const levels = fieldLevels(canvas, size, fogPatches(epoch, view, this.reducedMotion));
-                this.blocks.paintField(canvas, levels, outdoor, NO_SHIFT, FOG_COLOR, (level) => {
-                    return ((FOG_PATCH_ALPHA * level) / FOG_LEVELS) * density;
-                });
+                if (!this.smoothCloudLayer()) {
+                    this.blocks.paintField(canvas, levels, outdoor, NO_SHIFT, FOG_COLOR, (level) => {
+                        return ((FOG_PATCH_ALPHA * level) / FOG_LEVELS) * density;
+                    });
+                }
                 this.paintFarFog(view, canvas, size, outdoor, levels, density, grid, avatarRoom);
             }
         } else if (showWeather) {
-            this.fillVeil(canvas, outdoor, veil, 0x27344b, storm ? 0.2 : rainVeilAlpha(rain), paint);
+            this.addVeil(canvas, outdoor, veil, 0x27344b, storm ? 0.2 : rainVeilAlpha(rain), paint);
             // The rain falls from grey clouds, the storm from dark ones (not at night, with the personal switch).
             const covering =
                 weather === WeatherType.Storm ? STORM_CLOUDS : weather === WeatherType.Rain ? RAIN_CLOUDS : undefined;
@@ -422,7 +482,7 @@ export class WeatherManager {
                     const patches = cloudPatches(epoch, view, shownRainCover(cover), this.reducedMotion, sky);
                     const painted = fieldLevels(canvas, size, patches);
                     this.blockFrame.rainLevels = painted;
-                    if (this.cloudsShown) {
+                    if (this.cloudsShown && !this.smoothCloudLayer()) {
                         const body = covering.alpha * this.zoomFade();
                         this.paintCumulus(
                             canvas,
@@ -434,6 +494,18 @@ export class WeatherManager {
                             sunlight.night,
                         );
                     }
+                }
+                if (this.cloudsShown && this.smoothCloudLayer()) {
+                    this.layerClouds = this.cloudSky(
+                        epoch,
+                        view,
+                        sky,
+                        shownRainCover(cover),
+                        cumulonimbusPalette(covering.color),
+                        covering.alpha * this.zoomFade(),
+                        sunlight.night,
+                        undefined,
+                    );
                 }
                 // More rain under the thick of a cloud, less in a gap: the showers cross the map with the clouds
                 // (the clouds as they were last painted).
@@ -475,6 +547,7 @@ export class WeatherManager {
         if (showClouds) {
             const zoom = this.screenScale();
             this.drawClouds(
+                view,
                 epoch,
                 sky,
                 canvas,
@@ -489,6 +562,8 @@ export class WeatherManager {
                 paint,
             );
         }
+        this.drawSkyLayer(view, sky, grid ? veil : undefined, sun);
+        this.reflectedSky = this.skyOverWater(sun, sunlight, cloudiness, raining || storm);
         if (paint) this.blocks.end();
         // Only the fog passes over the buildings seen from far.
         if (paint && !(showWeather && weather === WeatherType.Fog)) this.farFog.hide();
@@ -588,6 +663,7 @@ export class WeatherManager {
      * Gone zoomed in (the camera is under them), their shadows kept. Fixed to the map, they glide with the wind whatever the camera.
      */
     private drawClouds(
+        view: WeatherView,
         epoch: number,
         sky: { x: number; y: number },
         canvas: BlockCanvasArea,
@@ -601,7 +677,21 @@ export class WeatherManager {
         zoom: number,
         paint: boolean,
     ): void {
-        if (veilAlpha > 0) this.fillVeil(canvas, outdoor, veil, OVERCAST_COLOR, veilAlpha, paint);
+        if (veilAlpha > 0) this.addVeil(canvas, outdoor, veil, OVERCAST_COLOR, veilAlpha, paint);
+        if (this.smoothCloudLayer()) {
+            // The clouds of the rain, when it rains, are those the layer draws.
+            this.layerClouds ??= this.cloudSky(
+                epoch,
+                view,
+                sky,
+                shownCloudiness(cloudiness),
+                cloudPalette(cloudiness),
+                CLOUD_ALPHA * cloudZoomFade(zoom, this.cloudsHeight),
+                sunlight.night,
+                shadowOffset && { ...shadowOffset, alpha: CLOUD_SHADOW_ALPHA * sunlight.shadows },
+            );
+            return;
+        }
         if (!paint) return;
         // One field of clouds for the clouds and their shadows (the same clouds, moved by whole cells), wide enough for
         // the shadows of clouds just out of the canvas.
@@ -624,6 +714,144 @@ export class WeatherManager {
             this.blocks.paintField(field, levels, outdoor, shift, 0x000000, (level) => (alpha * level) / FOG_LEVELS);
         }
         this.paintCumulus(field, levels, outdoor, size, cloudPalette(cloudiness), CLOUD_ALPHA * fade, sunlight.night);
+    }
+
+    /** The cloud layer of the graphics card when it is there and chosen; otherwise the clouds go in the blocks. */
+    private smoothCloudLayer(): CloudLayer | undefined {
+        return this.smoothClouds ? this.cloudLayer : undefined;
+    }
+
+    /**
+     * What the water reflects: the sky worked out at the last drawing of the weather and the lamps of the night veil;
+     * nothing with the reflections turned off or in Basique.
+     */
+    public waterReflection(lamps: WaterReflection["lamps"]): WaterReflection {
+        if (!this.reflectionsShown || this.basic) return NO_WATER_REFLECTION;
+        return { ...this.reflectedSky, lamps };
+    }
+
+    /**
+     * The sky over the water: its blue by day (greyer under clouds or rain), nothing at night; the clouds the layer
+     * drew; the glint of the sun on the waves, towards it, stronger when it is high and the sky clear.
+     */
+    private skyOverWater(
+        sun: SunPosition | undefined,
+        sunlight: { night: number; shadows: number },
+        cloudiness: number,
+        raining: boolean,
+    ): Omit<WaterReflection, "lamps"> {
+        const day = 1 - sunlight.night;
+        const grey = Math.min(1, cloudiness + (raining ? 0.6 : 0));
+        const thickness = this.cloudLayer?.reflected();
+        const tones = this.layerClouds?.tones;
+        const toSun = sun ? sun.azimuth * (Math.PI / 180) : 0;
+        return {
+            sky: { color: grey > 0.5 ? GREY_SKY : DAY_SKY, share: 0.1 * day },
+            clouds: thickness && tones ? { ...thickness, color: tones.lit, share: 0.45 * day + 0.15 } : undefined,
+            sun: {
+                x: Math.sin(toSun),
+                y: -Math.cos(toSun),
+                strength: sunlight.shadows * (1 - 0.8 * grey),
+            },
+        };
+    }
+
+    /**
+     * Told only when it changes, against what the store holds (not what this manager last told): a scene made again
+     * destroys its old manager after the new one told its rainbow, and the button by the clock was left without it.
+     */
+    private setRainbowSpot(spot: { x: number; y: number } | undefined): void {
+        const told = get(rainbowSpotStore);
+        if (told?.x === spot?.x && told?.y === spot?.y) return;
+        rainbowSpotStore.set(spot);
+    }
+
+    /** A veil over the outdoors: drawn by the cloud layer when it is there, in the graphics or the blocks otherwise. */
+    private addVeil(
+        canvas: BlockCanvasArea,
+        outdoor: Uint8Array,
+        veil: readonly WeatherView[],
+        color: number,
+        alpha: number,
+        paint: boolean,
+    ): void {
+        if (this.smoothCloudLayer()) {
+            this.layerVeils = [...this.layerVeils, { color, alpha }];
+            return;
+        }
+        this.fillVeil(canvas, outdoor, veil, color, alpha, paint);
+    }
+
+    /** The fog for the cloud layer: its patches over the view and a margin, in one flat colour, `body` thick. */
+    private fogSky(epoch: number, view: WeatherView, body: number): CloudSky {
+        return {
+            patches: fogPatches(epoch, layerArea(view), this.reducedMotion),
+            tones: { lit: FOG_COLOR, mid: FOG_COLOR, shade: FOG_COLOR },
+            body,
+            shadow: undefined,
+        };
+    }
+
+    /** Clouds for the cloud layer: their puffs over the view and a margin, their tones for how night it is. */
+    private cloudSky(
+        epoch: number,
+        view: WeatherView,
+        sky: { x: number; y: number },
+        shownCover: number,
+        palette: CloudPalette,
+        body: number,
+        night: number,
+        shadow: CloudSky["shadow"],
+    ): CloudSky {
+        const tint = (color: number): { color: number; alpha: number } => cloudTint(color, body, night);
+        return {
+            patches: cloudPatches(epoch, layerArea(view), shownCover, this.reducedMotion, sky),
+            tones: { lit: tint(palette.lit).color, mid: tint(palette.mid).color, shade: tint(palette.shade).color },
+            body: tint(palette.mid).alpha,
+            shadow,
+        };
+    }
+
+    /** The clouds and veils gathered for the cloud layer this time; hidden when there is none, or no layer. */
+    private drawSkyLayer(
+        view: WeatherView,
+        sky: { x: number; y: number },
+        outdoors: readonly WeatherView[] | undefined,
+        sun: SunPosition | undefined,
+    ): void {
+        const layer = this.smoothCloudLayer();
+        if (!layer || (!this.layerClouds && this.layerVeils.length === 0 && this.layerRainbow <= 0)) {
+            this.cloudLayer?.hide();
+            this.setRainbowSpot(undefined);
+            return;
+        }
+        const rainbow =
+            this.layerRainbow > 0 && sun
+                ? {
+                      ...rainbowPlacement(
+                          { width: this.scene.Map.widthInPixels, height: this.scene.Map.heightInPixels },
+                          sun,
+                      ),
+                      strength: this.layerRainbow,
+                  }
+                : undefined;
+        // The top of its arc: where the button by the clock takes the avatar.
+        this.setRainbowSpot(
+            rainbow && {
+                x: Math.round(rainbow.x + rainbow.direction.x * rainbow.radius),
+                y: Math.round(rainbow.y + rainbow.direction.y * rainbow.radius),
+            },
+        );
+        layer.draw({
+            view,
+            sky,
+            clouds: this.layerClouds,
+            veils: this.layerVeils,
+            outdoors,
+            overRoofs: this.layerOverRoofs ? (this.roofs?.share ?? 0) : 0,
+            rainbow,
+            still: this.reducedMotion,
+        });
     }
 
     /**
@@ -891,5 +1119,21 @@ export class WeatherManager {
         this.puddleGraphics.destroy();
         this.blocks.destroy();
         this.farFog.destroy();
+        this.cloudLayer?.destroy();
+        this.setRainbowSpot(undefined);
     }
+}
+
+/** The colour of the sky the water reflects: blue by fine weather, grey under a covered or rainy sky. */
+const DAY_SKY = 0x8fb9e6;
+const GREY_SKY = 0x9aa3ad;
+
+/** What the cloud layer covers: the view and CLOUD_LAYER_MARGIN around it. */
+function layerArea(view: WeatherView): WeatherView {
+    return {
+        x: view.x - CLOUD_LAYER_MARGIN,
+        y: view.y - CLOUD_LAYER_MARGIN,
+        width: view.width + 2 * CLOUD_LAYER_MARGIN,
+        height: view.height + 2 * CLOUD_LAYER_MARGIN,
+    };
 }

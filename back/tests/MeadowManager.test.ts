@@ -227,6 +227,7 @@ describe("MeadowManager", () => {
         dry.manager.mapChanged();
         dry.steps(100);
         expect(dry.sent).toEqual([]);
+        expect(dry.manager.snapshot()).toBeUndefined();
         dry.manager.stop();
         // By night nothing grows: once the soil is wet through, the state stops changing.
         const night = createHarness({ now: Date.UTC(2026, 6, 14, 1) });
@@ -396,6 +397,60 @@ describe("MeadowManager", () => {
         const after = grassOf(second.sent[0]);
         expect(after[0]).toBeGreaterThan(0);
         expect(Math.abs(after[0] - before[0])).toBeLessThanOrEqual(2);
+        second.manager.stop();
+    });
+
+    it("gives the meadow it restored to the first player, before its first step", async () => {
+        const first = createHarness();
+        first.manager.mapChanged();
+        first.steps(400);
+        first.manager.stop();
+        const before = grassOf(first.sent[first.sent.length - 1]);
+        const second = createHarness({ saved: first.store });
+        await second.manager.restore();
+        second.manager.mapChanged();
+        const snapshot = second.manager.snapshot();
+        expect(second.sent).toEqual([]);
+        expect(snapshot && grassOf(snapshot)).toEqual(before);
+        second.manager.stop();
+    });
+
+    it("lives the time the room was empty when it opens again, a slice at each step", async () => {
+        const first = createHarness();
+        first.manager.mapChanged();
+        first.steps(30);
+        first.manager.stop();
+        expect(Number(first.store.at)).toBe(Date.UTC(2026, 6, 14, 10));
+        const before = new Uint8Array(gunzipSync(Buffer.from(first.store.grass, "base64")));
+        // A day later, by the same summer rain: the meadow lives that day before the step of now.
+        const second = createHarness({ saved: first.store, now: Date.UTC(2026, 6, 15, 10) });
+        // The water of the relief lives the same day along with it, told when the meadow caught up.
+        const along: { seconds: number; last: boolean }[] = [];
+        second.manager.liveAlong((seconds, _rain, last) => along.push({ seconds, last }));
+        await second.manager.restore();
+        second.manager.mapChanged();
+        expect(second.manager.catchingUp()).toBe(true);
+        second.steps(12);
+        expect(second.manager.catchingUp()).toBe(false);
+        expect(along.reduce((total, slice) => total + slice.seconds, 0)).toBeCloseTo(24 * 3600, 0);
+        expect(along.filter((slice) => slice.last)).toHaveLength(1);
+        expect(along.at(-1)?.last).toBe(true);
+        const snapshot = second.manager.snapshot();
+        const sum = (cells: Uint8Array): number => cells.reduce((total, cell) => total + cell, 0);
+        expect(snapshot && sum(grassOf(snapshot))).toBeGreaterThan(sum(before));
+        second.manager.stop();
+    });
+
+    it("does not catch up a meadow saved without its time", async () => {
+        const first = createHarness();
+        first.manager.mapChanged();
+        first.steps(30);
+        first.manager.stop();
+        const withoutTime = Object.fromEntries(Object.entries(first.store).filter(([field]) => field !== "at"));
+        const second = createHarness({ saved: withoutTime, now: Date.UTC(2026, 6, 15, 10) });
+        await second.manager.restore();
+        second.manager.mapChanged();
+        expect(second.manager.catchingUp()).toBe(false);
         second.manager.stop();
     });
 
