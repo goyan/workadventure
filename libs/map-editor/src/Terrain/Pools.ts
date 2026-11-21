@@ -52,6 +52,8 @@ export function validPoolStyles(sent: readonly unknown[]): PoolStyle[] {
 
 /** A pool emptied is full again in this many seconds, whatever its size: its pump goes by its volume. */
 export const POOL_FILL_SECONDS = 8;
+/** After a meteor fell in the water of the map, the pumps of its pools take this many seconds to start again. */
+export const POOL_PUMP_RESTART_SECONDS = 3;
 /** The pump fills a pool up to this many pixels under its rim: its water does not lap over the coping. */
 export const POOL_FREEBOARD_PX = 2;
 /** The overflow of a pool leaves this many pixels over its level before it takes water: a ripple is not a flood. */

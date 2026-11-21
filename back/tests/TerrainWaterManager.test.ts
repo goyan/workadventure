@@ -779,6 +779,21 @@ describe("the pools of the map in the water of the relief", () => {
         manager.stop();
     });
 
+    it("leaves a pool a meteor emptied empty for a moment: its pump takes three seconds to start again", () => {
+        const { manager, steps } = createHarness({ wam: pooled(), mapSize: () => ({ width: 60, height: 60 }) });
+        manager.mapChanged();
+        steps(120);
+        const grid = manager.getGrid();
+        manager.vaporise(23 * 16, 22 * 16, 4);
+        // Two seconds later it is still empty; then it fills as fast as before.
+        steps(20);
+        expect(grid?.depthAt(22, 22)).toBeLessThan(1);
+        steps(10 + 40);
+        expect(grid?.depthAt(22, 22)).toBeGreaterThan(full * 0.35);
+        expect(grid?.depthAt(22, 22)).toBeLessThan(full * 0.65);
+        manager.stop();
+    });
+
     it("fills a pool again after it was emptied", () => {
         const { manager, steps } = createHarness({ wam: pooled(), mapSize: () => ({ width: 60, height: 60 }) });
         manager.mapChanged();

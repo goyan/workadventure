@@ -364,7 +364,9 @@ vec4 poolColor(vec2 world, float t) {
     // have been emptied); a pool placed as an image is always full.
     float held = pack(2.0, world).b * ${WATER_SCALE_PX}.0;
     float fill = kept.g > 0.5 ? 1.0 : clamp(held / max(1.0, min(depthPx, ${WATER_SCALE_PX}.0) - 4.0), 0.0, 1.0);
-    float wetness = smoothstep(0.0, 0.2, fill);
+    // Wet as soon as a film of water lies on its floor; how much of the colour of deep water it takes follows its
+    // level, so a pool half emptied looks half empty: its tiles show through a thin, pale water.
+    float wetness = smoothstep(0.0, 0.06, fill);
     if (frozen && fill > 0.05) {
         vec3 ice = texture2D(uIceTexture, fract(world / uIceSize)).rgb;
         return vec4(snowOnIce(ice * mix(vec3(1.0), water, 0.15), world), 1.0);
@@ -375,7 +377,8 @@ vec4 poolColor(vec2 world, float t) {
     vec3 floorColor = mix(vec3(0.9, 0.95, 0.96), vec3(0.72, 0.82, 0.86), grout);
     // Emptied, the dry tiles of its floor show, darker towards its walls; the water comes back over them as it fills.
     vec3 dry = floorColor * 0.86;
-    vec3 c = mix(floorColor * (water * 0.6 + 0.4), water * 0.55, 0.3 + 0.55 * deep * fill);
+    vec3 seen = floorColor * mix(vec3(1.0), water * 0.6 + 0.4, 0.35 + 0.65 * fill);
+    vec3 c = mix(seen, water * 0.55, (0.3 + 0.55 * deep) * fill);
     c = mix(dry, c, wetness);
     // The walls shade the water along them.
     c *= mix(0.82, 1.0, poolAround(world, 12.0));

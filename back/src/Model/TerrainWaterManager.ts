@@ -18,6 +18,7 @@ import {
     liquidRainRate,
     POOL_FILL_SECONDS,
     POOL_OVERFLOW_SLACK_PX,
+    POOL_PUMP_RESTART_SECONDS,
     poolBasins,
     poolCells,
     PX_PER_MM,
@@ -112,6 +113,8 @@ export class TerrainWaterManager {
     private downpours: () => readonly Downpour[] = () => [];
     /** The cells of the pools of the map, with the depth of their basin: what the pumps fill at each step. */
     private pools: readonly PoolCell[] = [];
+    /** The step from which the pumps of the pools run again: a meteor that fell in the water stops them a moment. */
+    private pumpsFromStep = 0;
     /** The doors of the ground of the map: closed, they hold the water; open, they let it through. */
     private doors: WaterDoor[] = [];
     /** For each door, the step until which it is open: an avatar stood in its passage a moment ago. */
@@ -313,6 +316,7 @@ export class TerrainWaterManager {
             const missing = fullPx - grid.depthAt(cellX, cellY);
             const pumped = (depthPx * WATER_STEP_MS) / 1000 / POOL_FILL_SECONDS;
             if (missing > 0) {
+                if (this.steps < this.pumpsFromStep) continue;
                 laid += grid.rainOn(cellX, cellY, 0, Math.min(missing, pumped));
             } else if (missing < -POOL_OVERFLOW_SLACK_PX) {
                 const px = Math.min(-missing, pumped);
@@ -472,6 +476,7 @@ export class TerrainWaterManager {
         const shape = meteorShape(radiusTiles);
         const cellX = Math.floor(x / TERRAIN_CELL);
         const cellY = Math.floor(y / TERRAIN_CELL);
+        this.stopPumps();
         if (this.room.getWam()?.settings?.water?.inertia === true) {
             // A water with inertia makes its own wave: the impact only throws the water of the crater around it.
             const struck = strikeWater(grid, cellX, cellY, shape);
@@ -508,11 +513,18 @@ export class TerrainWaterManager {
             meteorShape(radiusTiles).discCells,
         );
         if (!taken || taken.takenPx <= 0) return;
+        this.stopPumps();
         this.sums.lostPx += taken.takenPx;
         this.moving = true;
         this.version++;
         this.changedSinceSave = true;
         this.tell(grid);
+    }
+
+    /** A meteor fell in the water: the pumps of the pools start again a moment later, so an emptied pool is seen empty. */
+    private stopPumps(): void {
+        if (this.pools.length === 0) return;
+        this.pumpsFromStep = this.steps + (POOL_PUMP_RESTART_SECONDS * 1000) / WATER_STEP_MS;
     }
 
     /** The grid of the water, for what lives in it. Undefined on a map without water. */
