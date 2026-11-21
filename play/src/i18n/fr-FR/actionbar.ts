@@ -309,6 +309,8 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
             humidityValue: "{value} %",
             wind: "Vent",
             windValue: "{value} km/h",
+            less: "{label} : un cran de moins",
+            more: "{label} : un cran de plus",
             windFrom: "Vent de",
             clouds: "Afficher les nuages et leurs ombres (pour moi)",
             thresholds: "Le feu prend au-delà de",

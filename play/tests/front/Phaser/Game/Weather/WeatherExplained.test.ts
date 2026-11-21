@@ -561,3 +561,56 @@ describe("explainWeather: never another value than the game's", () => {
         expect(iceOf(undefined)).toBe(0);
     });
 });
+
+describe("the weather explained at the extremes of the conditions", () => {
+    /** Every number of the board, wherever it is: none may be NaN nor infinite. */
+    const numbers = (value: unknown): number[] => {
+        if (typeof value === "number") return [value];
+        if (value === null || typeof value !== "object") return [];
+        return Object.values(value).flatMap(numbers);
+    };
+    const at = (temperature: number, humidity: number, windSpeed: number): WeatherBoardInput => {
+        const air = { temperature, humidity, windSpeed };
+        return input({
+            mapAir: { ...air, byHand: true, place: "Paris" },
+            precipitationAir: air,
+            roomAir: air,
+            frostAir: air,
+            mapFrostAir: air,
+            falling: true,
+            roomWind: windSpeed,
+            snow: { map: 1, here: 1 },
+        });
+    };
+
+    it("tells only numbers, from -80 to +80 °C, with any humidity and a wind up to 250 km/h", () => {
+        for (const temperature of [-80, -60, -40, 0, 40, 60, 80]) {
+            for (const humidity of [0, 5, 50, 100]) {
+                for (const windSpeed of [0, 100, 180, 250]) {
+                    for (const value of numbers(explainWeather(at(temperature, humidity, windSpeed)))) {
+                        expect(Number.isFinite(value)).toBe(true);
+                    }
+                }
+            }
+        }
+    });
+
+    it("is snow, frozen water and a frozen soil at -80 °C; rain, open water and a thawed soil at +80 °C", () => {
+        const cold = explainWeather(at(-80, 50, 10));
+        expect(cold.precipitation.form).toBe("snow");
+        expect(cold.soil.reason).toBe("frozen");
+        expect(cold.precipitation.wetBulb).toBeCloseTo(-80, 0);
+        const hot = explainWeather(at(80, 5, 250));
+        expect(hot.precipitation.form).toBe("rain");
+        expect(hot.frost.level).toBe("none");
+        expect(hot.soil.reason).toBe("thawed");
+        expect(hot.snow.trend).toBe("melting");
+    });
+
+    it("finds the cold under which an air of +40 °C would snow, even far under zero", () => {
+        const hot = explainWeather(at(40, 5, 0));
+        const snowUnder = hot.precipitation.form === "rain" ? hot.precipitation.snowUnder : undefined;
+        expect(snowUnder).toBeDefined();
+        expect(snowShare((snowUnder ?? 0) - 0.01, 5)).toBeGreaterThan(0);
+    });
+});

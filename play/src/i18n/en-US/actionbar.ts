@@ -305,6 +305,8 @@ const actionbar = {
             humidityValue: "{value} %",
             wind: "Wind",
             windValue: "{value} km/h",
+            less: "{label}: one step less",
+            more: "{label}: one step more",
             windFrom: "Wind from",
             clouds: "Show the clouds and their shadows (for me)",
             thresholds: "Fire takes beyond",
