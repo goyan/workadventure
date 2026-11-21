@@ -126,6 +126,9 @@ export type PathFollowResult = {
     blocked?: boolean;
 };
 
+/** From this snow cover (0 to 1) on frozen water, one walks on it rather than skates. */
+const SNOW_WALKED_ON = 0.5;
+
 export abstract class Character extends Container implements OutlineableInterface, Movable {
     private readonly movedSubject = new Subject<PositionInterface>();
     public readonly moved$ = this.movedSubject.asObservable();
@@ -516,11 +519,13 @@ export abstract class Character extends Container implements OutlineableInterfac
         // The ice is on the ground too.
         if (!this.scene || this.floorZ > 0) return false;
         const body = { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y };
-        // A rink of the map, or the water of the relief frozen by the cold.
+        // A rink of the map, or the water of the relief frozen by the cold: under a snow that covers it, the frozen
+        // water is walked on, leaving footprints, not skated on.
         return (
             (isOnIce(getIceRectangles(this.scene), body) ||
                 isPointInWater(getFrozenPoolRectangles(this.scene), body) ||
-                this.scene.isFrozenWaterAt?.(body.x, body.y) === true) &&
+                (this.scene.isFrozenWaterAt?.(body.x, body.y) === true &&
+                    (this.scene.getSnowCoverAt?.(body.x, body.y) ?? 0) < SNOW_WALKED_ON)) &&
             !this.isSwimmingHere()
         );
     }

@@ -3,13 +3,14 @@ import { FootprintTrail } from "@wa/front/Phaser/Game/Christmas/FootprintTrail";
 import type { WalkerSample } from "@wa/front/Phaser/Game/Christmas/FootprintTrail";
 
 /** The dark ground showing through the frost where a foot pressed it. */
-const FROST_PRINT_COLOR = "#5f6a63";
+export const FROST_PRINT_COLOR = "#5f6a63";
 /** Fading prints only need a redraw now and then. */
 const FADE_REDRAW_MS = 100;
 
 /**
- * The footprints left on the frosted ground (Weather/Frost.ts), for this player only: outdoors, never on water, and as
- * strong as the frost. In the snow the snow decor leaves its own.
+ * The footprints left on the frosted or snowy ground (Weather/Frost.ts, the snow of the meadow or of the player's own
+ * city), for this player only: where `takes` says (outdoors, never on open water), and as strong as the frost or the
+ * snow. In the colour of the ground through the frost, or of the default footprints in the snow.
  */
 export class FrostPrints {
     private readonly layer: FootprintLayer;
@@ -17,13 +18,9 @@ export class FrostPrints {
     private lastFadeRedraw = Number.NEGATIVE_INFINITY;
     private alpha = Number.NaN;
 
-    constructor(
-        scene: Phaser.Scene,
-        isOutdoor: (x: number, y: number) => boolean,
-        isWet: (x: number, y: number) => boolean,
-    ) {
-        this.layer = new FootprintLayer(scene, FROST_PRINT_COLOR);
-        this.trail = new FootprintTrail((x, y) => isOutdoor(x, y) && !isWet(x, y));
+    constructor(scene: Phaser.Scene, takes: (x: number, y: number) => boolean, color?: string) {
+        this.layer = new FootprintLayer(scene, color);
+        this.trail = new FootprintTrail(takes);
     }
 
     /** Whether the scene must be drawn again. */

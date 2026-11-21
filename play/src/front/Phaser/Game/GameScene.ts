@@ -2152,26 +2152,25 @@ export class GameScene extends DirtyScene {
         return feet;
     }
 
-    /** Feet of the players who leave footprints: everyone but the riders and the skaters. */
+    /**
+     * Feet of the players who leave footprints, and the wheels of those who ride on the ground: one track for an
+     * electric unicycle, two for a skateboard. Nothing from a skater on the ice, a canoe or a plane.
+     */
     private seasonalWalkers(): WalkerSample[] {
         const walkers: WalkerSample[] = [];
-        if (takesSteps(this.CurrentPlayer)) {
+        const sample = (id: string, character: Character & { isRunning(): boolean }): void => {
+            const wheels = groundWheelsOf(character);
+            if (wheels === undefined && !takesSteps(character)) return;
             walkers.push({
-                id: "local",
-                x: this.CurrentPlayer.x,
-                y: this.CurrentPlayer.y + CHARACTER_BODY_OFFSET_Y,
-                running: this.CurrentPlayer.isRunning(),
+                id,
+                x: character.x,
+                y: character.y + CHARACTER_BODY_OFFSET_Y,
+                running: character.isRunning(),
+                ...(wheels !== undefined && { wheels }),
             });
-        }
-        for (const player of this.MapPlayersByKey.values()) {
-            if (!takesSteps(player)) continue;
-            walkers.push({
-                id: String(player.userId),
-                x: player.x,
-                y: player.y + CHARACTER_BODY_OFFSET_Y,
-                running: player.isRunning(),
-            });
-        }
+        };
+        sample("local", this.CurrentPlayer);
+        for (const player of this.MapPlayersByKey.values()) sample(String(player.userId), player);
         return walkers;
     }
 
@@ -4203,9 +4202,12 @@ export class GameScene extends DirtyScene {
                             ),
                         };
                     },
-                    isWet: (x, y) => isGroundUnderWater(this, this.terrainWater, x, y),
+                    // Frozen water takes the leaves and the footprints as the ground does.
+                    isWet: (x, y) => isGroundUnderWater(this, this.terrainWater, x, y) && !this.isFrozenWaterAt(x, y),
                     waterVersion: () => this.terrainWater.version(),
                     frost: () => waterCycleNow(this.getGameMap().getWamFile()?.getWam().settings).frost,
+                    snowCover: () => this.getMapSnowCoverage(),
+                    snowAt: (x, y) => this.getSnowCoverAt(x, y),
                 });
                 // Same: one event subscription and one timer at a time.
                 this._knockManager?.destroy();
@@ -7129,4 +7131,12 @@ ${escapedMessage}
     public get focusFx() {
         return this._focusFx;
     }
+}
+
+/** The tracks the wheels of a rider on the ground leave: undefined for one who walks, skates or rides no wheels. */
+function groundWheelsOf(character: Character): 1 | 2 | undefined {
+    if (!character.isRidingVehicle() || character.isOnIce()) return undefined;
+    if (character.vehicle === Vehicle.ElectricUnicycle) return 1;
+    if (character.vehicle === Vehicle.Skateboard) return 2;
+    return undefined;
 }
