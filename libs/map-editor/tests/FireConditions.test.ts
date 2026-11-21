@@ -64,6 +64,11 @@ describe("the bounds of the conditions", () => {
         expect(boundedFireConditions({ windFrom: -90 }, NEUTRAL_FIRE_CONDITIONS).windFrom).toBe(270);
     });
 
+    it("lets the cold go down to -30 °C, to freeze a lake", () => {
+        expect(boundedFireConditions({ temperature: -25 }, NEUTRAL_FIRE_CONDITIONS).temperature).toBe(-25);
+        expect(boundedFireConditions({ temperature: -40 }, NEUTRAL_FIRE_CONDITIONS).temperature).toBe(-30);
+    });
+
     it("keeps the thresholds within theirs", () => {
         expect(
             boundedFireThresholds({ temperature: -40, humidity: 0, windSpeed: 9999 }, DEFAULT_FIRE_THRESHOLDS),
