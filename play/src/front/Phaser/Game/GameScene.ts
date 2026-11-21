@@ -3913,6 +3913,11 @@ export class GameScene extends DirtyScene {
                     },
                     seasonalTheme: () => this.getSeasonalTheme(),
                     snowShare: () => this.getSnowShare(),
+                    precipitationAir: () =>
+                        precipitationAirNow(
+                            this.getGameMap().getWamFile()?.getWam().settings,
+                            this.nightManager?.serverDate(),
+                        ),
                 });
                 // The relief of the ground and the water of its hollows.
                 this.terrainView?.destroy();

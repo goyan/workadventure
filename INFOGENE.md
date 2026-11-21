@@ -3202,13 +3202,34 @@ couverture de neige au sol et les arbres qui blanchissent décrit l'état d'avan
   restent douces hors météo Réelle : elles ne servent plus à la forme de la pluie. Un éditeur qui essaie une météo ou
   un lieu dans le panneau des réglages voit, pour lui seul et le temps de l'essai, la météo de la carte essayée et la
   forme que donne l'air du lieu essayé, même s'il suit une ville.
-- **Rendu.** Quand il pleut, la part de neige devient des flocons (`snowflakes`, les mêmes que l'ancienne neige,
-  d'autant plus nombreux que la précipitation est forte : `snowfall`), le reste des gouttes : pluie et flocons mêlés
-  dans le mélange. Les flocons sont emportés par le vent de la carte. Le voile sombre et les nuages gris de la pluie
-  restent. Son : une chute à moitié neigeuse ou plus a l'ambiance feutrée de la neige, sinon la pluie, moins forte à
+- **Rendu.** Quand il pleut, la part de neige devient des flocons, le reste des gouttes : pluie et flocons mêlés
+  dans le mélange. Depuis le 2026-11-21 les flocons sont dérivés de l'air (`Weather/Snowfall.ts`, voir « Flocons
+  dérivés de l'air » ci-dessous). Le voile sombre et les nuages gris de la pluie restent. Son : une chute à moitié neigeuse ou plus a l'ambiance feutrée de la neige, sinon la pluie, moins forte à
   proportion. Bandeau : une pluie dont au moins la moitié tombe en neige est nommée « Neige », d'après la température
   et l'humidité réelles prévues au lieu pour chaque quart d'heure (maintenant, +1 h, +4 h), ou d'après les conditions
   réglées à la main pour « maintenant ».
+- **Flocons dérivés de l'air** (`Weather/Snowfall.ts`, même chemin pour la météo de la carte et la météo
+  personnelle). Remplace les carrés blancs de 2 px qui rebouclaient dans des cellules de 64 px.
+  - **Quantité** : selon le taux d'eau de la part neige (`rainRate × snowShare`, mm/h) : faible sous 1 mm/h, forte à
+    partir de 2,5 mm/h (≈ 1 cm de neige fraîche par mm d'eau) ; courbe `snowLevel` (choix) ; taux inconnu : neige
+    modérée, orage : forte. Le réglage personnel « quantité » de la pluie s'applique.
+  - **Sortes de flocons** à vitesse et taille fixes (Locatelli et Hobbs 1974, J. Geophys. Res. 79, tableau 1) : gros
+    agrégats de 8 mm (V = 0,8 D^0,16 ≈ 1,1 m/s), moyens de 3 mm (≈ 0,95 m/s), cristaux fins de 1 mm (V = 0,69 D^0,41
+    ≈ 0,7 m/s) ; la pluie tombe à 5-9 m/s. La température du thermomètre mouillé choisit le mélange (`flakeMix`) :
+    gros flocons collants près de 0 °C, second maximum des dendrites vers -12 °C (Hobbs, Chang et Locatelli 1974),
+    cristaux fins sous -20 °C ; parts intermédiaires choisies. À eau égale, les cristaux fins sont plus nombreux
+    (N = R / (M V), montré en racine quatrième : choix).
+  - **Chute** : chaque flocon suit le repère de l'air, porté par le vent réel près du sol (profil logarithmique,
+    ≈ 0,8 du vent à 10 m) dans ses deux composantes, comme les nuages (un vent du sud fait remonter la neige à
+    l'écran ; la pluie, elle, ne penche qu'est-ouest), et tombe 9 à 15 s, puis se pose 0,8 s sans éclaboussure. Deux
+    plans (lointain plus petit et plus lent, proche plus gros et plus rapide), balancement propre à chaque flocon.
+    32 px ≈ 1,1 m : 1 m/s ≈ 29 px/s ; 13 km/h dérive ≈ 84 px/s, plus vite que la chute. Champ fixé à la carte.
+  - **Dessin** : pixel art de 1 à 5 px, éclairé en haut à gauche, un pixel d'ombre en bas à droite (lisible sur la
+    neige au sol, où les cristaux fins restent presque invisibles, comme en vrai) ; de nuit gris bleuté et un peu plus
+    pâle (`snowTones`, choix), les lampes ne les éclairent pas. Mouvement réduit : flocons immobiles. Sous abri : rien.
+    L'averse de la catastrophe dessine ses flocons de la même forme (`drawFlake`, taille 3).
+  - **Coût** : calcul ≈ 0,8 ms par image pour une forte neige près de 0 °C (≈ 900 flocons), ≈ 1,3 ms au pire (≈ 2 200
+    cristaux), contre ≈ 1,1 ms pour les gouttes d'une forte pluie (mesure Node, hors dessin Phaser).
 - **Sol et arbres.** La neige qui tombe tient au sol depuis le lot « Neige au sol » (section suivante) : le sol
   blanchit case par case et les arbres avec la couverture moyenne de la carte. Le décor de neige uni (`Christmas/` :
   sol uni, calottes, empreintes) reste débranché. Le givre et le gel de #392 sont inchangés. La neige des hauteurs du relief (`Terrain/SnowLine.ts`)
