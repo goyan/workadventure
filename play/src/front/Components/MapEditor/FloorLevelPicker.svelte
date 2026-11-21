@@ -8,7 +8,7 @@
         mapLayerLevelsStore,
         mapLayerPickLevelStore,
     } from "../../Stores/MapLayerStore";
-    import { stepLevel, steppableLevels } from "../../Phaser/Game/MapEditor/MapLayer/FloorOperations";
+    import { steppableLevels } from "../../Phaser/Game/MapEditor/MapLayer/FloorOperations";
     import { floorLevelTiles } from "../../Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
     import { IconChevronDown, IconChevronUp, IconColorPicker } from "@wa-icons";
 
@@ -28,7 +28,7 @@
     // The level the map editor works on, the same for the map tool and the objects: "auto" follows the floor drawn
     // under the pointer, a number is that level (0: the ground), whatever is drawn there.
     let choice = $derived<"auto" | number>(objectLevel ?? $mapEditorPlacementLevelStore);
-    // In "auto", the level last found under the pointer: where the stepping buttons start from.
+    // In "auto", the level last found under the pointer: where the arrows start from.
     let current = $derived(choice === "auto" ? $mapLayerLevelStore : choice);
     // Every level one can build on: the ground, the levels offered (with or without slabs: the one of a bridge is
     // chosen before its deck is laid), the floors that have slabs, and the level chosen when it is none of them.
@@ -61,22 +61,18 @@
         mapEditorPlacementLevelStore.set(level);
     }
 
-    /** One level up or down: any level, one per tile of wall, with or without slabs. */
-    function stepByLevel(delta: 1 | -1): void {
-        choose(stepLevel(steppableLevels($mapLayerLevelsStore), current, delta));
-    }
+    // Where the arrows go: the levels of the list and, above the walls of 2 tiles, one level per tile of wall, so that
+    // a floor or a bridge can be started where nothing is built yet.
+    let steps = $derived([...new Set([...chips, ...steppableLevels($mapLayerLevelsStore)])].sort((a, b) => a - b));
 
-    /** To the next level of the list, up or down, with or without slabs; the ground under the lowest one. */
+    /** To the next level up or down, with or without slabs; the ground under the lowest one. */
     function stepByFloor(delta: 1 | -1): void {
         const next =
             delta === 1
-                ? (chips.find((level) => level > current) ?? current)
-                : ([...chips].reverse().find((level) => level < current) ?? 0);
+                ? (steps.find((level) => level > current) ?? current)
+                : ([...steps].reverse().find((level) => level < current) ?? 0);
         choose(next);
     }
-
-    const chipClass = (selected: boolean): string =>
-        `px-2 py-1 rounded text-xs ${selected ? "bg-secondary" : "bg-white/10 hover:bg-white/20"}`;
 </script>
 
 <section class="level-bar flex shrink-0 flex-col gap-2 text-white" data-testid="floorLevelPicker">
@@ -112,7 +108,7 @@
             type="button"
             class="build-slot sm"
             aria-label={$LL.mapEditor.mapLayer.floorLevel.floorUp()}
-            disabled={!chips.some((level) => level > current)}
+            disabled={!steps.some((level) => level > current)}
             data-testid="floorUp"
             onclick={() => stepByFloor(1)}
         >
@@ -132,27 +128,6 @@
             </button>
         {/if}
     </div>
-    <details class="text-xs">
-        <summary class="cursor-pointer opacity-60 hover:opacity-100">
-            {$LL.mapEditor.mapLayer.floorLevel.adjust()}
-        </summary>
-        <div class="mt-2 flex items-center gap-2">
-            <button
-                type="button"
-                class={chipClass(false)}
-                title={$LL.mapEditor.mapLayer.floorLevel.levelStepHint()}
-                data-testid="floorLevelDown"
-                onclick={() => stepByLevel(-1)}>{$LL.mapEditor.mapLayer.floorLevel.levelDown()}</button
-            >
-            <button
-                type="button"
-                class={chipClass(false)}
-                title={$LL.mapEditor.mapLayer.floorLevel.levelStepHint()}
-                data-testid="floorLevelUp"
-                onclick={() => stepByLevel(1)}>{$LL.mapEditor.mapLayer.floorLevel.levelUp()}</button
-            >
-        </div>
-    </details>
     {#if $mapLayerPickLevelStore && !forObject}
         <p class="m-0 text-xs opacity-80">{$LL.mapEditor.mapLayer.floorLevel.pickArmed()}</p>
     {/if}
