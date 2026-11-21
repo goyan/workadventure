@@ -311,7 +311,7 @@ import { jungleEnabledStore } from "../../Stores/JungleStore";
 import { isEffectShown } from "../../Stores/EffectsStore";
 import { fireConditionsStore } from "../../Stores/FireConditionsStore";
 import { isBasicActive } from "../../Stores/BasicModeStore";
-import { waterFlowOverlayStore } from "../../Stores/VisualisationStore";
+import { waterFlowMeasuredStore, waterFlowOverlayStore } from "../../Stores/VisualisationStore";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -3021,7 +3021,8 @@ export class GameScene extends DirtyScene {
         this.terrainWaterQueue = this.terrainWaterQueue
             .then(async () => {
                 const depths = await gunzip(message.depths);
-                this.terrainWater.receive({ ...message, depths }, this.time.now);
+                const speeds = message.speeds ? await gunzip(message.speeds) : undefined;
+                this.terrainWater.receive({ ...message, depths, speeds }, this.time.now);
                 if (message.stats) terrainWaterStatsStore.set(message.stats);
             })
             .catch((error: unknown) => console.warn("A state of the water of the relief could not be read", error));
@@ -3910,6 +3911,9 @@ export class GameScene extends DirtyScene {
                     waves: () => this.getGameMap().getWamFile()?.getWam().settings?.water?.waves,
                     pace: () => this.getGameMap().getWamFile()?.getWam().settings?.water?.flowPace,
                     shown: () => get(waterFlowOverlayStore) && !isBasicActive(),
+                    measured: (measured) => {
+                        if (get(waterFlowMeasuredStore) !== measured) waterFlowMeasuredStore.set(measured);
+                    },
                 });
                 // The fish and the dolphins of that water.
                 this.aquaticLifeView?.destroy();

@@ -94,6 +94,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         totals: "Sur toute la carte : {stock} m³ d'eau, {area} m² sous l'eau",
         noWater: "Le serveur n'a encore rien dit de l'eau de cette carte.",
         estimated: "Vitesses estimées d'après la pente de la surface de l'eau.",
+        measured: "Vitesses calculées par le serveur (eau à inertie).",
         weather: {
             button: "Météo expliquée",
             title: "Pourquoi ce temps ?",

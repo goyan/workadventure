@@ -1089,6 +1089,9 @@ message TerrainWaterMessage {
   // Two bytes a cell (eighths of a pixel of water, low byte first), row by row, gzipped.
   bytes depths = 7;
   optional TerrainWaterStatsMessage stats = 8;
+  // The speed of the water, on a map whose water has inertia: two signed bytes a block of 4 x 4 cells (towards
+  // the east, towards the south, in quarters of a cell a second), row by row, gzipped. Absent: none is known.
+  optional bytes speeds = 9;
 }
 
 // The animals living in the water of the relief of a room (fish, dolphins), told by the server once a second: all

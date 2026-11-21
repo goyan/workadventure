@@ -376,6 +376,24 @@ describe("TerrainWaterManager", () => {
         expect(sent).toHaveLength(told);
     });
 
+    it("tells the room how fast the water runs on a map whose water has inertia, and nothing of it otherwise", () => {
+        const told = (inertia: boolean): TerrainWaterMessage => {
+            const wam = wamWith(wideLake);
+            if (wam.settings?.water) wam.settings.water.inertia = inertia;
+            wam.entities.spring = sourceAt(15, 15, 600000);
+            const { manager, sent, steps } = createHarness({ wam });
+            manager.mapChanged();
+            steps(20);
+            return sent[sent.length - 1];
+        };
+        expect(told(false).speeds).toBeUndefined();
+        const message = told(true);
+        const speeds = new Uint8Array(gunzipSync(message.speeds ?? new Uint8Array()));
+        // Two bytes a block of 4 cells a side over the whole grid, some of them moving.
+        expect(speeds).toHaveLength(Math.ceil(message.width / 4) * Math.ceil(message.height / 4) * 2);
+        expect(speeds.some((byte) => byte !== 0)).toBe(true);
+    });
+
     it("tells the room as often as the map asks while the water moves", () => {
         const count = (updates?: number): number => {
             const wam = wamWith(wideLake);
