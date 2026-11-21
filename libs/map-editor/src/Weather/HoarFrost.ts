@@ -27,12 +27,21 @@
  * give it: the vapour of the air is found over water, then compared with the saturation over ice of the surface.
  */
 
-/** Saturation vapour pressure over liquid water, hPa, at `celsius` (WMO-No. 8, Annex 4.B; -45 to 60 °C). */
+/**
+ * Saturation vapour pressure over liquid water, hPa, at `celsius` (WMO-No. 8, Annex 4.B; -45 to 60 °C). Read from -80
+ * to +80 °C too, the bounds of the conditions of a room: it stays within 2.5 % of the vapour pressure of supercooled
+ * water of D. M. Murphy and T. Koop (Q. J. R. Meteorol. Soc. 131, 2005), valid from -150 °C, and within 1.5 % of the
+ * steam tables at 80 °C (see the tests "at the extremes"): kept as it is rather than held at its range, which would make
+ * the vapour of an air at -80 °C a hundred times too much.
+ */
 export function waterSaturationPressure(celsius: number): number {
     return 6.112 * Math.exp((17.62 * celsius) / (243.12 + celsius));
 }
 
-/** Saturation vapour pressure over ice, hPa, at `celsius` (WMO-No. 8, Annex 4.B; -65 to 0 °C). */
+/**
+ * Saturation vapour pressure over ice, hPa, at `celsius` (WMO-No. 8, Annex 4.B; -65 to 0 °C). Read down to -80 °C, it
+ * stays within 1 % of the vapour pressure of ice of Murphy and Koop (2005), valid from -163 °C.
+ */
 export function iceSaturationPressure(celsius: number): number {
     return 6.112 * Math.exp((22.46 * celsius) / (272.62 + celsius));
 }
