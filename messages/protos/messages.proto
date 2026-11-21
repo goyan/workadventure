@@ -922,6 +922,8 @@ message LaunchCatastropheMessage {
   int32 radiusTiles = 4;
   // A downpour: it falls on the whole map instead of a disc.
   bool wholeMap = 5;
+  // A ball: its player lets it go. It is gone at once.
+  bool release = 6;
 }
 
 // Server to room: a catastrophe is on its way.
@@ -936,12 +938,10 @@ message CatastropheMessage {
   // A downpour: it falls on the whole map. Its `id` stays the same from a message to the next while it goes on, and
   // `impactInMs` is how long it still rains when no other message comes.
   bool wholeMap = 7;
-  // A ball: `x`, `y` and `radiusTiles` (its diameter) are what its player asks for, and `impactInMs` how long it is
-  // still held when no other message comes. These are the solid as it is now, in map pixels: it goes after what is
-  // asked no faster than a ball goes, and shrinks to nothing once it is held no more.
-  optional double ballX = 8;
-  optional double ballY = 9;
-  optional double ballRadius = 10;
+  // A ball: it is at `x`, `y`, `radiusTiles` across (its diameter), under the pointer of the player `userId`, and
+  // stands `impactInMs` more when no other message comes: 0 when its player let it go.
+  reserved 8, 9, 10;
+  optional int32 userId = 11;
 }
 
 // A player casts their fishing line: where the float lands, in map pixels. The server decides whether it does

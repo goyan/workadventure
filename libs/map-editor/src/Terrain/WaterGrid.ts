@@ -947,7 +947,7 @@ export class WaterGrid {
                 this.spill[index] = this.bareSpill[index] + (column.topPx - bed);
                 closed[index] = 1;
                 // What finds no way out stands on the ball, and runs off it by itself.
-                if (pushed > 0) depth[index] += this.pushAway(index, this.balls[owner[index]], pushed);
+                if (pushed > 0) depth[index] += this.pushAway(index, this.balls[owner[index]], pushed, surface);
             } else if (was) {
                 under[index] = 0;
                 depth[index] = water;
@@ -966,10 +966,11 @@ export class WaterGrid {
     /**
      * Hands `px` of water a ball pushes out of a column to the open water in front of it: the first column that no
      * ball closes, going straight away from the centre of the ball, never through a wall nor off the grid. A column
-     * takes no more than what brings it to the highest level of the map: the rest goes on to the next one. Returns
+     * takes no more than what brings it to the highest level of the map: the rest goes on to the next one. The water
+     * is pushed aside, not up: the way ends at a ground higher than `level`, the level the water stood at. Returns
      * what found no room.
      */
-    private pushAway(from: number, ball: WaterBall, px: number): number {
+    private pushAway(from: number, ball: WaterBall, px: number, level: number): number {
         const { x, y, width, height } = this.bounds;
         let column = from % width;
         let row = (from - column) / width;
@@ -1008,6 +1009,7 @@ export class WaterGrid {
             index = row * width + column;
             if (this.blocked[index]) break;
             if (this.ballClosed[index]) continue;
+            if (this.ground[index] > level) break;
             const room = this.spill[index] + this.highest - (this.ground[index] + this.depth[index]);
             if (room <= 0) continue;
             const laid = Math.min(left, room);

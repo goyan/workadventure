@@ -280,6 +280,35 @@ describe("TerrainWaterManager", () => {
         expect(repository.saveVariable).toHaveBeenCalled();
     });
 
+    it("takes a ball that moved since the last step along its way: it pushed the water of the whole way", () => {
+        const { manager, steps } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        fillWideLake(manager);
+        const grid = manager.getGrid();
+        if (!grid) throw new Error("no grid");
+        const before = grid.totalPx();
+        let ball = { id: 1, x: 100, y: 240, radiusPx: 32 };
+        manager.setBalls(() => [ball]);
+        steps(1);
+        const placed = vi.spyOn(grid, "setBalls");
+        // Under the pointer at once: 200 px further at the next step.
+        ball = { ...ball, x: 300 };
+        steps(1);
+        // 200 px: thirteen strides of a cell at most, the last one where the ball is.
+        expect(placed).toHaveBeenCalledTimes(13);
+        expect(placed.mock.calls.at(-1)?.[0]).toEqual([ball]);
+        const first = placed.mock.calls[0][0][0];
+        expect(first.x).toBeGreaterThan(100);
+        expect(first.x).toBeLessThanOrEqual(116);
+        expect(grid.totalPx()).toBeCloseTo(before, 1);
+        // Gone at once: one go, no way to sweep.
+        placed.mockClear();
+        manager.setBalls(() => []);
+        steps(1);
+        expect(placed).toHaveBeenCalledTimes(1);
+        expect(grid.ballAt(18, 15)).toBe(false);
+    });
+
     it("saves the water a ball holds under itself", () => {
         // A hollow 96 px deep: a ball of 32 px of radius leaves 64 px of room under its middle.
         const deep: [number, number, number][] = [];
