@@ -55,6 +55,8 @@ import {
 import type { MeadowState } from "./MeadowState";
 import type { TerrainWater } from "./TerrainWater";
 import { GROUND_TEXTURES, TexturedGround, WATER_FRAMES } from "./TexturedGround";
+import type { WaterReflection } from "./WaterReflection";
+import { BasicPools } from "./BasicPools";
 import type { GroundArea } from "./TexturedGround";
 import { GroundSplat } from "./GroundSplat";
 import { BreakingFoam } from "./BreakingFoam";
@@ -170,6 +172,8 @@ export class TerrainView {
         version: 0,
     };
     private readonly hiddenPools = new Map<string, PlacedPool>();
+    /** The pools painted in the editor as Basique shows them: still water and a coping (BasicPools.ts). */
+    private basicPools: BasicPools | undefined;
     /** The ladders of the pools drawn by the shaders. */
     private readonly ladders: PoolLadders | undefined;
     private everywhere = new Uint8Array(0);
@@ -219,8 +223,19 @@ export class TerrainView {
     }
 
     public update(now: number): void {
+        // Basique shows the ground of the map as it is, but its pools: still water, no waves, no ice (BasicPools).
+        const basic = isBasicActive();
+        if (basic) {
+            // The pools placed as images too, hidden as in the shaders: every pool has the same look.
+            this.readImagePools();
+            const settings = this.scene.getGameMap?.()?.getWamFile()?.getWam().settings;
+            this.basicPools ??= new BasicPools(this.scene, WATER_DEPTH);
+            if (this.basicPools.show(this.water.relief(), settings?.pools, this.imagePools)) this.scene.markDirty();
+        } else if (this.basicPools?.hide()) {
+            this.scene.markDirty();
+        }
         // Basique shows the ground of the map as it is: no water, relief, soils nor grass drawn over it.
-        if (isBasicActive() || (!this.water.hasAnything() && !this.meadowShows() && !this.hasPools())) {
+        if (basic || (!this.water.hasAnything() && !this.meadowShows() && !this.hasPools())) {
             if (this.visible) {
                 this.surface.hide();
                 this.hideGrounds();
@@ -866,6 +881,11 @@ export class TerrainView {
         return this.splat !== undefined;
     }
 
+    /** What the water reflects (sky, clouds, sun, lamps): read by the water shader at its next drawing. */
+    public setWaterReflection(reflection: WaterReflection): void {
+        this.splat?.setReflection(reflection);
+    }
+
     public setWaterRings(rings: readonly WaterRing[]): boolean {
         if (!this.splat) return false;
         if (rings.length > 0 || this.splat.hasRings()) this.scene.markDirty();
@@ -897,6 +917,7 @@ export class TerrainView {
     }
 
     public destroy(): void {
+        this.basicPools?.destroy();
         this.surface.destroy();
         this.splat?.destroy();
         this.ladders?.destroy();

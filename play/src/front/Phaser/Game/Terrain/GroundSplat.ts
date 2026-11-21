@@ -9,6 +9,8 @@ import { SHORE_PX } from "./TerrainShading";
 import { WHITECAP_MIN_DEPTH_PX } from "./Whitecaps";
 import { GROUND_TEXTURES } from "./TexturedGround";
 import type { GroundArea } from "./TexturedGround";
+import { NO_WATER_REFLECTION } from "./WaterReflection";
+import type { WaterReflection } from "./WaterReflection";
 
 /**
  * The grounds of the relief drawn on the graphics card, as a game draws its terrain: one picture of the weights of each
@@ -385,6 +387,16 @@ void main() {
 
 const WATER_FRAG = `${COMMON_GLSL}
 uniform float uStrength;
+// What the water reflects (WaterReflection.ts): the sky, the clouds (the thickness texture of CloudLayer), the sun,
+// the lamps at night (the night veil, where it is pierced).
+uniform vec4 uSkyTone;       // colour of the sky, share of it
+uniform sampler2D uCloudTexture;
+uniform vec4 uCloudArea;     // the part of the map the thickness covers
+uniform vec4 uCloudTone;     // colour of the clouds, share of them (0: none)
+uniform vec3 uSun;           // towards the sun on the map, strength of its glint
+uniform sampler2D uLampTexture;
+uniform vec4 uLampArea;      // the part of the map the night veil covers
+uniform float uLampOpacity;  // the opacity of the veil where no lamp shines (0: day)
 uniform sampler2D uIceTexture;
 uniform vec2 uIceSize;
 uniform float uIce;
@@ -513,6 +525,33 @@ vec4 poolColor(vec2 world, float t) {
     return vec4(c, 1.0);
 }
 
+// The sky, the clouds, the sun and the lamps mirrored by the water, bent by its waves (ripple, map pixels).
+vec3 reflected(vec3 water, vec2 world, vec2 ripple, float waves) {
+    water = mix(water, uSkyTone.rgb, uSkyTone.a);
+    if (uCloudTone.a > 0.0) {
+        vec2 uv = (world + ripple - uCloudArea.xy) / uCloudArea.zw;
+        if (uv.x > 0.0 && uv.y > 0.0 && uv.x < 1.0 && uv.y < 1.0) {
+            float cloud = smoothstep(0.1, 0.3, texture2D(uCloudTexture, vec2(uv.x, 1.0 - uv.y)).r);
+            water = mix(water, uCloudTone.rgb, cloud * uCloudTone.a);
+        }
+    }
+    if (uSun.z > 0.0) {
+        // A wave facing the sun throws its light back: bright sparks along the crests, towards the sun.
+        float facing = max(0.0, dot(normalize(ripple + vec2(0.0001)), uSun.xy));
+        water += vec3(1.0, 0.94, 0.78) * pow(facing, 6.0) * waves * uSun.z * 0.7;
+    }
+    if (uLampOpacity > 0.0) {
+        // The light of a lamp on the shore stretched down over the water, wavering with it.
+        vec2 uv = (world + vec2(ripple.x * 0.6, ripple.y * 1.6 - 10.0) - uLampArea.xy) / uLampArea.zw;
+        if (uv.x > 0.0 && uv.y > 0.0 && uv.x < 1.0 && uv.y < 1.0) {
+            float veil = texture2D(uLampTexture, vec2(uv.x, 1.0 - uv.y)).a;
+            float lit = clamp(1.0 - veil / uLampOpacity, 0.0, 1.0);
+            water += vec3(1.0, 0.84, 0.58) * lit * (0.25 + 0.35 * waves);
+        }
+    }
+    return water;
+}
+
 // How much water is over a point: 0 dry, 1 at the shore line, more inside.
 float wetAt(vec2 world) {
     return pack(2.0, world).b;
@@ -598,6 +637,7 @@ void main() {
         float lines = 1.0 - smoothstep(0.0, 0.04, abs(n1 - n2));
         water += lines * mix(0.14, 0.07, deep);
         water *= 0.9 + 0.2 * n1;
+        water = reflected(water, world, vec2(n1 - 0.5, n2 - 0.5) * 12.0, lines + 0.3 * n2);
         float glint = step(0.992, hash(floor(world / 2.0) + floor(t * 3.0))) * smoothstep(0.55, 0.7, n2);
         water = mix(water, FOAM, glint * 0.8);
         alpha = max(alpha, glint * 0.8);
@@ -743,6 +783,7 @@ export class GroundSplat {
                         setUniform("uSnow", this.snow);
                         setUniform("uServerIce", this.serverIce ? 1 : 0);
                         setUniform("uWind", [this.wind.x, this.wind.y, this.wind.share]);
+                        this.setReflectionUniforms(setUniform);
                         for (let index = 0; index < MAX_WATER_RINGS; index++) {
                             const ring = this.rings[index];
                             setUniform(
@@ -756,7 +797,7 @@ export class GroundSplat {
                 0,
                 1,
                 1,
-                ["__DEFAULT", GROUND_TEXTURES.ice],
+                ["__DEFAULT", GROUND_TEXTURES.ice, "__DEFAULT", "__DEFAULT"],
             )
             .setOrigin(0)
             .setDepth(waterDepth)
@@ -857,6 +898,55 @@ export class GroundSplat {
     }
 
     /** The wind over the water: which way it blows (length 1) and the share of open water its whitecaps whiten. */
+    /** What the water reflects; its textures bound again only when they change. */
+    public setReflection(reflection: WaterReflection): void {
+        const before = this.reflection;
+        this.reflection = reflection;
+        // Bound again when a texture changes or is gone: a destroyed texture bound to the shader breaks the drawing
+        // of the whole game (the screen stays black).
+        const gone = (key: string | undefined): boolean => key !== undefined && !this.scene.textures.exists(key);
+        if (
+            before.clouds?.key !== reflection.clouds?.key ||
+            before.lamps?.key !== reflection.lamps?.key ||
+            gone(reflection.clouds?.key) ||
+            gone(reflection.lamps?.key)
+        ) {
+            this.bindWaterTextures();
+        }
+    }
+
+    private reflection: WaterReflection = NO_WATER_REFLECTION;
+
+    private bindWaterTextures(): void {
+        const kept = (key: string | undefined): string =>
+            key !== undefined && this.scene.textures.exists(key) ? key : "__DEFAULT";
+        this.waterShader.setTextures([
+            kept(this.key),
+            GROUND_TEXTURES.ice,
+            kept(this.reflection.clouds?.key),
+            kept(this.reflection.lamps?.key),
+        ]);
+    }
+
+    private setReflectionUniforms(setUniform: (name: string, value: unknown) => void): void {
+        const { sky, clouds, sun, lamps } = this.reflection;
+        const rgb = (color: number): number[] => [
+            ((color >> 16) & 0xff) / 255,
+            ((color >> 8) & 0xff) / 255,
+            (color & 0xff) / 255,
+        ];
+        const area = (rect: { x: number; y: number; width: number; height: number } | undefined): number[] =>
+            rect ? [rect.x, rect.y, rect.width, rect.height] : [0, 0, 1, 1];
+        setUniform("uSkyTone", [...rgb(sky.color), sky.share]);
+        setUniform("uCloudTexture", 2);
+        setUniform("uCloudArea", area(clouds?.area));
+        setUniform("uCloudTone", clouds ? [...rgb(clouds.color), clouds.share] : [0, 0, 0, 0]);
+        setUniform("uSun", [sun.x, sun.y, sun.strength]);
+        setUniform("uLampTexture", 3);
+        setUniform("uLampArea", area(lamps?.area));
+        setUniform("uLampOpacity", lamps?.opacity ?? 0);
+    }
+
     public setWind(wind: { x: number; y: number; share: number }): void {
         this.wind = wind;
     }
@@ -923,7 +1013,7 @@ export class GroundSplat {
             const canvas = this.scene.textures.createCanvas(this.key, width, height);
             canvas?.setFilter(Phaser.Textures.FilterMode.LINEAR);
             this.groundShader.setTextures([this.key, ...SOIL_KEYS, GROUND_TEXTURES.grass, GROUND_TEXTURES.snow]);
-            this.waterShader.setTextures([this.key, GROUND_TEXTURES.ice]);
+            this.bindWaterTextures();
             this.anyWater = false;
         }
         this.area = area;

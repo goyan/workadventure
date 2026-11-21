@@ -215,6 +215,7 @@ export class CloudLayer {
     private thicknessArea = { x: 0, y: 0, width: 1, height: 1 };
     private maskTexture: Phaser.Textures.CanvasTexture | undefined;
     private maskOf: readonly WeatherView[] | undefined;
+    private maskCount = 0;
     private maskArea = { x: 0, y: 0, width: 1, height: 1 };
     private puffs: readonly Phaser.GameObjects.Image[] = [];
     private frame: CloudFrame | undefined;
@@ -263,6 +264,13 @@ export class CloudLayer {
     public hide(): void {
         this.shader.setVisible(false);
         this.frame = undefined;
+    }
+
+    /** The thickness of the clouds drawn last, for the water that reflects them; undefined without clouds. */
+    public reflected(): { key: string; area: { x: number; y: number; width: number; height: number } } | undefined {
+        return this.frame?.clouds && this.thickness
+            ? { key: this.thickness.texture.key, area: this.thicknessArea }
+            : undefined;
     }
 
     public destroy(): void {
@@ -338,24 +346,25 @@ export class CloudLayer {
         const y = Math.floor((view.y - MASK_MARGIN) / MASK_MARGIN) * MASK_MARGIN;
         const columns = Math.ceil((view.x + view.width + MASK_MARGIN - x) / MASK_TEXEL);
         const rows = Math.ceil((view.y + view.height + MASK_MARGIN - y) / MASK_TEXEL);
-        this.maskArea = { x, y, width: columns * MASK_TEXEL, height: rows * MASK_TEXEL };
+        // Kept while it is large enough, grown by steps: a canvas and a texture made again at each image of a zoom
+        // filled the memory of the graphics card.
         let texture = this.maskTexture;
-        if (!texture || texture.width !== columns || texture.height !== rows) {
+        if (!texture || texture.width < columns || texture.height < rows) {
+            const width = Math.ceil(Math.max(columns, texture?.width ?? 0) / TEXEL_STEP) * TEXEL_STEP;
+            const height = Math.ceil(Math.max(rows, texture?.height ?? 0) / TEXEL_STEP) * TEXEL_STEP;
             texture?.destroy();
             texture =
-                this.scene.textures.createCanvas(
-                    `weather-sky-mask:${this.id}:${columns}x${rows}:${Date.now()}`,
-                    columns,
-                    rows,
-                ) ?? undefined;
+                this.scene.textures.createCanvas(`weather-sky-mask:${this.id}:${++this.maskCount}`, width, height) ??
+                undefined;
             texture?.setFilter(Phaser.Textures.FilterMode.NEAREST);
             this.maskTexture = texture;
             this.bindTextures();
         }
         if (!texture) return;
+        this.maskArea = { x, y, width: texture.width * MASK_TEXEL, height: texture.height * MASK_TEXEL };
         const context = texture.getContext();
         context.fillStyle = "#000";
-        context.fillRect(0, 0, columns, rows);
+        context.fillRect(0, 0, texture.width, texture.height);
         context.fillStyle = "#f00";
         for (const rect of outdoors) {
             context.fillRect(

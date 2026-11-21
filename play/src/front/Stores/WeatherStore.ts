@@ -28,6 +28,9 @@ export const cloudsShownStore = createPersistedSwitchStore("weatherCloudsShown",
 /** Whether this player sees the rainbows (rain under a low sun). Personal, kept in the browser. */
 export const rainbowShownStore = createPersistedSwitchStore("weatherRainbowShown", true);
 
+/** Whether the water reflects the sky, the clouds, the sun and the lamps. Personal, kept in the browser. */
+export const waterReflectionsStore = createPersistedSwitchStore("waterReflections", true);
+
 /** Where the rainbow shown on the map stands (the top of its arc, map pixels); undefined when there is none. */
 export const rainbowSpotStore = writable<{ x: number; y: number } | undefined>(undefined);
 

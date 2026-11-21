@@ -23,6 +23,7 @@
         cloudsShownStore,
         smoothCloudsStore,
         rainbowShownStore,
+        waterReflectionsStore,
         weatherEffectsEnabledStore,
     } from "../../Stores/WeatherStore";
     import { lampDemoEnabledStore } from "../../Stores/LampDemoStore";
@@ -607,6 +608,12 @@
                 id="weather-clouds-shown"
                 bind:value={$cloudsShownStore}
                 label={$LL.menu.settings.clouds()}
+                labelPosition="right"
+            />
+            <InputSwitch
+                id="water-reflections"
+                bind:value={$waterReflectionsStore}
+                label={$LL.menu.settings.waterReflections()}
                 labelPosition="right"
             />
             <InputSwitch

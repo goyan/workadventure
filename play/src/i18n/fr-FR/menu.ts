@@ -55,6 +55,7 @@ const menu: DeepPartial<Translation["menu"]> = {
         smoothClouds: "Nuages fluides (carte graphique)",
         goToRainbow: "Aller à l’arc-en-ciel",
         rainbows: "Afficher les arcs-en-ciel (pluie sous un soleil bas)",
+        waterReflections: "Reflets dans l’eau (ciel, nuages, soleil, lampes)",
         weatherEffects: "Afficher la météo (pluie, neige et lueurs d’orage)",
         lampEffects: "Effets lumineux des lampes et des pistes de danse",
         clouds: "Afficher les nuages et leurs ombres",

@@ -54,6 +54,7 @@ const menu: BaseTranslation = {
         smoothClouds: "Smooth gliding clouds (graphics card)",
         goToRainbow: "Go to the rainbow",
         rainbows: "Show rainbows (rain under a low sun)",
+        waterReflections: "Reflections in the water (sky, clouds, sun, lamps)",
         weatherEffects: "Show weather effects (rain, snow and storm light)",
         lampEffects: "Light effects of lamps and dance floors",
         clouds: "Show clouds and their shadows",

@@ -28,6 +28,7 @@ import {
     rainCloudsStore,
     rainbowShownStore,
     smoothCloudsStore,
+    waterReflectionsStore,
 } from "../../../src/front/Stores/WeatherStore";
 
 const originalLights = readLightSettings();
@@ -124,7 +125,7 @@ describe("graphics presets", () => {
         });
     });
 
-    it("turns the smoothed pixels, the gliding clouds and the rainbows off at low quality only", () => {
+    it("turns the smoothed pixels, the gliding clouds, the rainbows and the reflections off at low quality only", () => {
         applyGraphicsQuality(GraphicsQuality.Low);
         expect([get(pixelSmoothingStore), get(smoothCloudsStore), get(rainbowShownStore)]).toEqual([
             false,
@@ -133,7 +134,12 @@ describe("graphics presets", () => {
         ]);
         expect(get(graphicsQualityStore)).toBe(GraphicsQuality.Low);
         applyGraphicsQuality(GraphicsQuality.Medium);
-        expect([get(pixelSmoothingStore), get(smoothCloudsStore), get(rainbowShownStore)]).toEqual([true, true, true]);
+        expect([
+            get(pixelSmoothingStore),
+            get(smoothCloudsStore),
+            get(rainbowShownStore),
+            get(waterReflectionsStore),
+        ]).toEqual([true, true, true, true]);
         expect(get(graphicsQualityStore)).toBe(GraphicsQuality.Medium);
         // Changed by hand, the quality is a custom one.
         rainbowShownStore.set(false);

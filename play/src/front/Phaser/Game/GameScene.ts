@@ -2414,6 +2414,12 @@ export class GameScene extends DirtyScene {
                 this.nightManager?.isNight(),
                 this.nightManager?.sunPosition(),
             );
+            // After the weather: the textures of the clouds it drew this time (one may have just been made again).
+            if (this.weatherManager) {
+                this.terrainView?.setWaterReflection(
+                    this.weatherManager.waterReflection(this.nightManager?.lampReflection()),
+                );
+            }
             // The relief may have been edited: the water follows it (nothing is done while it stays the same).
             const terrain = this.getGameMap().getWamFile()?.getWam().terrain;
             this.terrainWater.setTerrain(terrain);

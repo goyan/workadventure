@@ -6,6 +6,7 @@ import {
     cloudsHeightStore,
     cloudsShownStore,
     rainbowShownStore,
+    waterReflectionsStore,
     rainbowSpotStore,
     smoothCloudsStore,
     rainAmountStore,
@@ -21,6 +22,8 @@ import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { SeasonalTheme } from "../Seasonal/SeasonalTheme";
 import type { SunPosition } from "../Night/NightClock";
 import { basicActiveStore, unlessBasic } from "../../../Stores/BasicModeStore";
+import { NO_WATER_REFLECTION } from "../Terrain/WaterReflection";
+import type { WaterReflection } from "../Terrain/WaterReflection";
 import type { RaisedCover } from "./RaisedCover";
 import {
     farFogCells,
@@ -59,6 +62,7 @@ import {
     cloudLightStep,
     cloudPalette,
     cloudPatches,
+    cumulonimbusPalette,
     cloudShadowOffset,
     cloudSunlight,
     cloudTint,
@@ -176,9 +180,16 @@ export class WeatherManager {
     /** The strength of the rainbow drawn this time (0: none). */
     private layerRainbow = 0;
     private rainbowSpot: { x: number; y: number } | undefined;
+    /** The sky the water reflects, worked out at each drawing of the weather (see waterReflection). */
+    private reflectedSky: Omit<WaterReflection, "lamps"> = {
+        sky: { color: DAY_SKY, share: 0 },
+        clouds: undefined,
+        sun: { x: 0, y: -1, strength: 0 },
+    };
     /** Basique hides every effect: the rainbow too. */
     private basic = false;
     private rainbowShown = true;
+    private reflectionsShown = true;
     private lastFrameAt = -Infinity;
     private visible = false;
     private readonly sounds: WeatherSounds;
@@ -243,6 +254,7 @@ export class WeatherManager {
             smoothCloudsStore.subscribe((smooth) => (this.smoothClouds = smooth)),
             basicActiveStore.subscribe((basic) => (this.basic = basic)),
             rainbowShownStore.subscribe((shown) => (this.rainbowShown = shown)),
+            waterReflectionsStore.subscribe((shown) => (this.reflectionsShown = shown)),
             cloudsHeightStore.subscribe((height) => (this.cloudsHeight = height)),
             rainAmountStore.subscribe((value) => (this.rainSettings.amount = value)),
             rainLeanStore.subscribe((value) => (this.rainSettings.lean = value)),
@@ -476,7 +488,7 @@ export class WeatherManager {
                         view,
                         sky,
                         shownRainCover(cover),
-                        rainPalette(covering.color),
+                        cumulonimbusPalette(covering.color),
                         covering.alpha * this.zoomFade(),
                         sunlight.night,
                         undefined,
@@ -538,6 +550,7 @@ export class WeatherManager {
             );
         }
         this.drawSkyLayer(view, sky, grid ? veil : undefined, sun);
+        this.reflectedSky = this.skyOverWater(sun, sunlight, cloudiness, raining || storm);
         if (paint) this.blocks.end();
         // Only the fog passes over the buildings seen from far.
         if (paint && !(showWeather && weather === WeatherType.Fog)) this.farFog.hide();
@@ -693,6 +706,41 @@ export class WeatherManager {
     /** The cloud layer of the graphics card when it is there and chosen; otherwise the clouds go in the blocks. */
     private smoothCloudLayer(): CloudLayer | undefined {
         return this.smoothClouds ? this.cloudLayer : undefined;
+    }
+
+    /**
+     * What the water reflects: the sky worked out at the last drawing of the weather and the lamps of the night veil;
+     * nothing with the reflections turned off or in Basique.
+     */
+    public waterReflection(lamps: WaterReflection["lamps"]): WaterReflection {
+        if (!this.reflectionsShown || this.basic) return NO_WATER_REFLECTION;
+        return { ...this.reflectedSky, lamps };
+    }
+
+    /**
+     * The sky over the water: its blue by day (greyer under clouds or rain), nothing at night; the clouds the layer
+     * drew; the glint of the sun on the waves, towards it, stronger when it is high and the sky clear.
+     */
+    private skyOverWater(
+        sun: SunPosition | undefined,
+        sunlight: { night: number; shadows: number },
+        cloudiness: number,
+        raining: boolean,
+    ): Omit<WaterReflection, "lamps"> {
+        const day = 1 - sunlight.night;
+        const grey = Math.min(1, cloudiness + (raining ? 0.6 : 0));
+        const thickness = this.cloudLayer?.reflected();
+        const tones = this.layerClouds?.tones;
+        const toSun = sun ? sun.azimuth * (Math.PI / 180) : 0;
+        return {
+            sky: { color: grey > 0.5 ? GREY_SKY : DAY_SKY, share: 0.1 * day },
+            clouds: thickness && tones ? { ...thickness, color: tones.lit, share: 0.45 * day + 0.15 } : undefined,
+            sun: {
+                x: Math.sin(toSun),
+                y: -Math.cos(toSun),
+                strength: sunlight.shadows * (1 - 0.8 * grey),
+            },
+        };
     }
 
     /** Told only when it changes: the store is read by the button next to the clock. */
@@ -1056,3 +1104,7 @@ export class WeatherManager {
         this.setRainbowSpot(undefined);
     }
 }
+
+/** The colour of the sky the water reflects: blue by fine weather, grey under a covered or rainy sky. */
+const DAY_SKY = 0x8fb9e6;
+const GREY_SKY = 0x9aa3ad;

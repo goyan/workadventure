@@ -15,6 +15,7 @@ import {
     rainCloudsStore,
     rainbowShownStore,
     smoothCloudsStore,
+    waterReflectionsStore,
 } from "./WeatherStore";
 
 export enum GraphicsQuality {
@@ -48,6 +49,8 @@ export interface GraphicsProfile {
     pixelSmoothing: boolean;
     smoothClouds: boolean;
     rainbows: boolean;
+    /** The sky, the clouds, the sun and the lamps mirrored by the water. */
+    waterReflections: boolean;
     animations: boolean;
     rain: readonly number[];
     lights: Readonly<Record<string, LightSettingValue>>;
@@ -70,6 +73,7 @@ export function graphicsProfile(quality: GraphicsPreset): GraphicsProfile {
         pixelSmoothing: !low,
         smoothClouds: !low,
         rainbows: !low,
+        waterReflections: !low,
         animations: !low,
         rain: ultra ? [2, 2, 2, 2, 1] : high ? [1, 1, 1, 1, 0.8] : low ? [0.25, 0, 0, 0, 0] : [0.5, 0.5, 0.25, 0, 0.5],
         lights: {
@@ -129,6 +133,7 @@ export const graphicsQualityStore = derived(
         pixelSmoothingStore,
         smoothCloudsStore,
         rainbowShownStore,
+        waterReflectionsStore,
     ],
     ([
         lights,
@@ -143,6 +148,7 @@ export const graphicsQualityStore = derived(
         smoothing,
         smooth,
         rainbows,
+        reflections,
     ]) =>
         GRAPHICS_PRESETS.find((quality) => {
             const profile = graphicsProfile(quality);
@@ -153,6 +159,7 @@ export const graphicsQualityStore = derived(
                 smoothing === profile.pixelSmoothing &&
                 smooth === profile.smoothClouds &&
                 rainbows === profile.rainbows &&
+                reflections === profile.waterReflections &&
                 [rainAmount, rainLean, rainSplashes, rainPuddles, rainClouds].every(
                     (value, index) => value === profile.rain[index],
                 ) &&
@@ -175,6 +182,7 @@ export function applyGraphicsQuality(quality: GraphicsPreset): void {
     pixelSmoothingStore.set(profile.pixelSmoothing);
     smoothCloudsStore.set(profile.smoothClouds);
     rainbowShownStore.set(profile.rainbows);
+    waterReflectionsStore.set(profile.waterReflections);
     setTileAnimationsDisabled(!profile.animations);
     [rainAmountStore, rainLeanStore, rainSplashesStore, rainPuddlesStore, rainCloudsStore].forEach((store, index) =>
         store.set(profile.rain[index] ?? 0),
