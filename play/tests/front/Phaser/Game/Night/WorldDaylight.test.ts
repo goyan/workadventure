@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     placeOfPoint,
     solarMinutes,
+    WORLD_CITIES,
     worldCityAt,
     worldCityOf,
     worldShadeAt,
@@ -113,7 +114,7 @@ describe("worldCityOf", () => {
                 expect(rising(date, city), `${date.toISOString()} ${city.name}`).toBe(true);
                 elevations.push(elevation);
             }
-            // The longitudes the list leaves empty (the Pacific, the Atlantic) leave a sun higher for a while.
+            // A few hours of the year have no city of the list with a low sun the right way: a higher one, a while.
             expect(lowSunShare(elevations), day).toBeGreaterThan(0.75);
         }
     });
@@ -174,10 +175,12 @@ describe("worldCityOf", () => {
     });
 
     it("keeps the hour chosen as an hour: the same cities as before", () => {
-        // Read on the code before this change (its worldCityAt, given the hour wanted).
+        // Read on the code before this change (its worldCityAt, given the hour wanted), but for two instants where a
+        // city added since is nearer to the hour chosen: Unalaska at 18:52 (Auckland was at 17:37), Khabarovsk at 12:45
+        // (Séoul was at 12:12).
         const before: [string, number, string][] = [
             ["2026-06-21T06:00:00Z", 12 * 60 + 30, "Bangkok"],
-            ["2026-06-21T06:00:00Z", 18 * 60 + 30, "Auckland"],
+            ["2026-06-21T06:00:00Z", 18 * 60 + 30, "Unalaska"],
             ["2026-12-21T18:00:00Z", 9 * 60, "Vancouver"],
             ["2026-12-21T18:00:00Z", 12 * 60 + 30, "Chicago"],
             ["2026-12-21T18:00:00Z", 18 * 60 + 30, "Paris"],
@@ -185,11 +188,43 @@ describe("worldCityOf", () => {
             ["2026-03-21T12:00:00Z", 12 * 60 + 30, "Rome"],
             ["2026-03-21T12:00:00Z", 18 * 60 + 30, "Bangkok"],
             ["2026-11-21T03:30:00Z", 9 * 60, "Bombay"],
-            ["2026-11-21T03:30:00Z", 12 * 60 + 30, "Séoul"],
+            ["2026-11-21T03:30:00Z", 12 * 60 + 30, "Khabarovsk"],
             ["2026-11-21T03:30:00Z", 18 * 60 + 30, "Anchorage"],
         ];
         for (const [iso, minutes, name] of before) {
             expect(worldCityOf(new Date(iso), WorldMoment.Custom, minutes).name, `${iso} ${minutes}`).toBe(name);
+        }
+    });
+});
+
+describe("WORLD_CITIES", () => {
+    it("gives each city a time zone the clock can show", () => {
+        for (const city of WORLD_CITIES) {
+            expect(city.timezone, city.name).toBeDefined();
+            expect(() => new Intl.DateTimeFormat("en", { timeZone: city.timezone }), city.name).not.toThrow();
+        }
+    });
+
+    it("has, all year long, a city with a low sun for the morning and the evening, nearly at any time", () => {
+        // The 6th and the 21st of each month, every quarter of an hour, the city shown kept as the game keeps it.
+        // With the list before the cities of the north (Unalaska, St. John's, Khabarovsk, Petropavlovsk, Anadyr) were
+        // added: 80 % of the time only, and suns up to 45° for a morning, 35° for an evening.
+        const days = Array.from({ length: 12 }, (_, month) => month + 1).flatMap((month) =>
+            ["06", "21"].map((day) => `2026-${String(month).padStart(2, "0")}-${day}`),
+        );
+        for (const moment of [WorldMoment.Morning, WorldMoment.Evening]) {
+            for (const day of days) {
+                let shown: ReturnType<typeof worldCityOf> | undefined;
+                let low = 0;
+                for (let quarter = 0; quarter < 96; quarter++) {
+                    const date = new Date(new Date(`${day}T00:00:00Z`).getTime() + quarter * 900_000);
+                    shown = worldCityOf(date, moment, 0, shown);
+                    const elevation = sunElevationAt(date, shown);
+                    expect(elevation, `${moment} ${date.toISOString()} ${shown.name}`).toBeLessThanOrEqual(21);
+                    if (elevation >= 2 && elevation <= 16) low++;
+                }
+                expect(low / 96, `${moment} ${day}`).toBeGreaterThanOrEqual(0.95);
+            }
         }
     });
 });

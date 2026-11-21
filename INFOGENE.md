@@ -1612,11 +1612,23 @@ d'heure) à ±2 min. La nuit, un voile bleu nuit
     (soir gardé de 14° jusqu'à 2°, jamais après le coucher) : environ un changement de ville par heure.
   - **Midi** : la ville la plus proche de son midi solaire vrai, gardée tant qu'elle en est à 50 min au plus (toujours
     à moins d'une heure).
-  - Mesuré minute par minute (21 mars, 21 juin, 21 septembre, 21 novembre, 21 décembre 2026) : soleil du matin entre
-    2° et 16° 81 à 96 % du temps (médiane 12°), du soir 80 à 97 % (médiane 7-8°). Pires cas : les longitudes vides de
-    la liste (Pacifique entre Auckland et Honolulu, Atlantique entre Rio et Praia) laissent un soleil plus haut un
-    moment, jusqu'à 45° le matin (21 juin) et 36° le soir (21 novembre). Ajouter des villes là-bas changerait aussi
-    l'heure choisie et le nom d'un point cliqué : pas fait.
+  - **Villes du nord** (PR « lieux du ciel du monde ») : avec la liste d'origine (37 villes), mesuré minute par
+    minute (21 mars, juin, septembre, novembre, décembre 2026), le soleil retenu n'était entre 2° et 16° que 81 à 96 %
+    du temps le matin et 80 à 97 % le soir, avec des pires cas à 45° (matin du 21 juin, Anchorage à 19:41 UTC) et 36°
+    (soir du 21 novembre, Honolulu à 00:40 UTC). Cause mesurée : pas les deux océans en soi, mais la **latitude**. En
+    été boréal le soleil d'une ville à 50-65° N passe 10° en montant des heures avant celui d'une ville tempérée de même
+    longitude ; en hiver boréal il descend à 8° tôt l'après-midi. Il manquait donc des villes du nord dans le Pacifique
+    Nord, en Extrême-Orient russe et à Terre-Neuve ; aucune ville du sud (Papeete, Apia, Ushuaïa, Sainte-Hélène…) n'a
+    été retenue par la recherche. Ajoutées : **Unalaska** (53,89 N, 166,53 O, `America/Anchorage`), **St. John's**
+    (47,56 N, 52,71 O, `America/St_Johns`), **Khabarovsk** (48,48 N, 135,08 E, `Asia/Vladivostok`),
+    **Petropavlovsk-Kamtchatski** (53,02 N, 158,65 E, `Asia/Kamchatka`), **Anadyr** (64,73 N, 177,52 E,
+    `Asia/Anadyr`) ; coordonnées de Wikipédia, fuseaux de la base tz (`zone1970.tab`). Après, minute par minute le 6
+    et le 21 de chaque mois : au moins **97,0 %** du temps entre 2° et 16° pour chaque jour et chaque moment, pire cas
+    **20,2°**. Ce qui reste : les matins d'équinoxe vers 16 h UTC (Vancouver ~19°), le soir de juin vers 11 h 30 UTC
+    (Katmandou ~20°), quelques nuits UTC de novembre et février (Bangkok ~20°). Un test garde la couverture (le 6 et
+    le 21 de chaque mois, au quart d'heure : 95 % au moins, 21° au plus). Effets : l'**heure choisie** et **Midi**
+    peuvent tomber sur ces villes (ex. 18 h 30 le 21 juin à 06:00 UTC : Unalaska au lieu d'Auckland) ; un **point
+    cliqué** près d'elles porte leur nom et leur fuseau.
   - **Heure choisie** : inchangée, la ville dont l'**heure solaire vraie** est la plus proche (avec l'équation du
     temps, ±16 min selon la saison), gardée à 50 min près. **Point cliqué** sur la carte : inchangé ; le menu dit
     alors « Ciel de … (point choisi sur la carte) », surligné, puisqu'aucun moment n'est enfoncé. La carte du monde du menu s'ombre avec le voile du jeu lui-même
