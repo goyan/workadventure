@@ -421,6 +421,38 @@ describe("TerrainWaterManager", () => {
         expect(depthsAfter(sent).at(grid.bounds.x + 20, grid.bounds.y + 20)).toBeCloseTo(before + 5 / 8, 5);
     });
 
+    it("holds the water at a closed door, opens it for an avatar in its passage, and closes it a second after", () => {
+        const wam = wamWith(wideLake);
+        // A vertical door on the wall line of the tile column 10, its leaves on the tile rows 6 and 7.
+        for (const [id, name, y] of [
+            ["top", "porte-v-gris-haut", 5 * 32 + 12],
+            ["bottom", "porte-v-gris-bas", 6 * 32 + 12],
+        ] as const) {
+            wam.entities[id] = {
+                x: 10 * 32 - 32,
+                y,
+                prefabRef: { collectionName: "Carte Portes", id: `Carte Portes:${name}:Default:Down` },
+            } as (typeof wam.entities)[string];
+        }
+        const { manager, steps } = createHarness({ wam });
+        let walkers: { x: number; y: number }[] = [];
+        manager.setWalkers(() => walkers);
+        manager.mapChanged();
+        const crosses = (): boolean => manager.getGrid()?.canCross(19, 13, "east") ?? false;
+        steps(1);
+        expect(crosses()).toBe(false);
+        // Someone stands in the doorway: the water goes through.
+        walkers = [{ x: 10 * 32, y: 7 * 32 }];
+        steps(1);
+        expect(crosses()).toBe(true);
+        // They walk away: the door stays open a second, then holds the water again.
+        walkers = [{ x: 30 * 32, y: 7 * 32 }];
+        steps(9);
+        expect(crosses()).toBe(true);
+        steps(2);
+        expect(crosses()).toBe(false);
+    });
+
     it("fills the hollows with the rain of the map, and counts it", () => {
         const { manager, sent, steps } = createHarness({ wam: wamWith(lake, WeatherType.Rain) });
         manager.mapChanged();

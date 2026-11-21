@@ -1,6 +1,9 @@
 import { gunzipSync, gzipSync } from "node:zlib";
 import {
     advanceImpactWave,
+    closedDoorSides,
+    holdsOpen,
+    waterDoorsOf,
     strikeWater,
     CELL_AREA_M2,
     CELL_LITRES_PER_PX,
@@ -37,6 +40,7 @@ import type {
     TerrainData,
     WaterGridBounds,
     WaterObject,
+    WaterDoor,
     WaterTally,
 } from "@workadventure/map-editor";
 import type { TerrainWaterMessage } from "@workadventure/messages";
@@ -59,6 +63,8 @@ const UNTOLD_EIGHTHS = 2;
 const WAVE_STEPS_PER_MESSAGE = 2;
 /** After an impact on a water with inertia, the room is told that often for this long (half a minute). */
 const IMPACT_STIRRED_STEPS = 300;
+/** A door stays open this many steps after the last avatar left its passage (a second), as it closes on the screens. */
+const DOOR_OPEN_STEPS = 10;
 /** The water is saved every half minute while it changes. */
 const STEPS_PER_SAVE = 300;
 
@@ -99,6 +105,14 @@ export class TerrainWaterManager {
     private stirredUntilStep = 0;
     /** The downpours falling on the map now, asked at each step: none until the catastrophes of the room say. */
     private downpours: () => readonly Downpour[] = () => [];
+    /** The doors of the ground of the map: closed, they hold the water; open, they let it through. */
+    private doors: WaterDoor[] = [];
+    /** For each door, the step until which it is open: an avatar stood in its passage a moment ago. */
+    private doorOpenUntil: number[] = [];
+    /** Which doors the grid was last told closed; undefined when it must be told again (a new grid). */
+    private closedDoors: string | undefined;
+    /** Where the avatars standing on the ground are, asked at each step: nobody until the room says. */
+    private walkers: () => readonly { x: number; y: number }[] = () => [];
     /** The drains open on the map now, asked at each step: none until the catastrophes of the room say. */
     private drains: () => readonly Drain[] = () => [];
     private sums: Sums = noSums();
@@ -183,6 +197,11 @@ export class TerrainWaterManager {
         const before = this.grid ?? this.saved;
         this.saved = undefined;
         this.grid = bounds ? new WaterGrid(wam?.terrain, bounds, undefined, walls, rooms) : undefined;
+        // The doors of the map, all closed until someone is seen in their passage; the new grid is told at its
+        // next step.
+        this.doors = bounds ? waterDoorsOf(wam) : [];
+        this.doorOpenUntil = this.doors.map(() => 0);
+        this.closedDoors = undefined;
         this.version++;
         if (this.grid && before) this.grid.takeFrom(before);
         // The cells are not the same any more: the room is told the whole state at its next message.
@@ -240,6 +259,7 @@ export class TerrainWaterManager {
             this.rainRate = liquidRainRate(rainRateAt(settings, this.now(), slots), this.air());
         }
         this.steps++;
+        this.swingDoors(grid);
         // Both each step: a downpour goes on raining while the wave of a meteor runs.
         const raining = this.pourDownpours(grid);
         const draining = this.takeDrains(grid);
@@ -264,6 +284,39 @@ export class TerrainWaterManager {
             this.tell(grid);
         }
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
+    }
+
+    /** The room says where its avatars standing on the ground are: they hold the doors open. */
+    public setWalkers(walkers: () => readonly { x: number; y: number }[]): void {
+        this.walkers = walkers;
+    }
+
+    /**
+     * The doors open for who stands in their passage and close a second after: a closed door holds the water, an
+     * open one lets it through. The grid is told only when a door changed.
+     */
+    private swingDoors(grid: WaterGrid): void {
+        if (this.doors.length === 0) {
+            if (this.closedDoors !== "") {
+                grid.setClosedDoors(undefined);
+                this.closedDoors = "";
+            }
+            return;
+        }
+        const walkers = this.walkers();
+        let key = "";
+        for (let index = 0; index < this.doors.length; index++) {
+            const door = this.doors[index];
+            if (walkers.some((walker) => holdsOpen(door, walker))) {
+                this.doorOpenUntil[index] = this.steps + DOOR_OPEN_STEPS;
+            }
+            if (this.steps >= this.doorOpenUntil[index]) key += `${index},`;
+        }
+        if (key === this.closedDoors) return;
+        this.closedDoors = key;
+        grid.setClosedDoors(closedDoorSides(this.doors, (index) => this.steps < this.doorOpenUntil[index]));
+        // The water on each side of a door that just opened or closed has somewhere new to go, or nowhere.
+        this.moving = true;
     }
 
     /** The catastrophes of the room say which downpours are falling. */
