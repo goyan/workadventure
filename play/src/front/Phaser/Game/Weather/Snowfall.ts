@@ -205,7 +205,6 @@ const SNOW_PLANES: readonly SnowPlane[] = [
 const FALL_MIN_S = 9;
 const FALL_SPAN_S = 6;
 const LIE_S = 0.8;
-const FADE_IN_S = 0.6;
 const CYCLES = 100_000;
 /** The cells are hashed modulo this many: the hash stays exact however far the air went. */
 const HASH_WRAP = 4096;
@@ -280,29 +279,27 @@ export function snowflakes(
                     const age = clock - turn * period;
                     const cycle = ((turn % CYCLES) + CYCLES) % CYCLES;
                     const lying = age >= falls;
-                    const airborne = Math.min(age, falls);
-                    // How far along its sway: the swaying stops once it lies.
-                    const beat = 0.35 + 0.4 * ((own * 23.3) % 1);
-                    const phase = (own * 7.9) % 1;
-                    const swing = Math.sin((airborne * beat + phase) * 2 * Math.PI);
-                    const back = lying ? age - falls : 0;
-                    const x =
-                        (column + hash01(hashColumn + cycle, hashRow, 191 + salt)) * cell +
-                        shiftX +
-                        kind.flutterPx * swing -
-                        speedX * back;
-                    const y =
-                        (row + hash01(hashColumn, hashRow + cycle, 211 + salt)) * cell +
-                        shiftY +
-                        0.3 * kind.flutterPx * Math.cos((airborne * beat * 2 + phase) * 2 * Math.PI) -
-                        speedY * back;
+                    // Where the parcel of air it fell from is now, and where it lands (or landed): the air goes on
+                    // carrying the parcel at its speed, the flake falls through it, then lies where it landed.
+                    const anchorX = (column + hash01(hashColumn + cycle, hashRow, 191 + salt)) * cell + shiftX;
+                    const anchorY = (row + hash01(hashColumn, hashRow + cycle, 211 + salt)) * cell + shiftY;
+                    const { x, y } = fallingFlake({
+                        landX: anchorX + speedX * (falls - age),
+                        landY: anchorY + speedY * (falls - age),
+                        descentX: speedX * falls,
+                        descentY: speedY * falls,
+                        fall: age / falls,
+                        swayPx: kind.flutterPx,
+                        sways: (0.35 + 0.4 * ((own * 23.3) % 1)) * falls,
+                        phase: (own * 7.9) % 1,
+                    });
                     if (x < view.x || x > view.x + view.width || y < view.y || y > view.y + view.height) continue;
                     if (local) {
                         // Where it appeared: a flake shows or not for its whole fall.
-                        const here = local(x - speedX * airborne, y - speedY * airborne);
+                        const here = local(anchorX - speedX * age, anchorY - speedY * age);
                         if (pick >= amount * here) continue;
                     }
-                    const fadeIn = still ? 1 : Math.min(1, age / FADE_IN_S);
+                    const fadeIn = still ? 1 : flakeFadeIn(age);
                     const fadeOut = lying ? 1 - (age - falls) / LIE_S : 1;
                     flakes.push({
                         x,
@@ -322,6 +319,39 @@ export function snowflakes(
         });
     });
     return flakes;
+}
+
+/**
+ * One flake on its way down, the same for the weather and the downpour (DownpourFall), each placing its own flakes:
+ * it lands at (`landX`, `landY`) once `fall` (0 as it appears, 1 as it lands) reaches 1, having come down `descent`
+ * (map pixels, its fall and the drift of the wind over it), swaying `swayPx` to each side `sways` times over its fall,
+ * less and less as it nears the ground. From 1 on it lies where it landed.
+ */
+export interface FallingFlake {
+    landX: number;
+    landY: number;
+    descentX: number;
+    descentY: number;
+    fall: number;
+    swayPx: number;
+    sways: number;
+    /** Where its sway starts, 0 to 1: its own. */
+    phase: number;
+}
+
+export function fallingFlake(flake: FallingFlake): { x: number; y: number } {
+    const left = Math.max(0, 1 - flake.fall);
+    if (left === 0) return { x: flake.landX, y: flake.landY };
+    const sway = Math.sin((Math.min(1, flake.fall) * flake.sways + flake.phase) * 2 * Math.PI) * flake.swayPx * left;
+    return { x: flake.landX - left * flake.descentX + sway, y: flake.landY - left * flake.descentY };
+}
+
+/** A flake fades in over this long as it comes out of the sky (seconds): that of the downpour, a sixth of its fall. */
+const FADE_IN_S = 0.43;
+
+/** How much of a flake shows this long after it appeared (seconds). */
+export function flakeFadeIn(seconds: number): number {
+    return Math.min(1, Math.max(0, seconds / FADE_IN_S));
 }
 
 /** A pixel of a flake: its place from the top left corner, its width and height, lit (0) or shaded (1). */
