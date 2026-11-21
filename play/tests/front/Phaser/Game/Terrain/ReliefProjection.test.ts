@@ -345,9 +345,11 @@ describe("a column of the relief drawn in 3/4", () => {
 });
 
 describe("when the relief is seen in 3/4", () => {
-    it("out of the editor and out of the basic mode only", () => {
-        expect(projectionShown({ editorOpen: false, basic: false })).toBe(true);
-        expect(projectionShown({ editorOpen: true, basic: false })).toBe(false);
-        expect(projectionShown({ editorOpen: false, basic: true })).toBe(false);
+    it("when the player chose it, out of the editor and out of the basic mode only", () => {
+        expect(projectionShown({ chosen: true, editorOpen: false, basic: false })).toBe(true);
+        expect(projectionShown({ chosen: true, editorOpen: true, basic: false })).toBe(false);
+        expect(projectionShown({ chosen: true, editorOpen: false, basic: true })).toBe(false);
+        // Not chosen: the ground of the map is drawn flat, by the other engine.
+        expect(projectionShown({ chosen: false, editorOpen: false, basic: false })).toBe(false);
     });
 });

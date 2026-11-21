@@ -26,6 +26,8 @@ function fixture(
         layout?: GroundLayout;
         season?: () => Season | undefined;
         snowLineSeason?: Season;
+        snowCoverAt?: (x: number, y: number) => number;
+        groundVersion?: () => number;
         screenScale?: () => number;
         mapSize?: { width: number; height: number };
         /** Drawn with WebGL: the pixels go straight to textures (`painted` holds what each was last sent). */
@@ -164,7 +166,8 @@ function fixture(
         layout: options.layout,
         water,
         season: options.season ?? (() => undefined),
-        snowShown: () => 0,
+        snowCoverAt: options.snowCoverAt ?? (() => 0),
+        groundVersion: options.groundVersion,
         snowLineSeason: () => options.snowLineSeason,
         screenScale: options.screenScale,
         mapSize: options.mapSize && (() => options.mapSize ?? { width: 0, height: 0 }),
@@ -919,12 +922,36 @@ describe("the blocks of the relief seen in 3/4", () => {
             relief: () => terrain,
             water,
             season: () => undefined,
-            snowShown: () => 0,
+            snowCoverAt: () => 0,
         });
         const start = performance.now();
         tiles.update(0);
         expect(tiles.redraws()).toBeGreaterThanOrEqual(1);
         expect(performance.now() - start).toBeLessThan(80);
+    });
+
+    it("draws again the block the snow fell on, not the others", () => {
+        // Snow on the tiles of one block (256 px): the block 1,1.
+        const snow = { on: false, version: 0 };
+        const { settle, painted } = fixture(dugEverywhere(), undefined, {
+            snowCoverAt: (x, y) => (snow.on && x >= 256 && x < 512 && y >= 256 && y < 512 ? 1 : 0),
+            groundVersion: () => snow.version,
+        });
+        settle();
+        const before = new Map([...painted].map(([key, pixels]) => [key, Uint8ClampedArray.from(pixels)]));
+        snow.on = true;
+        snow.version++;
+        settle();
+        const changed = [...painted]
+            .filter(([key, pixels]) => {
+                const old = before.get(key);
+                return !old || old.some((value, index) => value !== pixels[index]);
+            })
+            .map(([key]) => key);
+        expect(changed).toContain("relief-block:1,1");
+        // The blocks around it draw its cells in their margins; none further.
+        expect(changed.every((key) => /^relief-block:[0-2],[0-2](@\d)?$/.test(key))).toBe(true);
+        expect(changed.length).toBeLessThan(painted.size);
     });
 
     it("draws no block again when the meadow is told again without changing what covers the ground", () => {

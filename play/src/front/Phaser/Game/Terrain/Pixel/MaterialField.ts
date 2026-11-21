@@ -24,8 +24,8 @@ export interface CellInputs {
     /** The relief and the soils painted; none on a map without relief. */
     terrain: TerrainData | undefined;
     meadow?: MeadowState;
-    /** How much snow lies on the ground (0 to 1): the Christmas theme or the snow of the map weather. */
-    snowShown: number;
+    /** How much the snow that fell whitens the ground at a point of the map (map pixels), 0 to 1. Absent: none. */
+    snowCoverAt?: (x: number, y: number) => number;
     /** Whether a cell is outdoors (not in a room). Absent: every cell is, and bare ground is grass (the 3/4 relief only). */
     outdoor?: (cellX: number, cellY: number) => boolean;
     /** Whether a cell is under a floor of the Carte tool: left to it. */
@@ -56,11 +56,10 @@ export function cellMaterial(inputs: CellInputs, cellX: number, cellY: number): 
     const dug = heightAt(terrain, cellX, cellY) !== 0;
     // Rooms and the floors of the Carte tool keep their own tiles (nothing is dug there).
     if (!dug && (inputs.outdoor?.(cellX, cellY) === false || inputs.paved?.(cellX, cellY) === true)) return "none";
-    // The snow of the map comes cell after cell as it thickens (all of it under the theme of the winter): each cell
-    // whitens at its own share of the snow, so the ground goes white by patches, not all at once.
-    if (inputs.snowShown >= 1 || (inputs.snowShown > 0 && inputs.snowShown > hash2(cellX * 7 + 13, cellY * 5 + 3))) {
-        return "snow";
-    }
+    // The snow comes cell after cell as it thickens where it lies: each cell whitens at its own share of the snow, so
+    // the ground goes white by patches, not all at once.
+    const snow = inputs.snowCoverAt?.((cellX + 0.5) * TERRAIN_CELL, (cellY + 0.5) * TERRAIN_CELL) ?? 0;
+    if (snow >= 1 || (snow > 0 && snow > hash2(cellX * 7 + 13, cellY * 5 + 3))) return "snow";
     // The snow of the heights, over the snow line of the season (it slows the walk there too).
     if (inputs.snowLineSeason && snowCover(heightAt(terrain, cellX, cellY), inputs.snowLineSeason) >= SNOW_FROM) {
         return "snow";

@@ -146,6 +146,12 @@ describe("swimming in the water of the relief", () => {
         expect(isDeepTerrainWater(water, { x: 8, y: 8 }, 0)).toBe(true);
         expect(isDeepTerrainWater(water, { x: 15, y: 8 }, 0)).toBe(false);
     });
+
+    it("reads the water of the cell under the point where the water is not drawn smooth (the other engine)", () => {
+        const water = { depthAt: (x: number) => (Math.floor(x / 16) === 0 ? 20 : 0) };
+        expect(isDeepTerrainWater(water, { x: 15, y: 8 }, 0, false)).toBe(true);
+        expect(isDeepTerrainWater(water, { x: 17, y: 8 }, 0, false)).toBe(false);
+    });
 });
 
 describe("the bridges over the water of the relief", () => {

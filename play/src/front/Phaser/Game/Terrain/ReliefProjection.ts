@@ -129,9 +129,10 @@ export function hiddenBehindRim(
 }
 
 /**
- * Whether the relief is drawn in 3/4: not while the map editor is open (one digs and places where one aims, on a flat
- * relief), nor in the basic mode (the relief and its water are not drawn at all there).
+ * Whether the relief is drawn in 3/4: only when the player chose it (the map is else drawn flat by the other engine of
+ * the ground, TerrainView), not while the map editor is open (one digs and places where one aims, on a flat relief),
+ * nor in the basic mode (the relief and its water are not drawn at all there).
  */
-export function projectionShown(where: { editorOpen: boolean; basic: boolean }): boolean {
-    return !where.editorOpen && !where.basic;
+export function projectionShown(where: { chosen: boolean; editorOpen: boolean; basic: boolean }): boolean {
+    return where.chosen && !where.editorOpen && !where.basic;
 }

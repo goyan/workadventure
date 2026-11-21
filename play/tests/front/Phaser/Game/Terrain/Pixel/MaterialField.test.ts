@@ -8,6 +8,7 @@ import {
     pickMaterial,
 } from "../../../../../../src/front/Phaser/Game/Terrain/Pixel/MaterialField";
 import type { CellInputs, Cover } from "../../../../../../src/front/Phaser/Game/Terrain/Pixel/MaterialField";
+import { hash2 } from "../../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelNoise";
 import type { Material } from "../../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
 
 /** A dug cell painted with a soil (its number in SOILS: 4 sand). */
@@ -35,24 +36,22 @@ function meadow(values: { grass?: number; dryness?: number; fire?: number; ash?:
 
 describe("what covers a cell of the terrain", () => {
     it("the grass of the meadow over the soil painted under it, the soil without grass", () => {
-        expect(cellMaterial({ terrain: painted(4), meadow: meadow({ grass: 255 }), snowShown: 0 }, 4, 4)).toBe("grass");
-        expect(cellMaterial({ terrain: painted(4), meadow: meadow({}), snowShown: 0 }, 4, 4)).toBe("sand");
-        expect(cellMaterial({ terrain: painted(4), snowShown: 0 }, 4, 4)).toBe("sand");
+        expect(cellMaterial({ terrain: painted(4), meadow: meadow({ grass: 255 }) }, 4, 4)).toBe("grass");
+        expect(cellMaterial({ terrain: painted(4), meadow: meadow({}) }, 4, 4)).toBe("sand");
+        expect(cellMaterial({ terrain: painted(4) }, 4, 4)).toBe("sand");
     });
 
     it("snow over everything when it lies, embers where it burns, then ash, then straw", () => {
-        expect(cellMaterial({ terrain: painted(4), meadow: meadow({ grass: 255 }), snowShown: 1 }, 4, 4)).toBe("snow");
-        expect(
-            cellMaterial({ terrain: painted(1), meadow: meadow({ grass: 255, fire: 200 }), snowShown: 0 }, 4, 4),
-        ).toBe("ember");
-        expect(cellMaterial({ terrain: painted(1), meadow: meadow({ ash: 200 }), snowShown: 0 }, 4, 4)).toBe("ash");
-        expect(
-            cellMaterial({ terrain: painted(1), meadow: meadow({ grass: 255, dryness: 255 }), snowShown: 0 }, 4, 4),
-        ).toBe("straw");
+        expect(cellMaterial({ terrain: painted(4), meadow: meadow({ grass: 255 }), snowCoverAt: () => 1 }, 4, 4)).toBe(
+            "snow",
+        );
+        expect(cellMaterial({ terrain: painted(1), meadow: meadow({ grass: 255, fire: 200 }) }, 4, 4)).toBe("ember");
+        expect(cellMaterial({ terrain: painted(1), meadow: meadow({ ash: 200 }) }, 4, 4)).toBe("ash");
+        expect(cellMaterial({ terrain: painted(1), meadow: meadow({ grass: 255, dryness: 255 }) }, 4, 4)).toBe("straw");
     });
 
     it("grass where nothing is painted nor grows", () => {
-        expect(cellMaterial({ terrain: painted(4), snowShown: 0 }, 9, 9)).toBe("grass");
+        expect(cellMaterial({ terrain: painted(4) }, 9, 9)).toBe("grass");
     });
 });
 
@@ -94,7 +93,6 @@ describe("what covers a cell of the flat ground", () => {
     const clay = withSoils(undefined, new Map([[cellKey(3, 3), 3]]));
     const flat = (overrides: Partial<CellInputs> = {}): CellInputs => ({
         terrain: clay,
-        snowShown: 0,
         outdoor: (cellX) => cellX < 5,
         paved: (cellX, cellY) => cellX === 2 && cellY === 2,
         mapGrass: (_cellX, cellY) => cellY >= 8,
@@ -106,14 +104,14 @@ describe("what covers a cell of the flat ground", () => {
     it("nothing indoors nor on a floor of the Carte tool, even under the snow", () => {
         expect(cellMaterial(flat(), 6, 1)).toBe("none");
         expect(cellMaterial(flat(), 2, 2)).toBe("none");
-        expect(cellMaterial(flat({ snowShown: 1 }), 6, 1)).toBe("none");
-        expect(cellMaterial(flat({ snowShown: 1 }), 2, 2)).toBe("none");
+        expect(cellMaterial(flat({ snowCoverAt: () => 1 }), 6, 1)).toBe("none");
+        expect(cellMaterial(flat({ snowCoverAt: () => 1 }), 2, 2)).toBe("none");
     });
 
     it("the grass tiles of the map, nothing on the bare ground outdoors, snow over all of it in winter", () => {
         expect(cellMaterial(flat(), 1, 9)).toBe("grass");
         expect(cellMaterial(flat(), 1, 1)).toBe("none");
-        expect(cellMaterial(flat({ snowShown: 1 }), 1, 1)).toBe("snow");
+        expect(cellMaterial(flat({ snowCoverAt: () => 1 }), 1, 1)).toBe("snow");
     });
 
     it("grass where the ground is dug, even with nothing painted nor growing", () => {
@@ -133,7 +131,7 @@ describe("the snow of the heights", () => {
     it("whitens a mount over the snow line of the season, not under it", () => {
         // A mount 200 px high: over the line of the winter (96) and of the autumn (160), under the summer's (224).
         const mount = withHeights(undefined, new Map([[cellKey(1, 1), 200]]));
-        const inputs = (season: Season): CellInputs => ({ terrain: mount, snowShown: 0, snowLineSeason: season });
+        const inputs = (season: Season): CellInputs => ({ terrain: mount, snowLineSeason: season });
         expect(cellMaterial(inputs(Season.Winter), 1, 1)).toBe("snow");
         expect(cellMaterial(inputs(Season.Autumn), 1, 1)).toBe("snow");
         expect(cellMaterial(inputs(Season.Summer), 1, 1)).toBe("grass");
@@ -153,11 +151,11 @@ describe("the border of what nothing covers", () => {
 
 describe("the snow of the map coming", () => {
     it("covers the ground cell after cell as it thickens, not all at once at half", () => {
-        const share = (snowShown: number) => {
+        const share = (snow: number) => {
             let snowy = 0;
             for (let x = 0; x < 40; x++) {
                 for (let y = 0; y < 40; y++) {
-                    if (cellMaterial({ terrain: undefined, snowShown }, x, y) === "snow") snowy++;
+                    if (cellMaterial({ terrain: undefined, snowCoverAt: () => snow }, x, y) === "snow") snowy++;
                 }
             }
             return snowy / 1600;
@@ -167,5 +165,23 @@ describe("the snow of the map coming", () => {
         expect(share(0.3)).toBeLessThan(0.4);
         expect(share(0.7)).toBeGreaterThan(0.6);
         expect(share(1)).toBe(1);
+    });
+
+    it("whitens the cells the snow lies on, not their neighbours", () => {
+        // The snow lies on the tile of 32 px at 32,32 only: the cells 2 and 3, on both axes.
+        const snowCoverAt = (x: number, y: number) => (x >= 32 && x < 64 && y >= 32 && y < 64 ? 1 : 0);
+        expect(cellMaterial({ terrain: undefined, snowCoverAt }, 2, 2)).toBe("snow");
+        expect(cellMaterial({ terrain: undefined, snowCoverAt }, 3, 3)).toBe("snow");
+        expect(cellMaterial({ terrain: undefined, snowCoverAt }, 4, 2)).toBe("grass");
+        expect(cellMaterial({ terrain: undefined, snowCoverAt }, 2, 1)).toBe("grass");
+    });
+
+    it("comes by the same patches wherever half of it lies: a cell whitens at its own share of the snow", () => {
+        for (let x = 0; x < 30; x++) {
+            for (let y = 0; y < 30; y++) {
+                const snowy = cellMaterial({ terrain: undefined, snowCoverAt: () => 0.5 }, x, y) === "snow";
+                expect(snowy, `${x},${y}`).toBe(hash2(x * 7 + 13, y * 5 + 3) < 0.5);
+            }
+        }
     });
 });

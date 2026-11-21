@@ -93,9 +93,15 @@ export function isDeepTerrainWater(
         | undefined,
     point: Point,
     now: number,
+    /**
+     * Whether the water is drawn smooth between the centres of the cells (the relief in 3/4): one swims where it is
+     * drawn dark. Else by the cell under the point.
+     */
+    asDrawn = true,
 ): boolean {
     // On the deck of a bridge one walks, whatever water runs under it.
     if (water === undefined || water.isBridgeAt?.(point.x, point.y)) return false;
+    if (!asDrawn) return water.depthAt(point.x, point.y, now) >= SWIM_DEPTH_PX;
     // The water as it is drawn (between the centres of the cells, as the lake and the avatar in it are), so that one
     // swims where the water is drawn dark: not by squares of a cell.
     return waterDepthAtPoint((x, y) => water.depthAt(x, y, now), point.x, point.y) >= SWIM_DEPTH_PX;

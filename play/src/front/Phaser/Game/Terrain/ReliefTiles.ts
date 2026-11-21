@@ -80,8 +80,13 @@ export interface ReliefInputs {
     water: TerrainWater;
     meadow?: MeadowState;
     season(): Season | undefined;
-    /** How much of the ground is under the snow of the season (0 to 1). */
-    snowShown(): number;
+    /** How much the snow that fell whitens the ground at a point of the map (map pixels), 0 to 1. */
+    snowCoverAt(x: number, y: number): number;
+    /**
+     * Changes when what `snowCoverAt` answers may have changed for a reason the meadow does not tell (whose ground the
+     * player sees): what covers the cells is read again. The snow of the meadow itself changes with its version.
+     */
+    groundVersion?(): number;
     /** The season of the calendar, for the snow line of the heights (the same for everyone, as the walk). */
     snowLineSeason?(): Season | undefined;
     /** The layout of the map, to draw the flat ground too: absent, only the dug ground and its water are drawn. */
@@ -316,10 +321,9 @@ export class ReliefTiles {
         }
         // The meadow is told again every 10 s (2 s during a fire): a block is drawn again only when what covers one of
         // its cells changes, not at each message.
-        const snow = Math.round(this.inputs.snowShown() * 10) / 10;
-        const coverKey = `${this.inputs.meadow?.version() ?? 0}|${layout?.version() ?? 0}|${snow}|${
-            this.inputs.snowLineSeason?.() ?? ""
-        }`;
+        const coverKey = `${this.inputs.meadow?.version() ?? 0}|${layout?.version() ?? 0}|${
+            this.inputs.groundVersion?.() ?? 0
+        }|${this.inputs.snowLineSeason?.() ?? ""}`;
         if (coverKey !== this.coverKey) {
             this.coverKey = coverKey;
             this.markCoversStale();
@@ -351,7 +355,8 @@ export class ReliefTiles {
             this.staleCovers.delete(key);
             reads++;
         }
-        const shared = `${this.inputs.season() ?? ""}|${snow}|${this.projected ? "3/4" : "flat"}|${this.seeThrough}`;
+        // The snow is in what covers each cell: a block is drawn again where it fell, not all of them.
+        const shared = `${this.inputs.season() ?? ""}|${this.projected ? "3/4" : "flat"}|${this.seeThrough}`;
         this.reliefReads = 0;
         this.reliefsWaiting = false;
         // A block whose relief is not read yet (its turn comes in a next image) is left as it is.
@@ -698,7 +703,7 @@ export class ReliefTiles {
         return {
             terrain,
             meadow,
-            snowShown: this.inputs.snowShown(),
+            snowCoverAt: (x, y) => this.inputs.snowCoverAt(x, y),
             outdoor: layout && ((cellX, cellY) => layout.outdoor(cellX, cellY)),
             paved: layout && ((cellX, cellY) => layout.paved(cellX, cellY)),
             mapGrass: layout && ((cellX, cellY) => layout.mapGrass(cellX, cellY)),

@@ -2397,7 +2397,11 @@ export class GameScene extends DirtyScene {
                 pointerAltitude(terrain, pointed && (this.reliefTiles?.groundPointAt(pointed) ?? pointed)),
             );
             // The relief is drawn in 3/4 out of the editor; flat in it, to dig and place where one aims.
-            const projected = projectionShown({ editorOpen: get(mapEditorModeStore), basic: isBasicActive() });
+            const projected = projectionShown({
+                chosen: true,
+                editorOpen: get(mapEditorModeStore),
+                basic: isBasicActive(),
+            });
             // Nothing of it in the basic mode; flat while the map is edited.
             this.mapGroundLayout?.refresh(time);
             this.reliefTiles?.setHidden(isBasicActive());
@@ -3900,7 +3904,8 @@ export class GameScene extends DirtyScene {
                     meadow: this.meadow,
                     season: () =>
                         this.seasonalThemeManager?.groundSeason(this.getGroundSeason()) ?? this.getGroundSeason(),
-                    snowShown: () => this.seasonalThemeManager?.groundSnow() ?? 0,
+                    snowCoverAt: () => this.seasonalThemeManager?.groundSnow() ?? 0,
+                    groundVersion: () => Math.round((this.seasonalThemeManager?.groundSnow() ?? 0) * 10),
                     layout: this.mapGroundLayout,
                     snowLineSeason: () => this.getGroundSeason(),
                     // Far out, the blocks are drawn no finer than the screen shows them.
