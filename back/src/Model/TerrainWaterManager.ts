@@ -1,6 +1,8 @@
 import { gunzipSync, gzipSync } from "node:zlib";
 import {
     advanceImpactWave,
+    blastWater,
+    DEFAULT_IMPACT_REACH,
     closedDoorSides,
     holdsOpen,
     waterDoorsOf,
@@ -477,6 +479,8 @@ export class TerrainWaterManager {
         const cellX = Math.floor(x / TERRAIN_CELL);
         const cellY = Math.floor(y / TERRAIN_CELL);
         this.stopPumps();
+        // The shock first drives the water around the crater away; then the water of the crater is thrown up.
+        this.blast(grid, cellX, cellY, radiusTiles);
         if (this.room.getWam()?.settings?.water?.inertia === true) {
             // A water with inertia makes its own wave: the impact only throws the water of the crater around it.
             const struck = strikeWater(grid, cellX, cellY, shape);
@@ -502,7 +506,8 @@ export class TerrainWaterManager {
 
     /**
      * A fireball lands at a point of the map (pixels), its crater `radiusTiles` wide: the water of the crater boils
-     * away, counted as lost, and no wave leaves. The room is told at once. Nothing on a map without water.
+     * away, counted as lost, and its steam blows the water around the crater outwards (see blast). The room is told
+     * at once. Nothing on a map without water.
      */
     public vaporise(x: number, y: number, radiusTiles: number): void {
         const grid = this.grid;
@@ -512,13 +517,28 @@ export class TerrainWaterManager {
             Math.floor(y / TERRAIN_CELL),
             meteorShape(radiusTiles).discCells,
         );
-        if (!taken || taken.takenPx <= 0) return;
+        if (!taken) return;
+        // The steam of the water it boils away blows the water around the crater outwards.
+        const blast = this.blast(grid, Math.floor(x / TERRAIN_CELL), Math.floor(y / TERRAIN_CELL), radiusTiles);
+        if (taken.takenPx <= 0 && blast <= 0) return;
         this.stopPumps();
         this.sums.lostPx += taken.takenPx;
         this.moving = true;
         this.version++;
         this.changedSinceSave = true;
         this.tell(grid);
+    }
+
+    /**
+     * The blast of an impact drives the water around its crater away, as far as the map says (WaterSettings
+     * .impactReach, see blastWater). Returns the water moved; what found no room past the blast is counted lost.
+     */
+    private blast(grid: WaterGrid, cellX: number, cellY: number, radiusTiles: number): number {
+        const reach = this.room.getWam()?.settings?.water?.impactReach ?? DEFAULT_IMPACT_REACH;
+        const blast = blastWater(grid, cellX, cellY, meteorShape(radiusTiles), reach);
+        if (!blast) return 0;
+        this.sums.lostPx += blast.lostPx;
+        return blast.movedPx;
     }
 
     /** A meteor fell in the water: the pumps of the pools start again a moment later, so an emptied pool is seen empty. */

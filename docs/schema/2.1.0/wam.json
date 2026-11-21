@@ -1994,6 +1994,11 @@
                   "minimum": 0.1,
                   "maximum": 2
                 },
+                "impactReach": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 4
+                },
                 "waves": {
                   "type": "object",
                   "properties": {

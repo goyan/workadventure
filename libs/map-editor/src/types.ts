@@ -1002,6 +1002,12 @@ export const WATER_PACE_BOUNDS = { precision: [1, 8], updates: [1, 10] } as cons
  */
 export const DEFAULT_FLOW_PACE = 1;
 export const FLOW_PACE_BOUNDS = [0.1, 2] as const;
+/**
+ * How far the blast of a meteor drives the water away, in times the radius of its crater: 1 is the crater alone. The
+ * usual 2.5 is about how far the continuous ejecta of a crater reach (two to three times its radius).
+ */
+export const DEFAULT_IMPACT_REACH = 2.5;
+export const IMPACT_REACH_BOUNDS = [1, 4] as const;
 
 /**
  * The water of a map as in reality (the "Realistic" button of the relief tool): it goes at its real pace, has
@@ -1021,6 +1027,7 @@ export const REALISTIC_WATER_SETTINGS = {
     precision: DEFAULT_WATER_PACE.precision,
     updates: 5,
     flowPace: DEFAULT_FLOW_PACE,
+    impactReach: DEFAULT_IMPACT_REACH,
 } as const;
 /** The fastest the floors of the rooms of a map may drain, in mm an hour. */
 export const MAX_WATER_INDOOR_DRAIN = 10000;
@@ -1094,6 +1101,11 @@ export const WaterSettings = z.object({
      * `speed`, not this.
      */
     flowPace: z.number().min(FLOW_PACE_BOUNDS[0]).max(FLOW_PACE_BOUNDS[1]).optional(),
+    /**
+     * How far the blast of a meteor fallen in the water drives it away, in times the radius of its crater (2.5 when
+     * absent, 1: the water of the crater alone is moved).
+     */
+    impactReach: z.number().min(IMPACT_REACH_BOUNDS[0]).max(IMPACT_REACH_BOUNDS[1]).optional(),
     waves: z
         .object({
             roughness: z.number().min(WAVE_BOUNDS.roughness[0]).max(WAVE_BOUNDS.roughness[1]),

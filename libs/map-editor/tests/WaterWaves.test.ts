@@ -394,6 +394,23 @@ describe("the settings of the waves", () => {
         expect(wam.settings?.water?.flowPace).toBe(0.5);
     });
 
+    it("keeps how far the blast of a meteor drives the water away, from the crater alone to four times as far", async () => {
+        const wam = emptyWam();
+        await send(wam, {});
+        expect(wam.settings?.water).not.toHaveProperty("impactReach");
+        await send(wam, { impactReach: 99 });
+        expect(wam.settings?.water?.impactReach).toBe(4);
+        // An older client says nothing of it: it stays.
+        await send(wam, {});
+        expect(wam.settings?.water?.impactReach).toBe(4);
+        await send(wam, { impactReach: 0 });
+        expect(wam.settings?.water?.impactReach).toBe(1);
+        await send(wam, { impactReach: Number.NaN });
+        expect(wam.settings?.water?.impactReach).toBe(1);
+        await send(wam, { impactReach: 2.5 });
+        expect(wam.settings?.water?.impactReach).toBe(2.5);
+    });
+
     it("go to the water with inertia, the usual ones for a map that set none", () => {
         expect(stepInputOf({ ...DEFAULT_WATER_SETTINGS }, 0, [], 0.1).waves).toBeUndefined();
         expect(stepInputOf({ ...DEFAULT_WATER_SETTINGS, inertia: true }, 0, [], 0.1).waves).toEqual(

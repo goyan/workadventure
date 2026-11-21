@@ -19,6 +19,7 @@ const { executeUpdateTerrain, executeUpdateWAMSettings, mapSettings } = vi.hoist
         precision: 3,
         updates: 1,
         flowPace: 1,
+        impactReach: 2.5,
         meadow: { enabled: true, growMinutes: 10, thirstMinutes: 20, moistureHold: 1 },
         life: {
             enabled: false,
@@ -193,6 +194,7 @@ describe("TerrainEditor", () => {
                 precision: 3,
                 updates: 5,
                 flowPace: 1,
+                impactReach: 2.5,
             },
         });
         // The sliders follow, those of the waves now shown.
@@ -219,6 +221,15 @@ describe("TerrainEditor", () => {
         expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
             $case: "updateWaterSettingMessage",
             updateWaterSettingMessage: expect.objectContaining({ flowPace: 0.5 }),
+        });
+    });
+
+    it("sets how far the blast of a meteor drives the water away, with or without the water with inertia", () => {
+        render();
+        setRange("terrain-impact-reach", 4);
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: expect.objectContaining({ impactReach: 4 }),
         });
     });
 
@@ -302,6 +313,7 @@ describe("TerrainEditor", () => {
                 indoorDrain: 300,
                 inertia: false,
                 updates: 1,
+                impactReach: 2.5,
             },
         });
         setRange("terrain-evaporation", 1);
@@ -317,6 +329,7 @@ describe("TerrainEditor", () => {
                 indoorDrain: 300,
                 inertia: false,
                 updates: 1,
+                impactReach: 2.5,
             },
         });
         setRange("terrain-speed", 300);
@@ -332,6 +345,7 @@ describe("TerrainEditor", () => {
                 indoorDrain: 300,
                 inertia: false,
                 updates: 1,
+                impactReach: 2.5,
             },
         });
         setRange("terrain-absorption", 20);
@@ -347,6 +361,7 @@ describe("TerrainEditor", () => {
                 indoorDrain: 300,
                 inertia: false,
                 updates: 1,
+                impactReach: 2.5,
             },
         });
     });
@@ -369,6 +384,7 @@ describe("TerrainEditor", () => {
                 indoorDrain: 300,
                 inertia: false,
                 updates: 1,
+                impactReach: 2.5,
             },
         });
     });
@@ -391,6 +407,7 @@ describe("TerrainEditor", () => {
                 indoorDrain: 300,
                 inertia: false,
                 updates: 1,
+                impactReach: 2.5,
             },
         });
     });
@@ -413,6 +430,7 @@ describe("TerrainEditor", () => {
                 indoorDrain: 0,
                 inertia: false,
                 updates: 1,
+                impactReach: 2.5,
             },
         });
     });

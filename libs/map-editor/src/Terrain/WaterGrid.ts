@@ -661,6 +661,38 @@ export class WaterGrid {
     }
 
     /**
+     * Takes a share of the water of the ring around a cell: of each cell further than `inner` cells from it and no
+     * further than `outer`, reached from it without crossing a wall, the share `share` gives for its distance (0 to
+     * 1). Returns the water taken; undefined outside the grid or in a wall.
+     */
+    public takeRing(
+        cellX: number,
+        cellY: number,
+        inner: number,
+        outer: number,
+        share: (distanceCells: number) => number,
+    ): number | undefined {
+        const centre = this.indexOf(cellX, cellY);
+        if (centre === undefined || this.blocked[centre]) return undefined;
+        const { width } = this.bounds;
+        const column = centre % width;
+        const row = (centre - column) / width;
+        let takenPx = 0;
+        for (const index of this.discAround(centre, outer, discLimit(outer))) {
+            if (this.depth[index] <= 0) continue;
+            const x = index % width;
+            const distance = Math.hypot(x - column, (index - x) / width - row);
+            if (distance <= inner) continue;
+            const part = share(distance);
+            if (!Number.isFinite(part) || part <= 0) continue;
+            const taken = this.depth[index] * Math.min(1, part);
+            this.depth[index] -= taken;
+            takenPx += taken;
+        }
+        return takenPx;
+    }
+
+    /**
      * Lays up to `px` of water on the ring around a cell: the cells further than `inner` cells from it and no further
      * than `outer`, reached from it without crossing a wall (all the disc when `inner` is negative). Each cell takes
      * an even share, never over its highest level, and a cell already `deepPx` deep no more than `crestPx`: open water

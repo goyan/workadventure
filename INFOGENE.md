@@ -3213,6 +3213,15 @@ L'eau d'une piscine peinte n'est plus un dessin toujours plein : c'est de l'eau 
   les pompes mettent 3 secondes à repartir (`POOL_PUMP_RESTART_SECONDS`) : une piscine vidée se voit vide. Compté avec les sources dans le bilan de l'eau. Le fond ne boit pas (sol de piscine, creux).
   Le bassin est étanche (`WaterGrid.seal`) : il ne reçoit que la pluie qui tombe dessus (`sealedRainPx`), pas le
   ruissellement du terrain autour, que la margelle arrête ; sinon une pluie le ferait déborder onze fois plus vite.
+- **Le souffle d'un météore** (`blastWater`, réglage `water.impactReach`, curseur « Souffle d'un météore dans
+  l'eau » de l'outil Relief). Un impact déplace bien plus d'eau que le volume de ce qui tombe : le choc chasse l'eau
+  autour du cratère, toute près de lui, de moins en moins ensuite (en ligne droite : un choix, le plus simple qui ne
+  laisse pas de marche dans l'eau), plus rien à `impactReach` fois le rayon du cratère. L'eau chassée retombe en
+  bourrelet juste au-delà ; ce qui n'y trouve pas de place est perdu. Défaut 2,5 (les projections d'un cratère
+  couvrent 2 à 3 fois son rayon), de 1 (l'eau du cratère seule, comme avant) à 4. Vaut pour la comète (avant qu'elle
+  projette l'eau de son cratère) et pour le météore brûlant (sa vapeur souffle l'eau autour : il n'était suivi
+  d'aucune vague avant), sur toute l'eau de la carte, lacs compris. Dans une piscine, l'essentiel de l'eau est jeté
+  dehors.
 - **Ce qui en découle.** La comète y soulève une vague, le météore brûlant fait bouillir son eau, le drain la vide,
   et elle se remplit. La pluie et la fonte y tombent. Une inondation y entre, elle déborde. Elle gèle comme un lac.
 - **À l'écran** (`GroundSplat`, `poolColor`). La margelle et le carrelage restent ; l'eau dessinée suit le niveau du

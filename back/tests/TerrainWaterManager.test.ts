@@ -3,6 +3,7 @@ import {
     cellKey,
     CELL_LITRES_PER_PX,
     DEFAULT_POOL_STYLE,
+    DEFAULT_WATER_SETTINGS,
     POOL_FREEBOARD_PX,
     poolSoilCode,
     PX_PER_MM,
@@ -51,7 +52,17 @@ function wamWith(terrain: TerrainData | undefined, weather: WeatherType = Weathe
         entities: {},
         settings: {
             weather,
-            water: { runoff: 10, evaporation: 0, speed: 1, absorption: 0, current: 1, maxSurface: 18, indoorDrain: 0 },
+            // The blast of an impact has its own tests: here a meteor moves the water of its crater alone.
+            water: {
+                runoff: 10,
+                evaporation: 0,
+                speed: 1,
+                absorption: 0,
+                current: 1,
+                maxSurface: 18,
+                indoorDrain: 0,
+                impactReach: 1,
+            },
         },
         terrain,
     };
@@ -293,6 +304,27 @@ describe("TerrainWaterManager", () => {
         sent.length = 0;
         steps(5);
         expect(sent.length).toBeLessThan(5);
+    });
+
+    it("a fireball blows the water around its crater outwards, as far as the map says", () => {
+        const depthAfter = (impactReach: number | undefined): number | undefined => {
+            const wam = wamWith(wideLake);
+            wam.settings = {
+                ...wam.settings,
+                water: { ...DEFAULT_WATER_SETTINGS, ...wam.settings?.water, impactReach },
+            };
+            const { manager } = createHarness({ wam });
+            manager.mapChanged();
+            fillWithWater(manager);
+            manager.vaporise(240, 240, 4);
+            // Ten cells from the middle of a crater of eight.
+            return manager.getGrid()?.depthAt(25, 15);
+        };
+        expect(depthAfter(1)).toBe(8);
+        // The usual blast reaches 2.5 times the crater: five sixths of the water there are gone.
+        expect(depthAfter(undefined)).toBeCloseTo(8 / 6, 1);
+        // A blast that reaches four times the crater is stronger there: eleven twelfths are gone.
+        expect(depthAfter(4)).toBeCloseTo(8 / 12, 1);
     });
 
     it("a fireball on a map without water does nothing", () => {
@@ -777,6 +809,39 @@ describe("the pools of the map in the water of the relief", () => {
         // What the pump brought is counted with the sources.
         expect(sent.some((message) => (message.stats?.sources ?? 0) > 0)).toBe(true);
         manager.stop();
+    });
+
+    it("has a meteor that falls in a wide pool throw far more water out than its crater holds", () => {
+        // A pool of 40 × 30 cells, a crater of 4 tiles (8 cells) in its middle.
+        const wide: [string, number][] = [];
+        for (let y = 10; y < 40; y++) for (let x = 10; x < 50; x++) wide.push([cellKey(x, y), poolSoilCode(0)]);
+        const water = (reach: number | undefined): number => {
+            const wam = wamWith(withSoils(undefined, new Map(wide)));
+            wam.settings = {
+                ...wam.settings,
+                pools: [DEFAULT_POOL_STYLE],
+                water: { ...DEFAULT_WATER_SETTINGS, ...wam.settings?.water, impactReach: reach },
+            };
+            const { manager } = createHarness({ wam, mapSize: () => ({ width: 80, height: 60 }) });
+            manager.mapChanged();
+            for (let step = 0; step < 120; step++) manager.step();
+            manager.vaporise(30 * 16, 25 * 16, 4);
+            const grid = manager.getGrid();
+            let held = 0;
+            for (const [key] of wide) {
+                const [x, y] = key.split(",").map(Number);
+                held += grid?.depthAt(x, y) ?? 0;
+            }
+            manager.stop();
+            return held / (wide.length * full);
+        };
+        // The crater alone: a sixth of the water of the pool. The usual blast takes far more of it, a wider one more.
+        const craterOnly = water(1);
+        const usual = water(undefined);
+        expect(craterOnly).toBeGreaterThan(0.75);
+        expect(usual).toBeLessThan(craterOnly - 0.2);
+        expect(usual).toBeLessThan(0.6);
+        expect(water(4)).toBeLessThan(usual);
     });
 
     it("leaves a pool a meteor emptied empty for a moment: its pump takes three seconds to start again", () => {
