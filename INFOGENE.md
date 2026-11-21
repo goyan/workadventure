@@ -2467,6 +2467,30 @@ relief des blocs d'une vue immense est lu 48 blocs par image au plus. Plusieurs 
 remplie en 12 images, tout net en 155 images, 7,6 ms par bloc net (75 ms avant : les boucles tournaient dans le
 générateur et les courbes de niveau allouaient un tableau par point).
 
+**Blocs peints hors du fil du jeu** (lot E, `docs/superpowers/specs/2026-11-21-terrain-blocs-worker-design.md` du
+dépôt d'infra) : le dessin d'un bloc est un module pur (`Terrain/Pixel/BlockPainter.ts`) qui peint à partir de données
+simples (`BlockJob` : hauteurs, eau, matière de chaque case de la fenêtre, herbe dense), lues une fois par bloc par
+`ReliefTiles.jobOf` (0,18 ms). Deux **workers** au plus (`Terrain/BlockPaintWorker.ts`, `BlockPaintPool.ts`,
+`BlockPaintWorkers.ts`) calculent les pixels ; chacun reçoit ses blocs d'avance (environ deux images de travail,
+`WORK_AN_IMAGE`) et les enchaîne seul. Le fil du jeu ne fait que préparer les blocs et envoyer les pixels revenus à la
+carte graphique : 6 ms par image tant que la vue n'est pas nette, 3 ms ensuite (`HANDOVER_BUDGET_MS`). Les workers
+démarrent par un blob de même origine qui importe leur script (le navigateur refuse un worker dont le script vient du
+domaine des ressources). **Repli** : sans `Worker`, ou après une erreur, un message illisible ou 5 s de silence, les
+blocs sont peints sur le fil du jeu comme avant (un avertissement dans la console, une fois). Le worker ne charge ni
+la bibliothèque des cartes ni Phaser (`Pixel/TerrainUnits.ts` recopie les unités, un test garde l'égalité ;
+`Pixel/WorkerImports.test.ts` refuse tout import lourd) : 13,7 ko minifié. **Une seule copie par bloc**
+(`Terrain/ReliefSurface.ts`) : en WebGL les pixels vont droit à une texture (`addUint8Array`, mise à jour sur place)
+par un tampon partagé par taille, sans canvas par bloc ; au retour d'un contexte WebGL perdu, tous les blocs sont
+redessinés. Les blocs à dessiner sont choisis une fois par image (`plan`), un bloc sans relief n'est pas lu case par
+case. Mesuré le 2026-11-21 dans Chromium (Apple M4 Max, carte d'équipe locale, 72 blocs visibles et 99 autour, zoom 1,
+jeu à 27 images/s au repos), sur le fil du jeu puis avec les workers : vue remplie en grossier 1,05 s → 0,4 s ; vue
+nette 11,6 s → 0,9 s ; tout net autour 16 s → 1,3 à 1,4 s ; temps du terrain sur le fil du jeu 1 800 ms → 153 à
+169 ms ; 18 → 24 à 25 images/s pendant le chargement ; mêmes pixels (0 octet d'écart sur 4 blocs) ; textures du
+terrain après un parcours de zooms 41 Mo, aucun canvas. Cibles de la conception non atteintes : 95 % des images sous
+2 ms (4,5 à 5 ms au milieu, 6,5 à 7,5 ms au pire pendant 1,3 s : l'envoi des pixels à la carte graphique reste sur le
+fil du jeu) et 110 blocs nets en moins d'une seconde (99 en 1,3 s). Très dézoomé depuis rien : 600 blocs grossiers en
+3 s, jusqu'à 15 ms par image pendant ce temps.
+
 **Limites.** L'eau traverse encore les murs (elle devra passer par les portes seulement : `back` ne connaît pas les
 murs). Pas de mode Rivière tracée. Relief au sol et dehors seulement. Animaux et compagnons ignorent l'eau.
 Pas de courant qui pousse l'avatar. Un geste immense part en plusieurs commandes (autant d'annulations). Les valeurs
