@@ -5,7 +5,6 @@ import {
     SNOW_FULL_MM,
     SNOW_MAX_MM,
     snowByte,
-    snowCoverOf,
     snowMeltMmPerHour,
     snowMmOfByte,
     snowSublimationMmPerHour,
@@ -165,6 +164,11 @@ export interface MeadowStepInput {
     windSpeed?: number;
     /** The luck of the fire, from 0 to 1 at each draw: whether it spreads, whether one starts. Math.random when absent. */
     random?: () => number;
+    /**
+     * How frozen the top of the soil is, from 0 to 1 (see soilFrost): its water is ice, which neither dries, nor
+     * spreads, nor runs down; its grass lies dormant, and nothing grows back after a fire. 0 when absent.
+     */
+    soilFrost?: number;
     /** The air over the snow (temperature, humidity, wind); absent while not known: the snow neither melts nor goes. */
     weather?: SnowWeather;
     /** How many times faster than the real clock the snow melts; THAW_SPEED when absent. */
@@ -586,6 +590,11 @@ export class Meadow {
                 : 0;
         // A hot, dry wind dries the soil itself, not under the rain.
         const parching = rain > 0 ? 1 : 1 + PARCHING * danger;
+        // What of the soil is not frozen: only that part of it changes. Frozen water stays where it is.
+        const thaw =
+            input.soilFrost !== undefined && Number.isFinite(input.soilFrost)
+                ? 1 - Math.min(1, Math.max(0, input.soilFrost))
+                : 1;
         const { width, height, moisture, next, grass, dryness, fire, ash, water, hold, ground, fertility, outdoor } =
             this;
         water.fill(0);
@@ -603,7 +612,7 @@ export class Meadow {
                     const kept = moisture[index] + rain * seconds * RAIN_GAIN;
                     moisture[index] = Math.min(
                         1,
-                        kept - kept * Math.min(1, (seconds * parching) / (hold[index] * holds)),
+                        kept - kept * Math.min(1, (seconds * parching * thaw) / (hold[index] * holds)),
                     );
                 }
             }
@@ -627,7 +636,7 @@ export class Meadow {
                 if (ground[other] > ground[index]) change += (MOISTURE_RUNOFF / 4) * slope * moisture[other];
                 else if (ground[other] < ground[index]) change -= (MOISTURE_RUNOFF / 4) * slope * moisture[index];
             }
-            next[index] = Math.min(1, Math.max(0, moisture[index] + change * Math.min(1, pace)));
+            next[index] = Math.min(1, Math.max(0, moisture[index] + change * Math.min(1, pace) * thaw));
         }
         moisture.set(next);
         this.drinkFromBanks();
@@ -637,14 +646,14 @@ export class Meadow {
             let cover = grass[index];
             if (fertility[index] <= 0 || water[index] >= DROWNING_WATER_PX) {
                 cover -= seconds / DROWN_SECONDS;
-            } else if (snowCover(ground[index], input.season) > 0 || this.snow[index] > 0) {
-                // Under the snow, of the heights or fallen, the grass dies back, as fast as of thirst under a full
-                // cover.
-                cover -=
-                    (seconds / thirstSeconds) *
-                    Math.max(snowCover(ground[index], input.season), snowCoverOf(this.snow[index]));
+            } else if (snowCover(ground[index], input.season) > 0) {
+                // Under the snow of the heights the grass dies back, as fast as of thirst under a full cover.
+                cover -= (seconds / thirstSeconds) * snowCover(ground[index], input.season);
+            } else if (this.snow[index] > 0) {
+                // Under the snow that fell the grass lies dormant: it neither dies of thirst nor grows.
             } else if (moisture[index] < DRY_MOISTURE) {
-                cover -= seconds / thirstSeconds;
+                // The grass of a frozen soil lies dormant: it does not go thirsty for the water it cannot draw.
+                cover -= (seconds * thaw) / thirstSeconds;
             } else if (
                 input.daylight &&
                 growth > 0 &&
@@ -652,15 +661,17 @@ export class Meadow {
                 moisture[index] >= GROWING_MOISTURE[0] &&
                 moisture[index] <= GROWING_MOISTURE[1]
             ) {
-                cover += (seconds / growSeconds) * fertility[index] * growth * altitudeGrowth(ground[index]);
+                cover += ((seconds * thaw) / growSeconds) * fertility[index] * growth * altitudeGrowth(ground[index]);
             }
             grass[index] = Math.min(1, Math.max(0, cover));
         }
         this.burn(input, seconds, Math.min(growSeconds, AFTER_FIRE_SECONDS));
-        this.regrow(input, seconds, Math.min(growSeconds, AFTER_FIRE_SECONDS));
+        // Nothing grows back on a frozen soil: the time after a fire runs again at the thaw.
+        this.regrow(input, seconds * thaw, Math.min(growSeconds, AFTER_FIRE_SECONDS));
         // The grass dries towards what the conditions and its soil make it: straw on a dry soil when it is hot, dry
         // and windy, green again on a wet soil or when the conditions ease.
-        const share = 1 - Math.exp(-seconds / DRYING_SECONDS);
+        // Dormant on a frozen soil, it neither cures nor greens.
+        const share = 1 - Math.exp(-(seconds * thaw) / DRYING_SECONDS);
         for (let index = 0; index < dryness.length; index++) {
             // Every ground where grass can grow dries, bare or not; sand, rock and indoors have nothing to dry.
             // Burnt ground has nothing left to dry until its grass is back.

@@ -145,13 +145,17 @@ const menu: BaseTranslation = {
             disabled: "Off",
             always: "Always night",
             world: "Daytime somewhere",
-            worldHelp: "The sky of a city of the world where it is the moment chosen, at the server time.",
+            worldHelp:
+                "The sky of a city of the world where the sun is rising, at its highest or setting, or at the chosen time, at the server time. Click on the map for another point.",
             morning: "Morning",
             noon: "Noon",
             evening: "Evening",
             custom: "Chosen time",
             worldCity: "Sky of {city}",
+            worldPointCity: "Sky of {city} (point chosen on the map)",
             skyMenu: "Sky and time",
+            basicOff:
+                "Basic mode turns the day/night cycle off: full daylight. Your choice ({mode}) comes back when you leave it.",
             disable: "Turn off night mode",
             darkness: "Darkness of the night: {percent:number}%",
             darknessLight: "Light",

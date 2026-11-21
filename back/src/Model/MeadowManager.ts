@@ -8,7 +8,7 @@ import {
     lifeFireOf,
     Meadow,
     MEADOW_STEP_SECONDS,
-    minutesOfDayIn,
+    isDaylightAt,
     pavedTilesOf,
     liquidRainRate,
     DEFAULT_WATER_SETTINGS,
@@ -18,6 +18,7 @@ import {
     PX_PER_MM,
     snowRainRate,
     snowShareOf,
+    soilFrostOf,
     rainRateAt,
     seasonAt,
     TERRAIN_CELL,
@@ -48,9 +49,6 @@ const STEPS_PER_MESSAGE = 5;
 const STEPS_PER_SAVE = 30;
 /** No meadow on a map larger than this, in tiles: it would be read at every step. */
 const MAX_MEADOW_TILES = 1_000_000;
-/** The grass grows by day: between these minutes of the day at the place of the map. */
-const DAY_FROM = 7 * 60;
-const DAY_TO = 19 * 60;
 /** A tree on fire melts the snow this many tiles around its foot. */
 const TREE_THAW_TILES = 2;
 /** Each patch of fire a player sets melts this much of the snow under it, in mm of water. */
@@ -95,6 +93,8 @@ export class MeadowManager {
     private timer: ReturnType<typeof setInterval> | undefined;
     private steps = 0;
     private rainRate = 0;
+    /** How frozen the soil is now, from the same air as the rain (see soilFrost). */
+    private frost = 0;
     /** The air the rain of the map falls through: the conditions of the room, once it gives them. */
     private air: () => PrecipitationAir | undefined = () => undefined;
     /** The part of the rain of the map that falls as snow now, in mm of water an hour. */
@@ -305,6 +305,8 @@ export class MeadowManager {
             this.rainRate = liquidRainRate(falling, this.air());
             // ...and the snow lies on the ground, until it melts.
             this.snowRate = snowRainRate(falling, this.air());
+            // ...and in the same cold the soil freezes: its water stays, its grass lies dormant.
+            this.frost = soilFrostOf(this.air());
         }
         this.steps++;
         const set = { ...DEFAULT_MEADOW_SETTINGS, ...settings?.meadow };
@@ -349,7 +351,7 @@ export class MeadowManager {
                     seconds: MEADOW_STEP_SECONDS,
                     rainMmPerHour: this.rainRate,
                     daylight: false,
-                    season: seasonAt(date),
+                    season: seasonAt(date, settings?.weatherLocation),
                     waterAt,
                     ...snow,
                 });
@@ -360,13 +362,13 @@ export class MeadowManager {
             return;
         }
         this.cleared = false;
-        const minutes = minutesOfDayIn(date, settings?.weatherLocation?.timezone);
         const weather = this.fireWeather();
         const thawed = meadow.step({
             seconds: MEADOW_STEP_SECONDS,
             rainMmPerHour: this.rainRate,
-            daylight: minutes >= DAY_FROM && minutes < DAY_TO,
-            season: seasonAt(date),
+            // Day from sunrise to sunset at the place of the map, as the game draws its day and night.
+            daylight: isDaylightAt(date, settings?.weatherLocation),
+            season: seasonAt(date, settings?.weatherLocation),
             growSeconds: set.growMinutes * 60,
             thirstSeconds: set.thirstMinutes * 60,
             moistureHold: set.moistureHold,
@@ -374,6 +376,7 @@ export class MeadowManager {
             windFrom: weather.windFrom,
             windSpeed: weather.windSpeed,
             random: this.random,
+            soilFrost: this.frost,
             waterAt,
             ...snow,
         });

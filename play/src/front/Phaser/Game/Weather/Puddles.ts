@@ -1,5 +1,5 @@
 import { WeatherType } from "@workadventure/map-editor";
-import type { AutoWeatherSettings } from "@workadventure/map-editor";
+import type { AutoWeatherSettings, SeasonPlace } from "@workadventure/map-editor";
 import { hash01 } from "../Autumn/LeafPalette";
 import type { MapSnowSettings } from "./SnowCover";
 import type { WeatherView } from "./WeatherFrame";
@@ -24,6 +24,7 @@ export function groundWetness(
     startedAt?: number,
     auto?: AutoWeatherSettings,
     dryFrom?: number,
+    place?: SeasonPlace,
 ): number {
     if (!Number.isFinite(epoch)) return 0;
     const clamp = (value: number): number => Math.max(0, Math.min(1, value));
@@ -31,8 +32,8 @@ export function groundWetness(
         const date = new Date(epoch);
         const start = slotStart(date).getTime();
         const elapsed = epoch - start;
-        const wasRaining = rains(autoWeatherAt(new Date(start - 1), auto));
-        if (rains(autoWeatherAt(date, auto))) return wasRaining ? 1 : clamp(elapsed / PUDDLE_FILL_MS);
+        const wasRaining = rains(autoWeatherAt(new Date(start - 1), auto, place));
+        if (rains(autoWeatherAt(date, auto, place))) return wasRaining ? 1 : clamp(elapsed / PUDDLE_FILL_MS);
         return wasRaining ? clamp(1 - elapsed / PUDDLE_DRY_MS) : 0;
     }
     if (!rains(configured)) return dryFrom === undefined ? 0 : clamp(1 - (epoch - dryFrom) / PUDDLE_DRY_MS);
@@ -49,6 +50,7 @@ export function mapGroundWetness(settings: MapSnowSettings | undefined, serverDa
         settings?.rainSince ?? settings?.weatherStartedAt,
         settings?.weatherAuto,
         settings?.rainDryFrom,
+        settings?.weatherLocation,
     );
 }
 

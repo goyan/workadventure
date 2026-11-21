@@ -6,16 +6,24 @@ import { describe, expect, it, vi } from "vitest";
 import { MeadowManager } from "../src/Model/MeadowManager";
 import type { VariablesRepositoryInterface } from "../src/Services/Repository/VariablesRepositoryInterface";
 
-function wamWith(weather: WeatherType, meadow?: NonNullable<WAMFileFormat["settings"]>["meadow"]): WAMFileFormat {
+type Settings = NonNullable<WAMFileFormat["settings"]>;
+
+function wamWith(
+    weather: WeatherType,
+    meadow?: Settings["meadow"],
+    weatherLocation?: Settings["weatherLocation"],
+): WAMFileFormat {
     return {
         version: "2.1.0",
         mapUrl: "map.tmj",
         areas: [],
         entityCollections: [],
         entities: {},
-        settings: { weather, meadow },
+        settings: weatherLocation ? { weather, meadow, weatherLocation } : { weather, meadow },
     };
 }
+
+const SYDNEY = { name: "Sydney", latitude: -33.87, longitude: 151.21, timezone: "Australia/Sydney" };
 
 function createHarness({
     weather = WeatherType.Rain,
@@ -28,7 +36,9 @@ function createHarness({
     danger = undefined as (() => number) | undefined,
     wind = { windFrom: 0, windSpeed: 0 },
     random = () => 1,
+    place = undefined as Settings["weatherLocation"],
 }: {
+    place?: Settings["weatherLocation"];
     danger?: () => number;
     wind?: { windFrom: number; windSpeed: number };
     random?: () => number;
@@ -48,7 +58,7 @@ function createHarness({
             return Promise.resolve(1);
         }),
     } satisfies VariablesRepositoryInterface;
-    const wam = wamWith(weather, meadow);
+    const wam = wamWith(weather, meadow, place);
     const room = {
         getWam: () => wam,
         sendSubMessageToRoom: (message: SubToPusherRoomMessage): void => {
@@ -85,6 +95,63 @@ describe("MeadowManager", () => {
         expect(sent).toEqual([]);
         expect(manager.snapshot()).toBeUndefined();
         manager.stop();
+    });
+
+    it("grows grass from sunrise to sunset, as the day and night of the game: at 6 in Paris in June too", () => {
+        // June 21, 4:00 UTC: 6:00 in Paris, the sun is up (it rose at 5:47); the grass grows.
+        const dawn = createHarness({ now: Date.UTC(2026, 5, 21, 4) });
+        dawn.manager.mapChanged();
+        dawn.steps(400);
+        expect(grassOf(dawn.sent[dawn.sent.length - 1]).some((cover) => cover > 0)).toBe(true);
+        dawn.manager.stop();
+        // October 21, 6:00 UTC: 8:00 in Paris, before sunrise (8:24): nothing grows yet.
+        const autumnDawn = createHarness({ now: Date.UTC(2026, 9, 21, 6) });
+        autumnDawn.manager.mapChanged();
+        autumnDawn.steps(400);
+        const told = autumnDawn.sent;
+        expect(told.length === 0 || grassOf(told[told.length - 1]).every((cover) => cover === 0)).toBe(true);
+        autumnDawn.manager.stop();
+    });
+
+    it("grows grass in the summer of the place: in January in Sydney, not in its winter of July", () => {
+        // January 15, 2:00 UTC: 13:00 in Sydney, a summer noon; in Paris a winter night.
+        const summer = createHarness({ place: SYDNEY, now: Date.UTC(2026, 0, 15, 2) });
+        summer.manager.mapChanged();
+        summer.steps(400);
+        expect(grassOf(summer.sent[summer.sent.length - 1]).some((cover) => cover > 0)).toBe(true);
+        summer.manager.stop();
+        // July 15, 2:00 UTC: noon in Sydney, in its winter: the grass sleeps.
+        const winter = createHarness({ place: SYDNEY, now: Date.UTC(2026, 6, 15, 2) });
+        winter.manager.mapChanged();
+        winter.steps(400);
+        const told = winter.sent;
+        expect(told.length === 0 || grassOf(told[told.length - 1]).every((cover) => cover === 0)).toBe(true);
+        winter.manager.stop();
+        // A winter noon in Paris: nothing grows, as before.
+        const paris = createHarness({ now: Date.UTC(2026, 0, 15, 11) });
+        paris.manager.mapChanged();
+        paris.steps(400);
+        const parisTold = paris.sent;
+        expect(parisTold.length === 0 || grassOf(parisTold[parisTold.length - 1]).every((cover) => cover === 0)).toBe(
+            true,
+        );
+        paris.manager.stop();
+    });
+
+    it("grows no grass at 7:30 in Paris in November, before sunrise, and grows it at noon", () => {
+        // November 21, 6:30 UTC: 7:30 in Paris, inside the old 7 to 19 window but before the 8:08 sunrise.
+        const early = createHarness({ now: Date.UTC(2026, 10, 21, 6, 30) });
+        early.manager.mapChanged();
+        early.steps(400);
+        const told = early.sent;
+        expect(told.length === 0 || grassOf(told[told.length - 1]).every((cover) => cover === 0)).toBe(true);
+        early.manager.stop();
+        // Same day, 11:00 UTC: noon in Paris.
+        const noon = createHarness({ now: Date.UTC(2026, 10, 21, 11) });
+        noon.manager.mapChanged();
+        noon.steps(400);
+        expect(grassOf(noon.sent[noon.sent.length - 1]).some((cover) => cover > 0)).toBe(true);
+        noon.manager.stop();
     });
 
     it("grows grass under the rain of the map, by tiles, and tells the room when it changed", () => {
@@ -124,6 +191,33 @@ describe("MeadowManager", () => {
         mild.steps(400);
         expect(grassOf(mild.sent[mild.sent.length - 1]).every((cover) => cover > 0)).toBe(true);
         mild.manager.stop();
+    });
+
+    it("keeps the water of a soil frozen by the cold of the room, and dries it in a milder air", () => {
+        const moistureOf = (message: MeadowMessage): Uint8Array => new Uint8Array(gunzipSync(message.moisture));
+        const after = (temperature: number): { moisture: Uint8Array; wet: Uint8Array; grass: Uint8Array } => {
+            let air = { temperature: 20, humidity: 60 };
+            const harness = createHarness();
+            harness.manager.fallThrough(() => air);
+            harness.manager.mapChanged();
+            // A rain in mild air wets the soil and grows the grass, then the sky clears and the air turns.
+            harness.steps(400);
+            const wet = harness.manager.snapshot();
+            if (!wet) throw new Error("no meadow");
+            harness.wam.settings = { ...harness.wam.settings, weather: WeatherType.Clear };
+            air = { temperature, humidity: 60 };
+            harness.steps(900);
+            const now = harness.manager.snapshot();
+            harness.manager.stop();
+            if (!now) throw new Error("no meadow");
+            return { moisture: moistureOf(now), wet: moistureOf(wet), grass: grassOf(now) };
+        };
+        const frozen = after(-5);
+        // Half an hour of frost: not a drop lost, and the grass is still there.
+        expect(frozen.moisture).toEqual(frozen.wet);
+        expect(frozen.grass.every((cover) => cover > 0)).toBe(true);
+        const mild = after(5);
+        expect(mild.moisture.every((moisture, index) => moisture < mild.wet[index])).toBe(true);
     });
 
     it("says nothing of a dry and bare map, nor twice the same state", () => {

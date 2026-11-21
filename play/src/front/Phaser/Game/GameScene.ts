@@ -45,7 +45,7 @@ import {
     WeatherType,
     bridgesOf,
 } from "@workadventure/map-editor";
-import type { Bridges } from "@workadventure/map-editor";
+import type { Bridges, WeatherLocation } from "@workadventure/map-editor";
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
 import Debug from "debug";
 import { asError } from "catch-unknown";
@@ -322,7 +322,7 @@ import { levelUnderPoint } from "./MapEditor/MapLayer/FloorOperations";
 import { levelItems } from "./MapEditor/MapLayer/MapLayerLevels";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
 import { weatherAtTime } from "./Weather/WeatherFrame";
-import { setRoomConditions, shownMapPlace, shownWeatherSettings } from "./Weather/RealWeatherClient";
+import { setRoomConditions, shownWeatherSettings } from "./Weather/RealWeatherClient";
 import { isSwayingTree, TreeSway } from "./Nature/TreeSway";
 import { TreePoseTextures } from "./Nature/TreePoses";
 import { TreeSeasonEffects } from "./Nature/TreeSeasonEffects";
@@ -417,8 +417,7 @@ import type { WalkerSample } from "./Christmas/FootprintTrail";
 import { NightManager } from "./Night/NightManager";
 import { PerfMonitor } from "./Perf/PerfMonitor";
 import { skyWeatherFactor } from "./Night/SkyLight";
-import { sunPositionAt } from "./Night/NightClock";
-import { daylightOf } from "./Lamps/EnergySaving";
+import { mapDaylightAt } from "./Lamps/MapDaylight";
 import { SkyShadowManager } from "./SkyShadows/SkyShadowManager";
 import { SkyWindowLightManager } from "./SkyShadows/SkyWindowLightManager";
 import { SkyMovingShadows } from "./SkyShadows/SkyMovingShadows";
@@ -3058,12 +3057,20 @@ export class GameScene extends DirtyScene {
     }
 
     /**
-     * The season of the ground of the map, by the calendar of Paris like the meadow of the server (not the personal
+     * The season of the ground of the map, by the calendar of its place like the meadow of the server (not the personal
      * theme: the snow of the heights slows everyone alike). Unknown until the time of the server is.
      */
     public getGroundSeason(): Season | undefined {
         const date = this.nightManager?.serverDate();
-        return date && Number.isFinite(date.getTime()) ? seasonAt(date) : undefined;
+        return date && Number.isFinite(date.getTime()) ? seasonAt(date, this.getMapPlace()) : undefined;
+    }
+
+    /**
+     * The place saved with the map (Paris without one): its seasons and its day, the same for every player and for the
+     * server. Not the place a person tries in the weather settings, nor the city of the sky of the world they follow.
+     */
+    public getMapPlace(): WeatherLocation | undefined {
+        return this.getGameMap().getWamFile()?.getWam().settings?.weatherLocation;
     }
 
     /** The meadow of the map, for what reads its grass and the moisture of its soil. */
@@ -3149,22 +3156,17 @@ export class GameScene extends DirtyScene {
         const serverDate = this.nightManager?.serverDate();
         const settings = shownWeatherSettings(this.getGameMap().getWamFile()?.getWam().settings, serverDate);
         const configured = settings?.weather ?? WeatherType.Clear;
-        return weatherAtTime(configured, serverDate, settings?.weatherAuto);
+        return weatherAtTime(configured, serverDate, settings?.weatherAuto, settings?.weatherLocation);
     }
 
     /**
      * How much daylight the sky of the map gives at an instant (daylightOf), the same for everyone: the sun of the place
      * of the map (Paris when it has none) and the weather of the map at that instant, its clouds included. Nothing
-     * personal: neither the night turned off nor the computer clock, neither the seasonal theme nor the clouds hidden.
-     * The energy saving of the lamps follows it (LampManager).
+     * personal: neither the night turned off nor the computer clock, neither the seasonal theme nor the clouds hidden,
+     * nor the weather of the city a player follows on their clock. The energy saving of the lamps follows it (LampManager).
      */
     public mapDaylightAt(at: number): number {
-        const date = new Date(at);
-        const mapSettings = this.getGameMap().getWamFile()?.getWam().settings;
-        const settings = shownWeatherSettings(mapSettings, date);
-        const weather = weatherAtTime(settings?.weather ?? WeatherType.Clear, date, settings?.weatherAuto);
-        const sun = sunPositionAt(date, shownMapPlace(mapSettings));
-        return daylightOf(sun.elevation, skyWeatherFactor(weather, settings?.cloudiness ?? 0));
+        return mapDaylightAt(this.getGameMap().getWamFile()?.getWam().settings, new Date(at));
     }
 
     /** The map weather as it is shown now, with its wind. */
@@ -4070,7 +4072,8 @@ export class GameScene extends DirtyScene {
                 this.treeSeasonEffects = new TreeSeasonEffects(this, {
                     trees: () => this.swayingTrees(),
                     season: () => this.gameMapFrontWrapper.getEntitiesManager().getSeason(),
-                    autumnProgress: () => autumnProgress(this.nightManager?.serverDate() ?? new Date(Number.NaN)),
+                    autumnProgress: () =>
+                        autumnProgress(this.nightManager?.serverDate() ?? new Date(Number.NaN), this.getMapPlace()),
                     windSpeed: () => this.shownWeather()?.windSpeed,
                     windFrom: () => this.shownWeather()?.windFrom,
                     snowCoverage: () => this.getMapSnowCoverage(),
@@ -4086,12 +4089,16 @@ export class GameScene extends DirtyScene {
                     entities: () => this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(),
                     markDirty: () => this.markDirty(),
                     serverDate: () => this.nightManager?.serverDate(),
+                    place: () => this.getMapPlace(),
                     leafConditions: () => {
                         const weather = this.shownWeather();
                         return {
                             windSpeed: weather?.windSpeed,
                             windFrom: weather?.windFrom,
-                            progress: autumnProgress(this.nightManager?.serverDate() ?? new Date(Number.NaN)),
+                            progress: autumnProgress(
+                                this.nightManager?.serverDate() ?? new Date(Number.NaN),
+                                this.getMapPlace(),
+                            ),
                         };
                     },
                     isWet: (x, y) => isGroundUnderWater(this, this.terrainWater, x, y),

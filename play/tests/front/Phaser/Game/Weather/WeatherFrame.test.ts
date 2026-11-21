@@ -360,3 +360,26 @@ describe("fog", () => {
         });
     });
 });
+
+describe("the automatic weather of a map with a place", () => {
+    it("follows the schedule of its place, its fog included, and that of Paris without one", () => {
+        const sydney = { latitude: -33.87, timezone: "Australia/Sydney" };
+        const auto = { frequency: "normal" as const, include: [WeatherType.Rain, WeatherType.Storm, WeatherType.Fog] };
+        let differs = 0;
+        for (
+            let time = Date.parse("2026-01-01T00:00:00Z");
+            time < Date.parse("2026-02-01T00:00:00Z");
+            time += 1_800_000
+        ) {
+            const date = new Date(time + 900_000);
+            const there = autoWeatherAt(date, auto, sydney);
+            expect(weatherAtTime(WeatherType.Automatic, date, auto, sydney)).toBe(there);
+            expect(weatherAtTime(WeatherType.Automatic, date, auto)).toBe(autoWeatherAt(date, auto));
+            expect(fogStrength(WeatherType.Automatic, date, auto, undefined, undefined, sydney) > 0).toBe(
+                there === WeatherType.Fog,
+            );
+            if (there !== autoWeatherAt(date, auto)) differs++;
+        }
+        expect(differs).toBeGreaterThan(0);
+    });
+});

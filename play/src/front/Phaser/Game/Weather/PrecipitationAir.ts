@@ -2,9 +2,9 @@ import { get } from "svelte/store";
 import type { PrecipitationAir } from "@workadventure/map-editor";
 import { realWeatherAt } from "@wa/common/RealWeather";
 import { fireConditionsStore } from "@wa/front/Stores/FireConditionsStore";
-import { chosenWeatherNow } from "./ChosenPlaceWeather";
 import type { RealForecastState } from "./RealWeather";
-import { shownPlaceTimeline } from "./RealWeatherClient";
+import { chosenWeatherNow } from "./ChosenPlaceWeather";
+import { shownPlaceTimeline, showsChosenPlaceWeather } from "./RealWeatherClient";
 import type { MapSnowSettings } from "./SnowCover";
 
 /** The air of the quarter hour under way of a timeline: its temperature and its humidity, when both are known. */
@@ -15,15 +15,37 @@ export function airAt(state: RealForecastState, epoch: number): PrecipitationAir
     return { temperature: now.temperature, humidity: now.humidity };
 }
 
+/** Where the air of a precipitation can come from, each read at the same instant. */
+export interface PrecipitationAirSources {
+    /** The timeline of the city this player follows, when the precipitation drawn is that of their city. */
+    chosenPlace: RealForecastState | undefined;
+    /** The heat and the humidity set by hand in the room, when they are. */
+    byHand: PrecipitationAir | undefined;
+    /** The timeline at the place of the map (Paris without one). */
+    mapPlace: RealForecastState;
+}
+
+/**
+ * The air the precipitation drawn falls through, by its source. The precipitation of this player's own city (they
+ * follow it on their clock, "Jour dans le monde") falls through the air of that city, so that what they see matches
+ * their own sky and banner. The precipitation of the map falls through the air of the map, the same for every player
+ * who follows the server and the one the server goes by (FireConditionsManager.air): set by hand in the room, else the
+ * real air at the place of the map. Undefined while it is not known: it then rains.
+ */
+export function drawnPrecipitationAir(sources: PrecipitationAirSources, epoch: number): PrecipitationAir | undefined {
+    if (sources.chosenPlace) return airAt(sources.chosenPlace, epoch);
+    return sources.byHand ?? airAt(sources.mapPlace, epoch);
+}
+
 let memo: { settings: MapSnowSettings | undefined; second: number; air: PrecipitationAir | undefined } | undefined;
 
 /**
- * The air the precipitation shown to this player falls through, which says whether it is rain or snow (snowShare):
- * the real air of their own city when they follow one (its weather is theirs alone, see ChosenPlaceWeather), else the
- * heat and the humidity set by hand in the room, else the real air at the place of the map (Paris without one),
- * whatever weather the map shows: the same sources, in the same order, as the frost of the ground (Frost.ts), and for
- * the last two the same air for every player of the map. Undefined while none is known: it then rains. Read again
- * once a second of the game clock.
+ * The air the precipitation shown to this player falls through, which says whether it is rain or snow (snowShare),
+ * by the source of that precipitation (drawnPrecipitationAir): the air of the city they follow on their clock when
+ * the weather drawn for them is that of their city (showsChosenPlaceWeather), else the air of the map, whatever
+ * weather the map shows, the same for every player who follows the server. A weather tried in the map settings panel
+ * falls through the air of the place tried. Undefined while none is known: it then rains. Read again once a second of
+ * the game clock.
  */
 export function precipitationAirNow(
     settings: MapSnowSettings | undefined,
@@ -54,9 +76,15 @@ export function roomPrecipitationAir(
 }
 
 function readAir(settings: MapSnowSettings | undefined, date: Date): PrecipitationAir | undefined {
-    const { place, state } = chosenWeatherNow();
-    if (place) return airAt(state, date.getTime());
     const conditions = get(fireConditionsStore);
-    if (conditions?.manual) return { temperature: conditions.temperature, humidity: conditions.humidity };
-    return airAt(shownPlaceTimeline(settings), date.getTime());
+    return drawnPrecipitationAir(
+        {
+            chosenPlace: showsChosenPlaceWeather() ? chosenWeatherNow().state : undefined,
+            byHand: conditions?.manual
+                ? { temperature: conditions.temperature, humidity: conditions.humidity }
+                : undefined,
+            mapPlace: shownPlaceTimeline(settings),
+        },
+        date.getTime(),
+    );
 }

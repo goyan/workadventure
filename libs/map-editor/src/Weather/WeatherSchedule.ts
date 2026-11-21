@@ -1,6 +1,7 @@
 import { DEFAULT_AUTO_WEATHER, Season, WeatherType } from "../types";
 import type { AutoWeatherFrequency, AutoWeatherSettings } from "../types";
-import { seasonAt } from "./SeasonClock";
+import { calendarTimeZone, placeCalendar, seasonOfMonth, southernPlace } from "./SeasonClock";
+import type { SeasonPlace } from "./SeasonClock";
 
 /**
  * Weathers the automatic schedule can draw, clear being the remainder. No snow: a precipitation is drawn as a rain,
@@ -47,24 +48,14 @@ export const CLOUD_FADE_MS = 3 * 60 * 1000;
 
 /** Probability that a 30-minute slot keeps the weather of the previous one. */
 export const PERSISTENCE = 0.6;
-/** Fog only exists before this Paris hour. */
+/** Fog only exists before this hour at the place of the map (Paris without a place). */
 export const FOG_UNTIL_HOUR = 11;
-/** Storms only happen in [start, end) Paris hours. */
+/** Storms only happen in [start, end) hours at the place of the map (Paris without a place). */
 export const STORM_HOURS: readonly [number, number] = [13, 21];
 
 const SLOTS_PER_DAY = 48;
 const SLOT_MS = 30 * 60 * 1000;
 const CACHE_SIZE = 4;
-
-const parisFormat = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/Paris",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-});
 
 const dayCache = new Map<string, WeatherType[]>();
 let computations = 0;
@@ -74,25 +65,36 @@ export function scheduleComputations(): number {
     return computations;
 }
 
-/** Real instant at which the current 30-minute Paris slot began (Paris offsets are whole hours). */
+/**
+ * Real instant at which the current 30-minute slot began. Slots are cut on the clock of the world: at a place whose
+ * offset is whole or half hours (Paris, Sydney, Adelaide, India) they begin on the hour and the half hour there too;
+ * at a quarter-hour one (Nepal, Chatham) a quarter of an hour off.
+ */
 export function slotStart(date: Date): Date {
     return new Date(Math.floor(date.getTime() / SLOT_MS) * SLOT_MS);
 }
 
-/** Automatic weather at `date`, identical for every client with the same settings. */
-export function autoWeatherAt(date: Date, auto: AutoWeatherSettings = DEFAULT_AUTO_WEATHER): WeatherType {
+/**
+ * Automatic weather at `date`, identical for every client with the same settings and place: the day, its season and
+ * the hours of its fog and storms are those of the place of the map (`place`, Paris without one).
+ */
+export function autoWeatherAt(
+    date: Date,
+    auto: AutoWeatherSettings = DEFAULT_AUTO_WEATHER,
+    place?: SeasonPlace,
+): WeatherType {
     const time = date.getTime();
     if (!Number.isFinite(time)) return WeatherType.Clear;
     const settings = normalise(auto);
     // Called several times per frame (current and previous slot): the weather is constant within a slot,
-    // so skip the Paris-time formatting.
+    // so skip the local-time formatting.
     const index = Math.floor(time / SLOT_MS);
-    const key = `${index}|${settings.frequency}|${settings.include.join(",")}`;
+    const key = `${index}|${settings.frequency}|${settings.include.join(",")}|${placeKey(place)}`;
     const known = slotMemo.get(key);
     if (known !== undefined) return known;
     slotComputations++;
-    const { day, slot } = parisSlot(date);
-    const weather = daySchedule(day, settings)[slot];
+    const { day, slot } = placeSlot(date, place);
+    const weather = daySchedule(day, settings, southernPlace(place))[slot];
     slotMemo.set(key, weather);
     while (slotMemo.size > MEMO_SIZE) {
         const oldest = slotMemo.keys().next().value;
@@ -106,28 +108,29 @@ const MEMO_SIZE = 8;
 const slotMemo = new Map<string, WeatherType>();
 let slotComputations = 0;
 
-/** Number of Paris-slot lookups computed so far (memo misses), for tests. */
+/** Number of slot lookups computed so far (memo misses), for tests. */
 export function parisSlotComputations(): number {
     return slotComputations;
 }
 
 /**
- * Next weather changes after `date` (at most `count`), looking at the current Paris day and the next one.
+ * Next weather changes after `date` (at most `count`), looking at the current day of the place and the next one.
  */
 export function autoWeatherChanges(
     date: Date,
     auto: AutoWeatherSettings | undefined,
     count: number,
+    place?: SeasonPlace,
 ): { at: Date; weather: WeatherType }[] {
     const changes: { at: Date; weather: WeatherType }[] = [];
     if (!Number.isFinite(date.getTime()) || count <= 0) return changes;
     const settings = auto ?? DEFAULT_AUTO_WEATHER;
-    const lastDay = shiftDay(parisSlot(date).day, 1);
-    let current = autoWeatherAt(date, settings);
+    const lastDay = shiftDay(placeSlot(date, place).day, 1);
+    let current = autoWeatherAt(date, settings, place);
     for (let t = slotStart(date).getTime() + SLOT_MS; changes.length < count; t += SLOT_MS) {
         const at = new Date(t);
-        if (parisSlot(at).day > lastDay) break;
-        const weather = autoWeatherAt(at, settings);
+        if (placeSlot(at, place).day > lastDay) break;
+        const weather = autoWeatherAt(at, settings, place);
         if (weather !== current) {
             changes.push({ at, weather });
             current = weather;
@@ -143,27 +146,36 @@ export function fadedCloudiness(previous: number, current: number, elapsed: numb
 }
 
 /**
- * How cloudy the automatic weather is at `date`, 0 to 1, identical for every client with the same settings. Clouds are
+ * How cloudy the automatic weather is at `date`, 0 to 1, identical for every client with the same settings and place
+ * (the season of the place sets how often the clear slots are clouded). Clouds are
  * a chain of their own over the clear slots of the schedule: the schedule itself (rain, storms, fog) is the same
  * with or without them. None when the map turns them off (`clouds: false`).
  */
-export function cloudinessAt(date: Date, auto: AutoWeatherSettings = DEFAULT_AUTO_WEATHER): number {
+export function cloudinessAt(
+    date: Date,
+    auto: AutoWeatherSettings = DEFAULT_AUTO_WEATHER,
+    place?: SeasonPlace,
+): number {
     const time = date.getTime();
     if (!Number.isFinite(time) || auto.clouds === false) return 0;
     const start = slotStart(date).getTime();
-    return fadedCloudiness(slotCloudiness(new Date(start - 1), auto), slotCloudiness(date, auto), time - start);
+    return fadedCloudiness(
+        slotCloudiness(new Date(start - 1), auto, place),
+        slotCloudiness(date, auto, place),
+        time - start,
+    );
 }
 
-// Asked several times per image: the clouds are constant within a slot, so skip the Paris-time formatting.
+// Asked several times per image: the clouds are constant within a slot, so skip the local-time formatting.
 const cloudSlotMemo = new Map<string, number>();
 
-function slotCloudiness(date: Date, auto: AutoWeatherSettings): number {
-    if (autoWeatherAt(date, auto) !== WeatherType.Clear) return 0;
-    const key = `${Math.floor(date.getTime() / SLOT_MS)}|${auto.frequency}`;
+function slotCloudiness(date: Date, auto: AutoWeatherSettings, place: SeasonPlace | undefined): number {
+    if (autoWeatherAt(date, auto, place) !== WeatherType.Clear) return 0;
+    const key = `${Math.floor(date.getTime() / SLOT_MS)}|${auto.frequency}|${placeKey(place)}`;
     const known = cloudSlotMemo.get(key);
     if (known !== undefined) return known;
-    const { day, slot } = parisSlot(date);
-    const cloudiness = cloudDay(day, auto.frequency)[slot] ? AUTO_CLOUDINESS : 0;
+    const { day, slot } = placeSlot(date, place);
+    const cloudiness = cloudDay(day, auto.frequency, southernPlace(place))[slot] ? AUTO_CLOUDINESS : 0;
     cloudSlotMemo.set(key, cloudiness);
     while (cloudSlotMemo.size > MEMO_SIZE) {
         const oldest = cloudSlotMemo.keys().next().value;
@@ -175,17 +187,17 @@ function slotCloudiness(date: Date, auto: AutoWeatherSettings): number {
 
 const cloudCache = new Map<string, boolean[]>();
 
-/** Which slots of a Paris day have clouds; like the schedule, the day starts from the end of its eve. */
-function cloudDay(day: string, frequency: AutoWeatherFrequency): boolean[] {
-    const key = `${day}|${frequency}`;
+/** Which slots of a day of the place have clouds; like the schedule, the day starts from the end of its eve. */
+function cloudDay(day: string, frequency: AutoWeatherFrequency, south: boolean): boolean[] {
+    const key = `${day}|${frequency}|${south ? "south" : "north"}`;
     const cached = cloudCache.get(key);
     if (cached) {
         cloudCache.delete(key);
         cloudCache.set(key, cached);
         return cached;
     }
-    const eve = computeCloudDay(shiftDay(day, -1), frequency, false);
-    const clouds = computeCloudDay(day, frequency, eve[SLOTS_PER_DAY - 1]);
+    const eve = computeCloudDay(shiftDay(day, -1), frequency, south, false);
+    const clouds = computeCloudDay(day, frequency, south, eve[SLOTS_PER_DAY - 1]);
     cloudCache.set(key, clouds);
     while (cloudCache.size > CACHE_SIZE) {
         const oldest = cloudCache.keys().next().value;
@@ -195,9 +207,8 @@ function cloudDay(day: string, frequency: AutoWeatherFrequency): boolean[] {
     return clouds;
 }
 
-function computeCloudDay(day: string, frequency: AutoWeatherFrequency, start: boolean): boolean[] {
-    const noon = new Date(`${day}T12:00:00Z`);
-    const chance = Math.min(1, (CLOUD_SHARES[seasonAt(noon)] * FREQUENCY_FACTORS[frequency]) / 100);
+function computeCloudDay(day: string, frequency: AutoWeatherFrequency, south: boolean, start: boolean): boolean[] {
+    const chance = Math.min(1, (CLOUD_SHARES[seasonOfDay(day, south)] * FREQUENCY_FACTORS[frequency]) / 100);
     // A seed of its own: the clouds never consume the draws of the schedule.
     const random = mulberry32(fnv1a(`${day}|${frequency}|clouds`));
     const clouds: boolean[] = [];
@@ -219,11 +230,22 @@ function normalise(auto: AutoWeatherSettings): Normalised {
     return { frequency: auto.frequency, include };
 }
 
-function parisSlot(date: Date): { day: string; slot: number } {
-    const parts: Record<string, string> = {};
-    for (const part of parisFormat.formatToParts(date)) parts[part.type] = part.value;
-    const slot = Number(parts.hour) * 2 + (Number(parts.minute) >= 30 ? 1 : 0);
-    return { day: `${parts.year}-${parts.month}-${parts.day}`, slot };
+/**
+ * The day of the place and the slot of that day `date` falls in, read at the start of its slot (constant within it).
+ */
+function placeSlot(date: Date, place: SeasonPlace | undefined): { day: string; slot: number } {
+    const { day, hour, minute } = placeCalendar(slotStart(date), place);
+    return { day, slot: hour * 2 + (minute >= 30 ? 1 : 0) };
+}
+
+/** What sets the schedule of a place: its clock and its hemisphere. */
+function placeKey(place: SeasonPlace | undefined): string {
+    return `${calendarTimeZone(place)}|${southernPlace(place) ? "south" : "north"}`;
+}
+
+/** The season of a `YYYY-MM-DD` day of the place, from its month alone. */
+function seasonOfDay(day: string, south: boolean): Season {
+    return seasonOfMonth(Number(day.slice(5, 7)), south ? -1 : undefined);
 }
 
 /** `YYYY-MM-DD` shifted by `days` calendar days. */
@@ -232,8 +254,8 @@ function shiftDay(day: string, days: number): string {
     return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
 
-function daySchedule(day: string, settings: Normalised): WeatherType[] {
-    const key = `${day}|${settings.frequency}|${settings.include.join(",")}`;
+function daySchedule(day: string, settings: Normalised, south: boolean): WeatherType[] {
+    const key = `${day}|${settings.frequency}|${settings.include.join(",")}|${south ? "south" : "north"}`;
     const cached = dayCache.get(key);
     if (cached) {
         dayCache.delete(key);
@@ -242,8 +264,8 @@ function daySchedule(day: string, settings: Normalised): WeatherType[] {
     }
     // The eve, computed from clear, gives the starting point. Since every slot consumes the same random
     // draws whatever the previous weather, the eve converges to its real schedule long before 23:30.
-    const eve = computeDay(shiftDay(day, -1), settings, WeatherType.Clear);
-    const schedule = computeDay(day, settings, eve[SLOTS_PER_DAY - 1]);
+    const eve = computeDay(shiftDay(day, -1), settings, south, WeatherType.Clear);
+    const schedule = computeDay(day, settings, south, eve[SLOTS_PER_DAY - 1]);
     dayCache.set(key, schedule);
     while (dayCache.size > CACHE_SIZE) {
         const oldest = dayCache.keys().next().value;
@@ -253,11 +275,10 @@ function daySchedule(day: string, settings: Normalised): WeatherType[] {
     return schedule;
 }
 
-function computeDay(day: string, settings: Normalised, start: WeatherType): WeatherType[] {
+function computeDay(day: string, settings: Normalised, south: boolean, start: WeatherType): WeatherType[] {
     computations++;
-    // Noon UTC is always inside the same Paris calendar day.
-    const noon = new Date(`${day}T12:00:00Z`);
-    const weights = drawWeights(seasonAt(noon), settings);
+    // The season of the day of the place, read in its month: the seed stays the day itself.
+    const weights = drawWeights(seasonOfDay(day, south), settings);
     const random = mulberry32(fnv1a(`${day}|${settings.frequency}|${settings.include.join(",")}`));
     const schedule: WeatherType[] = [];
     let previous = start;

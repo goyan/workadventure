@@ -22,7 +22,7 @@ function usualRate(weather: WeatherType): number {
  * weather timeline at the place of the map, when known (a map in Real only).
  */
 export function rainRateAt(
-    settings: Pick<WAMSettings, "weather" | "weatherAuto"> | undefined,
+    settings: Pick<WAMSettings, "weather" | "weatherAuto" | "weatherLocation"> | undefined,
     epoch: number,
     slots: readonly RealWeatherSlot[] | undefined,
 ): number {
@@ -33,11 +33,11 @@ export function rainRateAt(
         case WeatherType.Storm:
             return usualRate(configured);
         case WeatherType.Automatic:
-            return usualRate(autoWeatherAt(date, settings?.weatherAuto));
+            return usualRate(autoWeatherAt(date, settings?.weatherAuto, settings?.weatherLocation));
         case WeatherType.Real: {
             const now = slots && Number.isFinite(epoch) ? realWeatherAt(slots, epoch) : undefined;
             // Outside the timeline the map shows its automatic weather.
-            if (!now) return usualRate(autoWeatherAt(date, settings?.weatherAuto));
+            if (!now) return usualRate(autoWeatherAt(date, settings?.weatherAuto, settings?.weatherLocation));
             const rate = now.rainRate;
             return rate !== undefined && Number.isFinite(rate) ? Math.max(0, rate) : usualRate(now.weather);
         }

@@ -153,8 +153,9 @@ function personalWeatherSettings(
     settings: MapSnowSettings | undefined,
     date: Date | undefined,
 ): MapSnowSettings | undefined {
+    if (!showsChosenPlaceWeather()) return undefined;
     const { place, state: chosenState } = chosenWeatherNow();
-    if (!place || preview) return undefined;
+    if (!place) return undefined;
     const second = date === undefined ? undefined : Math.floor(date.getTime() / 1000);
     if (
         personalMemo &&
@@ -172,10 +173,18 @@ function personalWeatherSettings(
     // While its real weather is not known yet, the automatic one shows, with its clouds.
     const shown =
         real?.weather === WeatherType.Automatic && date
-            ? { ...real, cloudiness: cloudinessAt(date, real.weatherAuto) }
+            ? { ...real, cloudiness: cloudinessAt(date, real.weatherAuto, real.weatherLocation) }
             : real;
     personalMemo = { settings, place, state: chosenState, second, shown };
     return shown;
+}
+
+/**
+ * Whether the weather drawn for this player is that of their own place (personalWeatherSettings): they follow a city
+ * on their clock and no weather is being tried in the map settings panel. Otherwise it is the weather of the map.
+ */
+export function showsChosenPlaceWeather(): boolean {
+    return chosenWeatherNow().place !== undefined && !preview;
 }
 
 /** The conditions of the room, when a player set them by hand: their wind is the wind of the whole scene. */
@@ -184,7 +193,11 @@ export function setRoomConditions(conditions: FireConditionsMessage | undefined)
     manualConditions = conditions;
 }
 
-function mapWeatherSettings(
+/**
+ * The weather of the map itself at `date`, as everyone sees it (the trial of the settings panel aside): without the
+ * weather of the city a player follows on their clock.
+ */
+export function mapWeatherSettings(
     settings: MapSnowSettings | undefined,
     date: Date | undefined,
 ): MapSnowSettings | undefined {
@@ -194,7 +207,10 @@ function mapWeatherSettings(
         return withPlaceWind({ ...tried, weather: WeatherType.Clear, cloudiness: AUTO_CLOUDINESS }, date);
     }
     if (tried?.weather === WeatherType.Automatic) {
-        return withPlaceWind(date ? { ...tried, cloudiness: cloudinessAt(date, tried.weatherAuto) } : tried, date);
+        return withPlaceWind(
+            date ? { ...tried, cloudiness: cloudinessAt(date, tried.weatherAuto, tried.weatherLocation) } : tried,
+            date,
+        );
     }
     if (tried?.weather !== WeatherType.Real) return withPlaceWind(tried, date);
     follow(tried.weatherLocation);
@@ -216,7 +232,7 @@ function mapWeatherSettings(
     // While the real weather is unavailable, the automatic one shows, with its clouds.
     const shown =
         real?.weather === WeatherType.Automatic && date
-            ? { ...real, cloudiness: cloudinessAt(date, real.weatherAuto) }
+            ? { ...real, cloudiness: cloudinessAt(date, real.weatherAuto, real.weatherLocation) }
             : real;
     memo = {
         settings,

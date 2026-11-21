@@ -1,3 +1,5 @@
+import { SUNRISE_ELEVATION, sunPositionAt as librarySunPositionAt } from "@workadventure/map-editor";
+import type { SunPosition } from "@workadventure/map-editor";
 import { PARIS_LATITUDE, PARIS_LONGITUDE } from "../../../../common/RealWeather";
 import type { MapPlace } from "../../../../common/RealWeather";
 
@@ -11,8 +13,9 @@ export const NIGHT_DARKNESS_MAX = 0.95;
 const PARIS = { latitude: PARIS_LATITUDE, longitude: PARIS_LONGITUDE };
 
 // Geometric elevations of the sun's centre. Sunrise and sunset: the upper limb on the horizon, with the standard
-// refraction (34′) and the sun's semi-diameter (16′) already counted. Civil twilight: 6° below the horizon.
-const SUNSET_ELEVATION = -0.833;
+// refraction (34′) and the sun's semi-diameter (16′) already counted, the same threshold as the meadow of the back.
+// Civil twilight: 6° below the horizon.
+const SUNSET_ELEVATION = SUNRISE_ELEVATION;
 const CIVIL_TWILIGHT_ELEVATION = -6;
 
 const NIGHT_AT_PATTERN = /^(\d{1,2}):(\d{2})$/;
@@ -67,8 +70,6 @@ export function parisWallClockToInstant(year: number, month: number, day: number
     return new Date(epoch);
 }
 
-const DEG = Math.PI / 180;
-
 /**
  * Geometric elevation of the sun's centre above the horizon of Paris, in degrees, without refraction. Solar position
  * equations of the NOAA (Jean Meeus, "Astronomical Algorithms"), accurate to well under a minute of time for sunrise
@@ -83,11 +84,7 @@ export function sunElevationAt(date: Date, place: MapPlace): number {
     return sunPositionAt(date, place).elevation;
 }
 
-/** Where the sun is, in degrees: elevation above the horizon, azimuth from the north, clockwise. */
-export interface SunPosition {
-    elevation: number;
-    azimuth: number;
-}
+export type { SunPosition } from "@workadventure/map-editor";
 
 /**
  * The sun the clouds are drawn with: as it is while the night is drawn; with the night turned off the map stays in
@@ -97,52 +94,13 @@ export function sunForClouds(sun: SunPosition | undefined, nightDisabled: boolea
     return nightDisabled && sun && sun.elevation < 2 ? undefined : sun;
 }
 
-/**
- * Where the sun is seen from a place: geometric elevation above the horizon and azimuth, both in degrees, the azimuth
- * from the north, clockwise (90 = east). Azimuth by Meeus 13.5, valid at any longitude and latitude.
- */
+// The sun itself is computed in the map editor library, shared with the back (the meadow grows by day): one code.
+export { solarTermsAt, trueSolarMinutes } from "@workadventure/map-editor";
+export type { SolarTerms } from "@workadventure/map-editor";
+
+/** Where the sun is seen from a place (Paris by default): see sunPositionAt of the map editor library. */
 export function sunPositionAt(date: Date, place: MapPlace = PARIS): SunPosition {
-    const julianDay = date.getTime() / 86_400_000 + 2_440_587.5;
-    const t = (julianDay - 2_451_545) / 36_525; // Julian centuries since J2000.0
-
-    const meanLongitude = (280.46646 + t * (36_000.76983 + t * 0.0003032)) % 360;
-    const meanAnomaly = 357.52911 + t * (35_999.05029 - 0.0001537 * t);
-    const eccentricity = 0.016708634 - t * (0.000042037 + 0.0000001267 * t);
-    const center =
-        Math.sin(meanAnomaly * DEG) * (1.914602 - t * (0.004817 + 0.000014 * t)) +
-        Math.sin(2 * meanAnomaly * DEG) * (0.019993 - 0.000101 * t) +
-        Math.sin(3 * meanAnomaly * DEG) * 0.000289;
-    const omega = 125.04 - 1934.136 * t;
-    const apparentLongitude = meanLongitude + center - 0.00569 - 0.00478 * Math.sin(omega * DEG);
-    const meanObliquity = 23 + (26 + (21.448 - t * (46.815 + t * (0.00059 - t * 0.001813))) / 60) / 60;
-    const obliquity = meanObliquity + 0.00256 * Math.cos(omega * DEG);
-    const declination = Math.asin(Math.sin(obliquity * DEG) * Math.sin(apparentLongitude * DEG));
-
-    // Equation of time, in minutes.
-    const y = Math.tan((obliquity / 2) * DEG) ** 2;
-    const equationOfTime =
-        (4 / DEG) *
-        (y * Math.sin(2 * meanLongitude * DEG) -
-            2 * eccentricity * Math.sin(meanAnomaly * DEG) +
-            4 * eccentricity * y * Math.sin(meanAnomaly * DEG) * Math.cos(2 * meanLongitude * DEG) -
-            0.5 * y * y * Math.sin(4 * meanLongitude * DEG) -
-            1.25 * eccentricity * eccentricity * Math.sin(2 * meanAnomaly * DEG));
-
-    const utcMinutes = (((date.getTime() / 60_000) % 1440) + 1440) % 1440;
-    const trueSolarMinutes = utcMinutes + equationOfTime + 4 * place.longitude;
-    const hourAngle = (trueSolarMinutes / 4 - 180) * DEG;
-
-    const latitude = place.latitude * DEG;
-    const cosZenith =
-        Math.sin(latitude) * Math.sin(declination) + Math.cos(latitude) * Math.cos(declination) * Math.cos(hourAngle);
-    const elevation = 90 - Math.acos(Math.min(1, Math.max(-1, cosZenith))) / DEG;
-    // Meeus measures from the south, westward; + 180° gives it from the north, clockwise.
-    const fromSouth = Math.atan2(
-        Math.sin(hourAngle),
-        Math.cos(hourAngle) * Math.sin(latitude) - Math.tan(declination) * Math.cos(latitude),
-    );
-    const azimuth = (((fromSouth / DEG + 180) % 360) + 360) % 360;
-    return { elevation, azimuth };
+    return librarySunPositionAt(date, place);
 }
 
 /**

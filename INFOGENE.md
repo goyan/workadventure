@@ -334,7 +334,9 @@ torches, lampes de Jam, piste de danse et lampes des pièces jamais concernées.
 - **Entrées, les mêmes pour tous** (`GameScene.mapDaylightAt`) : heure du serveur (rien n'est éteint tant qu'elle
   n'est pas connue), soleil du lieu de la carte (Paris par défaut), météo de la carte à cet instant avec ses nuages.
   Rien de personnel : ni « Désactiver la nuit », ni l'horloge de l'ordinateur, ni le thème saisonnier, ni les nuages
-  masqués. Écarts possibles : la personne qui essaie une météo dans le panneau (aperçu) voit les lampes suivre son
+  masqués, ni la météo de la ville suivie sur son horloge (`Lamps/MapDaylight.ts` lit `mapWeatherSettings`, pas
+  `shownWeatherSettings`). Quel que soit son mode d'horloge (« Toujours nuit », « Jour dans le monde »…), chacun voit
+  les lampes de dehors suivre le jour réel de la carte. Écarts possibles : la personne qui essaie une météo dans le panneau (aperçu) voit les lampes suivre son
   essai ; en météo Réelle, un navigateur qui attend encore la réponse du pusher affiche la météo automatique.
 - **Dehors** : pied de l'image de la lampe (milieu du bas), lu sur la grille dehors/dedans (`OutdoorGrid.isOutdoorAt`) ;
   pour une lampe sur un palier, le sol sous elle. Une lampe dont le pied tombe dans un mur (façade) compte comme de
@@ -469,8 +471,23 @@ n'a pas de position à lui (comme un va-et-vient).
   (`worldClockTimeZone`, `mapTimeZoneStore` ; l'heure de l'ordinateur en mode « Heure de mon ordinateur ») et les
   **minuteries** des lampes lisent leurs heures dans ce fuseau (`minutesOfDayIn`, évalué par `back`). Sans lieu, ou
   pour un lieu choisi avant ce changement (pas de fuseau enregistré : rechoisir la ville), ou si le fuseau n'en est
-  pas un : heure de Paris. Restent à l'heure de Paris pour toutes les cartes : saisons, thème de Noël, programme de la
-  météo automatique. `play`, `back` et `map-storage` à déployer ensemble.
+  pas un : heure de Paris. Depuis le 2026-11-21, saisons et programme de la météo automatique suivent aussi ce lieu
+  (voir « Saisons du lieu de la carte »). `play`, `back` et `map-storage` à déployer ensemble.
+- **Saisons du lieu de la carte** (2026-11-21) : la saison d'une carte est celle de son lieu (`seasonAt(date, place)`,
+  `libs/map-editor/src/Weather/SeasonClock.ts`, la même fonction pour `back` et pour chaque navigateur, lieu lu dans
+  `settings.weatherLocation` enregistré). Hémisphère nord (latitude ≥ 0) : saisons météorologiques habituelles ;
+  hémisphère sud : décalées de six mois (décembre à février = été, mars à mai = automne). Le mois se lit dans le fuseau
+  du lieu (`placeCalendar`, Paris sans fuseau connu : un lieu choisi avant la #293 garde son hémisphère et le jour de
+  Paris). Suivent la saison du lieu : l'herbe du pré (`MeadowManager`), les arbres saisonniers (`EntitiesManager`), la
+  limite de la neige des hauteurs et l'allure dans la neige (`GameScene.getGroundSeason`), le tapis de feuilles
+  (`autumnProgressAt`, 1er mars au 31 mai au sud), le thème saisonnier « Auto » (automne de la carte, pas du
+  calendrier de Paris) et la **météo automatique** : parts de la saison du lieu, jour tiré dans le fuseau du lieu,
+  brouillard avant 11 h et orages de 13 h à 21 h à l'heure du lieu (`autoWeatherAt(date, auto, place)`,
+  `cloudinessAt`, `autoWeatherChanges`). Les heures de l'aperçu de « Météo de la carte » sont celles du lieu choisi.
+  Sans lieu (ou à Paris) : rien ne change, empreinte du programme figée dans `tests/WeatherSchedulePlace.test.ts`.
+  Limites : les tropiques reçoivent les quatre saisons selon le signe de leur latitude (pas de saison sèche et humide) ;
+  les créneaux de 30 min restent calés sur l'heure du monde, décalés d'un quart d'heure pour un fuseau au quart
+  d'heure (Népal, Chatham) ; le tirage quotidien de la jungle reste au jour de Paris.
 - **Éclairage du jeu dans l'éditeur (réglage personnel)** : l'éditeur de carte masque le voile de nuit, pour voir ce qu'on
   édite ; le **bouton soleil-lune sous la barre d'outils de l'éditeur** (ou l'interrupteur « Même éclairage dans l'éditeur de carte qu'en jeu », Paramètres → Ambiance → Cycle jour/nuit,
   `nightInEditorStore`, désactivé par défaut) le laisse, avec l'obscurité, l'ambiance et les rebonds réglés : on règle
@@ -1582,6 +1599,33 @@ d'heure) à ±2 min. La nuit, un voile bleu nuit
 - **Choix personnel** dans Paramètres → Thème → Cycle jour/nuit : heure du serveur (défaut), heure de mon ordinateur
   (horloge et fuseau du poste : la date et l'heure affichées par le poste sont lues comme une heure de Paris, puis
   éclairées par le soleil de Paris de ce jour-là ; un poste qui affiche 22 h voit la nuit de Paris à 22 h), ou désactivé. La clé `nightMode` est mémorisée ; l’ancienne préférence `disableNight` est conservée.
+- **Jour dans le monde** (menu de l'horloge) : « Matin », « Midi » et « Soir » se lisent à la **hauteur du soleil**,
+  pas à une heure (18 h 30 solaire, c'est la nuit noire d'un hiver de Paris et le plein jour d'un été de Reykjavik) ;
+  `worldCityOf` de `WorldDaylight.ts`, calcul du jeu (`sunPositionAt`, `trueSolarMinutes`) :
+  - **Matin** : la ville dont le soleil est le plus près de **+10°** parmi celles où il est à plus de 2° et monte
+    (une heure ou plus avant le midi solaire vrai) ; **Soir** : **+8°** parmi celles où il descend (une heure ou plus
+    après). À ces hauteurs les ombres du soleil sont entières (elles s'effacent de 6° à 2°) et au plus long (un objet
+    en jette six à sept fois sa hauteur, coupée à la longueur réglée), dans une lumière dorée (le soleil blanchit de 5°
+    à 35°) ; le soir est un peu plus bas, plus chaud. Sous 2° plus d'ombres : ni matin ni soir. Sans ville dans la
+    bonne phase (jamais vu avec la liste), la plus proche en hauteur dont le soleil va dans le bon sens, puis la plus
+    proche en hauteur. La ville affichée est gardée tant que son soleil reste à 6° de la cible et dans la bonne phase
+    (soir gardé de 14° jusqu'à 2°, jamais après le coucher) : environ un changement de ville par heure.
+  - **Midi** : la ville la plus proche de son midi solaire vrai, gardée tant qu'elle en est à 50 min au plus (toujours
+    à moins d'une heure).
+  - Mesuré minute par minute (21 mars, 21 juin, 21 septembre, 21 novembre, 21 décembre 2026) : soleil du matin entre
+    2° et 16° 81 à 96 % du temps (médiane 12°), du soir 80 à 97 % (médiane 7-8°). Pires cas : les longitudes vides de
+    la liste (Pacifique entre Auckland et Honolulu, Atlantique entre Rio et Praia) laissent un soleil plus haut un
+    moment, jusqu'à 45° le matin (21 juin) et 36° le soir (21 novembre). Ajouter des villes là-bas changerait aussi
+    l'heure choisie et le nom d'un point cliqué : pas fait.
+  - **Heure choisie** : inchangée, la ville dont l'**heure solaire vraie** est la plus proche (avec l'équation du
+    temps, ±16 min selon la saison), gardée à 50 min près. **Point cliqué** sur la carte : inchangé ; le menu dit
+    alors « Ciel de … (point choisi sur la carte) », surligné, puisqu'aucun moment n'est enfoncé. La carte du monde du menu s'ombre avec le voile du jeu lui-même
+  (`worldShadeAt` = `nightOpacityAt` vu de chaque point) : plein jour jusqu'à −0,833°, assombrie jusqu'à −6°, nuit
+  au-delà. Dessinée pixel par pixel (240 × 120) : environ 7 ms par dessin (mesuré en conteneur Linux sur un Mac), une
+  fois par seconde tant que le menu est ouvert en mode monde.
+- **Mode Basique** : il coupe le cycle (plein jour). Le menu de l'horloge le dit en une ligne et surligne le mode
+  effectif, « Désactivé », pas le mode enregistré ; celui-ci revient en quittant le Basique (`effectiveNightModeStore`,
+  lu aussi par `NightManager`). Le panneau du ciel du monde est masqué tant que le Basique s'applique.
 - **Pas de nuit** en mode édition ou lorsque le cycle est désactivé.
 - **Recette locale** : `?nightAt=21:00` force l'heure de Paris du jour courant (soleil de ce jour), seulement en
   développement (`import.meta.env.DEV`).
@@ -2285,7 +2329,8 @@ l'**humidité du sol** de chaque case monte sous la pluie de la carte et sous l'
 quatre voisines, **descend les pentes**, et se perd à l'allure de chaque sol (argile 30 min, prairie 15, terre 10,
 sable 2, gravier 1, rocher rien) ; l'**herbe** pousse seule sur un sol fertile (terre et sol d'origine, prairie plus
 vite, argile moitié moins ; jamais sur sable, rocher, gravier) quand il est humide sans être détrempé (25 à 90 %),
-sans eau dessus, de jour (7 h à 19 h au lieu de la carte), en saison (pleine au printemps et en été, 40 % en automne,
+sans eau dessus, de jour (du lever au coucher du soleil au lieu de la carte, Paris sans lieu, comme le cycle jour/nuit du jeu :
+`Weather/SunPosition.ts` de la bibliothèque, `isDaylightAt` ; de 7 h à 19 h avant le 2026-11-20), en saison (pleine au printemps et en été, 40 % en automne,
 rien en hiver), et **moins vite en altitude** (rien au-delà de 192 px, 6 cases) ; un pré plein en 10 minutes de
 bonnes conditions ; elle meurt de soif en 20 minutes sur un sol sec, noyée en 1 minute sous l'eau. Dehors seulement
 (ce que les murs de l'outil Carte ferment n'a pas de pré), jamais sur un sol posé par l'outil Carte. Résultat : un
@@ -2306,14 +2351,14 @@ la pose de la boisson (`LandLifeView`, calculé par le navigateur à partir du p
 rien à la vie des antilopes : elles ne cherchent pas l'herbe et n'ont pas faim sans elle. Rien sur le fil.
 
 **Neige en altitude** (`Terrain/SnowLine.ts`). La neige tient sur les monts à partir d'une altitude qui dépend de la
-saison du calendrier de Paris : 96 px (3 cases) en hiver, 160 px au printemps et en automne, 224 px en été ; fine à
+saison du lieu de la carte (Paris sans lieu, saisons inversées au sud) : 96 px (3 cases) en hiver, 160 px au printemps et en automne, 224 px en été ; fine à
 la limite, complète 32 px plus haut (`snowCover`). Le navigateur la dessine en voile blanc sur le sol et l'herbe,
 sous les ombres des pentes, dehors seulement (`TerrainView`, `snowAlpha`) ; on y marche moins vite (85 % sous une
 couverture complète, `snowPace` dans `GroundPace.ts`) ; le serveur y fait mourir l'herbe, à l'allure de la soif sous
 une couverture complète (`Meadow.step`). Tout se calcule à partir du relief et de la saison : rien dans la carte ni
 sur le fil, aucun réglage. Indépendante de la neige de la météo (qui blanchit toute la carte) et du thème personnel.
 
-**Altitude de l'avatar.** Sur une carte qui a un relief, la pile des étages sous l'horloge dit l'altitude de
+**Altitude de l'avatar.** Sur une carte qui a un relief, la pile des étages, à gauche de l'horloge (dessous sur un écran de moins de 768 px), dit l'altitude de
 l'avatar, en mètres (une case d'altitude ≈ 1,10 m, `metresOf`) : la hauteur du relief sous ses pieds quand il est au
 sol (négative dans un creux, positive sur un mont), l'altitude de son palier quand il est en hauteur
 (`Floors/AvatarAltitude.ts`, `avatarAltitudeStore`). La pile s'affiche donc aussi sur une carte sans étage dès qu'elle
@@ -2915,14 +2960,22 @@ couverture de neige au sol et les arbres qui blanchissent décrit l'état d'avan
   plus rien à 6 °C (choix : l'ajustement n'est plus fiable en air très sec). Exemples : 2 °C et 40 % → thermomètre
   mouillé −2,3 °C, neige ; 2 °C et 95 % → 1,45 °C, pluie (5 % de flocons) ; 1 °C et 99 % → 71 % de neige ; 0 °C →
   neige ; 3 °C et 70 % → neige ; 5 °C et 90 % → pluie.
-- **D'où viennent la température et l'humidité** (`Weather/PrecipitationAir.ts` `precipitationAirNow`, mêmes sources
-  et même ordre que le givre du sol de `Weather/Frost.ts`) : la ville que le joueur suit pour lui seul s'il en a
-  choisi une (météo personnelle), sinon la température et l'humidité réglées à la main dans Catastrophe → Météo
-  (pour toute la salle), sinon l'air réel du lieu de la carte (Paris sans lieu), **quelle que soit la météo de la
-  carte** : une carte en Pluie fixe ou en Automatique neige quand il fait réellement assez froid à son lieu. Les deux
-  dernières sources sont les mêmes pour tous les joueurs de la carte. Tant que rien n'est connu (frise pas encore
-  reçue, humidité absente), il pleut, toujours. Rien ne dépend du calendrier. Les conditions de feu de la salle,
-  elles, restent douces hors météo Réelle : elles ne servent plus à la forme de la pluie.
+- **D'où viennent la température et l'humidité** (`Weather/PrecipitationAir.ts` `precipitationAirNow`,
+  règle pure `drawnPrecipitationAir`) : la forme suit **la source de la précipitation dessinée** (décision de
+  l'utilisateur, 2026-11-21 : l'affichage d'un joueur doit être cohérent avec le ciel et la météo qu'il voit).
+  Précipitation de la carte (joueur qui suit le serveur, tout mode d'horloge autre que « Jour dans le monde ») : la
+  température et l'humidité réglées à la main dans Catastrophe → Météo (pour toute la salle), sinon l'air réel du lieu
+  de la carte (Paris sans lieu), **quelle que soit la météo de la carte** : une carte en Pluie fixe ou en Automatique
+  neige quand il fait réellement assez froid à son lieu ; la forme est la même pour tous ces joueurs (« forme commune :
+  oui ») et ce sont les sources du serveur, dans le même ordre (`FireConditionsManager.air`). Précipitation
+  personnelle (joueur en « Jour dans le monde », qui voit la météo de sa ville à la place de celle de la carte, #392,
+  `showsChosenPlaceWeather`) : l'air de **sa ville** au même quart d'heure (température et humidité de sa frise), ni
+  celui de la carte ni celui réglé à la main dans la salle ; son écran et son bandeau personnel disent donc la même
+  chose, et le givre suit la même ville (`Weather/Frost.ts`). Tant que rien n'est connu (frise pas encore reçue,
+  humidité absente), il pleut, toujours. Rien ne dépend du calendrier. Les conditions de feu de la salle, elles,
+  restent douces hors météo Réelle : elles ne servent plus à la forme de la pluie. Un éditeur qui essaie une météo ou
+  un lieu dans le panneau des réglages voit, pour lui seul et le temps de l'essai, la météo de la carte essayée et la
+  forme que donne l'air du lieu essayé, même s'il suit une ville.
 - **Rendu.** Quand il pleut, la part de neige devient des flocons (`snowflakes`, les mêmes que l'ancienne neige,
   d'autant plus nombreux que la précipitation est forte : `snowfall`), le reste des gouttes : pluie et flocons mêlés
   dans le mélange. Les flocons sont emportés par le vent de la carte. Le voile sombre et les nuages gris de la pluie
@@ -2940,9 +2993,25 @@ couverture de neige au sol et les arbres qui blanchissent décrit l'état d'avan
   (section suivante).
 - **Limites.** Rien n'est lissé dans le temps (la forme suit les conditions du quart d'heure) ; le thermomètre mouillé
   au sol ignore une couche chaude en altitude (une pluie verglaçante réelle est dessinée en neige) ; les flaques se
-  remplissent encore sous la neige ; un joueur qui suit sa propre ville voit la forme de la pluie de cette ville, le
-  serveur celle du lieu de la carte.
+  remplissent encore sous la neige.
   `play`, `back` et `map-storage` se déploient ensemble.
+
+**Sol gelé** (2026-11-21, `Weather/SoilFrost.ts`, champ facultatif `soilFrost` de `MeadowStepInput`). Le gel fige
+l'eau du sol, il ne l'enlève pas. Avant, par −10 °C le pré séchait aussi vite que par 15 °C, et pendant une neige
+(qui n'apporte pas d'eau) l'herbe mourait de soif. Le serveur lit le gel dans le même air que la forme de la pluie
+(`fallThrough`, `FireConditionsManager.air` : réglé à la main, sinon réel au lieu de la carte quelle que soit sa météo,
+Paris sans lieu) : `soilFrost(température)` vaut 1 à −1 °C et moins, 0 à +1 °C et plus, et monte en ligne droite
+entre les deux (pas de bascule à 0 °C qui clignote). Air inconnu (température ou humidité absente) : pas de gel.
+Sur la part gelée du sol :
+- l'humidité ne baisse plus (ni évaporation, ni dessèchement par le vent chaud) et ne se répand plus aux voisines ni
+  ne descend les pentes ;
+- l'herbe dort : elle ne meurt pas de soif et ne pousse pas ; elle ne jaunit ni ne reverdit (`dryness` figée) ;
+- rien ne repousse après un feu : le compte à rebours des cendres (braises comprises) reprend au dégel.
+
+Inchangés : la pluie liquide encore absorbée (à −1 °C presque tout tombe en neige), le sol trempé sous l'eau qui
+repose, les berges (`drinkFromBanks` ne fait que remonter l'humidité), la noyade, la neige des hauteurs (saison et
+altitude), le feu en cours, le départ spontané (le danger est nul par ce froid), le broutage. Pas de manteau neigeux
+ni de fonte dans ce lot (voir la #417). Rien côté navigateur. `back` seul change de comportement.
 
 ### Neige au sol : elle s'accumule, blanchit, fond et rend son eau
 
@@ -2964,7 +3033,8 @@ Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus
     eau va quand même à l'eau du relief. À l'inverse une neige qui tombe plus vite qu'elle ne fond étouffe le feu :
     case en feu éteinte dès qu'il y reste de la neige, arbre éteint sous une couverture pleine (15 mm).
   - Sur une eau libre, la neige fond aussitôt en eau quand l'air est au-dessus de 0 °C (ou inconnu) ; à 0 °C et
-    moins elle tient sur l'eau, comme sur une glace. Une case enneigée ne prend pas feu ; l'herbe y meurt comme sous la neige des hauteurs.
+    moins elle tient sur l'eau, comme sur une glace. Une case enneigée ne prend pas feu ; l'herbe y dort (elle ne
+    meurt pas de soif et ne pousse pas), à la différence de la neige des hauteurs, sous laquelle elle meurt.
 - **Eau de fonte.** Ce qui fond humidifie le sol de sa case comme la même pluie le ferait, et est versé dans l'eau du
   relief, millimètre pour millimètre (`PX_PER_MM`, `TerrainWaterManager.pour`), compté avec la pluie dans le bilan. Hors de la grille d'eau, le sol est humidifié et le
   reste est perdu. La neige de la pluie de la carte s'accumule à la vitesse de l'eau de la carte (`water.speed`),
@@ -3037,8 +3107,9 @@ gardent leur voile au dehors seul.
 
 **Thème saisonnier** (« Paramètres → Ambiance → Thème saisonnier ») : Auto, Automne, Aucun (Noël retiré, voir plus bas). Réglage perso
 (`seasonalTheme` dans le navigateur), appliqué sans recharger. Il remplace « Thème de Noël » (repris une fois :
-Toujours → Auto depuis le retrait de Noël, Jamais → Aucun) et « Sol extérieur » (effacé). Auto suit le calendrier de
-Paris, revérifié chaque minute : automne du 1er septembre au 30 novembre ; tant que l'heure du serveur
+Toujours → Auto depuis le retrait de Noël, Jamais → Aucun) et « Sol extérieur » (effacé). Auto suit la saison du lieu
+de la carte (Paris sans lieu), revérifiée chaque minute : automne du 1er septembre au 30 novembre au nord, du 1er mars
+au 31 mai au sud ; tant que l'heure du serveur
 n'est pas reçue, Auto n'affiche rien (`Seasonal/SeasonalTheme.ts`). `SeasonalThemeManager` crée le décor du thème
 (`SeasonalDecor`), le masque pendant l'édition et le reconstruit quand un mur ou un objet change.
 
@@ -4128,13 +4199,14 @@ sol mouillé autour. Repli : sans WebGL ou avec moins de 9 unités de texture, l
 style des patinoires).
 
 **Météo personnelle.** Le bandeau météo devient une pastille : la ville du serveur (globe) avec l'icône du temps et
-une flèche du vent ; un clic ouvre le bulletin. Un joueur qui suit un lieu du monde sur son horloge (mode « monde »,
+une flèche du vent ; un clic ouvre le bulletin, sous la pastille. Dès 768 px de large, la pastille météo et la pile des
+étages sont sur la ligne de l'horloge, à sa gauche (météo, étages, horloge) ; en dessous, empilées sous l'horloge. Un joueur qui suit un lieu du monde sur son horloge (mode « monde »,
 `worldCityStore`, nommé d'après la ville la plus proche) voit aussi sa ville (ordinateur), et le jeu dessine pour lui
 seul la météo de ce lieu (`ChosenPlaceWeather`, route `real-weather` du pusher) ; les autres gardent celle du
 serveur.
 
-**Gel.** À partir de la température du lieu affiché (`Weather/Frost.ts`), pour ce joueur seul, rien n'est envoyé :
-givre au sol sous 0 °C ; l'eau gèle des hauts-fonds vers le fond entre 0 et -15 °C (toute gelée au-delà), en glace de
+**Gel.** À partir de l'air du lieu affiché (`Weather/Frost.ts`), pour ce joueur seul, rien n'est envoyé :
+givre au sol d'après la vapeur de l'air (voir « Givre » ci-dessous) ; l'eau gèle des hauts-fonds vers le fond entre 0 et -15 °C (toute gelée au-delà), en glace de
 patinoire ; le sol se mouille sous la pluie et sèche en cinq minutes ; tout avance en deux minutes environ, rien ne
 saute. La neige au sol reste celle d'avant : seulement quand il neige. **Dehors seulement** : `OutdoorGrid` (ce qui
 est fermé par des murs) ne gèle jamais. Sur l'eau gelée on patine (logique des patinoires), on n'y nage plus et le
@@ -4143,6 +4215,23 @@ gèlent comme des hauts-fonds et deviennent des patinoires, sauf si leur **eau c
 d'état d'objet `hot` (`ENTITY_STATE_KEYS`, défaut « non », `entityStateDefault`), commandée par un interrupteur
 (« Il agit sur : l'eau chaude des piscines », cibles choisies pour une piscine dehors) ; chauffée, elle fume dans le
 froid et ne gèle jamais.
+
+**Givre** (2026-11-21, `libs/map-editor/src/Weather/HoarFrost.ts` `hoarFrost`, remplace la rampe « blanc à −10 °C »
+de #392). La gelée blanche est un dépôt de la vapeur de l'air sur une surface plus froide que le point de givrage de
+cet air : il faut un sol sous 0 °C **et** un air assez humide ; par air sec il gèle sans blanchir (gelée noire), et
+l'air très froid porte peu de vapeur. Calcul : pression de vapeur de l'air d'après son humidité relative à l'eau
+(celle d'Open-Meteo et de la salle), comparée à la saturation sur la glace à la température du sol (formes de Magnus
+de l'OMM, WMO-No. 8 annexe 4.B : eau 17,62 / 243,12, glace 22,46 / 272,62, 6,112 hPa) ; givre = excès de vapeur sur
+0,25 hPa (choix : sol tout blanc à 0,25 hPa d'excès). Sol plus froid que l'air de 0,8 °C par vent calme (choix, sous
+les 1 à 3 °C de l'herbe par nuit claire et calme, FAO Snyder et de Melo-Abreu 2005, ch. 2), de jour comme de nuit et
+par tout ciel : ni la nuit ni la nébulosité ne sont lues (les conditions réglées à la main n'en ont pas) ; le vent
+ramène le sol à la température de l'air, en entier jusqu'à 7 km/h, plus rien à 18 km/h (choix). Vent inconnu = calme ;
+**humidité inconnue = pas de givre**. Exemples : −2 °C et 95 % → 0,70 ; −2 °C et 40 % → 0 ; −15 °C et 70 % → 0 ;
++1 °C et 100 % → 0 (sol à +0,2 °C) ; −2 °C, 95 % et 40 km/h → 0 ; −30 °C et 95 % → 0,54. Sources, dans le même ordre
+que la température : ville suivie par le joueur (« Jour dans le monde » : température, humidité et vent de sa frise),
+sinon conditions réglées à la main dans la salle, sinon air réel du lieu de la carte. Limites : un vrai givre de nuit
+claire sous un air à +1 °C n'est pas rendu, et le givre se forme aussi de jour au soleil ; le shader le pose sur tout
+le sol dehors du relief, quel que soit le sol (l'eau a son propre shader).
 
 **Piscines codées.** Une piscine est peinte au sol avec l'outil **Relief**, mode **Piscine** : ses cases gardent un sol
 de piscine (codes 7 à 14, `libs/map-editor/src/Terrain/Pools.ts`), un par style. Jusqu'à 8 styles par carte, dans

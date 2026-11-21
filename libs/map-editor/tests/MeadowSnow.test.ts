@@ -179,13 +179,19 @@ describe("the snow and the fire", () => {
         expect(meadow.ignite(10, 10, 0)).toBe(0);
     });
 
-    it("kills the grass it lies on", () => {
+    it("leaves the grass under it dormant: it neither dies of thirst nor grows", () => {
         const meadow = new Meadow(size, undefined, undefined);
-        meadow.set(10, 10, 0.5, 1);
-        meadow.set(12, 10, 0.5, 1);
+        // A dry soil under the snow, a moist one in daylight under it: neither moves.
+        meadow.set(10, 10, 0, 0.6);
+        meadow.set(12, 10, 0, 0.6);
         meadow.snowOn(10, 10, 0, 100);
         for (let step = 0; step < 50; step++) meadow.step(under(frost));
-        expect(meadow.grassAt(10, 10)).toBeLessThan(meadow.grassAt(12, 10));
+        expect(meadow.grassAt(10, 10)).toBeCloseTo(0.6);
+        expect(meadow.grassAt(12, 10)).toBeLessThan(0.6);
+        meadow.set(14, 10, 0.5, 0.2);
+        meadow.snowOn(14, 10, 0, 100);
+        for (let step = 0; step < 50; step++) meadow.step(under(frost, { daylight: true }));
+        expect(meadow.grassAt(14, 10)).toBeCloseTo(0.2);
     });
 });
 
