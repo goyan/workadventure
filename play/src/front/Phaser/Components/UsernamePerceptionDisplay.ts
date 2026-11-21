@@ -13,6 +13,9 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 /** The system asks for less motion: the symbol stands still. */
 const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
+/** The symbol rests on one position or the other, never in between. */
+export const FLOAT_EASING = "steps(2, jump-none)";
+
 /** A size in pixels of the game, laid out at the scale of the name tag. */
 function gamePx(px: number): string {
     return `calc(${px}px * var(--username-dom-scale, 1))`;
@@ -63,9 +66,14 @@ export class UsernamePerceptionDisplay {
                 [
                     { transform: "translateY(0)" },
                     { transform: `translateY(calc(-${PERCEPTION_MARK_FLOAT_PX}px * var(--username-dom-scale, 1)))` },
-                    { transform: "translateY(0)" },
                 ],
-                { duration: PERCEPTION_MARK_FLOAT_PERIOD_MS, iterations: Infinity, easing: "ease-in-out" },
+                // Up, then down again: two positions per period, by whole pixels.
+                {
+                    duration: PERCEPTION_MARK_FLOAT_PERIOD_MS / 2,
+                    iterations: Infinity,
+                    direction: "alternate",
+                    easing: FLOAT_EASING,
+                },
             ),
         );
         if (typeof sparkles.animate === "function") {

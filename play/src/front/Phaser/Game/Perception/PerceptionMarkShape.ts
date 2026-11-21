@@ -96,8 +96,11 @@ export function perceptionMarkLift(heartsShown: boolean): number {
     return GAP_ABOVE_NAME + (heartsShown ? NERF_HEART_HEIGHT + 1 : 0);
 }
 
-/** The symbol floats up and down this far, in pixels of the game, once every FLOAT_PERIOD_MS. */
-export const PERCEPTION_MARK_FLOAT_PX = 1.5;
+/**
+ * The symbol floats up and down this far, in pixels of the game, once every FLOAT_PERIOD_MS: by whole pixels, in two
+ * positions (a drawing in pixels moved by less would blur), so it moves twice per period.
+ */
+export const PERCEPTION_MARK_FLOAT_PX = 1;
 export const PERCEPTION_MARK_FLOAT_PERIOD_MS = 2400;
-/** The sparkles twinkle in a few steps per period: the browser composes them, the scene is not drawn again. */
+/** The sparkles twinkle in a few steps per period: played by the browser, the scene is not drawn again for them. */
 export const PERCEPTION_MARK_TWINKLE_PERIOD_MS = 1600;

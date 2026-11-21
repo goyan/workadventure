@@ -4,7 +4,7 @@ import type { GameScene } from "../Game/GameScene";
 import type { UsernameDomLayer } from "../Game/UsernameDomLayer";
 import { perceptionMarkLift } from "../Game/Perception/PerceptionMarkShape";
 import { UsernameDisplay } from "./UsernameDisplay";
-import { UsernamePerceptionDisplay } from "./UsernamePerceptionDisplay";
+import { FLOAT_EASING, UsernamePerceptionDisplay } from "./UsernamePerceptionDisplay";
 
 vi.mock("phaser", () => ({ Scenes: { Events: { RENDER: "render" } } }));
 vi.mock("../Services/WaScaleManager", () => ({
@@ -14,7 +14,7 @@ vi.mock("../Services/WaScaleManager", () => ({
 
 /** jsdom has no Web Animations: a stand-in that records what was asked. */
 function stubAnimate(): ReturnType<typeof vi.fn> {
-    const animate = vi.fn(() => mock<Animation>());
+    const animate = vi.fn((_keyframes: unknown, _options?: KeyframeAnimationOptions) => mock<Animation>());
     Object.defineProperty(HTMLElement.prototype, "animate", { value: animate, configurable: true, writable: true });
     Object.defineProperty(SVGElement.prototype, "animate", { value: animate, configurable: true, writable: true });
     return animate;
@@ -71,6 +71,8 @@ describe("UsernamePerceptionDisplay", () => {
         display.show("basic", "", 2);
         expect(display.animated).toBe(true);
         expect(animate).toHaveBeenCalledTimes(2);
+        // The float goes by whole pixels, a few times a period, not smoothly at the rate of the screen.
+        expect(animate.mock.calls[0]?.[1]).toMatchObject({ easing: FLOAT_EASING, direction: "alternate" });
         display.show(undefined, "", 2);
         expect(display.animated).toBe(false);
     });

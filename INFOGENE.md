@@ -104,7 +104,8 @@ sort :
 Les deux portent la même étoile qui scintille ; leurs formes diffèrent (œil plat et barre, anneau), pour être distingués
 sans les couleurs. Au survol du symbole, une infobulle le dit (« Mode Basique : ne voit ni la nuit ni la météo », « Suit
 la météo d'une autre ville » : la ville n'est jamais transmise). Le Basique l'emporte sur une ville suivie : il coupe
-aussi la météo de cette ville.
+aussi la météo de cette ville (lu dans le code : dessin de la météo, `WeatherManager` ; nuit, `effectiveNightModeStore` ;
+sol, `TerrainView`).
 
 - **Qui le voit** : seulement un joueur qui perçoit lui-même le monde partagé (ni Basique, ni ville suivie), jamais
   au-dessus de son propre avatar (`shownPerceptionMark`, `Perception/PerceptionProtocol.ts`).
@@ -117,8 +118,9 @@ aussi la météo de cette ville.
   nuit et du brouillard, à la même échelle, et il suit le palier et l'avion comme le nom ; 2 px au-dessus de la
   pastille, au-dessus des cœurs du Nerf quand ils s'affichent ; caché pendant une bulle de texte ou une émote, et avec
   la pastille quand la mini-vidéo est sur l'avatar.
-- **Animation** : flottement de 1,5 px en 2,4 s et scintillement de l'étoile, joués par le navigateur (Web
-  Animations) : la scène n'est jamais redessinée pour eux. Immobile avec « mouvement réduit ».
+- **Animation** : flottement de 1 px par pixel entier (deux positions en 2,4 s) et scintillement de l'étoile en trois
+  pas, joués par le navigateur (Web Animations) : la scène Phaser n'est jamais redessinée pour eux ; une animation du
+  navigateur par symbole visible, coût non mesuré. Immobile avec « mouvement réduit ».
 
 ## Torche
 
