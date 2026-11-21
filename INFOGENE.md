@@ -3430,9 +3430,8 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
 - **Escalier à flanc vide** (`-vide`) : un avatar du niveau de départ passe dessous là où la hauteur libre atteint
   40 px ; ailleurs, et pour un flanc plein, l'escalier bloque comme avant.
 - **Sélecteur de niveau commun** (`FloorLevelPicker.svelte`, en haut du panneau Carte et du panneau Objets ; choix
-  partagé `mapEditorPlacementLevelStore`) : une ligne Auto · pipette · Sol · paliers posés, une ligne Niveau − / +
-  (n'importe quel niveau, une case de mur à la fois, avec ou sans dalles : `steppableLevels`) et Palier − / + (palier
-  posé suivant ou précédent). **Auto** suit le palier dessiné sous le pointeur, le sol ailleurs. Dans l'outil Carte, un
+  partagé `mapEditorPlacementLevelStore`) : une ligne Auto · pipette · Sol · paliers posés, des flèches vers le
+  niveau au-dessus ou en dessous (voir « Éditeur : choisir un niveau »). **Auto** suit le palier dessiné sous le pointeur, le sol ailleurs. Dans l'outil Carte, un
   clic en mode Porte, Fenêtre ou Hauteur sur un mur d'un autre niveau passe à ce niveau (`levelOfWallAt`).
 - **Profondeurs** : les bandes des paliers commencent au-dessus de tout le sol, objets « au-dessus des avatars »
   compris (un arbre derrière une maison est caché par son étage), et restent sous les calques de recouvrement.
@@ -3900,8 +3899,12 @@ dépliant « Ajuster la hauteur ».
 
 - Chaque niveau porte le nom de sa hauteur, qui ne change pas : « Niveau 1 », « Niveau 2 »… Un niveau qui a des
   dalles porte en plus son nom dans le jeu : « Niveau 2 · Étage 1 ».
-- Les flèches vont au niveau suivant ou précédent de la liste, construit ou non.
-- « Ajuster la hauteur » reste pour les hauteurs hors liste (une case de mur à la fois).
+- Les flèches (« Niveau au-dessus », « Niveau en dessous ») vont au niveau d'à côté, construit ou non : ceux de la
+  liste et, au-dessus des murs de 2 cases, une case de mur à la fois jusqu'à 10 cases plus haut (`steppableLevels`),
+  pour commencer un étage ou un pont là où rien n'existe encore ; la flèche du bas finit au sol. Même règle pour un
+  objet ou une zone sélectionnés. Le repli « Ajuster la hauteur » et ses boutons « Niveau − / + », qui faisaient la
+  même chose, sont retirés. Dans l'outil Carte, Page précédente / Page suivante changent toujours de niveau dans les
+  modes des paliers.
 - Passer en mode **Escalier** sur un étage qu'aucun étage construit ne surmonte ramène le niveau édité à celui d'où
   un escalier y monte (le sol sous un tablier qu'on vient de poser), et l'escalier vise l'étage quitté
   (`stairBaseBelow`). Pas en « auto ».
