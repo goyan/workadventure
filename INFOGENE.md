@@ -2958,6 +2958,23 @@ couverture de neige au sol et les arbres qui blanchissent décrit l'état d'avan
   serveur celle du lieu de la carte.
   `play`, `back` et `map-storage` se déploient ensemble.
 
+**Sol gelé** (2026-11-21, `Weather/SoilFrost.ts`, champ facultatif `soilFrost` de `MeadowStepInput`). Le gel fige
+l'eau du sol, il ne l'enlève pas. Avant, par −10 °C le pré séchait aussi vite que par 15 °C, et pendant une neige
+(qui n'apporte pas d'eau) l'herbe mourait de soif. Le serveur lit le gel dans le même air que la forme de la pluie
+(`fallThrough`, `FireConditionsManager.air` : réglé à la main, sinon réel au lieu de la carte quelle que soit sa météo,
+Paris sans lieu) : `soilFrost(température)` vaut 1 à −1 °C et moins, 0 à +1 °C et plus, et monte en ligne droite
+entre les deux (pas de bascule à 0 °C qui clignote). Air inconnu (température ou humidité absente) : pas de gel.
+Sur la part gelée du sol :
+- l'humidité ne baisse plus (ni évaporation, ni dessèchement par le vent chaud) et ne se répand plus aux voisines ni
+  ne descend les pentes ;
+- l'herbe dort : elle ne meurt pas de soif et ne pousse pas ; elle ne jaunit ni ne reverdit (`dryness` figée) ;
+- rien ne repousse après un feu : le compte à rebours des cendres (braises comprises) reprend au dégel.
+
+Inchangés : la pluie liquide encore absorbée (à −1 °C presque tout tombe en neige), le sol trempé sous l'eau qui
+repose, les berges (`drinkFromBanks` ne fait que remonter l'humidité), la noyade, la neige des hauteurs (saison et
+altitude), le feu en cours, le départ spontané (le danger est nul par ce froid), le broutage. Pas de manteau neigeux
+ni de fonte dans ce lot (voir la #417). Rien côté navigateur. `back` seul change de comportement.
+
 ### Arbres : feuilles d'automne et neige
 
 Les arbres qui se balancent (`Nature:tree-*`, `Nature/TreeSway.ts`) réagissent à la saison qu'ils affichent

@@ -153,6 +153,33 @@ describe("MeadowManager", () => {
         mild.manager.stop();
     });
 
+    it("keeps the water of a soil frozen by the cold of the room, and dries it in a milder air", () => {
+        const moistureOf = (message: MeadowMessage): Uint8Array => new Uint8Array(gunzipSync(message.moisture));
+        const after = (temperature: number): { moisture: Uint8Array; wet: Uint8Array; grass: Uint8Array } => {
+            let air = { temperature: 20, humidity: 60 };
+            const harness = createHarness();
+            harness.manager.fallThrough(() => air);
+            harness.manager.mapChanged();
+            // A rain in mild air wets the soil and grows the grass, then the sky clears and the air turns.
+            harness.steps(400);
+            const wet = harness.manager.snapshot();
+            if (!wet) throw new Error("no meadow");
+            harness.wam.settings = { ...harness.wam.settings, weather: WeatherType.Clear };
+            air = { temperature, humidity: 60 };
+            harness.steps(900);
+            const now = harness.manager.snapshot();
+            harness.manager.stop();
+            if (!now) throw new Error("no meadow");
+            return { moisture: moistureOf(now), wet: moistureOf(wet), grass: grassOf(now) };
+        };
+        const frozen = after(-5);
+        // Half an hour of frost: not a drop lost, and the grass is still there.
+        expect(frozen.moisture).toEqual(frozen.wet);
+        expect(frozen.grass.every((cover) => cover > 0)).toBe(true);
+        const mild = after(5);
+        expect(mild.moisture.every((moisture, index) => moisture < mild.wet[index])).toBe(true);
+    });
+
     it("says nothing of a dry and bare map, nor twice the same state", () => {
         const dry = createHarness({ weather: WeatherType.Clear });
         dry.manager.mapChanged();
