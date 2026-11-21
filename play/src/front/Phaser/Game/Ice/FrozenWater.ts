@@ -2,19 +2,28 @@ import { get } from "svelte/store";
 import { entityStatesManagerStore } from "@wa/front/Stores/EntityStatesStore";
 import type { GameScene } from "@wa/front/Phaser/Game/GameScene";
 import { isFrozen, POOL_ICE_DEPTH_PX, waterCycleNow } from "@wa/front/Phaser/Game/Weather/Frost";
+import { followsServerGround } from "@wa/front/Phaser/Game/Weather/GroundSource";
+import { SWIM_DEPTH_PX } from "@wa/front/Phaser/Game/Water/WaterZones";
+import { iceHolds } from "./IceHold";
 
 /**
- * Whether the point is on water of the relief frozen for this player (Frost.ts): it is skated on as on a rink, nobody
- * swims in it nor is carried by its current. What this player sees: their own city may be colder than the map's.
+ * Whether the point is on water of the relief frozen for this player: it is skated on as on a rink, nobody swims in
+ * it nor is carried by its current. A player who follows the weather of the server stands on the ice the server keeps
+ * (the same for everyone: it bears them over deep water from a thickness on, see iceHolds); a player who follows a
+ * place of their own has the ice of their own cold (Frost.ts), which may be colder than the map's.
  */
 export function isOnFrozenWater(scene: GameScene, point: { x: number; y: number }): boolean {
     const water = scene.getTerrainWater?.();
     if (!water) return false;
     // Indoors (closed by walls, see OutdoorGrid) the water never freezes.
     if (scene.getOutdoorGrid?.()?.isOutdoorAt(point.x, point.y) === false) return false;
+    const depth = water.depthAt(point.x, point.y, scene.time.now);
+    if (followsServerGround()) {
+        return iceHolds(scene.getMeadow?.()?.iceAtPoint(point.x, point.y) ?? 0, depth >= SWIM_DEPTH_PX);
+    }
     const { ice } = waterCycleNow(scene.getGameMap?.()?.getWamFile()?.getWam().settings);
     if (ice <= 0) return false;
-    return isFrozen(water.depthAt(point.x, point.y, scene.time.now), ice);
+    return isFrozen(depth, ice);
 }
 
 /**
@@ -34,6 +43,13 @@ export function isPoolFrozen(
 ): boolean {
     // A pool painted with the relief tool: its hot water set in its style.
     if (pool.painted?.hot) return false;
+    // For a player who follows the weather of the server, a painted pool has the ice the server keeps on it (the
+    // same for everyone), which bears a skater once thick enough. A pool placed as an image is not known to the
+    // server: it keeps the rule of this player's own cold below.
+    if (pool.painted && followsServerGround()) {
+        const ice = scene.getMeadow?.()?.iceAtPoint(pool.x + pool.width / 2, pool.y + pool.height / 2) ?? 0;
+        return iceHolds(ice, pool.painted.depthPx >= SWIM_DEPTH_PX);
+    }
     const { ice } = waterCycleNow(scene.getGameMap?.()?.getWamFile()?.getWam().settings);
     if (!isFrozen(POOL_ICE_DEPTH_PX, ice)) return false;
     if (scene.getOutdoorGrid?.()?.isOutdoorAt(pool.x + pool.width / 2, pool.y + pool.height / 2) === false)

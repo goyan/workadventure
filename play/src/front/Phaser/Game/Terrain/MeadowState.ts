@@ -1,4 +1,4 @@
-import { snowCoverOf, snowMmOfByte, TILE_PX } from "@workadventure/map-editor";
+import { iceMmOfByte, snowCoverOf, snowMmOfByte, TILE_PX } from "@workadventure/map-editor";
 
 /** The colour of the grass, and how much of the ground a full meadow covers. */
 export const GRASS_COLOR = 0x4c9a2a;
@@ -85,6 +85,9 @@ export class MeadowState {
     /** The snow lying on each tile (snowByte); empty when none lies on the map. */
     private snow: Uint8Array = new Uint8Array(0);
     private meanSnow = 0;
+    /** The ice over the water of each tile (iceByte); empty when no water of the map is frozen. */
+    private ice: Uint8Array = new Uint8Array(0);
+    private anyIce = false;
     private anyFire = false;
     private any = false;
     private anyDry = false;
@@ -103,6 +106,8 @@ export class MeadowState {
         ash?: Uint8Array;
         /** The snow lying on each tile; absent or empty when none lies, or from a server that keeps none. */
         snow?: Uint8Array;
+        /** The ice over the water of each tile; absent or empty when none is frozen, or from a server that keeps none. */
+        ice?: Uint8Array;
     }): void {
         const tiles = state.width * state.height;
         if (!Number.isInteger(tiles) || tiles < 0 || state.grass.length !== tiles || state.moisture.length !== tiles) {
@@ -116,6 +121,8 @@ export class MeadowState {
         this.fire = state.fire?.length === tiles ? state.fire : new Uint8Array(tiles);
         this.ash = state.ash?.length === tiles ? state.ash : new Uint8Array(tiles);
         this.snow = state.snow?.length === tiles ? state.snow : new Uint8Array(0);
+        this.ice = state.ice?.length === tiles ? state.ice : new Uint8Array(0);
+        this.anyIce = this.ice.some((byte) => byte > 0);
         let covered = 0;
         for (const byte of this.snow) covered += snowCoverOf(snowMmOfByte(byte));
         this.meanSnow = tiles > 0 ? covered / tiles : 0;
@@ -179,6 +186,26 @@ export class MeadowState {
     /** How much of the map the snow whitens, 0 to 1: the mean over its tiles. */
     public meanSnowCover(): number {
         return this.meanSnow;
+    }
+
+    /** The ice over the water of a tile, as the server tells it (iceByte): 0 without ice. */
+    public iceByteAt(tileX: number, tileY: number): number {
+        return this.ice.length === 0 ? 0 : this.at(this.ice, tileX, tileY);
+    }
+
+    /** The ice over the water of a tile, in mm. */
+    public iceAt(tileX: number, tileY: number): number {
+        return iceMmOfByte(this.iceByteAt(tileX, tileY));
+    }
+
+    /** The ice over the water at a point of the map (map pixels), in mm. */
+    public iceAtPoint(x: number, y: number): number {
+        return this.iceAt(Math.floor(x / TILE_PX), Math.floor(y / TILE_PX));
+    }
+
+    /** Whether any water of the map is frozen. */
+    public hasIce(): boolean {
+        return this.anyIce;
     }
 
     /** Whether any snow lies on the map. */

@@ -1072,6 +1072,9 @@ message MeadowMessage {
   // A byte a tile, the snow lying on it (snowByte in libs/map-editor: 0 none, 255 the most a tile holds), row by row,
   // gzipped. Empty when no snow lies on the map, and from an older server.
   bytes snow = 8;
+  // A byte a tile, the ice over the water lying on it (iceByte in libs/map-editor: 0 none, 255 the thickest), row by
+  // row, gzipped. Empty when no water of the map is frozen, and from an older server.
+  bytes ice = 9;
 }
 
 // The water of the relief of the map (WaterGrid in libs/map-editor): the depth of the water over each cell of a

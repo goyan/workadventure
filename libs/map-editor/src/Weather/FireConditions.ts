@@ -23,7 +23,7 @@ export const NEUTRAL_FIRE_CONDITIONS: FireConditions = { temperature: 20, humidi
 export const DEFAULT_FIRE_THRESHOLDS: FireThresholds = { temperature: 30, humidity: 30, windSpeed: 30 };
 
 export const FIRE_CONDITION_BOUNDS = {
-    temperature: [-10, 50],
+    temperature: [-30, 50],
     humidity: [0, 100],
     windSpeed: [0, 120],
 } as const;

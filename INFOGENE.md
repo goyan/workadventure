@@ -3124,10 +3124,47 @@ Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus
 - **Deux modes** (`Weather/GroundSource.ts`). Un joueur qui suit le temps du serveur voit la neige du serveur. Un
   joueur qui suit sa propre ville (météo personnelle de #392) n'en voit rien et ne la ralentit pas : son monde reste
   local. L'eau, elle, est commune : il peut voir monter une eau de fonte sans avoir vu la neige.
-- **Limites.** La glace reste celle de #392 (personnelle, côté navigateur) : le serveur ne la connaît pas. La neige
-  tient sur l'eau dès 0 °C, même là où cette glace n'a pas encore gagné l'eau profonde à l'écran. Pas de neige locale en météo personnelle. Pas
+- **Limites.** La neige tient sur l'eau dès 0 °C, avant même que la glace du serveur (section suivante) n'ait pris. Pas de neige locale en météo personnelle. Pas
   d'empreintes dans la neige tombée. Sur une carte sans relief ni grille d'eau, l'eau de fonte ne fait qu'humidifier
   le sol. `play` et `back` se déploient ensemble.
+
+### Glace du serveur : l'eau gèle pour tous, et le feu la fait fondre
+
+Le gel de #392 était calculé par chaque navigateur d'après sa température, avec une seule valeur pour toute la carte :
+deux joueurs pouvaient ne pas voir la même glace, et rien (feu, météore) ne pouvait la trouer. Pour qui suit le temps
+du serveur, la glace est maintenant tenue par le serveur, case par case.
+
+- **Modèle** (`libs/map-editor/src/Terrain/Ice.ts`, champ `ice` de `Meadow`). Une épaisseur en millimètres sur l'eau
+  de chaque case (au moins 0,5 px d'eau), jamais plus épaisse que cette eau : une flaque gèle entièrement.
+  - Prise en glace sous 0 °C, loi de Stefan : `365 × (−T) × (1 + vent / 30) / max(épaisseur, 10)` mm par jour,
+    divisé par `1 + neige / 50` (la neige isole). Le temps court 600 fois plus vite que le réel (`THAW_SPEED`) :
+    5 cm en 50 s environ à −10 °C sans vent.
+  - Dégel au-dessus de 0 °C, au rythme de la fonte de la neige. La glace est le dessus de l'eau : geler et dégeler ne
+    changent pas le volume d'eau, qui continue de couler dessous.
+  - **Porte** quelqu'un à partir de 50 mm (`ICE_BEARS_MM`) : plus mince, sur une eau où l'on nage, elle cède et on
+    nage. **Glisse** dès 5 mm (`ICE_SLIPS_MM`) là où l'on marcherait (flaque gelée, verglas sur un sol inondé).
+  - La neige se pose sur la glace au lieu d'y fondre, même quand l'air repasse au-dessus de 0 °C.
+- **Feu, météore, comète.** La chaleur d'un feu (`Meadow.warm` : case en feu, arbre en feu, catastrophe « feu »)
+  fait fondre la neige d'une case puis la glace dessous. Le météore brûlant fait fondre neige et glace de son
+  cratère. La comète brise la glace du sien (`MeadowManager.shatter`). Le givre ne tient pas là où le sol brûle ni
+  sur ses cendres (shader du sol, dans les deux modes).
+- **Annonce.** `MeadowMessage.ice` (champ 9) : un octet par case (`iceByte`), gzip, vide sans glace ; annoncé toutes
+  les 2 s tant que la glace bouge ; gardé dans Redis avec le pré ; vit aussi sur une carte dont l'herbe est coupée.
+- **Navigateur, même affichage.** La texture de glace, son dessin dans le shader de l'eau, le patin, l'absence de
+  nage et de courant, les poissons figés et l'écume arrêtée de #392 sont repris tels quels : seule leur source
+  change. En mode serveur (`followsServerGround`), le shader lit la glace par case dans la texture de données
+  (9e paquet de `GroundSplat`, 12 paquets au lieu de 8, uniforme `uServerIce`), plus transparente quand elle est
+  mince, et la neige posée dessus est celle de la case. `isOnFrozenWater` lit la glace du serveur (`Ice/IceHold.ts`).
+  En météo personnelle (pastille 🖥), rien ne change : le gel local de `Frost.ts`.
+- **Température manuelle** jusqu'à −30 °C (au lieu de −10), pour geler un lac vite.
+- **Piscines.** Une piscine peinte (outil Relief, mode Piscine) gèle par la glace du serveur comme un lac, d'après
+  la profondeur de son style, sauf si son eau est chaude : chauffée, elle ne gèle jamais et fait fondre la neige qui
+  y tombe. Le pré relit les styles avec la carte (`Meadow`, tableaux `pool` et `hotPool`). On y patine quand la glace
+  porte (5 cm si l'on y nagerait). Une piscine posée comme image (ancien objet) n'est pas connue du serveur : elle
+  garde la règle de #392 (dès −8 °C) ; la convertir en piscine peinte la fait suivre le serveur.
+- **Limites.** Pas de glace du serveur dessinée sans shader (repli). La pêche n'est pas refusée sur la glace.
+  L'eau sous la glace s'évapore encore. La glace est tenue par case de 32 px, l'eau par cellule de 16 px : le bord de
+  la glace est lissé par le shader. `play` et `back` se déploient ensemble.
 
 ### Arbres : feuilles d'automne et neige
 

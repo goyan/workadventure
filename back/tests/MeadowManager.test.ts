@@ -1,5 +1,5 @@
 import { gunzipSync } from "node:zlib";
-import { WeatherType } from "@workadventure/map-editor";
+import { cellKey, DEFAULT_POOL_STYLE, poolSoilCode, WeatherType, withSoils } from "@workadventure/map-editor";
 import type { PrecipitationAir, SnowWeather, WAMFileFormat } from "@workadventure/map-editor";
 import type { MeadowMessage, SubToPusherRoomMessage } from "@workadventure/messages";
 import { describe, expect, it, vi } from "vitest";
@@ -37,7 +37,9 @@ function createHarness({
     wind = { windFrom: 0, windSpeed: 0 },
     random = () => 1,
     place = undefined as Settings["weatherLocation"],
+    water = undefined as (() => { depthAt(cellX: number, cellY: number): number } | undefined) | undefined,
 }: {
+    water?: () => { depthAt(cellX: number, cellY: number): number } | undefined;
     place?: Settings["weatherLocation"];
     danger?: () => number;
     wind?: { windFrom: number; windSpeed: number };
@@ -68,7 +70,7 @@ function createHarness({
     const manager = new MeadowManager(
         room,
         { slotsFor: vi.fn(() => undefined) },
-        () => undefined,
+        water ?? (() => undefined),
         { repository, roomUrl: "room" },
         () => now,
         mapSize,
@@ -561,5 +563,132 @@ describe("the snow of the MeadowManager", () => {
         steps(1);
         expect(snowOf(sent.at(-1))[centre]).toBe(0);
         manager.stop();
+    });
+});
+
+describe("the ice of the MeadowManager", () => {
+    const iceOf = (message: MeadowMessage | undefined): Uint8Array =>
+        message && message.ice.length > 0 ? new Uint8Array(gunzipSync(message.ice)) : new Uint8Array(8 * 4);
+    const frost: SnowWeather = { temperature: -10, humidity: 100, windSpeed: 0 };
+    const mild: SnowWeather = { temperature: 10, humidity: 50, windSpeed: 0 };
+    /** A room all under 8 px of water, whose air can be changed. */
+    const iceHarness = (options: Parameters<typeof createHarness>[0] = {}) => {
+        const harness = createHarness({ weather: WeatherType.Clear, water: () => ({ depthAt: () => 8 }), ...options });
+        const air: { now: SnowWeather | undefined } = { now: frost };
+        harness.manager.fallThrough((): PrecipitationAir | undefined => air.now);
+        harness.manager.snowUnder(() => air.now);
+        return { ...harness, air };
+    };
+    const centre = 2 * 8 + 4;
+    const point = { x: 4 * 32 + 16, y: 2 * 32 + 16 };
+
+    it("freezes the water of the map in the frost, tells the room as it thickens, and thaws it in a mild air", () => {
+        const { manager, sent, steps, air } = iceHarness();
+        manager.mapChanged();
+        steps(3);
+        const thin = iceOf(sent.at(-1))[centre];
+        expect(thin).toBeGreaterThan(0);
+        steps(10);
+        expect(iceOf(sent.at(-1))[centre]).toBeGreaterThan(thin);
+        expect(manager.snapshot()?.ice.length).toBeGreaterThan(0);
+        air.now = mild;
+        steps(200);
+        expect(iceOf(sent.at(-1)).every((byte) => byte === 0)).toBe(true);
+        expect(sent.at(-1)?.ice.length).toBe(0);
+        manager.stop();
+    });
+
+    it("freezes nothing where no water lies, nor in an air that is not known", () => {
+        const dry = createHarness({ weather: WeatherType.Clear });
+        dry.manager.snowUnder(() => frost);
+        dry.manager.mapChanged();
+        dry.steps(10);
+        expect(iceOf(dry.sent.at(-1)).every((byte) => byte === 0)).toBe(true);
+        dry.manager.stop();
+        const unknown = iceHarness();
+        unknown.air.now = undefined;
+        unknown.manager.mapChanged();
+        unknown.steps(10);
+        expect(iceOf(unknown.sent.at(-1)).every((byte) => byte === 0)).toBe(true);
+        unknown.manager.stop();
+    });
+
+    it("freezes the water on a map that turned its grass off", () => {
+        const { manager, sent, steps } = iceHarness({
+            meadow: { enabled: false, growMinutes: 10, thirstMinutes: 20, moistureHold: 1 },
+        });
+        manager.mapChanged();
+        steps(5);
+        expect(iceOf(sent.at(-1))[centre]).toBeGreaterThan(0);
+        manager.stop();
+    });
+
+    it("has the ice broken by a comet, and melted by a fireball and by the fire a player holds", () => {
+        const { manager, sent, steps } = iceHarness();
+        manager.mapChanged();
+        steps(10);
+        expect(iceOf(sent.at(-1))[centre]).toBeGreaterThan(0);
+        manager.shatter(point.x, point.y, 1);
+        steps(1);
+        // Broken, then taking again in the frost: thinner than away from the crater.
+        expect(iceOf(sent.at(-1))[centre]).toBeLessThan(iceOf(sent.at(-1))[0]);
+        steps(10);
+        const before = iceOf(sent.at(-1))[centre];
+        for (let patch = 0; patch < 3; patch++) manager.ignite(point.x, point.y, 1);
+        steps(1);
+        expect(iceOf(sent.at(-1))[centre]).toBeLessThan(before);
+        manager.scorch(point.x, point.y, 1, 7);
+        steps(1);
+        expect(iceOf(sent.at(-1))[centre]).toBeLessThan(iceOf(sent.at(-1))[0]);
+        manager.stop();
+    });
+
+    it("brings the ice back after a restart", async () => {
+        const first = iceHarness();
+        first.manager.mapChanged();
+        first.steps(10);
+        first.manager.stop();
+        expect(first.store.ice).toBeDefined();
+        const second = iceHarness({ saved: first.store });
+        second.air.now = { ...frost, temperature: 0 };
+        await second.manager.restore();
+        second.manager.mapChanged();
+        second.steps(5);
+        expect(iceOf(second.sent.at(-1))[centre]).toBeGreaterThan(0);
+        second.manager.stop();
+    });
+
+    it("freezes a pool painted on the map, unless its water is heated", () => {
+        const pool = (tileX: number, style: number): [string, number][] =>
+            [0, 1].flatMap((y) =>
+                [0, 1].map((x): [string, number] => [cellKey(tileX * 2 + x, 2 + y), poolSoilCode(style)]),
+            );
+        const harness = createHarness({ weather: WeatherType.Clear });
+        harness.wam.terrain = withSoils(undefined, new Map([...pool(2, 0), ...pool(5, 1)]));
+        harness.wam.settings = {
+            ...harness.wam.settings,
+            pools: [DEFAULT_POOL_STYLE, { ...DEFAULT_POOL_STYLE, hot: true }],
+        };
+        harness.manager.fallThrough(() => frost);
+        harness.manager.snowUnder(() => frost);
+        harness.manager.mapChanged();
+        harness.steps(10);
+        const ice = iceOf(harness.sent.at(-1));
+        // The tile (2, 1) is a pool, the tile (5, 1) a heated one, the tile (0, 0) dry ground.
+        expect(ice[8 + 2]).toBeGreaterThan(0);
+        expect(ice[8 + 5]).toBe(0);
+        expect(ice[0]).toBe(0);
+        // Heating the first pool thaws it: the styles are read again with the map.
+        harness.wam.settings = {
+            ...harness.wam.settings,
+            pools: [
+                { ...DEFAULT_POOL_STYLE, hot: true },
+                { ...DEFAULT_POOL_STYLE, hot: true },
+            ],
+        };
+        harness.manager.mapChanged();
+        harness.steps(2);
+        expect(iceOf(harness.sent.at(-1))[8 + 2]).toBe(0);
+        harness.manager.stop();
     });
 });
