@@ -6,6 +6,7 @@ import { DEEP_ICE_PX, POOL_ICE_DEPTH_PX } from "@wa/front/Phaser/Game/Weather/Fr
 import type { WaterCycle } from "@wa/front/Phaser/Game/Weather/Frost";
 import type { WaterRing } from "@wa/front/Phaser/Game/Catastrophe/MeteorFall";
 import { SHORE_PX } from "./TerrainShading";
+import { WHITECAP_MIN_DEPTH_PX } from "./Whitecaps";
 import { GROUND_TEXTURES } from "./TexturedGround";
 import type { GroundArea } from "./TexturedGround";
 
@@ -302,6 +303,9 @@ uniform float uSnow;
 // 1 for a player who follows the weather of the server: the ice and the snow on it are those the server keeps, cell
 // by cell; 0 for one who follows a place of their own: the ice of their own cold (uIce), the snow of their map.
 uniform float uServerIce;
+// The wind over the water: which way it blows (a vector of length 1) and the share of open water its whitecaps
+// whiten (Whitecaps.ts), 0 in a light wind.
+uniform vec3 uWind;
 // The fronts of the waves of the comets fallen into the water (x, y, radius in map pixels, strength 0 to 1).
 uniform vec4 uRing0;
 uniform vec4 uRing1;
@@ -326,6 +330,30 @@ vec3 snowOnIce(vec3 ice, vec2 world) {
     float drift = 0.6 * fbm(world / 11.0) + 0.4 * hash(floor(world / 2.0));
     float covered = step(1.0 - snow * 0.95, drift);
     return mix(ice, vec3(0.95, 0.97, 1.0) * (0.94 + 0.06 * hash(floor(world))), covered);
+}
+
+// The whitecaps of the wind at a point of open water, 0 to 1: short crests lying across the wind, each in a cell of
+// a grid laid along it (14 px across the wind, 7 along). A cell breaks for a second and a half, by chance, as
+// often as the wind asks: a crest fills about a third of its cell, so the share of the cells is three times that
+// of the water. They drift slowly downwind.
+float whitecapsAt(vec2 world, float t) {
+    float share = uWind.z;
+    if (share <= 0.0) return 0.0;
+    vec2 along = uWind.xy;
+    vec2 across = vec2(-along.y, along.x);
+    vec2 p = vec2(dot(world, across) / 14.0, (dot(world, along) - t * 3.0) / 7.0);
+    // Every other row is shifted: no columns of crests.
+    p.x += 0.5 * mod(floor(p.y), 2.0);
+    vec2 cell = floor(p);
+    float phase = t / 1.5 + hash(cell + 3.7);
+    float turn = floor(phase);
+    float life = fract(phase);
+    float breaks = step(hash(cell + turn * 17.0 + 11.0), min(1.0, share * 3.0));
+    if (breaks <= 0.0) return 0.0;
+    vec2 q = fract(p) - 0.5 - (vec2(hash(cell + turn + 1.3), hash(cell + turn + 2.9)) - 0.5) * 0.3;
+    // A crest: long across the wind, thin along it, its edge torn by a fine noise.
+    float shape = 1.0 - smoothstep(0.5, 1.0, length(q * vec2(2.6, 5.0)) + (vnoise(world / 2.0) - 0.5) * 0.7);
+    return breaks * shape * smoothstep(0.0, 0.15, life) * (1.0 - smoothstep(0.55, 1.0, life));
 }
 
 const vec3 SHALLOW = vec3(0.1, 0.48, 0.52);
@@ -460,6 +488,18 @@ void main() {
         float froth = smoothstep(0.35, 0.6, fbm(world / 5.0 + vec2(t * 0.25, 0.0)) * (0.6 + 0.6 * wave));
         // A film too thin to break does not froth.
         float foam = band * froth * film;
+
+        // The foam of the waves that break and of the floods that advance (BreakingFoam.ts, the red of pack 9):
+        // a froth torn by a fine noise that boils, whole where the foam is strong, in flecks where it fades.
+        float broken = pack(9.0, world).r;
+        float boil = fbm(world / 3.5 + vec2(t * 0.35, -t * 0.25));
+        float surf = smoothstep(0.78 - 0.62 * broken, 0.9 - 0.62 * broken, boil) * step(0.03, broken);
+        foam = max(foam, surf * 0.92);
+
+        // The whitecaps of the wind, on open water outdoors.
+        float open = outdoors * step(${WHITECAP_MIN_DEPTH_PX}.0, depthPx);
+        foam = max(foam, whitecapsAt(world, t) * open * 0.85);
+
         water = mix(water, FOAM, foam);
         alpha = max(alpha, foam * 0.9);
 
@@ -580,6 +620,7 @@ export class GroundSplat {
                         setUniform("uIce", this.cycle.ice);
                         setUniform("uSnow", this.snow);
                         setUniform("uServerIce", this.serverIce ? 1 : 0);
+                        setUniform("uWind", [this.wind.x, this.wind.y, this.wind.share]);
                         for (let index = 0; index < MAX_WATER_RINGS; index++) {
                             const ring = this.rings[index];
                             setUniform(
@@ -607,6 +648,8 @@ export class GroundSplat {
     /** Whether the ice drawn is the one the server keeps (GroundSource), not the one of this player's own cold. */
     private serverIce = false;
     private rings: readonly WaterRing[] = [];
+    /** The wind over the water: which way it blows and the share of open water its whitecaps whiten. */
+    private wind = { x: 0, y: 1, share: 0 };
 
     /** Lays the grounds over `area` from their weights. Nothing to draw: the ground shader is hidden. */
     public setGround(area: GroundArea, weights: GroundWeights): void {
@@ -662,13 +705,21 @@ export class GroundSplat {
         this.place(this.waterShader, area, this.anyWater || this.anyPool);
     }
 
-    /** The depth of the water over the area (map pixels a cell, as the area of `setGround`); undefined: dry. */
-    public setWater(wet: Uint8Array | undefined, strength: number): void {
+    /**
+     * The depth of the water over the area (map pixels a cell, as the area of `setGround`); undefined: dry. With the
+     * foam of its waves, cell by cell (0 to 255); undefined: none.
+     */
+    public setWater(wet: Uint8Array | undefined, strength: number, foam?: Uint8Array): void {
         const area = this.area;
         const pixels = this.pixels;
         if (!area || !pixels) return;
         this.strength = strength;
-        const any = writeWater(pixels.data, wet, area.columns, area.rows);
+        const { columns, rows } = area;
+        const any = writeWater(pixels.data, wet, columns, rows);
+        // The foam of the waves, in a pack of its own.
+        for (let cell = 0; cell < columns * rows; cell++) {
+            pixels.data[texel(9, cell, columns, rows)] = (wet?.[cell] ?? 0) > 0 ? (foam?.[cell] ?? 0) : 0;
+        }
         if (!any && !this.anyWater) return;
         this.anyWater = any;
         this.upload();
@@ -679,6 +730,11 @@ export class GroundSplat {
     /** The frost, the ice and the wet of now: read by the shaders at their next drawing. */
     public setCycle(cycle: WaterCycle): void {
         this.cycle = cycle;
+    }
+
+    /** The wind over the water: which way it blows (length 1) and the share of open water its whitecaps whiten. */
+    public setWind(wind: { x: number; y: number; share: number }): void {
+        this.wind = wind;
     }
 
     /** The fronts of the waves of the comets fallen into the water: the first MAX_WATER_RINGS are drawn. */

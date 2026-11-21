@@ -3899,8 +3899,16 @@ export class GameScene extends DirtyScene {
                 });
                 // The relief of the ground and the water of its hollows.
                 this.terrainView?.destroy();
-                this.terrainView = new TerrainView(this, this.terrainWater, undefined, this.meadow, () =>
-                    this.getGroundSeason(),
+                this.terrainView = new TerrainView(
+                    this,
+                    this.terrainWater,
+                    undefined,
+                    this.meadow,
+                    () => this.getGroundSeason(),
+                    () => {
+                        const weather = this.shownWeather();
+                        return weather ? { speed: weather.windSpeed, from: weather.windFrom } : undefined;
+                    },
                 );
                 // The water seen moving: foam on its current, whirls over the sinks, rings over the sources.
                 this.waterFlowView?.destroy();

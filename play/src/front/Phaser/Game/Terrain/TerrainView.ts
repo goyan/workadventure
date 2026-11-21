@@ -25,6 +25,7 @@ import type { BlockCanvasArea, BlockSnapshot, BlockSurface } from "../Weather/Bl
 import { paddedView, wellInside } from "../Weather/WeatherFrame";
 import type { WeatherView } from "../Weather/WeatherFrame";
 import { isBasicActive } from "../../../Stores/BasicModeStore";
+import { isEffectShown } from "../../../Stores/EffectsStore";
 import {
     DEEP_WATER_COLOR,
     deepWaterAlpha,
@@ -56,6 +57,8 @@ import type { TerrainWater } from "./TerrainWater";
 import { GROUND_TEXTURES, TexturedGround, WATER_FRAMES } from "./TexturedGround";
 import type { GroundArea } from "./TexturedGround";
 import { GroundSplat } from "./GroundSplat";
+import { BreakingFoam } from "./BreakingFoam";
+import { whitecapShare, windHeading } from "./Whitecaps";
 import { classicPoolsShown, imagePoolCells, imagePoolsOf, signatureOf } from "./ImagePools";
 import { PoolLadders, topEdgesOf } from "./PoolLadders";
 import type { ImagePool, PlacedPool } from "./ImagePools";
@@ -179,6 +182,10 @@ export class TerrainView {
     private serverIce = false;
     private poolsOf: { terrain: TerrainData | undefined; any: boolean } | undefined;
     private wet = new Uint8Array(0);
+    /** The foam of the waves that break and of the floods that advance, and what the shader is told of it. */
+    private readonly breaking = new BreakingFoam();
+    private breakingVersion = -1;
+    private foam = new Uint8Array(0);
     private shore = new Uint8Array(0);
 
     constructor(
@@ -189,6 +196,8 @@ export class TerrainView {
         private readonly meadow?: MeadowState,
         /** The season of the map: the snow holds on its heights, lower in winter. None: no snow is drawn. */
         private readonly season?: () => Season | undefined,
+        /** The wind the player sees: how fast (km/h) and where from (degrees). It raises whitecaps on the water. */
+        private readonly wind?: () => { speed?: number; from?: number } | undefined,
     ) {
         // The shaders draw the soils and the grass: the canvas keeps only the shades of the relief, smooth. Without
         // them the mottled grass and the soils are on the canvas: sharp cells, each keeps its own shade.
@@ -218,10 +227,13 @@ export class TerrainView {
         }
         this.ripple(now);
         this.flowCycle();
+        this.readFoam(now);
         const camera = this.scene.cameras.main.worldView;
         const screen = { x: camera.x, y: camera.y, width: camera.width, height: camera.height };
         this.readImagePools();
-        const key = `${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}:${this.imagePools.signature}:${this.poolSettingsVersion()}:${followsServerGround()}`;
+        // The foam left behind a wave fades: drawn again five times a second while any is left.
+        const foamKey = this.breaking.active(now) ? Math.floor(now / 200) : 0;
+        const key = `${foamKey}:${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}:${this.imagePools.signature}:${this.poolSettingsVersion()}:${followsServerGround()}`;
         const inside = this.drawn !== undefined && wellInside(this.drawn, screen, DRAW_MARGIN / 5);
         if (key === this.lastKey && inside) return;
         this.lastKey = key;
@@ -248,6 +260,26 @@ export class TerrainView {
         return this.poolSettingsSeen.version;
     }
 
+    /**
+     * The foam of the waves, read from each new state of the water, and the whitecaps of the wind: both drawn by the
+     * water shader. None for a player who turned the moving water off.
+     */
+    private readFoam(now: number): void {
+        if (!this.splat) return;
+        const shown = isEffectShown("waterFlow");
+        const version = this.water.version();
+        if (!shown) {
+            if (this.breakingVersion !== -1) this.breaking.clear();
+            this.breakingVersion = -1;
+        } else if (version !== this.breakingVersion) {
+            this.breakingVersion = version;
+            this.breaking.absorb(this.water.settled(), this.water.relief(), now);
+        }
+        const wind = shown ? this.wind?.() : undefined;
+        const heading = windHeading(wind?.from) ?? { x: 0, y: 1 };
+        this.splat.setWind({ ...heading, share: whitecapShare(wind?.speed) });
+    }
+
     private draw(view: WeatherView, now: number): void {
         const canvas = this.surface.begin(view, TERRAIN_CELL);
         const size = canvas.columns * canvas.rows;
@@ -256,6 +288,7 @@ export class TerrainView {
         if (this.everywhere.length !== size) {
             this.everywhere = new Uint8Array(size).fill(1);
             this.wet = new Uint8Array(size);
+            this.foam = new Uint8Array(size);
             this.shore = new Uint8Array(size);
         }
         const { everywhere, wet, shore } = this;
@@ -386,7 +419,23 @@ export class TerrainView {
             wet,
         );
         if (this.splat) {
-            this.splat.setWater(anyWater ? wet : undefined, this.seeThrough ? SEE_THROUGH : 1);
+            const foamy = anyWater && this.breaking.active(now);
+            if (foamy) {
+                const cellX = canvas.x / TERRAIN_CELL;
+                const cellY = canvas.y / TERRAIN_CELL;
+                for (let row = 0; row < canvas.rows; row++) {
+                    for (let column = 0; column < canvas.columns; column++) {
+                        this.foam[row * canvas.columns + column] = Math.round(
+                            255 * this.breaking.foamAt(cellX + column, cellY + row, now),
+                        );
+                    }
+                }
+            }
+            this.splat.setWater(
+                anyWater ? wet : undefined,
+                this.seeThrough ? SEE_THROUGH : 1,
+                foamy ? this.foam : undefined,
+            );
         } else if (this.grounds) {
             this.layWater(this.grounds, canvas, anyWater ? wet : undefined);
         } else if (anyWater) {
