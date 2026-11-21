@@ -114,6 +114,25 @@ describe("what the eraser of the map tool picks", () => {
         expect(eraseTargetUnder(scene, { x: 40, y: 140 })?.ref).toEqual({ kind: "floor", cell: { x: 1, y: 4 } });
         expect(eraseTargetUnder(scene, { x: 200, y: 200 })).toBeUndefined();
     });
+
+    it("picks the slab under the pointer whatever the level edited, the one of that level first", () => {
+        const floors = new FloorModel();
+        floors.setSlab(20, 5, 6, "parquet-clair");
+        const walls = new MapLayerModel();
+        const point = { x: 5 * 32 + 10, y: 6 * 32 - 20 + 10 };
+        const slab = { kind: "slab", level: 20, cell: { x: 5, y: 6 } };
+        // The deck of a bridge, while the ground or another floor is edited.
+        expect(eraseTargetUnder(sceneOf(walls, floors), point)?.ref).toEqual(slab);
+        expect(eraseTargetUnder(sceneOf(walls, floors, 52), point)?.ref).toEqual(slab);
+        // Two slabs drawn at the same place: the one of the level edited, else the highest.
+        floors.setSlab(52, 5, 7, "parquet-clair");
+        expect(eraseTargetUnder(sceneOf(walls, floors, 20), point)?.ref).toEqual(slab);
+        expect(eraseTargetUnder(sceneOf(walls, floors), point)?.ref).toEqual({
+            kind: "slab",
+            level: 52,
+            cell: { x: 5, y: 7 },
+        });
+    });
 });
 
 describe("what an eraser gesture of the map tool removes", () => {
@@ -132,6 +151,22 @@ describe("what an eraser gesture of the map tool removes", () => {
         expect(plan.outline).toHaveLength(2);
         applyErase(plan.refs, undefined, floors);
         expect(floors.getSlabs().map((slab) => [slab.x, slab.y])).toEqual([[9, 9]]);
+    });
+
+    it("removes the slabs of a rectangle on the floor of the slab it starts on, while the ground is edited", () => {
+        const floors = new FloorModel();
+        for (const x of [2, 3, 4]) floors.setSlab(20, x, 3, "parquet-clair");
+        const walls = new MapLayerModel();
+        walls.setFloor(2, 3, "parquet-clair");
+        const y = 3 * 32 - 20 + 5;
+        const plan = erasePlan(sceneOf(walls, floors), { x: 2 * 32 + 5, y }, { x: 3 * 32 + 5, y }, []);
+        expect(plan.refs).toEqual([
+            { kind: "slab", level: 20, cell: { x: 2, y: 3 } },
+            { kind: "slab", level: 20, cell: { x: 3, y: 3 } },
+        ]);
+        applyErase(plan.refs, undefined, floors);
+        expect(floors.getSlabs().map((slab) => [slab.x, slab.y])).toEqual([[4, 3]]);
+        expect(walls.getFloor(2, 3)?.family).toBe("parquet-clair");
     });
 
     it("removes the walls along the line of the wall it starts on, a high wall picked by its top too", () => {

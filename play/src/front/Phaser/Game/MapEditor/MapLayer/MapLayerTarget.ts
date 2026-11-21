@@ -202,16 +202,29 @@ function floorTarget(cell: TilePoint): MapLayerTarget {
     };
 }
 
+/**
+ * The floor of the slab drawn under a point of the screen, whatever the level edited: the one of that level when it
+ * has a slab there, else the highest one that has (it is drawn over the others).
+ */
+function slabLevelUnder(scene: TargetScene, screen: Point): number | undefined {
+    const levels = scene.floors.getLevels().reverse();
+    if (scene.level > 0) levels.unshift(scene.level);
+    return levels.find((level) => {
+        const cell = floorCellAt(screen.x, screen.y, level);
+        return scene.floors.hasSlab(level, cell.x, cell.y);
+    });
+}
+
 /** What a click of the eraser removes under a point of the screen, in the order of `ERASE_PRIORITY`. */
 export function eraseTargetUnder(scene: TargetScene, screen: Point): MapLayerTarget | undefined {
     const stair = stairTargetUnder(scene, screen);
     if (stair) return stair;
     const wall = wallHitAt(scene.walls, scene.picker, groundOf(scene, screen));
     if (wall) return { ref: wall.ref, outline: wallOutline(scene, [wall.ref]) };
-    const cell = floorCellAt(screen.x, screen.y, scene.level);
-    if (scene.level > 0) {
-        return scene.floors.hasSlab(scene.level, cell.x, cell.y) ? slabTarget(scene.level, cell) : undefined;
-    }
+    const slabLevel = slabLevelUnder(scene, screen);
+    if (slabLevel !== undefined) return slabTarget(slabLevel, floorCellAt(screen.x, screen.y, slabLevel));
+    if (scene.level > 0) return undefined;
+    const cell = floorCellAt(screen.x, screen.y, 0);
     return scene.walls.getFloor(cell.x, cell.y) ? floorTarget(cell) : undefined;
 }
 
@@ -251,8 +264,8 @@ export interface ErasePlan {
 /**
  * What an eraser gesture removes, from `start` to `end` (points of the screen). What it starts on decides: a stair, the
  * stair; a wall, a door or a window, that element on a click and the walls of its line (with what they carry) on a drag
- * along it; anything else, the slabs of the rectangle on a raised floor, the floors passed over on the ground (`path`:
- * the tiles visited, on the ground).
+ * along it; a slab, whatever its floor, the slabs of the rectangle on that floor; anything else, the slabs of the
+ * rectangle on the raised floor edited, the floors passed over on the ground (`path`: the tiles visited, on the ground).
  */
 export function erasePlan(scene: TargetScene, start: Point, end: Point, path: readonly Point[]): ErasePlan {
     const stair = stairTargetUnder(scene, start);
@@ -265,13 +278,12 @@ export function erasePlan(scene: TargetScene, start: Point, end: Point, path: re
         // A wall removed takes the door and the window it carries: they are outlined with it.
         return { refs, outline: wallOutline(scene, [...refs, ...line.map((edge) => wallRefOn(scene.walls, edge))]) };
     }
-    if (scene.level > 0) {
-        const targets = rectangleCells(
-            floorCellAt(start.x, start.y, scene.level),
-            floorCellAt(end.x, end.y, scene.level),
-        )
-            .filter((cell) => scene.floors.hasSlab(scene.level, cell.x, cell.y))
-            .map((cell) => slabTarget(scene.level, cell));
+    // The floor of the slab the gesture starts on, else the raised floor edited.
+    const slabLevel = slabLevelUnder(scene, start) ?? (scene.level > 0 ? scene.level : undefined);
+    if (slabLevel !== undefined) {
+        const targets = rectangleCells(floorCellAt(start.x, start.y, slabLevel), floorCellAt(end.x, end.y, slabLevel))
+            .filter((cell) => scene.floors.hasSlab(slabLevel, cell.x, cell.y))
+            .map((cell) => slabTarget(slabLevel, cell));
         return { refs: targets.map((target) => target.ref), outline: targets.flatMap((target) => target.outline) };
     }
     const seen = new Set<string>();
