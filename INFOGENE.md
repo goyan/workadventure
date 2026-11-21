@@ -4063,6 +4063,16 @@ ensemble.
 `Phaser/UserInput/GameSceneUserInputHandler.ts`, `Components/Catastrophe/CatastrophePanel.svelte`, icône `comet` de
 `PixelIcons.ts`, i18n `actionbar` et `menu` (fr, en).
 
+## Catastrophes : la flamme du feu qu'on tient
+
+La catastrophe « feu » ne montrait rien quand rien ne prenait sous le pointeur (herbe verte ou mouillée, neige, sol
+nu). Le serveur annonce maintenant chaque touche de feu à la salle (`CatastropheMessage`, genre `CATASTROPHE_FIRE`,
+un identifiant par joueur, 500 ms de vie : `FIRE_PATCH_LASTS_MS`), et chaque navigateur dessine des flammes qui
+vacillent sur le disque, au-dessus d'une lueur, tant que le joueur garde le clic (`Catastrophe/FireTorch.ts` pour
+les flammes, `FireTorchView.ts` pour le dessin, lumière ajoutée). La flamme suit le pointeur et s'éteint au relâchement.
+Ce qui prend feu reste le feu du pré, dessiné ailleurs. Coupée avec l'effet « feu » ; mouvement réduit : flammes fixes.
+Un navigateur d'avant ce lot dessine une comète pour chaque touche : `play` et `back` se déploient ensemble.
+
 ## Catastrophes : le drain
 
 Quatrième catastrophe du widget : l'inverse de l'averse. Elle **retire l'eau, fort, d'un disque** sous le pointeur,

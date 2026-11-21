@@ -6,6 +6,7 @@ import {
     DRAIN_LASTS_MS,
     DRAINS_PER_ROOM,
     drainTiles,
+    FIRE_PATCH_LASTS_MS,
     FIRE_PATCHES_PER_SECOND,
     fireTiles,
     METEOR_FALL_MS,
@@ -46,6 +47,8 @@ export class CatastropheManager {
     private stopped = false;
     /** When each player set their last patches of fire, within the last second. */
     private readonly patches = new Map<number, number[]>();
+    /** The flame of each player who set fire, by the id the room is told: one flame a player, which follows them. */
+    private readonly flames = new Map<number, number>();
     /** What a patch of fire lights: the meadow of the room, given once it is made. */
     private ignite: (x: number, y: number, radiusTiles: number) => void = () => undefined;
     /** What a fireball does where it lands: the water and the meadow of the room, given once they are made. */
@@ -200,8 +203,29 @@ export class CatastropheManager {
         }
         recent.push(now);
         this.patches.set(userId, recent);
+        const tiles = fireTiles(radiusTiles);
+        // The room sees the flame the player holds, whether or not anything takes fire under it.
+        let flame = this.flames.get(userId);
+        if (flame === undefined) {
+            flame = this.nextId++;
+            this.flames.set(userId, flame);
+        }
+        this.room.sendSubMessageToRoom({
+            message: {
+                $case: "catastropheMessage",
+                catastropheMessage: {
+                    id: flame,
+                    kind: CatastropheKind.CATASTROPHE_FIRE,
+                    x,
+                    y,
+                    impactInMs: FIRE_PATCH_LASTS_MS,
+                    radiusTiles: tiles,
+                    wholeMap: false,
+                },
+            },
+        });
         try {
-            this.ignite(x, y, fireTiles(radiusTiles));
+            this.ignite(x, y, tiles);
         } catch (error) {
             console.error("A patch of fire could not be set on the meadow of the map", error);
         }

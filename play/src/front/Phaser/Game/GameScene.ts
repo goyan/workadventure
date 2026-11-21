@@ -439,6 +439,7 @@ import { TreeFireState } from "./Fire/TreeFireState";
 import { TreeFireView } from "./Fire/TreeFireView";
 import { DownpourView } from "./Catastrophe/DownpourView";
 import { DrainView } from "./Catastrophe/DrainView";
+import { FireTorchView } from "./Catastrophe/FireTorchView";
 import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
 import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
 import { CoffeeManager } from "./Coffee/CoffeeManager";
@@ -632,6 +633,7 @@ export class GameScene extends DirtyScene {
     private treeFireView: TreeFireView | undefined;
     private downpourView: DownpourView | undefined;
     private drainView: DrainView | undefined;
+    private fireTorchView: FireTorchView | undefined;
     private catastropheSubscription: Subscription | undefined;
     /** The animals of the water of the relief, as the server tells them. */
     private readonly aquaticLife = new AquaticLife();
@@ -1809,6 +1811,8 @@ export class GameScene extends DirtyScene {
         this.downpourView = undefined;
         this.drainView?.destroy();
         this.drainView = undefined;
+        this.fireTorchView?.destroy();
+        this.fireTorchView = undefined;
         rodEquippedStore.set(false);
         this._coffeeManager?.destroy();
         this._coffeeManager = undefined;
@@ -2369,6 +2373,7 @@ export class GameScene extends DirtyScene {
             this.treeFireView?.update(time);
             this.downpourView?.update(time);
             this.drainView?.update(time);
+            this.fireTorchView?.update(time);
             this.nightManager?.update(time);
             this.lampManager?.update(time);
             this.gameSwitches?.update(time);
@@ -4390,9 +4395,16 @@ export class GameScene extends DirtyScene {
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
         );
         this.drainView = drainView;
+        this.fireTorchView?.destroy();
+        const fireTorchView = new FireTorchView(
+            this,
+            () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+        );
+        this.fireTorchView = fireTorchView;
         this.catastropheSubscription = this.connection?.catastropheMessageStream.subscribe((message) => {
             if (message.kind === CatastropheKind.CATASTROPHE_DOWNPOUR) downpourView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_DRAIN) drainView.report(message, this.time.now);
+            else if (message.kind === CatastropheKind.CATASTROPHE_FIRE) fireTorchView.report(message, this.time.now);
             else meteorView.add(message, this.time.now);
         });
         this.karaokeSpotlight?.destroy();
