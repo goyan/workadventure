@@ -82,7 +82,7 @@ function stairTarget(stair: PlacedStair): MapLayerTarget {
     return { ref: { kind: "stair", base: stair.base, foot: { ...stair.foot } }, outline: [stairOutline(stair)] };
 }
 
-/** A placed stair (or ramp) that starts from the level edited, under a point of the screen: the one the stair mode moves. */
+/** A placed stair (or ramp) under a point of the screen, whatever the floor it starts from: the one the stair mode moves. */
 export function stairTargetUnder(scene: TargetScene, screen: Point): MapLayerTarget | undefined {
     const stair = stairUnderPoint(scene.floors, scene.level, screen.x, screen.y);
     return stair ? stairTarget(stair) : undefined;

@@ -197,9 +197,21 @@ describe("floor operations", () => {
         expect(stairUnderPoint(model, 0, 5 * 32 + 10, 6 * 32 + 10)).toBe(stair);
         // On the top of its image: further north than its tiles by its rise.
         expect(stairUnderPoint(model, 0, 5 * 32 + 10, stair.ground.y - 40)).toBe(stair);
-        // Beside it, or from another floor: nothing.
+        // Beside it: nothing.
         expect(stairUnderPoint(model, 0, 7 * 32 + 10, 6 * 32 + 10)).toBeUndefined();
-        expect(stairUnderPoint(model, 52, 5 * 32 + 10, 6 * 32 + 10 - 52)).toBeUndefined();
+        // While another floor is edited, it is still the one under the pointer.
+        expect(stairUnderPoint(model, 52, 5 * 32 + 10, 6 * 32 + 10)).toBe(stair);
+    });
+
+    it("takes the stair of the floor edited before the one of another floor under the same point", () => {
+        const model = new FloorModel();
+        expect(placeStair(model, north, { x: 5, y: 6 }, 0, BOUNDS)).toBe(true);
+        // One floor up, on the tiles drawn where the foot of the first one is.
+        const upper = floorCellAt(5 * 32 + 10, 6 * 32 + 10, 52);
+        expect(placeStair(model, north, upper, 52, BOUNDS)).toBe(true);
+        const [low, high] = model.getStairs();
+        expect(stairUnderPoint(model, 0, 5 * 32 + 10, 6 * 32 + 10)).toBe(low);
+        expect(stairUnderPoint(model, 52, 5 * 32 + 10, 6 * 32 + 10)).toBe(high);
     });
 
     it("offers the floors of the walls of 2, 3 and 4, and the ones already on the map", () => {
