@@ -3227,7 +3227,13 @@ couverture de neige au sol et les arbres qui blanchissent décrit l'état d'avan
   - **Dessin** : pixel art de 1 à 5 px, éclairé en haut à gauche, un pixel d'ombre en bas à droite (lisible sur la
     neige au sol, où les cristaux fins restent presque invisibles, comme en vrai) ; de nuit gris bleuté et un peu plus
     pâle (`snowTones`, choix), les lampes ne les éclairent pas. Mouvement réduit : flocons immobiles. Sous abri : rien.
-    L'averse de la catastrophe dessine ses flocons de la même forme (`drawFlake`, taille 3).
+  - **Partagé avec l'averse** de la catastrophe (`Catastrophe/DownpourFall.ts`) : la trajectoire d'un flocon
+    (`fallingFlake` : il descend jusqu'à son point d'arrivée, se balance de moins en moins en approchant, puis se pose),
+    son apparition en fondu (`flakeFadeIn`) et sa forme (`drawFlake`, taille 3 pour l'averse). Restent propres à
+    chacun le placement (l'averse : un point fixe du disque du nuage, chute droite de 96 px en 2,6 s ; la météo : un
+    champ fixé à l'air qui couvre la vue et que porte le vent réel), la quantité (l'averse : un nombre de flocons selon
+    son disque) et la sorte de flocon (l'averse ne connaît que la part de neige, pas la température : taille 3 fixe,
+    couleurs de jour).
   - **Coût** : calcul ≈ 0,8 ms par image pour une forte neige près de 0 °C (≈ 900 flocons), ≈ 1,3 ms au pire (≈ 2 200
     cristaux), contre ≈ 1,1 ms pour les gouttes d'une forte pluie (mesure Node, hors dessin Phaser).
 - **Sol et arbres.** La neige qui tombe tient au sol depuis le lot « Neige au sol » (section suivante) : le sol

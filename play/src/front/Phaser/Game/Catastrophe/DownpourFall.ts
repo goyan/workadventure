@@ -1,3 +1,5 @@
+import { fallingFlake } from "../Weather/Snowfall";
+
 /** A drop of a downpour at a moment: where it is, where it lands, and how far along its fall it is (0 to 1). */
 export interface DownpourDrop {
     x: number;
@@ -19,8 +21,8 @@ const MIN_DROPS = 24;
 const MAX_DROPS = 420;
 /** The drops lean a little, as a heavy rain does. */
 const LEAN = 0.18;
-/** A flake comes down in this many milliseconds, swaying this many map pixels to each side. */
-const FLAKE_FALL_MS = 2600;
+/** A flake comes down in this many milliseconds (about 1.3 m/s), swaying this many map pixels to each side. */
+export const FLAKE_FALL_MS = 2600;
 const FLAKE_SWAY_PX = 6;
 
 /** A number between 0 and 1 that only depends on the drop and on which one of its numbers is asked. */
@@ -97,8 +99,18 @@ export function downpourFlakes(
         const landY = centre.y + Math.sin(angle) * distance * 0.5;
         const turn = now / FLAKE_FALL_MS + share(flake, 2);
         const fall = reducedMotion ? share(flake, 2) : turn - Math.floor(turn);
-        const sway = Math.sin((fall * 3 + share(flake, 3)) * Math.PI * 2) * FLAKE_SWAY_PX * (1 - fall);
-        flakes.push({ x: landX + sway, y: landY - (1 - fall) * DOWNPOUR_FALL_PX, landX, landY, fall });
+        // The trajectory of the flakes of the weather (fallingFlake), straight down onto its place of the disc.
+        const { x, y } = fallingFlake({
+            landX,
+            landY,
+            descentX: 0,
+            descentY: DOWNPOUR_FALL_PX,
+            fall,
+            swayPx: FLAKE_SWAY_PX,
+            sways: 3,
+            phase: share(flake, 3),
+        });
+        flakes.push({ x, y, landX, landY, fall });
     }
     return flakes;
 }

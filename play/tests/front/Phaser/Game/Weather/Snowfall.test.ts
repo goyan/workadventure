@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
     drawFlake,
+    fallingFlake,
+    flakeFadeIn,
     FLAKE_KINDS,
     FLAKE_LIGHT,
     flakeMix,
@@ -207,6 +209,24 @@ describe("snowfall", () => {
         const under = snowflakes(EPOCH, view, fall, calm, () => 1.4).length;
         const gap = snowflakes(EPOCH, view, fall, calm, () => 0.5).length;
         expect(under).toBeGreaterThan(gap);
+    });
+
+    it("shares with the downpour one way down: onto its landing place, swaying less and less, then lying", () => {
+        const flake = { landX: 100, landY: 200, descentX: 30, descentY: 90, swayPx: 4, sways: 3, phase: 0.25 };
+        const start = fallingFlake({ ...flake, fall: 0 });
+        expect(start.y).toBe(110);
+        expect(start.x).toBeCloseTo(70 + 4);
+        expect(fallingFlake({ ...flake, fall: 1 })).toEqual({ x: 100, y: 200 });
+        expect(fallingFlake({ ...flake, fall: 1.2 })).toEqual({ x: 100, y: 200 });
+        // The sway dies down near the ground: never further from its line than the share of the fall left.
+        for (let fall = 0; fall < 1; fall += 0.05) {
+            const at = fallingFlake({ ...flake, fall });
+            expect(Math.abs(at.x - (100 - (1 - fall) * 30))).toBeLessThanOrEqual(4 * (1 - fall) + 1e-9);
+            expect(at.y).toBeCloseTo(200 - (1 - fall) * 90);
+        }
+        expect(flakeFadeIn(0)).toBe(0);
+        expect(flakeFadeIn(0.2)).toBeGreaterThan(0.3);
+        expect(flakeFadeIn(1)).toBe(1);
     });
 
     it("draws a flake in whole pixels, lit and shaded, darker and fainter at night", () => {
