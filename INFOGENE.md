@@ -2767,7 +2767,9 @@ Par-dessus la carte (`Terrain/WaterFlowOverlay.ts`, dix dessins par seconde, au-
   secondes, pas le clapot (voir ci-dessous) ;
 - **une étiquette sur les 8 plus grosses masses d'eau en vue** (`Terrain/WaterMasses.ts`) : volume en m³, surface
   en m², profondeur moyenne en m, puis ce qu'elle gagne ou perd en m³ par minute (somme des tendances de ses
-  cellules : elle ne saute presque plus avec les vagues).
+  cellules : elle ne saute presque plus avec les vagues). Ces débits sont en **temps réel**, alors que sources,
+  puits et pluie suivent le temps de jeu (« Vitesse de l'eau ») : à 4, une source de 100 m³/h verse 6,7 m³/min. La
+  légende le dit en une ligne.
 
 **Tendance plutôt que clapot** (`Terrain/WaterTrend.ts`, alimenté par `TerrainWater.receive`). Le serveur envoie
 l'eau une fois par seconde ; les vagues du modèle à inertie durent 2 à 4 s (mesuré : 2,3 à 3,8 s sous 40 px, jusqu'à
@@ -2783,11 +2785,18 @@ lisser sur 1 s ne changeait rien à 1 état par seconde, et pas assez à 5. La r
   exactement, quel que soit l'intervalle entre deux états) : une vague de 3 s n'en garde qu'un soixante-dixième ;
 - **zone morte** : aucune teinte sous 0,06 px/s (2 mm/s, 12 cm par minute), ni sous 15 % de l'agitation de l'eau
   (moyenne quadratique, sur 10 s, de sa vitesse de montée mesurée sur environ une seconde, quelle que soit la
-  cadence) : une mer forte cache une montée
-  lente, jamais ne la montre à l'envers. Rien n'est teinté avant trois secondes d'observation ;
+  cadence) : une mer forte cache une montée lente, jamais ne la montre à l'envers. Rien n'est teinté avant trois secondes d'observation ;
 - **hystérésis** : une teinte reste jusqu'à ce que la tendance retombe sous la moitié de son seuil ;
 - **silence du serveur** (rien ne bouge d'un quart de pixel, il n'envoie plus) : après 2 s sans état, la tendance
   s'éteint d'elle-même (`TerrainWater.settled(now)`).
+- **à la demande** : la tendance n'est tenue que tant que la visualisation la lit (`TerrainWater.settled(now)`, dix
+  fois par seconde quand « Flux d'eau » est affiché ; aucun autre lecteur). Fermée, aucun parcours de la grille et
+  aucune mémoire (`dropTrend`, ou d'elle-même au premier état après 2 s sans lecture). Rouverte, elle repart de rien
+  (pas de teinte d'avant la fermeture) et ne teinte qu'après 3 s d'observation. Coût mesuré quand elle est tenue
+  (Node, Mac M) : 2 ms par état sur une grille de 600 × 600 cellules (0,2 à 0,3 ms sur 200 × 200), soit 2, 10 ou
+  18 ms par seconde à 1, 5 ou 10 états par seconde ; aucun tableau alloué par état ; 17 octets par cellule (quatre
+  tableaux `Float32Array` et un `Int8Array`), 6,1 Mo pour 600 × 600. Auparavant, ce coût valait pour tout joueur,
+  même sans la visualisation.
 
 Mesuré sur le modèle (bassin de 80 × 80 cellules, 40 px, `WaterGrid` avec inertie, bande morte du serveur
 reproduite) : 0 à 2 changements de teinte par minute et par cellule sur mer forte (vagues de 30 à 45 cm), 0 à 2
@@ -2795,8 +2804,7 @@ sur mer modérée, au lieu d'un changement de signe toutes les une à deux secon
 clapot modéré apparaît en 5 à 11 s, une de 0,5 px/s en 2 à 3 s, une de 1 px/s sur mer forte en 1 à 4 s, puis ne
 s'éteint plus tant qu'elle dure. L'étiquette d'une masse atteint 63 % d'un nouveau débit en 8 à 9 s ; sur un
 bassin fermé de 2 400 m³ qui clapote, elle reste à « = » sauf 3 secondes sur 120 (1,2 à 1,6 m³/min, au lieu de
-±1,5 à ±14 m³/min chaque seconde auparavant). Rien n'a été vu
-à l'écran par un agent.
+±1,5 à ±14 m³/min chaque seconde auparavant). Rien n'a été vu à l'écran par un agent.
 
 Les **flèches** ne sont pas lissées : elles montrent la vitesse que le serveur calcule, une vague qui passe
 comprise. Sur mer modérée, cette vitesse reste sous son pas d'envoi (un quart de cellule par seconde) : pas de

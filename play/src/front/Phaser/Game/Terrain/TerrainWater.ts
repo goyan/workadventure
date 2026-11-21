@@ -65,6 +65,8 @@ const RUNNING_SHOWN_PX = 1 / 8;
 const GLIDE_DRAW_MS = 200;
 /** The shortest glide between two states: the server never tells the water more often than every step. */
 const SHORTEST_GLIDE_MS = 100;
+/** A trend nobody read for this long is let go (the view of the flows reads it ten times a second). */
+const TREND_UNREAD_MS = 2000;
 
 /**
  * The water of the relief as this browser shows it: the depth of the water over each cell of the grid the server
@@ -88,7 +90,12 @@ export class TerrainWater {
     private betweenMs = Infinity;
     private receivedAt = -Infinity;
     /** How fast the level rises or falls over a few seconds, cell by cell: the waves left out. */
-    private readonly trend = new WaterTrend();
+    /**
+     * How fast the level rises or falls over a few seconds, cell by cell: the waves left out. Kept only while the
+     * view of the flows reads it (settled with the time of the game): it goes through the whole grid at each state.
+     */
+    private trend: WaterTrend | undefined;
+    private trendReadAt = -Infinity;
     /** The speed of the water block by block, as the server last told it; undefined when it tells none. */
     private speeds: Int8Array | undefined;
     private wet = false;
@@ -171,14 +178,15 @@ export class TerrainWater {
             // Only then the pace of the new glide: the time the server took between the two states.
             this.before = this.to;
             this.betweenMs = Math.max(100, now - this.receivedAt);
-            this.trend.add(this.to, to, now);
+            if (this.trend && now - this.trendReadAt > TREND_UNREAD_MS) this.trend = undefined;
+            this.trend?.add(this.to, to, now);
         } else {
             // The first state, or another grid (the relief was edited): shown at once.
             this.from = to;
             this.at = -Infinity;
             this.before = to;
             this.betweenMs = Infinity;
-            this.trend.reset(to, now);
+            this.trend?.reset(to, now);
         }
         this.receivedAt = now;
         this.to = to;
@@ -220,20 +228,34 @@ export class TerrainWater {
     /**
      * The last state the server sent, cell by cell, with the one before it and the seconds between the two: what
      * the water holds and how fast it rises or falls (the view of the flows of the water). The arrays are those of
-     * this object: read, never written. With `now` (ms of the game), the trend of a water the server has fallen
-     * silent about dies down: it is still.
+     * this object: read, never written. With `now` (ms of the game), the trend of the level too: kept from then on
+     * while it is read so (it starts from nothing, and shows after a few seconds), and dying down where the server
+     * has fallen silent: the water is still.
      */
     public settled(now?: number): SettledWater {
-        if (now !== undefined) this.trend.idle(now);
+        let trend: WaterTrend | undefined;
+        if (now !== undefined) {
+            this.trendReadAt = now;
+            if (!this.trend) {
+                this.trend = new WaterTrend();
+                this.trend.reset(this.to, now);
+            } else this.trend.idle(now);
+            trend = this.trend;
+        }
         return {
             ...this.grid,
             depths: this.to,
             before: this.before,
             seconds: this.betweenMs / 1000,
             ...(this.speeds ? { speedAt: (cellX: number, cellY: number) => this.speedOfCell(cellX, cellY) } : {}),
-            trend: this.trend.trend(),
-            trendShown: this.trend.shown(),
+            ...(trend ? { trend: trend.trend(), trendShown: trend.shown() } : {}),
         };
+    }
+
+    /** The view of the flows is closed: the trend is let go, and starts again from nothing when it opens. */
+    public dropTrend(): void {
+        this.trend = undefined;
+        this.trendReadAt = -Infinity;
     }
 
     /**
