@@ -19,14 +19,19 @@ const clapot = (seconds: number, amplitude = 1.5): number =>
     amplitude * Math.sin((2 * Math.PI * seconds) / 2.2) + amplitude * 0.7 * Math.sin((2 * Math.PI * seconds) / 3 + 1);
 
 /** Feeds one cell `messages` states of `level(seconds)`, and gives what it shows after each one. */
-function run(level: (seconds: number) => number, messages: number, trend = new WaterTrend()): number[] {
+function run(
+    level: (seconds: number) => number,
+    messages: number,
+    trend = new WaterTrend(),
+    gap: (index: number) => number = gapMs,
+): number[] {
     const tell = told();
     let now = 0;
     let depth = tell(level(0));
     trend.reset(Float32Array.of(depth), now);
     const shown: number[] = [];
     for (let index = 1; index <= messages; index++) {
-        now += gapMs(index);
+        now += gap(index);
         const before = Float32Array.of(depth);
         depth = tell(level(now / 1000));
         trend.add(before, Float32Array.of(depth), now);
@@ -48,7 +53,7 @@ describe("WaterTrend", () => {
 
     it("shows a steady rise under the ripples as a rise, without changing its mind", () => {
         // 0.1 px a second (3.4 mm a second, 20 cm a minute), the level of a pond a source fills.
-        const shown = run((seconds) => 40 + 0.1 * seconds + clapot(seconds, 0.5), 90);
+        const shown = run((seconds) => 40 + 0.1 * seconds + clapot(seconds, 0.25), 90);
         expect(shown.slice(15)).toEqual(shown.slice(15).map(() => 1));
     });
 
@@ -60,7 +65,7 @@ describe("WaterTrend", () => {
     });
 
     it("shows a steady fall under the ripples as a fall", () => {
-        const shown = run((seconds) => 60 - 0.1 * seconds + clapot(seconds, 0.5), 90);
+        const shown = run((seconds) => 60 - 0.1 * seconds + clapot(seconds, 0.25), 90);
         expect(shown.slice(15)).toEqual(shown.slice(15).map(() => -1));
     });
 
@@ -105,5 +110,35 @@ describe("WaterTrend", () => {
         trend.reset(new Float32Array(4), 50_000);
         expect(Array.from(trend.trend())).toEqual([0, 0, 0, 0]);
         expect(Array.from(trend.shown())).toEqual([0, 0, 0, 0]);
+    });
+
+    describe("five states a second, as on a realistic map", () => {
+        const fast = (index: number): number => 200 + 40 * Math.sin(index * 2.7);
+        /** The index of the state that comes about `seconds` after the first. */
+        const at = (seconds: number): number => Math.round(seconds * 5);
+
+        it("shows no rise nor fall on water that only ripples", () => {
+            for (const amplitude of [0.3, 1.5, 4]) {
+                const shown = run((seconds) => 40 + clapot(seconds, amplitude), at(120), undefined, fast);
+                expect(
+                    shown.filter((sign) => sign !== 0),
+                    `waves of ${amplitude} px`,
+                ).toEqual([]);
+            }
+        });
+
+        it("shows a steady rise under the ripples, and a sudden flood within three seconds", () => {
+            const rising = run((seconds) => 40 + 0.1 * seconds + clapot(seconds, 0.25), at(90), undefined, fast);
+            expect(rising.slice(at(15))).toEqual(rising.slice(at(15)).map(() => 1));
+            const flood = run(
+                (seconds) => 40 + Math.max(0, seconds - 30) * 2 + clapot(seconds, 0.3),
+                at(40),
+                undefined,
+                fast,
+            );
+            const first = flood.findIndex((sign) => sign === 1);
+            expect(first).toBeGreaterThanOrEqual(at(29));
+            expect(first).toBeLessThanOrEqual(at(33));
+        });
     });
 });
