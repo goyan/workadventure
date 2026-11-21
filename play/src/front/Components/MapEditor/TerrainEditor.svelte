@@ -197,6 +197,14 @@
     }
 </script>
 
+<!-- What a setting does in detail (figures, measures), folded under its one-line hint. -->
+{#snippet more(text: string)}
+    <details class="retro-hint m-0" data-testid="terrain-more">
+        <summary class="cursor-pointer select-none underline">{$LL.mapEditor.terrain.more()}</summary>
+        {text}
+    </details>
+{/snippet}
+
 <!-- Like the panel of the Map tool: it scrolls when it is taller than the room the editor leaves it. -->
 <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3" data-testid="terrain-editor">
     <span class="retro-title">{$LL.mapEditor.terrain.title()}</span>
@@ -503,6 +511,7 @@
             {$LL.mapEditor.terrain.realistic()}
         </button>
         <p class="retro-hint m-0">{$LL.mapEditor.terrain.realisticHint()}</p>
+        {@render more($LL.mapEditor.terrain.realisticDetail())}
     </div>
     <div data-testid="terrain-max-depth">
         <RangeSlider
@@ -625,6 +634,7 @@
             onchange={saveWater}
         />
         <p class="retro-hint m-0">{$LL.mapEditor.terrain.real.inertia()}</p>
+        {@render more($LL.mapEditor.terrain.inertiaDetail())}
     </div>
     {#if inertia}
         <div data-testid="terrain-wave-roughness">
@@ -640,6 +650,7 @@
                 buttonShape="square"
             />
             <p class="retro-hint m-0">{$LL.mapEditor.terrain.waves.roughnessHint()}</p>
+            {@render more($LL.mapEditor.terrain.waves.roughnessDetail())}
         </div>
         <div data-testid="terrain-wave-damping">
             <RangeSlider
@@ -654,6 +665,7 @@
                 buttonShape="square"
             />
             <p class="retro-hint m-0">{$LL.mapEditor.terrain.waves.dampingHint()}</p>
+            {@render more($LL.mapEditor.terrain.waves.dampingDetail())}
         </div>
         <div data-testid="terrain-wave-breaking">
             <RangeSlider
@@ -668,6 +680,7 @@
                 buttonShape="square"
             />
             <p class="retro-hint m-0">{$LL.mapEditor.terrain.waves.breakingHint()}</p>
+            {@render more($LL.mapEditor.terrain.waves.breakingDetail())}
         </div>
         <div data-testid="terrain-wave-momentum">
             <RangeSlider
@@ -682,6 +695,7 @@
                 buttonShape="square"
             />
             <p class="retro-hint m-0">{$LL.mapEditor.terrain.waves.momentumHint()}</p>
+            {@render more($LL.mapEditor.terrain.waves.momentumDetail())}
         </div>
         <div data-testid="terrain-flow-pace">
             <RangeSlider
@@ -696,6 +710,7 @@
                 buttonShape="square"
             />
             <p class="retro-hint m-0">{$LL.mapEditor.terrain.flowPaceHint()}</p>
+            {@render more($LL.mapEditor.terrain.flowPaceDetail())}
         </div>
         <div data-testid="terrain-precision">
             <RangeSlider
@@ -710,6 +725,7 @@
                 buttonShape="square"
             />
             <p class="retro-hint m-0">{$LL.mapEditor.terrain.precisionHint()}</p>
+            {@render more($LL.mapEditor.terrain.precisionDetail())}
         </div>
     {/if}
     <div data-testid="terrain-updates">
@@ -725,6 +741,7 @@
             buttonShape="square"
         />
         <p class="retro-hint m-0">{$LL.mapEditor.terrain.updatesHint()}</p>
+        {@render more($LL.mapEditor.terrain.updatesDetail())}
     </div>
     <p class="retro-hint m-0">{$LL.mapEditor.terrain.paceHint()}</p>
 
