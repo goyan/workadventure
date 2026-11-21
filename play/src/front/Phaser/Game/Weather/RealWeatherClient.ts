@@ -184,7 +184,11 @@ export function setRoomConditions(conditions: FireConditionsMessage | undefined)
     manualConditions = conditions;
 }
 
-function mapWeatherSettings(
+/**
+ * The weather of the map itself at `date`, as everyone sees it (the trial of the settings panel aside): without the
+ * weather of the city a player follows on their clock.
+ */
+export function mapWeatherSettings(
     settings: MapSnowSettings | undefined,
     date: Date | undefined,
 ): MapSnowSettings | undefined {

@@ -334,7 +334,9 @@ torches, lampes de Jam, piste de danse et lampes des pièces jamais concernées.
 - **Entrées, les mêmes pour tous** (`GameScene.mapDaylightAt`) : heure du serveur (rien n'est éteint tant qu'elle
   n'est pas connue), soleil du lieu de la carte (Paris par défaut), météo de la carte à cet instant avec ses nuages.
   Rien de personnel : ni « Désactiver la nuit », ni l'horloge de l'ordinateur, ni le thème saisonnier, ni les nuages
-  masqués. Écarts possibles : la personne qui essaie une météo dans le panneau (aperçu) voit les lampes suivre son
+  masqués, ni la météo de la ville suivie sur son horloge (`Lamps/MapDaylight.ts` lit `mapWeatherSettings`, pas
+  `shownWeatherSettings`). Quel que soit son mode d'horloge (« Toujours nuit », « Jour dans le monde »…), chacun voit
+  les lampes de dehors suivre le jour réel de la carte. Écarts possibles : la personne qui essaie une météo dans le panneau (aperçu) voit les lampes suivre son
   essai ; en météo Réelle, un navigateur qui attend encore la réponse du pusher affiche la météo automatique.
 - **Dehors** : pied de l'image de la lampe (milieu du bas), lu sur la grille dehors/dedans (`OutdoorGrid.isOutdoorAt`) ;
   pour une lampe sur un palier, le sol sous elle. Une lampe dont le pied tombe dans un mur (façade) compte comme de
