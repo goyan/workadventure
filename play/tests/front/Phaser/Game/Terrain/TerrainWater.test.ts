@@ -1,4 +1,4 @@
-import { cellKey, withHeights } from "@workadventure/map-editor";
+import { cellKey, DEFAULT_POOL_STYLE, heightAt, poolSoilCode, withHeights, withSoils } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
 import { TerrainWater } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
 import type { WaterState } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
@@ -192,5 +192,21 @@ describe("the bridges over the water of the relief", () => {
         const same = water.version();
         water.setBridges(new Set());
         expect(water.version()).toBe(same);
+    });
+});
+
+describe("the basins of the pools, for the water", () => {
+    it("reads the pools of the map as dug in its relief, which is left as it is drawn", () => {
+        const painted = withSoils(undefined, new Map([[cellKey(5, 5), poolSoilCode(0)]]));
+        const water = new TerrainWater();
+        water.setTerrain(painted);
+        expect(water.relief()).toBe(painted);
+        expect(heightAt(water.relief(), 5, 5)).toBe(0);
+        expect(heightAt(water.basin(), 5, 5)).toBe(-DEFAULT_POOL_STYLE.depthPx);
+        const before = water.version();
+        water.setPools([{ ...DEFAULT_POOL_STYLE, depthPx: 20 }]);
+        expect(water.version()).toBeGreaterThan(before);
+        expect(heightAt(water.basin(), 5, 5)).toBe(-20);
+        expect(heightAt(water.basin(), 6, 5)).toBe(0);
     });
 });

@@ -6,6 +6,7 @@
         MAX_WATER_CURRENT,
         MAX_WATER_INDOOR_DRAIN,
         FLOW_PACE_BOUNDS,
+        IMPACT_REACH_BOUNDS,
         MAX_WATER_MAX_SURFACE,
         REALISTIC_WATER_SETTINGS,
         WATER_PACE_BOUNDS,
@@ -64,6 +65,7 @@
     let precision = $state(saved.precision);
     let updates = $state(saved.updates);
     let flowPace = $state(saved.flowPace);
+    let impactReach = $state(saved.impactReach);
 
     // The styles of the pools of the map: a pool is painted as a soil of its style (Terrain/Pools.ts).
     let pools = $state(saved.pools);
@@ -156,6 +158,7 @@
         precision = REALISTIC_WATER_SETTINGS.precision;
         updates = REALISTIC_WATER_SETTINGS.updates;
         flowPace = REALISTIC_WATER_SETTINGS.flowPace;
+        impactReach = REALISTIC_WATER_SETTINGS.impactReach;
         saveWater();
     }
 
@@ -172,6 +175,7 @@
                 indoorDrain,
                 inertia,
                 updates,
+                impactReach,
                 // The waves only matter to the water with inertia: a map without it keeps what it had.
                 ...(inertia ? { waveRoughness, waveDamping, waveBreaking, waveMomentum, precision, flowPace } : {}),
             },
@@ -582,6 +586,20 @@
             buttonShape="square"
         />
         <p class="retro-hint m-0">{$LL.mapEditor.terrain.real.indoorDrain()}</p>
+    </div>
+    <div data-testid="terrain-impact-reach">
+        <RangeSlider
+            id="terrain-impact-reach"
+            label={$LL.mapEditor.terrain.impactReach()}
+            unit="×"
+            min={IMPACT_REACH_BOUNDS[0]}
+            max={IMPACT_REACH_BOUNDS[1]}
+            step={0.5}
+            bind:value={impactReach}
+            onchange={saveWater}
+            buttonShape="square"
+        />
+        <p class="retro-hint m-0">{$LL.mapEditor.terrain.real.impactReach()}</p>
     </div>
     <div data-testid="terrain-speed">
         <RangeSlider

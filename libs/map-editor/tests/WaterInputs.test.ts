@@ -177,6 +177,7 @@ describe("stepInputOf", () => {
         );
         expect(broken).toEqual({
             rainPx: 0,
+            sealedRainPx: 0,
             evaporationPx: 0,
             absorptionPx: 0,
             indoorDrainPx: 0,

@@ -85,7 +85,17 @@ function allWaterRectangles(scene: Phaser.Scene): CachedWater {
         }
     }
     // Asked of the scene (FrozenWater.ts through GameScene): what the cold does stays out of this module.
-    ground.push(...paintedPoolRectangles(gameScene));
+    // A painted pool holds the water of the relief (the server fills it): emptied, it is no water, one walks on its
+    // floor until it fills again.
+    const terrainWater = gameScene.getTerrainWater?.();
+    const now = scene.time?.now ?? 0;
+    ground.push(
+        ...paintedPoolRectangles(gameScene).filter(
+            (pool) =>
+                !terrainWater ||
+                terrainWater.depthAt(pool.x + pool.width / 2, pool.y + pool.height / 2, now) >= SWIM_DEPTH_PX,
+        ),
+    );
     const frozen = gameScene.isPoolFrozen ? ground.filter((rectangle) => gameScene.isPoolFrozen?.(rectangle)) : [];
     cache = {
         scene,

@@ -1,4 +1,5 @@
 import {
+    poolBasins,
     reliefCells,
     SPEED_BLOCK_CELLS,
     SPEED_UNITS,
@@ -6,7 +7,7 @@ import {
     TILE_PX,
     WATER_MESSAGE_MS,
 } from "@workadventure/map-editor";
-import type { TerrainData } from "@workadventure/map-editor";
+import type { PoolStyle, TerrainData } from "@workadventure/map-editor";
 
 /** A state of the water as the server sends it, its bytes already unzipped (TerrainWaterMessage). */
 export interface WaterState {
@@ -65,6 +66,7 @@ const SHORTEST_GLIDE_MS = 100;
  */
 export class TerrainWater {
     private terrain: TerrainData | undefined;
+    private pools: readonly PoolStyle[] | undefined;
     private dug = false;
     private grid = { x: 0, y: 0, width: 0, height: 0 };
     /** The last state received, as bytes: the next change applies to it. */
@@ -98,6 +100,22 @@ export class TerrainWater {
     /** The relief the water was last given. */
     public relief(): TerrainData | undefined {
         return this.terrain;
+    }
+
+    /** The styles of the pools of the map: their depth is the depth of their basin (see basin). */
+    public setPools(pools: readonly PoolStyle[] | undefined): void {
+        if (pools === this.pools) return;
+        this.pools = pools;
+        this.changes++;
+    }
+
+    /**
+     * The relief as the water stands on it: the relief of the map with its pools dug as deep as their style
+     * (poolBasins), as the server reads it. The surface of the water is its depth over this ground, not over the
+     * relief drawn: read here whatever goes by the level of the water (its current, its flows).
+     */
+    public basin(): TerrainData | undefined {
+        return poolBasins(this.terrain, this.pools);
     }
 
     /** Whether there is anything to draw: a relief, or water (a source can flood a flat map). */

@@ -3268,14 +3268,57 @@ du serveur, la glace est maintenant tenue par le serveur, case par case.
   mince, et la neige posée dessus est celle de la case. `isOnFrozenWater` lit la glace du serveur (`Ice/IceHold.ts`).
   En météo personnelle (pastille 🖥), rien ne change : le gel local de `Frost.ts`.
 - **Température manuelle** jusqu'à −30 °C (au lieu de −10), pour geler un lac vite ; aujourd'hui jusqu'à −80 °C (voir « Conditions réglées à la main : les extrêmes »).
-- **Piscines.** Une piscine peinte (outil Relief, mode Piscine) gèle par la glace du serveur comme un lac, d'après
-  la profondeur de son style, sauf si son eau est chaude : chauffée, elle ne gèle jamais et fait fondre la neige qui
-  y tombe. Le pré relit les styles avec la carte (`Meadow`, tableaux `pool` et `hotPool`). On y patine quand la glace
-  porte (5 cm si l'on y nagerait). Une piscine posée comme image (ancien objet) n'est pas connue du serveur : elle
-  garde la règle de #392 (dès −8 °C) ; la convertir en piscine peinte la fait suivre le serveur.
+- **Piscines.** L'eau d'une piscine peinte est de l'eau du relief (section « Piscines en eau réaliste ») : elle gèle
+  comme un lac, sans règle à part, sauf si son eau est chaude (jamais de glace, la neige y fond). Une piscine posée
+  comme image (ancien objet) n'est pas connue du serveur : elle garde la règle de #392 (dès −8 °C) ; la convertir en
+  piscine peinte la fait suivre le serveur.
 - **Limites.** Pas de glace du serveur dessinée sans shader (repli). La pêche n'est pas refusée sur la glace.
   L'eau sous la glace s'évapore encore. La glace est tenue par case de 32 px, l'eau par cellule de 16 px : le bord de
   la glace est lissé par le shader. `play` et `back` se déploient ensemble.
+
+### Piscines en eau réaliste : un bassin que le serveur remplit
+
+L'eau d'une piscine peinte n'est plus un dessin toujours plein : c'est de l'eau du relief, tenue par le serveur.
+
+- **Le bassin** (`Terrain/Pools.ts`, `poolBasins`). Pour l'eau, une piscine (les cases d'un même style qui se
+  touchent) est creusée de la profondeur de son style sous son bord, qui est le sol le plus bas le long de ses côtés :
+  un fond plat, un seul niveau. Sur une pente ou un sol inégal elle ne se vide donc pas par son côté bas. Le relief de la carte n'est pas modifié (c'est ce que
+  l'éditeur édite et ce qui est dessiné) : le serveur et le navigateur lisent ce relief « avec bassins » pour tout
+  ce qui dépend du niveau de l'eau (`TerrainWaterManager`, `TerrainWater.basin()`, courant, flèches des flux). Lu une
+  fois par carte et par liste de styles.
+- **La pompe** (`TerrainWaterManager.pumpPools`, `poolCells`). Chaque case sous son niveau reçoit de quoi remplir une
+  piscine vide en 8 secondes (`POOL_FILL_SECONDS`) : une piscine plus grande ou plus profonde a une pompe plus forte.
+  Remplissage jusqu'à 2 px sous le bord (`POOL_FREEBOARD_PX`), jamais au-dessus. Un trop-plein reprend au même débit ce
+  qui dépasse le niveau (neige fondue dans la piscine, pluie), compté avec les puits ; une inondation qui apporte plus
+  que ce débit passe quand même par-dessus le bord. Après un météore tombé dans l'eau (comète ou météore brûlant),
+  les pompes mettent 3 secondes à repartir (`POOL_PUMP_RESTART_SECONDS`) : une piscine vidée se voit vide. Compté avec les sources dans le bilan de l'eau. Le fond ne boit pas (sol de piscine, creux).
+  Le bassin est étanche (`WaterGrid.seal`) : il ne reçoit que la pluie qui tombe dessus (`sealedRainPx`), pas le
+  ruissellement du terrain autour, que la margelle arrête ; sinon une pluie le ferait déborder onze fois plus vite.
+- **Le souffle d'un météore** (`blastWater`, réglage `water.impactReach`, curseur « Souffle d'un météore dans
+  l'eau » de l'outil Relief). Un impact déplace bien plus d'eau que le volume de ce qui tombe : le choc chasse l'eau
+  autour du cratère, toute près de lui, de moins en moins ensuite (en ligne droite : un choix, le plus simple qui ne
+  laisse pas de marche dans l'eau), plus rien à `impactReach` fois le rayon du cratère. L'eau chassée retombe en
+  bourrelet juste au-delà ; ce qui n'y trouve pas de place est perdu. Défaut 2,5 (les projections d'un cratère
+  couvrent 2 à 3 fois son rayon), de 1 (l'eau du cratère seule, comme avant) à 4. Vaut pour la comète (avant qu'elle
+  projette l'eau de son cratère) et pour le météore brûlant (sa vapeur souffle l'eau autour : il n'était suivi
+  d'aucune vague avant), sur toute l'eau de la carte, lacs compris. Dans une piscine, l'essentiel de l'eau est jeté
+  dehors.
+- **Ce qui en découle.** La comète y soulève une vague, le météore brûlant fait bouillir son eau, le drain la vide,
+  et elle se remplit. La pluie et la fonte y tombent. Une inondation y entre, elle déborde. Elle gèle comme un lac.
+- **À l'écran** (`GroundSplat`, `poolColor`). La margelle et le carrelage restent ; l'eau dessinée suit le niveau du
+  serveur : la couleur de l'eau suit son niveau (à moitié vide, l'eau est pâle et le
+  carrelage se voit au travers), une piscine vidée montre son carrelage sec, puis l'eau revient à mesure qu'elle se
+  remplit. Pas de glace
+  dans une piscine vide. Le sol autour d'une piscine ne s'assombrit pas (pas d'anneau de terre mouillée sur une
+  terrasse), et l'eau de la piscine ne bave pas sur la terrasse : à côté d'une piscine, le shader lit la profondeur de
+  la case elle-même au lieu de la profondeur lissée entre cases voisines, et ne dessine pas d'eau dans le coin d'une
+  case de piscine resté hors de sa forme arrondie.
+- **Nage** (`WaterZones`). Les rectangles de piscine restent, avec le plongeon et les échelles ; un rectangle ne
+  compte comme de l'eau que s'il contient de quoi nager (16 px en son centre) : dans une piscine vidée on marche sur
+  le fond. La nage du relief s'applique aussi (c'est la même eau).
+- **Limites.** Les piscines-images gardent leur dessin plein. Une carte existante voit ses piscines se remplir au
+  premier pas du serveur. Le sol autour d'une piscine devient humide (berges) : de l'herbe peut y pousser sur un sol
+  fertile. La profondeur dessinée plafonne à 128 px. `play` et `back` se déploient ensemble.
 
 ### Arbres : feuilles d'automne et neige
 

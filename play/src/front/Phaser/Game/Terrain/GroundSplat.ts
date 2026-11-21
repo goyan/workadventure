@@ -391,7 +391,14 @@ vec4 poolColor(vec2 world, float t) {
     // image (the green of pack 8), which the server does not know, keeps the rule of the cold.
     vec3 kept = pack(8.0, world);
     bool frozen = uServerIce > 0.5 && kept.g < 0.5 ? kept.r >= 0.0707 : cold;
-    if (frozen) {
+    // How full the pool is, 0 to 1: a painted pool holds the water of the relief, which the server fills (it may
+    // have been emptied); a pool placed as an image is always full.
+    float held = pack(2.0, world).b * ${WATER_SCALE_PX}.0;
+    float fill = kept.g > 0.5 ? 1.0 : clamp(held / max(1.0, min(depthPx, ${WATER_SCALE_PX}.0) - 4.0), 0.0, 1.0);
+    // Wet as soon as a film of water lies on its floor; how much of the colour of deep water it takes follows its
+    // level, so a pool half emptied looks half empty: its tiles show through a thin, pale water.
+    float wetness = smoothstep(0.0, 0.06, fill);
+    if (frozen && fill > 0.05) {
         vec3 ice = texture2D(uIceTexture, fract(world / uIceSize)).rgb;
         return vec4(snowOnIce(ice * mix(vec3(1.0), water, 0.15), world), 1.0);
     }
@@ -399,7 +406,11 @@ vec4 poolColor(vec2 world, float t) {
     vec2 tile = mod(world, 16.0);
     float grout = max(step(15.0, tile.x), step(15.0, tile.y));
     vec3 floorColor = mix(vec3(0.9, 0.95, 0.96), vec3(0.72, 0.82, 0.86), grout);
-    vec3 c = mix(floorColor * (water * 0.6 + 0.4), water * 0.55, 0.3 + 0.55 * deep);
+    // Emptied, the dry tiles of its floor show, darker towards its walls; the water comes back over them as it fills.
+    vec3 dry = floorColor * 0.86;
+    vec3 seen = floorColor * mix(vec3(1.0), water * 0.6 + 0.4, 0.35 + 0.65 * fill);
+    vec3 c = mix(seen, water * 0.55, (0.3 + 0.55 * deep) * fill);
+    c = mix(dry, c, wetness);
     // The walls shade the water along them.
     c *= mix(0.82, 1.0, poolAround(world, 12.0));
     // Caustics over the floor, and a glint now and then on the surface.
@@ -407,9 +418,9 @@ vec4 poolColor(vec2 world, float t) {
     float n1 = fbm(p + vec2(t * 0.09, t * 0.05));
     float n2 = fbm(p * 1.7 - vec2(t * 0.06, -t * 0.08) + 5.0);
     float lines = 1.0 - smoothstep(0.0, 0.05, abs(n1 - n2));
-    c += lines * mix(0.2, 0.08, deep);
+    c += lines * mix(0.2, 0.08, deep) * wetness;
     float glint = step(0.993, hash(floor(world / 2.0) + floor(t * 3.0))) * smoothstep(0.55, 0.7, n2);
-    c = mix(c, vec3(1.0), glint * 0.7);
+    c = mix(c, vec3(1.0), glint * 0.7 * wetness);
     return vec4(c, 1.0);
 }
 
@@ -422,6 +433,13 @@ void main() {
     vec2 world = worldPoint();
     float t = uTime;
     float depth = wetAt(world);
+    // Next to a pool, the depth smoothed between the cells would spill the water of the pool half a cell over its
+    // coping: there the water is that of the cell itself, so a dry terrace stays dry up to the stones. The corner of
+    // a cell of the pool left outside its rounded shape shows no water: it is under the coping.
+    float poolEdge = pack(5.0, world).r;
+    if (poolEdge > 0.02 && poolEdge <= 0.5) {
+        depth = packNearest(5.0, world).r > 0.5 ? 0.0 : packNearest(2.0, world).b;
+    }
     // The ice (Frost.ts): it takes the shallows first, the deep water last; frozen, nothing moves any more.
     float depthPx = depth * ${WATER_SCALE_PX}.0;
     float frozenAt = 0.1 + 0.9 * min(1.0, depthPx / ${DEEP_ICE_PX}.0) + (vnoise(world / 14.0) - 0.5) * 0.08;
@@ -447,6 +465,15 @@ void main() {
         around += wetAt(world + vec2(cos(angle), sin(angle)) * cellPx * 0.9);
     }
     float damp = clamp(around * 2.5, 0.0, 1.0) * (1.0 - cover);
+    if (damp > 0.001) {
+        // The coping of a pool keeps the ground around it dry: no dark ring of wet earth on a terrace.
+        float nearPool = 0.0;
+        for (int i = 0; i < 8; i++) {
+            float angle = float(i) * 0.785398;
+            nearPool = max(nearPool, pack(5.0, world + vec2(cos(angle), sin(angle)) * cellPx * 0.9).r);
+        }
+        damp *= 1.0 - step(0.25, nearPool);
+    }
     vec4 outColor = vec4(0.0, 0.0, 0.0, 0.3 * damp);
 
     if (cover > 0.001 && frozen > 0.5) {

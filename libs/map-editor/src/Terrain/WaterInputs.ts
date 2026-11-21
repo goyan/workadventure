@@ -94,6 +94,8 @@ export function stepInputOf(
     const rain = figure(rainMmPerHour);
     return {
         rainPx: rain * hours * PX_PER_MM * (1 + figure(settings.runoff)),
+        // A pool takes the rain alone: its coping keeps the runoff out.
+        sealedRainPx: rain * hours * PX_PER_MM,
         evaporationPx: rain > 0 ? 0 : figure(settings.evaporation) * hours * PX_PER_MM,
         absorptionPx: figure(settings.absorption) * hours * PX_PER_MM,
         // A map saved before the drains of the rooms has none in its settings: the usual ones. 0 drains nothing.

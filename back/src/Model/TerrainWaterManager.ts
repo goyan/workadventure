@@ -1,6 +1,8 @@
 import { gunzipSync, gzipSync } from "node:zlib";
 import {
     advanceImpactWave,
+    blastWater,
+    DEFAULT_IMPACT_REACH,
     closedDoorSides,
     holdsOpen,
     waterDoorsOf,
@@ -16,6 +18,11 @@ import {
     LITRES_PER_M3,
     meteorShape,
     liquidRainRate,
+    POOL_FILL_SECONDS,
+    POOL_OVERFLOW_SLACK_PX,
+    POOL_PUMP_RESTART_SECONDS,
+    poolBasins,
+    poolCells,
     PX_PER_MM,
     snowShareOf,
     rainRateAt,
@@ -37,6 +44,7 @@ import type {
     PrecipitationAir,
     Drain,
     ImpactWave,
+    PoolCell,
     TerrainData,
     WaterGridBounds,
     WaterObject,
@@ -105,6 +113,10 @@ export class TerrainWaterManager {
     private stirredUntilStep = 0;
     /** The downpours falling on the map now, asked at each step: none until the catastrophes of the room say. */
     private downpours: () => readonly Downpour[] = () => [];
+    /** The cells of the pools of the map, with the depth of their basin: what the pumps fill at each step. */
+    private pools: readonly PoolCell[] = [];
+    /** The step from which the pumps of the pools run again: a meteor that fell in the water stops them a moment. */
+    private pumpsFromStep = 0;
     /** The doors of the ground of the map: closed, they hold the water; open, they let it through. */
     private doors: WaterDoor[] = [];
     /** For each door, the step until which it is open: an avatar stood in its passage a moment ago. */
@@ -172,10 +184,13 @@ export class TerrainWaterManager {
     public mapChanged(): void {
         const wam = this.room.getWam();
         this.objects = waterObjectsOf(wam);
+        // For the water, a pool painted on the map is a basin dug in its ground, which a pump fills.
+        const terrain = poolBasins(wam?.terrain, wam?.settings?.pools);
+        this.pools = poolCells(wam?.terrain, wam?.settings?.pools);
         // A map whose size could not be read keeps all its water: an empty size would dry the whole map.
         const size = this.mapSize();
         const bounds = gridBoundsOf(
-            wam?.terrain,
+            terrain,
             this.objects,
             size && size.width > 0 && size.height > 0 ? size : undefined,
         );
@@ -186,23 +201,25 @@ export class TerrainWaterManager {
         const wallsSignature = walls && rooms ? `${walls.signature}#${rooms.signature}` : undefined;
         const sameGrid =
             this.readTerrain !== null &&
-            wam?.terrain === this.readTerrain &&
+            terrain === this.readTerrain &&
             wallsSignature === this.readWalls &&
             sameBounds(bounds, this.grid?.bounds ?? undefined, this.grid !== undefined);
         // A source or a sink may have come or gone: the water is looked at again.
         this.moving = true;
         if (sameGrid) return;
-        this.readTerrain = wam?.terrain;
+        this.readTerrain = terrain;
         this.readWalls = wallsSignature;
         const before = this.grid ?? this.saved;
         this.saved = undefined;
-        this.grid = bounds ? new WaterGrid(wam?.terrain, bounds, undefined, walls, rooms) : undefined;
+        this.grid = bounds ? new WaterGrid(terrain, bounds, undefined, walls, rooms) : undefined;
         // The doors of the map, all closed until someone is seen in their passage; the new grid is told at its
         // next step.
         this.doors = bounds ? waterDoorsOf(wam) : [];
         this.doorOpenUntil = this.doors.map(() => 0);
         this.closedDoors = undefined;
         this.version++;
+        // The basins of the pools take the rain alone, not the runoff of the ground around.
+        this.grid?.seal(this.pools);
         if (this.grid && before) this.grid.takeFrom(before);
         // The cells are not the same any more: the room is told the whole state at its next message.
         this.sentBytes = undefined;
@@ -262,6 +279,7 @@ export class TerrainWaterManager {
         this.swingDoors(grid);
         // Both each step: a downpour goes on raining while the wave of a meteor runs.
         const raining = this.pourDownpours(grid);
+        this.pumpPools(grid);
         const draining = this.takeDrains(grid);
         const waving = this.waves.length > 0 || raining || draining || this.steps < this.stirredUntilStep;
         if (this.waves.length > 0) this.advanceWaves(grid);
@@ -284,6 +302,35 @@ export class TerrainWaterManager {
             this.tell(grid);
         }
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
+    }
+
+    /**
+     * The pumps of the pools: each cell of a pool that stands under its level takes what fills an empty pool in
+     * POOL_FILL_SECONDS, so a larger or deeper pool has a stronger pump; counted with the sources. A cell that stands
+     * over its level (a snow that melted in the pool, a rain) loses as much through the overflow of the pool, counted
+     * with the sinks: a flood that brings more than that still runs over the rim.
+     */
+    private pumpPools(grid: WaterGrid): void {
+        if (this.pools.length === 0) return;
+        let laid = 0;
+        let taken = 0;
+        for (const { cellX, cellY, depthPx, fullPx } of this.pools) {
+            const missing = fullPx - grid.depthAt(cellX, cellY);
+            const pumped = (depthPx * WATER_STEP_MS) / 1000 / POOL_FILL_SECONDS;
+            if (missing > 0) {
+                if (this.steps < this.pumpsFromStep) continue;
+                laid += grid.rainOn(cellX, cellY, 0, Math.min(missing, pumped));
+            } else if (missing < -POOL_OVERFLOW_SLACK_PX) {
+                const px = Math.min(-missing, pumped);
+                taken += grid.drainDisc(cellX, cellY, 0, px, px);
+            }
+        }
+        if (laid <= 0 && taken <= 0) return;
+        this.sums.sourcesPx += laid;
+        this.sums.sinksPx += taken;
+        this.moving = true;
+        this.version++;
+        this.changedSinceSave = true;
     }
 
     /** The room says where its avatars standing on the ground are: they hold the doors open. */
@@ -431,6 +478,9 @@ export class TerrainWaterManager {
         const shape = meteorShape(radiusTiles);
         const cellX = Math.floor(x / TERRAIN_CELL);
         const cellY = Math.floor(y / TERRAIN_CELL);
+        this.stopPumps();
+        // The shock first drives the water around the crater away; then the water of the crater is thrown up.
+        this.blast(grid, cellX, cellY, radiusTiles);
         if (this.room.getWam()?.settings?.water?.inertia === true) {
             // A water with inertia makes its own wave: the impact only throws the water of the crater around it.
             const struck = strikeWater(grid, cellX, cellY, shape);
@@ -456,7 +506,8 @@ export class TerrainWaterManager {
 
     /**
      * A fireball lands at a point of the map (pixels), its crater `radiusTiles` wide: the water of the crater boils
-     * away, counted as lost, and no wave leaves. The room is told at once. Nothing on a map without water.
+     * away, counted as lost, and its steam blows the water around the crater outwards (see blast). The room is told
+     * at once. Nothing on a map without water.
      */
     public vaporise(x: number, y: number, radiusTiles: number): void {
         const grid = this.grid;
@@ -466,12 +517,34 @@ export class TerrainWaterManager {
             Math.floor(y / TERRAIN_CELL),
             meteorShape(radiusTiles).discCells,
         );
-        if (!taken || taken.takenPx <= 0) return;
+        if (!taken) return;
+        // The steam of the water it boils away blows the water around the crater outwards.
+        const blast = this.blast(grid, Math.floor(x / TERRAIN_CELL), Math.floor(y / TERRAIN_CELL), radiusTiles);
+        if (taken.takenPx <= 0 && blast <= 0) return;
+        this.stopPumps();
         this.sums.lostPx += taken.takenPx;
         this.moving = true;
         this.version++;
         this.changedSinceSave = true;
         this.tell(grid);
+    }
+
+    /**
+     * The blast of an impact drives the water around its crater away, as far as the map says (WaterSettings
+     * .impactReach, see blastWater). Returns the water moved; what found no room past the blast is counted lost.
+     */
+    private blast(grid: WaterGrid, cellX: number, cellY: number, radiusTiles: number): number {
+        const reach = this.room.getWam()?.settings?.water?.impactReach ?? DEFAULT_IMPACT_REACH;
+        const blast = blastWater(grid, cellX, cellY, meteorShape(radiusTiles), reach);
+        if (!blast) return 0;
+        this.sums.lostPx += blast.lostPx;
+        return blast.movedPx;
+    }
+
+    /** A meteor fell in the water: the pumps of the pools start again a moment later, so an emptied pool is seen empty. */
+    private stopPumps(): void {
+        if (this.pools.length === 0) return;
+        this.pumpsFromStep = this.steps + (POOL_PUMP_RESTART_SECONDS * 1000) / WATER_STEP_MS;
     }
 
     /** The grid of the water, for what lives in it. Undefined on a map without water. */

@@ -67,6 +67,41 @@ export function advanceImpactWave(grid: WaterGrid, wave: ImpactWave): { done: bo
     return { done: true, lostPx };
 }
 
+/** The water the blast drives away swells over a band this wide past its reach, in shares of the crater's radius. */
+const BLAST_SWELL_REACH = 0.5;
+/** ...and never narrower than this many cells. */
+const BLAST_SWELL_MIN_CELLS = 3;
+
+/**
+ * The blast of an impact on the water around its crater. An impact moves far more water than the volume of what
+ * fell: the shock drives the water away well past the crater, as the ejecta of a crater lie in a continuous blanket
+ * out to two or three times its radius. Here the water between the crater and `reach` times its radius is driven
+ * outwards: all of it next to the crater, less and less with the distance, none where the blast ends (a straight
+ * line: a choice, the simplest that leaves no step in the water). What is driven away is laid as a swell past the
+ * reach of the blast, over the level of a flood if need be; what finds no room there is lost (`lostPx`). In a closed
+ * basin, a pool, most of the water is thrown out.
+ *
+ * Undefined, and nothing done, for a reach of one or less (the crater alone) or one that is not a number, and
+ * outside the grid or in a wall.
+ */
+export function blastWater(
+    grid: WaterGrid,
+    cellX: number,
+    cellY: number,
+    shape: MeteorShape,
+    reach: number,
+): { movedPx: number; lostPx: number } | undefined {
+    if (!Number.isFinite(reach) || reach <= 1) return undefined;
+    const inner = shape.discCells;
+    const outer = inner * reach;
+    const movedPx = grid.takeRing(cellX, cellY, inner, outer, (distance) => 1 - (distance - inner) / (outer - inner));
+    if (movedPx === undefined) return undefined;
+    if (movedPx <= 0) return { movedPx: 0, lostPx: 0 };
+    const swell = Math.max(BLAST_SWELL_MIN_CELLS, inner * BLAST_SWELL_REACH);
+    const laid = grid.layRing(cellX, cellY, outer, outer + swell, movedPx, Infinity, Infinity, true);
+    return { movedPx, lostPx: Math.max(0, movedPx - laid) };
+}
+
 /** The rim an impact throws up around its crater reaches this many times the radius of the crater. */
 const RIM_REACH = 1.5;
 

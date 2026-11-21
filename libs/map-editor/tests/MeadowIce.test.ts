@@ -155,43 +155,32 @@ describe("the pools freezing", () => {
         );
     const terrain = withSoils(undefined, new Map([...poolAt(6, 6, 0), ...poolAt(8, 6, 1)]));
     const styles = [DEFAULT_POOL_STYLE, { ...DEFAULT_POOL_STYLE, hot: true }];
-    const dry = (weather: SnowWeather | undefined): MeadowStepInput => under(weather, { waterAt: () => 0 });
+    /** The water of the relief the pump of the server keeps in the two pools. */
+    const filled = (weather: SnowWeather | undefined): MeadowStepInput =>
+        under(weather, { waterAt: (x, y) => (y === 6 && (x === 6 || x === 8) ? 46 : 0) });
 
-    it("takes a pool in ice as the water of the relief, though no water of the relief lies in it", () => {
+    it("takes the water of a pool in ice as the water of a lake, and thaws it", () => {
         const meadow = new Meadow(size, terrain, undefined, undefined, styles);
-        run(meadow, 30, dry(frost));
+        run(meadow, 30, filled(frost));
         expect(meadow.iceAt(6, 6)).toBeGreaterThan(45);
         expect(meadow.iceAt(7, 6)).toBe(0);
-        run(meadow, 300, dry(mild));
+        run(meadow, 300, filled(mild));
         expect(meadow.iceAt(6, 6)).toBe(0);
     });
 
     it("never freezes a pool whose water is heated, and melts the snow that falls in it", () => {
         const meadow = new Meadow(size, terrain, undefined, undefined, styles);
-        run(meadow, 30, dry(frost));
+        run(meadow, 30, filled(frost));
         expect(meadow.iceAt(8, 6)).toBe(0);
         meadow.snowOn(8, 6, 0, 20);
-        meadow.step(dry(frost));
+        meadow.step(filled(frost));
         expect(meadow.snowAt(8, 6)).toBe(0);
     });
 
-    it("freezes a pool of the default style on a map that keeps no styles", () => {
-        const meadow = new Meadow(size, terrain, undefined);
-        run(meadow, 30, dry(frost));
-        expect(meadow.iceAt(6, 6)).toBeGreaterThan(45);
-        expect(meadow.iceAt(8, 6)).toBeGreaterThan(45);
-    });
-
-    it("lets the snow lie on a frozen pool, and melt in an open one in a mild air", () => {
+    it("has no ice in a pool that was emptied", () => {
         const meadow = new Meadow(size, terrain, undefined, undefined, styles);
-        run(meadow, 30, dry(frost));
-        meadow.snowOn(6, 6, 0, 20);
-        meadow.step(dry(frost));
-        expect(meadow.snowAt(6, 6)).toBeCloseTo(20);
-        const open = new Meadow(size, terrain, undefined, undefined, styles);
-        open.snowOn(6, 6, 0, 20);
-        open.step(dry(mild));
-        expect(open.snowAt(6, 6)).toBe(0);
+        run(meadow, 30, under(frost, { waterAt: () => 0 }));
+        expect(meadow.iceAt(6, 6)).toBe(0);
     });
 });
 

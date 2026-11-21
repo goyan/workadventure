@@ -5,6 +5,8 @@ import type { TerrainData } from "@workadventure/map-editor";
 export interface CurrentWater {
     depthAt(x: number, y: number, now: number): number;
     relief(): TerrainData | undefined;
+    /** The relief the water stands on, its pools dug (TerrainWater.basin); the relief itself when absent. */
+    basin?(): TerrainData | undefined;
     /**
      * How fast the water runs at a point, in cells a second, when the server computes it (the water with inertia):
      * the current is then that speed, not what the slope lets guess. Undefined: the slope is read.
@@ -89,7 +91,7 @@ export function waterCurrentAt(
         const share = (Math.min(1, speed / CURRENT_FULL_SPEED) * carried) / speed;
         return { x: known.x * share || 0, y: known.y * share || 0 };
     }
-    const terrain = water.relief();
+    const terrain = water.basin ? water.basin() : water.relief();
     const cellX = Math.floor(x / TERRAIN_CELL);
     const cellY = Math.floor(y / TERRAIN_CELL);
     const groundHere = heightAt(terrain, cellX, cellY);
