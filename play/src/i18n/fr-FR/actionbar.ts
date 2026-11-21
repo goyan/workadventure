@@ -216,7 +216,8 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
                 snow: "Elle tombe en neige.",
                 mix: "Elle tombe en neige à {share} %.",
                 always: "C'est le serveur qui la fait tomber : elle suit toujours l'air de la carte, pour tout le monde.",
-                notYours: "Ton air ({city}) n'y change rien.",
+                notYours:
+                    "Ton air ({city}, {temperature}) n'y change rien : sur ton écran aussi, elle tombe comme sur la carte.",
             },
             frost: {
                 title: "Givre au sol",

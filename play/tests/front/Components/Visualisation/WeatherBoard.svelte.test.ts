@@ -178,7 +178,7 @@ describe("WeatherBoard", () => {
         expect(text("weather-board-downpour-audience")).toContain("tout le monde");
         expect(text("weather-board-downpour")).toContain("24 °C et 55 % d'humidité");
         expect(text("weather-board-downpour-server")).toBe(
-            "C'est le serveur qui la fait tomber : elle suit toujours l'air de la carte, pour tout le monde. Ton air (Auckland) n'y change rien.",
+            "C'est le serveur qui la fait tomber : elle suit toujours l'air de la carte, pour tout le monde. Ton air (Auckland, -3 °C) n'y change rien : sur ton écran aussi, elle tombe comme sur la carte.",
         );
 
         // My own sky would snow where the map would rain: both set side by side, then what it means.
@@ -272,7 +272,7 @@ describe("WeatherBoard", () => {
         expect(text("weather-board-ice-map-result")).toBe("Les bords de l'eau sont gelés.");
 
         expect(text("weather-board-downpour-result")).toBe("Elle tombe en neige.");
-        expect(text("weather-board-downpour-server")).toContain("Ton air (Dakar) n'y change rien.");
+        expect(text("weather-board-downpour-server")).toContain("Ton air (Dakar, 24 °C) n'y change rien");
 
         expect(text("weather-board-soil-result")).toBe("Le sol est gelé.");
         expect(text("weather-board-soil")).toContain("Ton air (24 °C) n'y change rien");
@@ -289,6 +289,41 @@ describe("WeatherBoard", () => {
         expect(text("weather-board-snow-server")).toBe(
             "Tu ne la vois pas : tu suis Dakar, et cette neige est celle de la carte. Reviens au temps du serveur pour la voir.",
         );
+    });
+
+    it("answers why the downpour goes by 36 °C when it is -34 °C on my screen", () => {
+        const hot = { temperature: 36, humidity: 19, windSpeed: 5 };
+        const polar = { temperature: -34, humidity: 80, windSpeed: 15 };
+        render(
+            input({
+                city: "Iakoutsk",
+                drawsOwnWeather: true,
+                mapAir: { ...hot, byHand: true },
+                ownAir: { ...polar, byHand: false, place: "Iakoutsk" },
+                precipitationAir: polar,
+                roomAir: hot,
+                frostAir: polar,
+                mapFrostAir: hot,
+            }),
+        );
+        expect(text("weather-board-summary-downpour")).toBe(
+            "Averse de la catastrophe : pluie, pour tout le monde serveur",
+        );
+        expect(text("weather-board-downpour-result")).toBe("Elle tombe en pluie.");
+        expect(find("weather-board-downpour-air")?.getAttribute("data-air")).toBe("map");
+        expect(text("weather-board-downpour-air")).toContain("Décidé par l'air de la carte");
+        expect(text("weather-board-downpour-audience")).toContain("Vu par tout le monde");
+        expect(text("weather-board-downpour")).toContain("36 °C et 19 % d'humidité");
+        expect(text("weather-board-downpour")).toContain("Au-dessus de 1,5 °C, il fond : c'est de la pluie.");
+        expect(text("weather-board-downpour-server")).toBe(
+            "C'est le serveur qui la fait tomber : elle suit toujours l'air de la carte, pour tout le monde. Ton air (Iakoutsk, -34 °C) n'y change rien : sur ton écran aussi, elle tombe comme sur la carte.",
+        );
+        // My own sky, it, is a snow, and my ground is white where the map's is not.
+        expect(text("weather-board-precipitation-result")).toBe("Rien ne tombe. Ce serait de la neige.");
+        expect(text("weather-board-precipitation-map-result")).toBe("Rien ne tombe. Ce serait de la pluie.");
+        expect(text("weather-board-frost-own")).toContain("-34 °C et 80 % d'humidité");
+        expect(text("weather-board-frost-map-result")).toBe("Pas de givre.");
+        expect(text("weather-board-soil")).toContain("Ton air (-34 °C) n'y change rien");
     });
 
     it("doubles nothing for a player who follows the server: one line says it is the weather of the map", () => {
