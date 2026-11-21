@@ -20,10 +20,107 @@ export const levelOf = (animal: Animal): number => {
 export const cellAt = (pixel: number): number => Math.floor(pixel / TERRAIN_CELL);
 const middleOf = (cell: number): number => cell * TERRAIN_CELL + TERRAIN_CELL / 2;
 
+/** How many cells a search for a way round looks at, at most: about 45 cells around the animal. */
+export const ROUTE_MAX_CELLS = 8000;
+/** An animal that found no way round does not look for one again before this long. */
+export const ROUTE_RETRY_MS = 4000;
+/** A way round is kept while what it led to stays within this many cells of where it was. */
+const ROUTE_GOAL_DRIFT_CELLS = 2;
+
+/** The way round an animal follows, point by point (map pixels), to the cell its target was in when it was found. */
+interface Route {
+    points: { x: number; y: number }[];
+    at: number;
+    goalCellX: number;
+    goalCellY: number;
+}
+// Kept beside the animals, never saved nor sent: a way is found again after a restart.
+const routes = new WeakMap<Animal, Route>();
+const noRouteUntil = new WeakMap<Animal, number>();
+
+type MayEnter = (fromX: number, fromY: number, toCellX: number, toCellY: number) => boolean;
+
+/** Whether one goes straight from a point to another without being stopped. */
+function sees(from: { x: number; y: number }, to: { x: number; y: number }, mayEnter: MayEnter): boolean {
+    const walker = { x: from.x, y: from.y };
+    return advance(walker, to.x, to.y, Math.hypot(to.x - from.x, to.y - from.y) + 1, mayEnter);
+}
+
+const ROUTE_STEPS = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+    [1, 1],
+    [1, -1],
+    [-1, 1],
+    [-1, -1],
+] as const;
+
+/**
+ * A way from where an animal stands to a point it cannot go straight to: round the water it does not enter, by a
+ * bridge when there is one. The cells are searched outwards from the animal (ROUTE_MAX_CELLS at most), then the way
+ * is straightened: only its turns are kept. Undefined when the point is in another place, too far, or closed off.
+ */
+function findRoute(
+    animal: Animal,
+    toX: number,
+    toY: number,
+    bodies: Places,
+    level: number,
+    mayEnter: MayEnter,
+): Route | undefined {
+    const startX = cellAt(animal.x);
+    const startY = cellAt(animal.y);
+    const goalX = cellAt(toX);
+    const goalY = cellAt(toY);
+    const body = bodies.bodyAt(startX, startY);
+    if (body === 0 || bodies.bodyAt(goalX, goalY) !== body || !bodies.passable(goalX, goalY, level)) return undefined;
+    // The cells seen, each with the one it was reached from. Keys hold both coordinates of a cell.
+    const keyOf = (cellX: number, cellY: number): number => (cellY + 32768) * 65536 + cellX + 32768;
+    const from = new Map<number, number>();
+    const start = keyOf(startX, startY);
+    const goal = keyOf(goalX, goalY);
+    from.set(start, start);
+    const queue = [start];
+    for (let head = 0; head < queue.length && !from.has(goal) && from.size < ROUTE_MAX_CELLS; head++) {
+        const key = queue[head];
+        const cellX = (key % 65536) - 32768;
+        const cellY = Math.floor(key / 65536) - 32768;
+        for (const [dx, dy] of ROUTE_STEPS) {
+            const next = keyOf(cellX + dx, cellY + dy);
+            if (from.has(next) || !mayEnter(cellX, cellY, cellX + dx, cellY + dy)) continue;
+            from.set(next, key);
+            queue.push(next);
+        }
+    }
+    if (!from.has(goal)) return undefined;
+    // From the goal back to the start, then the other way: the middles of the cells, the point itself at the end.
+    const cells: { x: number; y: number }[] = [{ x: toX, y: toY }];
+    for (let key = from.get(goal) ?? start; key !== start; key = from.get(key) ?? start) {
+        cells.push({ x: middleOf((key % 65536) - 32768), y: middleOf(Math.floor(key / 65536) - 32768) });
+    }
+    cells.reverse();
+    // Straightened: from each point kept, the furthest one seen in a straight line is the next.
+    const points: { x: number; y: number }[] = [];
+    let anchor: { x: number; y: number } = animal;
+    for (let index = 0; index < cells.length; ) {
+        let reach = index;
+        while (reach + 1 < cells.length && sees(anchor, cells[reach + 1], mayEnter)) reach++;
+        points.push(cells[reach]);
+        anchor = cells[reach];
+        index = reach + 1;
+    }
+    return { points, at: 0, goalCellX: goalX, goalCellY: goalY };
+}
+
 /**
  * Moves an animal for `dtMs` towards its target; it is given a new random one, in its body of water, when it has
  * none, reached it or cannot go on. It never enters a cell with too little water nor crosses a wall, so it stays in
  * its body of water. In a cell that dried up it flees to the deepest neighbour; false when it died there.
+ *
+ * Stopped on its straight way, it looks for a way round (`findRoute`: a land animal goes by a bridge) and follows
+ * it; its target is only dropped when there is none.
  */
 export function swim(
     animal: Animal,
@@ -79,7 +176,7 @@ export function swim(
     const speed = Math.max(0, animal.speed ?? maxSpeedPxPerS);
     const open = (fromX: number, fromY: number, dx: number, dy: number): boolean =>
         bodies.canCross(fromX, fromY, dx, dy) && bodies.passable(fromX + dx, fromY + dy, minDepth);
-    const arrived = advance(animal, animal.targetX, animal.targetY, (speed * dtMs) / 1000, (fromX, fromY, toX, toY) => {
+    const mayEnter: MayEnter = (fromX, fromY, toX, toY) => {
         const dx = toX - fromX;
         const dy = toY - fromY;
         if (Math.abs(dx) > 1 || Math.abs(dy) > 1) return false;
@@ -89,9 +186,49 @@ export function swim(
             (open(fromX, fromY, dx, 0) && open(fromX + dx, fromY, 0, dy)) ||
             (open(fromX, fromY, 0, dy) && open(fromX, fromY + dy, dx, 0))
         );
-    });
-    // Stopped on its way: another target next time.
-    if (!arrived) animal.targetX = animal.targetY = undefined;
+    };
+    let distance = (speed * dtMs) / 1000;
+    // The way round it follows, as long as its target stays about where the way leads.
+    let route = routes.get(animal);
+    if (
+        route &&
+        (Math.abs(route.goalCellX - cellAt(animal.targetX)) > ROUTE_GOAL_DRIFT_CELLS ||
+            Math.abs(route.goalCellY - cellAt(animal.targetY)) > ROUTE_GOAL_DRIFT_CELLS)
+    ) {
+        routes.delete(animal);
+        route = undefined;
+    }
+    while (route && distance > 0) {
+        const point = route.points[route.at];
+        const before = Math.hypot(point.x - animal.x, point.y - animal.y);
+        if (!advance(animal, point.x, point.y, distance, mayEnter)) {
+            // The water moved, a door closed: the way is no longer one.
+            routes.delete(animal);
+            animal.targetX = animal.targetY = undefined;
+            return true;
+        }
+        distance -= Math.min(distance, before);
+        if (Math.hypot(point.x - animal.x, point.y - animal.y) >= 1) return true;
+        route.at++;
+        if (route.at >= route.points.length) {
+            // At the end of the way: straight to its target from here.
+            routes.delete(animal);
+            route = undefined;
+        }
+    }
+    if (distance <= 0) return true;
+    if (advance(animal, animal.targetX, animal.targetY, distance, mayEnter)) return true;
+    // Stopped on its straight way: round by another one when there is one, else another target next time.
+    const found =
+        (noRouteUntil.get(animal) ?? 0) > now
+            ? undefined
+            : findRoute(animal, animal.targetX, animal.targetY, bodies, minDepth, mayEnter);
+    if (found) {
+        routes.set(animal, found);
+        return true;
+    }
+    noRouteUntil.set(animal, now + ROUTE_RETRY_MS);
+    animal.targetX = animal.targetY = undefined;
     return true;
 }
 
@@ -100,11 +237,11 @@ export function swim(
  * the next cell can be entered from the current one. False when it was stopped before the end of its move.
  */
 function advance(
-    animal: Animal,
+    animal: { x: number; y: number },
     toX: number,
     toY: number,
     distance: number,
-    mayEnter: (fromX: number, fromY: number, toCellX: number, toCellY: number) => boolean,
+    mayEnter: MayEnter,
 ): boolean {
     let remaining = distance;
     while (remaining > 0) {
