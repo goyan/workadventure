@@ -178,6 +178,8 @@ export class WeatherManager {
     /** What the cloud layer draws this time, gathered while the weather is drawn (see drawSkyLayer). */
     private layerVeils: readonly { color: number; alpha: number }[] = [];
     private layerClouds: CloudSky | undefined;
+    /** Whether the cloud layer draws what it holds over the roofs too, seen from far: not the fog (paintFarFog). */
+    private layerOverRoofs = true;
     /** The strength of the rainbow drawn this time (0: none). */
     private layerRainbow = 0;
     /** The sky the water reflects, worked out at each drawing of the weather (see waterReflection). */
@@ -331,7 +333,9 @@ export class WeatherManager {
         // Clouds cross a screen in about 30 s: 15 images a second for them to glide (rain and storm already draw 30).
         // Drawn by the graphics card, they glide by fractions of a pixel: 30 images a second, as the rain.
         const cloudRate = this.smoothCloudLayer() ? 30 : 15;
-        if (!nearEdge && now - this.lastFrameAt < 1000 / (falling ? 30 : fogOnly ? 5 : cloudRate)) return;
+        // A fog in blocks moves by whole blocks: 5 images a second are enough. Drawn by the graphics card, it glides.
+        const fogRate = this.smoothCloudLayer() ? cloudRate : 5;
+        if (!nearEdge && now - this.lastFrameAt < 1000 / (falling ? 30 : fogOnly ? fogRate : cloudRate)) return;
         this.lastFrameAt = now;
         const view = paddedView(screen, DRAW_MARGIN);
         this.drawn = view;
@@ -417,6 +421,7 @@ export class WeatherManager {
         let canvas: BlockCanvasArea;
         this.layerVeils = [];
         this.layerClouds = undefined;
+        this.layerOverRoofs = true;
         this.layerRainbow =
             showWeather && !this.basic && this.rainbowShown
                 ? rainbowStrength(raining, storm, sun?.elevation, settings?.cloudCover, snow)
@@ -444,13 +449,21 @@ export class WeatherManager {
         }
         if (showWeather && weather === WeatherType.Fog) {
             const density = fogStrengthNow * (night ? FOG_NIGHT_FACTOR : 1);
-            this.fillVeil(canvas, outdoor, veil, FOG_COLOR, FOG_VEIL_ALPHA * density, paint);
+            this.addVeil(canvas, outdoor, veil, FOG_COLOR, FOG_VEIL_ALPHA * density, paint);
+            if (this.smoothCloudLayer()) {
+                // Smooth, as the clouds: its patches thickened by the graphics card, one flat colour, no shadow. Over
+                // the roofs the fog seen from far (paintFarFog) stays, over the lamps.
+                this.layerClouds = this.fogSky(epoch, view, FOG_PATCH_ALPHA * density);
+                this.layerOverRoofs = false;
+            }
             if (paint) {
                 // The patches stop at the walls: only outdoor cells are painted.
                 const levels = fieldLevels(canvas, size, fogPatches(epoch, view, this.reducedMotion));
-                this.blocks.paintField(canvas, levels, outdoor, NO_SHIFT, FOG_COLOR, (level) => {
-                    return ((FOG_PATCH_ALPHA * level) / FOG_LEVELS) * density;
-                });
+                if (!this.smoothCloudLayer()) {
+                    this.blocks.paintField(canvas, levels, outdoor, NO_SHIFT, FOG_COLOR, (level) => {
+                        return ((FOG_PATCH_ALPHA * level) / FOG_LEVELS) * density;
+                    });
+                }
                 this.paintFarFog(view, canvas, size, outdoor, levels, density, grid, avatarRoom);
             }
         } else if (showWeather) {
@@ -769,6 +782,16 @@ export class WeatherManager {
         this.fillVeil(canvas, outdoor, veil, color, alpha, paint);
     }
 
+    /** The fog for the cloud layer: its patches over the view and a margin, in one flat colour, `body` thick. */
+    private fogSky(epoch: number, view: WeatherView, body: number): CloudSky {
+        return {
+            patches: fogPatches(epoch, layerArea(view), this.reducedMotion),
+            tones: { lit: FOG_COLOR, mid: FOG_COLOR, shade: FOG_COLOR },
+            body,
+            shadow: undefined,
+        };
+    }
+
     /** Clouds for the cloud layer: their puffs over the view and a margin, their tones for how night it is. */
     private cloudSky(
         epoch: number,
@@ -780,15 +803,9 @@ export class WeatherManager {
         night: number,
         shadow: CloudSky["shadow"],
     ): CloudSky {
-        const around = {
-            x: view.x - CLOUD_LAYER_MARGIN,
-            y: view.y - CLOUD_LAYER_MARGIN,
-            width: view.width + 2 * CLOUD_LAYER_MARGIN,
-            height: view.height + 2 * CLOUD_LAYER_MARGIN,
-        };
         const tint = (color: number): { color: number; alpha: number } => cloudTint(color, body, night);
         return {
-            patches: cloudPatches(epoch, around, shownCover, this.reducedMotion, sky),
+            patches: cloudPatches(epoch, layerArea(view), shownCover, this.reducedMotion, sky),
             tones: { lit: tint(palette.lit).color, mid: tint(palette.mid).color, shade: tint(palette.shade).color },
             body: tint(palette.mid).alpha,
             shadow,
@@ -831,7 +848,7 @@ export class WeatherManager {
             clouds: this.layerClouds,
             veils: this.layerVeils,
             outdoors,
-            overRoofs: this.roofs?.share ?? 0,
+            overRoofs: this.layerOverRoofs ? (this.roofs?.share ?? 0) : 0,
             rainbow,
             still: this.reducedMotion,
         });
@@ -1110,3 +1127,13 @@ export class WeatherManager {
 /** The colour of the sky the water reflects: blue by fine weather, grey under a covered or rainy sky. */
 const DAY_SKY = 0x8fb9e6;
 const GREY_SKY = 0x9aa3ad;
+
+/** What the cloud layer covers: the view and CLOUD_LAYER_MARGIN around it. */
+function layerArea(view: WeatherView): WeatherView {
+    return {
+        x: view.x - CLOUD_LAYER_MARGIN,
+        y: view.y - CLOUD_LAYER_MARGIN,
+        width: view.width + 2 * CLOUD_LAYER_MARGIN,
+        height: view.height + 2 * CLOUD_LAYER_MARGIN,
+    };
+}
