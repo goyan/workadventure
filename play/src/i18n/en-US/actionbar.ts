@@ -303,7 +303,7 @@ const actionbar = {
         ball: "Ball",
         ballSizeLabel: "Size of the ball: its diameter, in tiles",
         ballArmedHelp:
-            "Hold the click: a solid ball, its centre at level 0 of the map, takes the place of the water and pushes it · Esc to cancel",
+            "Hold the click: a solid ball is there at once, its centre at level 0 of the map; it follows the pointer and pushes away the water of its part under water · Esc to cancel",
         tabs: { catastrophes: "Disasters", weather: "Weather" },
         weather: {
             manual: "Manual",
