@@ -16,6 +16,7 @@ const WORKER_ENTRIES = [
     "Pixel/BlockWindow.ts",
     "Pixel/TerrainUnits.ts",
     "Pixel/BlockPainter.ts",
+    "BlockPaintWorker.ts",
 ];
 
 /** What a worker must not load: the map editor library (zod and every schema), Phaser, Svelte, the stores. */
