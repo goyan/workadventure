@@ -132,6 +132,8 @@ interface MeadowLayers extends BlockCanvasArea {
     snow: Uint8Array | undefined;
     /** The ice the server keeps over the water (iceByte); undefined where none is frozen. */
     ice: Uint8Array | undefined;
+    /** The moisture of the soil the server keeps (0 to 255), outdoors; undefined where every soil is dry. */
+    moisture: Uint8Array | undefined;
     /** Whether these layers show the snow of the server (GroundSource): read again when the player changes of weather. */
     server: boolean;
 }
@@ -277,6 +279,7 @@ export class TerrainView {
                     grass: meadow?.grass,
                     snow: thickestSnow(relief.dug ? snowOf(relief.snow) : undefined, snowOf(meadow?.snow)),
                     ice: meadow?.ice,
+                    moisture: meadow?.moisture,
                     autumn: this.season?.() === Season.Autumn ? 1 : 0,
                     dug: relief.ground,
                     raised: relief.raised,
@@ -540,7 +543,9 @@ export class TerrainView {
         const meadow = this.meadow;
         return (
             meadow !== undefined &&
-            (meadow.hasGrass() || (followsServerGround() && (meadow.hasSnow() || meadow.hasIce())))
+            (meadow.hasGrass() ||
+                meadow.hasMoisture() ||
+                (followsServerGround() && (meadow.hasSnow() || meadow.hasIce())))
         );
     }
 
@@ -577,6 +582,7 @@ export class TerrainView {
             fire: undefined,
             snow: undefined,
             ice: undefined,
+            moisture: undefined,
             server,
         };
         const outdoor = this.scene.getOutdoorGrid?.();
@@ -593,7 +599,16 @@ export class TerrainView {
                 const flames = meadow.fireAt(tileX, tileY);
                 const white = server ? Math.round(snowCoverOf(meadow.snowAt(tileX, tileY)) * 255) : 0;
                 const frozen = server ? meadow.iceByteAt(tileX, tileY) : 0;
-                if (cover === 0 && dryness === 0 && ashes === 0 && flames === 0 && white === 0 && frozen === 0) {
+                const moist = meadow.moistureByteAt(tileX, tileY);
+                if (
+                    cover === 0 &&
+                    dryness === 0 &&
+                    ashes === 0 &&
+                    flames === 0 &&
+                    white === 0 &&
+                    frozen === 0 &&
+                    moist === 0
+                ) {
                     continue;
                 }
                 const firstRow = Math.max(0, tileY * cellsATile - top);
@@ -617,6 +632,7 @@ export class TerrainView {
                         if (flames > 0) (layers.fire ??= new Uint8Array(size))[index] = flames;
                         if (white > 0) (layers.snow ??= new Uint8Array(size))[index] = white;
                         if (frozen > 0) (layers.ice ??= new Uint8Array(size))[index] = frozen;
+                        if (moist > 0) (layers.moisture ??= new Uint8Array(size))[index] = moist;
                         // A dry ground yellows with or without grass on it.
                         if (dryness > 0) (layers.straw ??= new Uint8Array(size))[index] = strawLevel(drawn, dryness);
                     }

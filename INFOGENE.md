@@ -4410,7 +4410,22 @@ une source qui déborde d'un lac court sur un pré en pente en nappe de 6 à 110
 pour 28 à 110 L/s sur 1 à 9 m de large), en partie sous `SHOWN_PX` (0,5 px, 17 mm) que `levelsOver` taisait, alors que
 « Flux d'eau » y trace ses flèches (toute profondeur > 0). Une eau qui court (vitesse du bloc non nulle, eau à inertie) est
 dessinée dès `RUNNING_SHOWN_PX` (1/8 px, 4 mm, le pas des profondeurs du serveur), en sol luisant ; une pellicule immobile
-sous 0,5 px (reste d'une crue) reste cachée. Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
+sous 0,5 px (reste d'une crue) reste cachée. **Sol mouillé** (2026-11-21, `fix/sol-mouille-fonce`) : un sol mouillé
+est plus sombre, l'eau des pores abaissant sa réflectance (Twomey, Bohren et Mergenthaler 1986, *Applied Optics* 25:431).
+Le shader du sol l'assombrit selon le plus fort de trois états, jamais leur somme : la pluie de l'air du joueur
+(`uWet`, sur les sols peints comme avant), l'**humidité du sol tenue par le serveur** (`Meadow`, par tuile, déjà envoyée
+au navigateur : pluie, eau posée, remontée capillaire près de l'eau `BANK_MOISTURE`, séchage selon le sol, dont le
+sable en 120 s ; paquet 9, rouge) et la présence d'eau du relief (paquet 8, bleu). Courbe `groundWetness` : rapide avec
+la première eau puis plate (forme de Lobell et Asner 2002, *SSSAJ* 66:722 ; pente 3 : choix). Réflectance mouillée sur
+sèche (`WET_REFLECTANCE`, linéaire, appliquée en sRGB à la puissance 1/2,2) : terre et prairie 0,54, argile 0,48, sable
+0,55 (sols poreux 0,4 à 0,6, Lobell et Asner ; limon de 0,30 sec à 0,14 mouillé, Idso et al. 1975, *J. Appl.
+Meteorol.* 14:109 ; chiffres de ces deux articles relus par un résumé, pas sur l'article), roche 0,8, gravier 0,65,
+herbe 0,9 (**choix, non sourcés** : la pierre ne boit pas, les brins ne sont pas poreux). Mesure sur le shader : sable
+mouillé à 76 % de sa luminance sèche, roche 90 %, herbe 96 % ; la pluie fonce donc moins qu'avant (70 % partout). Sous
+un film, l'eau est claire (opacité de 20 % au plus mince) sur le sol foncé ; l'eau profonde et le rivage d'un lac ne
+changent pas. La couronne sombre du shader de l'eau n'ajoute que ce que l'humidité du modèle n'a pas déjà foncé.
+Limites : les tuiles de la carte non peintes comptent comme de la terre (le modèle les traite ainsi), pavés dehors
+compris ; l'humidité est par tuile de 32 px. Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
 (`TexturedGround`). Textures : `resources/terrain/ground-*.png` (générées, 4 tons nets ; `ground-ice.png` dans le
 style des patinoires).
 

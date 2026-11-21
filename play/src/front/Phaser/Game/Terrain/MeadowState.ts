@@ -88,6 +88,7 @@ export class MeadowState {
     /** The ice over the water of each tile (iceByte); empty when no water of the map is frozen. */
     private ice: Uint8Array = new Uint8Array(0);
     private anyIce = false;
+    private anyMoisture = false;
     private anyFire = false;
     private any = false;
     private anyDry = false;
@@ -123,6 +124,7 @@ export class MeadowState {
         this.snow = state.snow?.length === tiles ? state.snow : new Uint8Array(0);
         this.ice = state.ice?.length === tiles ? state.ice : new Uint8Array(0);
         this.anyIce = this.ice.some((byte) => byte > 0);
+        this.anyMoisture = state.moisture.some((byte) => byte > 0);
         let covered = 0;
         for (const byte of this.snow) covered += snowCoverOf(snowMmOfByte(byte));
         this.meanSnow = tiles > 0 ? covered / tiles : 0;
@@ -189,6 +191,16 @@ export class MeadowState {
     }
 
     /** The ice over the water of a tile, as the server tells it (iceByte): 0 without ice. */
+    /** The moisture of the soil of a tile, as the server keeps it: 0 (dry) to 255 (sodden). */
+    public moistureByteAt(tileX: number, tileY: number): number {
+        return this.at(this.moisture, tileX, tileY);
+    }
+
+    /** Whether the soil of any tile is moist. */
+    public hasMoisture(): boolean {
+        return this.anyMoisture;
+    }
+
     public iceByteAt(tileX: number, tileY: number): number {
         return this.ice.length === 0 ? 0 : this.at(this.ice, tileX, tileY);
     }
