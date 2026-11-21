@@ -1,5 +1,14 @@
 import { get } from "svelte/store";
-import { hoarFrost, WeatherType } from "@workadventure/map-editor";
+import {
+    hoarFrost,
+    rainRateAt,
+    SNOW_MAX_MM,
+    snowMeltMmPerHour,
+    snowShare,
+    snowSublimationMmPerHour,
+    THAW_SPEED,
+    WeatherType,
+} from "@workadventure/map-editor";
 import { realWeatherAt } from "@wa/common/RealWeather";
 import { nightDateStore } from "@wa/front/Stores/NightStore";
 import { fireConditionsStore } from "@wa/front/Stores/FireConditionsStore";
@@ -23,6 +32,11 @@ export interface WaterCycle {
     ice: number;
     /** How wet the ground is from the rain, 0 to 1. */
     wet: number;
+    /**
+     * The snow lying on the ground of a player who follows a place of their own, in mm of water (see ownSnowAfter):
+     * the snow of their city, for them alone. None for a player who follows the server, whose snow the server keeps.
+     */
+    snowMm: number;
 }
 
 /** The shallows freeze under this, °C... */
@@ -56,7 +70,28 @@ export function towards(value: number, target: number, seconds: number, upRate: 
     return Math.max(target, value - seconds * downRate);
 }
 
-let cycle: WaterCycle = { frost: 0, ice: 0, wet: 0 };
+/**
+ * The snow of a player's own city after `seconds` of the game clock, from `snowMm` of water lying on their ground:
+ * what falls there (`fallingMmPerHour` of water) lies by its share of snow (snowShare), and what lies melts and goes
+ * in a dry wind as the snow the server keeps does (Snow.ts), on the same clock (THAW_SPEED). Local to this browser:
+ * it gives no water, the water is the server's. Unchanged while the air of the city is not known.
+ */
+export function ownSnowAfter(
+    snowMm: number,
+    seconds: number,
+    fallingMmPerHour: number,
+    air: AirNow | undefined,
+): number {
+    if (!Number.isFinite(seconds) || seconds <= 0 || !air || air.humidity === undefined) return snowMm;
+    const weather = { temperature: air.temperature, humidity: air.humidity, windSpeed: air.windSpeed ?? 0 };
+    const hours = (seconds * THAW_SPEED) / 3600;
+    const falling = Number.isFinite(fallingMmPerHour) ? Math.max(0, fallingMmPerHour) : 0;
+    const gained = falling * snowShare(weather.temperature, weather.humidity) * hours;
+    const lost = (snowMeltMmPerHour(weather) + snowSublimationMmPerHour(weather)) * hours;
+    return Math.min(SNOW_MAX_MM, Math.max(0, snowMm + gained - lost));
+}
+
+let cycle: WaterCycle = { frost: 0, ice: 0, wet: 0, snowMm: 0 };
 let lastSecond: number | undefined;
 
 /**
@@ -79,14 +114,24 @@ export function waterCycleNow(settings: MapSnowSettings | undefined): WaterCycle
         ice: iceOf(air),
         wet: raining && (celsius === undefined || celsius > 0) ? 1 : 0,
     };
+    // The snow of their own city, for a player who follows one: what falls there, as their sky shows it.
+    const { place, state } = chosenWeatherNow();
+    const falling = place
+        ? rainRateAt(
+              { weather: WeatherType.Real, weatherLocation: place },
+              date.getTime(),
+              state.status === "known" ? state.slots : undefined,
+          )
+        : 0;
     cycle = Number.isFinite(elapsed)
         ? {
               frost: towards(cycle.frost, target.frost, elapsed, FROST_RATE, FROST_RATE),
               ice: towards(cycle.ice, target.ice, elapsed, ICE_RATE, ICE_RATE),
               wet: towards(cycle.wet, target.wet, elapsed, WET_RATE, DRY_RATE),
+              snowMm: place ? ownSnowAfter(cycle.snowMm, elapsed, falling, air) : 0,
           }
-        : // The first look at a map: the cycle is already where the weather is.
-          target;
+        : // The first look at a map: the cycle is already where the weather is. No snow lies yet: it has to fall.
+          { ...target, snowMm: 0 };
     return cycle;
 }
 

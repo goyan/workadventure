@@ -72,6 +72,8 @@ const NO_SHIFT = { columns: 0, rows: 0 };
 const SOIL_GROUND_DEPTH = TERRAIN_DEPTH - 0.04;
 const GRASS_GROUND_DEPTH = TERRAIN_DEPTH - 0.03;
 const SNOW_GROUND_DEPTH = TERRAIN_DEPTH - 0.02;
+/** The snow of a player's own city is drawn in this many steps from none to a full cover. */
+const OWN_SNOW_STEPS = 20;
 /** The water over the relief canvas (its slopes show under it), under the puddles (0.7). */
 const WATER_DEPTH = TERRAIN_DEPTH + 0.01;
 const DEEP_WATER_DEPTH = TERRAIN_DEPTH + 0.02;
@@ -139,6 +141,8 @@ interface MeadowLayers extends BlockCanvasArea {
     moisture: Uint8Array | undefined;
     /** Whether these layers show the snow of the server (GroundSource): read again when the player changes of weather. */
     server: boolean;
+    /** The snow of their own city these layers show to a player who follows one, in twentieths (0 for the server's). */
+    own: number;
 }
 
 /**
@@ -235,7 +239,7 @@ export class TerrainView {
         this.readImagePools();
         // The foam left behind a wave fades: drawn again five times a second while any is left.
         const foamKey = this.breaking.active(now) ? Math.floor(now / 200) : 0;
-        const key = `${foamKey}:${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}:${this.imagePools.signature}:${this.poolSettingsVersion()}:${followsServerGround()}`;
+        const key = `${foamKey}:${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}:${this.imagePools.signature}:${this.poolSettingsVersion()}:${followsServerGround()}:${this.ownSnow()}`;
         const inside = this.drawn !== undefined && wellInside(this.drawn, screen, DRAW_MARGIN / 5);
         if (key === this.lastKey && inside) return;
         this.lastKey = key;
@@ -590,12 +594,18 @@ export class TerrainView {
     /** Whether the meadow has anything to draw for this player: grass, a dry ground, or the snow of the server. */
     private meadowShows(): boolean {
         const meadow = this.meadow;
-        return (
-            meadow !== undefined &&
-            (meadow.hasGrass() ||
-                meadow.hasMoisture() ||
-                (followsServerGround() && (meadow.hasSnow() || meadow.hasIce())))
-        );
+        if (meadow === undefined) return false;
+        if (meadow.hasGrass() || meadow.hasMoisture()) return true;
+        return followsServerGround() ? meadow.hasSnow() || meadow.hasIce() : this.ownSnow() > 0;
+    }
+
+    /**
+     * The snow of their own city on the ground of a player who follows one, in steps of a twentieth: the ground is
+     * painted again when it moves by one, not at each image. 0 for a player who follows the server.
+     */
+    private ownSnow(): number {
+        if (followsServerGround()) return 0;
+        return Math.round((this.scene.getMapSnowCoverage?.() ?? 0) * OWN_SNOW_STEPS);
     }
 
     private meadowOver(canvas: BlockCanvasArea): MeadowLayers | undefined {
@@ -606,11 +616,13 @@ export class TerrainView {
         }
         // The snow of the server is for those who follow its weather (GroundSource).
         const server = followsServerGround();
+        const own = this.ownSnow();
         const kept = this.meadowLayers;
         if (
             kept &&
             kept.version === meadow.version() &&
             kept.server === server &&
+            kept.own === own &&
             kept.x === canvas.x &&
             kept.y === canvas.y &&
             kept.columns === canvas.columns &&
@@ -633,6 +645,7 @@ export class TerrainView {
             ice: undefined,
             moisture: undefined,
             server,
+            own,
         };
         const outdoor = this.scene.getOutdoorGrid?.();
         const cellsATile = TILE_PX / TERRAIN_CELL;
@@ -646,7 +659,10 @@ export class TerrainView {
                 const dryness = meadow.drynessAt(tileX, tileY);
                 const ashes = meadow.ashAt(tileX, tileY);
                 const flames = meadow.fireAt(tileX, tileY);
-                const white = server ? Math.round(snowCoverOf(meadow.snowAt(tileX, tileY)) * 255) : 0;
+                // The snow of the server tile by tile, or the snow of their own city, the same everywhere outdoors.
+                const white = server
+                    ? Math.round(snowCoverOf(meadow.snowAt(tileX, tileY)) * 255)
+                    : Math.round((own / OWN_SNOW_STEPS) * 255);
                 const frozen = server ? meadow.iceByteAt(tileX, tileY) : 0;
                 const moist = meadow.moistureByteAt(tileX, tileY);
                 if (

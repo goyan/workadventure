@@ -725,7 +725,7 @@ export class GroundSplat {
 
     private autumn = 0;
     /** The cycle of the water this player sees (Frost.ts): frost, ice and wet ground. */
-    private cycle: WaterCycle = { frost: 0, ice: 0, wet: 0 };
+    private cycle: WaterCycle = { frost: 0, ice: 0, wet: 0, snowMm: 0 };
     private snow = 0;
     /** Whether the ice drawn is the one the server keeps (GroundSource), not the one of this player's own cold. */
     private serverIce = false;

@@ -39,6 +39,7 @@ import {
     listeningZoneJamKey,
     type Season,
     seasonAt,
+    snowCoverOf,
     snowShareOf,
     type WAMFileFormat,
     WAMSettingsUtils,
@@ -3205,12 +3206,20 @@ export class GameScene extends DirtyScene {
      * and the ice whiten with it.
      */
     public getMapSnowCoverage(): number {
-        return snowCoverOfMap(this.meadow);
+        return snowCoverOfMap(this.meadow, this.ownSnowCover());
+    }
+
+    /** The snow of their own city on the ground of a player who follows one (Frost.ts), 0 to 1; none otherwise. */
+    private ownSnowCover(): number {
+        return snowCoverOf(waterCycleNow(this.getGameMap().getWamFile()?.getWam().settings).snowMm);
     }
 
     /** How much the snow that fell whitens the ground at a point of the map for this player, 0 to 1: it slows the walk. */
     public getSnowCoverAt(x: number, y: number): number {
-        return snowCoverHere(this.meadow, x, y);
+        return snowCoverHere(this.meadow, x, y, {
+            cover: this.ownSnowCover(),
+            outdoors: this.getOutdoorGrid()?.isOutdoorAt(x, y) ?? true,
+        });
     }
 
     public getGameMap(): GameMap {
