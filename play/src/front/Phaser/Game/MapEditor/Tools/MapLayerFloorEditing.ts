@@ -55,6 +55,7 @@ import {
     stairUnderPoint,
     stairTargets,
     stairArrivalCells,
+    stairBaseBelow,
     stairHasArrival,
     stairRiseBetween,
     stairTarget,
@@ -114,6 +115,17 @@ export class MapLayerFloorEditing {
             .setVisible(false);
         // Slabs are laid above the ground: choosing that mode on the ground goes to a floor, a built one if any.
         this.unsubscribeMode = mapLayerModeStore.subscribe((mode) => {
+            // A stair chosen on a floor with nothing built above it: the stair that goes up to that floor is the one
+            // wanted. The level goes down to where it starts from, and the stair aims at the floor just left.
+            if (mode === "stair" && get(mapEditorPlacementLevelStore) !== "auto") {
+                const level = get(mapLayerLevelStore);
+                const base = stairBaseBelow(level, get(mapLayerBuiltLevelsStore), get(mapLayerLevelsStore));
+                if (base !== undefined) {
+                    mapLayerStairTargetStore.set(level);
+                    mapEditorPlacementLevelStore.set(base);
+                }
+                return;
+            }
             if (mode !== "slab" || get(mapLayerLevelStore) !== 0) return;
             // (Unless the level follows the pointer: the slabs then go where a floor is drawn.)
             if (get(mapEditorPlacementLevelStore) === "auto") return;

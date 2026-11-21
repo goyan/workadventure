@@ -3774,6 +3774,9 @@ dépliant « Ajuster la hauteur ».
   dalles porte en plus son nom dans le jeu : « Niveau 2 · Étage 1 ».
 - Les flèches vont au niveau suivant ou précédent de la liste, construit ou non.
 - « Ajuster la hauteur » reste pour les hauteurs hors liste (une case de mur à la fois).
+- Passer en mode **Escalier** sur un étage qu'aucun étage construit ne surmonte ramène le niveau édité à celui d'où
+  un escalier y monte (le sol sous un tablier qu'on vient de poser), et l'escalier vise l'étage quitté
+  (`stairBaseBelow`). Pas en « auto ».
 - La liste des niveaux offerts est tenue par l'outil Carte : dans un autre outil ouvert sans être passé par lui, elle
   se réduit au sol et aux étages construits.
 
