@@ -50,7 +50,7 @@ import type { SunPosition } from "./NightClock";
 import { roomAmbience, type AmbienceSettings } from "./AmbientLight";
 import { moonPhaseAt, moonPositionAt } from "./MoonClock";
 import { NightHalos } from "./NightHalos";
-import { placeOfPoint, worldCityAt, worldMomentMinutes } from "./WorldDaylight";
+import { placeOfPoint, worldCityOf } from "./WorldDaylight";
 import { coversMostly, isInLightableArea, lightableAreas, NightLights, roomsThatLightUp } from "./NightLights";
 import type { LitArea, NightRect } from "./NightLights";
 import { NightOverlay } from "./NightOverlay";
@@ -242,18 +242,15 @@ export class NightManager {
             const sunAt = this.sunInstant(date);
             // The sun of the place of the map (Paris when it has none), shared with its real weather.
             const mapPlace = shownMapPlace(this.scene.getGameMap().getWamFile()?.getWam().settings);
-            // The sky of the world: the point chosen on its map, or the city where it is now the moment chosen.
+            // The sky of the world: the point chosen on its map, or the city where it is now the moment chosen (the height of
+            // its sun for the morning, noon and the evening, its solar time for an hour chosen).
             const point = get(worldPointStore);
             this.worldCity =
                 this.mode !== NightMode.World || !date
                     ? undefined
                     : point
                       ? placeOfPoint(point)
-                      : worldCityAt(
-                            date,
-                            worldMomentMinutes(get(worldMomentStore), get(worldCustomMinutesStore)),
-                            this.worldCity,
-                        );
+                      : worldCityOf(date, get(worldMomentStore), get(worldCustomMinutesStore), this.worldCity);
             worldCityStore.set(this.worldCity);
             // The clock shown follows the time of the place of the map (of the city of the world).
             mapTimeZoneStore.set(this.worldCity?.timezone ?? mapPlace?.timezone);

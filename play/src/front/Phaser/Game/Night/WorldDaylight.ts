@@ -1,5 +1,5 @@
 import type { WeatherLocation } from "@workadventure/map-editor";
-import { NIGHT_MAX_OPACITY, nightOpacityAt, trueSolarMinutes } from "./NightClock";
+import { NIGHT_MAX_OPACITY, nightOpacityAt, sunPositionAt, trueSolarMinutes } from "./NightClock";
 
 /** The moment of the day chosen for the sky of somewhere in the world. */
 export enum WorldMoment {
@@ -10,14 +10,37 @@ export enum WorldMoment {
     Custom = "custom",
 }
 
-/** The local solar time of each moment, in minutes since midnight. */
-export const WORLD_MOMENT_MINUTES: Record<Exclude<WorldMoment, WorldMoment.Custom>, number> = {
-    [WorldMoment.Morning]: 9 * 60,
-    [WorldMoment.Noon]: 12 * 60 + 30,
-    [WorldMoment.Evening]: 18 * 60 + 30,
-};
-
-/** A city keeps being the sky shown while its solar time stays this close to the moment (minutes): no hopping. */
+/**
+ * The morning and the evening are told by the height of the sun, not by an hour: 18:30 is the deep night of a winter
+ * and the full day of a northern summer. Morning: the sun has risen and climbs, 10° above the horizon; evening: it
+ * goes down, 8° above it, before the dusk. At these heights the sun of the game casts its shadows in full (they fade
+ * from 6° to 2°, cloudSunlight), at their longest (an object casts one six to seven times its height, cut at the
+ * length set for shadows), in a golden light (the sun turns white from 5° to 35°, SkyLight). The evening is a little
+ * lower, its light warmer: the last hour of the day.
+ */
+export const MORNING_SUN_ELEVATION = 10;
+export const EVENING_SUN_ELEVATION = 8;
+/**
+ * A city keeps being the sky of the morning or of the evening while its sun stays this close to the height wanted
+ * (degrees) and goes the same way: about 40 minutes to an hour at the latitudes of the list, no hopping. Evening:
+ * kept from 14° down to 2°, never after sunset.
+ */
+const KEEP_ELEVATION_DEGREES = 6;
+/**
+ * The lowest sun of a morning or an evening (degrees): under it the shadows of the sun are gone (cloudSunlight), the
+ * light is that of the dusk. Chosen and kept alike only above it.
+ */
+const LOWEST_MOMENT_ELEVATION = 2;
+/**
+ * A morning ends, an evening starts, this long from the solar noon (minutes): a sun near its highest, even low in a
+ * winter of the north (7° at noon in Anchorage in November), no longer climbs nor goes down: it is a noon.
+ */
+const MOMENT_FROM_NOON_MINUTES = 60;
+/** A city keeps being the sky of noon while its true solar time stays this close to its noon (minutes). */
+const KEEP_NOON_MINUTES = 50;
+/** Noon: the sun at its highest, in true solar time. */
+const SOLAR_NOON_MINUTES = 12 * 60;
+/** An hour chosen keeps its city while the city's solar time stays this close to it (minutes): no hopping. */
 const KEEP_CITY_MINUTES = 50;
 
 /**
@@ -73,26 +96,76 @@ export function solarMinutes(date: Date, longitude: number): number {
 }
 
 /**
- * The city where it is now the moment wanted (`minutes`, its solar time): the one whose sun is nearest to it. The city
+ * The city where it is now an hour chosen (`minutes`, its true solar time): the one whose sun is nearest to it. The city
  * shown before is kept while it stays near enough, so that the sky does not hop from a city to the next.
  */
 export function worldCityAt(date: Date, minutes: number, shown?: WeatherLocation): WeatherLocation {
     if (shown && dayGap(solarMinutes(date, shown.longitude), minutes) <= KEEP_CITY_MINUTES) return shown;
+    return nearestCity((city) => dayGap(solarMinutes(date, city.longitude), minutes));
+}
+
+/**
+ * The city whose sky is shown for the moment chosen: for an hour chosen by the player, the city where it is that solar
+ * time (worldCityAt); for noon, the city nearest to its true solar noon; for the morning and the evening, the city
+ * whose sun stands nearest to the height of that moment (MORNING_SUN_ELEVATION, EVENING_SUN_ELEVATION) among those
+ * where it stands above LOWEST_MOMENT_ELEVATION and climbs (an hour or more before its solar noon) or goes down (an
+ * hour or more after it). When no
+ * city of the list is in that phase (not met with the cities of the list), the nearest in height among those whose sun
+ * goes the right way, then among all. The city shown before is kept while it stays near enough, so that the sky does not hop.
+ */
+export function worldCityOf(
+    date: Date,
+    moment: WorldMoment,
+    customMinutes: number,
+    shown?: WeatherLocation,
+): WeatherLocation {
+    if (moment === WorldMoment.Custom) return worldCityAt(date, wrapDay(customMinutes), shown);
+    if (moment === WorldMoment.Noon) {
+        if (shown && dayGap(solarMinutes(date, shown.longitude), SOLAR_NOON_MINUTES) <= KEEP_NOON_MINUTES) {
+            return shown;
+        }
+        return nearestCity((city) => dayGap(solarMinutes(date, city.longitude), SOLAR_NOON_MINUTES));
+    }
+    const morning = moment === WorldMoment.Morning;
+    const target = morning ? MORNING_SUN_ELEVATION : EVENING_SUN_ELEVATION;
+    /** How far the sun of a city is from the height wanted, in degrees, whether it goes the right way, and is up. */
+    const sunOf = (city: WeatherLocation): { gap: number; climbsRightWay: boolean; inPhase: boolean } => {
+        const elevation = sunPositionAt(date, city).elevation;
+        const fromNoon = solarMinutes(date, city.longitude) - SOLAR_NOON_MINUTES;
+        const climbsRightWay = morning ? fromNoon <= -MOMENT_FROM_NOON_MINUTES : fromNoon >= MOMENT_FROM_NOON_MINUTES;
+        return {
+            gap: Math.abs(elevation - target),
+            climbsRightWay,
+            inPhase: climbsRightWay && elevation > LOWEST_MOMENT_ELEVATION,
+        };
+    };
+    if (shown) {
+        const sun = sunOf(shown);
+        if (sun.inPhase && sun.gap <= KEEP_ELEVATION_DEGREES) return shown;
+    }
+    // The nearest in height among the cities in the phase of the moment; failing any, among those whose sun goes the
+    // right way, whatever its height (a morning stays a morning); failing any, the nearest in height.
+    const suns = WORLD_CITIES.map((city) => ({ city, sun: sunOf(city) }));
+    const choices = [suns.filter(({ sun }) => sun.inPhase), suns.filter(({ sun }) => sun.climbsRightWay), suns].find(
+        (cities) => cities.length > 0,
+    );
+    const allowed = new Set(choices?.map(({ city }) => city));
+    const gaps = new Map(suns.map(({ city, sun }) => [city, sun.gap]));
+    return nearestCity((city) => (allowed.has(city) ? (gaps.get(city) ?? Infinity) : Infinity));
+}
+
+/** The city of the list for which `gap` is the smallest. */
+function nearestCity(gap: (city: WeatherLocation) => number): WeatherLocation {
     let best = WORLD_CITIES[0];
     let bestGap = Infinity;
     for (const city of WORLD_CITIES) {
-        const gap = dayGap(solarMinutes(date, city.longitude), minutes);
-        if (gap < bestGap) {
+        const cityGap = gap(city);
+        if (cityGap < bestGap) {
             best = city;
-            bestGap = gap;
+            bestGap = cityGap;
         }
     }
     return best ?? WORLD_CITIES[0] ?? { name: "Paris", latitude: 48.86, longitude: 2.35 };
-}
-
-/** The moment chosen, in minutes since midnight (an hour chosen by the player, or that of a named moment). */
-export function worldMomentMinutes(moment: WorldMoment, customMinutes: number): number {
-    return moment === WorldMoment.Custom ? wrapDay(customMinutes) : WORLD_MOMENT_MINUTES[moment];
 }
 
 /** A point chosen on the map of the world. */

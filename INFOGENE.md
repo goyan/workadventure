@@ -1584,9 +1584,27 @@ d'heure) à ±2 min. La nuit, un voile bleu nuit
 - **Choix personnel** dans Paramètres → Thème → Cycle jour/nuit : heure du serveur (défaut), heure de mon ordinateur
   (horloge et fuseau du poste : la date et l'heure affichées par le poste sont lues comme une heure de Paris, puis
   éclairées par le soleil de Paris de ce jour-là ; un poste qui affiche 22 h voit la nuit de Paris à 22 h), ou désactivé. La clé `nightMode` est mémorisée ; l’ancienne préférence `disableNight` est conservée.
-- **Jour dans le monde** (menu de l'horloge) : la ville d'un moment (Matin 9 h, Midi 12 h 30, Soir 18 h 30, ou une
-  heure choisie) est celle dont l'**heure solaire vraie** est la plus proche (avec l'équation du temps, `trueSolarMinutes`
-  de `NightClock.ts`, ±16 min selon la saison). La carte du monde du menu s'ombre avec le voile du jeu lui-même
+- **Jour dans le monde** (menu de l'horloge) : « Matin », « Midi » et « Soir » se lisent à la **hauteur du soleil**,
+  pas à une heure (18 h 30 solaire, c'est la nuit noire d'un hiver de Paris et le plein jour d'un été de Reykjavik) ;
+  `worldCityOf` de `WorldDaylight.ts`, calcul du jeu (`sunPositionAt`, `trueSolarMinutes`) :
+  - **Matin** : la ville dont le soleil est le plus près de **+10°** parmi celles où il est à plus de 2° et monte
+    (une heure ou plus avant le midi solaire vrai) ; **Soir** : **+8°** parmi celles où il descend (une heure ou plus
+    après). À ces hauteurs les ombres du soleil sont entières (elles s'effacent de 6° à 2°) et au plus long (un objet
+    en jette six à sept fois sa hauteur, coupée à la longueur réglée), dans une lumière dorée (le soleil blanchit de 5°
+    à 35°) ; le soir est un peu plus bas, plus chaud. Sous 2° plus d'ombres : ni matin ni soir. Sans ville dans la
+    bonne phase (jamais vu avec la liste), la plus proche en hauteur dont le soleil va dans le bon sens, puis la plus
+    proche en hauteur. La ville affichée est gardée tant que son soleil reste à 6° de la cible et dans la bonne phase
+    (soir gardé de 14° jusqu'à 2°, jamais après le coucher) : environ un changement de ville par heure.
+  - **Midi** : la ville la plus proche de son midi solaire vrai, gardée tant qu'elle en est à 50 min au plus (toujours
+    à moins d'une heure).
+  - Mesuré minute par minute (21 mars, 21 juin, 21 septembre, 21 novembre, 21 décembre 2026) : soleil du matin entre
+    2° et 16° 81 à 96 % du temps (médiane 12°), du soir 80 à 97 % (médiane 7-8°). Pires cas : les longitudes vides de
+    la liste (Pacifique entre Auckland et Honolulu, Atlantique entre Rio et Praia) laissent un soleil plus haut un
+    moment, jusqu'à 45° le matin (21 juin) et 36° le soir (21 novembre). Ajouter des villes là-bas changerait aussi
+    l'heure choisie et le nom d'un point cliqué : pas fait.
+  - **Heure choisie** : inchangée, la ville dont l'**heure solaire vraie** est la plus proche (avec l'équation du
+    temps, ±16 min selon la saison), gardée à 50 min près. **Point cliqué** sur la carte : inchangé ; le menu dit
+    alors « Ciel de … (point choisi sur la carte) », surligné, puisqu'aucun moment n'est enfoncé. La carte du monde du menu s'ombre avec le voile du jeu lui-même
   (`worldShadeAt` = `nightOpacityAt` vu de chaque point) : plein jour jusqu'à −0,833°, assombrie jusqu'à −6°, nuit
   au-delà. Dessinée pixel par pixel (240 × 120) : environ 7 ms par dessin (mesuré en conteneur Linux sur un Mac), une
   fois par seconde tant que le menu est ouvert en mode monde.
