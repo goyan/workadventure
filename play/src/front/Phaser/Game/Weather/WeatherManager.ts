@@ -1,4 +1,5 @@
 import { heightAt, TERRAIN_CELL, WeatherType } from "@workadventure/map-editor";
+import type { PrecipitationAir } from "@workadventure/map-editor";
 import type { Unsubscriber } from "svelte/store";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import {
@@ -29,8 +30,6 @@ import {
     lightningBolt,
     outdoorCells,
     paddedView,
-    snowfall,
-    snowflakes,
     stormFlash,
     weatherAtTime,
     wellInside,
@@ -75,6 +74,8 @@ import { createBlockSurface } from "./BlockSurface";
 import { screenScale, seenFromFar } from "./ScreenScale";
 import type { BlockCanvasArea, BlockSurface } from "./BlockSurface";
 import { WeatherSounds } from "./WeatherSounds";
+import { drawFlake, flakeMix, snowflakes, snowLevel, snowTones, snowWind } from "./Snowfall";
+import type { SnowFall } from "./Snowfall";
 
 /** The system asks for less motion: the fog patches stand still. */
 const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -145,6 +146,11 @@ export interface WeatherManagerOptions {
      * same for everyone): flakes instead of as many drops. Rain when not given.
      */
     snowShare?: () => number;
+    /**
+     * The air the precipitation falls through (precipitationAirNow), which says what flakes it makes (flakeMix): big
+     * ones near 0 °C, fine crystals in a hard frost. A usual snow just under 0 °C when not given.
+     */
+    precipitationAir?: () => PrecipitationAir | undefined;
     /** Overrides the system "reduced motion" setting (read once from matchMedia otherwise). Used by tests. */
     reducedMotion?: boolean;
 }
@@ -175,6 +181,8 @@ export class WeatherManager {
     private puddlesVisible = false;
     /** Where the sky has drifted to with the wind of the map (the real one, or the usual drift). */
     private readonly skyDrift = new SkyDrift();
+    /** Where the air near the ground has carried the snow, with the real wind (map pixels): the flakes go with it. */
+    private readonly snowDrift = new SkyDrift();
     private readonly reducedMotion: boolean;
     // Development override of the rain intensity (`?rainLevel`), fixed for the life of the scene.
     private readonly forcedRain = parseRainLevel(window.location.search, import.meta.env.DEV);
@@ -445,12 +453,22 @@ export class WeatherManager {
             const lean = rainLean(settings?.windFrom, settings?.windSpeed, this.rainSettings.lean);
             // The part that falls as rain as drops, the part that falls as snow as flakes: both in a sleet.
             if (snow < 1) this.drawRain(epoch, view, rain * (1 - snow), lean, isOutdoor, underClouds);
-            const flakes = snowfall(rain * this.rainSettings.amount, snow);
-            if (flakes > 0) {
-                this.graphics.fillStyle(0xf2f5ff, 0.8);
-                for (const flake of keepOutdoorParticles(snowflakes(epoch, view, flakes, lean), isOutdoor)) {
-                    this.graphics.fillRect(Math.round(flake.x), Math.round(flake.y), 2, 2);
-                }
+            const fall: SnowFall = {
+                level: Math.min(1, snowLevel(settings?.rainRate, snow, storm) * this.rainSettings.amount),
+                mix: flakeMix(this.options.precipitationAir?.()),
+            };
+            if (fall.level > 0) {
+                const darkness = sun ? sunlight.night : night ? 1 : 0;
+                this.drawSnow(
+                    epoch,
+                    view,
+                    fall,
+                    settings?.windFrom,
+                    settings?.windSpeed,
+                    darkness,
+                    isOutdoor,
+                    underClouds,
+                );
             }
             if (storm && serverDate) this.drawLightning(epoch, view, veil, isOutdoor);
         }
@@ -720,6 +738,43 @@ export class WeatherManager {
                 this.graphics.fillRect(splash.x + spread, splash.y - dot, dot, dot);
                 if (splash.stage === 1) this.graphics.fillRect(splash.x, splash.y, dot, dot);
             }
+        }
+    }
+
+    /**
+     * The snow: flakes of the kinds the air makes, carried by the wind near the ground and falling about a metre a
+     * second (Snowfall.ts), outdoors only, over everything; standing still when motion is reduced. No splash: a flake
+     * lies a moment where it lands, the snow on the ground is drawn apart (SnowGround, TerrainView).
+     */
+    private drawSnow(
+        epoch: number,
+        view: WeatherView,
+        fall: SnowFall,
+        windFrom: number | undefined,
+        windSpeed: number | undefined,
+        night: number,
+        isOutdoor: ((x: number, y: number) => boolean) | undefined,
+        local: RainLocal | undefined,
+    ): void {
+        const velocity = snowWind(windFrom, windSpeed, this.rainSettings.lean);
+        // The air goes on with the wind, without a jump when the wind changes; still when motion is reduced.
+        const air = this.reducedMotion
+            ? { shift: { x: 0, y: 0 }, velocity }
+            : { shift: this.snowDrift.at(epoch, velocity), velocity };
+        // Seen from very close, worked out on a finer grid like the rain: a flake keeps its size on the screen.
+        const fine = rainFineness(this.screenScale());
+        const finer =
+            fine === 1
+                ? view
+                : { x: view.x * fine, y: view.y * fine, width: view.width * fine, height: view.height * fine };
+        const localFine: RainLocal | undefined = local && fine !== 1 ? (x, y) => local(x / fine, y / fine) : local;
+        const tones = snowTones(night);
+        const pixel = 1 / fine;
+        for (const flake of snowflakes(epoch, finer, fall, air, localFine, this.reducedMotion)) {
+            const x = flake.x / fine;
+            const y = flake.y / fine;
+            if (isOutdoor && !isOutdoor(x, y)) continue;
+            drawFlake(this.graphics, x, y, flake.size, flake.alpha * tones.alpha, tones, pixel);
         }
     }
 

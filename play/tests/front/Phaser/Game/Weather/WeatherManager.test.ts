@@ -95,6 +95,7 @@ const { mapEditorModeStore } = await import("../../../../../src/front/Stores/Map
 const { cloudsShownStore, cloudsHeightStore, rainPuddlesStore, weatherEffectsEnabledStore } =
     await import("../../../../../src/front/Stores/WeatherStore");
 const { lastStrike } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherFrame");
+const { FLAKE_LIGHT } = await import("../../../../../src/front/Phaser/Game/Weather/Snowfall");
 const { autoWeatherAt, cloudinessAt, slotStart } =
     await import("../../../../../src/front/Phaser/Game/Weather/WeatherSchedule");
 const { WeatherManager, blocksPerSecond } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherManager");
@@ -171,7 +172,7 @@ describe("weather rendering lifecycle", () => {
         wam.settings = { weather: WeatherType.Snow };
         manager.update(80, new Date(80));
         expect(graphics.lineTo.mock.calls.length).toBeGreaterThan(drops);
-        expect(graphics.fillRect.mock.calls).not.toContainEqual([expect.any(Number), expect.any(Number), 2, 2]);
+        expect(graphics.fillStyle.mock.calls.map(([color]) => color)).not.toContain(FLAKE_LIGHT);
         expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Rain);
         wam.settings = { weather: WeatherType.Clear };
         manager.update(90, new Date(90));
@@ -184,7 +185,6 @@ describe("weather rendering lifecycle", () => {
     });
 
     it("lets the rain fall as flakes in the cold of the room, as both in a sleet, and tells the sounds", () => {
-        const flake = [expect.any(Number), expect.any(Number), 2, 2];
         const drawn = (snow: number | undefined, weather = WeatherType.Rain) => {
             const { scene, graphics, wam } = fixture();
             wam.settings = { weather };
@@ -193,8 +193,8 @@ describe("weather rendering lifecycle", () => {
             manager.update(0, new Date(0));
             return {
                 drops: graphics.lineTo.mock.calls.length,
-                flakes: graphics.fillRect.mock.calls.filter(([, , width, height]) => width === 2 && height === 2)
-                    .length,
+                // Each flake starts with its lit colour (drawFlake).
+                flakes: graphics.fillStyle.mock.calls.filter(([color]) => color === FLAKE_LIGHT).length,
                 graphics,
             };
         };
@@ -205,7 +205,6 @@ describe("weather rendering lifecycle", () => {
         const snow = drawn(1);
         expect(snow.drops).toBe(0);
         expect(snow.flakes).toBeGreaterThan(0);
-        expect(snow.graphics.fillRect.mock.calls).toContainEqual(flake);
         // The weather stays a rain: only its form changed.
         expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Rain);
         expect(sounds.update.mock.lastCall?.[5]).toBe(1);
@@ -647,7 +646,7 @@ describe("weather rendering lifecycle", () => {
             const leaves = graphics.fillRect.mock.calls.filter(
                 ([, , width, height]) => (width === 4 && height === 3) || (width === 3 && height === 4),
             );
-            expect(graphics.fillRect.mock.calls).toContainEqual([expect.any(Number), expect.any(Number), 2, 2]);
+            expect(graphics.fillStyle.mock.calls.map(([color]) => color)).toContain(FLAKE_LIGHT);
             expect(leaves).toHaveLength(0);
         });
     });
