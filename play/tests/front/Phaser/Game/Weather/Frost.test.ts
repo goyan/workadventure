@@ -1,14 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { frostAt, iceAt, isFrozen, POOL_ICE_DEPTH_PX, towards } from "@wa/front/Phaser/Game/Weather/Frost";
+import { iceAt, isFrozen, POOL_ICE_DEPTH_PX, towards } from "@wa/front/Phaser/Game/Weather/Frost";
 
 describe("Frost", () => {
-    it("whitens the ground from 0 °C, all of it at -10 °C", () => {
-        expect(frostAt(5)).toBe(0);
-        expect(frostAt(0)).toBe(0);
-        expect(frostAt(-5)).toBeCloseTo(0.5);
-        expect(frostAt(-25)).toBe(1);
-    });
-
     it("freezes the water from 0 °C, all of it at -15 °C", () => {
         expect(iceAt(5)).toBe(0);
         expect(iceAt(0)).toBe(0);

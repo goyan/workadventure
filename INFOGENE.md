@@ -4124,8 +4124,8 @@ une flèche du vent ; un clic ouvre le bulletin, sous la pastille. Dès 768 px d
 seul la météo de ce lieu (`ChosenPlaceWeather`, route `real-weather` du pusher) ; les autres gardent celle du
 serveur.
 
-**Gel.** À partir de la température du lieu affiché (`Weather/Frost.ts`), pour ce joueur seul, rien n'est envoyé :
-givre au sol sous 0 °C ; l'eau gèle des hauts-fonds vers le fond entre 0 et -15 °C (toute gelée au-delà), en glace de
+**Gel.** À partir de l'air du lieu affiché (`Weather/Frost.ts`), pour ce joueur seul, rien n'est envoyé :
+givre au sol d'après la vapeur de l'air (voir « Givre » ci-dessous) ; l'eau gèle des hauts-fonds vers le fond entre 0 et -15 °C (toute gelée au-delà), en glace de
 patinoire ; le sol se mouille sous la pluie et sèche en cinq minutes ; tout avance en deux minutes environ, rien ne
 saute. La neige au sol reste celle d'avant : seulement quand il neige. **Dehors seulement** : `OutdoorGrid` (ce qui
 est fermé par des murs) ne gèle jamais. Sur l'eau gelée on patine (logique des patinoires), on n'y nage plus et le
@@ -4134,6 +4134,23 @@ gèlent comme des hauts-fonds et deviennent des patinoires, sauf si leur **eau c
 d'état d'objet `hot` (`ENTITY_STATE_KEYS`, défaut « non », `entityStateDefault`), commandée par un interrupteur
 (« Il agit sur : l'eau chaude des piscines », cibles choisies pour une piscine dehors) ; chauffée, elle fume dans le
 froid et ne gèle jamais.
+
+**Givre** (2026-11-21, `libs/map-editor/src/Weather/HoarFrost.ts` `hoarFrost`, remplace la rampe « blanc à −10 °C »
+de #392). La gelée blanche est un dépôt de la vapeur de l'air sur une surface plus froide que le point de givrage de
+cet air : il faut un sol sous 0 °C **et** un air assez humide ; par air sec il gèle sans blanchir (gelée noire), et
+l'air très froid porte peu de vapeur. Calcul : pression de vapeur de l'air d'après son humidité relative à l'eau
+(celle d'Open-Meteo et de la salle), comparée à la saturation sur la glace à la température du sol (formes de Magnus
+de l'OMM, WMO-No. 8 annexe 4.B : eau 17,62 / 243,12, glace 22,46 / 272,62, 6,112 hPa) ; givre = excès de vapeur sur
+0,25 hPa (choix : sol tout blanc à 0,25 hPa d'excès). Sol plus froid que l'air de 0,8 °C par vent calme (choix, sous
+les 1 à 3 °C de l'herbe par nuit claire et calme, FAO Snyder et de Melo-Abreu 2005, ch. 2), de jour comme de nuit et
+par tout ciel : ni la nuit ni la nébulosité ne sont lues (les conditions réglées à la main n'en ont pas) ; le vent
+ramène le sol à la température de l'air, en entier jusqu'à 7 km/h, plus rien à 18 km/h (choix). Vent inconnu = calme ;
+**humidité inconnue = pas de givre**. Exemples : −2 °C et 95 % → 0,70 ; −2 °C et 40 % → 0 ; −15 °C et 70 % → 0 ;
++1 °C et 100 % → 0 (sol à +0,2 °C) ; −2 °C, 95 % et 40 km/h → 0 ; −30 °C et 95 % → 0,54. Sources, dans le même ordre
+que la température : ville suivie par le joueur (« Jour dans le monde » : température, humidité et vent de sa frise),
+sinon conditions réglées à la main dans la salle, sinon air réel du lieu de la carte. Limites : un vrai givre de nuit
+claire sous un air à +1 °C n'est pas rendu, et le givre se forme aussi de jour au soleil ; le shader le pose sur tout
+le sol dehors du relief, quel que soit le sol (l'eau a son propre shader).
 
 **Piscines codées.** Une piscine est peinte au sol avec l'outil **Relief**, mode **Piscine** : ses cases gardent un sol
 de piscine (codes 7 à 14, `libs/map-editor/src/Terrain/Pools.ts`), un par style. Jusqu'à 8 styles par carte, dans

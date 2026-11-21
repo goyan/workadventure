@@ -57,6 +57,7 @@ export * from "./Weather/RealWeather";
 export * from "./Weather/RainRate";
 export * from "./Weather/Precipitation";
 export * from "./Weather/SoilFrost";
+export * from "./Weather/HoarFrost";
 export * from "./Weather/SunPosition";
 export * from "./ListeningZone/ListeningZoneJam";
 export * from "./ListeningZone/JamSpaceName";
