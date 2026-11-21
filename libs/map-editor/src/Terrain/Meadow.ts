@@ -88,6 +88,11 @@ export const RAIN_GAIN = 0.0005;
 /** Share of the difference of moisture with its four neighbours a tile takes a step, and of its moisture that runs to a lower one. */
 export const MOISTURE_SPREAD = 0.12;
 export const MOISTURE_RUNOFF = 0.08;
+/**
+ * The soil next to open water drinks from it from below (the water table, capillary rise): a tile at 1, 2 and 3
+ * tiles from water lying on the ground keeps at least this much moisture, whatever the air takes from its top.
+ */
+export const BANK_MOISTURE: readonly number[] = [0.8, 0.5, 0.17];
 /** No grass grows this high over the ground of the map, in pixels of altitude; it grows slower on the way up. */
 export const GRASS_LINE_PX = 192;
 
@@ -189,6 +194,9 @@ export class Meadow {
     private readonly fertility: Float32Array;
     private readonly ground: Float32Array;
     private readonly outdoor: Uint8Array;
+    /** For each tile, a step long: 1 on open water, 2 next to it… 0 out of its reach (see drinkFromBanks). */
+    private readonly bankReach: Uint8Array;
+    private readonly bankQueue: Int32Array;
 
     constructor(
         size: { width: number; height: number },
@@ -212,6 +220,8 @@ export class Meadow {
         this.fertility = new Float32Array(tiles);
         this.ground = new Float32Array(tiles);
         this.outdoor = outdoorTiles(this.width, this.height, walls);
+        this.bankReach = new Uint8Array(tiles);
+        this.bankQueue = new Int32Array(tiles);
         for (let tileY = 0; tileY < this.height; tileY++) {
             for (let tileX = 0; tileX < this.width; tileX++) {
                 const index = tileY * this.width + tileX;
@@ -406,6 +416,41 @@ export class Meadow {
         return changed;
     }
 
+    /**
+     * The soil along open water keeps the moisture it draws from it (BANK_MOISTURE), less the farther it is: the
+     * tiles are reached from the water lying on the ground, side by side, outdoors.
+     */
+    private drinkFromBanks(): void {
+        const { width, moisture, water, hold, outdoor, bankReach, bankQueue } = this;
+        const reach = BANK_MOISTURE.length;
+        bankReach.fill(0);
+        let tail = 0;
+        for (let index = 0; index < water.length; index++) {
+            if (outdoor[index] && water[index] >= SOAKED_WATER_PX) {
+                bankReach[index] = 1;
+                bankQueue[tail++] = index;
+            }
+        }
+        // Breadth first: each tile is reached once, at its distance from the nearest water (1 on the water).
+        for (let head = 0; head < tail; head++) {
+            const index = bankQueue[head];
+            const distance = bankReach[index];
+            if (distance > reach) continue;
+            const tileX = index % width;
+            for (const other of [
+                tileX < width - 1 ? index + 1 : -1,
+                tileX > 0 ? index - 1 : -1,
+                index + width,
+                index - width,
+            ]) {
+                if (other < 0 || other >= moisture.length || bankReach[other] !== 0 || !outdoor[other]) continue;
+                bankReach[other] = distance + 1;
+                bankQueue[tail++] = other;
+                if (hold[other] > 0) moisture[other] = Math.max(moisture[other], BANK_MOISTURE[distance - 1]);
+            }
+        }
+    }
+
     /** One step: the soil gains and loses its moisture, which spreads; then the grass grows or dies. */
     public step(input: MeadowStepInput): void {
         const seconds = Number.isFinite(input.seconds) && input.seconds > 0 ? input.seconds : 0;
@@ -465,6 +510,7 @@ export class Meadow {
             next[index] = Math.min(1, Math.max(0, moisture[index] + change * Math.min(1, pace)));
         }
         moisture.set(next);
+        this.drinkFromBanks();
         const growth = seasonGrowth(input.season);
         for (let index = 0; index < grass.length; index++) {
             if (!outdoor[index]) continue;
@@ -499,7 +545,13 @@ export class Meadow {
                 dryness[index] = 0;
                 continue;
             }
-            const target = water[index] >= SOAKED_WATER_PX ? 0 : danger * (1 - moisture[index]);
+            // Living grass on a soil that still feeds it stays green: the air cures the grass the soil leaves
+            // thirsty, fully where it dies of thirst.
+            const thirst = Math.min(
+                1,
+                Math.max(0, (GROWING_MOISTURE[0] - moisture[index]) / (GROWING_MOISTURE[0] - DRY_MOISTURE)),
+            );
+            const target = water[index] >= SOAKED_WATER_PX ? 0 : danger * thirst;
             dryness[index] += (target - dryness[index]) * share;
         }
         // At the highest danger a fire starts by itself now and then, on grass gone to straw.
