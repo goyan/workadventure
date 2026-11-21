@@ -103,6 +103,22 @@ describe("MeadowManager", () => {
         autumnDawn.manager.stop();
     });
 
+    it("grows no grass at 7:30 in Paris in November, before sunrise, and grows it at noon", () => {
+        // November 21, 6:30 UTC: 7:30 in Paris, inside the old 7 to 19 window but before the 8:08 sunrise.
+        const early = createHarness({ now: Date.UTC(2026, 10, 21, 6, 30) });
+        early.manager.mapChanged();
+        early.steps(400);
+        const told = early.sent;
+        expect(told.length === 0 || grassOf(told[told.length - 1]).every((cover) => cover === 0)).toBe(true);
+        early.manager.stop();
+        // Same day, 11:00 UTC: noon in Paris.
+        const noon = createHarness({ now: Date.UTC(2026, 10, 21, 11) });
+        noon.manager.mapChanged();
+        noon.steps(400);
+        expect(grassOf(noon.sent[noon.sent.length - 1]).some((cover) => cover > 0)).toBe(true);
+        noon.manager.stop();
+    });
+
     it("grows grass under the rain of the map, by tiles, and tells the room when it changed", () => {
         // 16 × 8 cells of the relief: 8 × 4 tiles.
         const { manager, sent, steps } = createHarness();
