@@ -136,6 +136,8 @@ function fixture(
             pool.released.push(pixels);
         },
         check: vi.fn(),
+        /** The blocks the workers were given and have not answered. */
+        inFlight: () => waiting.map((each) => each.job),
         /** The workers answer every block they were given, in turn. */
         flush: () => {
             const painter = new BlockPainter();
@@ -642,6 +644,27 @@ describe("the blocks of the relief seen in 3/4", () => {
             expect(onceSharp).toBeGreaterThanOrEqual(1);
             expect(onceSharp).toBeLessThanOrEqual(3);
             expect(whileNotSharp).toBeGreaterThan(onceSharp);
+        });
+
+        it("draws ahead again a far block that was with the workers when they broke down", () => {
+            const { tiles, pool, settle, painted } = fixture(dugEverywhere(), undefined, {
+                pool: true,
+                mapSize: { width: 2560, height: 2560 },
+            });
+            // Until a block far from the view (drawn ahead, coarse) is with a worker.
+            const farInFlight = () => pool.inFlight().find((job) => job.blockX >= 6 || job.blockY >= 6);
+            for (let frame = 0; frame < 2000 && !farInFlight(); frame++) {
+                pool.flush();
+                tiles.update(frame);
+            }
+            const far = farInFlight();
+            if (!far) throw new Error("no far block was given to the workers");
+            const key = `relief-block:${far.blockX},${far.blockY}@4`;
+            expect(painted.has(key)).toBe(false);
+            pool.breakDown();
+            settle();
+            // Painted on the thread of the game, like the rest of the map.
+            expect(painted.get(key)?.length).toBe(64 * 64 * 4);
         });
 
         it("checks at every image that its workers still answer", () => {

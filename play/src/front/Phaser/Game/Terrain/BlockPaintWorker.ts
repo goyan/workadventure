@@ -3,8 +3,8 @@ import type { BlockJob } from "./Pixel/BlockPainter";
 
 /**
  * The worker that paints the blocks of the terrain, off the thread of the game: it is given what a block is painted
- * from (BlockJob) and answers its pixels. Loaded by BlockPaintWorkers (`?worker&inline`); it must load nothing heavy
- * (WorkerImports.test).
+ * from (BlockJob) and answers its pixels. Started by BlockPaintWorkers (a same-origin blob that imports this file,
+ * `?worker&url`); it must load nothing heavy (WorkerImports.test).
  */
 
 /** A block to paint; `recycle`: a buffer handed back by the game, to paint into instead of allocating one. */

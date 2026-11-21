@@ -6,7 +6,7 @@ import { TERRAIN_CHUNK } from "./Pixel/TerrainUnits";
 // The window of a block and the fineness of its drawing live in a file the worker can load (Pixel/BlockWindow).
 export { blockCellWindow, COARSE_TEXEL, NORTH_ROWS, SHADOW_CELLS, SOUTH_ROWS, texelFor } from "./Pixel/BlockWindow";
 
-/** The most blocks drawn in one image of the game; the others wait for the next one. */
+/** The blocks `toRedraw` takes up at once when it is not told how many. */
 export const BLOCKS_AN_IMAGE = 1;
 /** The most blocks kept drawn. */
 export const KEPT_BLOCKS = 64;
@@ -52,8 +52,9 @@ export function reliefSignature(terrain: TerrainData | undefined, blockX: number
 
 /**
  * Which blocks of the relief to draw again: the ones whose inputs (their signature: relief, water, meadow, season,
- * snow) changed since they were drawn, at most BLOCKS_AN_IMAGE an image, the visible ones first. A scroll or a zoom
- * changes no signature: nothing is drawn again.
+ * snow) changed since they were drawn. A scroll or a zoom changes no signature: nothing is drawn again. The terrain
+ * asks which ones (`stale`) once an image and takes them up one by one (`take`), as many as fit in the time of the
+ * image; `toRedraw` does both at once, for a fixed number of blocks.
  */
 export class ReliefTileSchedule {
     /** Blocks drawn so far. */
@@ -78,6 +79,7 @@ export class ReliefTileSchedule {
         this.redraws++;
     }
 
+    /** The first `budget` blocks to draw again, the visible ones first, taken up at once (`stale` then `take`). */
     public toRedraw(
         keys: readonly string[],
         signatures: ReadonlyMap<string, string>,

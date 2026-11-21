@@ -41,8 +41,9 @@ const MAX_LANDED = 16;
 /** The most blocks taken up in one image (cheap ones: coarse, or with nothing to draw). */
 const PICKS_AN_IMAGE = 16;
 /**
- * The blocks kept drawn, in sharp blocks (256 × 256 points: about half a megabyte each, its canvas and its texture): a
- * block drawn a point every 2 px weighs a quarter, a coarse one is not counted (a sixteenth). The blocks around the view
+ * The blocks kept drawn, in sharp blocks (256 × 256 points: a quarter of a megabyte of texture each; twice that
+ * without WebGL, with its canvas): a block drawn a point every 2 px weighs a quarter, a coarse one is not counted (a
+ * sixteenth). The blocks around the view
  * are always kept; beyond, the ones seen least lately are let go: zooming out again, or coming back, draws nothing
  * again.
  */
@@ -622,8 +623,12 @@ export class ReliefTiles {
                 this.landed.push({ id, pixels });
                 return;
             }
-            // The workers broke down: the block is to draw again, on the thread of the game.
-            if (this.flying.delete(id)) this.schedule.unmark(key);
+            // The workers broke down: the block is to draw again, on the thread of the game. One drawn ahead, far from
+            // the view, is behind the place the map was looked at up to: the map is looked at again.
+            if (this.flying.delete(id)) {
+                this.schedule.unmark(key);
+                this.lookAheadAgain();
+            }
         });
     }
 

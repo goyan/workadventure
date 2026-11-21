@@ -2458,7 +2458,8 @@ images, puis affinée, les blocs visibles d'abord, du milieu de la vue vers ses 
 montre (`texelFor` : un point pour 1, 2 ou 4 px de carte selon le zoom de la caméra, un point dessiné au plus un tiers
 plus gros qu'un pixel d'écran : net au-dessus du zoom 0,67, 2 px jusqu'à 0,34, 4 px en deçà) ; il est redessiné plus
 fin quand on zoome, jamais plus grossier quand on dézoome. **Cache** : les blocs qu'on quitte sont gardés, dans la
-limite de 256 blocs nets (`KEPT_WEIGHT`, environ 130 Mo ; un bloc à 2 px compte un quart, un grossier ne compte pas),
+limite de 256 blocs nets (`KEPT_WEIGHT`, environ 65 Mo de textures depuis le lot E ; un bloc à 2 px compte un quart, un
+grossier ne compte pas),
 les moins récemment vus lâchés d'abord, jamais ceux autour de la vue : zoomer, dézoomer ou revenir ne redessine rien.
 **Carte dessinée d'avance** : une fois la vue dessinée, le reste de la carte l'est en grossier, du plus proche au plus
 loin (`drawAhead`, `ReliefInputs.mapSize`) : dézoomer ou se déplacer montre tout de suite le sol, affiné ensuite. Le
