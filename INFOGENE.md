@@ -2958,7 +2958,8 @@ Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus
   - Sublimation : `0,02 × vent × (1 − humidité / 100)` mm/h, à toute température, sans eau.
   - Le temps de la neige court 600 fois plus vite que le réel (`THAW_SPEED`) : 15 mm fondent en une minute environ à
     10 °C sans vent. Constante à régler à l'essai.
-  - Sur une eau libre, la neige fond aussitôt en eau. Une case enneigée ne prend pas feu, un feu s'y éteint, l'herbe
+  - Sur une eau libre, la neige fond aussitôt en eau quand l'air est au-dessus de 0 °C (ou inconnu) ; à 0 °C et
+    moins elle tient sur l'eau, comme sur une glace. Une case enneigée ne prend pas feu, un feu s'y éteint, l'herbe
     y meurt comme sous la neige des hauteurs.
 - **Eau de fonte.** Ce qui fond humidifie le sol de sa case comme la même pluie le ferait, et est versé dans l'eau du
   relief, millimètre pour millimètre (`PX_PER_MM`, `TerrainWaterManager.pour`), compté avec la pluie dans le bilan. Hors de la grille d'eau, le sol est humidifié et le
@@ -2975,8 +2976,8 @@ Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus
 - **Deux modes** (`Weather/GroundSource.ts`). Un joueur qui suit le temps du serveur voit la neige du serveur. Un
   joueur qui suit sa propre ville (météo personnelle de #392) n'en voit rien et ne la ralentit pas : son monde reste
   local. L'eau, elle, est commune : il peut voir monter une eau de fonte sans avoir vu la neige.
-- **Limites.** La glace reste celle de #392 (personnelle, côté navigateur) : la neige tombée sur un lac gelé à
-  l'écran y fond, le serveur ne connaissant pas cette glace. Pas de neige locale en météo personnelle. Pas
+- **Limites.** La glace reste celle de #392 (personnelle, côté navigateur) : le serveur ne la connaît pas. La neige
+  tient sur l'eau dès 0 °C, même là où cette glace n'a pas encore gagné l'eau profonde à l'écran. Pas de neige locale en météo personnelle. Pas
   d'empreintes dans la neige tombée. Sur une carte sans relief ni grille d'eau, l'eau de fonte ne fait qu'humidifier
   le sol. `play` et `back` se déploient ensemble.
 

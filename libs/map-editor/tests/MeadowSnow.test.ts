@@ -115,12 +115,23 @@ describe("the snow melting", () => {
         expect(melted + total(meadow)).toBeCloseTo(laid, 1);
     });
 
-    it("melts at once in open water, as water", () => {
-        const meadow = new Meadow(size, undefined, undefined);
-        meadow.snowOn(10, 10, 0, 20);
-        const melted = meadow.step(under(frost, { waterAt: (x, y) => (x === 10 && y === 10 ? 4 : 0) }));
-        expect(melted?.meltedMm[10 * size.width + 10]).toBeCloseTo(20);
-        expect(meadow.snowAt(10, 10)).toBe(0);
+    it("melts at once in open water, as water, in an air over 0 °C or not known", () => {
+        for (const weather of [mild, undefined]) {
+            const meadow = new Meadow(size, undefined, undefined);
+            meadow.snowOn(10, 10, 0, 20);
+            const melted = meadow.step(under(weather, { waterAt: (x, y) => (x === 10 && y === 10 ? 4 : 0) }));
+            expect(melted?.meltedMm[10 * size.width + 10]).toBeCloseTo(20);
+            expect(meadow.snowAt(10, 10)).toBe(0);
+        }
+    });
+
+    it("holds on the water when it freezes: the water under it is as good as ice", () => {
+        for (const weather of [frost, { ...frost, temperature: 0 }]) {
+            const meadow = new Meadow(size, undefined, undefined);
+            meadow.snowOn(10, 10, 0, 20);
+            expect(meadow.step(under(weather, { waterAt: () => 4, snowfallMm: 5 }))).toBeUndefined();
+            expect(meadow.snowAt(10, 10)).toBeCloseTo(25);
+        }
     });
 
     it("melts faster under a warm rain", () => {

@@ -696,7 +696,7 @@ export class Meadow {
 
     /**
      * The snow of one step: what falls is laid, then it melts by the heat of the air and under the rain, and a dry
-     * wind takes some of it. On open water it melts at once. With `wets`, what melts wets the soil under it as the
+     * wind takes some of it. On open water it melts at once, unless it freezes. With `wets`, what melts wets the soil under it as the
      * same rain would. True when any melted: its water is in `melted`.
      */
     private stepSnow(input: MeadowStepInput, seconds: number, rain: number, wets: boolean): boolean {
@@ -713,14 +713,17 @@ export class Meadow {
             ? snowMeltMmPerHour(weather) * hours + rainMeltMm(rain * hours, weather.temperature)
             : 0;
         const going = weather ? snowSublimationMmPerHour(weather) * hours : 0;
+        // When it freezes the water does not take the snow: it holds on it as on ice.
+        const freezing = weather !== undefined && Number.isFinite(weather.temperature) && weather.temperature <= 0;
         melted.fill(0);
         let any = false;
         for (let index = 0; index < snow.length; index++) {
             if (!outdoor[index]) continue;
             let lying = Math.min(SNOW_MAX_MM, snow[index] + falling);
             if (lying <= 0) continue;
-            // Open water takes the snow as it falls; elsewhere the heat melts it first, then the wind takes its share.
-            const thaw = water[index] >= SOAKED_WATER_PX ? lying : Math.min(lying, melting);
+            // Open water takes the snow as it falls, unless it freezes; elsewhere the heat melts it first, then the
+            // wind takes its share.
+            const thaw = water[index] >= SOAKED_WATER_PX && !freezing ? lying : Math.min(lying, melting);
             lying -= thaw;
             lying = Math.max(0, lying - going);
             if (thaw > 0) {
