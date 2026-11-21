@@ -21,8 +21,13 @@ export function mottledCover(cover: number, cellX: number, cellY: number): numbe
     return Math.max(1, Math.round(cover * share));
 }
 
-/** The colour of the grass gone dry: straw, drawn over the ground as much as its grass is dry. */
-export const STRAW_COLOR = 0xe0c24a;
+/**
+ * The colour of the grass gone dry: straw, drawn over the ground as much as its grass is dry. Cured grass is a pale,
+ * greyish blond, far less saturated than a yellow ("straw" then "bleached" in the grassland curing guides of the CFA
+ * of Victoria and of FESA, Western Australia), kept darker than the sand so that the two read apart. The middle of
+ * the patches the ground shader draws, from bleached blond to dry khaki (see GroundSplat).
+ */
+export const STRAW_COLOR = 0xb4a16b;
 export const STRAW_ALPHA = 0.92;
 /**
  * A dry ground is seen dry, not only its meadows: bare ground where grass can grow yellows this much (of 255), and

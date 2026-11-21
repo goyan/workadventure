@@ -15,6 +15,7 @@ import { soilCode } from "../src/Terrain/Soils";
 import { cellKey, withHeights, withSoils } from "../src/Terrain/TerrainGrid";
 import { Season } from "../src/types";
 import type { TerrainData } from "../src/types";
+import { DEFAULT_FIRE_THRESHOLDS, fireDanger } from "../src/Weather/FireConditions";
 
 const dry: MeadowStepInput = {
     seconds: MEADOW_STEP_SECONDS,
@@ -401,5 +402,27 @@ describe("the dryness of the grass", () => {
         expect(next.drynessAt(3, 2)).toBeCloseTo(0.8, 5);
         next.clear();
         expect(next.drynessAt(3, 2)).toBe(0);
+    });
+
+    it("keeps a green bank along open water in a heatwave, and turns to straw a few tiles away", () => {
+        // A heatwave in the bush: 36 °C, 20 % of humidity, 26 km/h of wind, no rain, a lake on the column 0.
+        const danger = fireDanger(
+            { temperature: 36, humidity: 20, windSpeed: 26, windFrom: 90 },
+            DEFAULT_FIRE_THRESHOLDS,
+        );
+        expect(danger).toBeGreaterThan(0.9);
+        const heatwave: MeadowStepInput = { ...lake, season: Season.Summer, fireDanger: danger, random: () => 1 };
+        const meadow = new Meadow(size, undefined, undefined);
+        for (let x = 1; x < size.width; x++) meadow.set(x, 2, 0.6, 1);
+        run(meadow, 1800, heatwave);
+        // The bank drinks from the lake: its grass stays alive and green.
+        for (const x of [1, 2]) {
+            expect(meadow.grassAt(x, 2)).toBeGreaterThan(0.9);
+            expect(meadow.drynessAt(x, 2)).toBeLessThan(0.1);
+        }
+        // Then it yellows, and beyond the reach of the water the grass is straw.
+        expect(meadow.drynessAt(3, 2)).toBeGreaterThan(0.2);
+        expect(meadow.drynessAt(3, 2)).toBeLessThan(0.7);
+        for (const x of [4, 6, 10]) expect(meadow.drynessAt(x, 2)).toBeGreaterThan(0.8);
     });
 });

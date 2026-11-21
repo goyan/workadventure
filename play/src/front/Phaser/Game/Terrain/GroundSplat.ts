@@ -221,7 +221,10 @@ void main() {
     float fire = burnt.g;
     if (straw > 0.002) {
         float dry = step(1.0 - bend(straw, edgeNoise, 1.2), 0.5 * hash(floor(world)) + 0.5 * fbm(world / 10.0));
-        vec3 strawColor = vec3(0.88, 0.76, 0.29) * (0.85 + 0.3 * hash(floor(world / 2.0) + 3.0));
+        // Cured grass, in wide patches from bleached blond to dry khaki (STRAW_COLOR is their middle), with a grain
+        // kept narrow enough that the palest straw stays darker than the sand.
+        vec3 strawColor = mix(vec3(0.753, 0.659, 0.439), vec3(0.663, 0.608, 0.4), vnoise(world / 48.0 + 5.1));
+        strawColor *= 0.9 + 0.15 * hash(floor(world / 2.0) + 3.0);
         float strawAlpha = dry * 0.92;
         outColor = vec4(strawColor * strawAlpha, strawAlpha) + outColor * (1.0 - strawAlpha);
     }

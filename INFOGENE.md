@@ -3560,13 +3560,33 @@ sécheresse de l'air doivent être là toutes les deux ; le vent double ce qu'el
 conditions s'apaisent, et vaut 0 sous l'eau ou sans herbe. Elle est annoncée avec le pré (`MeadowMessage.dryness`) et
 sauvegardée avec lui ; un pré sauvegardé avant ce lot se recharge, vert.
 
+**Berges vertes (correctif du 2026-11-21).** Signalé en beta par une canicule (36 °C, 20 %, 26 km/h) : toute l'herbe
+était jaune jusqu'au bord de l'eau. Deux causes : la cible de sécheresse suivait `danger × (1 − humidité)`, si bien
+qu'une herbe encore assez humide pour pousser (humidité 0,26 au bord, 0,25 étant le seuil de pousse) était peinte en
+paille à 69 % ; et le dessèchement accéléré (×20 au danger maximal) vidait le sol voisin de l'eau dès la deuxième
+case. Désormais la sécheresse tend vers `danger × soif`, la soif allant de 0 au seuil de pousse
+(`GROWING_MOISTURE[0]`) à 1 au seuil de mort (`DRY_MOISTURE`) : l'air ne sèche que l'herbe que le sol laisse
+assoiffée. Et le sol le long de l'eau libre boit par en dessous (nappe, remontée capillaire) : à 1, 2 et 3 cases d'une
+eau posée au sol il garde au moins 0,8, 0,5 et 0,17 d'humidité (`BANK_MOISTURE`, `Meadow.drinkFromBanks`, de proche en
+proche, dehors). Mesuré par la bibliothèque à 36 °C / 20 % / 26 km/h : sécheresse 0 / 0 / 0,44 aux cases 1 à 3, puis
+0,93 dès la 4ᵉ (avant : 0,69 / 0,87 / 0,92 / 0,93). Le guide de séchage du CFA (Victoria) note à 90 % « some green in
+wetter areas such as roadside and river valleys ». Au-delà de la bande, le feu court comme avant ; la berge verte le
+freine (chance de propagation des herbes vertes). Changement voulu : une herbe humide (sol à 0,25 et plus) ne jaunit
+plus sous un danger modéré.
+
 **À l'écran.**
 - Le widget « Catastrophe » a deux onglets. L'onglet **« Météo »** : interrupteur « Manuel » (coupé, les curseurs
   montrent les conditions réelles, grisés), curseurs de température, d'humidité, de vent, provenance du vent par les
   huit points de la rose, trois seuils (réglables même hors manuel) et l'indicateur de danger (faible, modéré, fort,
   extrême). Un geste envoie la demande au serveur, quatre fois par seconde au plus pendant un glisser ; l'annonce du
   serveur déplace les curseurs de tous sans rien renvoyer.
-- L'herbe sèche est peinte en **paille** par-dessus le vert, d'autant plus qu'elle est sèche.
+- L'herbe sèche est peinte en **paille** par-dessus le vert, d'autant plus qu'elle est sèche. Couleur revue le
+  2026-11-21 (avant `#e0c24a`, jaune moutarde saturé à 71 %) : les guides de séchage du CFA (Victoria) et de la FESA
+  (Australie-Occidentale) disent « straw » puis « bleached » à 90-100 %, et leurs photos mesurées (moyenne des zones
+  au soleil) donnent des blonds gris de 26 à 34 % de saturation (`#bcae8a`, `#c0ad95`, `#c2ae83`). Le shader du sol
+  (`GroundSplat`) mêle par grandes plaques un blond délavé `#c0a870` et un kaki sec `#a99b66`, grain de ±7 % ; le
+  repli sans shader (`STRAW_COLOR`) prend leur milieu `#b4a16b`. Écart avec le sable (`#e1cd96`) : ΔE ≥ 15 composé
+  sur l'herbe (avant 31), avec l'argile ≥ 17.
 - En manuel, le **vent de toute la scène** (nuages, arbres, pluie penchée) est celui de la salle.
 - Le bandeau météo affiche l'**humidité** pour « Maintenant » et, en manuel, la température et le vent de la salle
   avec la mention « manuel ».
