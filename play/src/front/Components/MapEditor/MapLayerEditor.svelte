@@ -41,8 +41,16 @@
         mapLayerBuiltLevelsStore,
         mapLayerStairOpenStore,
         mapLayerStairWidthStore,
+        mapLayerBridgeHeightStore,
+        mapLayerBridgeStyleStore,
+        mapLayerBridgeWidthStore,
     } from "../../Stores/MapLayerStore";
     import { STAIR_DIRECTIONS, floorLevelTiles } from "../../Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
+    import {
+        BRIDGE_HEIGHTS,
+        BRIDGE_MAX_WIDTH,
+        BRIDGE_STYLES,
+    } from "../../Phaser/Game/MapEditor/MapLayer/BridgeBuilder";
     import {
         stairTarget,
         stairTargets as stairTargetsFrom,
@@ -53,6 +61,7 @@
         IconBrush,
         IconStack2,
         IconStairs,
+        IconBuildingBridge,
         IconBucket,
         IconDoor,
         IconEraser,
@@ -81,6 +90,7 @@
             modes: [
                 { mode: "slab", icon: IconStack2 },
                 { mode: "stair", icon: IconStairs },
+                { mode: "bridge", icon: IconBuildingBridge },
                 { mode: "floorBrush", icon: IconBrush },
                 { mode: "floorRectangle", icon: IconRectangle },
                 { mode: "floorFill", icon: IconBucket },
@@ -132,6 +142,7 @@
     let usesFloor = $derived(
         $mapLayerModeStore !== "wall" &&
             $mapLayerModeStore !== "stair" &&
+            $mapLayerModeStore !== "bridge" &&
             $mapLayerModeStore !== "erase" &&
             $mapLayerModeStore !== "door" &&
             $mapLayerModeStore !== "window" &&
@@ -261,6 +272,72 @@
                     </ol>
                 </details>
             {/if}
+        {/if}
+
+        {#if $mapLayerModeStore === "bridge"}
+            <section class="flex flex-col gap-2" data-testid="mapLayerBridge">
+                <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.bridge.width()}</h3>
+                <div class="flex items-center gap-2">
+                    <button
+                        type="button"
+                        class="px-3 py-1 rounded text-xs bg-white/10 hover:bg-white/20 disabled:opacity-40"
+                        aria-label={$LL.mapEditor.mapLayer.bridge.narrower()}
+                        data-testid="mapLayerBridgeNarrower"
+                        disabled={$mapLayerBridgeWidthStore <= 1}
+                        onclick={() => mapLayerBridgeWidthStore.update((width) => Math.max(1, width - 1))}>−</button
+                    >
+                    <span class="min-w-16 text-center text-xs tabular-nums" data-testid="mapLayerBridgeWidth">
+                        {$LL.mapEditor.mapLayer.bridge.tiles({ count: $mapLayerBridgeWidthStore })}
+                    </span>
+                    <button
+                        type="button"
+                        class="px-3 py-1 rounded text-xs bg-white/10 hover:bg-white/20 disabled:opacity-40"
+                        aria-label={$LL.mapEditor.mapLayer.bridge.wider()}
+                        data-testid="mapLayerBridgeWider"
+                        disabled={$mapLayerBridgeWidthStore >= BRIDGE_MAX_WIDTH}
+                        onclick={() =>
+                            mapLayerBridgeWidthStore.update((width) => Math.min(BRIDGE_MAX_WIDTH, width + 1))}>+</button
+                    >
+                </div>
+                {#if $mapLayerBridgePiecesAvailableStore}
+                    <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.bridge.style()}</h3>
+                    <div class="flex gap-2">
+                        {#each BRIDGE_STYLES as style (style)}
+                            <button
+                                type="button"
+                                class="px-3 py-1 rounded text-xs {$mapLayerBridgeStyleStore === style
+                                    ? 'bg-secondary'
+                                    : 'bg-white/10 hover:bg-white/20'}"
+                                aria-pressed={$mapLayerBridgeStyleStore === style}
+                                data-testid="mapLayerBridgeStyle-{style}"
+                                onclick={() => mapLayerBridgeStyleStore.set(style)}
+                            >
+                                {$LL.mapEditor.mapLayer.bridge.styles[style]()}
+                            </button>
+                        {/each}
+                    </div>
+                    <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.bridge.height()}</h3>
+                    <div class="flex gap-2">
+                        {#each BRIDGE_HEIGHTS as height (height)}
+                            <button
+                                type="button"
+                                class="px-3 py-1 rounded text-xs {$mapLayerBridgeHeightStore === height
+                                    ? 'bg-secondary'
+                                    : 'bg-white/10 hover:bg-white/20'}"
+                                aria-pressed={$mapLayerBridgeHeightStore === height}
+                                data-testid="mapLayerBridgeHeight-{height}"
+                                onclick={() => mapLayerBridgeHeightStore.set(height)}
+                            >
+                                {height === BRIDGE_HEIGHTS[0]
+                                    ? $LL.mapEditor.mapLayer.bridge.low()
+                                    : $LL.mapEditor.mapLayer.bridge.high()}
+                            </button>
+                        {/each}
+                    </div>
+                {:else}
+                    <p class="m-0 text-xs opacity-80">{$LL.mapEditor.mapLayer.bridge.concreteOnly()}</p>
+                {/if}
+            </section>
         {/if}
 
         {#if $mapLayerModeStore === "stair"}

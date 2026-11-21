@@ -875,6 +875,7 @@ export class MapLayerEditorTool extends MapEditorTool {
                 return undefined;
             case "slab":
             case "stair":
+            case "bridge":
                 // The floors have their own model: see MapLayerFloorEditing.
                 return undefined;
             case "erase":

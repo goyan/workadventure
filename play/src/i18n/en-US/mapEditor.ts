@@ -827,6 +827,7 @@ const mapEditor: BaseTranslation = {
             erase: "Eraser",
             slab: "Floor slabs",
             stair: "Stair",
+            bridge: "Bridge",
         },
         hints: {
             wall: "Drag to draw a straight wall.",
@@ -840,6 +841,7 @@ const mapEditor: BaseTranslation = {
             erase: "A click erases what is outlined in red, on the level chosen: a stair or a ramp, a door, a window, a wall, a slab or a floor. Start on a wall and drag along it to erase its segments (doors and windows included); on a raised floor, drag a rectangle to remove its slabs; on the ground, start on a floor to erase the floors passed over. Objects are kept.",
             slab: "Choose a level, then drag a rectangle to lay the slabs of a raised floor.",
             stair: "Click the tile of the first step, on the level the stair starts from. Hover over the map to see where it arrives. A stair or a ramp already placed is outlined in white on hover: drag it to move it.",
+            bridge: "Click the bank it starts from, drag to the bank it reaches and release: the deck and a way up at each end are laid at once. The bridge is straight, east-west or north-south.",
         },
         floors: "Floor",
         floorGuide: {
@@ -857,6 +859,22 @@ const mapEditor: BaseTranslation = {
             well: "Slabs removed for the well",
             refused: "Does not fit here",
             deadEnd: "A placed stair that leads nowhere",
+        },
+        bridge: {
+            width: "Width",
+            narrower: "Narrower",
+            wider: "Wider",
+            tiles: "{count} tile{{s}}",
+            style: "Style",
+            height: "Height",
+            low: "Low",
+            high: "High",
+            concreteOnly:
+                "This room does not have the pieces of the wooden bridges: a concrete bridge, as high as walls of 2 tiles.",
+            styles: {
+                wood: "Wood",
+                concrete: "Concrete",
+            },
         },
         floorLevel: {
             adjust: "Adjust height",
@@ -937,6 +955,9 @@ const mapEditor: BaseTranslation = {
             stairNoArrival:
                 "Stair placed, but it leads nowhere yet: lay slabs of the level it reaches on the orange tiles.",
             stairInvalid: "The stair does not fit here: it leaves the map or crosses another stair.",
+            bridgeTooShort:
+                "Bridge too short: at least one tile of deck is needed between its two ways up. Drag further.",
+            bridgeBlocked: "The bridge does not fit here: it leaves the map or crosses a stair.",
             failed: "The change could not be applied.",
         },
         families: {
