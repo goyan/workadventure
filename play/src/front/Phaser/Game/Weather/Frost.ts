@@ -70,13 +70,13 @@ export function waterCycleNow(settings: MapSnowSettings | undefined): WaterCycle
     if (lastSecond === second) return cycle;
     const elapsed = lastSecond === undefined ? Number.POSITIVE_INFINITY : Math.min(60, second - lastSecond);
     lastSecond = second;
-    const air = airNow(settings, date);
+    const air = frostAirNow(settings, date);
     const celsius = air?.temperature;
     const weather = shownWeatherSettings(settings, date)?.weather;
     const raining = weather === WeatherType.Rain || weather === WeatherType.Storm;
     const target = {
-        frost: air?.humidity === undefined ? 0 : hoarFrost({ ...air, humidity: air.humidity }),
-        ice: celsius === undefined ? 0 : iceAt(celsius),
+        frost: frostOf(air),
+        ice: iceOf(air),
         wet: raining && (celsius === undefined || celsius > 0) ? 1 : 0,
     };
     cycle = Number.isFinite(elapsed)
@@ -105,14 +105,31 @@ export function timelineAirAt(state: RealForecastState, epoch: number): AirNow |
     return { temperature: now.temperature, humidity: now.humidity, windSpeed: now.windSpeed };
 }
 
+/** The frost the ground goes towards under an air, 0 to 1 (hoarFrost): none while its humidity is not known. */
+export function frostOf(air: AirNow | undefined): number {
+    return air?.humidity === undefined ? 0 : hoarFrost({ ...air, humidity: air.humidity });
+}
+
+/** How far the ice goes towards under an air, 0 to 1 (iceAt): none while its temperature is not known. */
+export function iceOf(air: AirNow | undefined): number {
+    return air === undefined ? 0 : iceAt(air.temperature);
+}
+
 /**
  * The air now at the place shown, the one the frost of the ground goes by: this player's own city, else the map's
- * (the heat, the humidity and the wind set by hand in the room first, as the banner says them). A humidity not known
- * gives no frost: none is made up.
+ * (mapFrostAirNow). A humidity not known gives no frost: none is made up.
  */
-function airNow(settings: MapSnowSettings | undefined, date: Date): AirNow | undefined {
+export function frostAirNow(settings: MapSnowSettings | undefined, date: Date): AirNow | undefined {
     const { place, state } = chosenWeatherNow();
     if (place) return timelineAirAt(state, date.getTime());
+    return mapFrostAirNow(settings, date);
+}
+
+/**
+ * The air of the map the frost goes by for every player who follows the server: the heat, the humidity and the wind
+ * set by hand in the room first, as the banner says them, else the real air at the place of the map.
+ */
+export function mapFrostAirNow(settings: MapSnowSettings | undefined, date: Date): AirNow | undefined {
     const conditions = get(fireConditionsStore);
     if (conditions?.manual) {
         return { temperature: conditions.temperature, humidity: conditions.humidity, windSpeed: conditions.windSpeed };
