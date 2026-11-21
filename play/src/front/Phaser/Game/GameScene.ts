@@ -405,10 +405,12 @@ import { footprintSurface, GroundFootprints } from "./Terrain/Footprints";
 import { WaterGlints } from "./Terrain/WaterGlints";
 import { ReliefTiles } from "./Terrain/ReliefTiles";
 import { createBlockPaintPool } from "./Terrain/BlockPaintWorkers";
+import { blocksStateOf, groundEngineOf } from "./Terrain/GroundEngineChoice";
+import type { GroundEngine } from "./Terrain/GroundEngineChoice";
 import { GroundEngines } from "./Terrain/GroundEngines";
 import type { PixelGround } from "./Terrain/GroundEngines";
-import { tellPixelReliefShown } from "./Terrain/PixelReliefShown";
-import { groundPointAt, hiddenBehindRim, projectionShown, shiftAt } from "./Terrain/ReliefProjection";
+import { tellPixelBlocksShown } from "./Terrain/PixelBlocksShown";
+import { groundPointAt, hiddenBehindRim, shiftAt } from "./Terrain/ReliefProjection";
 import { TerrainView } from "./Terrain/TerrainView";
 import { CharacterDrops } from "./Terrain/CharacterDrops";
 import { avatarDrop, surfaceDropAt, waterDepthAtPoint } from "./Terrain/AvatarDrop";
@@ -679,9 +681,9 @@ export class GameScene extends DirtyScene {
      * frost come with it). It draws unless the blocks do (pixelBlocksShown).
      */
     private terrainView: TerrainView | undefined;
-    /** Whether the relief is shown in 3/4, and the image of the game it was worked out at (pixelReliefShown). */
-    private reliefShown = false;
-    private reliefShownAt = -1;
+    /** The engine that draws the ground, and the image of the game it was worked out at (groundEngine). */
+    private groundEngineNow: GroundEngine = "flat";
+    private groundEngineAt = -1;
     /** The characters drawn lower in the hollows of the relief, while the image is drawn. */
     private characterDrops: CharacterDrops | undefined;
     private waterFlowView: WaterFlowView | undefined;
@@ -1783,7 +1785,7 @@ export class GameScene extends DirtyScene {
         this.mapGroundLayout = undefined;
         this.pixelRelief?.destroy();
         this.pixelRelief = undefined;
-        tellPixelReliefShown(undefined);
+        tellPixelBlocksShown(undefined);
         this.terrainView?.destroy();
         this.terrainView = undefined;
         this.characterDrops?.destroy();
@@ -2453,13 +2455,7 @@ export class GameScene extends DirtyScene {
             // The relief in 3/4 is made when the player turns it on, destroyed when they turn it off, hidden meanwhile
             // in the editor and in Basique: no page to load again.
             // Its blocks only where the shaders of the flat engine cannot draw it.
-            this.pixelRelief?.sync(
-                {
-                    chosen: get(pixelReliefStore) && this.terrainView?.canProject() !== true,
-                    shown: this.pixelBlocksShown(),
-                },
-                time,
-            );
+            this.pixelRelief?.sync(blocksStateOf(this.groundChoice()), time);
             // Every character drawn as low as the ground (or the water) under it, in a hollow; at its place when the
             // relief is not seen in 3/4.
             const relief = this.terrainWater.relief();
@@ -3230,33 +3226,41 @@ export class GameScene extends DirtyScene {
         );
     }
 
-    /** The relief in 3/4, for its footprints, its clicks and its tests. */
-    public getReliefTiles(): ReliefTiles | undefined {
-        return this.pixelRelief?.current()?.tiles;
-    }
-
     /** The flat drawing of the relief, for the editor to show the bottom through the water while it is edited. */
     public getTerrainView(): TerrainView | undefined {
         return this.terrainView;
     }
 
+    /** What decides which engine draws the ground (GroundEngineChoice). */
+    private groundChoice(): { chosen: boolean; editorOpen: boolean; basic: boolean; shader: boolean } {
+        return {
+            chosen: get(pixelReliefStore),
+            editorOpen: get(mapEditorModeStore),
+            basic: isBasicActive(),
+            shader: this.terrainView?.canProject() === true,
+        };
+    }
+
+    /**
+     * The engine that draws the ground now: the flat one, its shaders in 3/4, or the blocks in 3/4 where the shaders
+     * cannot. Worked out once an image: every character, every animal of the water and the float of a line ask it.
+     */
+    private groundEngine(): GroundEngine {
+        const frame = this.game.loop.frame;
+        if (frame !== this.groundEngineAt) {
+            this.groundEngineAt = frame;
+            this.groundEngineNow = groundEngineOf(this.groundChoice());
+        }
+        return this.groundEngineNow;
+    }
+
     /**
      * Whether the relief is shown in 3/4 now: the player chose it, the map is not edited and Basique does not apply.
      * Drawn so by the shaders of the flat engine, or by the blocks where they cannot (pixelBlocksShown). Else the ground
-     * is flat, and nothing is drawn lower nor higher than its place. Worked out once an image: every character, every
-     * animal of the water and the float of a line ask it.
+     * is flat, and nothing is drawn lower nor higher than its place.
      */
     public pixelReliefShown(): boolean {
-        const frame = this.game.loop.frame;
-        if (frame !== this.reliefShownAt) {
-            this.reliefShownAt = frame;
-            this.reliefShown = projectionShown({
-                chosen: get(pixelReliefStore),
-                editorOpen: get(mapEditorModeStore),
-                basic: isBasicActive(),
-            });
-        }
-        return this.reliefShown;
+        return this.groundEngine() !== "flat";
     }
 
     /**
@@ -3265,12 +3269,14 @@ export class GameScene extends DirtyScene {
      * applies (the pools placed as images keep their image, the leaves lie over the blocks, …).
      */
     public pixelBlocksShown(): boolean {
-        return this.pixelReliefShown() && this.terrainView?.canProject() !== true;
+        return this.groundEngine() === "blocks";
     }
 
     /** The point of the ground drawn under a point of the map: itself, unless the relief is shown in 3/4. */
     public groundPointUnder(point: { x: number; y: number }): { x: number; y: number } {
-        return this.pixelReliefShown() ? groundPointAt(this.terrainWater.relief(), point) : point;
+        if (!this.pixelReliefShown()) return point;
+        // The deck of a bridge is a raised floor, drawn at its place over the hollow under it: a click on it is on it.
+        return groundPointAt(this.terrainWater.relief(), point, (x, y) => this.terrainWater.isBridgeAt(x, y));
     }
 
     /** The season the relief in 3/4 is drawn in: the one of the theme this person forces (as their trees), else the map's. */
@@ -4121,12 +4127,12 @@ export class GameScene extends DirtyScene {
                     this.meadow,
                     () => this.getGroundSeason(),
                     () => this.pixelBlocksShown(),
-                    () => this.pixelReliefShown(),
+                    () => this.groundEngine() === "oblique",
                 );
                 // The relief in 3/4, in pixel art: only for who chose it (nothing of it is made else).
                 this.pixelRelief?.destroy();
                 this.pixelRelief = new GroundEngines(() => this.createPixelRelief());
-                tellPixelReliefShown(() => this.pixelBlocksShown());
+                tellPixelBlocksShown(() => this.pixelBlocksShown());
                 this.characterDrops?.destroy();
                 this.characterDrops = new CharacterDrops(this, () => [
                     ...(this.CurrentPlayer ? [this.CurrentPlayer] : []),

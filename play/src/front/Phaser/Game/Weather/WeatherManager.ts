@@ -17,7 +17,7 @@ import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { SeasonalTheme } from "../Seasonal/SeasonalTheme";
 import type { SunPosition } from "../Night/NightClock";
 import { unlessBasic } from "../../../Stores/BasicModeStore";
-import { pixelReliefShownNow } from "../Terrain/PixelReliefShown";
+import { pixelBlocksShownNow } from "../Terrain/PixelBlocksShown";
 import type { RaisedCover } from "./RaisedCover";
 import {
     farFogCells,
@@ -258,7 +258,7 @@ export class WeatherManager {
         this.snowGround.update(
             now,
             serverDate,
-            !this.editing && !pixelReliefShownNow(),
+            !this.editing && !pixelBlocksShownNow(),
             theme === SeasonalTheme.Autumn,
         );
         const showWeather = enabled && weather !== WeatherType.Clear;

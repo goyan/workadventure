@@ -1,5 +1,5 @@
 import { DEPTH_TILE_INDEX } from "../DepthIndexes";
-import { pixelReliefShownNow } from "../Terrain/PixelReliefShown";
+import { pixelBlocksShownNow } from "../Terrain/PixelBlocksShown";
 import type { WeatherView } from "../Weather/WeatherFrame";
 import { seenFromFar } from "../Weather/ScreenScale";
 import type { LeafSources } from "./LeafDensity";
@@ -33,7 +33,7 @@ export class LeafScatterLayer {
         sources: LeafSources,
         force: boolean,
     ): boolean {
-        const depth = pixelReliefShownNow() ? LEAF_OVER_BLOCKS_DEPTH : LEAF_SCATTER_DEPTH;
+        const depth = pixelBlocksShownNow() ? LEAF_OVER_BLOCKS_DEPTH : LEAF_SCATTER_DEPTH;
         if (depth !== this.depth) {
             this.depth = depth;
             this.graphics.setDepth(depth);

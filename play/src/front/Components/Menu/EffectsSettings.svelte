@@ -32,7 +32,7 @@
         }),
     );
 
-    // Which engine draws the ground: the relief seen in 3/4 in pixel art, or the flat one (off, the default).
+    // How the ground is drawn: the relief seen in 3/4, or flat (off, the default).
     let pixelRelief = $state(get(pixelReliefStore));
     $effect(() =>
         pixelReliefStore.subscribe((value) => {

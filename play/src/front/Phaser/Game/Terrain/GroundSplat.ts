@@ -6,7 +6,7 @@ import { DEEP_ICE_PX, POOL_ICE_DEPTH_PX } from "@wa/front/Phaser/Game/Weather/Fr
 import type { WaterCycle } from "@wa/front/Phaser/Game/Weather/Frost";
 import type { WaterRing } from "@wa/front/Phaser/Game/Catastrophe/MeteorFall";
 import { HEIGHT_OFFSET, HEIGHT_SCALE, OBLIQUE_HALVINGS, OBLIQUE_STEPS, writeHeights } from "./ObliqueView";
-import { MAX_DROP, MAX_RISE } from "./Pixel/ColumnPainter";
+import { DROP_SCALE, MAX_DROP, MAX_RISE } from "./Pixel/ColumnPainter";
 import { GROUND_TEXTURES } from "./TexturedGround";
 import type { GroundArea } from "./TexturedGround";
 
@@ -131,7 +131,7 @@ float heightIn(float which, vec2 world) {
 
 // The row of the screen a point of the map is drawn at, in 3/4: higher by half the height of what is seen there.
 float rowOf(vec2 world) {
-    return world.y - clamp(heightIn(1.0, world) * 0.5, -${MAX_DROP}.0, ${MAX_RISE}.0);
+    return world.y - clamp(heightIn(1.0, world) * ${DROP_SCALE}, -${MAX_DROP}.0, ${MAX_RISE}.0);
 }
 #endif
 
@@ -151,7 +151,7 @@ vec2 worldPoint() {
         float rowSouth = rowOf(south);
         if (rowSouth <= screen.y) return floor(south) + 0.5;
         vec2 north = vec2(screen.x, (ceil(south.y / cell - 0.5) - 0.5) * cell);
-        for (int step = 0; step < ${OBLIQUE_STEPS}; step++) {
+        for (int walked = 0; walked < ${OBLIQUE_STEPS}; walked++) {
             float rowNorth = rowOf(north);
             if (rowNorth <= screen.y) {
                 gStretch = (rowSouth - rowNorth) / max(south.y - north.y, 0.001);
@@ -583,8 +583,8 @@ export interface GroundWeights {
     /** How deep each cell is dug and how high it is raised, in map pixels (to 255). */
     dug: Uint8Array;
     raised: Uint8Array;
-    /** The exact height of the ground of each cell, in map pixels: where it is drawn, seen in 3/4. */
-    heights: Float32Array;
+    /** The exact height of the ground of each cell, in map pixels: where it is drawn, seen in 3/4. Not read flat. */
+    heights?: Float32Array;
     /** The straw, the ash and the fire of the meadow, 0 to 255; undefined: none. */
     straw: Uint8Array | undefined;
     ash: Uint8Array | undefined;
@@ -698,7 +698,7 @@ export class GroundSplat {
     }
 
     private autumn = 0;
-    /** The relief seen in 3/4: the picture of the exact heights (ObliqueView.ts), kept only while it is. */
+    /** The relief seen in 3/4, and the picture of the exact heights it reads (ObliqueView.ts), made at its first use. */
     private oblique = false;
     private readonly heightsKey = `ground-heights-${splatCount}`;
     private heights: ImageData | undefined;
@@ -766,7 +766,7 @@ export class GroundSplat {
         if (any) smoothWeights(data, columns, rows);
         this.autumn = weights.autumn;
         this.anyGround = any;
-        if (this.oblique) {
+        if (this.oblique && weights.heights) {
             // Seen in 3/4: the exact heights of the ground, and of what is seen (the ground, until the water is told).
             const heights = this.heightsFor(area);
             this.groundHeights = weights.heights;

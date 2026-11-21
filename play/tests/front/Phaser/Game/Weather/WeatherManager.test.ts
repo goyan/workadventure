@@ -298,15 +298,15 @@ describe("weather rendering lifecycle", () => {
     });
 
     it("leaves the grass of the map to the relief in 3/4 while it is shown: its blocks draw it", async () => {
-        const { tellPixelReliefShown } = await import("../../../../../src/front/Phaser/Game/Terrain/PixelReliefShown");
+        const { tellPixelBlocksShown } = await import("../../../../../src/front/Phaser/Game/Terrain/PixelBlocksShown");
         const { scene } = fixture();
         manager = new WeatherManager(scene);
         manager.update(0, new Date(0));
         expect(ground.update.mock.lastCall?.[2]).toBe(true);
-        tellPixelReliefShown(() => true);
+        tellPixelBlocksShown(() => true);
         manager.update(1, new Date(1));
         expect(ground.update.mock.lastCall?.[2]).toBe(false);
-        tellPixelReliefShown(undefined);
+        tellPixelBlocksShown(undefined);
         manager.update(2, new Date(2));
         expect(ground.update.mock.lastCall?.[2]).toBe(true);
     });

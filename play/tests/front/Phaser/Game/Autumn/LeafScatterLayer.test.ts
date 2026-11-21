@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { quantizeWind } from "../../../../../src/front/Phaser/Game/Autumn/LeafDensity";
 import { LeafScatterLayer } from "../../../../../src/front/Phaser/Game/Autumn/LeafScatterLayer";
 import { DEPTH_TILE_INDEX } from "../../../../../src/front/Phaser/Game/DepthIndexes";
-import { tellPixelReliefShown } from "../../../../../src/front/Phaser/Game/Terrain/PixelReliefShown";
+import { tellPixelBlocksShown } from "../../../../../src/front/Phaser/Game/Terrain/PixelBlocksShown";
 
 describe("LeafScatterLayer", () => {
     it("fades its leaves with the layer alpha", () => {
@@ -29,10 +29,10 @@ describe("LeafScatterLayer", () => {
         const sources = { trees: [], wind: quantizeWind(undefined, undefined), progress: 1 };
         // As on a map drawn flat: just over its ground (0.65 over the tiles).
         expect(depths[depths.length - 1]).toBeCloseTo(DEPTH_TILE_INDEX + 0.65);
-        tellPixelReliefShown(() => true);
+        tellPixelBlocksShown(() => true);
         layer.update(view, () => true, sources, false);
         expect(depths[depths.length - 1]).toBeCloseTo(DEPTH_TILE_INDEX + 0.67);
-        tellPixelReliefShown(undefined);
+        tellPixelBlocksShown(undefined);
         layer.update(view, () => true, sources, false);
         expect(depths[depths.length - 1]).toBeCloseTo(DEPTH_TILE_INDEX + 0.65);
     });

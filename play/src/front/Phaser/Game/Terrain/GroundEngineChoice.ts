@@ -19,3 +19,12 @@ export function groundEngineOf(where: {
     if (!projectionShown(where)) return "flat";
     return where.shader ? "oblique" : "blocks";
 }
+
+/**
+ * What the blocks of the relief are told at each image (GroundEngines.sync): made only where the shaders cannot draw
+ * the 3/4 and the player asked for it, shown while they are the engine that draws, kept hidden in the editor and in
+ * Basique.
+ */
+export function blocksStateOf(where: Parameters<typeof groundEngineOf>[0]): { chosen: boolean; shown: boolean } {
+    return { chosen: where.chosen && !where.shader, shown: groundEngineOf(where) === "blocks" };
+}

@@ -16,7 +16,7 @@ import {
     whirlTurnsPerSecond,
 } from "./WaterFoam";
 
-import { pixelReliefShownNow } from "./PixelReliefShown";
+import { pixelBlocksShownNow } from "./PixelBlocksShown";
 import { strokeRing, strokeStreak } from "./WaterFlowStrokes";
 
 export interface WaterFlowViewOptions {
@@ -109,7 +109,7 @@ export class WaterFlowView {
         this.marksGraphics.clear();
         let drawn = false;
         // Smooth lines over the ground drawn flat; whole pixels over the relief in pixel art.
-        const pixelArt = pixelReliefShownNow();
+        const pixelArt = pixelBlocksShownNow();
         for (const fleck of this.foam.flecks()) {
             const streak = foamStreak(fleck);
             if (streak.alpha <= 0) continue;

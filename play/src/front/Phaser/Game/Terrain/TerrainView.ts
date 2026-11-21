@@ -96,8 +96,8 @@ interface ReliefLayers extends BlockCanvasArea {
     ground: Uint8Array;
     /** The height of the cells raised over the ground. */
     raised: Uint8Array;
-    /** The exact height of the ground of each cell (for the relief seen in 3/4). */
-    heights: Float32Array;
+    /** The exact height of the ground of each cell, read at the first drawing of the relief in 3/4. */
+    heights?: Float32Array;
     /** The snow of the heights over the canvas (0 to 255), and the season it was read for. */
     snow: Uint8Array | undefined;
     season: Season | undefined;
@@ -307,7 +307,16 @@ export class TerrainView {
                     autumn: this.season?.() === Season.Autumn ? 1 : 0,
                     dug: relief.ground,
                     raised: relief.raised,
-                    heights: relief.heights,
+                    // Read from the map only when the relief is seen in 3/4.
+                    heights: this.isOblique
+                        ? (relief.heights ??= heightsOver(
+                              relief.terrain,
+                              canvas.x / TERRAIN_CELL,
+                              canvas.y / TERRAIN_CELL,
+                              canvas.columns,
+                              canvas.rows,
+                          ))
+                        : undefined,
                     straw: meadow?.straw,
                     ash: meadow?.ash,
                     fire: meadow?.fire,
@@ -490,13 +499,6 @@ export class TerrainView {
             rows: canvas.rows,
             ground: new Uint8Array(size),
             raised: new Uint8Array(size),
-            heights: heightsOver(
-                terrain,
-                canvas.x / TERRAIN_CELL,
-                canvas.y / TERRAIN_CELL,
-                canvas.columns,
-                canvas.rows,
-            ),
             snow: undefined,
             season,
             soils: new Map(),

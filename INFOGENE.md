@@ -2542,7 +2542,8 @@ de la pluie ne se posent pas sur le relief ; les éclaboussures deviennent des r
 `docs/superpowers/{specs,plans}/2026-11-21-relief-3-4-shader*` ; la fusion d'`infogene` qui a amené là :
 `…/2026-11-21-fusion-infogene-deux-moteurs*`). Réglage personnel « Relief en 3/4 » (Paramètres → Graphismes → Effets ;
 `pixelReliefStore`, clé `terrainPixelRelief`, coupé par défaut), sans recharger ; jamais dans l'éditeur ni en mode
-Basique. Une règle dit qui dessine (`Terrain/GroundEngineChoice.ts` `groundEngineOf`) :
+Basique. Une règle dit qui dessine (`Terrain/GroundEngineChoice.ts` : `groundEngineOf`, et `blocksStateOf` pour les blocs),
+lue par `GameScene` :
 
 | Réglage | Éditeur ou Basique | Shader capable | Qui dessine le sol |
 |---|---|---|---|
@@ -2571,8 +2572,10 @@ des lots A à E, décrits ci-dessous (`Terrain/GroundEngines.ts` ne les crée qu
 `Terrain/PixelReliefShown.ts` disent « les blocs dessinent » (moteur à plat caché, piscines posées en image à leur
 image, feuilles au-dessus des blocs, herbe de la carte laissée aux blocs, écume en pixels, pas de traces du givre).
 
-**Limites.** L'écume du courant, les feuilles au sol, les flaques, les traces du givre, les arbres et les objets
-restent dessinés à leur place : ils ne montent pas avec un mont (lot 2 du relief). Le rendu en 3/4 est celui des
+**Limites.** L'écume du courant, les remous des puits et les ronds des sources, la vue des courants, les feuilles au
+sol, les flaques, les traces du givre, la vapeur des piscines chaudes, les échelles des piscines peintes, les arbres et
+les objets restent dessinés à leur place : ils ne montent pas avec un mont et ne descendent pas dans un trou (lot 2 du
+relief). Une piscine peinte sur un sol plat garde ses échelles au bon endroit ; peinte sur un relief, non. Le rendu en 3/4 est celui des
 textures du moteur à plat, pas le pixel art des blocs. Coût non mesuré sur une carte graphique intégrée. Le thème
 « Hiver » de la branche a disparu avec celui d'`infogene` ; un pont étant fait de paliers, plus de cas particulier d'un
 pont dans la nage, le décalage de l'avatar ni le clic.

@@ -7,10 +7,10 @@
 let read: (() => boolean) | undefined;
 
 /** Told by the scene when its map is set up, and with nothing when it is destroyed. */
-export function tellPixelReliefShown(reader: (() => boolean) | undefined): void {
+export function tellPixelBlocksShown(reader: (() => boolean) | undefined): void {
     read = reader;
 }
 
-export function pixelReliefShownNow(): boolean {
+export function pixelBlocksShownNow(): boolean {
     return read?.() === true;
 }
