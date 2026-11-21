@@ -4365,7 +4365,15 @@ Les sols se mélangent par leur hauteur (la luminosité de leur texture), leurs 
 la carte puis coupés net au pixel (pixel art, aucun fondu) ; les poids sont lissés 1-2-1 avant l'envoi pour que les
 bords ne suivent pas l'escalier des cases. L'herbe pousse en touffes (seuil sur la texture et un bruit), les cendres
 s'effacent par plaques. L'eau a sa couleur de sa profondeur, une surface animée en continu, une écume de rive et le
-sol mouillé autour. Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
+sol mouillé autour. **Eau mince visible** (2026-11-21, `fix/eau-invisible`) : le rivage du shader se calculait
+de la seule profondeur lissée (`profondeur × 12`, seuil 0,5), si bien qu'une nappe de moins de ~5 px (1 px d'eau =
+3,4 cm, soit ~18 cm) n'était pas dessinée au centre de sa case, et seulement par taches jusqu'à ~9 px (~30 cm) :
+un pré inondé par une source paraissait sec avec quelques points bleus, alors que le serveur y comptait l'eau (les
+animaux y boivent dès 2 px). Une présence d'eau par case (bleu du paquet 8, 255 dès qu'une case a de l'eau, au-dessus
+de `SHOWN_PX` de `TerrainWater`) est désormais lue à part de la profondeur : toute eau atteint au moins le bord de sa
+case, l'eau profonde garde son rivage d'avant (`waterShoreLevel`, jumeau TypeScript de la règle du GLSL, testé dans
+`WaterCover.test.ts`). Sous `SHORE_PX` (3 px, ~10 cm), un film est un sol luisant : opacité réduite jusqu'à 60 %,
+sans écume. Les deux replis (`TexturedGround`, canevas) dessinaient déjà toute case mouillée. Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
 (`TexturedGround`). Textures : `resources/terrain/ground-*.png` (générées, 4 tons nets ; `ground-ice.png` dans le
 style des patinoires).
 
