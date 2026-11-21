@@ -143,10 +143,10 @@ describe("the pool of workers that paint the blocks of the terrain", () => {
         [
             "a worker silent for more than 5 s",
             (_worker, painters) => {
-                painters.check(1000);
-                painters.check(1000 + PAINT_TIMEOUT_MS);
+                // Checked at every image (here every 100 ms), without an answer.
+                for (let now = 1000; now <= 1000 + PAINT_TIMEOUT_MS; now += 100) painters.check(now);
                 expect(painters.usable()).toBe(true);
-                painters.check(1001 + PAINT_TIMEOUT_MS);
+                painters.check(1100 + PAINT_TIMEOUT_MS);
                 expect(painters.usable()).toBe(false);
             },
         ],
@@ -181,15 +181,38 @@ describe("the pool of workers that paint the blocks of the terrain", () => {
         vi.spyOn(console, "warn").mockImplementation(() => undefined);
         const { painters, workers } = pool(1);
         for (const id of [1, 2, 3]) painters.post(job(id), () => undefined);
-        painters.check(0);
+        const checkUntil = (from: number, to: number) => {
+            for (let now = from; now <= to; now += 100) painters.check(now);
+        };
+        checkUntil(0, 4000);
         workers[0].answer();
-        painters.check(PAINT_TIMEOUT_MS - 1);
+        checkUntil(4100, 8000);
         workers[0].answer();
-        // 5 s after the first check, yet it answered meanwhile: the wait counts from its last answer.
-        painters.check(PAINT_TIMEOUT_MS + 10);
+        // 5 s and more since the first check, yet it answered meanwhile: the wait counts from its last answer.
+        checkUntil(8100, 12_000);
         expect(painters.usable()).toBe(true);
-        // Its last block: more than 5 s without an answer since that check.
-        painters.check(2 * PAINT_TIMEOUT_MS + 11);
+        // Its last block, and no answer for more than 5 s.
+        checkUntil(12_100, 13_300);
+        expect(painters.usable()).toBe(false);
+    });
+
+    it("does not take the game frozen for a while (tab asleep, debugger) for a worker that does not answer", () => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        const { painters, workers } = pool(1);
+        const done = vi.fn();
+        painters.post(job(1), done);
+        painters.check(0);
+        painters.check(16);
+        // The game is back after a minute without an image: nothing is counted of that minute.
+        painters.check(60_016);
+        painters.check(60_032);
+        expect(painters.usable()).toBe(true);
+        expect(warn).not.toHaveBeenCalled();
+        workers[0].answer();
+        expect(done).toHaveBeenCalledTimes(1);
+        // A worker really silent, the game running: 5 s of images later, it is broken down.
+        painters.post(job(2), done);
+        for (let now = 60_048; now <= 60_048 + PAINT_TIMEOUT_MS + 100; now += 16) painters.check(now);
         expect(painters.usable()).toBe(false);
     });
 

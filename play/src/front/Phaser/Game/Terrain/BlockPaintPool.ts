@@ -32,8 +32,13 @@ function workOf(job: BlockJob): number {
     return 16 / (job.texel * job.texel);
 }
 
-/** A worker that has not answered a block for this long is taken as broken down. */
+/** A worker that has not answered a block for this long, the game running, is taken as broken down. */
 export const PAINT_TIMEOUT_MS = 5000;
+/**
+ * Longer than this between two checks, the game itself was stopped (tab asleep, debugger, a long task): that time is
+ * not counted against the workers, which may have answered meanwhile without the game reading their answers yet.
+ */
+const GAME_STALLED_MS = 1000;
 
 /** A block given to a worker: what it weighs in its work, and who waits for its pixels. */
 interface Given {
@@ -64,6 +69,8 @@ export class BlockPaintPool implements BlockPainters {
     private broken = false;
     /** Buffers of pixels handed back by the game: each goes with a next job, to be painted into. */
     private readonly spare: ArrayBuffer[] = [];
+    /** When the pool was last asked to check on its workers. */
+    private lastCheck: number | undefined;
 
     constructor(
         private readonly spawn: () => WorkerLike,
@@ -115,10 +122,17 @@ export class BlockPaintPool implements BlockPainters {
         this.spare.push(pixels.buffer as ArrayBuffer);
     }
 
-    /** To call at every image, with the time: a worker silent for too long breaks the pool down. */
+    /**
+     * To call at every image, with the time: a worker silent for too long while the game runs breaks the pool down.
+     */
     public check(now: number): void {
+        const stalled =
+            this.lastCheck !== undefined && now - this.lastCheck > GAME_STALLED_MS ? now - this.lastCheck : 0;
+        this.lastCheck = now;
         for (const slot of this.slots) {
             if (slot.given.length === 0) continue;
+            // The game was stopped meanwhile: the wait starts again where it was.
+            if (stalled > 0 && slot.waitingSince !== undefined) slot.waitingSince += stalled;
             if (slot.waitingSince === undefined) slot.waitingSince = now;
             else if (now - slot.waitingSince > PAINT_TIMEOUT_MS) {
                 this.fail(new Error(`no answer for ${PAINT_TIMEOUT_MS} ms`));
