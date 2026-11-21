@@ -3902,6 +3902,11 @@ export class GameScene extends DirtyScene {
                     wam: () => this.getGameMap().getWamFile()?.getWam(),
                     view: () => this.cameras.main.worldView,
                     isFrozenAt: (x, y) => isOnFrozenWater(this, { x, y }),
+                    wind: () => {
+                        const weather = this.shownWeather();
+                        return weather ? { speed: weather.windSpeed, from: weather.windFrom } : undefined;
+                    },
+                    isOutdoorAt: (x, y) => this.getOutdoorGrid()?.isOutdoorAt(x, y) ?? true,
                 });
                 this.frozenPoolsView?.destroy();
                 this.frozenPoolsView = new FrozenPoolsView(this);

@@ -2304,6 +2304,29 @@ son seuil `shallowest`), un tourbillon sur chaque puits qui a de l'eau autour de
 tour par seconde selon le débit réglé) et des ronds qui s'élargissent sur chaque source. Dessiné 15 fois par seconde ;
 chaque navigateur a ses propres traits (un décor, rien n'est partagé). Rien pour qui a demandé moins de mouvement.
 
+**Écume des vagues et moutons du vent.** Trois écumes, chacune avec sa règle, toutes calculées par le navigateur à
+partir de ce qu'il reçoit déjà (profondeurs, vent) :
+
+- **Écume de courant** (ci-dessus) : réservée à l'eau peu profonde (moins de 32 px, une case : ruisseau, rivière,
+  nappe qui court sur la terre). En eau plus profonde, le courant d'une houle ne porte pas d'écume, sauf s'il est
+  presque au plus fort.
+- **Déferlement et rivage** (`Terrain/BreakingFoam.ts`) : une vague fait de l'écume quand elle est haute pour l'eau
+  où elle court. Hauteur de la vague (surface de la cellule moins le creux le plus bas à 3 cellules autour) divisée
+  par la profondeur sous ce creux : rien sous 0,3, tout blanc à 0,78 (seuil réel de déferlement en eau peu
+  profonde). Une houle longue sur fond profond, même haute, n'en fait donc aucune : l'onde d'une comète reste
+  lisse au large et blanchit en approchant des rives, sur les hauts-fonds et là où le bourrelet de l'impact
+  retombe. Une cascade en fait aussi. S'y ajoute le **front de crue** : une cellule sèche à l'état précédent,
+  mouillée maintenant, à côté d'une eau déjà là (pas la pluie qui remplit une mare). L'écume reste derrière la
+  vague et s'efface de moitié toutes les 1,8 s. Dessinée par cellule, par blocs vue de loin.
+- **Moutons** (`Terrain/Whitecaps.ts`) : le vent lève des vagues courtes qui cassent à leur crête, sans rapport
+  avec la houle. Part de l'eau blanchie selon la loi usuelle (Monahan et O'Muircheartaigh, 1980 :
+  3,84 × 10⁻⁶ × vent^3,41, vent en m/s) : rien sous 3 m/s, environ 0,03 % à force 3, 0,3 % à force 4, 1 % à
+  force 5, 2,4 % à force 6. Seulement dehors, sur une eau d'au moins 8 px, non gelée ; courts traits en travers du
+  vent, qui dérivent lentement sous lui ; 320 au plus à l'écran. Le vent est celui que le joueur voit (météo
+  réelle ou réglée).
+
+Aucun réglage, rien d'envoyé par le serveur. Non vu à l'écran par un agent.
+
 **Sources et puits repérés dans l'outil Relief.** Tant que l'outil Relief est ouvert, chaque objet qui porte une
 propriété de source ou de puits est repéré sur la carte (`Terrain/WaterMarks.ts`, logique pure ;
 `Terrain/WaterMarksView.ts`, dessin, créé et détruit par `TerrainEditorTool`) : une pastille bleue marquée + pour une
