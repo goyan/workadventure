@@ -98,6 +98,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         weather: {
             button: "Météo expliquée",
             title: "Pourquoi ce temps ?",
+            close: "Fermer « Météo expliquée »",
             intro: "Ce que tu vois dépend de deux airs. Ce tableau dit lequel décide, pourquoi, et qui voit la même chose.",
             more: "En savoir plus",
             airs: {
@@ -311,6 +312,8 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
             humidityValue: "{value} %",
             wind: "Vent",
             windValue: "{value} km/h",
+            less: "{label} : un cran de moins",
+            more: "{label} : un cran de plus",
             windFrom: "Vent de",
             clouds: "Afficher les nuages et leurs ombres (pour moi)",
             thresholds: "Le feu prend au-delà de",

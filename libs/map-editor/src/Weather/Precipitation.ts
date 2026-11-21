@@ -4,16 +4,26 @@
  * (drops or flakes), so both find the same form from the same temperature and humidity.
  */
 
+import { iceSaturationPressure, waterSaturationPressure } from "./HoarFrost";
+
 /** The humidity range of the fit of Stull (2011), in %. */
 const STULL_HUMIDITY: readonly [number, number] = [5, 99];
+/** The temperature range of that fit, in °C: out of it the psychrometric equation is solved instead. */
+const STULL_TEMPERATURE: readonly [number, number] = [-20, 50];
+/** Sea-level pressure, hPa: the fit of Stull is for it too. */
+const SEA_LEVEL_HPA = 1013.25;
 
 /**
  * Wet-bulb temperature (°C) at sea-level pressure from the air temperature (°C) and its relative humidity (%): the
  * empirical fit of R. Stull, "Wet-Bulb Temperature from Relative Humidity and Air Temperature", J. Appl. Meteor.
  * Climatol. 50 (2011), 2267-2269. Valid from -20 to 50 °C and 5 to 99 % (the humidity is kept within), to about 0.3 °C;
- * less exact in air both cold and very dry.
+ * less exact in air both cold and very dry. Out of its temperature range the fit is no longer to be trusted (it gives
+ * -48 °C for an air at -80 °C and 5 %): the psychrometric equation is solved there (psychrometricWetBulb).
  */
 export function wetBulbTemperature(temperature: number, humidity: number): number {
+    if (temperature < STULL_TEMPERATURE[0] || temperature > STULL_TEMPERATURE[1]) {
+        return psychrometricWetBulb(temperature, humidity);
+    }
     const rh = Math.min(STULL_HUMIDITY[1], Math.max(STULL_HUMIDITY[0], humidity));
     return (
         temperature * Math.atan(0.151977 * Math.sqrt(rh + 8.313659)) +
@@ -22,6 +32,30 @@ export function wetBulbTemperature(temperature: number, humidity: number): numbe
         0.00391838 * Math.pow(rh, 1.5) * Math.atan(0.023101 * rh) -
         4.686035
     );
+}
+
+/**
+ * Wet-bulb temperature (°C) at sea-level pressure by the psychrometric formulae of the WMO (WMO-No. 8, 2018, Annex
+ * 4.B, eq. 4.B.8 over water, 4.B.9 over ice under zero): the bulb whose saturation vapour pressure, less what the dry
+ * air takes from it by its warmth, is the vapour of the air. Solved by halving between the air and 120 °C under it:
+ * the left side grows with the bulb. The enhancement factor f(p), about 1.004 on both sides, is left out.
+ */
+function psychrometricWetBulb(temperature: number, humidity: number): number {
+    const vapour = (Math.min(100, Math.max(0, humidity)) / 100) * waterSaturationPressure(temperature);
+    const excess = (bulb: number): number =>
+        bulb >= 0
+            ? waterSaturationPressure(bulb) -
+              6.53e-4 * (1 + 0.000944 * bulb) * SEA_LEVEL_HPA * (temperature - bulb) -
+              vapour
+            : iceSaturationPressure(bulb) - 5.75e-4 * SEA_LEVEL_HPA * (temperature - bulb) - vapour;
+    let low = temperature - 120;
+    let high = temperature;
+    for (let step = 0; step < 48; step++) {
+        const middle = (low + high) / 2;
+        if (excess(middle) > 0) high = middle;
+        else low = middle;
+    }
+    return (low + high) / 2;
 }
 
 /**

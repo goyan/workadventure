@@ -154,6 +154,12 @@ const menu: DeepPartial<Translation["menu"]> = {
             custom: "Heure choisie",
             worldCity: "Ciel de {city}",
             worldPointCity: "Ciel de {city} (point choisi sur la carte)",
+            pointNorth: "N",
+            pointSouth: "S",
+            pointEast: "E",
+            pointWest: "O",
+            pointFar: "{point} · {city} à {distance} km",
+            pointShort: "{city} {distance} km",
             skyMenu: "Ciel et heure",
             basicOff:
                 "Le mode Basique coupe le cycle jour/nuit : plein jour. Ton choix ({mode}) reviendra quand tu le quitteras.",

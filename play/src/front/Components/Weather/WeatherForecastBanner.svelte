@@ -53,7 +53,10 @@
         const humidity =
             state.status === "known" ? realWeatherAt(state.slots, $nightDateStore.getTime())?.humidity : undefined;
         return {
-            city: place.name.split(",")[0]?.trim() || place.name,
+            // A town without its region and country; a point far from any city whole ("Auckland 4,000 km").
+            city: place.longName ? place.name : place.name.split(",")[0]?.trim() || place.name,
+            // A point far from any city: its coordinates on the chip, the nearest city and how far on the card.
+            longCity: place.longName ?? (place.name.split(",")[0]?.trim() || place.name),
             cells: chosenPlaceForecast(place, state, $nightDateStore),
             humidity,
         };
@@ -149,7 +152,7 @@
             />
             {#if mine}
                 <WeatherCard
-                    city={mine.city}
+                    city={mine.longCity}
                     kind="local"
                     tag={$LL.actionbar.weatherBanner.local()}
                     cells={mine.cells}

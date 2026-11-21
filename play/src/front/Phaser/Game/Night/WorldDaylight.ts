@@ -185,24 +185,123 @@ export interface WorldPoint {
 }
 
 /**
- * The place of a point of the world: its own latitude and longitude for the sun, the time zone and the name of the
- * nearest city of the list for the clock and the weather banner, however far it is.
+ * A point is named after the nearest city of the list only this close to it (km): a few suburbs away. Farther, a
+ * town of the list would name the middle of an ocean or the ice of Antarctica, often the very place of the map (two
+ * "Auckland" at 14 °C and −34 °C); the point then says its own coordinates.
  */
-export function placeOfPoint(point: WorldPoint): WeatherLocation {
-    let nearest = WORLD_CITIES[0];
-    let distance = Infinity;
-    for (const city of WORLD_CITIES) {
-        const gap =
-            (city.latitude - point.latitude) ** 2 +
-            (lonGap(city.longitude, point.longitude) * Math.cos((point.latitude * Math.PI) / 180)) ** 2;
-        if (gap < distance) {
-            nearest = city;
-            distance = gap;
+export const NAMED_POINT_RADIUS_KM = 150;
+/**
+ * Up to this far from the nearest city of the list (km), a point keeps the time zone of that city: the civil hour of
+ * its region, summer time included. Farther (an ocean, the poles), the zone of its longitude (Etc/GMT±N, an hour every
+ * 15°): the nearest city may be hours away.
+ */
+export const CITY_TIME_ZONE_RADIUS_KM = 1000;
+/** The mean radius of the Earth (km). */
+const EARTH_RADIUS_KM = 6371;
+
+/** The place of a point of the world: its name for a short line (clock, chip) and, when it differs, a longer one. */
+export interface WorldPlace extends WeatherLocation {
+    /** The name where there is room for more (weather card, sky menu, weather board); absent: `name`. */
+    longName?: string;
+}
+
+/** The words a point far from any city is named with, in the language of the player. */
+export interface PointWords {
+    north: string;
+    south: string;
+    east: string;
+    west: string;
+    /** The point and the city it is told against, the distance written: "72° S 170° E · Auckland à 4 000 km". */
+    far: (point: string, city: string, distance: string) => string;
+    /** The short name: the city it is told against and how far, "Auckland 4 000 km" (chip, clock). */
+    short: (city: string, distance: string) => string;
+    /** A number of kilometres written for the player ("4 000"). */
+    kilometres: (km: number) => string;
+}
+
+/**
+ * The most characters of a city in the short name of a point: the chip and the clock share one line with the floors.
+ * "Rio de Janeiro" is kept whole, "Petropavlovsk-Kamtchatski" becomes "Petropavlovsk…".
+ */
+export const SHORT_CITY_NAME_LENGTH = 14;
+
+/** A city name for the short name of a point: cut with an ellipsis past SHORT_CITY_NAME_LENGTH characters. */
+export function shortCityName(name: string): string {
+    const characters = Array.from(name);
+    if (characters.length <= SHORT_CITY_NAME_LENGTH) return name;
+    return `${characters
+        .slice(0, SHORT_CITY_NAME_LENGTH - 1)
+        .join("")
+        .trimEnd()}…`;
+}
+
+/** The nearest city of the list to a point, the great-circle way, and how far it is (km). */
+export function nearestCityOf(point: WorldPoint): { city: WeatherLocation; distanceKm: number } {
+    let city: WeatherLocation = WORLD_CITIES[0] ?? { name: "Paris", latitude: 48.86, longitude: 2.35 };
+    let distanceKm = Infinity;
+    for (const candidate of WORLD_CITIES) {
+        const distance = greatCircleKm(candidate, point);
+        if (distance < distanceKm) {
+            city = candidate;
+            distanceKm = distance;
         }
     }
-    // Named after the nearest city of the list, wherever the point is (its weather is that of the point itself).
-    const name = nearest?.name ?? `${Math.round(point.latitude)}°, ${Math.round(point.longitude)}°`;
-    return { name, latitude: point.latitude, longitude: point.longitude, timezone: nearest?.timezone };
+    return { city, distanceKm };
+}
+
+/**
+ * A point written in whole degrees, its hemispheres after them: "72° S 170° E". The hemisphere is that of the rounded
+ * value: no "0° N", no "180° E".
+ */
+export function pointCoordinates(point: WorldPoint, words: PointWords): string {
+    const latitude = Math.round(point.latitude);
+    const longitude = Math.round(wrapLongitude(point.longitude));
+    const ns = latitude > 0 ? ` ${words.north}` : latitude < 0 ? ` ${words.south}` : "";
+    const ew =
+        longitude > 0 && longitude < 180 ? ` ${words.east}` : longitude < 0 && longitude > -180 ? ` ${words.west}` : "";
+    return `${Math.abs(latitude)}°${ns} ${Math.abs(longitude)}°${ew}`;
+}
+
+/** A distance rounded for reading: to 10 km under 1 000 km, to 100 km beyond. */
+export function roundedDistanceKm(km: number): number {
+    const step = km < 1000 ? 10 : 100;
+    return Math.max(step, Math.round(km / step) * step);
+}
+
+/**
+ * The time zone of a point: that of the nearest city of the list within CITY_TIME_ZONE_RADIUS_KM, else the zone of
+ * its longitude. Etc/GMT counts the other way round: Etc/GMT-11 is UTC+11.
+ */
+export function pointTimeZone(
+    point: WorldPoint,
+    nearest: { city: WeatherLocation; distanceKm: number },
+): string | undefined {
+    if (nearest.distanceKm <= CITY_TIME_ZONE_RADIUS_KM) return nearest.city.timezone;
+    const hours = Math.max(-12, Math.min(12, Math.round(wrapLongitude(point.longitude) / 15)));
+    return hours === 0 ? "Etc/GMT" : `Etc/GMT${hours > 0 ? "-" : "+"}${Math.abs(hours)}`;
+}
+
+/**
+ * The place of a point of the world: its own latitude and longitude for the sun and the weather. Within
+ * NAMED_POINT_RADIUS_KM of a city of the list it is named after it; farther its short name is the nearest city and
+ * how far ("Auckland 4 000 km"), its long name adds its coordinates ("72° S 170° E · Auckland à 4 000 km"). Its time zone: pointTimeZone.
+ */
+export function placeOfPoint(point: WorldPoint, words: PointWords): WorldPlace {
+    const nearest = nearestCityOf(point);
+    const timezone = pointTimeZone(point, nearest);
+    if (nearest.distanceKm <= NAMED_POINT_RADIUS_KM) {
+        return { name: nearest.city.name, latitude: point.latitude, longitude: point.longitude, timezone };
+    }
+    const coordinates = pointCoordinates(point, words);
+    const distance = words.kilometres(roundedDistanceKm(nearest.distanceKm));
+    return {
+        // The city speaks to the player more than coordinates; its distance tells it is not the city itself.
+        name: words.short(shortCityName(nearest.city.name), distance),
+        longName: words.far(coordinates, nearest.city.name, distance),
+        latitude: point.latitude,
+        longitude: point.longitude,
+        timezone,
+    };
 }
 
 /**
@@ -213,10 +312,20 @@ export function worldShadeAt(date: Date, latitude: number, longitude: number): n
     return nightOpacityAt(date, { latitude, longitude }) / NIGHT_MAX_OPACITY;
 }
 
-/** Degrees between two longitudes, the short way round. */
-function lonGap(a: number, b: number): number {
-    const gap = Math.abs(a - b) % 360;
-    return Math.min(gap, 360 - gap);
+/** Kilometres between two points of the Earth, the great-circle way (haversine). */
+function greatCircleKm(a: WorldPoint, b: WorldPoint): number {
+    const radians = Math.PI / 180;
+    const dLat = (b.latitude - a.latitude) * radians;
+    const dLon = (b.longitude - a.longitude) * radians;
+    const h =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(a.latitude * radians) * Math.cos(b.latitude * radians) * Math.sin(dLon / 2) ** 2;
+    return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/** A longitude brought within −180° to 180°. */
+function wrapLongitude(longitude: number): number {
+    return ((((longitude + 180) % 360) + 360) % 360) - 180;
 }
 
 /** Minutes between two times of the day, the short way round midnight. */

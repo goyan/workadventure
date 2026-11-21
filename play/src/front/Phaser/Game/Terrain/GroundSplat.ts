@@ -5,6 +5,7 @@ import { refreshCanvasTexture } from "@wa/front/Phaser/Game/CanvasTextureRefresh
 import { DEEP_ICE_PX, POOL_ICE_DEPTH_PX } from "@wa/front/Phaser/Game/Weather/Frost";
 import type { WaterCycle } from "@wa/front/Phaser/Game/Weather/Frost";
 import type { WaterRing } from "@wa/front/Phaser/Game/Catastrophe/MeteorFall";
+import { SHORE_PX } from "./TerrainShading";
 import { WHITECAP_MIN_DEPTH_PX } from "./Whitecaps";
 import { GROUND_TEXTURES } from "./TexturedGround";
 import type { GroundArea } from "./TexturedGround";
@@ -37,6 +38,8 @@ const PACKS_ACROSS = 4;
 const PACKS_DOWN = PACKS / PACKS_ACROSS;
 /** The depth of water (map pixels) the water channel reaches its full value at. */
 const WATER_SCALE_PX = 128;
+/** The depth (0 to 1 of WATER_SCALE_PX) times this is how far a deep water reaches over the cells around it. */
+const SHORE_GAIN = 12;
 /** How strong the dark of the hollows and the light of the mounts are, against the bare relief: the water and the
  * textures already tell the depth. */
 const RELIEF_SHADE = 0.6;
@@ -429,7 +432,9 @@ void main() {
     float frozen = depthPx > 0.0 ? mix(step(frozenAt, uIce) * outdoors, keptFrozen, uServerIce) : 0.0;
     float still = 1.0 - frozen;
     // The shore: the water of a cell reaches the middle of the next, bent by a noise that drifts slowly (lapping).
-    float level = clamp(depth * 12.0, 0.0, 1.0);
+    // However thin, water reaches the edge of its cell: whether a cell holds any (pack 8, blue), apart from how
+    // deep it is, keeps a film of a few centimetres from vanishing (waterShoreLevel is the twin of this rule).
+    float level = max(clamp(depth * ${SHORE_GAIN}.0, 0.0, 1.0), pack(8.0, world).b);
     float drift = fbm(world / 18.0 + vec2(t * 0.05, -t * 0.04) * still) - 0.5;
     float edge = bend(level, drift, 1.3);
     float cover = step(0.5, edge);
@@ -456,7 +461,9 @@ void main() {
     } else if (cover > 0.001) {
         float deep = clamp(depth * ${WATER_SCALE_PX}.0 / 64.0, 0.0, 1.0);
         vec3 water = mix(SHALLOW, DEEP, deep);
-        float alpha = mix(0.5, 0.92, deep);
+        // A film thinner than the shore of the water (SHORE_PX) is a wet sheen: the ground shows through it.
+        float film = smoothstep(0.0, ${SHORE_PX}.0, depthPx);
+        float alpha = mix(0.5, 0.92, deep) * mix(0.6, 1.0, film);
 
         // The waves of the comets: a bright crest running to the shores, a dark trough behind, the surface pushed.
         float shock = ringsAt(world);
@@ -479,11 +486,12 @@ void main() {
         float band = step(0.5, edge) * (1.0 - step(0.66, edge));
         float wave = 0.5 + 0.5 * sin(t * 1.6 + drift * 12.0);
         float froth = smoothstep(0.35, 0.6, fbm(world / 5.0 + vec2(t * 0.25, 0.0)) * (0.6 + 0.6 * wave));
-        float foam = band * froth;
+        // A film too thin to break does not froth.
+        float foam = band * froth * film;
 
-        // The foam of the waves that break and of the floods that advance (BreakingFoam.ts, the blue of pack 8):
+        // The foam of the waves that break and of the floods that advance (BreakingFoam.ts, the red of pack 9):
         // a froth torn by a fine noise that boils, whole where the foam is strong, in flecks where it fades.
-        float broken = pack(8.0, world).b;
+        float broken = pack(9.0, world).r;
         float boil = fbm(world / 3.5 + vec2(t * 0.35, -t * 0.25));
         float surf = smoothstep(0.78 - 0.62 * broken, 0.9 - 0.62 * broken, boil) * step(0.03, broken);
         foam = max(foam, surf * 0.92);
@@ -707,13 +715,10 @@ export class GroundSplat {
         if (!area || !pixels) return;
         this.strength = strength;
         const { columns, rows } = area;
-        const data = pixels.data;
-        let any = false;
+        const any = writeWater(pixels.data, wet, columns, rows);
+        // The foam of the waves, in a pack of its own.
         for (let cell = 0; cell < columns * rows; cell++) {
-            const depth = wet?.[cell] ?? 0;
-            if (depth > 0) any = true;
-            data[texel(2, cell, columns, rows) + 2] = Math.min(255, Math.round((depth * 255) / WATER_SCALE_PX));
-            data[texel(8, cell, columns, rows) + 2] = depth > 0 ? (foam?.[cell] ?? 0) : 0;
+            pixels.data[texel(9, cell, columns, rows)] = (wet?.[cell] ?? 0) > 0 ? (foam?.[cell] ?? 0) : 0;
         }
         if (!any && !this.anyWater) return;
         this.anyWater = any;
@@ -895,6 +900,36 @@ function poolNeighbour(
         }
     }
     return undefined;
+}
+
+/**
+ * Writes the water of an area (pixels of water a cell, see TerrainWater.levelsOver) into the picture of the weights:
+ * its depth (pack 2, blue) and, apart from it, whether a cell holds any (pack 8, blue). Returns whether any does.
+ */
+export function writeWater(
+    data: Uint8ClampedArray,
+    wet: Uint8Array | undefined,
+    columns: number,
+    rows: number,
+): boolean {
+    let any = false;
+    for (let cell = 0; cell < columns * rows; cell++) {
+        const depth = wet?.[cell] ?? 0;
+        if (depth > 0) any = true;
+        data[texel(2, cell, columns, rows) + 2] = Math.min(255, Math.round((depth * 255) / WATER_SCALE_PX));
+        data[texel(8, cell, columns, rows) + 2] = depth > 0 ? 255 : 0;
+    }
+    return any;
+}
+
+/**
+ * The level of the shore at a point, from the depth (0 to 1 of WATER_SCALE_PX) and the presence of water (0 to 1),
+ * both smoothed between the cells: the water shader draws the point where this, bent by its noise, reaches one half.
+ * The TypeScript twin of the rule of WATER_FRAG. A deep water reaches past the edge of its cell, as far as its depth
+ * smoothed allows; however thin, water reaches the edge of its cell (the presence is one half there).
+ */
+export function waterShoreLevel(depth: number, present: number): number {
+    return Math.max(Math.min(1, Math.max(0, depth * SHORE_GAIN)), present);
 }
 
 export function texel(pack: number, cell: number, columns: number, rows: number): number {

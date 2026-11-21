@@ -93,6 +93,35 @@ viser un mur, un meuble et un avatar, puis vérifier les espaces dans une saisie
 l'éditeur et une interaction ESPACE après rangement. Le son est synthétique original,
 CC0 ; aucune dépendance, texture externe ni modification du protocole protobuf.
 
+## Symbole de perception modifiée
+
+Un petit symbole flotte au-dessus du nom d'un joueur qui ne perçoit pas le monde partagé, comme sous l'effet d'un
+sort :
+
+- **œil barré violet** : il est en **mode Basique** (ni nuit, ni météo, ni effets) ;
+- **œil dans une boule de cristal cyan** : il suit la **météo d'une autre ville** (« Jour dans le monde »).
+
+Les deux portent la même étoile qui scintille ; leurs formes diffèrent (œil plat et barre, anneau), pour être distingués
+sans les couleurs. Au survol du symbole, une infobulle le dit (« Mode Basique : ne voit ni la nuit ni la météo », « Suit
+la météo d'une autre ville » : la ville n'est jamais transmise). Le Basique l'emporte sur une ville suivie : il coupe
+aussi la météo de cette ville (lu dans le code : dessin de la météo, `WeatherManager` ; nuit, `effectiveNightModeStore` ;
+sol, `TerrainView`).
+
+- **Qui le voit** : seulement un joueur qui perçoit lui-même le monde partagé (ni Basique, ni ville suivie), jamais
+  au-dessus de son propre avatar (`shownPerceptionMark`, `Perception/PerceptionProtocol.ts`).
+- **Partage** : variable de joueur publique `_perception`, non sauvegardée (`none`, `basic`, `place` ; toute autre
+  valeur lue `none`), publiée à l'entrée dans la salle et à chaque changement (`PerceptionManager`). Aucun changement
+  du protocole ni de `back` ; un ancien client n'affiche rien. Le Basique compte tel qu'il est choisi, même dans
+  l'éditeur (le symbole ne clignote pas à chaque édition) ; un essai de météo dans le panneau de la carte n'est pas
+  une ville suivie.
+- **Place** : élément de la pastille du nom (`UsernamePerceptionDisplay`), donc dans la même couche au-dessus de la
+  nuit et du brouillard, à la même échelle, et il suit le palier et l'avion comme le nom ; 2 px au-dessus de la
+  pastille, au-dessus des cœurs du Nerf quand ils s'affichent ; caché pendant une bulle de texte ou une émote, et avec
+  la pastille quand la mini-vidéo est sur l'avatar.
+- **Animation** : flottement de 1 px par pixel entier (deux positions en 2,4 s) et scintillement de l'étoile en trois
+  pas, joués par le navigateur (Web Animations) : la scène Phaser n'est jamais redessinée pour eux ; une animation du
+  navigateur par symbole visible, coût non mesuré. Immobile avec « mouvement réduit ».
+
 ## Torche
 
 Cliquer sur son avatar, puis **Équiper la torche** dans la roue d'actions ; **Ranger la torche** apparaît au même
@@ -1630,8 +1659,22 @@ d'heure) à ±2 min. La nuit, un voile bleu nuit
     peuvent tomber sur ces villes (ex. 18 h 30 le 21 juin à 06:00 UTC : Unalaska au lieu d'Auckland) ; un **point
     cliqué** près d'elles porte leur nom et leur fuseau.
   - **Heure choisie** : inchangée, la ville dont l'**heure solaire vraie** est la plus proche (avec l'équation du
-    temps, ±16 min selon la saison), gardée à 50 min près. **Point cliqué** sur la carte : inchangé ; le menu dit
-    alors « Ciel de … (point choisi sur la carte) », surligné, puisqu'aucun moment n'est enfoncé. La carte du monde du menu s'ombre avec le voile du jeu lui-même
+    temps, ±16 min selon la saison), gardée à 50 min près. **Point cliqué** sur la carte : le menu dit alors
+    « Ciel de … (point choisi sur la carte) », surligné, puisqu'aucun moment n'est enfoncé. Le point garde ses
+    coordonnées pour le soleil et la météo ; il ne porte le **nom** d'une ville de la liste qu'à 150 km d'elle au plus
+    (`NAMED_POINT_RADIUS_KM`, distance orthodromique, `nearestCityOf`). Plus loin, forme courte (horloge, pastille
+    météo) : la ville de repère et sa distance, « Auckland 4 000 km » (« Auckland 4,000 km » en anglais), jamais la
+    ville seule, qui reste réservée à un point à 150 km au plus ; un nom de ville de plus de 14 caractères y est
+    coupé d'une ellipse, la distance gardée (« Petropavlovsk… 12 300 km », `shortCityName`), pour que la ligne de
+    l'horloge tienne. La pastille ne coupe plus à la virgule le nom d'un point (la virgule du séparateur de milliers
+    anglais), seulement celui d'une ville du lieu de la carte. Forme longue, avec les coordonnées en degrés entiers « 72° S 170° E · Auckland à 4 000 km » (sans parenthèses : le tableau le met déjà entre parenthèses, « Ton air (…, −34 °C) » ; `WorldPlace.longName` : menu de
+    l'horloge, fiche météo personnelle, « Météo expliquée ») ; ouest « O » en français, « W » en anglais. Avant, un
+    clic dans l'océan Austral s'appelait « Auckland » comme le lieu du serveur : deux fiches « Auckland » à 14 °C et
+    −34 °C. Son **fuseau** : celui de la ville la plus proche à 1 000 km au plus (`CITY_TIME_ZONE_RADIUS_KM`, heure
+    civile de la région, heure d'été comprise), sinon celui de sa longitude, `Etc/GMT±N` (une heure par 15°, signe
+    inversé : `Etc/GMT-11` = UTC+11) : la ville la plus proche d'un point de l'Antarctique peut être à plusieurs
+    heures de lui. Les cases de la liste sont espacées : la plupart des clics à terre, même en Europe, se nomment
+    désormais par leurs coordonnées. La carte du monde du menu s'ombre avec le voile du jeu lui-même
   (`worldShadeAt` = `nightOpacityAt` vu de chaque point) : plein jour jusqu'à −0,833°, assombrie jusqu'à −6°, nuit
   au-delà. Dessinée pixel par pixel (240 × 120) : environ 7 ms par dessin (mesuré en conteneur Linux sur un Mac), une
   fois par seconde tant que le menu est ouvert en mode monde.
@@ -2326,7 +2369,7 @@ partir de ce qu'il reçoit déjà (profondeurs, vent) :
   du vent, qui dérivent lentement sous lui. Le vent est celui que le joueur voit (météo réelle ou réglée).
 
 Le déferlement et les moutons sont dessinés par le **shader de l'eau** (`Terrain/GroundSplat.ts`), comme l'écume
-de rive : l'écume des vagues lui arrive par cellule (bleu du paquet 8), déchirée par un bruit fin qui bouillonne ;
+de rive : l'écume des vagues lui arrive par cellule (rouge du paquet 9), déchirée par un bruit fin qui bouillonne ;
 les moutons par un uniforme (`uWind` : sens du vent et part blanchie), dans une grille posée le long du vent. Sans
 shader (rendu de secours), ni l'un ni l'autre. Coupés avec l'effet « eau en mouvement ».
 
@@ -2754,6 +2797,16 @@ cela change, et la règle dans un « En savoir plus » :
 | Glace sur l'eau | `iceOf(frostAirNow)`, `isFrozen` | comme le givre | comme le givre |
 | Sol gelé | `soilFrostOf(roomPrecipitationAir)` | carte (serveur) | tout le monde |
 | Neige au sol | `MeadowState` reçu du serveur, `snowMeltMmPerHour` | carte (serveur) | ceux qui suivent le serveur |
+
+**Jamais plus bas que la fenêtre.** Le tableau est sous l'horloge, les fiches météo dépliées, le concours de pêche
+et les catastrophes, dans une colonne sans borne basse : une hauteur fixe (60 % de la fenêtre) le faisait sortir de
+l'écran. `WeatherBoardLive` mesure la place qui reste sous ce qui le précède jusqu'au bas de la fenêtre (marge de
+12 px, `weatherBoardFit`) et lui donne cette hauteur, le tableau défilant dedans ; mesure refaite quand la colonne
+ou la fenêtre change de taille, pas à chaque seconde. Avec moins de 240 px de place, il s'ouvre **par-dessus** les
+panneaux du dessous, juste sous la ligne de l'horloge (et ses fiches), fond opaque, avec une croix de fermeture
+(la tuile qui l'a ouvert peut être dessous). La molette au-dessus du tableau le fait défiler, sans zoomer le jeu
+(Phaser ne lit que la molette au-dessus du canevas) ; pas de fermeture par Échap (aucun panneau voisin ne le fait,
+et Échap désarme déjà une catastrophe).
 
 **L'écran du joueur face à la carte du serveur.** Le sujet du tableau est ce que ce joueur voit. Quand il suit une
 ville, la pluie ou la neige, le givre et la glace de son écran sont calculés une seconde fois avec l'air de la carte
@@ -3214,7 +3267,7 @@ du serveur, la glace est maintenant tenue par le serveur, case par case.
   (9e paquet de `GroundSplat`, 12 paquets au lieu de 8, uniforme `uServerIce`), plus transparente quand elle est
   mince, et la neige posée dessus est celle de la case. `isOnFrozenWater` lit la glace du serveur (`Ice/IceHold.ts`).
   En météo personnelle (pastille 🖥), rien ne change : le gel local de `Frost.ts`.
-- **Température manuelle** jusqu'à −30 °C (au lieu de −10), pour geler un lac vite.
+- **Température manuelle** jusqu'à −30 °C (au lieu de −10), pour geler un lac vite ; aujourd'hui jusqu'à −80 °C (voir « Conditions réglées à la main : les extrêmes »).
 - **Piscines.** Une piscine peinte (outil Relief, mode Piscine) gèle par la glace du serveur comme un lac, d'après
   la profondeur de son style, sauf si son eau est chaude : chauffée, elle ne gèle jamais et fait fondre la neige qui
   y tombe. Le pré relit les styles avec la carte (`Meadow`, tableaux `pool` et `hotPool`). On y patine quand la glace
@@ -3823,8 +3876,8 @@ seuils. Le serveur (`back/src/Model/FireConditionsManager.ts`) les tient pour to
 - Sinon, ou pour ce que la météo réelle ne donne pas : conditions neutres 20 °C, 60 %, 10 km/h du nord-ouest. Une
   carte en météo fixe ou automatique ne sèche donc qu'en manuel.
 
-Le serveur borne toute valeur (température −10 à 50 °C, humidité 0 à 100 %, vent 0 à 120 km/h ; seuils 0 à 50 °C,
-5 à 100 %, 5 à 120 km/h), refuse plus de 5 changements par seconde et par joueur, annonce les conditions à la salle à
+Le serveur borne toute valeur (température −80 à +80 °C, humidité 0 à 100 %, vent 0 à 250 km/h depuis le 2026-11-21,
+voir « Conditions réglées à la main : les extrêmes » ; seuils 0 à 50 °C, 5 à 100 %, 5 à 120 km/h), refuse plus de 5 changements par seconde et par joueur, annonce les conditions à la salle à
 chaque changement (et quand la météo réelle avance) et à l'entrée d'un joueur. Rien n'est enregistré : après un
 redémarrage de `back`, la salle revient aux conditions réelles et aux seuils 30-30-30.
 
@@ -4372,14 +4425,22 @@ Les sols se mélangent par leur hauteur (la luminosité de leur texture), leurs 
 la carte puis coupés net au pixel (pixel art, aucun fondu) ; les poids sont lissés 1-2-1 avant l'envoi pour que les
 bords ne suivent pas l'escalier des cases. L'herbe pousse en touffes (seuil sur la texture et un bruit), les cendres
 s'effacent par plaques. L'eau a sa couleur de sa profondeur, une surface animée en continu, une écume de rive et le
-sol mouillé autour. Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
+sol mouillé autour. **Eau mince visible** (2026-11-21, `fix/eau-invisible`) : le rivage du shader se calculait
+de la seule profondeur lissée (`profondeur × 12`, seuil 0,5), si bien qu'une nappe de moins de ~5 px (1 px d'eau =
+3,4 cm, soit ~18 cm) n'était pas dessinée au centre de sa case, et seulement par taches jusqu'à ~9 px (~30 cm) :
+un pré inondé par une source paraissait sec avec quelques points bleus, alors que le serveur y comptait l'eau (les
+animaux y boivent dès 2 px). Une présence d'eau par case (bleu du paquet 8, 255 dès qu'une case a de l'eau, au-dessus
+de `SHOWN_PX` de `TerrainWater`) est désormais lue à part de la profondeur : toute eau atteint au moins le bord de sa
+case, l'eau profonde garde son rivage d'avant (`waterShoreLevel`, jumeau TypeScript de la règle du GLSL, testé dans
+`WaterCover.test.ts`). Sous `SHORE_PX` (3 px, ~10 cm), un film est un sol luisant : opacité réduite jusqu'à 60 %,
+sans écume. Les deux replis (`TexturedGround`, canevas) dessinaient déjà toute case mouillée. Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
 (`TexturedGround`). Textures : `resources/terrain/ground-*.png` (générées, 4 tons nets ; `ground-ice.png` dans le
 style des patinoires).
 
 **Météo personnelle.** Le bandeau météo devient une pastille : la ville du serveur (globe) avec l'icône du temps et
 une flèche du vent ; un clic ouvre le bulletin, sous la pastille. Dès 768 px de large, la pastille météo et la pile des
 étages sont sur la ligne de l'horloge, à sa gauche (météo, étages, horloge) ; en dessous, empilées sous l'horloge. Un joueur qui suit un lieu du monde sur son horloge (mode « monde »,
-`worldCityStore`, nommé d'après la ville la plus proche) voit aussi sa ville (ordinateur), et le jeu dessine pour lui
+`worldCityStore`, nommé d'après la ville la plus proche, ou par ses coordonnées loin de toute ville) voit aussi sa ville (ordinateur), et le jeu dessine pour lui
 seul la météo de ce lieu (`ChosenPlaceWeather`, route `real-weather` du pusher) ; les autres gardent celle du
 serveur.
 
@@ -4433,3 +4494,46 @@ piscines-images (objets avec eau) sont redessinées de la même façon, image ca
 piscine modifiable » dans l'éditeur d'objets la remplace par une piscine peinte (`MapEditor/PoolConversion.ts`).
 **Gel** : une piscine gèle en surface comme une eau calme de 32 px, quelle que soit sa profondeur
 (`POOL_ICE_DEPTH_PX`), soit vers -8 °C ; jamais dedans (`OutdoorGrid`) ni chauffée.
+
+## Conditions réglées à la main : les extrêmes
+
+Depuis le 2026-11-21, les conditions réglées à la main dans la salle (Catastrophe → Météo) vont de **−80 à +80 °C**
+pour la température et de **0 à 250 km/h** pour le vent (avant −10 à 50 °C et 0 à 120 km/h) ; l'humidité reste de 0
+à 100 %, les seuils du feu ne changent pas. Les bornes ne vivent qu'à un endroit, `FIRE_CONDITION_BOUNDS`
+(`libs/map-editor/src/Weather/FireConditions.ts`) : le curseur, le serveur (`boundedFireConditions`, une valeur
+au-delà est ramenée à la borne) et le tableau « Météo expliquée » (bornes de ses recherches de seuil) les lisent.
+Chaque curseur de condition a deux boutons − et + qui la déplacent d'un cran (un degré, un point, un km/h), le
+curseur gardant un cran par pixel environ. Le protocole ne change pas (champs `double`).
+
+Ce que donne chaque règle aux extrêmes, figé par `libs/map-editor/tests/WeatherExtremes.test.ts` et
+`play/tests/front/Phaser/Game/Weather/WeatherExtremes.test.ts` :
+
+- **neige ou pluie** : toute précipitation est de la neige par −20 °C et en dessous, de la pluie dès 6 °C. Le
+  thermomètre mouillé (`wetBulbTemperature`) suit l'ajustement de Stull de −20 à 50 °C ; au-delà il est tiré des
+  formules psychrométriques de l'OMM (WMO-No. 8, 2018, annexe 4.B, éq. 4.B.8 et 4.B.9, au niveau de la mer) : Stull
+  donnait −48 °C pour un air à −80 °C et 5 %, l'équation donne −80 °C. Le passage à −20 °C saute de moins de 4 °C
+  (l'erreur de Stull dans un air froid et sec), sans effet sur la neige ;
+- **givre** : les formes de Magnus de l'OMM sont gardées hors de leur domaine annoncé (eau −45 à 60 °C, glace −65 à
+  0 °C) : elles restent à moins de 2,5 % des pressions de vapeur de Murphy et Koop (2005) de −80 à +80 °C, et à 1,5 %
+  des tables de vapeur à 80 °C (474,2 hPa, Wagner et Pruss 2002). Par −80 °C le sol ne blanchit que si l'air est saturé sur la glace ; jamais par +80 °C.
+  Le vent retient le givre en ôtant le refroidissement du sol ; au-delà de 120 km/h (l'ancienne borne, rien ne change
+  en dessous), une tempête l'arrache : il s'efface jusqu'à disparaître à 250 km/h (`FROST_SWEPT_FROM_KMH`,
+  `FROST_SWEPT_KMH`, un choix : le givre de surface est un dépôt fragile d'air calme, UBC « Surface hoar ») ;
+- **sol** gelé tout entier dès −1 °C, **eau** gelée tout entière dès −15 °C (glace du navigateur) ; la glace du
+  serveur (#429) prend le lac jusqu'au fond en quelques pas par −80 °C et 250 km/h sans dépasser son eau, et fond
+  d'environ 108 mm par pas par +80 °C (loi de Stefan intégrée pas à pas : par grand froid et grand vent, le premier
+  pas surestime l'épaisseur, bornée par l'eau et par 1 m) ;
+- **neige au sol** : par +80 °C, un air humide et 250 km/h, elle fond à 324 mm d'eau par heure réelle, environ
+  108 mm par pas de 2 s du jeu (une neige de 600 mm part en une vingtaine de secondes) ; aucune fonte sous 0 °C ;
+- **feu** : danger nul par grand froid, maximal par +80 °C, air sec et grand vent. La tête du feu plafonne toujours à
+  dix cases par pas de 2 s (atteint dès 125 km/h, environ 20 km/h de course, Cheney et Cruz), les braises des arbres
+  à quarante cases (dès 120 km/h) : à 250 km/h le feu ne va pas plus vite qu'à 125 et ne traverse jamais la carte en
+  un pas ; flancs et arrière presque immobiles ;
+- **navigateur** : nuages à 180 px/s au plus (dès 60 km/h), arbres couchés et feuilles au plus fort dès 80 km/h
+  (`TreePoses`, `TreeLeafFall`), feuilles au sol au palier le plus fort dès 50 km/h, pluie penchée d'un pixel par
+  pixel au plus (dès 60 km/h), flammes couchées dès 60 km/h, fumée portée au plus dès 60 km/h : tous plafonnés, rien ne déborde.
+
+Le schéma de la météo réelle (`RealWeatherSlot`) ne borne pas la température et accepte un vent jusqu'à 500 km/h :
+un lieu réel extrême n'est pas rejeté. Rien de ces conditions n'est enregistré ; un ancien `back` ramènerait la
+valeur à ses anciennes bornes (le curseur revient alors sur ce que le serveur annonce) : `play` et `back` vont
+ensemble.

@@ -24,7 +24,11 @@ const place = vi.hoisted((): { value: { name: string } | undefined } => ({ value
 const clock = vi.hoisted((): { store: Writable<Date | undefined> | undefined } => ({ store: undefined }));
 const chosen = vi.hoisted(
     (): {
-        place: { store: Writable<{ name: string; latitude: number; longitude: number } | undefined> | undefined };
+        place: {
+            store:
+                | Writable<{ name: string; longName?: string; latitude: number; longitude: number } | undefined>
+                | undefined;
+        };
         state: { store: Writable<{ place: unknown; state: unknown }> | undefined };
         cells: { at: number; weather?: string; temperature?: number; windSpeed?: number; windFrom?: number }[];
     } => ({ place: { store: undefined }, state: { store: undefined }, cells: [] }),
@@ -458,6 +462,27 @@ describe("WeatherForecastBanner", () => {
                 ?.textContent?.replace(/\s+/g, " ")
                 .trim(),
         ).toBe("Now -3°");
+    });
+
+    it("names a point far from any city by the city it is told against on the chip, with its coordinates on the card", () => {
+        chosen.cells = [{ at: NOW.getTime(), weather: "snow", temperature: -34 }];
+        render(false);
+        chosen.place.store?.set({
+            name: "Auckland 4,000 km",
+            longName: "72° S 170° E · Auckland 4,000 km away",
+            latitude: -72.4,
+            longitude: 170.2,
+        });
+        flushSync();
+        // Whole, though English groups thousands with a comma: a point's name is never cut as a town's.
+        expect(target.querySelector('[data-testid="weather-chip-local"]')?.textContent?.trim()).toBe(
+            "Auckland 4,000 km",
+        );
+        chip()?.click();
+        flushSync();
+        expect(target.querySelector('[data-testid="weather-card-local-city"]')?.textContent).toBe(
+            "72° S 170° E · Auckland 4,000 km away",
+        );
     });
 
     it("shows no badge while the player follows the server: there is one weather only", () => {
