@@ -16,6 +16,7 @@ import {
     removeStairAt,
     stairArrivalCells,
     stairAt,
+    stairBaseBelow,
     stairHasArrival,
     stairUnderPoint,
     stairTarget,
@@ -287,5 +288,24 @@ describe("floor operations", () => {
         expect(stairTargets(0, levels)).toEqual([52, 84, 116]);
         // A level that walls standing on a floor give (116 + 52) is offered with them.
         expect(stairTargets(116, [...levels, 168])).toEqual([148, 168, 180]);
+    });
+});
+
+describe("the level the stair mode goes down to", () => {
+    const LEVELS = [20, 52, 84, 116];
+    it("is the ground under a deck just laid, with nothing built above it", () => {
+        expect(stairBaseBelow(52, [52], LEVELS)).toBe(0);
+        expect(stairBaseBelow(20, [20], LEVELS)).toBe(0);
+    });
+    it("is the highest built floor a stair reaches it from", () => {
+        expect(stairBaseBelow(116, [52, 116], LEVELS)).toBe(52);
+    });
+    it("is none on the ground, nor on a floor a stair leaves for a built one", () => {
+        expect(stairBaseBelow(0, [52], LEVELS)).toBeUndefined();
+        expect(stairBaseBelow(52, [52, 84], LEVELS)).toBeUndefined();
+        expect(stairBaseBelow(52, [52, 116], LEVELS)).toBeUndefined();
+    });
+    it("is none when no stair reaches the floor", () => {
+        expect(stairBaseBelow(180, [180], [...LEVELS, 180])).toBeUndefined();
     });
 });

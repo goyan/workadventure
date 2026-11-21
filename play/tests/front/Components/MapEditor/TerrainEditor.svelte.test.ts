@@ -153,6 +153,23 @@ describe("TerrainEditor", () => {
         });
     });
 
+    it("keeps the detail of a setting folded under its one-line hint", () => {
+        render();
+        byTestId("terrain-inertia").querySelector("input")?.click();
+        flushSync();
+        const folded = byTestId("terrain-wave-roughness").querySelector("details");
+        expect(folded?.open).toBe(false);
+        expect(folded?.querySelector("summary")?.textContent).toContain("mapEditor.terrain.more");
+        expect(folded?.textContent).toContain("mapEditor.terrain.waves.roughnessDetail");
+        // The hint itself stays in sight.
+        expect(byTestId("terrain-wave-roughness").querySelector("p")?.textContent).toContain(
+            "mapEditor.terrain.waves.roughnessHint",
+        );
+        for (const id of ["terrain-water-realistic", "terrain-inertia", "terrain-flow-pace", "terrain-updates"]) {
+            expect(byTestId(id).querySelector("details")).not.toBeNull();
+        }
+    });
+
     it("sets every setting of the water back to its realistic value with one button", () => {
         render();
         setRange("terrain-runoff", 50);

@@ -297,6 +297,20 @@ export function stairTarget(
 }
 
 /**
+ * The level the stair mode goes down to when it is chosen on a floor no stair would leave for a built one: the
+ * stair wanted is then the one that goes up to this floor (a deck just laid needs its ramps). The highest level a
+ * stair reaches it from, among the ground and the floors that have slabs; undefined when this floor is fine, or when
+ * no stair reaches it.
+ */
+export function stairBaseBelow(level: number, built: readonly number[], levels: readonly number[]): number | undefined {
+    if (level <= 0) return undefined;
+    if (stairTargets(level, levels).some((target) => built.includes(target))) return undefined;
+    return [0, ...built]
+        .filter((base) => base < level && stairRiseBetween(base, level) !== undefined)
+        .sort((a, b) => b - a)[0];
+}
+
+/**
  * The tiles one steps onto at the top of a stair, on the floor it reaches: the ones just beyond its top end, across
  * its width.
  */

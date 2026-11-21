@@ -2,6 +2,7 @@ import { writable } from "svelte/store";
 import type { FloorFamily, WallHeight, WallTint } from "../Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 import type { DoorHeightSetting } from "../Phaser/Game/MapEditor/MapLayer/MapLayerOperations";
 import type { StairDirection, StairWidth } from "../Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
+import type { BridgeHeight, BridgeStyle } from "../Phaser/Game/MapEditor/MapLayer/BridgeBuilder";
 
 export type MapLayerMode =
     | "wall"
@@ -14,7 +15,8 @@ export type MapLayerMode =
     | "height"
     | "erase"
     | "slab"
-    | "stair";
+    | "stair"
+    | "bridge";
 
 export const mapLayerModeStore = writable<MapLayerMode>("wall");
 export const mapLayerFloorFamilyStore = writable<FloorFamily>("carrelage-gris");
@@ -94,13 +96,15 @@ export type MapLayerStatus =
     | "windowsUnavailable"
     | "slabOnGround"
     | "stairInvalid"
+    | "bridgeTooShort"
+    | "bridgeBlocked"
     | "stairNoArrival"
     | "failed";
 export const mapLayerStatusStore = writable<MapLayerStatus | undefined>(undefined);
 
-/** The modes that lay the raised floors: slabs and stairs (the eraser removes them with the rest). */
-export function isFloorMode(mode: MapLayerMode): mode is "slab" | "stair" {
-    return mode === "slab" || mode === "stair";
+/** The modes that lay the raised floors: slabs, stairs and whole bridges (the eraser removes them with the rest). */
+export function isFloorMode(mode: MapLayerMode): mode is "slab" | "stair" | "bridge" {
+    return mode === "slab" || mode === "stair" || mode === "bridge";
 }
 
 /** Whether the catalog of the raised floors (slabs and stairs) is loaded in the current room. */
@@ -122,6 +126,11 @@ export const mapLayerStairTargetStore = writable<number | undefined>(undefined);
 /** Whether its side is open (its stringer only) instead of full. */
 export const mapLayerStairOpenStore = writable<boolean>(true);
 
+/** The bridge the bridge mode lays: its width in tiles, what it is made of, and the altitude of its deck. */
+export const mapLayerBridgeWidthStore = writable<number>(2);
+export const mapLayerBridgeStyleStore = writable<BridgeStyle>("wood");
+export const mapLayerBridgeHeightStore = writable<BridgeHeight>(20);
+
 /**
  * The modes that draw walls, doors and windows: they edit the level chosen in the panel, the ground or a raised floor.
  * (The floor modes of the ground always edit the ground: the floor of a raised floor is its slabs.)
@@ -142,5 +151,6 @@ export const mapLayerUpperWallsAvailableStore = writable<boolean>(false);
 
 /** Whether a mode shows the choice of the level: the modes of the raised floors, and the wall modes once they can. */
 export function usesLevel(mode: MapLayerMode, upperWallsAvailable: boolean): boolean {
-    return isFloorMode(mode) || (upperWallsAvailable && isWallLevelMode(mode));
+    // A bridge starts from the ground, whatever the level chosen: its own panel sets its height.
+    return (isFloorMode(mode) && mode !== "bridge") || (upperWallsAvailable && isWallLevelMode(mode));
 }

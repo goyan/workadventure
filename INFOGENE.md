@@ -2484,131 +2484,131 @@ par défaut du rythme sont à doser avec le tableau de bord. `play`, `back` et `
 ## Eau à inertie (à l'essai)
 
 Réglage de carte `settings.water.inertia` (interrupteur « Eau à inertie (à l'essai) » du panneau Relief,
-`UpdateWaterSettingMessage.inertia`, champ 8, facultatif ; absent ou faux : rien ne change). Sur une carte qui
-l'active, l'eau ne se contente plus d'avancer de proche en proche (un cinquième de l'écart de niveau par pas,
-`WaterGrid.flow`) : chaque passage entre deux cellules garde son **débit** d'un pas à l'autre
-(`WaterGrid.flowWithInertia`, `flowEast` et `flowSouth`). Le débit accélère avec l'écart des surfaces et la hauteur
-d'eau qui passe (gravité à l'échelle de la carte : une onde court à 4,5 cellules par seconde sous 18 px d'eau, 17
-sous 256 px), ralentit par frottement (20 % par seconde, davantage dans une eau mince), et une cellule ne donne
-jamais plus que ce qu'elle a. L'eau a donc de l'élan : des vagues courent et rebondissent, un lac dérangé se remet
-à niveau en une minute environ.
+`UpdateWaterSettingMessage.inertia`, champ 8, facultatif), **coupé par défaut : sans lui rien ne change**, l'eau
+avance de proche en proche (un cinquième de l'écart de niveau par pas, `WaterGrid.flow`).
 
-Une eau profonde est déplacée en plusieurs mouvements par pas (jusqu'à 8), pour que ses ondes ne dépassent pas un
-tiers de cellule par mouvement : au-delà le calcul s'emballe. Murs, bord de la grille et hauteur maximale de l'eau
-sont ceux de l'eau d'avant. Sources, puits, pluie, drains, comète et les échanges lointains des cartes accélérées
-ne changent pas : ils posent ou retirent de l'eau, l'inertie la fait ensuite courir. Les débits ne sont ni envoyés
-aux navigateurs ni sauvegardés : le courant senti par les avatars reste déduit de la pente, et l'eau repart
-immobile après un redémarrage du serveur.
+Activé, chaque passage entre deux cellules garde son **débit** d'un pas à l'autre (`WaterGrid.flowWithInertia`,
+`flowEast` et `flowSouth`). Le débit accélère avec l'écart des surfaces et la hauteur d'eau qui passe (gravité à
+l'échelle de la carte : une case fait 1,095 m de côté, une cellule 0,55 m, un pixel d'eau 3,4 cm ; une vague court
+à 2,4 m/s sous 60 cm d'eau, 4,4 m/s sous 2 m), et une cellule ne donne jamais plus que ce qu'elle a. L'eau a donc
+de l'élan : des vagues courent, cassent, rebondissent et noient les rives. Une eau profonde clapote plusieurs
+minutes avant de se calmer.
 
-Coût mesuré (grille de 600 × 600, conteneur Linux sur Mac) : 11 ms par pas sous 20 px d'eau, 16 ms sous 80 px,
-27 ms sous 240 px, contre 4 à 5 ms pour l'eau d'avant ; 4 ms contre 2 sur une grille presque sèche.
+Murs et bord de la grille sont ceux de l'eau d'avant. Sources, puits, pluie, drains et les échanges lointains des
+cartes accélérées ne changent pas : ils posent ou retirent de l'eau, l'inertie la fait ensuite courir. Les débits ne
+sont ni envoyés aux navigateurs ni sauvegardés : le courant senti par les avatars reste déduit de la pente, et
+l'eau repart immobile après un redémarrage du serveur.
 
-Le même chiffre sur une vraie carte (carte d'équipe locale rejouée hors jeu, 480 × 320 cellules dont 59 000 sous
-l'eau, 10 à 80 px d'eau) : 14 ms par pas, contre 2,5 ms.
+### Ce qui retient l'eau : quatre réglages (`settings.water.waves`)
 
-### Effets connus de l'inertie sur le reste (mesurés hors jeu, à juger à l'écran)
+Une seule équation partout, mais ce qui freine l'eau dépend de la case. Curseurs du panneau Relief quand l'inertie
+est activée ; `UpdateWaterSettingMessage.waveRoughness`, `waveDamping`, `waveBreaking`, `waveMomentum`, champs 9 à
+12, facultatifs.
 
-- **Crue sur sol plat moins étalée** : pour la même eau, trois fois moins de cellules mouillées (le frottement
-  retient les films minces ; la nappe est plus épaisse et plus ramassée).
-- **Lac plus plat entre une source et un puits** : la pente permanente de l'un à l'autre disparaît presque. Le
-  courant senti par les avatars et les canoës, encore déduit de la pente, y est donc plus faible.
-- **Puits fort plus efficace** : à la vitesse 1, un puits qui demande plus que son disque vide un lac 2,5 fois plus
-  vite (l'eau court vers lui) ; sur une carte accélérée, où les échanges lointains jouaient déjà, presque rien ne
-  change.
-- **Eau qui converge autour d'un puits** : un puits à grand disque, ou un trop-plein (puits qui tient un niveau),
-  creuse un trou où l'eau se rue et forme une bosse ; un peu d'eau est alors jetée par la hauteur maximale, et un
-  trop-plein fait descendre le lac sous son niveau. Défaut connu, non corrigé.
-- **Comète** : son onde reste posée anneau par anneau (`ImpactWave`), et l'inertie fait courir en plus de vraies
-  vagues depuis le cratère et depuis chaque anneau : deux ondes se superposent, les cercles dessinés suivent la
-  première seulement.
-- **Météore brûlant et drain** : ils retirent de l'eau comme avant ; le trou se referme par une vraie vague au lieu
-  de se combler sans bruit.
-
-### Vagues : frottement du sol, déferlement, élan (réglables par carte)
-
-Ce qui suit remplace le frottement uniforme de 20 % par seconde décrit plus haut, et les effets connus qui en
-dépendaient (crue moins étalée, comète à deux ondes).
-
-Le premier jet freinait l'eau de la même façon partout (20 % de son débit par seconde) : mesuré hors jeu, une
-vague perdait 80 % de sa hauteur en 200 cellules et n'atteignait jamais la rive. Ce qui retient l'eau dépend
-maintenant de l'endroit où elle court, par quatre réglages de la carte (`settings.water.waves`, curseurs du
-panneau Relief quand l'inertie est activée, `UpdateWaterSettingMessage.waveRoughness`, `waveDamping`,
-`waveBreaking`, `waveMomentum`, champs 9 à 12, facultatifs) :
-
-- **Frottement du sol** (`roughness`, × 0 à 10, 1 par défaut) : frottement de Manning. La part de débit perdue par
-  seconde vaut le carré de la rugosité du sol × la vitesse de l'eau / sa profondeur à la puissance 4/3 : presque
-  rien sous une houle au large, fort sous une lame d'eau rapide sur la terre. La rugosité vient du sol peint sur
-  chaque case (`soilRoughness` : argile 0,022, sable 0,025, terre, gravier et case non peinte 0,03, rocher 0,04,
-  prairie 0,045).
-- **Amorti** (`damping`, 0 à 1 par seconde, 0,02 par défaut) : perte de débit uniforme, ce qui calme un lac dérangé.
-  Plus haut, les vagues s'éteignent avant la rive.
-- **Déferlement** (`breaking`, × 0 à 5, 1 par défaut) : un front dont la surface tombe de plus d'un dixième de
-  l'eau qui passe perd son débit en proportion ; une houle douce n'est pas touchée.
-- **Élan emporté** (`momentum`, 0 à 1, 1 par défaut) : l'eau emporte sa vitesse avec elle (terme d'advection,
-  pris en amont). Mesuré : fronts plus nets, lac dérangé bien plus calme (crête de 31 px au lieu de 39 dans un
-  bassin de 30 px), mais vagues qui grossissent moins en approchant du rivage et montent moins loin qu'à 0.
+- **Frottement du sol** (`roughness`, × 0 à 10, 1 par défaut et en réel) : frottement de Manning. La part de débit
+  perdue par seconde vaut le carré de la rugosité du sol × la vitesse de l'eau / sa profondeur à la puissance 4/3 :
+  presque rien sous une houle au large, fort sous une lame d'eau rapide sur la terre. La rugosité vient du sol
+  peint sur chaque case (`soilRoughness` : argile 0,022, sable 0,025, terre, gravier et case non peinte 0,03,
+  rocher 0,04, prairie 0,045).
+- **Amorti** (`damping`, 0 à 1 par seconde, 0,02 par défaut, 0 en réel) : perte de débit uniforme, ce qui calme un
+  lac dérangé ; 0,02 est le minimum qui garde le calcul calme. Plus haut, les vagues s'éteignent avant la rive.
+- **Déferlement** (`breaking`, × 0 à 5, 1 par défaut et en réel) : un front dont la surface tombe de plus d'un
+  dixième de l'eau qui passe perd son débit en proportion ; une houle douce n'est pas touchée.
+- **Élan emporté** (`momentum`, 0 à 1, 1 par défaut et en réel) : l'eau emporte sa vitesse avec elle (advection
+  prise en amont). Mesuré : fronts plus nets, lac dérangé bien plus calme (crête de 31 px au lieu de 39 dans un
+  bassin de 30 px), mais vagues qui grossissent moins en approchant du rivage qu'à 0.
 
 **Terre émergée et cuvettes.** Le déferlement et l'élan emporté n'agissent que dans les cuvettes du relief (lac,
 étang, mer : cases dont le sol est sous leur niveau de débordement, `WaterGrid.hollow`). Sur la terre émergée, le
 front d'une crue est une lame qui avance, pas une vague qui casse : seul le frottement du sol la retient. Mesuré
-sur le tsunami d'une comète de 24 cases dans un lac de 120 cellules de rayon : avec ces deux termes aussi sur la
-terre, 46 cellules d'inondation ; sans, 165 cellules (90 m), sous 28 à 34 px d'eau sur les 60 premières, masse
-conservée, rien de perdu.
+sur le tsunami d'une comète de 24 cases dans un lac de 120 cellules de rayon : 165 cellules d'inondation (90 m),
+sous 28 à 34 px d'eau sur les 60 premières, masse conservée (46 cellules seulement quand ces deux termes
+agissaient aussi sur la terre).
 
-**Comète sous inertie : impact physique seul.** Sur une carte à inertie, la comète ne pose plus son onde anneau
-par anneau (`ImpactWave`) : l'eau du cratère et celle qu'elle apporte sont jetées en bourrelet autour du cratère
-(jusqu'à une fois et demie son rayon, au-dessus du niveau des crues s'il le faut, `strikeWater`), et l'eau fait
-elle-même la vague. Les cercles dessinés par le navigateur ne le sont plus (ils suivaient l'onde d'avant), et la
-salle reçoit l'eau cinq fois par seconde pendant trente secondes après l'impact. Sans inertie, rien ne change.
+**Hauteur d'eau.** Sous inertie, une vague n'est pas coupée à la hauteur maximale de l'eau de la carte (18 px par
+défaut) mais à la plus haute qu'une carte puisse régler (256 px) ; sources et pluie restent limitées par le
+réglage.
 
-**Bouton « Réaliste »** (panneau Relief, en tête des réglages de la carte) : remet tous les réglages de l'eau sur
-leurs valeurs physiques (`REALISTIC_WATER_SETTINGS` : vitesse 1, inertie activée, vagues par défaut, hauteur d'eau
-à 256 px, ruissellement 10, évaporation 0,2 mm/h, absorption 5 mm/h, vidange 300 mm/h). Seul l'amorti (0,02) n'est
-pas physique : 0 en réel, c'est le minimum qui garde le calcul calme. Chaque réglage dit sa valeur réelle dans sa
-description.
+### Vitesse et cadence : trois réglages
 
-Sous inertie, une vague n'est plus coupée à la hauteur maximale de l'eau de la carte (18 px par défaut) mais à la
-plus haute qu'une carte puisse régler (256 px) ; sources et pluie restent limitées par le réglage. L'eau ne
-franchit jamais plus d'une demi-cellule par mouvement : un torrent ne dicte pas le nombre de mouvements de toute la
-carte (mesuré : une source de 50 m³/s sur un mont doublait le coût de chaque pas). Les deux tests du premier jet qui exigeaient un
-lac calme en 90 s ont été assouplis exprès : une eau profonde clapote maintenant plusieurs minutes.
-
-Une eau plus profonde qu'environ 100 px porte ses vagues à la vitesse de cette profondeur, pas plus vite : trois
-mouvements par pas au plus (mesuré : un seul trou de 300 px doublait le coût de chaque pas de toute la carte).
-
-Coût mesuré avec ces vagues (conteneur Linux sur Mac) : 30 à 33 ms par pas sur une grille de 600 × 600 sous
-l'eau, quelle que soit sa profondeur ; 22 ms sur la carte d'équipe locale rejouée (100 000 cellules sous l'eau,
-4 ms sans inertie).
-
-
-### Cadence : finesse du calcul et envois aux joueurs (réglables par carte)
-
-Trois cadences se cachent derrière « la fréquence de l'eau » : le calcul (10 pas par seconde, 1 à 3 mouvements
-par pas sous inertie), l'envoi aux joueurs (une fois par seconde, cinq sous une averse, un drain ou après une
-comète) et l'affichage (un fondu d'un état vers le suivant). Le joueur ne voit que la plus lente.
-
-- **Finesse du calcul** (`settings.water.precision`, 1 à 8, 3 par défaut, `UpdateWaterSettingMessage.precision`
-  champ 13) : le plus de mouvements de l'eau à inertie par pas. À 3, une vague court au plus à 5,5 m/s et un
-  torrent à 8 m/s ; à 8, 15 et 22 m/s. Chaque mouvement de plus coûte autant de calcul.
-- **Vitesse d'écoulement** (`settings.water.flowPace`, × 0,1 à 2, 1 par défaut, champ 15) : combien de fois sa
-  vitesse réelle l'eau à inertie s'écoule (le temps que l'eau vit à chaque pas est multiplié d'autant : vagues,
-  crues et courants). À 1, l'eau va à sa vitesse physique pour l'échelle de la carte (case de 1,095 m de côté :
-  2,2 cases par seconde sous 60 cm d'eau, 4 sous 2 m). Repère : l'avatar marche à 5,6 cases par seconde, soit
-  6,2 m/s, 4,4 fois plus vite qu'un piéton ; par rapport à lui l'eau est donc plutôt lente. Pluie, sources et puits
-  suivent « Vitesse de l'eau », pas ce réglage. La visualisation des flux affiche la vitesse vue à l'écran.
+- **Vitesse d'écoulement** (`settings.water.flowPace`, × 0,1 à 2, 1 par défaut et en réel, champ 15) : combien de
+  fois sa vitesse réelle l'eau s'écoule (le temps que l'eau vit à chaque pas est multiplié d'autant : vagues, crues
+  et courants). À 1 : 2,2 cases par seconde sous 60 cm d'eau, 4 sous 2 m. Repère : l'avatar marche à 5,6 cases par
+  seconde, soit 6,2 m/s, 4,4 fois plus vite qu'un piéton. Pluie, sources et puits suivent « Vitesse de l'eau »,
+  pas ce réglage.
+- **Finesse du calcul** (`settings.water.precision`, 1 à 8, 3 par défaut, champ 13) : le plus de mouvements de
+  l'eau par pas (10 pas par seconde). L'eau ne franchit jamais plus d'une demi-cellule par mouvement, et une vague
+  ne court pas plus vite que ce que ces mouvements supportent : à 3, vague à 5,8 m/s au plus (celle de 100 px de
+  fond) et torrent à 8 m/s ; à 8, 15 et 16 m/s. Sans ces bornes, un seul trou profond ou une seule source forte
+  alourdissait chaque pas de toute la carte (mesuré : `back` à 100 % d'un cœur). Chaque mouvement de plus coûte
+  autant de calcul.
 - **Envois aux joueurs** (`settings.water.updates`, 1 à 10 par seconde, 1 par défaut, champ 14,
-  `stepsBetweenUpdates`) : quand l'eau bouge. Le bouton « Réaliste » le met à 5.
-- **Fondu calé sur l'intervalle réel** (`TerrainWater.glideMs`) : il durait toujours une seconde, même quand les
-  états arrivaient cinq fois par seconde ; l'eau affichée traînait derrière. L'eau reste dessinée cinq fois par
-  seconde au plus pendant un fondu.
-- **Ce qui a à peine changé n'est pas renvoyé** : une cellule dont l'eau a bougé de moins d'un quart de pixel depuis
-  le dernier envoi garde la valeur que la salle connaît (jamais une cellule qui s'assèche ou se mouille) ; un état
-  complet, toutes les trente secondes, remet tout d'aplomb.
+  `stepsBetweenUpdates`) : quand l'eau bouge ; au moins 5 sous une averse, un drain ou pendant trente secondes
+  après une comète. Le fondu du navigateur dure le temps réel entre deux états (`TerrainWater.glideMs`), l'eau y
+  est dessinée cinq fois par seconde au plus. Une cellule dont l'eau a bougé de moins d'un quart de pixel n'est pas
+  renvoyée (jamais une cellule qui s'assèche ou se mouille) ; un état complet toutes les trente secondes remet tout
+  d'aplomb.
 
-Mesuré hors jeu (grille de 480 × 320) : une carte au repos coûte 0,3 Ko par envoi (les cellules inchangées ne
-pèsent rien) ; un lac calme avec une source, 7 Ko/s à 5 envois par seconde, 2 Ko/s avec la bande d'un quart de
-pixel ; un tsunami, 45 à 63 Ko par envoi, soit 258 Ko/s à 5 envois et 450 Ko/s à 10, par joueur. N'envoyer que la
-zone qui change n'apporterait donc rien, et un autre encodage 25 % au mieux pendant un tsunami : non faits.
+### Comète, météore brûlant et drain sous inertie
+
+- **Comète : impact physique seul.** Elle ne pose plus son onde anneau par anneau (`ImpactWave`) : l'eau du cratère
+  et celle qu'elle apporte sont jetées en bourrelet autour du cratère (jusqu'à une fois et demie son rayon,
+  au-dessus du niveau des crues s'il le faut, `strikeWater`), et l'eau fait elle-même la vague. Les cercles
+  dessinés par le navigateur ne le sont plus. Sans inertie, la comète est celle d'avant.
+- **Météore brûlant et drain** : ils retirent de l'eau comme avant ; le trou se referme par une vraie vague.
+
+### Bouton « Réaliste » et aides du panneau
+
+Le bouton « Réaliste » (en tête des réglages de la carte) remet tous les réglages de l'eau sur leurs valeurs
+physiques (`REALISTIC_WATER_SETTINGS` : vitesse 1, inertie activée, vagues par défaut, vitesse d'écoulement 1,
+finesse 3, 5 envois par seconde, hauteur d'eau à 256 px, ruissellement 10, évaporation 0,2 mm/h, absorption 5 mm/h,
+vidange 300 mm/h). Seul l'amorti (0,02) n'est pas physique.
+
+Chaque réglage a une aide d'une ligne qui finit par sa valeur réelle ; le détail (chiffres, mesures) est replié
+dessous, sous « En savoir plus ».
+
+### Limites connues
+
+- **Courant senti plus faible entre une source et un puits** : un lac est plus plat sous inertie, et le courant
+  des avatars et des canoës est encore déduit de la pente.
+- **Puits fort plus efficace** : à la vitesse 1, un puits qui demande plus que son disque vide un lac environ
+  2,5 fois plus vite (mesuré avant les réglages des vagues).
+- **Trop-plein** (puits qui tient un niveau) et puits à grand disque : l'eau converge et forme une bosse, le
+  trop-plein fait descendre le lac sous son niveau. Non corrigé.
+- La rugosité de la prairie vient du sol peint, pas de l'herbe qui y pousse.
+- Rien n'a été jugé à l'écran par un agent : allure des vagues, bourrelet de la comète, rives.
+
+### Coûts mesurés (conteneur Linux sur Mac, hors jeu)
+
+- **Calcul** : 30 à 33 ms par pas sur une grille de 600 × 600 sous l'eau, quelle que soit sa profondeur ; 22 ms
+  sur la carte d'équipe locale rejouée (100 000 cellules sous l'eau), contre 4 ms sans inertie ; `back` local vers
+  29 % d'un cœur.
+- **Réseau** (grille de 480 × 320) : une carte au repos coûte 0,3 Ko par envoi (les cellules inchangées ne pèsent
+  rien) ; un lac calme avec une source, 2 Ko/s à 5 envois par seconde ; un tsunami, 45 à 63 Ko par envoi, soit
+  258 Ko/s à 5 envois et 450 Ko/s à 10, par joueur. N'envoyer que la zone qui change n'apporterait rien, et un
+  autre encodage 25 % au mieux pendant un tsunami : non faits.
+
+
+## Visualisation des flux d'eau
+
+Entrée « Visualisation » du menu des applications (sous « Catastrophe ») : un panneau sous l'horloge
+(`VisualisationPanel.svelte`, `visualisationPanelStore`) avec une tuile « Flux d'eau » (`waterFlowOverlayStore`).
+Pour soi seul, pour la session ; l'affichage reste quand le panneau est fermé. Indisponible en mode basique.
+
+Par-dessus la carte (`Terrain/WaterFlowOverlay.ts`, dix dessins par seconde, au-dessus du voile de nuit) :
+
+- **une flèche là où l'eau court** : sens, vitesse par la longueur et la couleur (échelle de 0 à 3 m/s et plus,
+  `FLOW_SPEED_SCALE`), point qui file le long de la flèche. Une flèche par bloc de cellules, plus gros vu de loin,
+  3 000 au plus ;
+- **une teinte là où le niveau change** : bleue quand il monte, magenta quand il baisse ;
+- **une étiquette sur les 8 plus grosses masses d'eau en vue** (`Terrain/WaterMasses.ts`) : volume en m³, surface
+  en m², profondeur moyenne en m, puis ce qu'elle gagne ou perd en m³ par minute.
+
+Tout est lu des profondeurs que le navigateur reçoit déjà (`TerrainWater.settled` garde l'état d'avant et le temps
+entre les deux) : rien n'est demandé au serveur. Limites : les vitesses sont **estimées** d'après la pente de la
+surface (`steadyFlowSpeed`, selon le modèle d'eau, les réglages des vagues, la rugosité du sol et la vitesse
+d'écoulement de la carte), pas mesurées : une vague qui passe sous inertie ne s'y lit pas ; les masses ignorent
+les murs. Coût non mesurable en images par seconde dans le navigateur de test.
 
 ## Vie aquatique (poissons et dauphins)
 
@@ -3702,6 +3702,9 @@ droite, sans recherche de chemin ; un lion ou un tigre revient autour de son arb
 
 ## Catastrophes : le météore
 
+Sur une carte dont l'eau a de l'inertie, la comète ne lance plus l'onde décrite ici : elle jette l'eau de son
+cratère en bourrelet et l'eau fait elle-même la vague (voir « Eau à inertie »).
+
 > Depuis le 2026-11-20 la tuile de cette section s'appelle **« Comète »** dans le widget (elle apporte de l'eau et
 > lance une onde ; elle est dessinée en bleu glace). Son code garde ses noms (`CATASTROPHE_METEOR`, `Meteor.ts`,
 > `MeteorView`). La tuile « Météore » est désormais le météore brûlant décrit plus bas (« Catastrophes : le météore
@@ -3794,6 +3797,24 @@ avec 8 px apportés par cellule du cratère). Pas de son. Rien n'a été vu à l
 cette section : widget, viseur, chute, éclair et gerbe ne sont validés que par les tests ; l'effet sur l'eau en jeu
 n'est pas vu.
 
+## Pont posé en un geste
+
+Outil Carte, groupe des paliers, mode **« Pont »** : presser sur la berge de départ, glisser jusqu'à la berge
+d'arrivée, relâcher. Le tablier et une montée à chaque bout sont posés d'un coup, en une seule annulation
+(`BridgeBuilder.ts` : `planBridge`, `bridgeFits`, `layBridge` ; aperçu vert, rouge quand c'est refusé).
+
+- **Largeur** 1 à 6 cases, centrée sur la case de départ ; au-delà de 2, les montées sont posées côte à côte.
+- **Style** : *Bois* (dalles `dalle-bois`, rampes) ou *Béton* (dalles `dalle-pierre-grise`, escaliers pleins : il
+  n'existe pas de rampe en béton).
+- **Hauteur** : *Basse* (20 px) ou *Haute* (52 px, le dessus de murs de 2 cases).
+- Le pont est **droit**, est-ouest ou nord-sud : il suit le côté le plus long du geste, sur la rangée (ou la colonne)
+  du départ. Les deux points sont lus au sol, quel que soit le niveau choisi dans le sélecteur.
+- Refusé en entier, avec un message : trop court (il faut au moins une case de tablier entre les deux montées), hors
+  de la carte, ou sur un escalier qui part du sol. Les murs ne sont pas regardés.
+- Sans les pièces des ponts dans le catalogue de la salle : béton, hauteur haute, sans choix.
+- Le pont est fait des pièces ordinaires des paliers : il se retouche et s'efface ensuite pièce par pièce (gomme).
+  Un test vérifie que le serveur y lit un pont (cases à sec pour les animaux).
+
 ## Éditeur : choisir un niveau
 
 Le sélecteur de niveau de l'éditeur (`FloorLevelPicker.svelte`) propose **tous les niveaux où l'on peut construire**,
@@ -3806,6 +3827,9 @@ dépliant « Ajuster la hauteur ».
   dalles porte en plus son nom dans le jeu : « Niveau 2 · Étage 1 ».
 - Les flèches vont au niveau suivant ou précédent de la liste, construit ou non.
 - « Ajuster la hauteur » reste pour les hauteurs hors liste (une case de mur à la fois).
+- Passer en mode **Escalier** sur un étage qu'aucun étage construit ne surmonte ramène le niveau édité à celui d'où
+  un escalier y monte (le sol sous un tablier qu'on vient de poser), et l'escalier vise l'étage quitté
+  (`stairBaseBelow`). Pas en « auto ».
 - La liste des niveaux offerts est tenue par l'outil Carte : dans un autre outil ouvert sans être passé par lui, elle
   se réduit au sol et aux étages construits.
 

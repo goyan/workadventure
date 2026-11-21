@@ -180,6 +180,7 @@ export { default as IconRectangle } from "~icons/tabler/rectangle";
 export { default as IconHome } from "~icons/tabler/home";
 export { default as IconHandStop } from "~icons/tabler/hand-stop";
 export { default as IconStairs } from "~icons/tabler/stairs";
+export { default as IconBuildingBridge } from "~icons/tabler/building-bridge";
 export { default as IconColorPicker } from "~icons/tabler/color-picker";
 
 // The map editor build kit: its tools and the categories of objects, one picture each.
