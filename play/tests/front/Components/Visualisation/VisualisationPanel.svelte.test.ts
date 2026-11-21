@@ -16,6 +16,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 falling: label("Falling"),
                 trend: label("Over a few seconds"),
                 masses: label("On each body of water"),
+                realTime: label("Per real minute"),
                 totals: ({ stock, area }: { stock: string; area: string }) => `${stock} m3, ${area} m2`,
                 noWater: label("No water told yet"),
                 estimated: label("Estimated"),
@@ -81,6 +82,7 @@ describe("VisualisationPanel", () => {
         expect(find("visualisation-water-flow")?.getAttribute("aria-pressed")).toBe("true");
         expect(find("visualisation-water-flow-legend")?.textContent).toContain("Speed");
         expect(find("visualisation-water-flow-legend")?.textContent).toContain("Over a few seconds");
+        expect(find("visualisation-water-flow-legend")?.textContent).toContain("Per real minute");
         find("visualisation-water-flow")?.click();
         flushSync();
         expect(get(waterFlowOverlayStore)).toBe(false);

@@ -84,6 +84,7 @@
                 </div>
                 <div class="opacity-80">{$LL.actionbar.visualisation.trend()}</div>
                 <div class="opacity-80">{$LL.actionbar.visualisation.masses()}</div>
+                <div class="opacity-80">{$LL.actionbar.visualisation.realTime()}</div>
                 {#if stats}
                     <div data-testid="visualisation-water-totals">
                         {$LL.actionbar.visualisation.totals({

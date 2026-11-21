@@ -10,8 +10,10 @@ import type { WaterMass } from "./WaterMasses";
 export interface WaterFlowOverlayOptions {
     /** The water of the relief: its last state, and a number that changes with it. */
     water: {
-        /** With `now` (ms of the game), the trend of a water the server fell silent about dies down. */
+        /** With `now` (ms of the game), the trend of the level too: kept while it is read so. */
         settled(now?: number): SettledWater;
+        /** The view is closed: the trend is let go. */
+        dropTrend?(): void;
         relief(): TerrainData | undefined;
         basin?(): TerrainData | undefined;
         version(): number;
@@ -212,6 +214,8 @@ export class WaterFlowOverlay {
 
     private clear(): void {
         if (!this.drawn) return;
+        this.options.water.dropTrend?.();
+        this.masses = [];
         this.graphics.clear();
         for (const label of this.labels) label.setVisible(false);
         this.drawn = false;
