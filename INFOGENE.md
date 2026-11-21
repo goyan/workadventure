@@ -2577,7 +2577,7 @@ textures du moteur à plat, pas le pixel art des blocs. Coût non mesuré sur un
 « Hiver » de la branche a disparu avec celui d'`infogene` ; un pont étant fait de paliers, plus de cas particulier d'un
 pont dans la nage, le décalage de l'avatar ni le clic.
 
-**Les blocs, repli sans shader : relief vu de trois quarts** ( conception et plan dans le dépôt d'infra,
+**Les blocs, repli sans shader : relief vu de trois quarts** (conception et plan dans le dépôt d'infra,
 `docs/superpowers/{specs,plans}/2026-11-20-relief-3-4*`). Hors de l'éditeur, le sol creusé est dessiné **plus bas de
 la moitié de sa profondeur**, comme les étages sont dessinés plus haut de leur altitude : un trou de 8 cases (256 px)
 a une paroi de 128 px. Là où le sol descend en allant vers le sud, on voit sa paroi (roche teintée par le sol du bord,
