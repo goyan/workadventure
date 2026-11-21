@@ -1,5 +1,5 @@
 import { precipitationWeather, WeatherType } from "@workadventure/map-editor";
-import type { AutoWeatherSettings } from "@workadventure/map-editor";
+import type { AutoWeatherSettings, SeasonPlace } from "@workadventure/map-editor";
 import { hash01 } from "../Autumn/LeafPalette";
 import { autoWeatherAt, slotStart } from "./WeatherSchedule";
 
@@ -160,18 +160,19 @@ export function lightningBolt(
     return undefined;
 }
 
-/** The seasonal schedule is shared by every client: same Paris date and settings, same weather. */
+/** The seasonal schedule is shared by every client: same date, settings and place of the map, same weather. */
 export function weatherAtTime(
     configured: WeatherType,
     serverDate: Date | undefined,
     auto?: AutoWeatherSettings,
+    place?: SeasonPlace,
 ): WeatherType {
     // A cloudy sky is a clear one: its clouds are drawn apart (cloudiness), never as rain.
     if (configured === WeatherType.Cloudy) return WeatherType.Clear;
     // A map saved with a snow: a rain, which the cold alone turns to snow (snowShare).
     if (configured !== WeatherType.Automatic) return precipitationWeather(configured);
     if (!serverDate || !Number.isFinite(serverDate.getTime())) return WeatherType.Clear;
-    return autoWeatherAt(serverDate, auto);
+    return autoWeatherAt(serverDate, auto, place);
 }
 
 /** Weather only falls outdoors: particles above an indoor cell are not drawn. No grid means no filtering. */
@@ -196,6 +197,7 @@ export function fogStrength(
     auto?: AutoWeatherSettings,
     startedAt?: number,
     endsAt?: number,
+    place?: SeasonPlace,
 ): number {
     if (configured === WeatherType.Fog) {
         if (startedAt === undefined || !Number.isFinite(date.getTime())) return 1;
@@ -206,13 +208,13 @@ export function fogStrength(
     }
     if (configured !== WeatherType.Automatic) return 0;
     const time = date.getTime();
-    if (!Number.isFinite(time) || autoWeatherAt(date, auto) !== WeatherType.Fog) return 0;
+    if (!Number.isFinite(time) || autoWeatherAt(date, auto, place) !== WeatherType.Fog) return 0;
     const start = slotStart(date).getTime();
     let strength = 1;
-    if (autoWeatherAt(new Date(start - 1), auto) !== WeatherType.Fog) {
+    if (autoWeatherAt(new Date(start - 1), auto, place) !== WeatherType.Fog) {
         strength = Math.min(strength, (time - start) / FOG_FADE_MS);
     }
-    if (autoWeatherAt(new Date(start + SLOT_MS), auto) !== WeatherType.Fog) {
+    if (autoWeatherAt(new Date(start + SLOT_MS), auto, place) !== WeatherType.Fog) {
         strength = Math.min(strength, (start + SLOT_MS - time) / FOG_FADE_MS);
     }
     return Math.max(0, Math.min(1, strength));

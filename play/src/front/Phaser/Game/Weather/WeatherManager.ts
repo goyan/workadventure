@@ -241,7 +241,7 @@ export class WeatherManager {
         const realFogSince = real ? settings?.weatherStartedAt : undefined;
         const realFogUntil = real ? settings?.weatherEndsAt : undefined;
         const theme = this.options.seasonalTheme?.();
-        const weather = weatherAtTime(configured, serverDate, settings?.weatherAuto);
+        const weather = weatherAtTime(configured, serverDate, settings?.weatherAuto, settings?.weatherLocation);
         const storm = weather === WeatherType.Storm;
         const forcedRain = forcedRainLevel(this.forcedRain, now);
         const rain = forcedRain ?? rainIntensity(settings?.rainRate, storm);
@@ -291,7 +291,14 @@ export class WeatherManager {
         const fogStrengthNow =
             showWeather && weather === WeatherType.Fog
                 ? serverDate
-                    ? fogStrength(configured, serverDate, settings?.weatherAuto, realFogSince, realFogUntil)
+                    ? fogStrength(
+                          configured,
+                          serverDate,
+                          settings?.weatherAuto,
+                          realFogSince,
+                          realFogUntil,
+                          settings?.weatherLocation,
+                      )
                     : 1
                 : 1;
         const shadowOffset = showClouds && sunlight.shadows > 0 ? cloudShadowOffset(sun) : undefined;

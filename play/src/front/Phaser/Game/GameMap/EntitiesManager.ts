@@ -252,7 +252,7 @@ export class EntitiesManager extends EventEmitter {
      * Follow the calendar each minute. The personal seasonal theme colours nature for this person only; a snow cover
      * shared by the map takes priority over it.
      */
-    /** The season the seasonal trees show: the calendar, the snow of the map or the personal theme. */
+    /** The season the seasonal trees show: the calendar of the place of the map, its snow or the personal theme. */
     public getSeason(): Season {
         return this.season;
     }
@@ -269,7 +269,9 @@ export class EntitiesManager extends EventEmitter {
         // While the snow settles or melts, the trees follow the ground every few seconds rather than every minute.
         this.nextSeasonCheck =
             coverage > 0 && coverage < 1 ? time + SETTLING_CHECK_MS : time + 60_000 - (serverDate.getTime() % 60_000);
-        const weatherSeason = treeSeasonAt(serverDate, coverage);
+        // The calendar of the place of the map: its seasons turn over in the south.
+        const place = this.scene.getGameMap().getWamFile()?.getWam().settings?.weatherLocation;
+        const weatherSeason = treeSeasonAt(serverDate, coverage, place);
         // Snow cover takes priority over autumn's personal colour palette, just as it does on the ground.
         const season = weatherSeason === Season.Winter ? Season.Winter : (forcedSeason ?? weatherSeason);
         // The trees whiten with the ground (a snow just begun leaves them green); a chosen winter theme, at once.

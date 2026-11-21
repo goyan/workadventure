@@ -21,6 +21,22 @@ describe("activeSeasonalTheme", () => {
         expect(activeSeasonalTheme(SeasonalThemeMode.Auto, new Date(iso))).toBe(theme);
     });
 
+    it("follows the autumn of the place of the map in auto: March to May in Sydney, the forced modes as before", () => {
+        const sydney = { latitude: -33.87, timezone: "Australia/Sydney" };
+        expect(activeSeasonalTheme(SeasonalThemeMode.Auto, new Date("2026-04-15T02:00:00Z"), sydney)).toBe(
+            SeasonalTheme.Autumn,
+        );
+        expect(activeSeasonalTheme(SeasonalThemeMode.Auto, new Date("2026-10-15T02:00:00Z"), sydney)).toBeUndefined();
+        // Midnight in Sydney: March 1st there, still February in Paris.
+        expect(activeSeasonalTheme(SeasonalThemeMode.Auto, new Date("2026-02-28T14:00:00Z"), sydney)).toBe(
+            SeasonalTheme.Autumn,
+        );
+        expect(activeSeasonalTheme(SeasonalThemeMode.None, new Date("2026-04-15T02:00:00Z"), sydney)).toBeUndefined();
+        expect(activeSeasonalTheme(SeasonalThemeMode.Autumn, new Date("2026-10-15T02:00:00Z"), sydney)).toBe(
+            SeasonalTheme.Autumn,
+        );
+    });
+
     it("has no auto theme before server time", () => {
         expect(activeSeasonalTheme(SeasonalThemeMode.Auto, undefined)).toBeUndefined();
     });

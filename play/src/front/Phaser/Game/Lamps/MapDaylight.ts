@@ -13,7 +13,12 @@ import { daylightOf } from "./EnergySaving";
  */
 export function mapDaylightAt(settings: MapSnowSettings | undefined, date: Date): number {
     const shown = mapWeatherSettings(settings, date);
-    const weather = weatherAtTime(shown?.weather ?? WeatherType.Clear, date, shown?.weatherAuto);
+    const weather = weatherAtTime(
+        shown?.weather ?? WeatherType.Clear,
+        date,
+        shown?.weatherAuto,
+        shown?.weatherLocation,
+    );
     const sun = sunPositionAt(date, shownMapPlace(settings));
     return daylightOf(sun.elevation, skyWeatherFactor(weather, shown?.cloudiness ?? 0));
 }
