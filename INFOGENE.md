@@ -2455,8 +2455,14 @@ falaise), pas le sol à son pied. Courbes de niveau sur les monts comme dans les
 **Chargement du terrain** : un bloc de la vue jamais dessiné est d'abord dessiné **grossier** (un point sur 4 dans
 chaque sens, 16 fois moins cher : `ReliefTileSchedule.COARSE_TEXEL`), puis **net** ; la vue est remplie en quelques
 images, puis affinée, les blocs visibles d'abord. Très dézoomé, un bloc n'est pas dessiné plus fin que l'écran ne le
-montre (`texelFor` : un point pour 1, 2 ou 4 px de carte selon le zoom de la caméra) ; il est redessiné plus fin quand
-on zoome, jamais plus grossier quand on dézoome. Plusieurs blocs peu chers par image, dans la limite de 6 ms
+montre (`texelFor` : un point pour 1, 2 ou 4 px de carte selon le zoom de la caméra, un point dessiné au plus un tiers
+plus gros qu'un pixel d'écran : net au-dessus du zoom 0,67, 2 px jusqu'à 0,34, 4 px en deçà) ; il est redessiné plus
+fin quand on zoome, jamais plus grossier quand on dézoome. **Cache** : les blocs qu'on quitte sont gardés, dans la
+limite de 256 blocs nets (`KEPT_WEIGHT`, environ 130 Mo ; un bloc à 2 px compte un quart, un grossier ne compte pas),
+les moins récemment vus lâchés d'abord, jamais ceux autour de la vue : zoomer, dézoomer ou revenir ne redessine rien.
+**Carte dessinée d'avance** : une fois la vue dessinée, le reste de la carte l'est en grossier, du plus proche au plus
+loin (`drawAhead`, `ReliefInputs.mapSize`) : dézoomer ou se déplacer montre tout de suite le sol, affiné ensuite. Le
+relief des blocs d'une vue immense est lu 48 blocs par image au plus. Plusieurs blocs peu chers par image, dans la limite de 6 ms
 (`DRAW_BUDGET_MS`). Mesuré le 2026-11-21 dans Chromium sur la carte d'équipe locale (72 blocs visibles, zoom 1) : vue
 remplie en 12 images, tout net en 155 images, 7,6 ms par bloc net (75 ms avant : les boucles tournaient dans le
 générateur et les courbes de niveau allouaient un tableau par point).

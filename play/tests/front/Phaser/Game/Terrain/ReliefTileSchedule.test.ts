@@ -43,14 +43,14 @@ describe("the blocks of the relief to draw", () => {
         expect(changed(cellKey(-10, 3))).toBe(false);
     });
 
-    it("draws a block no finer than the screen shows: a point of the ground a pixel of the screen at most", () => {
+    it("draws a block no finer than the screen shows: a point of the ground a third more than a pixel of the screen at most", () => {
         // Pixels of the screen for a pixel of the map → pixels of the map for a point drawn.
         expect(texelFor(2)).toBe(1);
         expect(texelFor(1)).toBe(1);
-        expect(texelFor(0.6)).toBe(1);
-        expect(texelFor(0.5)).toBe(2);
-        expect(texelFor(0.3)).toBe(2);
-        expect(texelFor(0.25)).toBe(4);
+        expect(texelFor(0.7)).toBe(1);
+        expect(texelFor(0.66)).toBe(2);
+        expect(texelFor(0.4)).toBe(2);
+        expect(texelFor(0.33)).toBe(4);
         expect(texelFor(0.05)).toBe(4);
     });
 
@@ -81,6 +81,23 @@ describe("the blocks of the relief to draw", () => {
             drawn += next.length;
         }
         expect(schedule.toRedraw(all, signatures(all), 2, new Set(visible))).toEqual(["10,0", "11,0"]);
+    });
+
+    it("lets go by weight: the heavy blocks seen least lately, never the ones that weigh nothing nor the ones kept", () => {
+        const schedule = new ReliefTileSchedule();
+        // In turn: a sharp block, a coarse one, two sharp ones.
+        for (const key of ["a", "coarse", "b", "c"]) schedule.toRedraw([key], signatures([key]), 2);
+        const weightOf = (key: string) => (key === "coarse" ? 0 : 1);
+        expect(schedule.evict(new Set(["c"]), 3, weightOf)).toEqual([]);
+        expect(schedule.evict(new Set(["c"]), 2, weightOf)).toEqual(["a"]);
+        expect(schedule.evict(new Set(["c"]), 0, weightOf)).toEqual(["b"]);
+    });
+
+    it("lets go of a block left to draw again as of one drawn (the editor opened meanwhile)", () => {
+        const schedule = new ReliefTileSchedule();
+        for (const key of ["a", "b", "c"]) schedule.toRedraw([key], signatures([key]), 2);
+        schedule.forget();
+        expect(schedule.evict(new Set(), 2)).toEqual(["a"]);
     });
 
     it("lets go of the blocks seen least lately beyond 64", () => {

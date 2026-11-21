@@ -69,6 +69,22 @@ const DENSE_GRASS = 160;
 const DRAW_BUDGET_MS = 6;
 /** The most blocks taken up in one image (cheap ones: coarse, or with nothing to draw). */
 const PICKS_AN_IMAGE = 16;
+/**
+ * The blocks kept drawn, in sharp blocks (256 × 256 points: about half a megabyte each, its canvas and its texture): a
+ * block drawn a point every 2 px weighs a quarter, a coarse one is not counted (a sixteenth). The blocks around the view
+ * are always kept; beyond, the ones seen least lately are let go: zooming out again, or coming back, draws nothing
+ * again.
+ */
+const KEPT_WEIGHT = 256;
+/** The map is drawn ahead (coarse) while fewer blocks than this are kept. */
+const MAX_AHEAD_BLOCKS = 2048;
+/**
+ * The most blocks whose relief is read for the first time in one image (a view far out comes over hundreds of blocks
+ * at once): the others wait for a next image, as they are.
+ */
+const RELIEFS_AN_IMAGE = 48;
+/** The most blocks of the map looked at in one image to draw them ahead (what covers each is read). */
+const AHEAD_LOOKS_AN_IMAGE = 8;
 /** The rows (or columns) of a block drawn between two looks at the time. */
 const ROWS_A_STEP = 16;
 /** The thresholds of the dither (bayer), row by row. */
@@ -148,6 +164,11 @@ export interface ReliefInputs {
      * the screen shows them (texelFor). Absent: always sharp.
      */
     screenScale?(): number;
+    /**
+     * The size of the map (px): once the view is drawn, the rest of the map is drawn ahead, coarse, so that zooming out
+     * or going somewhere shows the ground at once. Absent: only the blocks around the view are drawn.
+     */
+    mapSize?(): { width: number; height: number };
 }
 
 /** What the flat ground needs to know of the map: its rooms, the floors of the Carte tool, its grass tiles. */
@@ -218,6 +239,17 @@ export class ReliefTiles {
         }),
     );
     private readonly levels = new Uint8Array(GRID_WIDTH * GRID_HEIGHT);
+    /** The blocks of the map left to draw ahead, the nearest to the view first, for the blocks the view is over. */
+    private ahead: string[] = [];
+    private aheadAt = 0;
+    private aheadRange = "";
+    private aheadLooks = 0;
+    /** The reliefs of blocks read for the first time: in this image, in all; whether some wait for a next image. */
+    private reliefReads = 0;
+    private reliefReadCount = 0;
+    private reliefsWaiting = false;
+    /** The blocks of the map with nothing to draw, as far as known: not looked at again. */
+    private readonly aheadEmpty = new Set<string>();
     /** The pixels of the block being drawn (RGBA), shown once it is whole. */
     private readonly out = new Uint8ClampedArray(BLOCK_TEXELS * BLOCK_TEXELS * 4);
 
@@ -238,9 +270,19 @@ export class ReliefTiles {
         return this.coverReadCount;
     }
 
+    /** How many times the relief of a block was read for the first time: spread over images when the view is huge. */
+    public signatureReads(): number {
+        return this.reliefReadCount;
+    }
+
     /** Whether a block is being drawn, a step an image (its drawing not shown yet). */
     public isDrawing(): boolean {
-        return this.job !== undefined || this.staleCovers.size > 0;
+        return (
+            this.job !== undefined ||
+            this.staleCovers.size > 0 ||
+            this.reliefsWaiting ||
+            this.aheadAt < this.ahead.length
+        );
     }
 
     /** What covers the cells changed somewhere (meadow, layout, snow, relief): every block is read again, in turn. */
@@ -303,6 +345,7 @@ export class ReliefTiles {
             this.reliefSignatures.clear();
             // The soils painted are read by what covers the cells too.
             this.markCoversStale();
+            this.lookAheadAgain();
         }
         const view = this.scene.cameras.main.worldView;
         const visible = this.blocksOver(view.x, view.y, view.width, view.height);
@@ -326,6 +369,7 @@ export class ReliefTiles {
         if (coverKey !== this.coverKey) {
             this.coverKey = coverKey;
             this.markCoversStale();
+            this.lookAheadAgain();
         }
         // What covers the cells is read again COVERS_AN_IMAGE blocks an image at most, the visible ones first: a
         // message of the meadow (every 10 s) would else read the whole view in one image. Until then a block keeps
@@ -339,7 +383,9 @@ export class ReliefTiles {
         }
         let reads = 0;
         const visibleKeys = new Set(visible);
-        for (const key of [...visible, ...around.filter((key) => !visibleKeys.has(key))]) {
+        // The blocks of the view first.
+        const inTurn = [...visible, ...around.filter((key) => !visibleKeys.has(key))];
+        for (const key of inTurn) {
             if (reads >= COVERS_AN_IMAGE) break;
             if (this.coverSignatures.has(key) && !this.staleCovers.has(key)) continue;
             this.coverSignatures.set(key, this.coverSignature(key, terrain, now));
@@ -347,52 +393,151 @@ export class ReliefTiles {
             reads++;
         }
         const shared = `${this.inputs.season() ?? ""}|${snow}|${this.projected ? "3/4" : "flat"}|${this.seeThrough}`;
+        // The time of the image counts what the blocks are drawn from too.
+        const start = performance.now();
+        this.reliefReads = 0;
+        this.reliefsWaiting = false;
+        // A block whose relief is not read yet (its turn comes in a next image) is left as it is.
         const bases = new Map<string, string>();
-        for (const key of around) {
-            let relief = this.reliefSignatures.get(key);
-            if (relief === undefined) {
-                const [blockX, blockY] = key.split(",").map(Number);
-                relief = reliefSignature(terrain, blockX, blockY);
-                this.reliefSignatures.set(key, relief);
-            }
-            let water = this.waterSignatures.get(key);
-            if (water === undefined) {
-                water = this.waterSignature(key, now);
-                this.waterSignatures.set(key, water);
-            }
-            // Without the layout of the map, only the dug ground and its water are drawn.
-            if (!layout && relief === "" && water === "") {
-                bases.set(key, "");
-                continue;
-            }
-            const cover = this.coverSignatures.get(key);
-            // Not read yet (its turn comes in a next image): not drawn yet.
-            if (cover === undefined) {
-                bases.set(key, "");
-                continue;
-            }
-            // With it: nothing to draw where nothing covers the ground, nothing is dug and no water lies.
-            bases.set(
-                key,
-                relief === "" && water === "" && cover === "" ? "" : `${relief}|${water}|${cover}|${shared}`,
-            );
+        for (const key of inTurn) {
+            const base = this.baseOf(key, terrain, now, shared, false);
+            if (base !== undefined) bases.set(key, base);
         }
         // Blocks are drawn one after the other, DRAW_BUDGET_MS an image: one that takes longer goes on in the next
         // images; cheap ones (coarse, or with nothing left to draw) follow one another in the same image.
         const needed = texelFor(this.inputs.screenScale?.() ?? 1);
-        const start = performance.now();
+        this.aheadLooks = 0;
         let picks = 0;
         for (;;) {
             if (
                 !this.job &&
-                (picks++ >= PICKS_AN_IMAGE || !this.pick(around, visibleKeys, bases, needed, terrain, now))
+                (picks++ >= PICKS_AN_IMAGE ||
+                    !(
+                        this.pick(around, visibleKeys, bases, needed, terrain, now) ||
+                        this.drawAhead(around, aroundKeys, shared, terrain, now)
+                    ))
             ) {
                 break;
             }
             if (this.job?.steps.next().done) this.job = undefined;
             if (performance.now() - start >= DRAW_BUDGET_MS) break;
         }
-        for (const key of this.schedule.evict(new Set(around))) this.drop(key);
+        for (const key of this.schedule.evict(aroundKeys, KEPT_WEIGHT, (kept) => this.weightOf(kept))) {
+            this.drop(key);
+            // Let go sharp: drawn ahead again, coarse.
+            this.lookAheadAgain();
+        }
+    }
+
+    /** What a block weighs in the blocks kept (KEPT_WEIGHT): nothing while it is coarse, or not drawn. */
+    private weightOf(key: string): number {
+        const texel = this.blocks.get(key)?.texel;
+        return texel === undefined || texel >= COARSE_TEXEL ? 0 : 1 / (texel * texel);
+    }
+
+    /** The blocks of the map are looked at again to draw them ahead (what covers them changed, one was let go). */
+    private lookAheadAgain(): void {
+        this.aheadEmpty.clear();
+        this.aheadRange = "";
+    }
+
+    /**
+     * What a block is drawn from, but the fineness of its drawing, as a short text; empty when there is nothing to draw
+     * (nothing dug, no water, nothing that covers the ground), or when what covers its cells is not read yet (`readCover`
+     * false: its turn comes in a next image).
+     */
+    private baseOf(
+        key: string,
+        terrain: TerrainData | undefined,
+        now: number,
+        shared: string,
+        readCover: boolean,
+    ): string | undefined {
+        let relief = this.reliefSignatures.get(key);
+        if (relief === undefined) {
+            // Not read yet, and enough of them read in this image: its turn comes in a next one.
+            if (this.reliefReads >= RELIEFS_AN_IMAGE) {
+                this.reliefsWaiting = true;
+                return undefined;
+            }
+            this.reliefReads++;
+            this.reliefReadCount++;
+            const [blockX, blockY] = key.split(",").map(Number);
+            relief = reliefSignature(terrain, blockX, blockY);
+            this.reliefSignatures.set(key, relief);
+        }
+        let water = this.waterSignatures.get(key);
+        if (water === undefined) {
+            water = this.waterSignature(key, now);
+            this.waterSignatures.set(key, water);
+        }
+        // Without the layout of the map, only the dug ground and its water are drawn.
+        if (!this.inputs.layout && relief === "" && water === "") return "";
+        let cover = this.coverSignatures.get(key);
+        if (cover === undefined) {
+            if (!readCover) return "";
+            cover = this.coverSignature(key, terrain, now);
+            this.coverSignatures.set(key, cover);
+        }
+        // With it: nothing to draw where nothing covers the ground, nothing is dug and no water lies.
+        return relief === "" && water === "" && cover === "" ? "" : `${relief}|${water}|${cover}|${shared}`;
+    }
+
+    /**
+     * Once the blocks around the view are drawn: the rest of the map, coarse (COARSE_TEXEL: a sixteenth of the time and
+     * of the memory of a sharp block), the nearest to the view first. Zooming out, or going somewhere, shows the ground
+     * at once; it is sharpened then. False when nothing is left to draw ahead in this image.
+     */
+    private drawAhead(
+        around: readonly string[],
+        aroundKeys: ReadonlySet<string>,
+        shared: string,
+        terrain: TerrainData | undefined,
+        now: number,
+    ): boolean {
+        const size = this.inputs.mapSize?.();
+        if (!size) return false;
+        const range = `${around[0]}|${around[around.length - 1]}|${size.width}|${size.height}`;
+        if (range !== this.aheadRange) {
+            this.aheadRange = range;
+            const [firstX, firstY] = around[0].split(",").map(Number);
+            const [lastX, lastY] = around[around.length - 1].split(",").map(Number);
+            const middleX = (firstX + lastX) / 2;
+            const middleY = (firstY + lastY) / 2;
+            const left: { key: string; distance: number }[] = [];
+            for (let blockY = 0; blockY < Math.ceil(size.height / BLOCK_PX); blockY++) {
+                for (let blockX = 0; blockX < Math.ceil(size.width / BLOCK_PX); blockX++) {
+                    const key = `${blockX},${blockY}`;
+                    if (aroundKeys.has(key) || this.blocks.has(key) || this.aheadEmpty.has(key)) continue;
+                    left.push({ key, distance: Math.max(Math.abs(blockX - middleX), Math.abs(blockY - middleY)) });
+                }
+            }
+            this.ahead = left.sort((a, b) => a.distance - b.distance).map((block) => block.key);
+            this.aheadAt = 0;
+        }
+        while (this.aheadAt < this.ahead.length && this.aheadLooks < AHEAD_LOOKS_AN_IMAGE) {
+            if (this.blocks.size >= MAX_AHEAD_BLOCKS) {
+                this.aheadAt = this.ahead.length;
+                break;
+            }
+            const key = this.ahead[this.aheadAt++];
+            if (this.blocks.has(key) || aroundKeys.has(key)) continue;
+            this.aheadLooks++;
+            const base = this.baseOf(key, terrain, now, shared, true);
+            // Its relief is read in a next image.
+            if (base === undefined) {
+                this.aheadAt--;
+                return false;
+            }
+            if (base === "") {
+                this.aheadEmpty.add(key);
+                continue;
+            }
+            this.schedule.mark(key, `${base}|t${COARSE_TEXEL}`);
+            this.job = { key, steps: this.drawSteps(key, terrain, now, COARSE_TEXEL) };
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -413,7 +558,8 @@ export class ReliefTiles {
         const shown: string[] = [];
         const rest: string[] = [];
         for (const key of around) {
-            const base = bases.get(key) ?? "";
+            const base = bases.get(key);
+            if (base === undefined) continue;
             const drawn = this.blocks.get(key)?.texel;
             signatures.set(
                 key,
@@ -438,6 +584,7 @@ export class ReliefTiles {
 
     public destroy(): void {
         for (const key of [...this.blocks.keys()]) this.drop(key);
+        this.lookAheadAgain();
     }
 
     private blocksOver(x: number, y: number, width: number, height: number): string[] {

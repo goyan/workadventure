@@ -24,6 +24,7 @@ function fixture(
         season?: () => Season | undefined;
         snowLineSeason?: Season;
         screenScale?: () => number;
+        mapSize?: { width: number; height: number };
     } = {},
 ) {
     const worldView = { x: 300, y: 300, width: 600, height: 400 };
@@ -81,6 +82,7 @@ function fixture(
         snowShown: () => 0,
         snowLineSeason: () => options.snowLineSeason,
         screenScale: options.screenScale,
+        mapSize: options.mapSize && (() => options.mapSize ?? { width: 0, height: 0 }),
     });
     // Updates until every block around the view is drawn: a block is drawn over several images, as many as the machine
     // needs (more under the load of the whole suite).
@@ -382,6 +384,63 @@ describe("the blocks of the relief seen in 3/4", () => {
               : same(GRASS_LINE, color)
                 ? "line"
                 : "other";
+
+    describe("the blocks kept, and the map drawn ahead", () => {
+        it("keeps the blocks one zooms out of: zooming out again draws nothing again", () => {
+            // dugEverywhere: 10 × 10 blocks dug. Far out, a pixel of the screen is 5 px of the map.
+            const { tiles, worldView, settle } = fixture(dugEverywhere(), undefined, { screenScale: () => 0.2 });
+            Object.assign(worldView, { x: 0, y: 0, width: 2500, height: 2500 });
+            settle();
+            Object.assign(worldView, { x: 300, y: 300, width: 600, height: 400 });
+            settle();
+            const drawn = tiles.redraws();
+            Object.assign(worldView, { x: 0, y: 0, width: 2500, height: 2500 });
+            settle();
+            expect(tiles.redraws()).toBe(drawn);
+        });
+
+        it("learns of the blocks of a huge view a few an image, not all at once", () => {
+            const { tiles, worldView, settle } = fixture(dugEverywhere(), undefined, { screenScale: () => 0.2 });
+            settle();
+            // Far out at once: 40 × 40 blocks, most of them never seen.
+            Object.assign(worldView, { x: 0, y: 0, width: 10_000, height: 10_000 });
+            const before = tiles.signatureReads();
+            tiles.update(60_000);
+            expect(tiles.signatureReads() - before).toBeGreaterThan(0);
+            expect(tiles.signatureReads() - before).toBeLessThanOrEqual(48);
+            settle();
+            expect(tiles.signatureReads() - before).toBeGreaterThan(1500);
+        });
+
+        it("draws the rest of the map coarse once the view is drawn: a far block is there before one goes to it", () => {
+            const { scene, settle, painted, tiles } = fixture(dugEverywhere(), undefined, {
+                mapSize: { width: 2560, height: 2560 },
+            });
+            settle();
+            // The view shows the blocks 1 to 3 across, 1 and 2 down: the block 9,9 is far from it.
+            expect(painted.get("relief-block:9,9@4")?.length).toBe(64 * 64 * 4);
+            const created = scene.textures.createCanvas.mock.calls.map(([key]) => String(key));
+            // The view first, sharp; the rest after it, coarse only; nothing beyond the map.
+            expect(created.indexOf("relief-block:9,9@4")).toBeGreaterThan(created.indexOf("relief-block:2,2"));
+            expect(created).not.toContain("relief-block:9,9");
+            expect(created.some((key) => /:1[0-9],|,1[0-9]/.test(key))).toBe(false);
+            expect(tiles.isDrawing()).toBe(false);
+        });
+
+        it("sharpens a block drawn ahead when one goes to it, showing it coarse meanwhile", () => {
+            const { worldView, settle, painted, images, tiles } = fixture(dugEverywhere(), undefined, {
+                mapSize: { width: 2560, height: 2560 },
+            });
+            settle();
+            const shown = images.filter((image) => image.visible).length;
+            Object.assign(worldView, { x: 2100, y: 2100, width: 300, height: 300 });
+            tiles.update(50_000);
+            // Nothing vanished: the coarse blocks of the new view still show.
+            expect(images.filter((image) => image.visible).length).toBeGreaterThanOrEqual(shown);
+            settle();
+            expect(painted.get("relief-block:8,8")?.length).toBe(256 * 256 * 4);
+        });
+    });
 
     describe("a view filled at once, then sharpened", () => {
         // The view (x 300 to 900, y 300 to 700) shows the blocks 1 to 3 across, 1 and 2 down.

@@ -30,11 +30,11 @@ export function blockCellWindow(
 
 /**
  * Pixels of the map for a point of a block drawn (its texel), given how many pixels of the screen a pixel of the map
- * takes: a point drawn is a pixel of the screen at most, a block is drawn no finer than the screen shows it. Far out,
- * a block costs 4 or 16 times less to draw, and looks the same.
+ * takes: a point drawn is a third more than a pixel of the screen at most, a block is drawn hardly finer than the screen
+ * shows it. Far out, a block costs 4 or 16 times less to draw and to keep, and looks the same.
  */
 export function texelFor(screenScale: number): 1 | 2 | 4 {
-    return screenScale > 0.5 ? 1 : screenScale > 0.25 ? 2 : 4;
+    return screenScale > 2 / 3 ? 1 : screenScale > 1 / 3 ? 2 : 4;
 }
 
 /**
@@ -107,14 +107,22 @@ export class ReliefTileSchedule {
         this.drawn.set(key, signature);
     }
 
-    /** Forgets the blocks seen least lately beyond `max`, never the ones in `keep`; returns them. */
-    public evict(keep: ReadonlySet<string>, max = KEPT_BLOCKS): string[] {
-        if (this.drawn.size <= max) return [];
-        const candidates = [...this.drawn.keys()]
-            .filter((key) => !keep.has(key))
+    /**
+     * Forgets the blocks seen least lately while all those seen weigh more than `max`, never the ones in `keep` nor
+     * the ones that weigh nothing (`weightOf`: 1 each by default); returns them.
+     */
+    public evict(keep: ReadonlySet<string>, max = KEPT_BLOCKS, weightOf: (key: string) => number = () => 1): string[] {
+        let total = 0;
+        for (const key of this.seen.keys()) total += weightOf(key);
+        if (total <= max) return [];
+        const candidates = [...this.seen.keys()]
+            .filter((key) => !keep.has(key) && weightOf(key) > 0)
             .sort((a, b) => (this.seen.get(a) ?? 0) - (this.seen.get(b) ?? 0));
-        const dropped = candidates.slice(0, this.drawn.size - max);
-        for (const key of dropped) {
+        const dropped: string[] = [];
+        for (const key of candidates) {
+            if (total <= max) break;
+            total -= weightOf(key);
+            dropped.push(key);
             this.drawn.delete(key);
             this.seen.delete(key);
         }

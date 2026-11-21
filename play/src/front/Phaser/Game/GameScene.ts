@@ -3897,6 +3897,8 @@ export class GameScene extends DirtyScene {
                     snowLineSeason: () => this.getGroundSeason(),
                     // Far out, the blocks are drawn no finer than the screen shows them.
                     screenScale: () => this.cameras.main.zoom,
+                    // The rest of the map is drawn ahead, coarse: zooming out shows the ground at once.
+                    mapSize: () => ({ width: this.Map.widthInPixels, height: this.Map.heightInPixels }),
                 });
                 this.waterGlints?.destroy();
                 this.waterGlints = new WaterGlints(this, {
