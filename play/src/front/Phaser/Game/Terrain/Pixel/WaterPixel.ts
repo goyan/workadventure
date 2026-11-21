@@ -1,8 +1,8 @@
-import { Season } from "@workadventure/map-editor";
-import { SWIM_DEPTH_PX } from "../../Water/WaterZones";
+import type { Season } from "@workadventure/map-editor";
 import { valueNoise } from "./PixelNoise";
 import type { Rgb } from "./PixelPalette";
 import { bayer, rampsFor, shadeAt } from "./PixelPalette";
+import { SWIM_DEPTH_PX, WINTER } from "./TerrainUnits";
 
 /** Thinner than this (px), the water is the pale foam of the shore. */
 export const SHORE_PX = 3;
@@ -31,7 +31,7 @@ export function waterColor(
     edge = false,
 ): Rgb {
     if (seeThrough && ground && bayer(x, y) < SEE_THROUGH_SHARE) return ground;
-    if (edge) return season === Season.Winter ? SHORE_ICE : SHORE_FOAM;
+    if (edge) return season === WINTER ? SHORE_ICE : SHORE_FOAM;
     // The water one wades in: the clearest shade. From where one swims, the three darker ones, darker deeper down
     // (never the clearest: where one starts swimming shows).
     if (depth < SWIM_DEPTH_PX) return rampsFor(season).water[3];

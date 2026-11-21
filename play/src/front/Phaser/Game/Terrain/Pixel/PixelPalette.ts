@@ -1,4 +1,4 @@
-import { Season } from "@workadventure/map-editor";
+import type { Season } from "@workadventure/map-editor";
 
 /** A colour: red, green, blue, 0 to 255. */
 export type Rgb = readonly [number, number, number];
@@ -52,18 +52,19 @@ export const RAMPS: Record<Material | "wall" | "water", Ramp> = {
 };
 
 /** What changes with the season (the mock-ups of the seasons): the grass, and the sand of the summer. */
+// By the value of each season (the enum of the map editor is not loaded here: see TerrainUnits).
 const SEASON_RAMPS: Record<Season, Partial<Record<Material | "water", Ramp>>> = {
-    [Season.Spring]: { grass: ramp("#3f7032", "#55923d", "#72b34b", "#98d065") },
-    [Season.Summer]: {
+    spring: { grass: ramp("#3f7032", "#55923d", "#72b34b", "#98d065") },
+    summer: {
         grass: ramp("#4a6a2c", "#64883a", "#86a849", "#b3c36a"),
         sand: ramp("#b39860", "#d4b97c", "#ead39c", "#f7e9c0"),
         water: ramp("#1f5c7c", "#2a7598", "#3b93b4", "#5fb5cf"),
     },
-    [Season.Autumn]: {
+    autumn: {
         grass: ramp("#4a5a2a", "#647036", "#848a45", "#a8a35a"),
         water: ramp("#1f4466", "#295a84", "#38709c", "#5288b8"),
     },
-    [Season.Winter]: {
+    winter: {
         grass: ramp("#4f6a48", "#6b8460", "#8aa07c", "#a9ba9a"),
         water: ramp("#2c5677", "#3b6e93", "#5288ad", "#8db5d0"),
     },

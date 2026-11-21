@@ -3,6 +3,7 @@ import type { InteractionTrigger } from "@workadventure/map-editor";
 import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRectangles";
 import { getObjectInteraction } from "../../../Utils/ObjectCategories";
 import { waterDepthAtPoint } from "../Terrain/AvatarDrop";
+import { SWIM_DEPTH_PX } from "../Terrain/Pixel/TerrainUnits";
 import type { GameScene } from "../GameScene";
 
 /** A rectangle of water in world pixels. */
@@ -80,7 +81,7 @@ function allWaterRectangles(scene: Phaser.Scene): CachedWater {
 }
 
 /** One swims in the water of the relief from this depth on, in pixels (half a tile); under it one walks. */
-export const SWIM_DEPTH_PX = 16;
+export { SWIM_DEPTH_PX };
 
 /**
  * Whether a point is in water of the relief deep enough to swim (TerrainWater): the lakes dug in the ground, unlike

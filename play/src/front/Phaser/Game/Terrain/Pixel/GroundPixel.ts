@@ -1,7 +1,8 @@
-import { Season } from "@workadventure/map-editor";
+import type { Season } from "@workadventure/map-editor";
 import { hash2, valueNoise } from "./PixelNoise";
 import type { Material, Ramp, Rgb } from "./PixelPalette";
 import { RAMPS, rampsFor, shadeAt } from "./PixelPalette";
+import { AUTUMN, SUMMER, WINTER } from "./TerrainUnits";
 
 /** The dark line on the grass side of a border. */
 const GRASS_LINE: Rgb = [0x22, 0x36, 0x1c];
@@ -194,13 +195,13 @@ export function sprinkleAt(
     y: number,
 ): Rgb | undefined {
     if (material !== "grass" || season === undefined) return undefined;
-    if (season === Season.Autumn) {
+    if (season === AUTUMN) {
         const draw = hash2(x * 5 + 3, y * 11 + 7);
         for (const [threshold, color] of LEAVES) if (draw > threshold) return color;
         return undefined;
     }
-    if (!dense || season === Season.Winter) return undefined;
-    const rarer = season === Season.Summer ? SUMMER_RARER : 0;
+    if (!dense || season === WINTER) return undefined;
+    const rarer = season === SUMMER ? SUMMER_RARER : 0;
     const draw = hash2(x * 3 + 1, y * 7 + 2);
     for (const [threshold, color] of FLOWERS) if (draw > threshold + rarer) return color;
     return undefined;
@@ -211,11 +212,11 @@ export function sprinkleAt(
  * piercing the snow of the winter here and there.
  */
 export function seasonPatch(material: Material, season: Season | undefined, x: number, y: number): Ramp | undefined {
-    if (season === Season.Summer && material === "grass" && valueNoise(x / 9 + 3, y / 9) > 0.66) {
-        return rampsFor(Season.Summer).straw;
+    if (season === SUMMER && material === "grass" && valueNoise(x / 9 + 3, y / 9) > 0.66) {
+        return rampsFor(SUMMER).straw;
     }
-    if (season === Season.Winter && material === "snow" && valueNoise(x / 2.5, y / 2.5) > 0.86 && hash2(x, y) > 0.4) {
-        return rampsFor(Season.Winter).grass;
+    if (season === WINTER && material === "snow" && valueNoise(x / 2.5, y / 2.5) > 0.86 && hash2(x, y) > 0.4) {
+        return rampsFor(WINTER).grass;
     }
     return undefined;
 }
