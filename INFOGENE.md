@@ -3157,14 +3157,39 @@ du serveur, la glace est maintenant tenue par le serveur, case par case.
   mince, et la neige posée dessus est celle de la case. `isOnFrozenWater` lit la glace du serveur (`Ice/IceHold.ts`).
   En météo personnelle (pastille 🖥), rien ne change : le gel local de `Frost.ts`.
 - **Température manuelle** jusqu'à −30 °C (au lieu de −10), pour geler un lac vite.
-- **Piscines.** Une piscine peinte (outil Relief, mode Piscine) gèle par la glace du serveur comme un lac, d'après
-  la profondeur de son style, sauf si son eau est chaude : chauffée, elle ne gèle jamais et fait fondre la neige qui
-  y tombe. Le pré relit les styles avec la carte (`Meadow`, tableaux `pool` et `hotPool`). On y patine quand la glace
-  porte (5 cm si l'on y nagerait). Une piscine posée comme image (ancien objet) n'est pas connue du serveur : elle
-  garde la règle de #392 (dès −8 °C) ; la convertir en piscine peinte la fait suivre le serveur.
+- **Piscines.** L'eau d'une piscine peinte est de l'eau du relief (section « Piscines en eau réaliste ») : elle gèle
+  comme un lac, sans règle à part, sauf si son eau est chaude (jamais de glace, la neige y fond). Une piscine posée
+  comme image (ancien objet) n'est pas connue du serveur : elle garde la règle de #392 (dès −8 °C) ; la convertir en
+  piscine peinte la fait suivre le serveur.
 - **Limites.** Pas de glace du serveur dessinée sans shader (repli). La pêche n'est pas refusée sur la glace.
   L'eau sous la glace s'évapore encore. La glace est tenue par case de 32 px, l'eau par cellule de 16 px : le bord de
   la glace est lissé par le shader. `play` et `back` se déploient ensemble.
+
+### Piscines en eau réaliste : un bassin que le serveur remplit
+
+L'eau d'une piscine peinte n'est plus un dessin toujours plein : c'est de l'eau du relief, tenue par le serveur.
+
+- **Le bassin** (`Terrain/Pools.ts`, `poolBasins`). Pour l'eau, chaque case d'une piscine est creusée de la
+  profondeur de son style sous le sol où elle est peinte. Le relief de la carte n'est pas modifié (c'est ce que
+  l'éditeur édite et ce qui est dessiné) : le serveur et le navigateur lisent ce relief « avec bassins » pour tout
+  ce qui dépend du niveau de l'eau (`TerrainWaterManager`, `TerrainWater.basin()`, courant, flèches des flux). Lu une
+  fois par carte et par liste de styles.
+- **La pompe** (`TerrainWaterManager.pumpPools`, `poolCells`). Chaque case sous son niveau reçoit de quoi remplir une
+  piscine vide en 8 secondes (`POOL_FILL_SECONDS`) : une piscine plus grande ou plus profonde a une pompe plus forte.
+  Remplissage jusqu'à 2 px sous le bord (`POOL_FREEBOARD_PX`), jamais au-dessus : une piscine trop pleine se vide en
+  débordant. Compté avec les sources dans le bilan de l'eau. Le fond ne boit pas (sol de piscine, creux).
+- **Ce qui en découle.** La comète y soulève une vague, le météore brûlant fait bouillir son eau, le drain la vide,
+  et elle se remplit. La pluie et la fonte y tombent. Une inondation y entre, elle déborde. Elle gèle comme un lac.
+- **À l'écran** (`GroundSplat`, `poolColor`). La margelle et le carrelage restent ; l'eau dessinée suit le niveau du
+  serveur : une piscine vidée montre son carrelage sec, puis l'eau revient à mesure qu'elle se remplit. Pas de glace
+  dans une piscine vide. Le sol autour d'une piscine ne s'assombrit pas (pas d'anneau de terre mouillée sur une
+  terrasse).
+- **Nage** (`WaterZones`). Les rectangles de piscine restent, avec le plongeon et les échelles ; un rectangle ne
+  compte comme de l'eau que s'il contient de quoi nager (16 px en son centre) : dans une piscine vidée on marche sur
+  le fond. La nage du relief s'applique aussi (c'est la même eau).
+- **Limites.** Les piscines-images gardent leur dessin plein. Une carte existante voit ses piscines se remplir au
+  premier pas du serveur. Le sol autour d'une piscine devient humide (berges) : de l'herbe peut y pousser sur un sol
+  fertile. La profondeur dessinée plafonne à 128 px. `play` et `back` se déploient ensemble.
 
 ### Arbres : feuilles d'automne et neige
 

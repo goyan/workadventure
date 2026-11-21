@@ -2399,6 +2399,7 @@ export class GameScene extends DirtyScene {
             // The relief may have been edited: the water follows it (nothing is done while it stays the same).
             const terrain = this.getGameMap().getWamFile()?.getWam().terrain;
             this.terrainWater.setTerrain(terrain);
+            this.terrainWater.setPools(this.getGameMap().getWamFile()?.getWam().settings?.pools);
             // Told under the clock, with the floor of the avatar.
             avatarAltitudeStore.set(
                 avatarAltitude(terrain, this.CurrentPlayer.x, this.CurrentPlayer.y, this.CurrentPlayer.getFloorZ()),
@@ -4279,6 +4280,7 @@ export class GameScene extends DirtyScene {
         this.entityStatesManager = new EntityStatesManager(this.connection, room.entityStates);
         // The water of the relief: what the room holds now, then every change.
         this.terrainWater.setTerrain(this.getGameMap().getWamFile()?.getWam().terrain);
+        this.terrainWater.setPools(this.getGameMap().getWamFile()?.getWam().settings?.pools);
         if (room.terrainWater) this.receiveTerrainWater(room.terrainWater);
         this.terrainWaterSubscription?.unsubscribe();
         this.terrainWaterSubscription = this.connection.terrainWaterMessageStream.subscribe((message) => {

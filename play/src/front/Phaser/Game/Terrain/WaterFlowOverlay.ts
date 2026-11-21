@@ -8,7 +8,13 @@ import type { WaterMass } from "./WaterMasses";
 
 export interface WaterFlowOverlayOptions {
     /** The water of the relief: its last state, and a number that changes with it. */
-    water: { settled(): SettledWater; relief(): TerrainData | undefined; version(): number; hasAnything(): boolean };
+    water: {
+        settled(): SettledWater;
+        relief(): TerrainData | undefined;
+        basin?(): TerrainData | undefined;
+        version(): number;
+        hasAnything(): boolean;
+    };
     /** Whether the water of the map has inertia: how fast it runs down a slope depends on it. */
     inertia: () => boolean;
     /** How that water makes its waves, when the map says: the friction that holds it back. */
@@ -85,7 +91,7 @@ export class WaterFlowOverlay {
         if (now - this.lastFrameAt < FRAME_MS) return;
         this.lastFrameAt = now;
         const water = this.options.water.settled();
-        const terrain = this.options.water.relief();
+        const terrain = this.options.water.basin ? this.options.water.basin() : this.options.water.relief();
         const inertia = this.options.inertia();
         const waves = this.options.waves?.();
         const pace = inertia ? (this.options.pace?.() ?? 1) : 1;

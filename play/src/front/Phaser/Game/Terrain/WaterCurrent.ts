@@ -5,6 +5,8 @@ import type { TerrainData } from "@workadventure/map-editor";
 export interface CurrentWater {
     depthAt(x: number, y: number, now: number): number;
     relief(): TerrainData | undefined;
+    /** The relief the water stands on, its pools dug (TerrainWater.basin); the relief itself when absent. */
+    basin?(): TerrainData | undefined;
 }
 
 export interface CurrentVector {
@@ -51,7 +53,7 @@ export function waterCurrentAt(
     if (!water) return NONE;
     const depth = water.depthAt(x, y, now);
     if (depth < shallowest) return NONE;
-    const terrain = water.relief();
+    const terrain = water.basin ? water.basin() : water.relief();
     const cellX = Math.floor(x / TERRAIN_CELL);
     const cellY = Math.floor(y / TERRAIN_CELL);
     const groundHere = heightAt(terrain, cellX, cellY);

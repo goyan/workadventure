@@ -1,4 +1,11 @@
-import { cellKey, withHeights } from "@workadventure/map-editor";
+import {
+    cellKey,
+    DEFAULT_POOL_STYLE,
+    poolBasins,
+    poolSoilCode,
+    withHeights,
+    withSoils,
+} from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
 import { currentPush, waterCurrentAt } from "../../../../../src/front/Phaser/Game/Terrain/WaterCurrent";
@@ -93,5 +100,22 @@ describe("currentPush", () => {
         expect(currentPush(river, 8, 8, 0, 2, 180).x).toBeCloseTo(45, 3);
         expect(currentPush(river, 8, 8, 0, 0, 180)).toEqual({ x: 0, y: 0 });
         expect(currentPush(river, 8, 8, 0, Number.NaN, 180)).toEqual({ x: 0, y: 0 });
+    });
+});
+
+describe("the water of a pool", () => {
+    // A pool of 9 × 9 cells on a flat ground, full to its rim: 46 px of water over its basin of 48.
+    const soils = new Map<string, number>();
+    for (let y = -4; y <= 4; y++) for (let x = -4; x <= 4; x++) soils.set(cellKey(x, y), poolSoilCode(0));
+    const painted = withSoils(undefined, soils);
+    const inPool = (x: number, y: number): boolean => Math.abs(x) <= 4 && Math.abs(y) <= 4;
+    const depthAt = (x: number, y: number): number => (inPool(Math.floor(x / 16), Math.floor(y / 16)) ? 46 : 0);
+
+    it("is still when the pool is full: its surface is read over its basin, not over the flat ground drawn", () => {
+        const water = { relief: () => painted, basin: () => poolBasins(painted, [DEFAULT_POOL_STYLE]), depthAt };
+        // Two cells from the east wall of the pool.
+        const current = waterCurrentAt(water, 2 * 16 + 8, 8, 0);
+        expect(current.x).toBeCloseTo(0);
+        expect(current.y).toBeCloseTo(0);
     });
 });
