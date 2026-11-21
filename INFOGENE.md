@@ -4839,7 +4839,10 @@ d'eau libre de 24 px (bord irrégulier, éclats de glace), qui regèle en 2 minu
 envoie `CATASTROPHE_ICE_BREAK` (une valeur de plus de `CatastropheKind`, même message que les catastrophes, une casse
 par seconde par joueur), le serveur casse la glace d'une tuile autour par `meadow.shatter` (comme une comète) et le
 dit à la salle, qui ouvre le même trou. Météo personnelle : trou local. Les piscines gèlent en surface dès -3 °C
-(`POOL_ICE_DEPTH_PX` 8 px au lieu de 32, qui attendait -8,25 °C).
+(`POOL_ICE_DEPTH_PX` 8 px au lieu de 32, qui attendait -8,25 °C). La glace du serveur épaissit deux fois plus vite que
+l'horloge de la neige (`ICE_GROWTH_TIMES` = 2, soit 1 200 fois le temps réel ; le dégel garde ×600) : elle porte le
+woka en 1 min 30 environ à -3 °C, 38 s à -7 °C, 18 s à -15 °C (loi de Stefan, l'épaisseur croît comme la racine du
+temps).
 
 **Herbe dès l'arrivée** (`back/src/Model/MeadowManager.ts`, `GameScene.groundStatesOfJoinApplied`). Le premier joueur
 d'une salle recréée recevait un sol nu : `snapshot()` ne rendait que l'état déjà diffusé, vide jusqu'au premier pas de
