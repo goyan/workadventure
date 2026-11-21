@@ -1,6 +1,5 @@
 import { derived, get, writable, type Readable, type Writable } from "svelte/store";
-import type { WeatherLocation } from "@workadventure/map-editor";
-import { WorldMoment, type WorldPoint } from "@wa/front/Phaser/Game/Night/WorldDaylight";
+import { WorldMoment, type WorldPlace, type WorldPoint } from "@wa/front/Phaser/Game/Night/WorldDaylight";
 import { localUserStore } from "../Connection/LocalUserStore";
 import { NIGHT_DARKNESS_MAX, NIGHT_DARKNESS_MIN, NIGHT_MAX_OPACITY } from "../Phaser/Game/Night/NightClock";
 import { basicActiveStore } from "./BasicModeStore";
@@ -67,8 +66,8 @@ function createWorldPointStore(): Writable<WorldPoint | undefined> {
     return { subscribe: store.subscribe, set, update: (updater) => set(updater(get(store))) };
 }
 
-/** The city whose sky is shown (NightMode.World); undefined otherwise. */
-export const worldCityStore = writable<WeatherLocation | undefined>(undefined);
+/** The city (or the point of the map of the world) whose sky is shown (NightMode.World); undefined otherwise. */
+export const worldCityStore = writable<WorldPlace | undefined>(undefined);
 
 const NIGHT_MODE_KEY = "nightMode";
 

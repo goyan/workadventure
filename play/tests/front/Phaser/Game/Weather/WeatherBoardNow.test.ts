@@ -4,6 +4,7 @@ import type { RealForecastState } from "../../../../../src/front/Phaser/Game/Wea
 
 interface Place {
     name: string;
+    longName?: string;
     latitude: number;
     longitude: number;
 }
@@ -135,6 +136,22 @@ describe("weatherBoardNow", () => {
         expect(board.precipitation).toMatchObject({ form: "snow", differs: true });
         expect(board.precipitation.onMap).toMatchObject({ form: "rain", temperature: 24 });
         expect(board.ice).toMatchObject({ stage: "shallows", differs: true });
+    });
+
+    it("names a point far from any city by its long name: its coordinates, the nearest city and how far", () => {
+        map.timeline = timeline(14, 84, 8);
+        chosen.now = {
+            place: {
+                name: "72° S 170° E",
+                longName: "72° S 170° E (Auckland 4,000 km away)",
+                latitude: -72.4,
+                longitude: 170.2,
+            },
+            state: timeline(-34, 69, 15),
+        };
+        const board = weatherBoardNow(settings, now(), undefined, undefined);
+        expect(board.city).toBe("72° S 170° E (Auckland 4,000 km away)");
+        expect(board.ownAir?.place).toBe("72° S 170° E (Auckland 4,000 km away)");
     });
 
     it("says whether something falls for the player, and on the map", () => {

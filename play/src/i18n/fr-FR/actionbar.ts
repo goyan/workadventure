@@ -97,6 +97,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         weather: {
             button: "Météo expliquée",
             title: "Pourquoi ce temps ?",
+            close: "Fermer « Météo expliquée »",
             intro: "Ce que tu vois dépend de deux airs. Ce tableau dit lequel décide, pourquoi, et qui voit la même chose.",
             more: "En savoir plus",
             airs: {
