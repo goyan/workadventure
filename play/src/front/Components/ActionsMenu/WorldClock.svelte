@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { sunHeightAt, WorldMoment } from "@wa/front/Phaser/Game/Night/WorldDaylight";
+    import { worldShadeAt, WorldMoment } from "@wa/front/Phaser/Game/Night/WorldDaylight";
     import {
         NightMode,
         mapTimeZoneStore,
@@ -11,7 +11,7 @@
         worldPointStore,
     } from "@wa/front/Stores/NightStore";
     import { LL, locale } from "../../../i18n/i18n-svelte";
-    import { worldClockTimeZone } from "../../Phaser/Game/Night/NightClock";
+    import { NIGHT_MAX_OPACITY, worldClockTimeZone } from "../../Phaser/Game/Night/NightClock";
 
     /** The map of the world (Natural Earth, public domain): equirectangular, a point is read straight from it. */
     const WORLD_MAP = "/resources/terrain/world-map.png";
@@ -73,9 +73,8 @@
         for (let y = 0; y < MAP_HEIGHT; y++) {
             const latitude = 90 - ((y + 0.5) * 180) / MAP_HEIGHT;
             for (let x = 0; x < MAP_WIDTH; x++) {
-                const height = sunHeightAt(date, latitude, ((x + 0.5) * 360) / MAP_WIDTH - 180);
-                // Day: as it is; dusk: darker little by little; night: dark blue.
-                const dark = height >= 0.1 ? 0 : height <= -0.1 ? 0.6 : (0.1 - height) * 3;
+                // Day: as it is; dusk: darker little by little; night: dark blue. The night veil of the game itself.
+                const dark = worldShadeAt(date, latitude, ((x + 0.5) * 360) / MAP_WIDTH - 180) * NIGHT_MAX_OPACITY;
                 const at = (y * MAP_WIDTH + x) * 4;
                 shade.data[at] = shade.data[at] * (1 - dark) + 10 * dark;
                 shade.data[at + 1] = shade.data[at + 1] * (1 - dark) + 20 * dark;

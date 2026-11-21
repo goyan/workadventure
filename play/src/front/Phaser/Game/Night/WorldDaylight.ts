@@ -1,4 +1,5 @@
 import type { WeatherLocation } from "@workadventure/map-editor";
+import { NIGHT_MAX_OPACITY, nightOpacityAt, trueSolarMinutes } from "./NightClock";
 
 /** The moment of the day chosen for the sky of somewhere in the world. */
 export enum WorldMoment {
@@ -63,10 +64,12 @@ export const WORLD_CITIES: readonly WeatherLocation[] = [
     { name: "Auckland", latitude: -36.85, longitude: 174.76, timezone: "Pacific/Auckland" },
 ];
 
-/** The time of the sun at a longitude, at an instant, in minutes since midnight (noon: the sun at its highest). */
+/**
+ * The time of the sun at a longitude, at an instant, in minutes since midnight (noon: the sun at its highest): the true
+ * solar time, the one the sun of the game keeps.
+ */
 export function solarMinutes(date: Date, longitude: number): number {
-    const utc = date.getUTCHours() * 60 + date.getUTCMinutes() + date.getUTCSeconds() / 60;
-    return wrapDay(utc + longitude * 4);
+    return trueSolarMinutes(date, longitude);
 }
 
 /**
@@ -120,18 +123,11 @@ export function placeOfPoint(point: WorldPoint): WeatherLocation {
 }
 
 /**
- * How high the sun is over a point of the world at an instant: the sine of its height (above 0: day). Enough to
- * draw day and night on the map of the world (the equation of time is left out: a few minutes).
+ * How dark the night is over a point of the world at an instant, 0 (day) to 1 (full night): the night veil of the game
+ * (nightOpacityAt) seen from that point, so that the map of the world shows the day and the night the game draws there.
  */
-export function sunHeightAt(date: Date, latitude: number, longitude: number): number {
-    const start = Date.UTC(date.getUTCFullYear(), 0, 0);
-    const dayOfYear = (date.getTime() - start) / 86_400_000;
-    const declination = ((23.44 * Math.PI) / 180) * Math.sin((2 * Math.PI * (dayOfYear - 81)) / 365);
-    const hours = date.getUTCHours() + date.getUTCMinutes() / 60;
-    const subsolarLongitude = -(hours - 12) * 15;
-    const lat = (latitude * Math.PI) / 180;
-    const hourAngle = (lonGap(longitude, subsolarLongitude) * Math.PI) / 180;
-    return Math.sin(lat) * Math.sin(declination) + Math.cos(lat) * Math.cos(declination) * Math.cos(hourAngle);
+export function worldShadeAt(date: Date, latitude: number, longitude: number): number {
+    return nightOpacityAt(date, { latitude, longitude }) / NIGHT_MAX_OPACITY;
 }
 
 /** Degrees between two longitudes, the short way round. */

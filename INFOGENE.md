@@ -1582,6 +1582,12 @@ d'heure) à ±2 min. La nuit, un voile bleu nuit
 - **Choix personnel** dans Paramètres → Thème → Cycle jour/nuit : heure du serveur (défaut), heure de mon ordinateur
   (horloge et fuseau du poste : la date et l'heure affichées par le poste sont lues comme une heure de Paris, puis
   éclairées par le soleil de Paris de ce jour-là ; un poste qui affiche 22 h voit la nuit de Paris à 22 h), ou désactivé. La clé `nightMode` est mémorisée ; l’ancienne préférence `disableNight` est conservée.
+- **Jour dans le monde** (menu de l'horloge) : la ville d'un moment (Matin 9 h, Midi 12 h 30, Soir 18 h 30, ou une
+  heure choisie) est celle dont l'**heure solaire vraie** est la plus proche (avec l'équation du temps, `trueSolarMinutes`
+  de `NightClock.ts`, ±16 min selon la saison). La carte du monde du menu s'ombre avec le voile du jeu lui-même
+  (`worldShadeAt` = `nightOpacityAt` vu de chaque point) : plein jour jusqu'à −0,833°, assombrie jusqu'à −6°, nuit
+  au-delà. Dessinée pixel par pixel (240 × 120) : environ 7 ms par dessin (mesuré en conteneur Linux sur un Mac), une
+  fois par seconde tant que le menu est ouvert en mode monde.
 - **Pas de nuit** en mode édition ou lorsque le cycle est désactivé.
 - **Recette locale** : `?nightAt=21:00` force l'heure de Paris du jour courant (soleil de ce jour), seulement en
   développement (`import.meta.env.DEV`).
