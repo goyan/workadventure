@@ -153,8 +153,9 @@ function personalWeatherSettings(
     settings: MapSnowSettings | undefined,
     date: Date | undefined,
 ): MapSnowSettings | undefined {
+    if (!showsChosenPlaceWeather()) return undefined;
     const { place, state: chosenState } = chosenWeatherNow();
-    if (!place || preview) return undefined;
+    if (!place) return undefined;
     const second = date === undefined ? undefined : Math.floor(date.getTime() / 1000);
     if (
         personalMemo &&
@@ -176,6 +177,14 @@ function personalWeatherSettings(
             : real;
     personalMemo = { settings, place, state: chosenState, second, shown };
     return shown;
+}
+
+/**
+ * Whether the weather drawn for this player is that of their own place (personalWeatherSettings): they follow a city
+ * on their clock and no weather is being tried in the map settings panel. Otherwise it is the weather of the map.
+ */
+export function showsChosenPlaceWeather(): boolean {
+    return chosenWeatherNow().place !== undefined && !preview;
 }
 
 /** The conditions of the room, when a player set them by hand: their wind is the wind of the whole scene. */

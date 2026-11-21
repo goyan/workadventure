@@ -1,14 +1,16 @@
 import { get } from "svelte/store";
-import { WeatherType } from "@workadventure/map-editor";
+import { hoarFrost, WeatherType } from "@workadventure/map-editor";
+import { realWeatherAt } from "@wa/common/RealWeather";
 import { nightDateStore } from "@wa/front/Stores/NightStore";
 import { fireConditionsStore } from "@wa/front/Stores/FireConditionsStore";
-import { chosenPlaceForecast, chosenWeatherNow } from "./ChosenPlaceWeather";
-import { shownWeatherForecast, shownWeatherSettings } from "./RealWeatherClient";
+import { chosenWeatherNow } from "./ChosenPlaceWeather";
+import type { RealForecastState } from "./RealWeather";
+import { shownPlaceTimeline, shownWeatherSettings } from "./RealWeatherClient";
 import type { MapSnowSettings } from "./SnowCover";
 
 /**
- * The cycle of the water as this player sees it, from the temperature and the weather of the place shown (their own
- * city, or the map's): frost on the ground under 0 °C, ice spreading on the water from its shallows as it gets colder
+ * The cycle of the water as this player sees it, from the air and the weather of the place shown (their own city, or
+ * the map's): hoar frost on the ground from the vapour of a damp air under 0 °C (hoarFrost), ice spreading on the water from its shallows as it gets colder
  * (all of it frozen at -15 °C), outdoors only, the ground wet after a rain, drying again. Drawn by the shaders of the ground and the
  * water, and the frozen water is skated on: nothing is sent to the server, whose water keeps flowing.
  *
@@ -23,8 +25,6 @@ export interface WaterCycle {
     wet: number;
 }
 
-/** °C at which the ground is white with frost. */
-const FULL_FROST_C = -10;
 /** The shallows freeze under this, °C... */
 const ICE_START_C = 0;
 /** ...and the whole water at this. */
@@ -39,11 +39,6 @@ const FROST_RATE = 1 / 60;
 /** The ground soaks in a few seconds of rain and dries in about five minutes. */
 const WET_RATE = 1 / 8;
 const DRY_RATE = 1 / 300;
-
-/** Frost on the ground at this temperature, 0 to 1. */
-export function frostAt(celsius: number): number {
-    return clamp(celsius / FULL_FROST_C);
-}
 
 /** How far the ice reaches into the water at this temperature, 0 to 1. */
 export function iceAt(celsius: number): number {
@@ -75,11 +70,12 @@ export function waterCycleNow(settings: MapSnowSettings | undefined): WaterCycle
     if (lastSecond === second) return cycle;
     const elapsed = lastSecond === undefined ? Number.POSITIVE_INFINITY : Math.min(60, second - lastSecond);
     lastSecond = second;
-    const celsius = temperatureNow(settings, date);
+    const air = airNow(settings, date);
+    const celsius = air?.temperature;
     const weather = shownWeatherSettings(settings, date)?.weather;
     const raining = weather === WeatherType.Rain || weather === WeatherType.Storm;
     const target = {
-        frost: celsius === undefined ? 0 : frostAt(celsius),
+        frost: air?.humidity === undefined ? 0 : hoarFrost({ ...air, humidity: air.humidity }),
         ice: celsius === undefined ? 0 : iceAt(celsius),
         wet: raining && (celsius === undefined || celsius > 0) ? 1 : 0,
     };
@@ -94,16 +90,34 @@ export function waterCycleNow(settings: MapSnowSettings | undefined): WaterCycle
     return cycle;
 }
 
+/** The air now at a place: its temperature (°C), its relative humidity (%) and its wind (km/h), when given. */
+export interface AirNow {
+    temperature: number;
+    humidity: number | undefined;
+    windSpeed: number | undefined;
+}
+
+/** The air of the quarter hour under way of a timeline; undefined without a temperature. */
+export function timelineAirAt(state: RealForecastState, epoch: number): AirNow | undefined {
+    if (state.status !== "known") return undefined;
+    const now = realWeatherAt(state.slots, epoch);
+    if (!now || now.temperature === null) return undefined;
+    return { temperature: now.temperature, humidity: now.humidity, windSpeed: now.windSpeed };
+}
+
 /**
- * The temperature now at the place shown: this player's own city, else the map's (the heat set by hand in the room
- * first, as the banner says it).
+ * The air now at the place shown, the one the frost of the ground goes by: this player's own city, else the map's
+ * (the heat, the humidity and the wind set by hand in the room first, as the banner says them). A humidity not known
+ * gives no frost: none is made up.
  */
-function temperatureNow(settings: MapSnowSettings | undefined, date: Date): number | undefined {
+function airNow(settings: MapSnowSettings | undefined, date: Date): AirNow | undefined {
     const { place, state } = chosenWeatherNow();
-    if (place) return chosenPlaceForecast(place, state, date)[0]?.temperature;
+    if (place) return timelineAirAt(state, date.getTime());
     const conditions = get(fireConditionsStore);
-    if (conditions?.manual) return conditions.temperature;
-    return shownWeatherForecast(settings, date)[0]?.temperature;
+    if (conditions?.manual) {
+        return { temperature: conditions.temperature, humidity: conditions.humidity, windSpeed: conditions.windSpeed };
+    }
+    return timelineAirAt(shownPlaceTimeline(settings), date.getTime());
 }
 
 function clamp(value: number): number {
