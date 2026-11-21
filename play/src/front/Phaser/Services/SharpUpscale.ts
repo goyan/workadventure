@@ -13,6 +13,9 @@ import type { Game } from "../Game/Game";
  * game pixels (drawing it at the screen's definition would run every shader ~6 times more).
  */
 
+/** How long the canvas of the game keeps its size before the overlay follows it (ms). */
+const PLACE_DELAY_MS = 150;
+
 const VERTEX = `
 attribute vec2 aPosition;
 varying vec2 vUv;
@@ -57,6 +60,11 @@ export class SharpUpscale {
         this.showOverlay(false);
     };
     private readonly onContextRestored = (): void => this.setEnabled(this.enabled);
+    /**
+     * The game lost its own WebGL context: its canvas reads black from now on. The overlay steps aside at once and
+     * shows again only after the game has drawn into a restored context: it must never hide a game that runs.
+     */
+    private readonly onSourceLost = (): void => this.showOverlay(false);
 
     private constructor(
         private readonly game: Game,
@@ -72,7 +80,8 @@ export class SharpUpscale {
         source.parentElement?.prepend(this.overlay);
         this.overlay.addEventListener("webglcontextlost", this.onContextLost);
         this.overlay.addEventListener("webglcontextrestored", this.onContextRestored);
-        this.resizeObserver = new ResizeObserver(() => this.place());
+        this.source.addEventListener("webglcontextlost", this.onSourceLost);
+        this.resizeObserver = new ResizeObserver(() => this.placeWhenStill());
         this.resizeObserver.observe(source);
         this.unsubscribe = enabledStore.subscribe((enabled) => this.setEnabled(enabled));
     }
@@ -89,9 +98,11 @@ export class SharpUpscale {
     public destroy(): void {
         this.game.events.off(Phaser.Core.Events.POST_RENDER, this.present);
         this.resizeObserver.disconnect();
+        clearTimeout(this.placeTimer);
         this.unsubscribe();
         this.overlay.removeEventListener("webglcontextlost", this.onContextLost);
         this.overlay.removeEventListener("webglcontextrestored", this.onContextRestored);
+        this.source.removeEventListener("webglcontextlost", this.onSourceLost);
         this.overlay.remove();
     }
 
@@ -115,6 +126,24 @@ export class SharpUpscale {
         this.overlay.classList.toggle("hidden", !shown);
     }
 
+    private placeTimer: ReturnType<typeof setTimeout> | undefined;
+    private resizing = false;
+
+    /**
+     * A zoom resizes the canvas of the game at each image: the overlay steps aside (the game shows, unsmoothed) and is
+     * made again at its new size once the canvas has kept it for a moment, not reallocated at each image.
+     */
+    private placeWhenStill(): void {
+        this.resizing = true;
+        this.showOverlay(false);
+        clearTimeout(this.placeTimer);
+        this.placeTimer = setTimeout(() => {
+            this.resizing = false;
+            this.place();
+            this.game.markDirty();
+        }, PLACE_DELAY_MS);
+    }
+
     /** The overlay covers the canvas exactly, at the screen's definition. */
     private place(): void {
         const style = this.overlay.style;
@@ -136,7 +165,12 @@ export class SharpUpscale {
     private draw(): void {
         const pass = this.pass;
         const { width, height } = this.overlay;
-        if (!this.enabled || !pass || width === 0 || height === 0 || this.source.width === 0) {
+        if (!this.enabled || this.resizing || !pass || width === 0 || height === 0 || this.source.width === 0) {
+            return;
+        }
+        const renderer = this.game.renderer;
+        if (renderer instanceof Phaser.Renderer.WebGL.WebGLRenderer && renderer.contextLost) {
+            this.showOverlay(false);
             return;
         }
         const gl = pass.gl;
@@ -146,7 +180,9 @@ export class SharpUpscale {
         gl.uniform2f(pass.size, this.source.width, this.source.height);
         gl.uniform2f(pass.scale, width / this.source.width, height / this.source.height);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-        this.showOverlay(true);
+        // A lost context leaves the overlay black: the game shows instead. Never gl.getError() here: it waits for the
+        // graphics card to finish its work, at each image (41 % of the time of the main thread while zooming).
+        this.showOverlay(!gl.isContextLost());
     }
 
     private createPass(): Pass | undefined {
