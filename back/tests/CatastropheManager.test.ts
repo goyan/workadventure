@@ -1,4 +1,8 @@
 import {
+    BALL_GROWTH_PX_PER_SECOND,
+    BALL_LASTS_MS,
+    BALL_SPEED_PX_PER_SECOND,
+    BALLS_PER_ROOM,
     DOWNPOUR_DEFAULT_TILES,
     DOWNPOUR_LASTS_MS,
     DOWNPOUR_MAX_TILES,
@@ -280,6 +284,121 @@ describe("CatastropheManager, drains", () => {
         manager.stop();
         expect(manager.drains()).toHaveLength(0);
         expect(manager.drain(7, 100, 80)).toBe(false);
+    });
+});
+
+describe("CatastropheManager, balls", () => {
+    const BALL = CatastropheKind.CATASTROPHE_BALL;
+
+    it("a ball appears under the pointer with no radius, and swells no faster than a ball does", () => {
+        const { manager, sent } = harness();
+        expect(manager.request(7, BALL, 100, 80, 0, false)).toBe(true);
+        // A size that is none is the usual diameter, 4 tiles. The solid itself has no radius yet.
+        expect(sent[0]).toMatchObject({ kind: BALL, x: 100, y: 80, radiusTiles: 4, wholeMap: false });
+        expect(sent[0]).toMatchObject({ ballX: 100, ballY: 80, ballRadius: 0, impactInMs: BALL_LASTS_MS });
+        expect(manager.balls()).toEqual([{ id: sent[0].id, x: 100, y: 80, radiusPx: 0 }]);
+        vi.advanceTimersByTime(200);
+        expect(manager.balls()[0].radiusPx).toBeCloseTo(BALL_GROWTH_PX_PER_SECOND / 5, 5);
+        // Held long enough, it is as wide as asked: 4 tiles across, 64 px of radius.
+        for (let report = 0; report < 10; report++) {
+            vi.advanceTimersByTime(200);
+            manager.ball(7, 100, 80, 4);
+        }
+        expect(manager.balls()[0]).toMatchObject({ x: 100, y: 80, radiusPx: 64 });
+        expect(sent.at(-1)).toMatchObject({ id: sent[0].id, ballRadius: 64 });
+    });
+
+    it("goes after its player no faster than a ball goes, and the room is told where the solid is", () => {
+        const { manager, sent } = harness();
+        manager.ball(7, 100, 80, 4);
+        vi.advanceTimersByTime(200);
+        expect(manager.ball(7, 500, 80, 4)).toBe(true);
+        expect(sent[1]).toMatchObject({ id: sent[0].id, x: 500, y: 80, ballX: 100, ballY: 80 });
+        vi.advanceTimersByTime(500);
+        const [ball] = manager.balls();
+        expect(ball.x).toBeCloseTo(100 + BALL_SPEED_PX_PER_SECOND / 2, 5);
+        expect(ball.y).toBe(80);
+    });
+
+    it("ignores messages that come too fast", () => {
+        const { manager, sent } = harness();
+        manager.ball(7, 100, 80, 4);
+        vi.advanceTimersByTime(50);
+        expect(manager.ball(7, 300, 90, 4)).toBe(false);
+        expect(sent).toHaveLength(1);
+    });
+
+    it("keeps the diameter within 1 to 16 tiles", () => {
+        const { manager, sent } = harness();
+        expect(manager.ball(7, 100, 80, 99)).toBe(true);
+        expect(manager.ball(8, 100, 80, -5)).toBe(true);
+        expect(sent.map((message) => message.radiusTiles)).toEqual([16, 1]);
+    });
+
+    it("shrinks to nothing once its player lets go, or leaves, then is forgotten", () => {
+        const { manager } = harness();
+        manager.ball(7, 100, 80, 2);
+        for (let report = 0; report < 5; report++) {
+            vi.advanceTimersByTime(200);
+            manager.ball(7, 100, 80, 2);
+        }
+        expect(manager.balls()[0].radiusPx).toBe(32);
+        // No message any more: still held for a moment, then it shrinks as fast as it swelled.
+        vi.advanceTimersByTime(BALL_LASTS_MS);
+        expect(manager.balls()[0].radiusPx).toBe(32);
+        vi.advanceTimersByTime(250);
+        expect(manager.balls()[0].radiusPx).toBeCloseTo(32 - BALL_GROWTH_PX_PER_SECOND / 4, 5);
+        vi.advanceTimersByTime(300);
+        expect(manager.balls()).toHaveLength(0);
+    });
+
+    it("a new click makes a new ball, while the one let go finishes shrinking where it was", () => {
+        const { manager, sent } = harness();
+        manager.ball(7, 100, 80, 4);
+        vi.advanceTimersByTime(400);
+        manager.ball(7, 100, 80, 4);
+        vi.advanceTimersByTime(BALL_LASTS_MS + 100);
+        expect(manager.ball(7, 400, 300, 4)).toBe(true);
+        expect(sent.at(-1)?.id).not.toBe(sent[0].id);
+        expect(sent.at(-1)).toMatchObject({ ballX: 400, ballY: 300, ballRadius: 0 });
+        const balls = manager.balls();
+        expect(balls).toHaveLength(2);
+        expect(balls.find((ball) => ball.id === sent[0].id)).toMatchObject({ x: 100, y: 80 });
+    });
+
+    it("refuses a point outside the map, numbers that are not, and one ball more than the room may have", () => {
+        const { manager, sent } = harness();
+        expect(manager.ball(1, -1, 10, 4)).toBe(false);
+        expect(manager.ball(1, 10, MAP.height, 4)).toBe(false);
+        expect(manager.ball(1, Number.NaN, 10, 4)).toBe(false);
+        expect(manager.ball(1, 10, Number.POSITIVE_INFINITY, 4)).toBe(false);
+        for (let user = 1; user <= BALLS_PER_ROOM; user++) expect(manager.ball(user, 10, 10, 4)).toBe(true);
+        expect(manager.ball(99, 10, 10, 4)).toBe(false);
+        expect(sent).toHaveLength(BALLS_PER_ROOM);
+        // The balls let go count too while they shrink: a room never has more solids than that.
+        vi.advanceTimersByTime(BALL_LASTS_MS + 100);
+        expect(manager.balls().length).toBeLessThanOrEqual(BALLS_PER_ROOM);
+    });
+
+    it("catches up after a long silence without ever going faster", () => {
+        const { manager } = harness();
+        manager.ball(7, 100, 80, 16);
+        // Nobody asked where it was for three seconds, but its player kept holding it.
+        for (let report = 0; report < 15; report++) {
+            vi.advanceTimersByTime(200);
+            manager.ball(7, 600, 80, 16);
+        }
+        const [ball] = manager.balls();
+        expect(ball.x).toBeCloseTo(100 + BALL_SPEED_PX_PER_SECOND * 2.8, 3);
+        expect(ball.radiusPx).toBeCloseTo(BALL_GROWTH_PX_PER_SECOND * 3, 3);
+    });
+
+    it("no ball once the room stops", () => {
+        const { manager } = harness();
+        manager.ball(7, 100, 80, 4);
+        manager.stop();
+        expect(manager.balls()).toHaveLength(0);
+        expect(manager.ball(7, 100, 80, 4)).toBe(false);
     });
 });
 

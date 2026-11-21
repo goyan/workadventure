@@ -880,6 +880,9 @@ enum CatastropheKind {
   CATASTROPHE_DRAIN = 3;
   // A burning meteor: it sets its crater on fire, throws embers around and boils away the water it falls into.
   CATASTROPHE_FIREBALL = 4;
+  // A ball: a solid sphere held under the pointer of a player, its centre at the altitude 0 of the map, for as long
+  // as they keep telling. It takes the place of the water, which the server alone moves.
+  CATASTROPHE_BALL = 5;
 }
 
 // Browser to server: a player sets the conditions the fire of the room goes by (heat, humidity of the air, wind) by
@@ -914,8 +917,8 @@ message LaunchCatastropheMessage {
   CatastropheKind kind = 1;
   int32 x = 2;
   int32 y = 3;
-  // A meteor: the radius of its crater, in tiles. A downpour, a drain: the radius of its disc. The server keeps it
-  // within what each may be.
+  // A meteor: the radius of its crater, in tiles. A downpour, a drain: the radius of its disc. A ball: its
+  // diameter. The server keeps it within what each may be.
   int32 radiusTiles = 4;
   // A downpour: it falls on the whole map instead of a disc.
   bool wholeMap = 5;
@@ -933,6 +936,12 @@ message CatastropheMessage {
   // A downpour: it falls on the whole map. Its `id` stays the same from a message to the next while it goes on, and
   // `impactInMs` is how long it still rains when no other message comes.
   bool wholeMap = 7;
+  // A ball: `x`, `y` and `radiusTiles` (its diameter) are what its player asks for, and `impactInMs` how long it is
+  // still held when no other message comes. These are the solid as it is now, in map pixels: it goes after what is
+  // asked no faster than a ball goes, and shrinks to nothing once it is held no more.
+  optional double ballX = 8;
+  optional double ballY = 9;
+  optional double ballRadius = 10;
 }
 
 // A player casts their fishing line: where the float lands, in map pixels. The server decides whether it does

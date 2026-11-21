@@ -40,6 +40,7 @@ import {
     WeatherType,
 } from "@workadventure/map-editor";
 import type {
+    Ball,
     Downpour,
     PrecipitationAir,
     Drain,
@@ -127,6 +128,8 @@ export class TerrainWaterManager {
     private walkers: () => readonly { x: number; y: number }[] = () => [];
     /** The drains open on the map now, asked at each step: none until the catastrophes of the room say. */
     private drains: () => readonly Drain[] = () => [];
+    /** The balls standing on the map now, asked at each step: none until the catastrophes of the room say. */
+    private balls: () => readonly Ball[] = () => [];
     private sums: Sums = noSums();
     /** Whether the last step moved any water: a grid at rest with nothing coming in is not stepped. */
     private moving = true;
@@ -277,11 +280,13 @@ export class TerrainWaterManager {
         }
         this.steps++;
         this.swingDoors(grid);
+        // Before anything is poured or flows: the balls are where they are for the whole step.
+        const displacing = this.placeBalls(grid);
         // Both each step: a downpour goes on raining while the wave of a meteor runs.
         const raining = this.pourDownpours(grid);
         this.pumpPools(grid);
         const draining = this.takeDrains(grid);
-        const waving = this.waves.length > 0 || raining || draining || this.steps < this.stirredUntilStep;
+        const waving = this.waves.length > 0 || raining || draining || displacing || this.steps < this.stirredUntilStep;
         if (this.waves.length > 0) this.advanceWaves(grid);
         const pouring = this.rainRate > 0 || this.objects.some((object) => object.litresPerMinute > 0);
         if (this.moving || pouring) {
@@ -315,6 +320,8 @@ export class TerrainWaterManager {
         let laid = 0;
         let taken = 0;
         for (const { cellX, cellY, depthPx, fullPx } of this.pools) {
+            // A ball stands in the place of the water of this cell: nothing to fill.
+            if (grid.ballAt(cellX, cellY)) continue;
             const missing = fullPx - grid.depthAt(cellX, cellY);
             const pumped = (depthPx * WATER_STEP_MS) / 1000 / POOL_FILL_SECONDS;
             if (missing > 0) {
@@ -420,6 +427,26 @@ export class TerrainWaterManager {
         this.version++;
         this.changedSinceSave = true;
         return laid / (cells * cells * PX_PER_MM);
+    }
+
+    /** The catastrophes of the room say which balls stand on the map. */
+    public setBalls(balls: () => readonly Ball[]): void {
+        this.balls = balls;
+    }
+
+    /**
+     * The balls take the place of the water where they stand (WaterGrid.setBalls): nothing comes in nor goes out,
+     * the water is only pushed away, or let back. True while a ball stands on the map, so that the room sees the
+     * water move as often as under a wave.
+     */
+    private placeBalls(grid: WaterGrid): boolean {
+        const standing = this.balls();
+        if (grid.setBalls(standing)) {
+            this.moving = true;
+            this.version++;
+            this.changedSinceSave = true;
+        }
+        return standing.length > 0;
     }
 
     /** The catastrophes of the room say which drains are open. */
@@ -632,7 +659,8 @@ export class TerrainWaterManager {
         if (!this.store || !this.grid || !this.changedSinceSave) return;
         this.changedSinceSave = false;
         const fields: [string, string][] = [
-            ["grid", Buffer.from(gzipSync(this.grid.writeDepths())).toString("base64")],
+            // All the water, what a ball holds under itself included.
+            ["grid", Buffer.from(gzipSync(this.grid.writeDepths(true))).toString("base64")],
             ["bounds", JSON.stringify(this.grid.bounds)],
         ];
         for (const [field, value] of fields) {
