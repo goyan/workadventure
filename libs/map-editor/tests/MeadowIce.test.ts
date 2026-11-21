@@ -183,3 +183,23 @@ describe("the pools freezing", () => {
         expect(meadow.iceAt(6, 6)).toBe(0);
     });
 });
+
+describe("the water freezing at the extremes of the conditions", () => {
+    it("freezes the lake through in a polar storm without going beyond its water, and thaws it in a hot storm within seconds", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        const polar: SnowWeather = { temperature: -80, humidity: 50, windSpeed: 250 };
+        run(meadow, 1, under(polar));
+        const frozen = meadow.iceAt(10, 10);
+        expect(Number.isFinite(frozen)).toBe(true);
+        expect(frozen).toBeGreaterThan(0);
+        expect(frozen).toBeLessThanOrEqual(16 / PX_PER_MM);
+        run(meadow, 30, under(polar));
+        expect(meadow.iceAt(10, 10)).toBeCloseTo(16 / PX_PER_MM, 2);
+        // A hot storm thaws some 108 mm a step of 2 s: half a metre of ice is gone in a dozen seconds.
+        const hot: SnowWeather = { temperature: 80, humidity: 100, windSpeed: 250 };
+        run(meadow, 1, under(hot));
+        expect(meadow.iceAt(10, 10)).toBeCloseTo(16 / PX_PER_MM - 108, 2);
+        run(meadow, 5, under(hot));
+        expect(meadow.iceAt(10, 10)).toBe(0);
+    });
+});

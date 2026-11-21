@@ -35,6 +35,10 @@ const woka: DeepPartial<Translation["woka"]> = {
         canoeHint:
             "Le canoë se met à l’eau tout seul : là où vous nageriez dans l’eau du relief, vous pagayez, à la vitesse de la marche, et le courant vous emporte moitié moins. À terre, votre choix de véhicule terrestre s’applique.",
     },
+    perception: {
+        basic: "Mode Basique : ne voit ni la nuit ni la météo",
+        place: "Suit la météo d’une autre ville",
+    },
     customWoka: {
         color: "Couleur",
         defaultColor: "Couleur par défaut",

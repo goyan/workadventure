@@ -432,6 +432,8 @@ import { WaveManager } from "./Wave/WaveManager";
 import { NerfManager } from "./Nerf/NerfManager";
 import { TorchManager } from "./Torch/TorchManager";
 import { TORCH_EQUIPPED_VARIABLE, TORCH_INTENSITY_VARIABLE } from "./Torch/TorchProtocol";
+import { PERCEPTION_VARIABLE } from "./Perception/PerceptionProtocol";
+import { PerceptionManager } from "./Perception/PerceptionManager";
 import { FishingManager } from "./Fishing/FishingManager";
 import { MeteorView } from "./Catastrophe/MeteorView";
 import { FireView } from "./Fire/FireView";
@@ -681,6 +683,7 @@ export class GameScene extends DirtyScene {
     private _waveManager: WaveManager | undefined;
     private _nerfManager: NerfManager | undefined;
     private _torchManager: TorchManager | undefined;
+    private _perceptionManager: PerceptionManager | undefined;
     private _fishingManager: FishingManager | undefined;
     private karaokeSpotlight: KaraokeSpotlight | undefined;
     private _coffeeManager: CoffeeManager | undefined;
@@ -1794,6 +1797,8 @@ export class GameScene extends DirtyScene {
         nerfEquippedStore.set(false);
         this._torchManager?.destroy();
         this._torchManager = undefined;
+        this._perceptionManager?.destroy();
+        this._perceptionManager = undefined;
         this.karaokeSpotlight?.destroy();
         this.karaokeSpotlight = undefined;
         torchEquippedStore.set(false);
@@ -2680,6 +2685,8 @@ export class GameScene extends DirtyScene {
         character.setNerfEquipped(update.player.variables.get(NERF_EQUIPPED_VARIABLE));
         character.setNerfHearts(update.player.variables.get(NERF_HEARTS_VARIABLE));
         character.setTorchEquipped(update.player.variables.get(TORCH_EQUIPPED_VARIABLE));
+        character.setPerception(update.player.variables.get(PERCEPTION_VARIABLE));
+        this._perceptionManager?.refresh(character);
         character.setRodEquipped(update.player.variables.get(ROD_EQUIPPED_VARIABLE));
         character.setFloorZ(decodeFloorZ(update.player.variables.get(FLOOR_Z_VARIABLE)));
         character.setTorchIntensity(update.player.variables.get(TORCH_INTENSITY_VARIABLE));
@@ -4371,6 +4378,8 @@ export class GameScene extends DirtyScene {
         this._nerfManager = new NerfManager(this);
         this._torchManager?.destroy();
         this._torchManager = new TorchManager(this);
+        this._perceptionManager?.destroy();
+        this._perceptionManager = new PerceptionManager(this);
         this._fishingManager?.destroy();
         this._fishingManager = new FishingManager(this, room.fishing);
         this.catastropheSubscription?.unsubscribe();
@@ -6614,6 +6623,10 @@ ${escapedMessage}
         player.setTorchIntensity(
             this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(TORCH_INTENSITY_VARIABLE),
         );
+        player.setPerception(
+            this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(PERCEPTION_VARIABLE),
+        );
+        this._perceptionManager?.refresh(player);
         player.setRodEquipped(
             this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(ROD_EQUIPPED_VARIABLE),
         );

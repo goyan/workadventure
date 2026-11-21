@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { isTimeZone } from "@workadventure/map-editor";
 import {
+    nearestCityOf,
     placeOfPoint,
+    pointCoordinates,
+    SHORT_CITY_NAME_LENGTH,
+    shortCityName,
+    roundedDistanceKm,
     solarMinutes,
     WORLD_CITIES,
     worldCityAt,
@@ -8,6 +14,7 @@ import {
     worldShadeAt,
     WorldMoment,
 } from "@wa/front/Phaser/Game/Night/WorldDaylight";
+import type { PointWords } from "@wa/front/Phaser/Game/Night/WorldDaylight";
 import {
     NIGHT_MAX_OPACITY,
     nightOpacityAt,
@@ -20,12 +27,126 @@ const SANTIAGO = { latitude: -33.45, longitude: -70.67 };
 const PERTH = { latitude: -31.95, longitude: 115.86 };
 
 describe("placeOfPoint", () => {
-    it("names a point after the nearest city of the list, however far it is, and keeps its own coordinates", () => {
-        const place = placeOfPoint({ latitude: 69, longitude: -79 });
-        expect(place.name).not.toMatch(/°/);
-        expect(place.latitude).toBe(69);
-        expect(place.longitude).toBe(-79);
-        expect(place.timezone).toBeDefined();
+    const french: PointWords = {
+        north: "N",
+        south: "S",
+        east: "E",
+        west: "O",
+        far: (point, city, distance) => `${point} · ${city} à ${distance} km`,
+        short: (city, distance) => `${city} ${distance} km`,
+        kilometres: (km) => new Intl.NumberFormat("fr-FR").format(km),
+    };
+    const english: PointWords = {
+        north: "N",
+        south: "S",
+        east: "E",
+        west: "W",
+        far: (point, city, distance) => `${point} · ${city} ${distance} km away`,
+        short: (city, distance) => `${city} ${distance} km`,
+        kilometres: (km) => new Intl.NumberFormat("en-US").format(km),
+    };
+
+    it("names a point close to a city of the list after it, and keeps its own coordinates and the city's zone", () => {
+        // About 40 km from Auckland.
+        const place = placeOfPoint({ latitude: -37.1, longitude: 175.1 }, french);
+        expect(place.name).toBe("Auckland");
+        expect(place.longName).toBeUndefined();
+        expect(place.latitude).toBe(-37.1);
+        expect(place.longitude).toBe(175.1);
+        expect(place.timezone).toBe("Pacific/Auckland");
+    });
+
+    it("names a point far from any city by the nearest city and how far, the long name adding its coordinates", () => {
+        // The Ross Sea, under Auckland: the nearest city of the list is thousands of kilometres away.
+        const place = placeOfPoint({ latitude: -72.4, longitude: 170.2 }, french);
+        const { city, distanceKm } = nearestCityOf({ latitude: -72.4, longitude: 170.2 });
+        expect(distanceKm).toBeGreaterThan(3000);
+        const distance = new Intl.NumberFormat("fr-FR").format(roundedDistanceKm(distanceKm));
+        // Short (chip, clock): the city that speaks to the player and how far, never the city alone.
+        expect(place.name).toBe(`${city.name} ${distance} km`);
+        expect(place.name).not.toBe(city.name);
+        // In English, thousands grouped with a comma: "Auckland 4,000 km".
+        expect(placeOfPoint({ latitude: -72.4, longitude: 170.2 }, english).name).toBe(
+            `${city.name} ${new Intl.NumberFormat("en-US").format(roundedDistanceKm(distanceKm))} km`,
+        );
+        expect(roundedDistanceKm(distanceKm)).toBeGreaterThanOrEqual(1000);
+        // Long (cards, sky menu, weather board): the coordinates too.
+        expect(place.longName).toBe(`72° S 170° E · ${city.name} à ${distance} km`);
+    });
+
+    it("writes the west, the north and the numbers the player's way", () => {
+        const atlantic = { latitude: 45.6, longitude: -40.4 };
+        // Mid-Atlantic, under 1 000 km from St. John's: the distance is rounded to 10 km.
+        const { city, distanceKm } = nearestCityOf(atlantic);
+        expect(distanceKm).toBeGreaterThan(150);
+        const french_ = placeOfPoint(atlantic, french);
+        expect(french_.longName).toMatch(/^46° N 40° O · /);
+        const english_ = placeOfPoint(atlantic, english);
+        expect(english_.longName).toMatch(/^46° N 40° W · .+ km away$/);
+        expect(english_.name).toBe(
+            `${city.name} ${new Intl.NumberFormat("en-US").format(roundedDistanceKm(distanceKm))} km`,
+        );
+        expect(french_.name).toBe(
+            `${city.name} ${new Intl.NumberFormat("fr-FR").format(roundedDistanceKm(distanceKm))} km`,
+        );
+    });
+
+    it("shortens a long city name with an ellipsis in the short name, keeping the distance", () => {
+        // Near Petropavlovsk-Kamtchatski, out at sea: its name is cut, the distance stays.
+        const point = { latitude: 49, longitude: 165 };
+        const { city, distanceKm } = nearestCityOf(point);
+        expect(city.name).toBe("Petropavlovsk-Kamtchatski");
+        expect(distanceKm).toBeGreaterThan(150);
+        const place = placeOfPoint(point, french);
+        expect(place.name).toMatch(/^Petropavlovsk… [\d\u202f ]+ km$/);
+        expect(shortCityName(city.name)).toHaveLength(SHORT_CITY_NAME_LENGTH);
+        expect(place.longName).toContain("Petropavlovsk-Kamtchatski");
+        // Names of the list up to the limit are kept whole.
+        expect(shortCityName("Rio de Janeiro")).toBe("Rio de Janeiro");
+    });
+
+    it("gives no hemisphere to a rounded 0° nor to 180°", () => {
+        expect(pointCoordinates({ latitude: 0.3, longitude: 179.8 }, french)).toBe("0° 180°");
+        expect(pointCoordinates({ latitude: -0.4, longitude: -0.2 }, french)).toBe("0° 0°");
+        expect(pointCoordinates({ latitude: -89.6, longitude: 190 }, french)).toBe("90° S 170° O");
+    });
+
+    it("rounds a distance to 10 km under 1 000 km, to 100 km beyond", () => {
+        expect(roundedDistanceKm(164)).toBe(160);
+        expect(roundedDistanceKm(3949)).toBe(3900);
+        expect(roundedDistanceKm(4051)).toBe(4100);
+    });
+
+    it("measures the great-circle distance", () => {
+        // Paris (in the list) to a point a degree of latitude north of it: about 111 km.
+        const paris = WORLD_CITIES.find((city) => city.name === "Paris");
+        expect(paris).toBeDefined();
+        if (!paris) return;
+        const { city, distanceKm } = nearestCityOf({ latitude: paris.latitude + 1, longitude: paris.longitude });
+        expect(city.name).toBe("Paris");
+        expect(distanceKm).toBeCloseTo(111.2, 0);
+    });
+
+    it("keeps the zone of the nearest city within 1 000 km, else takes the zone of the longitude", () => {
+        // Lyon, a few hundred kilometres from the nearest city of the list: the civil hour of its region.
+        const lyon = { latitude: 45.76, longitude: 4.84 };
+        const { city, distanceKm } = nearestCityOf(lyon);
+        expect(distanceKm).toBeGreaterThan(150);
+        expect(distanceKm).toBeLessThan(1000);
+        expect(placeOfPoint(lyon, french).timezone).toBe(city.timezone);
+        expect(city.timezone).toMatch(/^Europe\//);
+        // The Ross Sea at 170° E: UTC+11.
+        const ross = placeOfPoint({ latitude: -72.4, longitude: 170.2 }, french);
+        expect(ross.timezone).toBe("Etc/GMT-11");
+        expect(isTimeZone(ross.timezone ?? "")).toBe(true);
+        // Mid-Atlantic at 30° W: UTC−2; the antimeridian stays within the zones that exist.
+        expect(placeOfPoint({ latitude: -60, longitude: -30 }, french).timezone).toBe("Etc/GMT+2");
+        expect(placeOfPoint({ latitude: -70, longitude: 179.9 }, french).timezone).toBe("Etc/GMT-12");
+        expect(placeOfPoint({ latitude: -70, longitude: -179.9 }, french).timezone).toBe("Etc/GMT+12");
+        expect(placeOfPoint({ latitude: -80, longitude: 3 }, french).timezone).toBe("Etc/GMT");
+        for (const timezone of ["Etc/GMT-12", "Etc/GMT+12", "Etc/GMT"]) {
+            expect(() => new Intl.DateTimeFormat("fr-FR", { timeZone: timezone })).not.toThrow();
+        }
     });
 });
 

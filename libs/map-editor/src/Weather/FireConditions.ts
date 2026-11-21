@@ -22,10 +22,16 @@ export const NEUTRAL_FIRE_CONDITIONS: FireConditions = { temperature: 20, humidi
 /** The 30-30-30 rule of wildfires: over 30 degrees, under 30 % of humidity, over 30 km/h of wind. */
 export const DEFAULT_FIRE_THRESHOLDS: FireThresholds = { temperature: 30, humidity: 30, windSpeed: 30 };
 
+/**
+ * What the conditions set by hand may be: from a polar cold to a heat no air reaches (-80 to +80 °C), and a wind up to
+ * the strongest gusts of a hurricane (250 km/h). The one source of these bounds: the sliders, the server and the
+ * explanations of the weather read them here. Every rule that reads the conditions holds over them (see the tests
+ * "at the extremes").
+ */
 export const FIRE_CONDITION_BOUNDS = {
-    temperature: [-30, 50],
+    temperature: [-80, 80],
     humidity: [0, 100],
-    windSpeed: [0, 120],
+    windSpeed: [0, 250],
 } as const;
 export const FIRE_THRESHOLD_BOUNDS = {
     temperature: [0, 50],

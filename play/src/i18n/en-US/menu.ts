@@ -153,6 +153,12 @@ const menu: BaseTranslation = {
             custom: "Chosen time",
             worldCity: "Sky of {city}",
             worldPointCity: "Sky of {city} (point chosen on the map)",
+            pointNorth: "N",
+            pointSouth: "S",
+            pointEast: "E",
+            pointWest: "W",
+            pointFar: "{point} · {city} {distance} km away",
+            pointShort: "{city} {distance} km",
             skyMenu: "Sky and time",
             basicOff:
                 "Basic mode turns the day/night cycle off: full daylight. Your choice ({mode}) comes back when you leave it.",

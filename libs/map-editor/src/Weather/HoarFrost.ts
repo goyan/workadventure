@@ -27,12 +27,21 @@
  * give it: the vapour of the air is found over water, then compared with the saturation over ice of the surface.
  */
 
-/** Saturation vapour pressure over liquid water, hPa, at `celsius` (WMO-No. 8, Annex 4.B; -45 to 60 °C). */
+/**
+ * Saturation vapour pressure over liquid water, hPa, at `celsius` (WMO-No. 8, Annex 4.B; -45 to 60 °C). Read from -80
+ * to +80 °C too, the bounds of the conditions of a room: it stays within 2.5 % of the vapour pressure of supercooled
+ * water of D. M. Murphy and T. Koop (Q. J. R. Meteorol. Soc. 131, 2005), valid from -150 °C, and within 1.5 % of the
+ * steam tables at 80 °C (see the tests "at the extremes"): kept as it is rather than held at its range, which would make
+ * the vapour of an air at -80 °C a hundred times too much.
+ */
 export function waterSaturationPressure(celsius: number): number {
     return 6.112 * Math.exp((17.62 * celsius) / (243.12 + celsius));
 }
 
-/** Saturation vapour pressure over ice, hPa, at `celsius` (WMO-No. 8, Annex 4.B; -65 to 0 °C). */
+/**
+ * Saturation vapour pressure over ice, hPa, at `celsius` (WMO-No. 8, Annex 4.B; -65 to 0 °C). Read down to -80 °C, it
+ * stays within 1 % of the vapour pressure of ice of Murphy and Koop (2005), valid from -163 °C.
+ */
 export function iceSaturationPressure(celsius: number): number {
     return 6.112 * Math.exp((22.46 * celsius) / (272.62 + celsius));
 }
@@ -74,6 +83,14 @@ export const FULL_FROST_SUPERSATURATION = 0.05;
  * the frost of great colds, the excess at which the ground was all white (0.25 hPa).
  */
 export const FULL_FROST_EXCESS_HPA = 0.1;
+/**
+ * Winds (km/h) between which a storm sweeps the frost away: whole up to the first, the strongest the conditions of a
+ * room could be set to before 2026-11-21 (nothing changes under it), none at the second, their strongest now. A choice:
+ * surface hoar is a fragile deposit of calm air (UBC, "Surface hoar": winds under 15 km/h) that a storm tears off as it
+ * forms; under 120 km/h the wind only keeps the ground as warm as the air, as before.
+ */
+export const FROST_SWEPT_FROM_KMH = 120;
+export const FROST_SWEPT_KMH = 250;
 /** Share of its whiteness a frost keeps at least however cold, the deposit being thinner but never none. A choice. */
 export const COLD_FROST_SHARE = 0.5;
 
@@ -107,8 +124,8 @@ export function iceSaturationRatio(air: HoarFrostAir | undefined): number | unde
 /**
  * How white the ground is with hoar frost, 0 to 1: by the supersaturation of the air over the ice of the ground, none
  * under saturation, all white at FULL_FROST_SUPERSATURATION; thinner when the vapour in excess (hPa) is under
- * FULL_FROST_EXCESS_HPA, down to COLD_FROST_SHARE of it. None over a ground at or above zero, none while the
- * temperature or the humidity is not known.
+ * FULL_FROST_EXCESS_HPA, down to COLD_FROST_SHARE of it; swept away by a storm from FROST_SWEPT_FROM_KMH, none at
+ * FROST_SWEPT_KMH. None over a ground at or above zero, none while the temperature or the humidity is not known.
  */
 export function hoarFrost(air: HoarFrostAir | undefined): number {
     const ratio = iceSaturationRatio(air);
@@ -118,5 +135,7 @@ export function hoarFrost(air: HoarFrostAir | undefined): number {
     const white = Math.min(1, (ratio - 1) / FULL_FROST_SUPERSATURATION);
     const excess = vapourPressure(air.temperature, air.humidity) - iceSaturationPressure(surface);
     const thickness = Math.min(1, excess / FULL_FROST_EXCESS_HPA);
-    return white * (COLD_FROST_SHARE + (1 - COLD_FROST_SHARE) * thickness);
+    const wind = air.windSpeed !== undefined && Number.isFinite(air.windSpeed) ? air.windSpeed : 0;
+    const kept = Math.min(1, Math.max(0, (FROST_SWEPT_KMH - wind) / (FROST_SWEPT_KMH - FROST_SWEPT_FROM_KMH)));
+    return white * (COLD_FROST_SHARE + (1 - COLD_FROST_SHARE) * thickness) * kept;
 }
