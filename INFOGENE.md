@@ -2458,8 +2458,15 @@ et douze puits puissants évacuent 13 fois plus d'eau qu'avant ces deux changeme
 **Murs et portes.** Les murs de l'outil Carte arrêtent l'eau : `back` les lit dans les objets de la carte
 (`waterWallsOf`, d'après le nom et la place des pièces `Carte Murs` et `Carte Fenêtres` du sol, sans le code de
 l'éditeur ; un test du front vérifie que les deux lisent les mêmes murs). Un mur horizontal ou une fenêtre retient
-l'eau à son pied, un mur vertical entre les deux colonnes de sa ligne. Une porte laisse passer l'eau, ouverte ou
-fermée : une inondation entre dans un bâtiment par ses portes. Un puits ne prend pas l'eau de l'autre côté d'un mur,
+l'eau à son pied, un mur vertical entre les deux colonnes de sa ligne. **Une porte fermée retient l'eau comme le
+mur où elle se trouve ; ouverte, elle la laisse passer** : une inondation entre dans un bâtiment par ses portes
+ouvertes (`waterDoorsOf`, `WaterGrid.setClosedDoors`, `TerrainWaterManager.swingDoors`). Le serveur ne connaît pas
+l'animation des portes : une porte est ouverte pour l'eau tant qu'un avatar au sol se tient dans son passage (ses
+cases, élargies d'une demi-case de chaque côté du mur), et une seconde après. Les deux battants d'une porte
+s'ouvrent ensemble. Limites : un animal ou un compagnon qui ouvre une porte à l'écran ne l'ouvre pas pour l'eau ;
+une porte de zone verrouillée s'ouvre pour l'eau dès qu'un avatar est dans son passage ; la règle des navigateurs
+(sens de marche, trajet) est plus fine que celle du serveur, qui ne lit que la position. Un puits ne prend pas
+l'eau de l'autre côté d'un mur,
 une source ne verse pas à travers. Un mur construit ou retiré refait la grille en gardant l'eau là où elle est. Les
 murs d'un palier ne comptent pas (l'eau reste au sol).
 
@@ -2558,8 +2565,7 @@ minutes avant de se calmer.
 
 Murs et bord de la grille sont ceux de l'eau d'avant. Sources, puits, pluie, drains et les échanges lointains des
 cartes accélérées ne changent pas : ils posent ou retirent de l'eau, l'inertie la fait ensuite courir. Les débits ne
-sont ni envoyés aux navigateurs ni sauvegardés : le courant senti par les avatars reste déduit de la pente, et
-l'eau repart immobile après un redémarrage du serveur.
+sont pas sauvegardés : l'eau repart immobile après un redémarrage du serveur.
 
 ### Ce qui retient l'eau : quatre réglages (`settings.water.waves`)
 
@@ -2611,6 +2617,31 @@ réglage.
   renvoyée (jamais une cellule qui s'assèche ou se mouille) ; un état complet toutes les trente secondes remet tout
   d'aplomb.
 
+### Vitesses envoyées aux joueurs : avatars et canoës emportés
+
+Sur une carte à inertie, le serveur dit à chaque envoi à quelle vitesse l'eau court (`WaterGrid.writeSpeeds`,
+`TerrainWaterMessage.speeds`, champ 9) : deux octets signés par bloc de 4 × 4 cellules (vers l'est, vers le sud,
+en quarts de cellule par seconde, vitesse vue à l'écran, donc déjà multipliée par la vitesse d'écoulement),
+compressés. Le navigateur les garde avec l'état de l'eau (`TerrainWater.speedAt`) et s'en sert à la place de la
+pente :
+
+- **Courant senti** (`currentPush`) : qui flotte (assez d'eau pour nager, 16 px) est emporté à la vitesse de l'eau,
+  canoë à moitié ; qui a pied l'est selon ce qui renverse un piéton dans une crue, le **produit hauteur × vitesse**
+  (`sweptShare`) : rien sous 0,4 m²/s, tout à partir de 1,2 m²/s, en proportion entre les deux (repères
+  d'hydraulique des crues pour la stabilité d'un adulte, cités de mémoire). Une lame mince et rapide n'emporte
+  personne, la vague d'un tsunami emporte plus vite qu'on ne marche. Le réglage « Force du courant » multiplie le
+  tout. Sans inertie, la règle d'avant reste (pente de la surface, un quart de la vitesse de marche au plus, dès un
+  quart de case d'eau).
+- **Jamais dans un bâtiment** : le courant n'emporte personne à l'intérieur (`getOutdoorGrid().isOutdoorAt`), avec
+  ou sans inertie. Ce n'était pas le cas avant : seuls les paliers, le drain et la glace l'arrêtaient.
+- **Écume** et **visualisation des flux** : elles suivent la vitesse réelle, une vague qui passe comprise ; la
+  légende dit « Vitesses calculées par le serveur ».
+
+Les autres joueurs voient l'avatar emporté par sa position, comme pour tout déplacement.
+
+Coût mesuré hors jeu : 4 Ko de plus par envoi pendant un tsunami (+8 %), 0,05 Ko sur une eau calme ; 1,3 ms pour
+les écrire et les compresser.
+
 ### Comète, météore brûlant et drain sous inertie
 
 - **Comète : impact physique seul.** Elle ne pose plus son onde anneau par anneau (`ImpactWave`) : l'eau du cratère
@@ -2631,8 +2662,6 @@ dessous, sous « En savoir plus ».
 
 ### Limites connues
 
-- **Courant senti plus faible entre une source et un puits** : un lac est plus plat sous inertie, et le courant
-  des avatars et des canoës est encore déduit de la pente.
 - **Puits fort plus efficace** : à la vitesse 1, un puits qui demande plus que son disque vide un lac environ
   2,5 fois plus vite (mesuré avant les réglages des vagues).
 - **Trop-plein** (puits qui tient un niveau) et puits à grand disque : l'eau converge et forme une bosse, le
@@ -2670,7 +2699,8 @@ Tout est lu des profondeurs que le navigateur reçoit déjà (`TerrainWater.sett
 entre les deux) : rien n'est demandé au serveur. Limites : les vitesses sont **estimées** d'après la pente de la
 surface (`steadyFlowSpeed`, selon le modèle d'eau, les réglages des vagues, la rugosité du sol et la vitesse
 d'écoulement de la carte), pas mesurées : une vague qui passe sous inertie ne s'y lit pas ; les masses ignorent
-les murs. Coût non mesurable en images par seconde dans le navigateur de test.
+les murs. Sur une carte à inertie, les vitesses sont celles que le serveur envoie, plus une estimation. Coût non
+mesurable en images par seconde dans le navigateur de test.
 
 ### Météo expliquée : pourquoi je vois ce temps
 

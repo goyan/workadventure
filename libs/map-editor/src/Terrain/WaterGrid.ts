@@ -221,6 +221,14 @@ const FASTEST_CELLS_PER_MOVE = 0.5;
  * the computation rocks by itself (measured: a small basin never calms down); at a third it calms down.
  */
 const WAVE_CELLS_PER_MOVE = 0.35;
+/**
+ * The speed of the water with inertia is told to the browsers by blocks of this many cells a side, one byte for
+ * each of its two parts (east, south), in this many units a cell a second: within about 32 cells a second, to a
+ * quarter of a cell a second.
+ */
+export const SPEED_BLOCK_CELLS = 4;
+export const SPEED_UNITS = 4;
+
 /** How wide a cell of the relief is, in metres. */
 export const CELL_METRES = Math.sqrt(CELL_AREA_M2);
 
@@ -430,6 +438,8 @@ export class WaterGrid {
      * each side, in the order east, west, south, north.
      */
     private readonly closed: Uint8Array;
+    /** The same sides as the walls alone close them: the doors that are closed are added to them (setClosedDoors). */
+    private readonly wallClosed: Uint8Array;
     /** For the search of a sink: the cells of its queue, and the search that last saw each cell. */
     private readonly queue: Int32Array;
     /** The cells of the basin of a sink, while it is lowered. */
@@ -531,6 +541,35 @@ export class WaterGrid {
                     this.closed[index + width] |= 8;
                 }
             }
+        }
+        this.wallClosed = Uint8Array.from(this.closed);
+    }
+
+    /**
+     * The doors that are closed now: the water does not cross their sides (keys of cellKey, as the walls), on top
+     * of the walls the grid was built with. An open door is simply not told: the water goes through it.
+     */
+    public setClosedDoors(doors: WaterWallSides | undefined): void {
+        const { x, y, width, height } = this.bounds;
+        this.closed.set(this.wallClosed);
+        if (!doors) return;
+        for (const key of doors.east) {
+            const cell = cellOf(key);
+            const column = cell.x - x;
+            const row = cell.y - y;
+            if (column < 0 || row < 0 || column + 1 >= width || row >= height) continue;
+            const index = row * width + column;
+            this.closed[index] |= 1;
+            this.closed[index + 1] |= 2;
+        }
+        for (const key of doors.south) {
+            const cell = cellOf(key);
+            const column = cell.x - x;
+            const row = cell.y - y;
+            if (column < 0 || row < 0 || column >= width || row + 1 >= height) continue;
+            const index = row * width + column;
+            this.closed[index] |= 4;
+            this.closed[index + width] |= 8;
         }
     }
 
@@ -834,6 +873,53 @@ export class WaterGrid {
                 if (index !== undefined && !this.blocked[index]) this.depth[index] = held;
             }
         }
+    }
+
+    /**
+     * The speed of the water, block by block (SPEED_BLOCK_CELLS cells a side, row by row): two signed bytes a
+     * block, how fast it runs towards the east then towards the south, in SPEED_UNITS units a cell a second, as it
+     * is seen (`pace` times its real speed, see WaterSettings.flowPace). It is what the block carries over the
+     * water it holds. Undefined for a water that has no inertia: it keeps no flow to tell.
+     */
+    public writeSpeeds(pace = 1): Uint8Array | undefined {
+        const { width, height } = this.bounds;
+        const size = width * height;
+        if (this.flowEast.length !== size || size === 0) return undefined;
+        const seen = Number.isFinite(pace) && pace > 0 ? pace : 1;
+        const columns = Math.ceil(width / SPEED_BLOCK_CELLS);
+        const rows = Math.ceil(height / SPEED_BLOCK_CELLS);
+        const bytes = new Uint8Array(columns * rows * 2);
+        const depth = this.depth;
+        const east = this.flowEast;
+        const south = this.flowSouth;
+        const byte = (speed: number): number => {
+            const units = Math.round(speed * seen * SPEED_UNITS);
+            return (units > 127 ? 127 : units < -127 ? -127 : units) & 255;
+        };
+        for (let blockRow = 0; blockRow < rows; blockRow++) {
+            for (let blockColumn = 0; blockColumn < columns; blockColumn++) {
+                let held = 0;
+                let towardsEast = 0;
+                let towardsSouth = 0;
+                const lastRow = Math.min(height, (blockRow + 1) * SPEED_BLOCK_CELLS);
+                const lastColumn = Math.min(width, (blockColumn + 1) * SPEED_BLOCK_CELLS);
+                for (let row = blockRow * SPEED_BLOCK_CELLS; row < lastRow; row++) {
+                    for (let column = blockColumn * SPEED_BLOCK_CELLS; column < lastColumn; column++) {
+                        const index = row * width + column;
+                        if (depth[index] <= DRY_PX) continue;
+                        held += depth[index];
+                        // What crosses the cell: the mean of what comes in by one side and goes out by the other.
+                        towardsEast += (east[index] + (column > 0 ? east[index - 1] : 0)) / 2;
+                        towardsSouth += (south[index] + (row > 0 ? south[index - width] : 0)) / 2;
+                    }
+                }
+                if (held <= DRY_PX) continue;
+                const at = (blockRow * columns + blockColumn) * 2;
+                bytes[at] = byte(towardsEast / held);
+                bytes[at + 1] = byte(towardsSouth / held);
+            }
+        }
+        return bytes;
     }
 
     /** The depths as bytes: two for each cell, in eighths of a pixel. For saving and for sending. */

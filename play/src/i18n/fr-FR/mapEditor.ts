@@ -829,7 +829,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             maxSurface:
                 "18 px par défaut : de quoi nager, sous les étages (52 px). Plus haut, une crue noie le sol en profondeur. En réel : aucun plafond (256 px).",
             current:
-                "À 1, le courant le plus fort emporte au quart de la vitesse de la marche. Réglage de jeu : 1 par défaut.",
+                "Force avec laquelle l'eau emporte les avatars, jamais dans un bâtiment. Avec l'eau à inertie, on est emporté à la vitesse de l'eau dès qu'on perd pied. Réglage de jeu : 1 par défaut.",
         },
         paceHint:
             "Les creux se remplissent avec la pluie de la carte et sèchent par beau temps. Une source ou un puits s'ajoute à n'importe quel objet depuis ses propriétés.",

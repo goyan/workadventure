@@ -8,7 +8,7 @@ import {
 } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
-import { currentPush, waterCurrentAt } from "../../../../../src/front/Phaser/Game/Terrain/WaterCurrent";
+import { currentPush, sweptShare, waterCurrentAt } from "../../../../../src/front/Phaser/Game/Terrain/WaterCurrent";
 
 /** Water and relief given cell by cell: `depth(x, y)` pixels of water, `ground(x, y)` the height of the ground. */
 function waterOf(depth: (x: number, y: number) => number, ground: (x: number, y: number) => number = () => -64) {
@@ -117,5 +117,54 @@ describe("the water of a pool", () => {
         const current = waterCurrentAt(water, 2 * 16 + 8, 8, 0);
         expect(current.x).toBeCloseTo(0);
         expect(current.y).toBeCloseTo(0);
+    });
+});
+
+describe("the current of a water whose speed the server tells", () => {
+    /** Level water `depth` px deep running at `x`, `y` cells a second: its surface says nothing of it. */
+    const running = (depth: number, x: number, y = 0) => ({ ...waterOf(() => depth), speedAt: () => ({ x, y }) });
+
+    it("carries who floats at the very speed of the water, whatever its surface looks like", () => {
+        // 30 px deep (one swims), 5 cells a second towards the east: 80 map pixels a second.
+        const push = currentPush(running(30, 5), 8, 8, 0, 1, 180);
+        expect(push.x).toBeCloseTo(80, 5);
+        expect(push.y).toBe(0);
+        // Faster than one walks under the wave of a tsunami.
+        expect(currentPush(running(30, 15), 8, 8, 0, 1, 180).x).toBeGreaterThan(180);
+        // The strength of the map still weighs on it, and nothing in water at rest.
+        expect(currentPush(running(30, 5), 8, 8, 0, 0.5, 180).x).toBeCloseTo(40, 5);
+        expect(currentPush(running(30, 0.1), 8, 8, 0, 1, 180)).toEqual({ x: 0, y: 0 });
+        expect(currentPush(running(30, 5), 8, 8, 0, 0, 180)).toEqual({ x: 0, y: 0 });
+    });
+
+    it("leaves on their feet who stands in a thin sheet, and sweeps them along as the water takes their footing", () => {
+        // 8 px of water (27 cm) at 2 cells a second (1.1 m/s): 0.3 m²/s, one keeps one's footing.
+        expect(currentPush(running(8, 2), 8, 8, 0, 1, 180)).toEqual({ x: 0, y: 0 });
+        // The same sheet at 8 cells a second (4.4 m/s): 1.2 m²/s, swept along at the speed of the water.
+        expect(currentPush(running(8, 8), 8, 8, 0, 1, 180).x).toBeCloseTo(8 * 16, 0);
+        // In between, by as much.
+        const half = currentPush(running(8, 5.33), 8, 8, 0, 1, 180).x;
+        expect(half).toBeGreaterThan(0);
+        expect(half).toBeLessThan(5.33 * 16);
+    });
+
+    it("gives the foam its way and its strength", () => {
+        const current = waterCurrentAt(running(30, 0, 1.5), 8, 8, 0);
+        expect(current.x).toBeCloseTo(0, 5);
+        expect(current.y).toBeCloseTo(0.5, 5);
+        // Never more than all of it.
+        expect(waterCurrentAt(running(30, 20), 8, 8, 0).x).toBeCloseTo(1, 5);
+    });
+});
+
+describe("sweptShare", () => {
+    it("is nothing under 0.4 m²/s, everything from 1.2 m²/s on", () => {
+        // A pixel of water is 3.42 cm, a cell a second 0.548 m/s.
+        expect(sweptShare(8, 2)).toBe(0);
+        expect(sweptShare(0, 30)).toBe(0);
+        expect(sweptShare(15, 8)).toBe(1);
+        const between = sweptShare(12, 4);
+        expect(between).toBeGreaterThan(0);
+        expect(between).toBeLessThan(1);
     });
 });

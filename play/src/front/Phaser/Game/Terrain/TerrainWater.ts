@@ -1,4 +1,12 @@
-import { poolBasins, reliefCells, TERRAIN_CELL, TILE_PX, WATER_MESSAGE_MS } from "@workadventure/map-editor";
+import {
+    poolBasins,
+    reliefCells,
+    SPEED_BLOCK_CELLS,
+    SPEED_UNITS,
+    TERRAIN_CELL,
+    TILE_PX,
+    WATER_MESSAGE_MS,
+} from "@workadventure/map-editor";
 import type { PoolStyle, TerrainData } from "@workadventure/map-editor";
 
 /** A state of the water as the server sends it, its bytes already unzipped (TerrainWaterMessage). */
@@ -13,6 +21,11 @@ export interface WaterState {
     full: boolean;
     /** Two bytes a cell, in eighths of a pixel of water, low byte first, row by row. */
     depths: Uint8Array;
+    /**
+     * The speed of the water, when the server knows it (a water with inertia): two signed bytes a block of cells
+     * (towards the east, towards the south), row by row, already unzipped.
+     */
+    speeds?: Uint8Array;
 }
 
 /** The last state of the water and the one before it, over the grid the server simulates. */
@@ -27,6 +40,8 @@ export interface SettledWater {
     before: Float32Array;
     /** The seconds between the two states; Infinity when there is only one. */
     seconds: number;
+    /** The speed of the water over a cell of the map, in cells a second; undefined when the server tells none. */
+    speedAt?: (cellX: number, cellY: number) => { x: number; y: number } | undefined;
 }
 
 /** A film of water thinner than this is not drawn: what a flood leaves behind would speckle the ground. */
@@ -60,6 +75,8 @@ export class TerrainWater {
     private before = new Float32Array(0);
     private betweenMs = Infinity;
     private receivedAt = -Infinity;
+    /** The speed of the water block by block, as the server last told it; undefined when it tells none. */
+    private speeds: Int8Array | undefined;
     private wet = false;
     private changes = 0;
     /** How many of those changes were states of the water received. */
@@ -150,6 +167,12 @@ export class TerrainWater {
         this.receivedAt = now;
         this.to = to;
         this.grid = { x: state.x, y: state.y, width: state.width, height: state.height };
+        // The speeds come whole with each state; none, or some of another size, and the water has no known speed.
+        const blocks = Math.ceil(state.width / SPEED_BLOCK_CELLS) * Math.ceil(state.height / SPEED_BLOCK_CELLS);
+        this.speeds =
+            state.speeds && state.speeds.length === blocks * 2
+                ? Int8Array.from(state.speeds, (byte) => (byte << 24) >> 24)
+                : undefined;
         this.bytes = bytes;
         this.seq = state.seq;
         this.wet = wet || this.from.some((depth) => depth > 0);
@@ -189,7 +212,27 @@ export class TerrainWater {
             depths: this.to,
             before: this.before,
             seconds: this.betweenMs / 1000,
+            ...(this.speeds ? { speedAt: (cellX: number, cellY: number) => this.speedOfCell(cellX, cellY) } : {}),
         };
+    }
+
+    /**
+     * How fast the water runs at a point of the map (map pixels), in cells a second, as the server computes it
+     * (the water with inertia): undefined when it tells none, so that the caller reads the slope instead.
+     */
+    public speedAt(x: number, y: number): { x: number; y: number } | undefined {
+        return this.speedOfCell(Math.floor(x / TERRAIN_CELL), Math.floor(y / TERRAIN_CELL));
+    }
+
+    private speedOfCell(cellX: number, cellY: number): { x: number; y: number } | undefined {
+        const speeds = this.speeds;
+        if (!speeds) return undefined;
+        const column = cellX - this.grid.x;
+        const row = cellY - this.grid.y;
+        if (column < 0 || row < 0 || column >= this.grid.width || row >= this.grid.height) return { x: 0, y: 0 };
+        const columns = Math.ceil(this.grid.width / SPEED_BLOCK_CELLS);
+        const at = (Math.floor(row / SPEED_BLOCK_CELLS) * columns + Math.floor(column / SPEED_BLOCK_CELLS)) * 2;
+        return { x: speeds[at] / SPEED_UNITS, y: speeds[at + 1] / SPEED_UNITS };
     }
 
     /**

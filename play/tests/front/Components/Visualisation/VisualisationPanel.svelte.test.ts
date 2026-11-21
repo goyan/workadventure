@@ -18,6 +18,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 totals: ({ stock, area }: { stock: string; area: string }) => `${stock} m3, ${area} m2`,
                 noWater: label("No water told yet"),
                 estimated: label("Estimated"),
+                measured: label("Measured"),
                 weather: { button: label("Weather explained") },
             },
         },
@@ -34,6 +35,7 @@ import VisualisationPanel from "../../../../src/front/Components/Visualisation/V
 import { terrainWaterStatsStore } from "../../../../src/front/Stores/TerrainEditorStore";
 import {
     visualisationPanelStore,
+    waterFlowMeasuredStore,
     waterFlowOverlayStore,
     weatherExplainedStore,
 } from "../../../../src/front/Stores/VisualisationStore";
@@ -91,6 +93,17 @@ describe("VisualisationPanel", () => {
         flushSync();
         expect(find("visualisation-widget")).toBeNull();
         expect(get(waterFlowOverlayStore)).toBe(true);
+    });
+
+    it("says whether the speeds are those of the server or guessed from the slope", () => {
+        visualisationPanelStore.set(true);
+        waterFlowOverlayStore.set(true);
+        flushSync();
+        expect(find("visualisation-water-speeds")?.textContent).toContain("Estimated");
+        waterFlowMeasuredStore.set(true);
+        flushSync();
+        expect(find("visualisation-water-speeds")?.textContent).toContain("Measured");
+        waterFlowMeasuredStore.set(false);
     });
 
     it("tells the water of the whole map once the server said it", () => {

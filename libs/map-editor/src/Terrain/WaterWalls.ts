@@ -13,7 +13,8 @@ import type { WaterWallSides } from "./WaterGrid";
  *   of that tile, holds the water.
  * - A vertical wall (`mur-vertical-…`) holds it on the row under its first vertex, between the columns on each side
  *   of its line.
- * - A door is not a wall: the water goes through it, open or closed. The walls of a raised floor (collections
+ * - A door is not a wall: these walls let the water through it. A closed door holds the water on top of them
+ *   (WaterDoors, WaterGrid.setClosedDoors). The walls of a raised floor (collections
  *   `… Paliers`, or an object with an elevation) are not on the ground.
  */
 const WALL_COLLECTION = "Carte Murs";
