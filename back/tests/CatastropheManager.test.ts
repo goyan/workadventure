@@ -99,9 +99,9 @@ describe("CatastropheManager", () => {
         expect(manager.launch(METEOR, 10, 10, 9999)).toBe(true);
         expect(manager.launch(METEOR, 10, 10, -3)).toBe(true);
         expect(manager.launch(METEOR, 10, 10, Number.NaN)).toBe(true);
-        expect(sent.map((message) => message.radiusTiles)).toEqual([24, 2, 4]);
+        expect(sent.map((message) => message.radiusTiles)).toEqual([8, 1, 4]);
         vi.advanceTimersByTime(1200);
-        expect(strike.mock.calls.map((call) => call[2])).toEqual([24, 2, 4]);
+        expect(strike.mock.calls.map((call) => call[2])).toEqual([8, 1, 4]);
     });
 
     it("a strike that throws stops nothing", () => {
@@ -489,12 +489,16 @@ describe("a patch of fire", () => {
             expect(strike).not.toHaveBeenCalled();
         });
 
-        it("keeps its size within 2 to 24 tiles", () => {
+        it("keeps its size within 1 to 8 tiles: one out of range is the nearest, none is the usual one", () => {
             const { manager, sent } = burning();
             manager.launch(FIREBALL, 10, 10, 99);
             manager.launch(FIREBALL, 10, 10, Number.NaN);
             manager.launch(FIREBALL, 10, 10, 0);
-            expect(sent.map((message) => message.radiusTiles)).toEqual([24, 4, 2]);
+            manager.launch(FIREBALL, 10, 10, 1);
+            // A tab opened before, still at 24: kept, at the largest.
+            manager.launch(METEOR, 10, 10, 24);
+            manager.launch(METEOR, 10, 10, -3);
+            expect(sent.map((message) => message.radiusTiles)).toEqual([8, 4, 4, 1, 8, 1]);
         });
 
         it("is counted with the meteors against the twenty in flight", () => {

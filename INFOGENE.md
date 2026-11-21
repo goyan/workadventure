@@ -4178,11 +4178,13 @@ est sous au moins 2 px d'eau à l'impact (d'après ce que ce navigateur sait de 
 Pour qui a demandé moins de mouvement (`prefers-reduced-motion`) : ni éclair ni météore qui tombe, il reste l'ombre
 et la gerbe. Tout est dessiné par le navigateur, en code, dans un seul calque au-dessus du voile de nuit et de la météo (`DEPTH_NIGHT_INDEX + 2`).
 
-**Taille du météore.** Le widget a un curseur : rayon du cratère de **2 à 24 cases** (4 par défaut, gardé pour la
-session). Le navigateur l'envoie avec la demande (`radiusTiles`), le serveur le ramène dans ces bornes
-(`meteorShape`) et l'annonce à la salle. Tout en découle : volume d'eau déplacé (surface du cratère × profondeur), eau
-apportée, portée de l'onde (6 fois le rayon du cratère, entre 64 et 240 cellules), taille de l'ombre, du météore, de
-la gerbe et des cercles.
+**Taille de la comète et du météore.** Le widget a un curseur : rayon du cratère de **1 à 8 cases** (4 par défaut,
+gardé pour la session ; de 2 à 24 jusqu'au 2026-11-21). Le navigateur l'envoie avec la demande (`radiusTiles`), le
+serveur le ramène dans ces bornes (`meteorShape`, `METEOR_MIN_TILES` et `METEOR_MAX_TILES`, lues aussi par le
+curseur : une valeur hors plage, comme le 24 d'un onglet ouvert avant, donne la plus proche ; 0 ou une valeur non
+numérique donne 4) et l'annonce à la salle. Tout en découle : volume d'eau déplacé (surface du cratère × profondeur), eau
+apportée, portée de l'onde (6 fois le rayon du cratère, jamais moins de 64 cellules : 64 à 96 dans ces bornes),
+taille de l'ombre, du météore (jamais dessiné à moins de 4 px de rayon), de la gerbe et des cercles.
 
 **Ce que fait l'eau.** À l'impact, le serveur vide le **cratère** (pour la taille par défaut : rayon 8 cellules de 16 px, soit 4 cases) et confie
 cette eau, **plus 8 px apportés par cellule du cratère**, à une **onde** (`Catastrophe/ImpactWave.ts`) dont le front
@@ -4405,7 +4407,7 @@ vérifiée sur un tablier. Rien de cela n'a été vu à l'écran par un agent.
 Conception et plan dans le dépôt d'infra, `docs/superpowers/{specs,plans}/2026-11-20-meteore-brulant*`.
 
 **Pour qui joue.** Tuile « Météore » du widget des catastrophes, à côté de « Comète ». Elle s'arme comme la comète
-(viseur, Échap annule), avec le même curseur de taille (rayon du cratère de 2 à 24 cases, 4 par défaut), et un clic
+(viseur, Échap annule), avec le même curseur de taille (rayon du cratère de 1 à 8 cases, 4 par défaut), et un clic
 gauche sur la carte lance le météore. Il tombe en 1,2 s comme la comète.
 
 **Ce qu'il fait à l'impact** (le serveur seul décide) :

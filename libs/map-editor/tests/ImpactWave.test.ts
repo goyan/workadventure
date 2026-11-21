@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { advanceImpactWave, blastWater, startImpactWave } from "../src/Catastrophe/ImpactWave";
-import { METEOR_ADDED_PX, METEOR_CREST_PX, METEOR_WAVE_CELLS_PER_STEP, meteorShape } from "../src/Catastrophe/Meteor";
+import {
+    METEOR_ADDED_PX,
+    METEOR_CREST_PX,
+    METEOR_DEFAULT_TILES,
+    METEOR_MAX_TILES,
+    METEOR_MIN_TILES,
+    METEOR_WAVE_CELLS_PER_STEP,
+    meteorShape,
+} from "../src/Catastrophe/Meteor";
 import { cellKey, withHeights } from "../src/Terrain/TerrainGrid";
 import { WaterGrid } from "../src/Terrain/WaterGrid";
 import type { WaterStepInput, WaterWallSides } from "../src/Terrain/WaterGrid";
@@ -146,8 +154,8 @@ describe("the wave of an impact", () => {
     });
 
     it("a wider meteor throws out more water", () => {
-        const small = startImpactWave(lake(), CX, CY, meteorShape(2));
-        const wide = startImpactWave(lake(), CX, CY, meteorShape(10));
+        const small = startImpactWave(lake(), CX, CY, meteorShape(1));
+        const wide = startImpactWave(lake(), CX, CY, meteorShape(8));
         if (!small || !wide) throw new Error("no wave");
         expect(wide.wave.carriedPx).toBeGreaterThan(small.wave.carriedPx * 10);
     });
@@ -156,13 +164,20 @@ describe("the wave of an impact", () => {
 describe("meteorShape", () => {
     it("is the crater of the size chosen, in cells of 16 px, and a wave six times as far", () => {
         expect(meteorShape(4)).toEqual({ radiusTiles: 4, discCells: 8, waveCells: 64 });
-        expect(meteorShape(10)).toEqual({ radiusTiles: 10, discCells: 20, waveCells: 120 });
-        expect(meteorShape(24)).toEqual({ radiusTiles: 24, discCells: 48, waveCells: 240 });
+        expect(meteorShape(8)).toEqual({ radiusTiles: 8, discCells: 16, waveCells: 96 });
+        // The smallest: a crater of one tile, and a wave that still goes as far as the shortest one.
+        expect(meteorShape(1)).toEqual({ radiusTiles: 1, discCells: 2, waveCells: 64 });
     });
 
     it("keeps a size within what a meteor may be, and takes the usual one for a size that is not a number", () => {
-        expect(meteorShape(0).radiusTiles).toBe(2);
-        expect(meteorShape(1000).radiusTiles).toBe(24);
+        expect([METEOR_MIN_TILES, METEOR_MAX_TILES, METEOR_DEFAULT_TILES]).toEqual([1, 8, 4]);
+        expect(meteorShape(-2).radiusTiles).toBe(1);
+        expect(meteorShape(0.6).radiusTiles).toBe(1);
+        // A tab opened before the largest was 8, still at 24: kept, at the largest.
+        expect(meteorShape(24).radiusTiles).toBe(8);
+        expect(meteorShape(1000).radiusTiles).toBe(8);
+        // No size at all (0, what a message that says none carries) is the usual one.
+        expect(meteorShape(0).radiusTiles).toBe(4);
         expect(meteorShape(7.6).radiusTiles).toBe(8);
         expect(meteorShape(Number.NaN).radiusTiles).toBe(4);
         expect(meteorShape(Number.POSITIVE_INFINITY).radiusTiles).toBe(4);
