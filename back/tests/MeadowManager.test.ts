@@ -444,6 +444,20 @@ describe("the snow of the MeadowManager", () => {
         second.manager.stop();
     });
 
+    it("melts the snow under the fire a player sets, in the cold too", () => {
+        const { manager, sent, steps, pour } = snowHarness();
+        manager.mapChanged();
+        manager.soak(downpour);
+        steps(1);
+        const before = snowOf(sent.at(-1))[centre];
+        expect(before).toBeGreaterThan(0);
+        manager.ignite(downpour.x, downpour.y, 1);
+        steps(1);
+        expect(snowOf(sent.at(-1))[centre]).toBe(0);
+        expect(pour).toHaveBeenCalled();
+        manager.stop();
+    });
+
     it("has the snow of the crater of a fireball gone at once", () => {
         const { manager, sent, steps } = snowHarness();
         manager.mapChanged();

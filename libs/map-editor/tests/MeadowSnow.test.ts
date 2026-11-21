@@ -189,6 +189,68 @@ describe("the snow and the fire", () => {
     });
 });
 
+describe("the heat of a fire on the snow", () => {
+    const dryPrairie = (): Meadow => {
+        const meadow = new Meadow(size, undefined, undefined);
+        for (let y = 0; y < size.height; y++) for (let x = 0; x < size.width; x++) meadow.set(x, y, 0.1, 1, 1);
+        return meadow;
+    };
+
+    it("melts the snow it is brought to, whatever the cold, without wetting the soil it dries", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        meadow.snowOn(10, 10, 3, 20);
+        meadow.warm(10, 10, 1, 50);
+        const melted = meadow.step(under(frost));
+        expect(meadow.snowAt(10, 10)).toBe(0);
+        expect(meadow.snowAt(11, 10)).toBe(0);
+        expect(meadow.snowAt(12, 10)).toBeCloseTo(20);
+        expect(melted?.meltedMm[10 * size.width + 10]).toBeCloseTo(20);
+        expect(meadow.moistureAt(10, 10)).toBe(0);
+        // The heat is spent: the snow that falls back holds.
+        meadow.snowOn(10, 10, 0, 20);
+        expect(meadow.step(under(frost))).toBeUndefined();
+        expect(meadow.snowAt(10, 10)).toBeCloseTo(20);
+    });
+
+    it("melts less than it is given no snow, and is nothing where it is not a number", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        meadow.snowOn(10, 10, 0, 20);
+        meadow.warm(10, 10, 0, 5);
+        meadow.warm(10, 10, 0, Number.NaN);
+        meadow.step(under(frost));
+        expect(meadow.snowAt(10, 10)).toBeCloseTo(15);
+    });
+
+    it("melts the snow around a tile on fire, step after step", () => {
+        const meadow = dryPrairie();
+        expect(meadow.ignite(4, 4, 0)).toBe(1);
+        meadow.snowOn(5, 4, 0, 40);
+        meadow.snowOn(8, 4, 0, 40);
+        meadow.step(under(frost));
+        expect(meadow.snowAt(5, 4)).toBeLessThan(40);
+        expect(meadow.snowAt(8, 4)).toBeCloseTo(40);
+        for (let step = 0; step < 10; step++) meadow.step(under(frost));
+        expect(meadow.snowAt(5, 4)).toBe(0);
+    });
+
+    it("is smothered by a snow that falls thicker than it melts", () => {
+        const meadow = dryPrairie();
+        meadow.ignite(4, 4, 0);
+        meadow.snowOn(4, 4, 0, 300);
+        meadow.step(under(frost));
+        expect(meadow.fireAt(4, 4)).toBe(0);
+        expect(meadow.snowAt(4, 4)).toBeGreaterThan(200);
+    });
+
+    it("leaves a tree its fire under a thin snow, and soaks it under a full cover", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        meadow.snowOn(10, 10, 0, 5);
+        expect(meadow.soakedAt(10, 10)).toBe(false);
+        meadow.snowOn(10, 10, 0, 10);
+        expect(meadow.soakedAt(10, 10)).toBe(true);
+    });
+});
+
 describe("the snow kept", () => {
     it("is written in a byte a tile and read back", () => {
         const meadow = new Meadow(size, undefined, undefined);

@@ -2,6 +2,7 @@ import { Season, TERRAIN_CELL, TILE_PX } from "../types";
 import type { TerrainData, WAMFileFormat } from "../types";
 import {
     rainMeltMm,
+    SNOW_FULL_MM,
     SNOW_MAX_MM,
     snowByte,
     snowCoverOf,
@@ -83,6 +84,8 @@ const FIRE_MAX_MOISTURE = 0.9;
 const FIRE_MAX_ASH = 0.5;
 /** A rain of this many mm an hour puts a fire at its height out in a second. */
 const RAIN_QUENCH_MM = 100;
+/** The snow (mm of water) a fire at its height melts a second, on its tile and on the eight around it. */
+export const FIRE_THAW_MM_PER_SECOND = 15;
 /** A fire starts by itself, at the highest danger, about once in this many seconds, on grass this dry. */
 const SELF_START_SECONDS = 60;
 const SELF_START_DRYNESS = 0.9;
@@ -209,6 +212,8 @@ export class Meadow {
     /** The snow lying on each tile, in mm of water (see Snow.ts), and what melted of it at the last step. */
     private readonly snow: Float32Array;
     private readonly melted: Float32Array;
+    /** The snow the heat of a fire melts on each tile at the next step, in mm of water (see warm): spent there. */
+    private readonly heat: Float32Array;
     /** Seconds the ash of a tile that went out still stays whole before it goes; not saved. */
     private readonly smoulder: Float32Array;
     /** What each tile on fire still has to burn (see fuelOf), from 0 to 1. */
@@ -241,6 +246,7 @@ export class Meadow {
         this.ash = new Float32Array(tiles);
         this.snow = new Float32Array(tiles);
         this.melted = new Float32Array(tiles);
+        this.heat = new Float32Array(tiles);
         this.smoulder = new Float32Array(tiles);
         this.fuel = new Float32Array(tiles);
         this.water = new Float32Array(tiles);
@@ -357,6 +363,17 @@ export class Meadow {
     }
 
     /**
+     * The heat of a fire is brought to the tiles within `radius` tiles of a tile: at the next step it melts up to
+     * `mm` of the snow of each (mm of water), whatever the cold of the air, and leaves the soil it dries as it was.
+     */
+    public warm(tileX: number, tileY: number, radius: number, mm: number): void {
+        if (!Number.isFinite(mm) || mm <= 0) return;
+        this.forTilesAround(tileX, tileY, radius, (index) => {
+            this.heat[index] += mm;
+        });
+    }
+
+    /**
      * The snow of the tiles within `radius` tiles of a tile melts at once (the heat of a fireball). Returns its water,
      * in mm over all the tiles.
      */
@@ -375,11 +392,15 @@ export class Meadow {
         return index !== undefined && this.outdoor[index] === 1 && this.fertility[index] > 0;
     }
 
-    /** Whether a tile is too wet for a fire: water lying on it, or a sodden soil. */
+    /** Whether a tile is too wet for a fire: water lying on it, a sodden soil, or a full cover of snow. */
     public soakedAt(tileX: number, tileY: number): boolean {
         const index = this.indexOf(tileX, tileY);
         return (
-            index !== undefined && (this.water[index] >= SOAKED_WATER_PX || this.moisture[index] >= FIRE_MAX_MOISTURE)
+            index !== undefined &&
+            (this.water[index] >= SOAKED_WATER_PX ||
+                this.moisture[index] >= FIRE_MAX_MOISTURE ||
+                // A full cover of snow smothers a fire as water does; a thin one is melted by it.
+                this.snow[index] >= SNOW_FULL_MM)
         );
     }
 
@@ -700,7 +721,19 @@ export class Meadow {
      * same rain would. True when any melted: its water is in `melted`.
      */
     private stepSnow(input: MeadowStepInput, seconds: number, rain: number, wets: boolean): boolean {
-        const { snow, melted, water, outdoor, moisture, hold } = this;
+        const { snow, melted, water, outdoor, moisture, hold, heat, fire, width, height } = this;
+        // A tile on fire warms itself and the eight around it.
+        const flame = FIRE_THAW_MM_PER_SECOND * seconds;
+        for (let index = 0; index < fire.length; index++) {
+            if (fire[index] <= 0) continue;
+            const tileX = index % width;
+            const tileY = (index - tileX) / width;
+            for (let y = Math.max(0, tileY - 1); y <= Math.min(height - 1, tileY + 1); y++) {
+                for (let x = Math.max(0, tileX - 1); x <= Math.min(width - 1, tileX + 1); x++) {
+                    heat[y * width + x] += flame * fire[index];
+                }
+            }
+        }
         const falling =
             input.snowfallMm !== undefined && Number.isFinite(input.snowfallMm) ? Math.max(0, input.snowfallMm) : 0;
         const times =
@@ -721,13 +754,16 @@ export class Meadow {
             if (!outdoor[index]) continue;
             let lying = Math.min(SNOW_MAX_MM, snow[index] + falling);
             if (lying <= 0) continue;
+            // The heat of a fire first: it melts the snow whatever the air, and dries the soil it bares.
+            const burnt = Math.min(lying, heat[index]);
+            lying -= burnt;
             // Open water takes the snow as it falls, unless it freezes; elsewhere the heat melts it first, then the
             // wind takes its share.
             const thaw = water[index] >= SOAKED_WATER_PX && !freezing ? lying : Math.min(lying, melting);
             lying -= thaw;
             lying = Math.max(0, lying - going);
-            if (thaw > 0) {
-                melted[index] = thaw;
+            if (thaw + burnt > 0) {
+                melted[index] = thaw + burnt;
                 any = true;
                 // RAIN_GAIN is by mm an hour and by second: a mm of water is 3600 of those.
                 if (wets && hold[index] > 0) {
@@ -736,6 +772,7 @@ export class Meadow {
             }
             snow[index] = lying;
         }
+        heat.fill(0);
         return any;
     }
 

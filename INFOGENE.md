@@ -2958,9 +2958,13 @@ Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus
   - Sublimation : `0,02 × vent × (1 − humidité / 100)` mm/h, à toute température, sans eau.
   - Le temps de la neige court 600 fois plus vite que le réel (`THAW_SPEED`) : 15 mm fondent en une minute environ à
     10 °C sans vent. Constante à régler à l'essai.
+  - Le feu fait fondre la neige autour de lui, même par temps de gel (`Meadow.warm`) : une case en feu chauffe sa
+    case et les huit voisines (15 mm par seconde à pleine flamme), un arbre en feu deux cases autour de son pied, la
+    catastrophe « feu » 60 mm par touche sous son disque. Cette fonte ne mouille pas le sol (le feu le sèche) ; son
+    eau va quand même à l'eau du relief. À l'inverse une neige qui tombe plus vite qu'elle ne fond étouffe le feu :
+    case en feu éteinte dès qu'il y reste de la neige, arbre éteint sous une couverture pleine (15 mm).
   - Sur une eau libre, la neige fond aussitôt en eau quand l'air est au-dessus de 0 °C (ou inconnu) ; à 0 °C et
-    moins elle tient sur l'eau, comme sur une glace. Une case enneigée ne prend pas feu, un feu s'y éteint, l'herbe
-    y meurt comme sous la neige des hauteurs.
+    moins elle tient sur l'eau, comme sur une glace. Une case enneigée ne prend pas feu ; l'herbe y meurt comme sous la neige des hauteurs.
 - **Eau de fonte.** Ce qui fond humidifie le sol de sa case comme la même pluie le ferait, et est versé dans l'eau du
   relief, millimètre pour millimètre (`PX_PER_MM`, `TerrainWaterManager.pour`), compté avec la pluie dans le bilan. Hors de la grille d'eau, le sol est humidifié et le
   reste est perdu. La neige de la pluie de la carte s'accumule à la vitesse de l'eau de la carte (`water.speed`),

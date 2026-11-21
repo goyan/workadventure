@@ -14,6 +14,7 @@ import {
     DEFAULT_WATER_SETTINGS,
     DOWNPOUR_PX_PER_SECOND,
     DOWNPOUR_REPORT_MS,
+    FIRE_THAW_MM_PER_SECOND,
     PX_PER_MM,
     snowRainRate,
     snowShareOf,
@@ -50,6 +51,10 @@ const MAX_MEADOW_TILES = 1_000_000;
 /** The grass grows by day: between these minutes of the day at the place of the map. */
 const DAY_FROM = 7 * 60;
 const DAY_TO = 19 * 60;
+/** A tree on fire melts the snow this many tiles around its foot. */
+const TREE_THAW_TILES = 2;
+/** Each patch of fire a player sets melts this much of the snow under it, in mm of water. */
+const FIRE_PATCH_THAW_MM = 60;
 
 /**
  * Keeps the meadow of a room (Meadow): the moisture of its soil and its grass, tile by tile over the whole map,
@@ -318,6 +323,17 @@ export class MeadowManager {
             : () => 0;
         const snow = this.snowInput();
         if (snow.snowfallMm) this.snowMoved = true;
+        // The trees on fire melt the snow around their foot.
+        if (meadow.snowy()) {
+            for (const tree of this.trees.fires()) {
+                meadow.warm(
+                    Math.floor(tree.x / TILE_PX),
+                    Math.floor(tree.y / TILE_PX),
+                    TREE_THAW_TILES,
+                    FIRE_THAW_MM_PER_SECOND * tree.fire * MEADOW_STEP_SECONDS,
+                );
+            }
+        }
         if (!set.enabled) {
             // A map that turned its meadow off: bare at once, told once, and nothing more is stepped.
             if (!this.cleared) {
@@ -388,7 +404,10 @@ export class MeadowManager {
      */
     public ignite(x: number, y: number, radiusTiles: number): number {
         const settings = this.room.getWam()?.settings;
-        if (!this.meadow || !{ ...DEFAULT_MEADOW_SETTINGS, ...settings?.meadow }.enabled) return 0;
+        if (!this.meadow) return 0;
+        // The fire melts the snow under it first: what it bares can burn at the next patch.
+        this.meadow.warm(Math.floor(x / TILE_PX), Math.floor(y / TILE_PX), radiusTiles, FIRE_PATCH_THAW_MM);
+        if (!{ ...DEFAULT_MEADOW_SETTINGS, ...settings?.meadow }.enabled) return 0;
         // The trees whose foot is in the patch take with the grass under them.
         const lit =
             this.meadow.ignite(Math.floor(x / TILE_PX), Math.floor(y / TILE_PX), radiusTiles) +
