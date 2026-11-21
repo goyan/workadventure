@@ -1,5 +1,5 @@
 import { gunzipSync } from "node:zlib";
-import { cellKey, CELL_LITRES_PER_PX, WeatherType, withHeights } from "@workadventure/map-editor";
+import { cellKey, CELL_LITRES_PER_PX, PX_PER_MM, WeatherType, withHeights } from "@workadventure/map-editor";
 import type { TerrainData, WAMFileFormat } from "@workadventure/map-editor";
 import type { SubToPusherRoomMessage, TerrainWaterMessage } from "@workadventure/messages";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -648,5 +648,39 @@ describe("TerrainWaterManager", () => {
         manager.mapChanged();
         steps(10);
         expect(rain.slotsFor).toHaveBeenCalledWith(place);
+    });
+});
+
+describe("the snow and the water of the relief", () => {
+    it("a downpour that falls as snow in the cold of the room brings no water", () => {
+        const { manager, steps } = createHarness({ wam: wamWith(wideLake) });
+        manager.fallThrough(() => ({ temperature: -5, humidity: 50 }));
+        manager.mapChanged();
+        manager.setDownpours(() => [{ id: 1, x: 240, y: 240, radiusTiles: 2, wholeMap: false }]);
+        steps(10);
+        expect(manager.getGrid()?.depthAt(15, 15)).toBe(0);
+        manager.stop();
+    });
+
+    it("pours the water of a melted snow on the four cells of its tile, counted with the rain", () => {
+        const { manager, sent, steps } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        // The snow that makes a pixel of water.
+        const mm = 1 / PX_PER_MM;
+        expect(manager.pour(7, 7, mm)).toBeCloseTo(mm);
+        const grid = manager.getGrid();
+        for (const [x, y] of [
+            [14, 14],
+            [15, 14],
+            [14, 15],
+            [15, 15],
+        ]) {
+            expect(grid?.depthAt(x, y)).toBeCloseTo(1);
+        }
+        expect(manager.pour(5000, 5000, mm)).toBe(0);
+        expect(manager.pour(7, 7, Number.NaN)).toBe(0);
+        steps(10);
+        expect(sent.at(-1)?.stats?.rain).toBeGreaterThan(0);
+        manager.stop();
     });
 });

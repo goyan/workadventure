@@ -440,6 +440,13 @@ export class GameRoom implements BrothersFinder {
         );
         // Nor does a snow soak the soil of the meadow.
         meadow.fallThrough(() => fireConditions.air());
+        // The snow that fell lies on the ground: it melts by the heat, the wind and the humidity of the room, and its
+        // water runs to the water of the relief.
+        meadow.snowUnder(() => {
+            const air = fireConditions.air();
+            return air ? { ...air, windSpeed: fireConditions.conditions().windSpeed } : undefined;
+        });
+        meadow.pourWith(terrainWater.pour.bind(terrainWater));
         // The animals of the map run from the fire of its grass and of its trees.
         aquaticLife.followFire(() => meadow.lifeFire());
         gameRoom.meadow = meadow;

@@ -2,12 +2,17 @@ import type { CatastropheMessage } from "@workadventure/messages";
 import { downpourTiles, TILE_PX } from "@workadventure/map-editor";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import { isEffectShown } from "../../../Stores/EffectsStore";
-import { DOWNPOUR_FALL_PX, downpourAlpha, downpourDrops, SPLASH_FROM } from "./DownpourFall";
+import { DOWNPOUR_FALL_PX, downpourAlpha, downpourDrops, downpourFlakes, SPLASH_FROM } from "./DownpourFall";
 
 const CLOUD_COLOR = 0x4a5568;
 const CLOUD_LIGHT = 0x718096;
 const DROP_COLOR = 0xbfe3ff;
 const WET_COLOR = 0x1a365d;
+/** In the cold a downpour falls as snow: its flakes, the white it lays under it, and its paler cloud. */
+const FLAKE_COLOR = 0xf2f5ff;
+const SNOW_GROUND_COLOR = 0xffffff;
+const SNOW_CLOUD_COLOR = 0x8d97a8;
+const SNOW_CLOUD_LIGHT = 0xc3cad6;
 /** The cloud follows the pointer of its player this fast: all the way in about a fifth of a second. */
 const FOLLOW_PER_MS = 0.012;
 /** Under a downpour on the whole map, the rain is drawn as a disc this many times the half-width of the view. */
@@ -37,7 +42,8 @@ interface Shown {
 /**
  * The downpours the server announces: under a dark cloud, drops fall on a disc of the ground and splash there; on the
  * whole map, they fall all over the view under a veil. A downpour follows the messages of its player and ends when
- * they stop. Drawn in code, in one layer above everything. The server alone decides what the water does.
+ * they stop. In the cold of the room the downpour falls as snow: flakes come down slowly instead of drops, in a
+ * sleet between the two. Drawn in code, in one layer above everything. The server alone decides what the water does.
  */
 export class DownpourView {
     private readonly graphics: Phaser.GameObjects.Graphics;
@@ -47,6 +53,8 @@ export class DownpourView {
     constructor(
         private readonly scene: Phaser.Scene & { markDirty(): void },
         private readonly reducedMotion: () => boolean,
+        /** The share of a downpour that falls as snow in the air of the room, 0 (rain) to 1 (snow). */
+        private readonly snowShare: () => number = () => 0,
     ) {
         this.graphics = scene.add.graphics().setDepth(DEPTH_NIGHT_INDEX + 2);
     }
@@ -93,6 +101,8 @@ export class DownpourView {
         const graphics = this.graphics;
         graphics.clear();
         const reduced = this.reducedMotion();
+        const share = this.snowShare();
+        const snow = Number.isFinite(share) ? Math.min(1, Math.max(0, share)) : 0;
         const follow = Math.min(1, elapsed * FOLLOW_PER_MS);
         let veiled = false;
         for (const [id, downpour] of this.shown) {
@@ -105,10 +115,10 @@ export class DownpourView {
             const alpha = downpourAlpha(now - downpour.beganAt, downpour.until - now, downpour.lasts);
             if (downpour.wholeMap) {
                 // Several downpours on the whole map look like one.
-                if (!veiled) this.drawWholeMap(now, alpha, reduced);
+                if (!veiled) this.drawWholeMap(now, alpha, reduced, snow);
                 veiled = true;
             } else {
-                this.drawDisc(now, downpour, alpha, reduced);
+                this.drawDisc(now, downpour, alpha, reduced, snow);
             }
         }
         this.scene.markDirty();
@@ -119,15 +129,19 @@ export class DownpourView {
         this.graphics.destroy();
     }
 
-    private drawDisc(now: number, downpour: Shown, alpha: number, reduced: boolean): void {
+    private drawDisc(now: number, downpour: Shown, alpha: number, reduced: boolean, snow: number): void {
         const { x, y, radiusPx } = downpour;
-        this.graphics.fillStyle(WET_COLOR, 0.22 * alpha);
+        // The ground darkens under the rain, pales under the snow.
+        this.graphics.fillStyle(WET_COLOR, 0.22 * alpha * (1 - snow));
         this.graphics.fillEllipse(x, y, radiusPx * 2, radiusPx);
-        this.drawDrops(now, { x, y }, radiusPx, alpha, reduced);
+        this.graphics.fillStyle(SNOW_GROUND_COLOR, 0.14 * alpha * snow);
+        this.graphics.fillEllipse(x, y, radiusPx * 2, radiusPx);
+        this.drawDrops(now, { x, y }, radiusPx, alpha, reduced, snow);
+        const snowing = snow >= 0.5;
         // The cloud hangs over the disc, as high as the drops fall from.
         const cloudY = y - DOWNPOUR_FALL_PX - radiusPx * 0.15;
         for (const [dx, dy, size] of PUFFS) {
-            this.graphics.fillStyle(CLOUD_COLOR, 0.85 * alpha);
+            this.graphics.fillStyle(snowing ? SNOW_CLOUD_COLOR : CLOUD_COLOR, 0.85 * alpha);
             this.graphics.fillEllipse(
                 x + dx * radiusPx,
                 cloudY + dy * radiusPx,
@@ -136,7 +150,7 @@ export class DownpourView {
             );
         }
         for (const [dx, dy, size] of PUFFS) {
-            this.graphics.fillStyle(CLOUD_LIGHT, 0.5 * alpha);
+            this.graphics.fillStyle(snowing ? SNOW_CLOUD_LIGHT : CLOUD_LIGHT, 0.5 * alpha);
             this.graphics.fillEllipse(
                 x + dx * radiusPx - size * radiusPx * 0.12,
                 cloudY + dy * radiusPx - size * radiusPx * 0.14,
@@ -146,9 +160,11 @@ export class DownpourView {
         }
     }
 
-    private drawWholeMap(now: number, alpha: number, reduced: boolean): void {
+    private drawWholeMap(now: number, alpha: number, reduced: boolean, snow: number): void {
         const view = this.scene.cameras.main.worldView;
-        this.graphics.fillStyle(WET_COLOR, 0.28 * alpha);
+        this.graphics.fillStyle(WET_COLOR, 0.28 * alpha * (1 - snow));
+        this.graphics.fillRect(view.x, view.y, view.width, view.height);
+        this.graphics.fillStyle(SNOW_GROUND_COLOR, 0.12 * alpha * snow);
         this.graphics.fillRect(view.x, view.y, view.width, view.height);
         // The drops keep their place on the map while the view moves: they are laid on a grid of the map.
         const reach = Math.max(view.width, view.height * 2) * WHOLE_VIEW_REACH;
@@ -157,7 +173,7 @@ export class DownpourView {
             x: Math.round(view.centerX / step) * step,
             y: Math.round(view.centerY / step) * step,
         };
-        this.drawDrops(now, centre, reach * 1.6, alpha, reduced);
+        this.drawDrops(now, centre, reach * 1.6, alpha, reduced, snow);
     }
 
     private drawDrops(
@@ -166,9 +182,17 @@ export class DownpourView {
         radiusPx: number,
         alpha: number,
         reduced: boolean,
+        snow: number,
     ): void {
         const graphics = this.graphics;
-        for (const drop of downpourDrops(now, centre, radiusPx, reduced)) {
+        if (snow > 0) {
+            // A flake fades in as it leaves the cloud, and stays whole down to the ground.
+            for (const flake of downpourFlakes(now, centre, radiusPx, snow, reduced)) {
+                graphics.fillStyle(FLAKE_COLOR, 0.9 * alpha * Math.min(1, flake.fall * 6));
+                graphics.fillRect(Math.round(flake.x) - 1, Math.round(flake.y) - 1, 3, 3);
+            }
+        }
+        for (const drop of downpourDrops(now, centre, radiusPx, reduced, snow)) {
             if (drop.fall >= SPLASH_FROM) {
                 const splash = (drop.fall - SPLASH_FROM) / (1 - SPLASH_FROM);
                 graphics.lineStyle(1, DROP_COLOR, 0.7 * alpha * (1 - splash));

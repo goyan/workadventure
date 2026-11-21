@@ -21,12 +21,16 @@ export function groundPace(
     moistureAt?: (x: number, y: number) => number,
     /** The season of the map, when the snow of its heights is to slow the walk. */
     season?: Season,
+    /** How much the snow that fell whitens the ground at a point of the map (0 to 1), when some may lie there. */
+    snowCoverAt?: (x: number, y: number) => number,
 ): number {
+    const fallen = snowCoverAt?.(feetX, feetY) ?? 0;
     const terrain = water?.relief();
-    if (!water || !terrain) return 1;
+    // The snow that fell slows the walk on a map without relief too.
+    if (!water || !terrain) return snowPace(fallen);
     const cellX = Math.floor(feetX / TERRAIN_CELL);
     const cellY = Math.floor(feetY / TERRAIN_CELL);
-    const snow = season ? snowPace(snowCover(heightAt(terrain, cellX, cellY), season)) : 1;
+    const snow = snowPace(Math.max(fallen, season ? snowCover(heightAt(terrain, cellX, cellY), season) : 0));
     const soil = terrain.soil ? soilAt(terrain, cellX, cellY) : 0;
     if (soil === 0) return snow;
     return snow * soilPace(soil, water.depthAt(feetX, feetY, now), moistureAt?.(feetX, feetY) ?? 0);

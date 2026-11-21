@@ -24,12 +24,3 @@ export interface MapSnowSettings {
     /** Real weather only (never saved): how hard it rains, mm an hour (rainIntensity). */
     rainRate?: number;
 }
-
-/**
- * How much snow lies on the ground and on the trees of the map, 0 to 1. None for now: snow is what a precipitation
- * becomes in cold air (snowShare), and what holds once fallen has to follow from what fell and from the cold of the
- * ground, kept by the server for everyone. Until then nothing whitens: the trees keep their snow drawing for that day.
- */
-export function mapSnowCoverage(): number {
-    return 0;
-}

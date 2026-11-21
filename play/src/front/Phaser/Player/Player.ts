@@ -1006,6 +1006,7 @@ export class Player extends Character {
             this.scene.time.now,
             meadow ? (x, y) => meadow.moistureAt(x, y) : undefined,
             this.scene.getGroundSeason?.(),
+            (x, y) => this.scene.getSnowCoverAt?.(x, y) ?? 0,
         );
     }
 

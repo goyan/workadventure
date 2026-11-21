@@ -24,7 +24,7 @@ vi.mock("../../../../../src/front/Phaser/Game/Weather/RealWeatherClient", () => 
     showsChosenPlaceWeather: () => chosen.now.place !== undefined && !map.previewing,
 }));
 
-const { airAt, drawnPrecipitationAir, precipitationAirNow } =
+const { airAt, drawnPrecipitationAir, precipitationAirNow, roomPrecipitationAir } =
     await import("../../../../../src/front/Phaser/Game/Weather/PrecipitationAir");
 const { fireConditionsStore } = await import("../../../../../src/front/Stores/FireConditionsStore");
 const { weatherForecast } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherForecast");
@@ -134,6 +134,16 @@ describe("precipitationAirNow", () => {
         chosen.now = { place: lyon, state: timeline(20, 40) };
         expect(read()).toEqual({ temperature: 20, humidity: 40 });
         expect(snowShareOf(read())).toBe(0);
+    });
+
+    it("has an air of the room that ignores the city this player follows: a catastrophe is the room's", () => {
+        const room = () => roomPrecipitationAir({ weather: WeatherType.Rain }, new Date(NOW));
+        chosen.now = { place: lyon, state: timeline(20, 50) };
+        map.timeline = timeline(12, 80);
+        expect(room()).toEqual({ temperature: 12, humidity: 80 });
+        fireConditionsStore.set(byHand);
+        expect(room()).toEqual({ temperature: -4, humidity: 70 });
+        expect(roomPrecipitationAir({ weather: WeatherType.Rain }, undefined)).toBeUndefined();
     });
 
     it("is read once a second of the game clock for the same map settings", () => {

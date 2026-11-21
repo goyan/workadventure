@@ -336,8 +336,8 @@ import { wallBarriers } from "./MapEditor/MapLayer/MapLayerBarriers";
 import { readMapLayerEntityStates } from "./MapEditor/MapLayer/MapLayerSync";
 import { autumnProgress } from "./Nature/TreeLeafFall";
 import { isGroundUnderWater } from "./Water/WaterZones";
-import { mapSnowCoverage } from "./Weather/SnowCover";
-import { precipitationAirNow } from "./Weather/PrecipitationAir";
+import { snowCoverHere, snowCoverOfMap } from "./Weather/GroundSource";
+import { precipitationAirNow, roomPrecipitationAir } from "./Weather/PrecipitationAir";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
 import { gameManager } from "./GameManager";
 import { EmoteManager } from "./EmoteManager";
@@ -3034,12 +3034,13 @@ export class GameScene extends DirtyScene {
                 // The dryness, the fire and the ash are empty from a server that does not know them.
                 const read = (bytes: Uint8Array): Promise<Uint8Array> =>
                     bytes.length > 0 ? gunzip(bytes) : Promise.resolve(new Uint8Array(0));
-                const [grass, moisture, dryness, fire, ash] = await Promise.all([
+                const [grass, moisture, dryness, fire, ash, snow] = await Promise.all([
                     gunzip(message.grass),
                     gunzip(message.moisture),
                     read(message.dryness),
                     read(message.fire),
                     read(message.ash),
+                    read(message.snow),
                 ]);
                 this.meadow.receive({
                     width: message.width,
@@ -3049,6 +3050,7 @@ export class GameScene extends DirtyScene {
                     dryness,
                     fire,
                     ash,
+                    snow,
                 });
             })
             .catch((error: unknown) => console.warn("A state of the meadow of the map could not be read", error));
@@ -3182,9 +3184,17 @@ export class GameScene extends DirtyScene {
         );
     }
 
-    /** How much snow lies on the map, 0 to 1 (none for now, see mapSnowCoverage): the ground and the trees whiten with it. */
+    /**
+     * How much snow lies on the map for this player, 0 to 1 (the snow the server keeps, see GroundSource): the trees
+     * and the ice whiten with it.
+     */
     public getMapSnowCoverage(): number {
-        return mapSnowCoverage();
+        return snowCoverOfMap(this.meadow);
+    }
+
+    /** How much the snow that fell whitens the ground at a point of the map for this player, 0 to 1: it slows the walk. */
+    public getSnowCoverAt(x: number, y: number): number {
+        return snowCoverHere(this.meadow, x, y);
     }
 
     public getGameMap(): GameMap {
@@ -4382,6 +4392,14 @@ export class GameScene extends DirtyScene {
         const downpourView = new DownpourView(
             this,
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+            // In the cold of the room a downpour falls as snow, for everyone as for the server.
+            () =>
+                snowShareOf(
+                    roomPrecipitationAir(
+                        this.getGameMap().getWamFile()?.getWam().settings,
+                        this.nightManager?.serverDate(),
+                    ),
+                ),
         );
         this.downpourView = downpourView;
         this.drainView?.destroy();

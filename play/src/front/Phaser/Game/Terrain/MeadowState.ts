@@ -1,4 +1,4 @@
-import { TILE_PX } from "@workadventure/map-editor";
+import { snowCoverOf, snowMmOfByte, TILE_PX } from "@workadventure/map-editor";
 
 /** The colour of the grass, and how much of the ground a full meadow covers. */
 export const GRASS_COLOR = 0x4c9a2a;
@@ -82,6 +82,9 @@ export class MeadowState {
     private dryness: Uint8Array = new Uint8Array(0);
     private fire: Uint8Array = new Uint8Array(0);
     private ash: Uint8Array = new Uint8Array(0);
+    /** The snow lying on each tile (snowByte); empty when none lies on the map. */
+    private snow: Uint8Array = new Uint8Array(0);
+    private meanSnow = 0;
     private anyFire = false;
     private any = false;
     private anyDry = false;
@@ -98,6 +101,8 @@ export class MeadowState {
         /** The fire and the ash of each tile; absent or empty from a server that knows no fire. */
         fire?: Uint8Array;
         ash?: Uint8Array;
+        /** The snow lying on each tile; absent or empty when none lies, or from a server that keeps none. */
+        snow?: Uint8Array;
     }): void {
         const tiles = state.width * state.height;
         if (!Number.isInteger(tiles) || tiles < 0 || state.grass.length !== tiles || state.moisture.length !== tiles) {
@@ -110,6 +115,10 @@ export class MeadowState {
         this.dryness = state.dryness?.length === tiles ? state.dryness : new Uint8Array(tiles);
         this.fire = state.fire?.length === tiles ? state.fire : new Uint8Array(tiles);
         this.ash = state.ash?.length === tiles ? state.ash : new Uint8Array(tiles);
+        this.snow = state.snow?.length === tiles ? state.snow : new Uint8Array(0);
+        let covered = 0;
+        for (const byte of this.snow) covered += snowCoverOf(snowMmOfByte(byte));
+        this.meanSnow = tiles > 0 ? covered / tiles : 0;
         this.anyFire = this.fire.some((fire) => fire > 0);
         this.any = state.grass.some((cover) => cover > 0);
         // A ground gone dry, burning or burnt is drawn even where no grass is left.
@@ -155,6 +164,26 @@ export class MeadowState {
     /** The grass at a point of the map (map pixels), from 0 (bare) to 1 (a full meadow). */
     public coverAt(x: number, y: number): number {
         return this.grassAt(Math.floor(x / TILE_PX), Math.floor(y / TILE_PX)) / 255;
+    }
+
+    /** The snow lying on a tile, in mm of water. */
+    public snowAt(tileX: number, tileY: number): number {
+        return this.snow.length === 0 ? 0 : snowMmOfByte(this.at(this.snow, tileX, tileY));
+    }
+
+    /** How much the snow whitens the ground at a point of the map (map pixels), 0 to 1. */
+    public snowCoverAt(x: number, y: number): number {
+        return snowCoverOf(this.snowAt(Math.floor(x / TILE_PX), Math.floor(y / TILE_PX)));
+    }
+
+    /** How much of the map the snow whitens, 0 to 1: the mean over its tiles. */
+    public meanSnowCover(): number {
+        return this.meanSnow;
+    }
+
+    /** Whether any snow lies on the map. */
+    public hasSnow(): boolean {
+        return this.meanSnow > 0;
     }
 
     /** Whether any grass grows on the map, or any of its ground is dry: nothing to draw otherwise. */

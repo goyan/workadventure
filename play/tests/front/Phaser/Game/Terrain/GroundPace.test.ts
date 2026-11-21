@@ -51,4 +51,14 @@ describe("groundPace", () => {
         );
         expect(groundPace({ relief: () => bare, depthAt: () => 0 }, 24, 24, 0, undefined, Season.Spring)).toBe(1);
     });
+
+    it("slows the walk in the snow that fell, with or without relief", () => {
+        const snowAt = (x: number): number => (x < 100 ? 1 : 0);
+        expect(groundPace(water(0), 600, 600, 0, undefined, undefined, snowAt)).toBe(1);
+        expect(groundPace(water(0), 50, 600, 0, undefined, undefined, snowAt)).toBeCloseTo(SNOW_PACE);
+        expect(groundPace(undefined, 50, 600, 0, undefined, undefined, snowAt)).toBeCloseTo(SNOW_PACE);
+        expect(
+            groundPace({ relief: () => undefined, depthAt: () => 0 }, 50, 600, 0, undefined, undefined, snowAt),
+        ).toBeCloseTo(SNOW_PACE);
+    });
 });

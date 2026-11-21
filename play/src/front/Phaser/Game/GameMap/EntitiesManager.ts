@@ -23,7 +23,6 @@ import { FLOOR_PREVIEW_DEPTH } from "../MapEditor/MapLayer/FloorDepth";
 import type { PlacedFloorPiece } from "../MapEditor/MapLayer/FloorModel";
 import { mapEditorPlacementLevelStore } from "../../../Stores/MapEditorStore";
 import { placementElevation } from "../Floors/FloorPlacement";
-import { mapSnowCoverage } from "../Weather/SnowCover";
 import { entityPlacementBlockerStore } from "../../../Stores/MapEditorStore";
 import { getTileCollisionGrid, reverseCollisionGrid } from "../../../Utils/EntityHitbox";
 import { actionsMenuStore } from "../../../Stores/ActionsMenuStore";
@@ -264,8 +263,8 @@ export class EntitiesManager extends EventEmitter {
         if (time < this.nextSeasonCheck && forcedSeason === this.lastForcedSeason && !outdoorsChanged) return;
         this.lastForcedSeason = forcedSeason;
         this.lastOutdoorVersion = outdoorVersion;
-        // The snow lying on the map (none for now, see mapSnowCoverage): the trees whiten with it.
-        const coverage = mapSnowCoverage();
+        // The snow lying on the map (the one the server keeps, see GroundSource): the trees whiten with it.
+        const coverage = this.scene.getMapSnowCoverage?.() ?? 0;
         // While the snow settles or melts, the trees follow the ground every few seconds rather than every minute.
         this.nextSeasonCheck =
             coverage > 0 && coverage < 1 ? time + SETTLING_CHECK_MS : time + 60_000 - (serverDate.getTime() % 60_000);

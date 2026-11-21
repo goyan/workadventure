@@ -21,6 +21,7 @@ export * from "./EntityStates";
 export * from "./Terrain/Scale";
 export * from "./Terrain/Meadow";
 export * from "./Terrain/Bridges";
+export * from "./Terrain/Snow";
 export * from "./Terrain/SnowLine";
 export * from "./Terrain/Soils";
 export * from "./Terrain/Pools";

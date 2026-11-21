@@ -3000,16 +3000,14 @@ couverture de neige au sol et les arbres qui blanchissent décrit l'état d'avan
   proportion. Bandeau : une pluie dont au moins la moitié tombe en neige est nommée « Neige », d'après la température
   et l'humidité réelles prévues au lieu pour chaque quart d'heure (maintenant, +1 h, +4 h), ou d'après les conditions
   réglées à la main pour « maintenant ».
-- **Sol et arbres.** Plus rien ne blanchit : le décor de neige (`Christmas/` : sol uni, calottes, empreintes) n'est
-  plus affiché, les arbres gardent l'image de leur saison, et la couche de neige du sol en shader (#392) reste vide
-  (`mapSnowCoverage` et `GameScene.getMapSnowCoverage` rendent 0). Ce code reste, débranché : il servira à la neige
-  qui tient vraiment (étape suivante : neige accumulée par le serveur d'après ce qui tombe et le froid). Le givre et
-  le gel de #392 sont inchangés. La neige des hauteurs du relief (`Terrain/SnowLine.ts`)
+- **Sol et arbres.** La neige qui tombe tient au sol depuis le lot « Neige au sol » (section suivante) : le sol
+  blanchit case par case et les arbres avec la couverture moyenne de la carte. Le décor de neige uni (`Christmas/` :
+  sol uni, calottes, empreintes) reste débranché. Le givre et le gel de #392 sont inchangés. La neige des hauteurs du relief (`Terrain/SnowLine.ts`)
   est inchangée ; elle suit l'altitude et la saison, pas la température.
 - **Serveur.** L'eau du relief et l'humidité du pré ne reçoivent que la part liquide (`liquidRainRate`,
   `fallThrough`, air lu par `FireConditionsManager.air` : réglé à la main, sinon réel au lieu de la carte dans tous
-  les modes ; le serveur a sa propre frise Open-Meteo, un léger écart avec celle des navigateurs est possible) : ce qui tombe en neige n'apporte pas d'eau, comme l'ancienne météo Neige, qui comptait pour zéro. La
-  fonte n'existe pas encore : cette eau est perdue.
+  les modes ; le serveur a sa propre frise Open-Meteo, un léger écart avec celle des navigateurs est possible) : ce qui tombe en neige n'apporte pas d'eau tout de suite : elle tient au sol et rend cette eau en fondant
+  (section suivante).
 - **Limites.** Rien n'est lissé dans le temps (la forme suit les conditions du quart d'heure) ; le thermomètre mouillé
   au sol ignore une couche chaude en altitude (une pluie verglaçante réelle est dessinée en neige) ; les flaques se
   remplissent encore sous la neige.
@@ -3031,6 +3029,52 @@ Inchangés : la pluie liquide encore absorbée (à −1 °C presque tout tombe e
 repose, les berges (`drinkFromBanks` ne fait que remonter l'humidité), la noyade, la neige des hauteurs (saison et
 altitude), le feu en cours, le départ spontané (le danger est nul par ce froid), le broutage. Pas de manteau neigeux
 ni de fonte dans ce lot (voir la #417). Rien côté navigateur. `back` seul change de comportement.
+
+### Neige au sol : elle s'accumule, blanchit, fond et rend son eau
+
+Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus : le serveur le garde case par case.
+
+- **Faire neiger.** Deux gestes : régler le froid dans Catastrophe → Météo (0 °C ou moins, ou quelques degrés par air
+  sec), puis lancer l'averse. Il n'y a pas de catastrophe « Neige » : la forme suit l'air, comme pour la pluie de la
+  carte. La pluie de la carte par temps froid s'accumule de la même façon, sur toute la carte.
+- **Modèle** (`libs/map-editor/src/Terrain/Snow.ts`, champ `snow` de `Meadow`). Une couche par case de 32 px, en
+  millimètres d'équivalent en eau, de 0 à 600 mm, dehors seulement. Sol tout blanc à partir de 15 mm.
+  - Fonte : `max(0, T) × 0,2 × (1 + vent / 20) × (0,5 + humidité / 100)` mm/h ; la pluie qui tombe dessus en fait
+    fondre un dixième de son volume par °C au-dessus de 0.
+  - Sublimation : `0,02 × vent × (1 − humidité / 100)` mm/h, à toute température, sans eau.
+  - Le temps de la neige court 600 fois plus vite que le réel (`THAW_SPEED`) : 15 mm fondent en une minute environ à
+    10 °C sans vent. Constante à régler à l'essai.
+  - Le feu fait fondre la neige autour de lui, même par temps de gel (`Meadow.warm`) : une case en feu chauffe sa
+    case et les huit voisines (15 mm par seconde à pleine flamme), un arbre en feu deux cases autour de son pied, la
+    catastrophe « feu » 60 mm par touche sous son disque. Cette fonte ne mouille pas le sol (le feu le sèche) ; son
+    eau va quand même à l'eau du relief. À l'inverse une neige qui tombe plus vite qu'elle ne fond étouffe le feu :
+    case en feu éteinte dès qu'il y reste de la neige, arbre éteint sous une couverture pleine (15 mm).
+  - Sur une eau libre, la neige fond aussitôt en eau quand l'air est au-dessus de 0 °C (ou inconnu) ; à 0 °C et
+    moins elle tient sur l'eau, comme sur une glace. Une case enneigée ne prend pas feu ; l'herbe y dort (elle ne
+    meurt pas de soif et ne pousse pas), à la différence de la neige des hauteurs, sous laquelle elle meurt.
+- **Eau de fonte.** Ce qui fond humidifie le sol de sa case comme la même pluie le ferait, et est versé dans l'eau du
+  relief, millimètre pour millimètre (`PX_PER_MM`, `TerrainWaterManager.pour`), compté avec la pluie dans le bilan. Hors de la grille d'eau, le sol est humidifié et le
+  reste est perdu. La neige de la pluie de la carte s'accumule à la vitesse de l'eau de la carte (`water.speed`),
+  sans le ruissellement (`runoff`) : elle tient où elle tombe.
+- **Averse à l'écran.** Par temps froid, l'averse tombe en flocons au lieu de gouttes (`downpourFlakes`, mélange des
+  deux dans l'entre-deux, nuage plus clair, sol qui pâlit au lieu de s'assombrir), d'après l'air de la salle
+  (`roomPrecipitationAir` : réglage manuel, sinon lieu de la carte), le même pour tous les joueurs et pour le serveur,
+  même pour qui suit sa propre ville : une catastrophe est celle de la salle.
+- **Averse.** `MeadowManager.soak` pose la part de neige à chaque annonce de l'averse (toutes les 200 ms), la part
+  liquide seule va à l'eau (`pourDownpours`). Un météore brûlant vaporise la neige de son cratère (perdue).
+- **Annonce.** `MeadowMessage.snow` (champ 8) : un octet par case (`snowByte`, racine carrée pour garder de la finesse
+  près de zéro), gzip, vide quand aucune neige ne tient. Annoncé toutes les 2 s tant que la neige tombe ou fond.
+  Gardé dans Redis avec le pré. Une carte dont l'herbe est coupée garde sa neige (`Meadow.stepSnowAlone`).
+- **Navigateur.** `MeadowState` lit la neige ; `TerrainView` l'envoie au canal neige du sol en shader (le plus fort
+  de la neige des hauteurs et de la neige tombée), avec un repli en voile blanc sans shader. La marche ralentit
+  (`groundPace`, comme la neige des hauteurs) et les arbres blanchissent avec la couverture moyenne de la carte.
+- **Deux modes** (`Weather/GroundSource.ts`). Un joueur qui suit le temps du serveur voit la neige du serveur. Un
+  joueur qui suit sa propre ville (météo personnelle de #392) n'en voit rien et ne la ralentit pas : son monde reste
+  local. L'eau, elle, est commune : il peut voir monter une eau de fonte sans avoir vu la neige.
+- **Limites.** La glace reste celle de #392 (personnelle, côté navigateur) : le serveur ne la connaît pas. La neige
+  tient sur l'eau dès 0 °C, même là où cette glace n'a pas encore gagné l'eau profonde à l'écran. Pas de neige locale en météo personnelle. Pas
+  d'empreintes dans la neige tombée. Sur une carte sans relief ni grille d'eau, l'eau de fonte ne fait qu'humidifier
+  le sol. `play` et `back` se déploient ensemble.
 
 ### Arbres : feuilles d'automne et neige
 
