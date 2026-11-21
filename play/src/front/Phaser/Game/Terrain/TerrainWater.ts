@@ -272,6 +272,36 @@ export class TerrainWater {
     }
 
     /**
+     * The depth of the water over the cells of an area (`columns` × `rows` cells from the cell `cellX`, `cellY`) at
+     * this time of the game, written into `depths`: its pixels as they are, however thin or deep; 0 where it is dry.
+     * For the surface of the water seen in 3/4 (the levels of `levelsOver` stop at 255 px).
+     */
+    public depthsOver(
+        cellX: number,
+        cellY: number,
+        columns: number,
+        rows: number,
+        now: number,
+        depths: Float32Array,
+    ): void {
+        depths.fill(0);
+        const share = this.share(now);
+        const { from, to, grid } = this;
+        const firstRow = Math.max(0, grid.y - cellY);
+        const lastRow = Math.min(rows, grid.y + grid.height - cellY);
+        const firstColumn = Math.max(0, grid.x - cellX);
+        const lastColumn = Math.min(columns, grid.x + grid.width - cellX);
+        for (let row = firstRow; row < lastRow; row++) {
+            const gridLine = (row + cellY - grid.y) * grid.width + (cellX - grid.x);
+            const line = row * columns;
+            for (let column = firstColumn; column < lastColumn; column++) {
+                const start = from[gridLine + column];
+                depths[line + column] = start + (to[gridLine + column] - start) * share;
+            }
+        }
+    }
+
+    /**
      * How far the water has glided from the state before to the last one. The glide lasts as long as the server
      * took between the two (a second, or less on a map told more often, or under a wave): gliding for a second
      * to a state that came a fifth of a second after the one before would leave the water a second late.

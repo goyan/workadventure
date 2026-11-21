@@ -1,3 +1,5 @@
+import { heightAt } from "@workadventure/map-editor";
+import type { TerrainData } from "@workadventure/map-editor";
 import { MAX_DROP, MAX_RISE, shiftOfHeight } from "./Pixel/ColumnPainter";
 
 /**
@@ -23,6 +25,51 @@ export function encodeHeight(height: number): [high: number, low: number] {
  */
 export function decodeHeight(high: number, low: number): number {
     return (high * 256 + low) / HEIGHT_SCALE - HEIGHT_OFFSET;
+}
+
+/** The exact height of the ground of each cell of an area (`columns` × `rows` cells from the cell `cellX`, `cellY`). */
+export function heightsOver(
+    terrain: TerrainData | undefined,
+    cellX: number,
+    cellY: number,
+    columns: number,
+    rows: number,
+): Float32Array {
+    const heights = new Float32Array(columns * rows);
+    if (!terrain) return heights;
+    for (let row = 0; row < rows; row++) {
+        for (let column = 0; column < columns; column++) {
+            heights[row * columns + column] = heightAt(terrain, cellX + column, cellY + row);
+        }
+    }
+    return heights;
+}
+
+/**
+ * The picture of the heights the shaders read in 3/4: two packs side by side, a pixel a cell, the ground (0) then the
+ * surface of what is seen (1: the ground, or the water over it). Where a cell of a pack is in its bytes (its red one).
+ */
+export function heightTexel(pack: 0 | 1, cell: number, columns: number): number {
+    const row = Math.floor(cell / columns);
+    return (row * columns * 2 + pack * columns + (cell % columns)) * 4;
+}
+
+/** Writes the heights of the cells of an area in a pack of that picture: two bytes each, opaque. */
+export function writeHeights(
+    data: Uint8ClampedArray,
+    pack: 0 | 1,
+    heights: ArrayLike<number>,
+    columns: number,
+    rows: number,
+): void {
+    for (let cell = 0; cell < columns * rows; cell++) {
+        const at = heightTexel(pack, cell, columns);
+        const [high, low] = encodeHeight(heights[cell] ?? 0);
+        data[at] = high;
+        data[at + 1] = low;
+        data[at + 2] = 0;
+        data[at + 3] = 255;
+    }
 }
 
 /** The row of the screen (in map pixels) a point of the map is drawn at, given the height of what is seen there. */

@@ -2,7 +2,15 @@ import { describe, expect, it } from "vitest";
 import { cellKey, heightAt, TERRAIN_CELL, withHeights } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 import { waterDepthAtPoint } from "../../../../../src/front/Phaser/Game/Terrain/AvatarDrop";
-import { decodeHeight, encodeHeight, rowOf, seenPoint } from "../../../../../src/front/Phaser/Game/Terrain/ObliqueView";
+import {
+    decodeHeight,
+    encodeHeight,
+    heightsOver,
+    heightTexel,
+    rowOf,
+    seenPoint,
+    writeHeights,
+} from "../../../../../src/front/Phaser/Game/Terrain/ObliqueView";
 import { groundPointAt, heightAtPoint, shiftAt } from "../../../../../src/front/Phaser/Game/Terrain/ReliefProjection";
 
 /** A relief of cells 10 to 13 across and 10 to 21 down, all at this height: a hollow under 0, a mount over it. */
@@ -51,6 +59,45 @@ describe("a height kept on two bytes for the shader", () => {
             const blended = decodeHeight((highA + highB) / 2, (lowA + lowB) / 2);
             expect(Math.abs(blended - (a + b) / 2)).toBeLessThanOrEqual(1 / 16);
         }
+    });
+});
+
+describe("the heights sent to the shaders", () => {
+    it("are those of the cells of the area, as the map keeps them: not clipped at 255", () => {
+        const terrain = withHeights(
+            undefined,
+            new Map([
+                [cellKey(10, 10), -256],
+                [cellKey(11, 10), 256],
+                [cellKey(10, 11), 13],
+            ]),
+        );
+        // 3 × 2 cells from the cell (10, 10).
+        expect([...heightsOver(terrain, 10, 10, 3, 2)]).toEqual([-256, 256, 0, 13, 0, 0]);
+        expect([...heightsOver(undefined, 10, 10, 2, 1)]).toEqual([0, 0]);
+    });
+
+    it("are written in their own picture, the ground beside the surface, each cell on two bytes", () => {
+        const columns = 3;
+        const rows = 2;
+        const data = new Uint8ClampedArray(columns * 2 * rows * 4).fill(7);
+        const ground = Float32Array.from([-256, 256, 0, 12.5, 0, 0]);
+        const surface = Float32Array.from([-216, 256, 0, 12.5, 300.25, 0]);
+        writeHeights(data, 0, ground, columns, rows);
+        writeHeights(data, 1, surface, columns, rows);
+        for (let cell = 0; cell < columns * rows; cell++) {
+            const groundAt = heightTexel(0, cell, columns);
+            const surfaceAt = heightTexel(1, cell, columns);
+            expect(decodeHeight(data[groundAt], data[groundAt + 1])).toBeCloseTo(ground[cell], 1);
+            expect(decodeHeight(data[surfaceAt], data[surfaceAt + 1])).toBeCloseTo(surface[cell], 1);
+            // Opaque: a canvas keeps its colours premultiplied.
+            expect(data[groundAt + 3]).toBe(255);
+            expect(data[surfaceAt + 3]).toBe(255);
+        }
+        // The ground of the cell (1, 0) is the second pixel of the first line; its surface is three pixels further.
+        expect(heightTexel(0, 1, columns)).toBe(4);
+        expect(heightTexel(1, 1, columns)).toBe(16);
+        expect(heightTexel(0, 3, columns)).toBe(24);
     });
 });
 

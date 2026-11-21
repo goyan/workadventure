@@ -122,6 +122,26 @@ describe("TerrainWater", () => {
         expect(levels[0]).toBe(15);
     });
 
+    it("gives the depth of the water over the cells of an area as it is, however deep, gliding between two states", () => {
+        const water = new TerrainWater();
+        water.setTerrain(pit);
+        water.receive(full(1, { "0,0": 300, "1,0": 0.125 }), 0);
+        // An area of 3 × 2 cells whose corner is the cell (0, 0); the cell (2, 1) is out of the grid of the water.
+        const depths = new Float32Array(6).fill(9);
+        water.depthsOver(0, 0, 3, 2, 5000, depths);
+        expect([...depths]).toEqual([300, 0.125, 0, 0, 0, 0]);
+        // Where the levels drawn flat stop at 255.
+        const levels = new Uint8Array(6);
+        water.levelsOver(0, 0, 3, 2, 5000, levels);
+        expect(levels[0]).toBe(255);
+        // Gliding to the next state.
+        water.receive(full(2, { "0,0": 100, "1,0": 0.125 }), 10_000);
+        water.depthsOver(0, 0, 3, 2, 10_000, depths);
+        expect(depths[0]).toBe(300);
+        water.depthsOver(0, 0, 3, 2, 20_000, depths);
+        expect(depths[0]).toBe(100);
+    });
+
     it("says when what it shows changed: the relief, a state, or the water gliding", () => {
         const water = new TerrainWater();
         const empty = water.drawKey(0);
