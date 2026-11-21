@@ -44,14 +44,15 @@ const SHORE_GAIN = 12;
 /**
  * The reflectance of a ground soaked, against the same ground dry (linear, visible light). Porous soils lose about
  * half of it: 0.4 to 0.6 for soils (Lobell & Asner 2002, Soil Sci. Soc. Am. J. 66:722), a loam's albedo from about
- * 0.30 dry to 0.14 wet (Idso et al. 1975, J. Appl. Meteorol. 14:109), sand about 0.4 dry and 0.23 wet. Rock, gravel and
+ * 0.30 dry to 0.14 wet (Idso et al. 1975, J. Appl. Meteorol. 14:109), sand about 0.4 dry and 0.23 wet; 0.45 for a beach sand,
+ * the darker end of the soils, so that a wet beach reads at once as it does. Rock, gravel and
  * grass are a choice, not sourced: a stone does not drink (a film only), the blades of grass are not porous.
  */
 export const WET_REFLECTANCE = {
     earth: 0.54,
     meadow: 0.54,
     clay: 0.48,
-    sand: 0.55,
+    sand: 0.45,
     rock: 0.8,
     gravel: 0.65,
     grass: 0.9,
@@ -65,7 +66,15 @@ const LUMA = [0.2126, 0.7152, 0.0722] as const;
  */
 const WET_DEEPENING = 0.5;
 /** How fast the reflectance falls with the moisture of the soil (0 to 1): most of the darkening by half of it. */
-const MOISTURE_CURVE = 3;
+const MOISTURE_CURVE = 6;
+/**
+ * The moisture of a soil (0 to 1, Meadow.ts) from which its surface is wet. The server keeps the water of the soil, the
+ * eye sees its first millimetres, which dry first: under this the water is in the depth and the surface is dry and
+ * light, over it the surface is wet and soon as dark as it gets. A clear wet line, as on a beach: a choice, not sourced.
+ */
+export const SURFACE_WET_MOISTURE = 0.25;
+/** How sharp the wet line is: the moisture over which it goes from dry to wet, bent by the noise of the edges, is 1/this. */
+const WET_LINE_GAIN = 3;
 /** A number as GLSL reads it. */
 const glsl = (value: number): string => value.toFixed(4);
 /** How strong the dark of the hollows and the light of the mounts are, against the bare relief: the water and the
@@ -155,9 +164,12 @@ float bend(float level, float noise, float strength) {
 
 // How wet the soil is from its moisture as the server keeps it (pack 9, green): fast with the first water, then level
 // (groundWetness is the twin of this rule).
-float soakedAt(vec2 world) {
-    float moisture = pack(9.0, world).g;
+float soakedOf(float moisture) {
     return (1.0 - exp(-${MOISTURE_CURVE}.0 * moisture)) / (1.0 - exp(-${MOISTURE_CURVE}.0));
+}
+
+float soakedAt(vec2 world) {
+    return soakedOf(pack(9.0, world).g);
 }
 `;
 
@@ -323,12 +335,12 @@ void main() {
     // The rain darkens the grounds the shaders paint, as before; the moisture and the water, those of the server,
     // wet the tiles of the map too.
     float rain = outColor.a > 0.002 ? uWet * outdoors : 0.0;
-    // The moisture is kept a tile (32 px) at a time: read over a tile around, so that it fades without the steps of
-    // the tiles, and its edge bent by the same noise as the edges of the soils.
-    float soaked = 0.25 * (soakedAt(world + vec2(8.0, 8.0)) + soakedAt(world + vec2(-8.0, 8.0))
-        + soakedAt(world + vec2(8.0, -8.0)) + soakedAt(world + vec2(-8.0, -8.0)));
-    float moistEdge = step(0.5, bend(clamp(soaked * 4.0, 0.0, 1.0), edgeNoise, 1.5));
-    float wet = min(1.0, max(max(rain, soaked * moistEdge), pack(8.0, world).b));
+    // The surface is wet from SURFACE_WET_MOISTURE on (groundWetness): a clear line, smoothed between the tiles the
+    // server keeps it by and bent by the same noise as the edges of the soils; past it, soon as dark as it gets.
+    float moisture = pack(9.0, world).g;
+    float line = clamp((moisture - ${glsl(SURFACE_WET_MOISTURE)}) * ${glsl(WET_LINE_GAIN)} + 0.5, 0.0, 1.0);
+    float surface = step(0.5, bend(line, edgeNoise, 1.5));
+    float wet = min(1.0, max(max(rain, surface * soakedOf(moisture)), pack(8.0, world).b));
     if (wet > 0.001) {
         // The colour deepens (wetColour), it is not veiled; over a ground the shaders do not paint (the tiles of the
         // map, whose colour the shader does not know), a veil of the darkening of a wet earth.
@@ -1079,7 +1091,10 @@ export function wetColor(colour: readonly number[], reflectance: number, wet: nu
 }
 
 export function groundWetness(rain: number, moisture: number, present: number): number {
-    const soaked = (1 - Math.exp(-MOISTURE_CURVE * moisture)) / (1 - Math.exp(-MOISTURE_CURVE));
+    const soaked =
+        moisture >= SURFACE_WET_MOISTURE
+            ? (1 - Math.exp(-MOISTURE_CURVE * moisture)) / (1 - Math.exp(-MOISTURE_CURVE))
+            : 0;
     return Math.min(1, Math.max(rain, soaked, present));
 }
 
