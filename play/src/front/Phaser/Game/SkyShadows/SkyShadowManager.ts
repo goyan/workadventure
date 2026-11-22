@@ -52,7 +52,7 @@ export interface SkyShadowScene {
  */
 export class SkyShadowManager {
     private readonly layer: SkyShadowLayer;
-    private casters: ShadowCasters = { boxes: [], trees: [], details: [] };
+    private casters: ShadowCasters = { boxes: [], trees: [], details: [], plates: [], slopes: [] };
     private castersSignature = "";
     private castersReadAt: number | undefined;
     private drawn: DrawnShadows | undefined;
@@ -208,6 +208,16 @@ export class SkyShadowManager {
                     return bend === 0 ? tree : { ...tree, bend };
                 }),
                 details: (this.casters.details ?? []).filter(nearTree),
+                plates: (this.casters.plates ?? []).filter((plate) =>
+                    near(plate.x, plate.y, plate.width, plate.height),
+                ),
+                slopes: (this.casters.slopes ?? []).filter((slope) => {
+                    const xs = [slope.low[0].x, slope.low[1].x, slope.high[0].x, slope.high[1].x];
+                    const ys = [slope.low[0].y, slope.low[1].y, slope.high[0].y, slope.high[1].y];
+                    const left = Math.min(...xs);
+                    const top = Math.min(...ys);
+                    return near(left, top, Math.max(...xs) - left, Math.max(...ys) - top);
+                }),
             },
             light,
         );

@@ -12,6 +12,12 @@ import type { SnowWeather } from "./Snow";
 export const ICE_BEARS_MM = 50;
 /** From this thickness (mm) the ice is slipped on, as a rink: a frozen puddle, black ice on a flooded ground. */
 export const ICE_SLIPS_MM = 5;
+/**
+ * How many times faster than the clock of the snow (THAW_SPEED) the ice thickens: on that clock alone a player would
+ * wait three minutes at -3 °C for the ice to bear them; twice as fast, a minute and a half. Its thaw keeps the clock
+ * of the snow.
+ */
+export const ICE_GROWTH_TIMES = 2;
 /** The thickest ice a tile holds, in mm. */
 export const ICE_MAX_MM = 1000;
 

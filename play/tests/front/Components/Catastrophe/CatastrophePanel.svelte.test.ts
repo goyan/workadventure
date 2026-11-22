@@ -108,18 +108,18 @@ describe("CatastrophePanel", () => {
         expect(target.textContent).toContain("Click on the map · Esc to cancel");
     });
 
-    it("chooses the size of the meteor, from 2 to 24 tiles", () => {
+    it("chooses the size of the comet and of the meteor, from 1 to 8 tiles", () => {
         render();
         const slider = target.querySelector<HTMLInputElement>('[data-testid="catastrophe-meteor-size"]');
-        expect(slider?.min).toBe("2");
-        expect(slider?.max).toBe("24");
+        expect(slider?.min).toBe("1");
+        expect(slider?.max).toBe("8");
         expect(target.textContent).toContain("4 tiles");
         if (!slider) throw new Error("no slider");
-        slider.value = "12";
+        slider.value = "7";
         slider.dispatchEvent(new Event("input", { bubbles: true }));
         flushSync();
-        expect(get(meteorRadiusTilesStore)).toBe(12);
-        expect(target.textContent).toContain("12 tiles");
+        expect(get(meteorRadiusTilesStore)).toBe(7);
+        expect(target.textContent).toContain("7 tiles");
         meteorRadiusTilesStore.set(4);
     });
 

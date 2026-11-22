@@ -4,11 +4,16 @@ export interface WalkerSample {
     x: number;
     y: number;
     running: boolean;
+    /**
+     * The tracks the wheels of their vehicle leave, when they ride: 1 for an electric unicycle, 2 close ones for a
+     * skateboard. They roll: lines, no steps.
+     */
+    wheels?: 1 | 2;
 }
 
 export type FootprintMark =
     | { kind: "step"; x: number; y: number; angle: number; side: -1 | 1 }
-    | { kind: "trail"; x1: number; y1: number; x2: number; y2: number };
+    | { kind: "trail"; x1: number; y1: number; x2: number; y2: number; width?: number };
 
 export const FOOTPRINT_STEP_PX = 16;
 export const FOOTPRINT_JUMP_PX = 64;
@@ -23,6 +28,10 @@ export const FOOTPRINT_MAX_SPEED_PX_PER_MS = 1.2;
 const TRAIL_SEGMENT_PX = 8;
 /** Steps sit left and right of the path. */
 const STEP_SIDE_OFFSET_PX = 3;
+/** The two wheels of a skateboard roll this far either side of its middle. */
+const WHEEL_SIDE_OFFSET_PX = 2.5;
+/** The track of a wheel, thinner than the trail of a runner: the two of a skateboard stay apart. */
+const WHEEL_TRACK_PX = 1.5;
 
 interface WalkerState {
     x: number;
@@ -72,10 +81,24 @@ export class FootprintTrail {
             if (moved === 0) continue;
             state.x = sample.x;
             state.y = sample.y;
-            if (sample.running) {
-                if (Math.hypot(sample.x - state.trailX, sample.y - state.trailY) >= TRAIL_SEGMENT_PX) {
+            if (sample.running || sample.wheels) {
+                const length = Math.hypot(sample.x - state.trailX, sample.y - state.trailY);
+                if (length >= TRAIL_SEGMENT_PX) {
                     if (this.isOutdoor(state.trailX, state.trailY) && this.isOutdoor(sample.x, sample.y)) {
-                        marks.push({ kind: "trail", x1: state.trailX, y1: state.trailY, x2: sample.x, y2: sample.y });
+                        // Across the way: the tracks of two wheels side by side, one line otherwise.
+                        const acrossX = -(sample.y - state.trailY) / length;
+                        const acrossY = (sample.x - state.trailX) / length;
+                        const offsets = sample.wheels === 2 ? [-WHEEL_SIDE_OFFSET_PX, WHEEL_SIDE_OFFSET_PX] : [0];
+                        for (const offset of offsets) {
+                            marks.push({
+                                kind: "trail",
+                                x1: state.trailX + acrossX * offset,
+                                y1: state.trailY + acrossY * offset,
+                                x2: sample.x + acrossX * offset,
+                                y2: sample.y + acrossY * offset,
+                                ...(sample.wheels && { width: WHEEL_TRACK_PX }),
+                            });
+                        }
                     }
                     state.trailX = sample.x;
                     state.trailY = sample.y;

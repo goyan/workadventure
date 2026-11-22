@@ -13,9 +13,12 @@ export const METEOR_DEEP_PX = 8;
 /** How many meteors can be falling at once in a room. */
 export const METEORS_PER_ROOM = 20;
 
-/** The radius of the crater of a meteor, in tiles: what a player chooses, from a pebble to the end of a lake. */
-export const METEOR_MIN_TILES = 2;
-export const METEOR_MAX_TILES = 24;
+/**
+ * The radius of the crater of a comet or of a burning meteor, in tiles: what a player chooses, from a pebble to a
+ * rock that empties a pond.
+ */
+export const METEOR_MIN_TILES = 1;
+export const METEOR_MAX_TILES = 8;
 export const METEOR_DEFAULT_TILES = 4;
 /** The wave of an impact goes this many times the radius of its crater, never less nor more than these (cells). */
 const WAVE_REACH = 6;
@@ -29,11 +32,15 @@ export interface MeteorShape {
     waveCells: number;
 }
 
-/** The shape of a meteor of that size; a size that is not a number is the usual one, one out of range the nearest. */
+/**
+ * The shape of a meteor of that size: one out of range is the nearest (a browser opened when a meteor could be
+ * larger); a size that is not a number, or none (0), is the usual one.
+ */
 export function meteorShape(radiusTiles: number): MeteorShape {
-    const tiles = Number.isFinite(radiusTiles)
-        ? Math.min(METEOR_MAX_TILES, Math.max(METEOR_MIN_TILES, Math.round(radiusTiles)))
-        : METEOR_DEFAULT_TILES;
+    const tiles =
+        Number.isFinite(radiusTiles) && radiusTiles !== 0
+            ? Math.min(METEOR_MAX_TILES, Math.max(METEOR_MIN_TILES, Math.round(radiusTiles)))
+            : METEOR_DEFAULT_TILES;
     const discCells = (tiles * TILE_PX) / TERRAIN_CELL;
     return {
         radiusTiles: tiles,

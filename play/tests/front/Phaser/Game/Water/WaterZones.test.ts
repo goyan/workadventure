@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { poolSoilCode, TERRAIN_CELL, TERRAIN_CHUNK } from "@workadventure/map-editor";
+import type { TerrainData } from "@workadventure/map-editor";
 import {
     DIVE_DEPTH,
     DIVE_DISTANCE,
@@ -7,6 +9,7 @@ import {
     intersectsWater,
     isGroundUnderWater,
     isPointInWater,
+    isPoolAt,
     isWithinOneTileOfWater,
     segmentCrossesWater,
 } from "../../../../../src/front/Phaser/Game/Water/WaterZones";
@@ -104,5 +107,17 @@ describe("getWaterRectangles on a map with raised floors", () => {
         expect(isGroundUnderWater(scene, lake, 5, 0)).toBe(false);
         expect(isGroundUnderWater(scene, lake, 70, 70)).toBe(true);
         expect(isGroundUnderWater(scene, lake, 200, 200)).toBe(false);
+    });
+});
+
+describe("isPoolAt", () => {
+    it("tells the cells of a pool painted with the relief tool: no water for a canoe there", () => {
+        const codes = new Array<number>(TERRAIN_CHUNK * TERRAIN_CHUNK).fill(0);
+        codes[TERRAIN_CHUNK + 1] = poolSoilCode(0);
+        const terrain = { soil: { "0,0": codes } } as unknown as TerrainData;
+        const centre = (cell: number): number => (cell + 0.5) * TERRAIN_CELL;
+        expect(isPoolAt(terrain, { x: centre(1), y: centre(1) })).toBe(true);
+        expect(isPoolAt(terrain, { x: centre(2), y: centre(1) })).toBe(false);
+        expect(isPoolAt(undefined, { x: centre(1), y: centre(1) })).toBe(false);
     });
 });

@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { SNOW_MAX_MM, THAW_SPEED } from "@workadventure/map-editor";
-import { iceAt, isFrozen, ownSnowAfter, POOL_ICE_DEPTH_PX, towards } from "@wa/front/Phaser/Game/Weather/Frost";
+import { ICE_BEARS_MM } from "@workadventure/map-editor";
+import {
+    cycleAfterAbsence,
+    iceAt,
+    isFrozen,
+    ownIceMm,
+    ownSnowAfter,
+    POOL_ICE_DEPTH_PX,
+    towards,
+} from "@wa/front/Phaser/Game/Weather/Frost";
 
 describe("Frost", () => {
     it("freezes the water from 0 °C, all of it at -15 °C", () => {
@@ -21,10 +30,18 @@ describe("Frost", () => {
         expect(isFrozen(4, 0)).toBe(false);
     });
 
-    it("freezes a pool from its surface at -10 °C, the deep water of a lake still open", () => {
-        expect(isFrozen(POOL_ICE_DEPTH_PX, iceAt(-10))).toBe(true);
-        expect(isFrozen(POOL_ICE_DEPTH_PX, iceAt(-5))).toBe(false);
+    it("freezes a pool from its surface from about -3 °C, the deep water of a lake still open", () => {
+        expect(isFrozen(POOL_ICE_DEPTH_PX, iceAt(-4))).toBe(true);
+        expect(isFrozen(POOL_ICE_DEPTH_PX, iceAt(-7))).toBe(true);
+        expect(isFrozen(POOL_ICE_DEPTH_PX, iceAt(-2.5))).toBe(false);
         expect(isFrozen(64, iceAt(-10))).toBe(false);
+    });
+
+    it("gives the ice of a player's own place a thickness that bears a walker from -7.5 °C", () => {
+        expect(ownIceMm(iceAt(-4))).toBeLessThan(ICE_BEARS_MM);
+        expect(ownIceMm(iceAt(-7))).toBeLessThan(ICE_BEARS_MM);
+        expect(ownIceMm(iceAt(-7.5))).toBeCloseTo(ICE_BEARS_MM);
+        expect(ownIceMm(iceAt(-12))).toBeGreaterThan(ICE_BEARS_MM);
     });
 
     it("moves towards the weather of now at its own pace each way, never past it", () => {
@@ -61,5 +78,25 @@ describe("the snow of a player's own city", () => {
         expect(ownSnowAfter(20, 60, 5, undefined)).toBe(20);
         expect(ownSnowAfter(20, 60, 5, { temperature: -5, humidity: undefined, windSpeed: undefined })).toBe(20);
         expect(ownSnowAfter(20, Number.NaN, 5, frost)).toBe(20);
+    });
+});
+
+describe("the cycle of a player's own city after an absence", () => {
+    it("goes on from where it was: the ice towards the cold of now, the snow melted in a mild air", () => {
+        const kept = { frost: 0.8, ice: 0.6, wet: 0, snowMm: 20 };
+        const target = { frost: 0, ice: 0, wet: 0 };
+        const mild = { temperature: 8, humidity: 70, windSpeed: 10 };
+        const minute = cycleAfterAbsence(kept, 30, target, 0, mild);
+        expect(minute.ice).toBeGreaterThan(0);
+        expect(minute.ice).toBeLessThan(kept.ice);
+        expect(minute.snowMm).toBeGreaterThan(0);
+        const day = cycleAfterAbsence(kept, 24 * 3600, target, 0, mild);
+        expect(day.ice).toBe(0);
+        expect(day.snowMm).toBeLessThan(minute.snowMm);
+    });
+
+    it("keeps the snow of the city when its air is not known, instead of starting again from bare ground", () => {
+        const kept = { frost: 0, ice: 0, wet: 0, snowMm: 12 };
+        expect(cycleAfterAbsence(kept, 3600, { frost: 0, ice: 0, wet: 0 }, 0, undefined).snowMm).toBe(12);
     });
 });

@@ -883,6 +883,9 @@ enum CatastropheKind {
   // A ball: a solid sphere held under the pointer of a player, its centre at the altitude 0 of the map, for as long
   // as they keep telling. It takes the place of the water, which the server alone moves.
   CATASTROPHE_BALL = 5;
+  // Ice that gives way under a player: too thin to bear them over deep water, it cracks, then breaks around the
+  // point. The server breaks the ice it keeps there (as a meteor does) and tells the room, which sees the hole.
+  CATASTROPHE_ICE_BREAK = 6;
 }
 
 // Browser to server: a player sets the conditions the fire of the room goes by (heat, humidity of the air, wind) by

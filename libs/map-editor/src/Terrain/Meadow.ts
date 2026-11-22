@@ -11,7 +11,15 @@ import {
     THAW_SPEED,
 } from "./Snow";
 import type { SnowWeather } from "./Snow";
-import { ICE_MAX_MM, ICE_SLIPS_MM, iceByte, iceGrowthMmPerDay, iceMmOfByte, iceThawMmPerHour } from "./Ice";
+import {
+    ICE_GROWTH_TIMES,
+    ICE_MAX_MM,
+    ICE_SLIPS_MM,
+    iceByte,
+    iceGrowthMmPerDay,
+    iceMmOfByte,
+    iceThawMmPerHour,
+} from "./Ice";
 import { poolStyleAt, poolStyleOf } from "./Pools";
 import { PX_PER_MM } from "./WaterInputs";
 import { snowCover } from "./SnowLine";
@@ -894,7 +902,7 @@ export class Meadow {
             if (lying < SOAKED_WATER_PX) {
                 thick = 0;
             } else {
-                if (weather) thick += (iceGrowthMmPerDay(thick, weather, snow[index]) * hours) / 24;
+                if (weather) thick += (iceGrowthMmPerDay(thick, weather, snow[index]) * hours * ICE_GROWTH_TIMES) / 24;
                 thick = Math.max(0, thick - thawing - heat[index]);
                 thick = Math.min(thick, lying / PX_PER_MM, ICE_MAX_MM);
             }

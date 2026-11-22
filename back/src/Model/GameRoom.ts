@@ -2,7 +2,9 @@ import path from "path";
 import {
     isAtAreaLevel,
     canUpdateListeningZoneJams,
+    boundedFireConditions,
     fireDanger,
+    NEUTRAL_FIRE_CONDITIONS,
     GameMapProperties,
     LISTENING_ZONE_JAM_VARIABLE,
     parseListeningZoneJams,
@@ -457,7 +459,37 @@ export class GameRoom implements BrothersFinder {
             return air ? { ...air, windSpeed: fireConditions.conditions().windSpeed } : undefined;
         });
         meadow.pourWith(terrainWater.pour.bind(terrainWater));
+        // The water of the relief lives the missed time with the meadow: under the same rain of the past.
+        meadow.liveAlong(terrainWater.liveAgain.bind(terrainWater));
+        // A room left empty lives the time it missed: with the weather of the past at the place of a map in real
+        // weather, each quarter hour read as the conditions of the room read the quarter hour of now.
+        meadow.catchUpWith(rainTimelineService.history.bind(rainTimelineService), (slot) => {
+            const conditions = boundedFireConditions(
+                {
+                    temperature: slot.temperature ?? undefined,
+                    humidity: slot.humidity,
+                    windSpeed: slot.windSpeed,
+                    windFrom: slot.windFrom,
+                },
+                NEUTRAL_FIRE_CONDITIONS,
+            );
+            const air =
+                slot.temperature !== null && slot.humidity !== undefined
+                    ? { temperature: slot.temperature, humidity: slot.humidity }
+                    : undefined;
+            return {
+                air,
+                snow: air ? { ...air, windSpeed: conditions.windSpeed } : undefined,
+                fire: {
+                    danger: fireDanger(conditions, fireConditions.thresholds()),
+                    windFrom: conditions.windFrom,
+                    windSpeed: conditions.windSpeed,
+                },
+            };
+        });
         breakIce = meadow.shatter.bind(meadow);
+        // The ice that gives way under a player is the ice the meadow keeps, broken as by a comet.
+        catastrophes.breakIceWith(meadow.shatter.bind(meadow));
         // The animals of the map run from the fire of its grass and of its trees.
         aquaticLife.followFire(() => meadow.lifeFire());
         gameRoom.meadow = meadow;

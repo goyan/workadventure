@@ -31,11 +31,11 @@ describe("the water freezing", () => {
     it("takes in ice from its surface in the frost, thicker with time, and only where water lies", () => {
         const meadow = new Meadow(size, undefined, undefined);
         expect(meadow.icy()).toBe(false);
-        run(meadow, 10, under(frost));
-        // 20 s at -10 °C, the clock of the ice 600 times the real one: about 3 cm.
+        run(meadow, 5, under(frost));
+        // 10 s at -10 °C, the ice thickening 1200 times faster than the real clock (ICE_GROWTH_TIMES): about 3 cm.
         expect(meadow.iceAt(10, 10)).toBeGreaterThan(20);
         expect(meadow.iceAt(10, 10)).toBeLessThan(40);
-        run(meadow, 20, under(frost));
+        run(meadow, 10, under(frost));
         expect(meadow.iceAt(10, 10)).toBeGreaterThan(45);
         expect(meadow.iceAt(10, 10)).toBeLessThan(62);
         expect(meadow.iceAt(11, 10)).toBe(0);

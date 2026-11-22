@@ -70,15 +70,21 @@ export function canSwimAcross(grid: WaterGrid, cellX: number, cellY: number, dx:
     return side !== undefined && grid.canCross(cellX, cellY, side.side);
 }
 
-export function waterBodiesOf(grid: WaterGrid): WaterBodies {
+/**
+ * `excluded`: cells whose water is no home for an animal, whatever its depth (the pools: treated water, no fish in
+ * it). They belong to no body and nothing swims into them.
+ */
+export function waterBodiesOf(grid: WaterGrid, excluded?: (cellX: number, cellY: number) => boolean): WaterBodies {
     const { x: left, y: top, width, height } = grid.bounds;
+    const depthAt = (cellX: number, cellY: number): number =>
+        excluded?.(cellX, cellY) ? 0 : grid.depthAt(cellX, cellY);
     const labels = new Int32Array(width * height);
     const sizes: { cells: number; deep: number }[] = [{ cells: 0, deep: 0 }];
     // A queue instead of recursion: a lake may hold hundreds of thousands of cells.
     const queue = new Int32Array(width * height);
     for (let start = 0; start < labels.length; start++) {
         if (labels[start] !== 0) continue;
-        if (grid.depthAt(left + (start % width), top + Math.floor(start / width)) < FISH_DEPTH_PX) continue;
+        if (depthAt(left + (start % width), top + Math.floor(start / width)) < FISH_DEPTH_PX) continue;
         const body = sizes.length;
         const size = { cells: 0, deep: 0 };
         sizes.push(size);
@@ -91,11 +97,11 @@ export function waterBodiesOf(grid: WaterGrid): WaterBodies {
             const cellX = left + (index % width);
             const cellY = top + Math.floor(index / width);
             size.cells++;
-            if (grid.depthAt(cellX, cellY) >= DOLPHIN_DEPTH_PX) size.deep++;
+            if (depthAt(cellX, cellY) >= DOLPHIN_DEPTH_PX) size.deep++;
             for (const { side, dx, dy } of SIDES) {
                 if (!grid.canCross(cellX, cellY, side)) continue;
                 const next = index + dx + dy * width;
-                if (labels[next] !== 0 || grid.depthAt(cellX + dx, cellY + dy) < FISH_DEPTH_PX) continue;
+                if (labels[next] !== 0 || depthAt(cellX + dx, cellY + dy) < FISH_DEPTH_PX) continue;
                 labels[next] = body;
                 queue[tail++] = next;
             }
@@ -110,10 +116,10 @@ export function waterBodiesOf(grid: WaterGrid): WaterBodies {
     return {
         sizes,
         bodyAt,
-        swimmable: (cellX, cellY, minDepth) => grid.depthAt(cellX, cellY) >= minDepth,
-        passable: (cellX, cellY, minDepth) => grid.depthAt(cellX, cellY) >= minDepth,
+        swimmable: (cellX, cellY, minDepth) => depthAt(cellX, cellY) >= minDepth,
+        passable: (cellX, cellY, minDepth) => depthAt(cellX, cellY) >= minDepth,
         canCross: (cellX, cellY, dx, dy) => canSwimAcross(grid, cellX, cellY, dx, dy),
-        comfortAt: (cellX, cellY) => grid.depthAt(cellX, cellY),
+        comfortAt: (cellX, cellY) => depthAt(cellX, cellY),
         anyCell: (body, minDepth, random) => {
             if (body === 0) return undefined;
             // One pass, each fitting cell kept with the same chance.
@@ -123,7 +129,7 @@ export function waterBodiesOf(grid: WaterGrid): WaterBodies {
                 if (labels[index] !== body) continue;
                 const cellX = left + (index % width);
                 const cellY = top + Math.floor(index / width);
-                if (grid.depthAt(cellX, cellY) < minDepth) continue;
+                if (depthAt(cellX, cellY) < minDepth) continue;
                 seen++;
                 if (random() * seen < 1) chosen = { cellX, cellY };
             }
@@ -134,7 +140,7 @@ export function waterBodiesOf(grid: WaterGrid): WaterBodies {
             const candidates: WaterCell[] = [];
             for (let cellY = near.cellY - reach; cellY <= near.cellY + reach; cellY++) {
                 for (let cellX = near.cellX - reach; cellX <= near.cellX + reach; cellX++) {
-                    if (bodyAt(cellX, cellY) === body && grid.depthAt(cellX, cellY) >= minDepth) {
+                    if (bodyAt(cellX, cellY) === body && depthAt(cellX, cellY) >= minDepth) {
                         candidates.push({ cellX, cellY });
                     }
                 }

@@ -116,6 +116,15 @@ export class NightOverlay {
             .setVisible(false);
     }
 
+    /** The veil drawn last, for the water that reflects the light of the lamps; undefined while it is hidden. */
+    private drawn: { area: { x: number; y: number; width: number; height: number }; opacity: number } | undefined;
+
+    public reflected():
+        | { key: string; area: { x: number; y: number; width: number; height: number }; opacity: number }
+        | undefined {
+        return this.drawn && { key: this.texture.texture.key, ...this.drawn };
+    }
+
     public draw(frame: NightFrame): void {
         const camera = this.scene.cameras.main;
         const { view } = frame;
@@ -218,10 +227,16 @@ export class NightOverlay {
 
         this.texture.render();
         this.texture.setVisible(true);
+        // A texel a screen pixel from the top left of the view: the map under it, view.x + texel / zoom.
+        this.drawn = {
+            area: { x: view.x, y: view.y, width: width / zoom, height: height / zoom },
+            opacity: frame.opacity,
+        };
     }
 
     public hide(): void {
         this.texture.setVisible(false);
+        this.drawn = undefined;
     }
 
     public destroy(): void {

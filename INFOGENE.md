@@ -3625,6 +3625,21 @@ change, à chaque division par deux de la résolution au zoom, à un changement 
 n'atteigne le bord ; un fondu ne change que l'opacité. Coupées dans l'éditeur. « Désactiver la nuit » : soleil seul tant
 qu'il est levé, pas de lune.
 
+**Ombre des ponts et des paliers** (`floorShadowCasters`, `plateShadow`, `slopeShadow`) : le tablier d'un pont, et plus
+généralement les dalles de tout palier (terrasse, étage), projette son ombre sur le sol et l'eau qu'il surplombe. Une
+dalle est une plaque à la hauteur de son étage (20 px pour un pont bas, 52 pour un haut), épaisse de 8 px : son ombre est
+son emprise au sol décalée à l'opposé de l'astre de hauteur / tan(élévation), avec les mêmes bornes de longueur, la même
+couleur et la même opacité que les autres ombres ; le jour passe dessous (le sol juste sous le bord éclairé reste au
+soleil). Les dalles voisines d'un même étage font une seule ombre. Un escalier ou une rampe est une pente : de son pied,
+au sol, jusqu'à son haut décalé de la hauteur de l'étage ; un escalier à flanc plein est plein dessous. Rangées avec les
+murs dans « Ce qui projette une ombre ». Calculées avec les autres ombres fixes : relues quand une pièce change, puis
+redessinées seulement quand l'astre bouge d'un demi-degré, rien à chaque image. Dessinées sous les dalles (profondeur
+0,7) : jamais sur le dessus de leur propre tablier ; sous un tablier, l'ombre est cachée par lui (soleil haut dans l'axe
+du pont). Limites : les ombres des arbres, des murs, des objets, des avatars et des animaux tombent toujours au sol et
+passent sous un tablier sans se poser dessus ; ce qui se tient sur un palier (objets, murs d'étage, avatars, animaux) ne
+projette pas d'ombre ; les garde-corps non plus. Un avatar sous un pont n'est pas assombri (comme à l'ombre d'un mur).
+Rendu non vu à l'écran à l'écriture de ce paragraphe.
+
 **Réglages personnels** (Paramètres → Ambiance, `Stores/SkyLightStore.ts`, gardés dans le navigateur, rien ne change
 pour les autres) : un interrupteur par astre, « Ombres et lumière du soleil » et « Ombres et lumière de la lune »
 (activés par défaut) ; chacun coupe pour son astre les ombres, la teinte et l'éclaircissement du voile et les taches par
@@ -4184,11 +4199,13 @@ est sous au moins 2 px d'eau à l'impact (d'après ce que ce navigateur sait de 
 Pour qui a demandé moins de mouvement (`prefers-reduced-motion`) : ni éclair ni météore qui tombe, il reste l'ombre
 et la gerbe. Tout est dessiné par le navigateur, en code, dans un seul calque au-dessus du voile de nuit et de la météo (`DEPTH_NIGHT_INDEX + 2`).
 
-**Taille du météore.** Le widget a un curseur : rayon du cratère de **2 à 24 cases** (4 par défaut, gardé pour la
-session). Le navigateur l'envoie avec la demande (`radiusTiles`), le serveur le ramène dans ces bornes
-(`meteorShape`) et l'annonce à la salle. Tout en découle : volume d'eau déplacé (surface du cratère × profondeur), eau
-apportée, portée de l'onde (6 fois le rayon du cratère, entre 64 et 240 cellules), taille de l'ombre, du météore, de
-la gerbe et des cercles.
+**Taille de la comète et du météore.** Le widget a un curseur : rayon du cratère de **1 à 8 cases** (4 par défaut,
+gardé pour la session ; de 2 à 24 jusqu'au 2026-11-21). Le navigateur l'envoie avec la demande (`radiusTiles`), le
+serveur le ramène dans ces bornes (`meteorShape`, `METEOR_MIN_TILES` et `METEOR_MAX_TILES`, lues aussi par le
+curseur : une valeur hors plage, comme le 24 d'un onglet ouvert avant, donne la plus proche ; 0 ou une valeur non
+numérique donne 4) et l'annonce à la salle. Tout en découle : volume d'eau déplacé (surface du cratère × profondeur), eau
+apportée, portée de l'onde (6 fois le rayon du cratère, jamais moins de 64 cellules : 64 à 96 dans ces bornes),
+taille de l'ombre, du météore (jamais dessiné à moins de 4 px de rayon), de la gerbe et des cercles.
 
 **Ce que fait l'eau.** À l'impact, le serveur vide le **cratère** (pour la taille par défaut : rayon 8 cellules de 16 px, soit 4 cases) et confie
 cette eau, **plus 8 px apportés par cellule du cratère**, à une **onde** (`Catastrophe/ImpactWave.ts`) dont le front
@@ -4411,7 +4428,7 @@ vérifiée sur un tablier. Rien de cela n'a été vu à l'écran par un agent.
 Conception et plan dans le dépôt d'infra, `docs/superpowers/{specs,plans}/2026-11-20-meteore-brulant*`.
 
 **Pour qui joue.** Tuile « Météore » du widget des catastrophes, à côté de « Comète ». Elle s'arme comme la comète
-(viseur, Échap annule), avec le même curseur de taille (rayon du cratère de 2 à 24 cases, 4 par défaut), et un clic
+(viseur, Échap annule), avec le même curseur de taille (rayon du cratère de 1 à 8 cases, 4 par défaut), et un clic
 gauche sur la carte lance le météore. Il tombe en 1,2 s comme la comète.
 
 **Ce qu'il fait à l'impact** (le serveur seul décide) :
@@ -4762,6 +4779,91 @@ piscines-images (objets avec eau) sont redessinées de la même façon, image ca
 piscine modifiable » dans l'éditeur d'objets la remplace par une piscine peinte (`MapEditor/PoolConversion.ts`).
 **Gel** : une piscine gèle en surface comme une eau calme de 32 px, quelle que soit sa profondeur
 (`POOL_ICE_DEPTH_PX`), soit vers -8 °C ; jamais dedans (`OutdoorGrid`) ni chauffée.
+
+## Rendu : pixels lissés, ciel par la carte graphique, reflets, arcs-en-ciel (PR #458)
+
+**Pixels lissés** (`Phaser/Services/SharpUpscale.ts`). Le jeu est calculé en pixels de jeu (`HdpiManager`) puis
+agrandi par le navigateur en `image-rendering: pixelated` : à un facteur non entier (2,53 sur un Retina au zoom par
+défaut), des pixels de jeu font 2 pixels d'écran et d'autres 3 (escaliers irréguliers, scintillement au défilement).
+Un second canvas WebGL, à la définition de l'écran, montre le canvas du jeu avec un filtre « sharp bilinear » : chaque
+pixel plat en son milieu, seul le pixel d'écran de son bord mélangé au voisin. Le bilinéaire interpole entre les
+**centres** des texels : la formule part de `floor(texel - 0,5) + 0,5` (sinon flou). Lu sur `POST_RENDER`, dans la même
+tâche que le dessin du jeu (`preserveDrawingBuffer` est faux). Le canvas est placé en tête de son parent : au-dessus du
+canvas du jeu (non positionné), sous les calques positionnés (pseudos, interface). Écarté : `smoothPixelArt` de
+Phaser 4, qui demande de tout dessiner en pleine définition (~6 fois plus de pixels dans chaque shader). Mesure
+(M4 Max) : 120 i/s avec ou sans.
+
+**Ciel par la carte graphique** (`Weather/CloudLayer.ts`). Avant : un canvas CPU d'un pixel par bloc de 4 à 64 px
+(`BlockSurface`), repeint 6 à 10 fois par seconde, des nuages qui sautaient d'un bloc (~40 px d'écran toutes les
+0,5 s). Maintenant, à chaque dessin de la météo (30 i/s quand il y a des nuages, 15 avant) : les bouffées
+(`cloudPatches`) sont additionnées dans une texture d'épaisseur de 8 px de carte par texel (fixe : un texel qui suivait
+le zoom changeait la forme des nuages à chaque palier) avec le mélange ADD de Phaser (`src + dst × alpha_dst`, d'où un
+fond **noir opaque**) ; un shader lit cette épaisseur lissée, la découpe en bosses (bruit fractal fixé au nuage :
+calculé en `monde - dérive du ciel`), éclaire les bosses depuis le nord-ouest par la pente de la densité, dessine les
+ombres (même forme, décalées à l'opposé du soleil), les voiles gris de la pluie et du ciel couvert, découpés par un
+masque « dehors » tracé depuis les rectangles d'extérieur (`veil`) tous les 4 px. Une RenderTexture Phaser se lit
+avec `1 - y`, comme un canvas (sans quoi : miroir vertical, visible seulement quand la texture dépasse la zone).
+Nuages de pluie et d'orage : `cumulonimbusPalette` (sommets éclairés bien plus clairs que `rainPalette`). Le
+brouillard reste en blocs. Réglage « Nuages fluides (carte graphique) » ; décoché ou sans WebGL : l'ancien chemin.
+« Réduire les animations » fige les bosses. Mesure en régime (M4 Max) : 4,9 à 5,5 ms de calcul, 4 ms de rendu.
+
+**Reflets dans l'eau** (`Terrain/WaterReflection.ts`, shader de l'eau de `GroundSplat`). L'eau mêle la couleur du
+ciel (bleu, gris sous un ciel couvert ou la pluie, rien la nuit), les nuages qui passent (la texture d'épaisseur de
+`CloudLayer`, relue décalée par les vagues : zoomé, quand la caméra est sous les nuages, on les voit dans l'eau),
+l'éclat du soleil sur les vagues tournées vers lui (plus fort soleil haut et ciel clair) et, la nuit, la lumière des
+lampes : le voile de nuit (`NightOverlay`, un texel par pixel d'écran, percé par les lampes, murs compris) relu sous
+la lampe, étiré vers le bas et ondulé. Rien n'est dessiné deux fois : l'eau relit ce qui est déjà calculé.
+`GameScene` passe le reflet à chaque image (`TerrainView.setWaterReflection`, comme les ondes des comètes). Réglage
+« Reflets dans l'eau ».
+
+**Arcs-en-ciel** (`Weather/Rainbow.ts`). Un arc-en-ciel se voit à 42° du point opposé au soleil : seulement s'il pleut
+avec un soleil entre 0 et 42° (fondu de 0 à 3° et de 36 à 42°), plus pâle par orage (× 0,5) et sous un ciel couvert.
+Fixé à la carte (centre, rayon 0,35 × le petit côté, 50 tuiles au plus), ouvert à l'opposé du soleil (sens des
+ombres), sa demi-ouverture `90° × (42 - hauteur) / 42` : un demi-cercle au soleil couchant, un arc court près de 42°.
+Arc secondaire pâle aux couleurs inversées, ciel plus clair dedans. Bouton 🌈 à côté de l'horloge
+(`RainbowButton.svelte`, `rainbowSpotStore` = sommet de l'arc, publié seulement quand il change) : téléporte sur la case
+libre la plus proche (`teleportNextTo`). Réglage « Afficher les arcs-en-ciel ».
+
+**Préréglages et Basique.** Les quatre effets font partie de `GraphicsProfile` : coupés en Basse, actifs au-dessus ; une
+case modifiée à la main donne « Personnalisée ». Le mode Basique les coupe tous.
+
+**Piscines en Basique** (`Terrain/BasicPools.ts`). Basique ne dessine pas l'eau du relief, et les piscines tracées
+dans l'éditeur (qui n'existent que dans le shader) disparaissaient, comme les piscines-images cachées pour lui. En
+Basique : eau fixe de la couleur du style dans ses cases, margelle sur les bords qui ne touchent pas une autre case de
+piscine, dans un `Graphics` dessiné une fois (de nouveau si le relief ou les styles changent) ; les piscines-images
+sont remontrées.
+
+**Écran noir et saccades au zoom** (corrigés dans la même PR). Écran noir : une texture d'épaisseur détruite
+(remplacée en dézoomant) restait liée au shader de l'eau, `ShaderQuad.setupTextures` levait une exception à chaque
+rendu. Le reflet est maintenant passé après la météo, et l'eau ne lie jamais une texture absente. La couche lissée
+s'efface si le contexte WebGL du jeu est perdu. Saccades (profil CPU pendant un zoom) : `gl.getError()` après chaque
+copie de la couche lissée faisait attendre le GPU (41 % du fil principal, retiré) ; `SnowGround` redessinait et
+redimensionnait sa texture à chaque image (clé de dessin au zoom exact : 14,5 % en création de framebuffers), zoom
+désormais par demi-octave et texture qui ne grandit que par pas de 256 px ; le masque « dehors » des nuages n'est plus
+recréé à chaque image ; la couche lissée attend que le canvas du jeu garde sa taille 150 ms avant de se recréer.
+Restent, d'origine : le redimensionnement du canvas par `WaScaleManager` et `smoothWeights` du sol quand la zone change.
+
+**Carte du monde de l'horloge** préchargée avec l'horloge (elle apparaissait d'un coup à la première ouverture).
+
+**La glace qui casse** (`Ice/IceBreaks.ts`, `Ice/FrozenWater.ts`, `Ice/IceHold.ts`, `CatastropheManager.iceBreak`).
+La glace a trois états sous un point (`IceState`) : aucune, fine, solide. Glace du serveur : solide dès 50 mm sur une
+eau où l'on nage (`ICE_BEARS_MM`), fine de 5 à 50 mm (avant : elle ne portait pas du tout, on passait à la nage sans
+rien voir). Météo personnelle : épaisseur lue du froid du moment (`ownIceMm`, pas d'historique : elle porte dès
+-7,5 °C). Sur une glace fine, des fissures s'étendent sous l'avatar (1,2 s au même endroit), puis elle cède : un trou
+d'eau libre de 24 px (bord irrégulier, éclats de glace), qui regèle en 2 minutes. Glace du serveur : le client
+envoie `CATASTROPHE_ICE_BREAK` (une valeur de plus de `CatastropheKind`, même message que les catastrophes, une casse
+par seconde par joueur), le serveur casse la glace d'une tuile autour par `meadow.shatter` (comme une comète) et le
+dit à la salle, qui ouvre le même trou. Météo personnelle : trou local. Les piscines gèlent en surface dès -3 °C
+(`POOL_ICE_DEPTH_PX` 8 px au lieu de 32, qui attendait -8,25 °C). La glace du serveur épaissit deux fois plus vite que
+l'horloge de la neige (`ICE_GROWTH_TIMES` = 2, soit 1 200 fois le temps réel ; le dégel garde ×600) : elle porte le
+woka en 1 min 30 environ à -3 °C, 38 s à -7 °C, 18 s à -15 °C (loi de Stefan, l'épaisseur croît comme la racine du
+temps).
+
+**Herbe dès l'arrivée** (`back/src/Model/MeadowManager.ts`, `GameScene.groundStatesOfJoinApplied`). Le premier joueur
+d'une salle recréée recevait un sol nu : `snapshot()` ne rendait que l'état déjà diffusé, vide jusqu'au premier pas de
+la prairie. Mesuré : entrée à 4,0 s sans prairie, herbe à 13,2 s (premier message périodique, toutes les 10 s). Le
+snapshot écrit désormais l'état courant si rien n'a été diffusé (toujours rien pour une carte nue et sèche) ; la carte
+attend la prairie et l'eau reçues à l'entrée (décompression) avant de s'afficher, 2 s au plus. Après : herbe à 4,4 s.
 
 ## Conditions réglées à la main : les extrêmes
 

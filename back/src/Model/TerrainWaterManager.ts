@@ -79,6 +79,11 @@ const IMPACT_STIRRED_STEPS = 300;
 const DOOR_OPEN_STEPS = 10;
 /** The water is saved every half minute while it changes. */
 const STEPS_PER_SAVE = 300;
+/**
+ * The time a room missed is lived again by steps this long (s): the water flows to where it rests in a few of them,
+ * and a week of absence costs a thousand steps.
+ */
+const CATCH_UP_SECONDS = 600;
 
 const SavedBounds = z.object({
     x: z.number().int(),
@@ -153,6 +158,8 @@ export class TerrainWaterManager {
     /** The step the room was last told a whole state at. */
     private fullAtStep = -Infinity;
     private changedSinceSave = false;
+    /** The time missed while the room was empty that is not lived again yet, and the rain (mm) that fell in it. */
+    private missed = { seconds: 0, rainMm: 0 };
 
     constructor(
         private readonly room: Pick<GameRoom, "getWam" | "sendSubMessageToRoom">,
@@ -291,7 +298,7 @@ export class TerrainWaterManager {
         const displacing = this.placeBalls(grid);
         // Both each step: a downpour goes on raining while the wave of a meteor runs.
         const raining = this.pourDownpours(grid);
-        this.pumpPools(grid);
+        this.pumpPools(grid, WATER_STEP_MS / 1000);
         const draining = this.takeDrains(grid);
         const waving = this.waves.length > 0 || raining || draining || displacing || this.steps < this.stirredUntilStep;
         if (this.waves.length > 0) this.advanceWaves(grid);
@@ -322,7 +329,7 @@ export class TerrainWaterManager {
      * over its level (a snow that melted in the pool, a rain) loses as much through the overflow of the pool, counted
      * with the sinks: a flood that brings more than that still runs over the rim.
      */
-    private pumpPools(grid: WaterGrid): void {
+    private pumpPools(grid: WaterGrid, seconds: number): void {
         if (this.pools.length === 0) return;
         let laid = 0;
         let taken = 0;
@@ -330,7 +337,7 @@ export class TerrainWaterManager {
             // A ball stands in the place of the water of this cell: nothing to fill.
             if (grid.ballAt(cellX, cellY)) continue;
             const missing = fullPx - grid.depthAt(cellX, cellY);
-            const pumped = (depthPx * WATER_STEP_MS) / 1000 / POOL_FILL_SECONDS;
+            const pumped = (depthPx * seconds) / POOL_FILL_SECONDS;
             if (missing > 0) {
                 if (this.steps < this.pumpsFromStep) continue;
                 laid += grid.rainOn(cellX, cellY, 0, Math.min(missing, pumped));
@@ -342,6 +349,30 @@ export class TerrainWaterManager {
         if (laid <= 0 && taken <= 0) return;
         this.sums.sourcesPx += laid;
         this.sums.sinksPx += taken;
+        this.moving = true;
+        this.version++;
+        this.changedSinceSave = true;
+    }
+
+    /**
+     * The time the room missed while it was empty, lived again as the meadow catches up (MeadowManager.catchUpWith):
+     * `seconds` of it under `rainMmPerHour` of rain (what falls as snow lies on the meadow, which pours its melt
+     * here). Lived by steps of CATCH_UP_SECONDS, without inertia: the water ends where it rests, the lakes filled by the
+     * rain of the past and lowered by its dry days, the pools pumped. `last` says the meadow caught up.
+     */
+    public liveAgain(seconds: number, rainMmPerHour: number, last: boolean): void {
+        const grid = this.grid;
+        if (!grid) return;
+        if (seconds > 0) {
+            this.missed.seconds += seconds;
+            this.missed.rainMm += (Math.max(0, rainMmPerHour) * seconds) / 3600;
+        }
+        if (this.missed.seconds <= 0 || (!last && this.missed.seconds < CATCH_UP_SECONDS)) return;
+        const { seconds: lived, rainMm } = this.missed;
+        this.missed = { seconds: 0, rainMm: 0 };
+        const water = this.room.getWam()?.settings?.water;
+        grid.step(stepInputOf(water && { ...water, inertia: false }, (rainMm * 3600) / lived, this.objects, lived));
+        this.pumpPools(grid, lived);
         this.moving = true;
         this.version++;
         this.changedSinceSave = true;

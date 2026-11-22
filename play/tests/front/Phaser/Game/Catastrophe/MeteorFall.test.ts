@@ -117,11 +117,24 @@ describe("waveCircles", () => {
     });
 
     it("starts wider and runs further for a wider meteor", () => {
-        const huge = meteorShape(24);
-        expect(waveCircles(0, huge)[0].radius).toBe(768);
-        // 48 cells of crater, a wave as far as 240 cells: 192 steps of 100 ms.
-        expect(waveCircles(19199, huge)).toHaveLength(3);
-        expect(waveCircles(19200, huge)).toEqual([]);
+        const largest = meteorShape(8);
+        expect(waveCircles(0, largest)[0].radius).toBe(256);
+        // 16 cells of crater, a wave as far as 96 cells: 80 steps of 100 ms.
+        expect(waveCircles(7999, largest)).toHaveLength(3);
+        expect(waveCircles(8000, largest)).toEqual([]);
+    });
+
+    it("still has circles to show around the smallest meteor, a crater of one tile", () => {
+        const smallest = meteorShape(1);
+        const circles = waveCircles(0, smallest);
+        // The circles that follow the first one inside so small a crater have no room: only those with a radius.
+        expect(circles.length).toBeGreaterThanOrEqual(1);
+        expect(circles[0].radius).toBe(32);
+        for (const circle of [...circles, ...waveCircles(3000, smallest)]) {
+            expect(Number.isFinite(circle.radius)).toBe(true);
+            expect(circle.radius).toBeGreaterThan(0);
+            expect(Number.isFinite(circle.alpha)).toBe(true);
+        }
     });
 
     it("has nothing to show before the impact", () => {

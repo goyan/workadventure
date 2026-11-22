@@ -281,7 +281,8 @@ describe("explainWeather: ice on the water", () => {
     });
 
     it("says the shallows, then the pools, then all the water as it gets colder", () => {
-        expect(iceUnder(-4)).toMatchObject({ stage: "shallows", reason: "freezing" });
+        expect(iceUnder(-2.5)).toMatchObject({ stage: "shallows", reason: "freezing" });
+        expect(iceUnder(-4)).toMatchObject({ stage: "pools", reason: "freezing" });
         expect(iceUnder(-10)).toMatchObject({ stage: "pools", reason: "freezing" });
         expect(iceUnder(-15)).toMatchObject({ stage: "all", reason: "freezing" });
     });
