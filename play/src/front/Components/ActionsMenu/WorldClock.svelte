@@ -14,6 +14,16 @@
     import { LL, locale } from "../../../i18n/i18n-svelte";
     import { basicActiveStore } from "../../Stores/BasicModeStore";
     import { NIGHT_MAX_OPACITY, worldClockTimeZone } from "../../Phaser/Game/Night/NightClock";
+    import { WorldFall } from "../../Phaser/Game/Night/WorldWeatherPick";
+    import {
+        chooseWorldFall,
+        clearWorldFall,
+        worldFallNoticeStore,
+        worldFallPendingStore,
+        worldFallStillFallsStore,
+        worldFallStore,
+    } from "../../Stores/WorldFallStore";
+    import PixelIcon from "./PixelIcon.svelte";
 
     /** The map of the world (Natural Earth, public domain): equirectangular, a point is read straight from it. */
     const WORLD_MAP = "/resources/terrain/world-map.png";
@@ -46,6 +56,35 @@
         { value: WorldMoment.Evening, label: $LL.menu.settings.night.evening() },
         { value: WorldMoment.Custom, label: $LL.menu.settings.night.custom() },
     ]);
+
+    // Looking for a place of the world where it rains or snows now (real weather), next to the moments.
+    const falls = $derived([
+        {
+            value: WorldFall.Rain,
+            label: $LL.menu.settings.night.worldRain(),
+            help: $LL.menu.settings.night.worldRainHelp(),
+            icon: "raindrop" as const,
+        },
+        {
+            value: WorldFall.Snow,
+            label: $LL.menu.settings.night.worldSnow(),
+            help: $LL.menu.settings.night.worldSnowHelp(),
+            icon: "snowflake" as const,
+        },
+    ]);
+    let rateFormatter = $derived(new Intl.NumberFormat($locale, { maximumFractionDigits: 1 }));
+    /** Why the sky shown is that of this place: it rains or snows there, as hard as it did when picked. */
+    let fallLabel = $derived.by(() => {
+        const choice = $worldFallStore;
+        if (!choice) return "";
+        const city = choice.place.name;
+        const rate = rateFormatter.format(choice.rainRate);
+        const night = $LL.menu.settings.night;
+        if (choice.fall === WorldFall.Snow) {
+            return choice.rainRate > 0 ? night.worldSnowCity({ city, rate }) : night.worldSnowCityLight({ city });
+        }
+        return choice.rainRate > 0 ? night.worldRainCity({ city, rate }) : night.worldRainCityLight({ city });
+    });
 
     let customTime = $derived(
         `${String(Math.floor($worldCustomMinutesStore / 60)).padStart(2, "0")}:${String(
@@ -107,6 +146,7 @@
         const box = (event.currentTarget as HTMLCanvasElement).getBoundingClientRect();
         const longitude = ((event.clientX - box.left) / box.width) * 360 - 180;
         const latitude = 90 - ((event.clientY - box.top) / box.height) * 180;
+        clearWorldFall();
         worldPointStore.set({
             latitude: Math.max(-89, Math.min(89, latitude)),
             longitude: Math.max(-180, Math.min(180, longitude)),
@@ -114,6 +154,7 @@
     }
 
     function chooseMoment(moment: WorldMoment): void {
+        clearWorldFall();
         worldPointStore.set(undefined);
         worldMomentStore.set(moment);
     }
@@ -201,16 +242,46 @@
                                 <button
                                     type="button"
                                     class="rounded px-2 py-1 hover:bg-white/10 {!$worldPointStore &&
+                                    !$worldFallStore &&
                                     $worldMomentStore === moment.value
                                         ? 'bg-white/15 font-bold'
                                         : ''}"
-                                    aria-pressed={!$worldPointStore && $worldMomentStore === moment.value}
+                                    aria-pressed={!$worldPointStore &&
+                                        !$worldFallStore &&
+                                        $worldMomentStore === moment.value}
                                     data-testid={`world-clock-moment-${moment.value}`}
                                     onclick={() => chooseMoment(moment.value)}>{moment.label}</button
                                 >
                             {/each}
                         </div>
-                        {#if !$worldPointStore && $worldMomentStore === WorldMoment.Custom}
+                        <div class="mt-1 grid grid-cols-2 gap-1">
+                            {#each falls as fall (fall.value)}
+                                <button
+                                    type="button"
+                                    class="flex items-center justify-center gap-1 rounded px-2 py-1 hover:bg-white/10 disabled:opacity-60 {!$worldPointStore &&
+                                    $worldFallStore?.fall === fall.value
+                                        ? 'bg-white/15 font-bold'
+                                        : ''}"
+                                    title={fall.help}
+                                    aria-pressed={!$worldPointStore && $worldFallStore?.fall === fall.value}
+                                    aria-busy={$worldFallPendingStore === fall.value}
+                                    disabled={$worldFallPendingStore !== undefined}
+                                    data-testid={`world-clock-fall-${fall.value}`}
+                                    onclick={() => chooseWorldFall(fall.value)}
+                                    ><PixelIcon name={fall.icon} size={14} />{fall.label}</button
+                                >
+                            {/each}
+                        </div>
+                        {#if $worldFallNoticeStore}
+                            <p class="mt-2 px-1 text-xs opacity-80" role="status" data-testid="world-clock-fall-notice">
+                                {$worldFallNoticeStore.status === "failed"
+                                    ? $LL.menu.settings.night.worldFallFailed()
+                                    : $worldFallNoticeStore.fall === WorldFall.Snow
+                                      ? $LL.menu.settings.night.worldNoSnow()
+                                      : $LL.menu.settings.night.worldNoRain()}
+                            </p>
+                        {/if}
+                        {#if !$worldPointStore && !$worldFallStore && $worldMomentStore === WorldMoment.Custom}
                             <input
                                 type="time"
                                 class="mt-2 w-full rounded bg-white/10 px-2 py-1"
@@ -229,6 +300,22 @@
                                 {$LL.menu.settings.night.worldPointCity({
                                     city: $worldCityStore.longName ?? $worldCityStore.name,
                                 })}
+                            </p>
+                        {:else if $worldFallStore}
+                            <!-- A place picked where it rains or snows: no moment is pressed, so say why this place. -->
+                            <p
+                                class="mt-2 rounded bg-white/15 px-2 py-1 text-xs font-bold"
+                                data-testid="world-clock-city"
+                                data-fall={$worldFallStore.fall}
+                            >
+                                {fallLabel}
+                                {#if $worldFallStillFallsStore === false}
+                                    <span class="block font-normal opacity-80" data-testid="world-clock-fall-stopped"
+                                        >{$worldFallStore.fall === WorldFall.Snow
+                                            ? $LL.menu.settings.night.worldSnowStopped()
+                                            : $LL.menu.settings.night.worldRainStopped()}</span
+                                    >
+                                {/if}
                             </p>
                         {:else if $worldCityStore}
                             <p class="mt-2 px-1 text-xs" data-testid="world-clock-city">
