@@ -1416,6 +1416,40 @@ export class WaterGrid implements WaterView {
     }
 
     /**
+     * How fast the water runs over a tile of the map (TILE_PX, its cells of the relief), in metres a second of the
+     * map: as a block of writeSpeedBytes reads it, what its cells carry over the water they hold, on a finer square.
+     * 0 where it is dry, out of the grid, and for a water without inertia (it keeps no flow). The speed is that of the
+     * water itself, not as it is seen (flowPace).
+     */
+    public tileSpeedAt(tileX: number, tileY: number): number {
+        const { width } = this.bounds;
+        if (this.flowEast.length !== this.depth.length || this.depth.length === 0) return 0;
+        const cells = TILE_PX / TERRAIN_CELL;
+        const depth = this.depth;
+        const east = this.flowEast;
+        const south = this.flowSouth;
+        let held = 0;
+        let towardsEast = 0;
+        let towardsSouth = 0;
+        for (let dy = 0; dy < cells; dy++) {
+            for (let dx = 0; dx < cells; dx++) {
+                const cellX = tileX * cells + dx;
+                const cellY = tileY * cells + dy;
+                const index = this.indexOf(cellX, cellY);
+                if (index === undefined || depth[index] <= DRY_PX) continue;
+                const column = cellX - this.bounds.x;
+                const row = cellY - this.bounds.y;
+                held += depth[index];
+                // What crosses the cell: the mean of what comes in by one side and goes out by the other.
+                towardsEast += (east[index] + (column > 0 ? east[index - 1] : 0)) / 2;
+                towardsSouth += (south[index] + (row > 0 ? south[index - width] : 0)) / 2;
+            }
+        }
+        if (held <= DRY_PX) return 0;
+        return (Math.hypot(towardsEast, towardsSouth) / held) * CELL_METRES;
+    }
+
+    /**
      * The depths as bytes: two for each cell, in eighths of a pixel. For sending: the water as it is seen, without
      * what a ball hides under itself. For saving (`whole`): all the water of each cell, so that the water under a
      * ball is not lost by a restart.

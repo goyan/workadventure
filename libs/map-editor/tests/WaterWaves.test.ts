@@ -13,6 +13,7 @@ import {
     SLOW_SPEED_UNITS,
     SLOWEST_TOLD_CELLS,
     SLOWEST_TOLD_METRES,
+    SPEED_UNITS,
     slowSpeedByte,
     slowSpeedOf,
     steadyFlowSpeed,
@@ -353,6 +354,29 @@ describe("the speed of the water told to the browsers", () => {
         // Seen at half its real pace, the same water is told half as fast.
         const slow = grid.writeSpeeds(0.5);
         expect(signed(slow?.[at] ?? 0)).toBeCloseTo(signed(speeds[at]) / 2, 0);
+    });
+
+    it("tells how fast the water runs over a tile, in metres a second, as its blocks tell it", () => {
+        const grid = river();
+        for (let step = 0; step < 50; step++) {
+            grid.rainOn(5, 4, 2.9, 0.3);
+            grid.step(still);
+        }
+        // Without inertia the water keeps no flow: no speed.
+        expect(grid.tileSpeedAt(20, 2)).toBe(0);
+        for (let step = 0; step < 600; step++) {
+            grid.rainOn(5, 4, 2.9, 0.3);
+            grid.step(withWaves());
+        }
+        const speeds = grid.writeSpeeds();
+        const blockMetres = ((speeds?.[(1 * 20 + 10) * 2] ?? 0) / SPEED_UNITS) * CELL_METRES;
+        // The tile (20, 2) is in the block (10, 1): the same water, as fast to a quarter of a cell a second.
+        expect(blockMetres).toBeGreaterThan(0);
+        expect(Math.abs(grid.tileSpeedAt(20, 2) - blockMetres)).toBeLessThan((0.5 / SPEED_UNITS) * CELL_METRES);
+        // The bank: dry, still.
+        expect(grid.tileSpeedAt(20, 0)).toBe(0);
+        // Out of the grid: still.
+        expect(grid.tileSpeedAt(500, 500)).toBe(0);
     });
 
     it("tells them byte for byte as before the slow speeds were told apart", () => {

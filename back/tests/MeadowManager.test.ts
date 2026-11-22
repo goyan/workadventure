@@ -37,12 +37,18 @@ function createHarness({
     wind = { windFrom: 0, windSpeed: 0 },
     random = () => 1,
     place = undefined as Settings["weatherLocation"],
-    water = undefined as (() => { depthAt(cellX: number, cellY: number): number } | undefined) | undefined,
+    water = undefined as
+        | (() =>
+              | { depthAt(cellX: number, cellY: number): number; tileSpeedAt?(tileX: number, tileY: number): number }
+              | undefined)
+        | undefined,
     waterSpeed = undefined as number | undefined,
 }: {
     /** The speed of the water of the map, and with it the clock of its snow and its ice (none: reality). */
     waterSpeed?: number;
-    water?: () => { depthAt(cellX: number, cellY: number): number } | undefined;
+    water?: () =>
+        | { depthAt(cellX: number, cellY: number): number; tileSpeedAt?(tileX: number, tileY: number): number }
+        | undefined;
     place?: Settings["weatherLocation"];
     danger?: () => number;
     wind?: { windFrom: number; windSpeed: number };
@@ -701,6 +707,22 @@ describe("the snow of the MeadowManager", () => {
         steps(10);
         expect(snowOf(sent.at(-1)).every((byte) => byte > 0)).toBe(true);
         manager.stop();
+    });
+
+    it("lets no ice take where the water runs fast, when the water of the map has inertia", () => {
+        // 16 px of water everywhere, still on the west half of the map, running at 1.5 m/s on its east half.
+        const water = () => ({ depthAt: () => 16, tileSpeedAt: (tileX: number) => (tileX < 4 ? 0 : 1.5) });
+        for (const inertia of [true, false]) {
+            const { manager, steps, wam } = snowHarness({ water });
+            wam.settings = { ...wam.settings, water: { ...DEFAULT_WATER_SETTINGS, speed: 600, inertia } };
+            manager.mapChanged();
+            steps(10);
+            expect(manager.iceAt(1, 1)).toBeGreaterThan(0);
+            // Without inertia the water keeps no speed: the ice takes as on still water.
+            if (inertia) expect(manager.iceAt(6, 1)).toBe(0);
+            else expect(manager.iceAt(6, 1)).toBeCloseTo(manager.iceAt(1, 1));
+            manager.stop();
+        }
     });
 
     it("pours the water of the snow that melts, and none while it freezes", () => {

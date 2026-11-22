@@ -1,6 +1,6 @@
 import { gunzipSync, gzipSync } from "node:zlib";
 import { MeadowSimulation } from "@workadventure/map-editor";
-import type { WaterGrid } from "@workadventure/map-editor";
+import type { MeadowWater } from "@workadventure/map-editor";
 import type { VariablesRepositoryInterface } from "../Services/Repository/VariablesRepositoryInterface";
 import type { GameRoom } from "./GameRoom";
 import type { RainTimelineService } from "./Services/RainTimelineService";
@@ -16,7 +16,7 @@ export class MeadowManager extends MeadowSimulation {
         room: Pick<GameRoom, "getWam" | "sendSubMessageToRoom">,
         rain: Pick<RainTimelineService, "slotsFor">,
         /** The water of the relief: the soil under it is soaked, and its grass drowns. */
-        water: () => Pick<WaterGrid, "depthAt"> | undefined,
+        water: () => MeadowWater | undefined,
         private readonly store?: { repository: VariablesRepositoryInterface; roomUrl: string },
         private readonly clockNow: () => number = Date.now,
         /** The size of the map in cells of the relief, once read. */

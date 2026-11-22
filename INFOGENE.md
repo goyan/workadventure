@@ -4013,6 +4013,14 @@ Le gel de #392 était calculé par chaque navigateur d'après sa température, a
 deux joueurs pouvaient ne pas voir la même glace, et rien (feu, météore) ne pouvait la trouer. Pour qui suit le temps
 du serveur, la glace est maintenant tenue par le serveur, case par case.
 
+- **Le courant empêche la glace de prendre** (2026-11-23, sur décision de l'utilisateur). Sur une eau qui court, le froid fait du frasil, des cristaux emportés et brassés par le courant, pas une plaque qui grandit sur place.
+  - **Source.** Gosink et Osterkamp, 1983, *Annals of Glaciology* 4, p. 79 (https://doi.org/10.3189/S0260305500005279). Ils citent la règle des rivières de Norvège (Carstens 1971) : « moving frazil slush if the water velocity is >0.6 and <1.2 m s-1, and open if the water velocity is >1.2 m s-1 ». Pour le Saint-Laurent (Starosolszky 1971), la surface « usually remains free of ice » au-delà de 1,0 m/s. Ils ajoutent que ces vitesses sont imprécises : elles varient avec la profondeur, la rugosité du fond et la météo.
+  - **Règle.** Jusqu'à 0,6 m/s (`ICE_CURRENT_SHEET_MS`), la glace prend comme sur une eau calme. À partir de 1,2 m/s (`ICE_CURRENT_OPEN_MS`), elle ne prend plus. Entre les deux, sa croissance diminue en ligne droite (`iceCurrentShare`). La droite est un choix : les sources donnent les bornes des régimes, pas de loi entre elles. Le courant ne fait ni fondre ni partir une glace déjà prise : la chaleur de l'eau et la débâcle ne sont pas modélisées.
+  - **Vitesse.** Elle est lue par tuile de 32 px (`WaterGrid.tileSpeedAt`) : ce que portent ses quatre cellules, rapporté à l'eau qu'elles tiennent, comme un bloc des vitesses envoyées aux navigateurs, mais sur un carré plus fin. Elle est exprimée en m/s du temps de la carte.
+  - **Quand la règle ne s'applique pas.** Elle ne vaut qu'avec l'inertie de l'eau. Sans inertie, l'eau ne garde pas de vitesse, et la glace prend comme avant, au bit près. Pendant le rattrapage d'une salle vide, l'eau va sans inertie : la glace prend donc comme avant.
+  - **Où elle s'applique.** Le calcul est dans `MeadowSimulation`, qui lit la grille d'eau qu'elle a déjà. Il vaut donc aussi dans le fil de calcul et pour le sol local d'un joueur.
+  - **Carte d'entrée.** Mesure hors jeu de son eau après 30 min d'inertie, sur 12 744 tuiles mouillées : 815 tuiles (6,4 %) vont à 1,2 m/s ou plus, et n'ont donc plus de glace ; 722 (5,7 %) sont entre 0,6 et 1,2 m/s, et y ont une glace plus mince. Le reste, lacs et mares, est inchangé.
+
 - **Modèle** (`libs/map-editor/src/Terrain/Ice.ts`, champ `ice` de `Meadow`). Une épaisseur en millimètres sur l'eau
   de chaque case (au moins 0,5 px d'eau), jamais plus épaisse que cette eau : une flaque gèle entièrement.
   - Prise en glace sous 0 °C, loi de Stefan : `365 × (−T) × (1 + vent / 30) / max(épaisseur, 10)` mm par jour,
