@@ -2842,7 +2842,8 @@ ancré sous la pastille (`ClockLine/ChipPopover.svelte`). Rien d'ouvert : barre 
 
 - **Qui les voit** : comme les rangées d'avant, rien de changé. Chaque pastille suit son entrée du menu des
   applications (`catastrophePanelStore`, `visualisationPanelStore`), hors mode Basique ; dans l'éditeur de carte aussi.
-  Activée depuis le menu, la pastille ouvre aussitôt son panneau (on vient choisir).
+  Activée depuis le menu, la pastille ouvre aussitôt son panneau (on vient choisir) : les deux restent montées,
+  masquées, tant que le menu ne les montre pas.
 - **Panneau Catastrophes** : onglets Catastrophes | Météo, les six tuiles, le curseur de taille, « Toute la carte » de
   l'averse, et l'onglet Météo (conditions manuelles, curseurs et boutons − et +) qui défile à l'intérieur quand la
   place manque. Fermer le panneau **laisse la catastrophe armée** : la pastille le dit (« Boule · 4 cases », teinte
@@ -2855,8 +2856,9 @@ ancré sous la pastille (`ClockLine/ChipPopover.svelte`). Rien d'ouvert : barre 
   ligne de l'horloge (+ 8 px).
 - **Fermeture** : clic sur la pastille ; appui n'importe où ailleurs, sur la carte compris (c'est là qu'on commence à
   viser : l'appui ferme le panneau et lance la catastrophe choisie comme avant) ; Échap. **Échap désarme d'abord**
-  (panneau ouvert ou non), puis, rien d'armé, ferme le panneau et rend le focus à sa pastille : un seul écouteur, pour
-  que la même touche ne fasse pas les deux. Un curseur ou une case du panneau resté focalisé est relâché à la fermeture
+  (panneau ouvert ou non), puis, rien d'armé, ferme le panneau et rend le focus à sa pastille : un seul écouteur par
+  pastille, et une touche prise par l'une (catastrophe désarmée, écoutée en phase de capture) ne ferme pas le panneau
+  de l'autre. Un curseur ou une case du panneau resté focalisé est relâché à la fermeture
   (un champ focalisé suspend les entrées du jeu). L'appui dehors est écouté en `pointerdown` (phase de capture) :
   `svelte-outside` écarté, il écoute `click`/`mousedown` et ignore un événement dont le défaut est empêché, ce que fait
   Phaser sur son canevas.

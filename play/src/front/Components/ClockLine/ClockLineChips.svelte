@@ -73,15 +73,16 @@
 </script>
 
 <!-- The chips of the disasters and of the visualisation, on the clock line: the last items, so the leftmost of the
-     line (it is laid right to left). In a row of their own, they start a new line of the clock line (it wraps). -->
-{#if $catastrophePanelStore || $visualisationPanelStore}
-    <div
-        bind:this={row}
-        class="flex items-center gap-2 {fold === 'own-row' ? 'basis-full justify-end' : ''}"
-        data-testid="clock-line-chips"
-        data-fold={fold}
-    >
-        <CatastrophePanel compact={fold === "icons"} />
-        <VisualisationChip compact={fold === "icons"} />
-    </div>
-{/if}
+     line (it is laid right to left). In a row of their own, they start a new line of the clock line (it wraps). Both
+     stay mounted while hidden: a chip shown from the apps menu then sees it shown, and opens its panel; the tab and the
+     size its panel shows are kept. -->
+<div
+    bind:this={row}
+    class="flex items-center gap-2 {fold === 'own-row' ? 'basis-full justify-end' : ''}"
+    class:hidden={!($catastrophePanelStore || $visualisationPanelStore)}
+    data-testid="clock-line-chips"
+    data-fold={fold}
+>
+    <CatastrophePanel compact={fold === "icons"} />
+    <VisualisationChip compact={fold === "icons"} />
+</div>

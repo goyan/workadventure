@@ -52,16 +52,23 @@
     }
 
     // One listener for Escape: what the owner does with it first (disarm), else the popover closes, the focus back on
-    // its chip. Two listeners would both act on the same key.
+    // its chip. Taken once for all the chips: a key one of them used (a disaster disarmed) closes no other popover.
+    // An owner with its own use of the key listens in the capture phase, before the popovers that only close.
     $effect(() => {
         if (!open && !listenEscape) return;
         const onKeydown = (event: KeyboardEvent): void => {
-            if (event.key !== "Escape") return;
-            if (onEscape?.()) return;
-            if (open) close(true);
+            if (event.key !== "Escape" || event.defaultPrevented) return;
+            if (onEscape?.()) {
+                event.preventDefault();
+                return;
+            }
+            if (!open) return;
+            event.preventDefault();
+            close(true);
         };
-        window.addEventListener("keydown", onKeydown);
-        return () => window.removeEventListener("keydown", onKeydown);
+        const capture = onEscape !== undefined;
+        window.addEventListener("keydown", onKeydown, capture);
+        return () => window.removeEventListener("keydown", onKeydown, capture);
     });
 
     // A press anywhere else closes the popover: on the map too, where it starts aiming the disaster chosen. Listened to
