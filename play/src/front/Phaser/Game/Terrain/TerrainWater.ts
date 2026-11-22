@@ -1,6 +1,7 @@
 import {
     poolBasins,
     reliefCells,
+    SLOW_SPEED_UNITS,
     SPEED_BLOCK_CELLS,
     SPEED_UNITS,
     TERRAIN_CELL,
@@ -27,6 +28,8 @@ export interface WaterState {
      * (towards the east, towards the south), row by row, already unzipped.
      */
     speeds?: Uint8Array;
+    /** The slow speeds apart, unzipped (TerrainWaterMessage.slowSpeeds): where `speeds` says 0. */
+    slowSpeeds?: Uint8Array;
 }
 
 /** The last state of the water and the one before it, over the grid the server simulates. */
@@ -49,6 +52,8 @@ export interface SettledWater {
      */
     trend?: Float32Array;
     trendShown?: Int8Array;
+    /** Whether that trend is known yet: the waves of the water are sampled for a few seconds first. */
+    trendReady?: boolean;
 }
 
 /** Water thinner than this is a film the feet stand in: what stands or walks reads the ground under it. */
@@ -65,8 +70,11 @@ const DRAWN_PX = 1 / 8;
 const GLIDE_DRAW_MS = 200;
 /** The shortest glide between two states: the server never tells the water more often than every step. */
 const SHORTEST_GLIDE_MS = 100;
-/** A trend nobody read for this long is let go (the view of the flows reads it ten times a second). */
-const TREND_UNREAD_MS = 2000;
+/**
+ * A trend nobody read for this long is let go (the view of the flows reads it ten times a second): a view closed and
+ * opened again within half a minute does not wait for its trend again.
+ */
+const TREND_UNREAD_MS = 30_000;
 
 /**
  * The water of the relief as this browser shows it: the depth of the water over each cell of the grid the server
@@ -98,6 +106,8 @@ export class TerrainWater {
     private trendReadAt = -Infinity;
     /** The speed of the water block by block, as the server last told it; undefined when it tells none. */
     private speeds: Int8Array | undefined;
+    /** The slow speeds, in SLOW_SPEED_UNITS, where `speeds` says 0; undefined when the server tells none. */
+    private slowSpeeds: Int8Array | undefined;
     private wet = false;
     private changes = 0;
     /** How many of those changes were states of the water received. */
@@ -197,6 +207,10 @@ export class TerrainWater {
             state.speeds && state.speeds.length === blocks * 2
                 ? Int8Array.from(state.speeds, (byte) => (byte << 24) >> 24)
                 : undefined;
+        this.slowSpeeds =
+            this.speeds && state.slowSpeeds && state.slowSpeeds.length === blocks * 2
+                ? Int8Array.from(state.slowSpeeds, (byte) => (byte << 24) >> 24)
+                : undefined;
         this.bytes = bytes;
         this.seq = state.seq;
         this.wet = wet || this.from.some((depth) => depth > 0);
@@ -248,7 +262,7 @@ export class TerrainWater {
             before: this.before,
             seconds: this.betweenMs / 1000,
             ...(this.speeds ? { speedAt: (cellX: number, cellY: number) => this.speedOfCell(cellX, cellY) } : {}),
-            ...(trend ? { trend: trend.trend(), trendShown: trend.shown() } : {}),
+            ...(trend ? { trend: trend.trend(), trendShown: trend.shown(), trendReady: trend.ready() } : {}),
         };
     }
 
@@ -274,6 +288,11 @@ export class TerrainWater {
         if (column < 0 || row < 0 || column >= this.grid.width || row >= this.grid.height) return { x: 0, y: 0 };
         const columns = Math.ceil(this.grid.width / SPEED_BLOCK_CELLS);
         const at = (Math.floor(row / SPEED_BLOCK_CELLS) * columns + Math.floor(column / SPEED_BLOCK_CELLS)) * 2;
+        const slow = this.slowSpeeds;
+        // Slower than a quarter of a cell a second: the slow speeds say how slow, when the server tells them.
+        if (slow && speeds[at] === 0 && speeds[at + 1] === 0) {
+            return { x: slow[at] / SLOW_SPEED_UNITS, y: slow[at + 1] / SLOW_SPEED_UNITS };
+        }
         return { x: speeds[at] / SPEED_UNITS, y: speeds[at + 1] / SPEED_UNITS };
     }
 

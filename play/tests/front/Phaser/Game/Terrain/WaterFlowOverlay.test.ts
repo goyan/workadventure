@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { massLabel } from "../../../../../src/front/Phaser/Game/Terrain/WaterFlowOverlay";
 
-const mass = { cells: 100, areaM2: 380, meanDepthM: 0.9, x: 0, y: 0 };
+const mass = { cells: 100, areaM2: 380, meanDepthM: 0.9, x: 0, y: 0, measuring: false };
 const plain = (text: string): string => text.replace(/\s/g, " ");
 
 describe("massLabel", () => {
@@ -16,5 +16,11 @@ describe("massLabel", () => {
     it("tells a body that empties, and one that neither fills nor empties", () => {
         expect(plain(massLabel({ ...mass, volumeM3: 342, trendM3PerMinute: -12 }))).toContain("▼ −12 m³/min");
         expect(massLabel({ ...mass, volumeM3: 342, trendM3PerMinute: 0.01 })).toMatch(/\n=$/);
+    });
+
+    it("does not say a body neither fills nor empties while it is being measured", () => {
+        const label = massLabel({ ...mass, volumeM3: 342, trendM3PerMinute: 0, measuring: true });
+        expect(label).not.toMatch(/=$/);
+        expect(label).toMatch(/\n…$/);
     });
 });

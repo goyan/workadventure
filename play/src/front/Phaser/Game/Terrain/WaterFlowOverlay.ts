@@ -3,7 +3,7 @@ import { TERRAIN_CELL } from "@workadventure/map-editor";
 import type { TerrainData, WaveSettings } from "@workadventure/map-editor";
 import { DEPTH_INGAME_TEXT_INDEX } from "../DepthIndexes";
 import type { SettledWater } from "./TerrainWater";
-import { flowOverBlock, flowSpeedColor } from "./WaterFlowField";
+import { flowOverBlock, flowSpeedColor, SLOWEST_TOLD_SPEED } from "./WaterFlowField";
 import { waterMassesOf } from "./WaterMasses";
 import type { WaterMass } from "./WaterMasses";
 
@@ -12,8 +12,7 @@ export interface WaterFlowOverlayOptions {
     water: {
         /** With `now` (ms of the game), the trend of the level too: kept while it is read so. */
         settled(now?: number): SettledWater;
-        /** The view is closed: the trend is let go. */
-        dropTrend?(): void;
+
         relief(): TerrainData | undefined;
         basin?(): TerrainData | undefined;
         version(): number;
@@ -39,8 +38,8 @@ const FRAME_MS = 100;
 const ARROW_SPACING = 44;
 /** Never more arrows than this on the screen. */
 const MOST_ARROWS = 3000;
-/** Water slower than this, in metres a second, has no arrow. */
-const SLOWEST_SHOWN = 0.03;
+/** Water slower than this, in metres a second, has no arrow: the slowest the server tells. */
+const SLOWEST_SHOWN = SLOWEST_TOLD_SPEED;
 /** An arrow is as long as its block allows from this speed on, in metres a second. */
 const FULL_ARROW_SPEED = 2;
 /**
@@ -64,7 +63,8 @@ const amount = (value: number): string => (Math.abs(value) >= 10 ? whole.format(
 export function massLabel(mass: WaterMass): string {
     const trend = mass.trendM3PerMinute;
     const steady = Math.abs(trend) < Math.max(0.05, mass.volumeM3 * 0.0005);
-    const told = steady ? "=" : `${trend > 0 ? "▲ +" : "▼ −"}${amount(Math.abs(trend))} m³/min`;
+    // While its trend is being measured, it is not said to stay as it is.
+    const told = mass.measuring ? "…" : steady ? "=" : `${trend > 0 ? "▲ +" : "▼ −"}${amount(Math.abs(trend))} m³/min`;
     return `${amount(mass.volumeM3)} m³ · ${amount(mass.areaM2)} m² · ${tenth.format(mass.meanDepthM)} m\n${told}`;
 }
 
@@ -214,7 +214,6 @@ export class WaterFlowOverlay {
 
     private clear(): void {
         if (!this.drawn) return;
-        this.options.water.dropTrend?.();
         this.masses = [];
         this.graphics.clear();
         for (const label of this.labels) label.setVisible(false);

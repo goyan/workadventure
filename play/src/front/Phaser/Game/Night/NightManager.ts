@@ -26,6 +26,7 @@ import { partyRoomsStore } from "../../../Stores/LampEffectsStore";
 import { rgbLampLightsStore, type RgbLampLight } from "../../../Stores/RgbLampStore";
 import { skyWindowLightsStore } from "../../../Stores/SkyWindowLightStore";
 import { torchLightsStore } from "../../../Stores/TorchStore";
+import { worldFallStore } from "../../../Stores/WorldFallStore";
 import type { GameScene } from "../GameScene";
 import { shownMapPlace } from "../Weather/RealWeatherClient";
 import {
@@ -227,7 +228,7 @@ export class NightManager {
         });
         // Another moment of the sky of the world: its city and its light at once.
         this.unsubscribeWorld = derived(
-            [worldMomentStore, worldCustomMinutesStore, worldPointStore],
+            [worldMomentStore, worldCustomMinutesStore, worldPointStore, worldFallStore],
             (values) => values,
         ).subscribe(() => {
             this.worldCity = undefined;
@@ -244,15 +245,19 @@ export class NightManager {
             const sunAt = this.sunInstant(date);
             // The sun of the place of the map (Paris when it has none), shared with its real weather.
             const mapPlace = shownMapPlace(this.scene.getGameMap().getWamFile()?.getWam().settings);
-            // The sky of the world: the point chosen on its map, or the city where it is now the moment chosen (the height of
-            // its sun for the morning, noon and the evening, its solar time for an hour chosen).
+            // The sky of the world: the point chosen on its map, the place picked where it rains or snows, or the city
+            // where it is now the moment chosen (the height of its sun for the morning, noon and the evening, its solar
+            // time for an hour chosen).
             const point = get(worldPointStore);
+            const fall = get(worldFallStore);
             this.worldCity =
                 this.mode !== NightMode.World || !date
                     ? undefined
                     : point
                       ? placeOfPoint(point, pointWords())
-                      : worldCityOf(date, get(worldMomentStore), get(worldCustomMinutesStore), this.worldCity);
+                      : fall
+                        ? fall.place
+                        : worldCityOf(date, get(worldMomentStore), get(worldCustomMinutesStore), this.worldCity);
             worldCityStore.set(this.worldCity);
             // The clock shown follows the time of the place of the map (of the city of the world).
             mapTimeZoneStore.set(this.worldCity?.timezone ?? mapPlace?.timezone);

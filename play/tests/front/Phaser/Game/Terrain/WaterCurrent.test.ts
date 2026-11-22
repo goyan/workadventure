@@ -9,6 +9,7 @@ import {
 import type { TerrainData } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
 import { currentPush, sweptShare, waterCurrentAt } from "../../../../../src/front/Phaser/Game/Terrain/WaterCurrent";
+import { TerrainWater } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
 
 /** Water and relief given cell by cell: `depth(x, y)` pixels of water, `ground(x, y)` the height of the ground. */
 function waterOf(depth: (x: number, y: number) => number, ground: (x: number, y: number) => number = () => -64) {
@@ -166,5 +167,27 @@ describe("sweptShare", () => {
         const between = sweptShare(12, 4);
         expect(between).toBeGreaterThan(0);
         expect(between).toBeLessThan(1);
+    });
+});
+
+describe("the current under the slow speeds the server tells apart", () => {
+    /** A pond 20 px deep over 8 by 8 cells: still in quarters of a cell a second, `slow` 250ths east. */
+    const pond = (slow?: number): TerrainWater => {
+        const water = new TerrainWater();
+        const depths = new Uint8Array(8 * 8 * 2);
+        for (let index = 0; index < 64; index++) depths[index * 2] = 20 * 8;
+        const speeds = new Uint8Array(8);
+        const slowSpeeds = slow === undefined ? undefined : Uint8Array.from([slow, 0, slow, 0, slow, 0, slow, 0]);
+        water.receive({ x: 0, y: 0, width: 8, height: 8, seq: 1, full: true, depths, speeds, slowSpeeds }, 0);
+        return water;
+    };
+
+    it("carries nobody, as before: the avatars and the canoes are pushed the same", () => {
+        // 31 250ths of a cell a second (7 cm a second): the fastest the slow speeds tell.
+        const slow = pond(31);
+        expect(slow.speedAt(8, 8)?.x).toBeCloseTo(0.124, 5);
+        expect(currentPush(slow, 8, 8, 0, 1, 180)).toEqual(currentPush(pond(), 8, 8, 0, 1, 180));
+        expect(currentPush(slow, 8, 8, 0, 1, 180)).toEqual({ x: 0, y: 0 });
+        expect(waterCurrentAt(slow, 8, 8, 0)).toEqual(waterCurrentAt(pond(), 8, 8, 0));
     });
 });

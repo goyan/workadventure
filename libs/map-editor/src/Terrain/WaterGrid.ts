@@ -244,9 +244,37 @@ const WAVE_CELLS_PER_MOVE = 0.35;
  */
 export const SPEED_BLOCK_CELLS = 4;
 export const SPEED_UNITS = 4;
+/**
+ * The water slower than half of one of those units (told 0) is told apart, block by block, in this many units a
+ * cell a second (two signed bytes a block, 0 where the speeds above say more): the slow currents of a pond a source
+ * feeds, to about 2 mm a second. Linear: the range is that of half a quarter of a cell a second (from 14 to 31
+ * units), a law that spreads it would gain nothing; few values, so that it zips well.
+ */
+export const SLOW_SPEED_UNITS = 250;
 
 /** How wide a cell of the relief is, in metres. */
 export const CELL_METRES = Math.sqrt(CELL_AREA_M2);
+
+/**
+ * The slowest water whose speed is told, in metres a second: slower, it is told still (it costs no byte), and the
+ * view of the flows draws no arrow there.
+ */
+export const SLOWEST_TOLD_METRES = 0.03;
+/** The same, in cells a second. */
+export const SLOWEST_TOLD_CELLS = SLOWEST_TOLD_METRES / CELL_METRES;
+
+/** The byte of a slow speed (cells a second, as seen): 0 under SLOWEST_TOLD_CELLS, or where the speeds tell it. */
+export function slowSpeedByte(speed: number): number {
+    if (!Number.isFinite(speed) || Math.abs(speed) < SLOWEST_TOLD_CELLS) return 0;
+    if (Math.round(speed * SPEED_UNITS) !== 0) return 0;
+    const units = Math.round(speed * SLOW_SPEED_UNITS);
+    return (units > 127 ? 127 : units < -127 ? -127 : units) & 255;
+}
+
+/** The speed, in cells a second, a byte of the slow speeds tells. */
+export function slowSpeedOf(byte: number): number {
+    return ((byte << 24) >> 24) / SLOW_SPEED_UNITS;
+}
 
 /** How fast a wave runs in water that deep (pixels), in cells a second. */
 export function waveSpeed(depthPx: number): number {
@@ -1233,6 +1261,15 @@ export class WaterGrid {
      * water it holds. Undefined for a water that has no inertia: it keeps no flow to tell.
      */
     public writeSpeeds(pace = 1): Uint8Array | undefined {
+        return this.writeSpeedBytes(pace)?.speeds;
+    }
+
+    /**
+     * The speeds of writeSpeeds, and the slow ones apart (`slow`, in SLOW_SPEED_UNITS, for the blocks those speeds
+     * tell still): the two are read together, the second by the browsers that know it. No `slow` when no water is
+     * slow enough and fast enough for it: none is sent.
+     */
+    public writeSpeedBytes(pace = 1): { speeds: Uint8Array; slow?: Uint8Array } | undefined {
         const { width, height } = this.bounds;
         const size = width * height;
         if (this.flowEast.length !== size || size === 0) return undefined;
@@ -1240,6 +1277,7 @@ export class WaterGrid {
         const columns = Math.ceil(width / SPEED_BLOCK_CELLS);
         const rows = Math.ceil(height / SPEED_BLOCK_CELLS);
         const bytes = new Uint8Array(columns * rows * 2);
+        const slow = new Uint8Array(columns * rows * 2);
         const depth = this.depth;
         const east = this.flowEast;
         const south = this.flowSouth;
@@ -1247,6 +1285,8 @@ export class WaterGrid {
             const units = Math.round(speed * seen * SPEED_UNITS);
             return (units > 127 ? 127 : units < -127 ? -127 : units) & 255;
         };
+        // Told only where `byte` says 0 (under half a unit): within 32 units, a signed byte.
+        const slowByte = (speed: number): number => slowSpeedByte(speed * seen);
         for (let blockRow = 0; blockRow < rows; blockRow++) {
             for (let blockColumn = 0; blockColumn < columns; blockColumn++) {
                 let held = 0;
@@ -1268,9 +1308,15 @@ export class WaterGrid {
                 const at = (blockRow * columns + blockColumn) * 2;
                 bytes[at] = byte(towardsEast / held);
                 bytes[at + 1] = byte(towardsSouth / held);
+                // Both parts of a slow block: one of them may be fast enough for the speeds above.
+                if (bytes[at] === 0 && bytes[at + 1] === 0) {
+                    slow[at] = slowByte(towardsEast / held);
+                    slow[at + 1] = slowByte(towardsSouth / held);
+                }
             }
         }
-        return bytes;
+        // No slow current: nothing to tell (a browser reads the speeds alone, as from a server that tells none).
+        return slow.some((value) => value !== 0) ? { speeds: bytes, slow } : { speeds: bytes };
     }
 
     /**

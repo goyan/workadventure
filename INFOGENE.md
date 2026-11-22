@@ -1658,6 +1658,29 @@ d'heure) à ±2 min. La nuit, un voile bleu nuit
     le 21 de chaque mois, au quart d'heure : 95 % au moins, 21° au plus). Effets : l'**heure choisie** et **Midi**
     peuvent tomber sur ces villes (ex. 18 h 30 le 21 juin à 06:00 UTC : Unalaska au lieu d'Auckland) ; un **point
     cliqué** près d'elles porte leur nom et leur fuseau.
+  - **Pluie** et **Neige** (sous les moments, goutte et flocon) : le ciel d'un lieu où il pleut (ou neige) **en ce
+    moment**, d'après la météo réelle. Au clic, le navigateur demande au pusher `/real-weather/world` (authentifié,
+    30 requêtes/min par joueur comme les autres routes météo), qui pose **une seule** requête à Open-Meteo pour tous
+    les lieux (`openMeteoWorldUrl` : coordonnées séparées par des virgules, `current=weather_code,temperature_2m,
+    relative_humidity_2m,precipitation,is_day`), gardée 10 min pour tout le pusher (`WorldWeatherService`, une
+    requête partagée entre clics simultanés, nouvel essai une minute après un échec, rien de plus vieux que 30 min) ;
+    le navigateur garde la réponse 5 min (`WorldWeatherClient`). Jamais en fond : seulement au clic. Chaque lieu de
+    la requête compte comme un appel du quota gratuit (46 lieux, 10 000 appels/jour) : au plus 6 requêtes par heure.
+    Lieux : les villes du ciel du monde (`WORLD_CITIES`, déplacées dans `common/WorldCities.ts` pour le pusher) et
+    quatre lieux réputés enneigés, demandés pour la pluie et la neige seulement, pas pour les moments
+    (`WORLD_WEATHER_EXTRA_PLACES` : Sapporo, Tromsø, Nuuk, Ushuaïa ; Wikipédia et `zone1970.tab`). **Règle** comme
+    le jeu (`WorldWeatherPick.fallOf`) : il tombe quelque chose quand le code WMO est une pluie, une neige ou un
+    orage (`weatherFromWmoCode`, même avec 0 mm comptés : le jeu dessine alors une pluie faible), et c'est de la
+    **neige** dès la moitié de neige au thermomètre mouillé (`snowShare` de `Precipitation.ts`), pas d'après le code
+    (un code de neige par 9 °C est dessiné en pluie). **Choix** : de jour d'abord (pour la voir), puis la plus
+    forte, puis par nom ; un second clic prend le lieu suivant de cette liste, en boucle. Le lieu est marqué sur la
+    carte du monde (le point jaune du lieu suivi), l'horloge prend son heure (il peut y faire nuit). Le menu dit
+    « Ciel de Lisbonne : il y pleut (2,4 mm/h) » ou « … il y neige (0,4 mm/h d'eau) », « faiblement » sans eau
+    comptée, puis « Il n'y pleut plus » quand la météo du lieu suivi (relue toutes les 5 min) ne le montre plus ; le
+    lieu reste. Aucun lieu : « Il ne neige dans aucune ville de la liste en ce moment », échec : « La météo du monde
+    est indisponible pour l'instant : rien n'a changé » ; le lieu suivi ne change pas. Ordre : un point cliqué
+    l'emporte, puis le lieu de pluie ou de neige, puis le moment ; un moment ou un clic sur la carte quitte le lieu
+    (`clearWorldFall`). Choix gardé dans le navigateur (`nightWorldFall`, par le nom du lieu).
   - **Heure choisie** : inchangée, la ville dont l'**heure solaire vraie** est la plus proche (avec l'équation du
     temps, ±16 min selon la saison), gardée à 50 min près. **Point cliqué** sur la carte : le menu dit alors
     « Ciel de … (point choisi sur la carte) », surligné, puisqu'aucun moment n'est enfoncé. Le point garde ses
@@ -2689,7 +2712,7 @@ Une seule équation partout, mais ce qui freine l'eau dépend de la case. Curseu
 est activée ; `UpdateWaterSettingMessage.waveRoughness`, `waveDamping`, `waveBreaking`, `waveMomentum`, champs 9 à
 12, facultatifs.
 
-- **Frottement du sol** (`roughness`, × 0 à 10, 1 par défaut et en réel) : frottement de Manning. La part de débit
+- **Frottement du sol** (`roughness`, × 0 à 10, 1 par défaut et en réel ; curseur au pas de 0,05 avec des boutons − et + d'un cran, `Terrain/WaveSteps.ts`, les autres réglages des vagues gardent leur pas) : frottement de Manning. La part de débit
   perdue par seconde vaut le carré de la rugosité du sol × la vitesse de l'eau / sa profondeur à la puissance 4/3 :
   presque rien sous une houle au large, fort sous une lame d'eau rapide sur la terre. La rugosité vient du sol
   peint sur chaque case (`soilRoughness` : argile 0,022, sable 0,025, terre, gravier et case non peinte 0,03,
@@ -2836,8 +2859,8 @@ lisser sur 1 s ne changeait rien à 1 état par seconde, et pas assez à 5. La r
   s'éteint d'elle-même (`TerrainWater.settled(now)`).
 - **à la demande** : la tendance n'est tenue que tant que la visualisation la lit (`TerrainWater.settled(now)`, dix
   fois par seconde quand « Flux d'eau » est affiché ; aucun autre lecteur). Fermée, aucun parcours de la grille et
-  aucune mémoire (`dropTrend`, ou d'elle-même au premier état après 2 s sans lecture). Rouverte, elle repart de rien
-  (pas de teinte d'avant la fermeture) et ne teinte qu'après 3 s d'observation. Coût mesuré quand elle est tenue
+  aucune mémoire, au premier état reçu après 30 s sans lecture. Rouverte plus tard, elle repart de rien (pas de teinte
+  d'avant la fermeture) et ne teinte qu'après 3 s d'observation. Coût mesuré quand elle est tenue
   (Node, Mac M) : 2 ms par état sur une grille de 600 × 600 cellules (0,2 à 0,3 ms sur 200 × 200), soit 2, 10 ou
   18 ms par seconde à 1, 5 ou 10 états par seconde ; aucun tableau alloué par état ; 17 octets par cellule (quatre
   tableaux `Float32Array` et un `Int8Array`), 6,1 Mo pour 600 × 600. Auparavant, ce coût valait pour tout joueur,
@@ -2856,25 +2879,43 @@ comprise. Sur mer modérée, cette vitesse reste sous son pas d'envoi (un quart 
 flèche. Sur mer forte, une flèche s'inverse d'une seconde à l'autre 15 à 35 % du temps, ce qui est le mouvement réel
 de l'eau sous la vague.
 
-**Pas de flèche sous 0,14 m/s sur une carte à inertie.** Le serveur transmet la vitesse par bloc de 4 × 4 cellules,
-par pas d'un quart de cellule par seconde (`SPEED_UNITS`, 0,137 m/s, `SLOWEST_TOLD_SPEED`) : plus lente, elle est
-dite nulle et l'overlay ne trace rien. La légende le dit (« transmises à partir de 0,14 m/s »). Mesuré sur le modèle
-(étang de 11 × 11 cellules, 30 cm d'eau, source de 100 m³/h au milieu, trop-plein par un chenal) : à « Vitesse de
-l'eau » 1, courants de 6 cm/s au plus, aucun bloc transmis non nul dans l'étang (flèches dans le chenal seulement) ;
-à 4, 82 cellules sur 121 au-dessus de 3 cm/s mais un seul bloc transmis ; à 60, des flèches partout. Une eau
-arrêtée (source à son niveau) n'a de toute façon aucune flèche. La glace n'y change rien : le serveur fait couler
-l'eau sous elle, l'overlay l'ignore.
+**Courants lents** (dès 3 cm/s sur une carte à inertie). Le serveur transmet la vitesse par bloc de 4 × 4 cellules,
+par pas d'un quart de cellule par seconde (`speeds`, `SPEED_UNITS`, 0,137 m/s) : plus lente, elle valait zéro et
+l'overlay ne traçait rien. Un champ facultatif `slowSpeeds` (champ 10 de `TerrainWaterMessage`, même disposition)
+donne, là où `speeds` dit zéro, la vitesse en 250ᵉ de cellule par seconde (2 mm/s), dès 3 cm/s : `SLOW_SPEED_UNITS`,
+`SLOWEST_TOLD_METRES` (une seule constante pour le serveur, le plancher de l'overlay et la légende), codage linéaire
+(`slowSpeedByte`, `slowSpeedOf` : la plage ne va que de 14 à 31 unités, une loi plus fine n'apporterait rien et peu de
+valeurs se compressent bien). Le serveur l'écrit dans le même passage que `speeds` (`WaterGrid.writeSpeedBytes`) et
+ne l'envoie pas quand aucun bloc n'est lent ; `speeds` reste identique octet pour octet (test sur une rivière).
 
-Deux pistes écartées ou laissées en option, chiffrées :
-- **deviner la vitesse d'après la pente** quand le serveur dit zéro : 3 à 6 cm/s sous 30 cm d'eau demandent une
-  pente de 0,001 à 0,002 px par cellule, trente fois sous le bruit des profondeurs reçues (huitième de pixel, et
-  quart de pixel de bande morte : 0,06 px par cellule, qui donnerait une flèche de 0,8 m/s sur un étang immobile) ;
-- **vitesses plus fines** (loi carrée sur le même octet : 2 mm/s au plus fin, toujours 32 cellules/s au plus) :
-  change le sens des octets, donc un `play` ancien face à un `back` neuf pousserait les avatars 5 à 11 fois trop
-  fort ; à faire seulement par un nouveau champ facultatif du protocole. Coût mesuré sur une mer de 80 × 80 qui se
-  calme : 28 octets gzip par message aujourd'hui, 343 sans plancher, 142 avec un plancher de 1 cm/s, 28 avec un
-  plancher de 3 cm/s (environ 56 fois plus sur 600 × 600) ; il faudrait aussi baisser `FLOW_REST_SPEED`
-  (0,1 cellule/s, 5,5 cm/s).
+- **Compatibilité** : un `play` ancien ignore le champ ; un `back` ancien ne l'envoie pas et le `play` neuf trace
+  alors dès 0,14 m/s, comme avant. Déployer `play` et `back` ensemble reste la règle (même commit, protobuf partagé).
+- **Courant des avatars et des canoës inchangé** : `speedAt` lit les vitesses lentes, mais `currentPush` et
+  `waterCurrentAt` ne comptent qu'à partir de 0,2 cellule/s (`CURRENT_REST_SPEED`), au-dessus de toute vitesse lente
+  (0,124 au plus) : test.
+- **Coût mesuré** (gzip par message, `speeds` puis `slowSpeeds`) : mer de 80 × 80 agitée 28 + 122 octets, qui se
+  calme 28 + 31 ; mer de 600 × 600 agitée 78 + 333 à 413, qui se calme 78 + 78 ; étang 28 à 47 + 28 à 34, rien d'envoyé
+  pour une eau sans courant lent. En octets par seconde, × 1, 5 ou 10 états par seconde : sur la mer de 600 × 600
+  agitée, 78 → 411 à 1 état/s, 390 → 2 415 à 5, 780 → 4 912 à 10 ; la finesse adaptative (#446), qui réduit la cadence
+  sous charge, réduit d'autant. Temps d'écriture du serveur inchangé (0,9 ms par message sur 600 × 600, un passage),
+  le calcul de l'eau n'est pas touché ; `FLOW_REST_SPEED` (navigateur seulement) suit le plancher.
+- **Ce que montre l'étang de la capture** (simulation : 11 × 11 cellules, 30 cm d'eau, source de 100 m³/h, trop-plein
+  par un chenal ; blocs de l'étang ayant une flèche, sur 9) : à « Vitesse de l'eau » 1, 1 au lieu de 0 ; à 4, 4 au lieu
+  de 1 ; à 60, 8 au lieu de 7. Les flèches lentes sont courtes et pâles (échelle existante). La légende dit
+  « transmises à partir de 0,03 m/s ».
+- Écartée : deviner la vitesse d'après la pente quand le serveur dit zéro (3 à 6 cm/s sous 30 cm d'eau demandent une
+  pente de 0,001 à 0,002 px par cellule, trente fois sous le bruit des profondeurs reçues).
+
+**La glace ne retient pas l'eau.** La glace du serveur (`Meadow.stepIce`) est une épaisseur à part, posée sur l'eau :
+le pré ne lit l'eau que par `depthAt` (`MeadowManager`, `water: () => Pick<WaterGrid, "depthAt">`) et n'y verse que
+la neige fondue. `WaterGrid.step` ne connaît pas la glace : une source sous un étang gelé verse tout son débit, l'eau
+coule dessous et déborde (test : l'étang garde tout ce que verse la source, puis l'eau sort par le chenal). L'overlay
+ignore aussi la glace : un courant sous la glace a ses flèches.
+
+**« … » : mesure en cours.** À l'ouverture de « Flux d'eau », la tendance n'est connue qu'après 3 s d'observation :
+les étiquettes affichent « … » au lieu de « = » (qui affirmait « ni gain ni perte »), et la légende le dit. Fermée,
+la vue garde sa tendance 30 s (`TREND_UNREAD_MS`) : rouverte dans ce délai, elle n'attend pas de nouveau ; au-delà,
+la tendance est lâchée au premier état reçu.
 
 Tout est lu des profondeurs que le navigateur reçoit déjà (`TerrainWater.settled` garde l'état d'avant et le temps
 entre les deux) : rien n'est demandé au serveur. Limites : les vitesses sont **estimées** d'après la pente de la

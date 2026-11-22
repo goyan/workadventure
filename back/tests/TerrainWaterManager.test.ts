@@ -643,6 +643,13 @@ describe("TerrainWaterManager", () => {
         // Two bytes a block of 4 cells a side over the whole grid, some of them moving.
         expect(speeds).toHaveLength(Math.ceil(message.width / 4) * Math.ceil(message.height / 4) * 2);
         expect(speeds.some((byte) => byte !== 0)).toBe(true);
+        // The slow ones apart, in the same layout when any, and none on a map whose water has no inertia.
+        expect(told(false).slowSpeeds).toBeUndefined();
+        if (message.slowSpeeds) {
+            const slow = new Uint8Array(gunzipSync(message.slowSpeeds));
+            expect(slow).toHaveLength(speeds.length);
+            expect(slow.some((byte) => byte !== 0)).toBe(true);
+        }
     });
 
     it("tells the room as often as the map asks while the water moves", () => {

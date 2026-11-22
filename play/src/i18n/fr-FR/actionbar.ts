@@ -91,7 +91,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         rising: "Niveau qui monte",
         falling: "Niveau qui baisse",
         trend: "La teinte suit la tendance du niveau sur quelques secondes : une eau qui ne fait que clapoter n'en a pas.",
-        masses: "Sur chaque masse d'eau : volume, surface, profondeur moyenne, puis ce qu'elle gagne ou perd par minute.",
+        masses: "Sur chaque masse d'eau : volume, surface, profondeur moyenne, puis ce qu'elle gagne ou perd par minute (« … » : mesure en cours, quelques secondes après l'ouverture).",
         realTime: "Débits en temps réel : à « Vitesse de l'eau » 4, une source de 100 m³/h verse 6,7 m³/min.",
         totals: "Sur toute la carte : {stock} m³ d'eau, {area} m² sous l'eau",
         noWater: "Le serveur n'a encore rien dit de l'eau de cette carte.",
