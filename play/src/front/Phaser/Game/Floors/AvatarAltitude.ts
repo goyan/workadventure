@@ -1,5 +1,13 @@
-import { heightAt, metresOf, TERRAIN_CELL } from "@workadventure/map-editor";
-import type { TerrainData } from "@workadventure/map-editor";
+import {
+    heightAt,
+    metresOf,
+    poolStyleOf,
+    soilAt,
+    soilName,
+    soilRoughness,
+    TERRAIN_CELL,
+} from "@workadventure/map-editor";
+import type { SoilName, TerrainData } from "@workadventure/map-editor";
 import { WATER_SHOWN_PX } from "../Terrain/TerrainWater";
 
 /**
@@ -31,7 +39,17 @@ export interface PointerGround {
     depth?: number;
     /** The surface is frozen: it is the one of the ice, at the level of its water. */
     ice?: boolean;
+    /** The soil painted on the cell, or a pool; undefined where nothing is painted (bare earth for the water). */
+    soil?: SoilName | "pool";
+    /** How rough that ground is under running water: the n of Manning the water meets there (see soilRoughness). */
+    roughness?: number;
 }
+
+/**
+ * The room the name of a soil takes under the pointer, in characters: the longest of the names of the soils and of a
+ * pool, in French as in English ("Gravier", "Prairie", "Piscine").
+ */
+export const SOIL_NAME_CH = 7;
 
 /** The water as the pointer reads it: the ground the server pours it over, and its depth in the last state. */
 export interface PointerWater {
@@ -69,20 +87,35 @@ export function pointerGroundAt(
     frozenAt: (point: { x: number; y: number }) => boolean,
 ): PointerGround | undefined {
     if (!pointer || !terrain || Object.keys(terrain.chunks).length === 0) return undefined;
+    // The ground the water stands on: the floor of a pool where its basin is dug.
     const groundPx = heightAt(
         water.basin() ?? terrain,
         Math.floor(pointer.x / TERRAIN_CELL),
         Math.floor(pointer.y / TERRAIN_CELL),
     );
     const depthPx = water.settledDepthAt(pointer.x, pointer.y);
+    // The soil of the map, as the water reads it (WaterGrid): a cell not painted runs as bare earth.
+    const code = soilAt(terrain, Math.floor(pointer.x / TERRAIN_CELL), Math.floor(pointer.y / TERRAIN_CELL));
+    const soil = poolStyleOf(code) === undefined ? soilName(code) : "pool";
     // The ice is read only over water: it goes by the meadow and the walls of the map.
-    return pointerGround(groundPx, depthPx, depthPx >= WATER_SHOWN_PX && frozenAt(pointer));
+    return {
+        ...pointerGround(groundPx, depthPx, depthPx >= WATER_SHOWN_PX && frozenAt(pointer)),
+        ...(soil ? { soil } : {}),
+        roughness: soilRoughness(code),
+    };
 }
 
 /** Whether two readings show the same: the stack is drawn again only when one of its figures changes. */
 export function samePointerGround(a: PointerGround | undefined, b: PointerGround | undefined): boolean {
     if (a === undefined || b === undefined) return a === b;
-    return a.ground === b.ground && a.surface === b.surface && a.depth === b.depth && a.ice === b.ice;
+    return (
+        a.ground === b.ground &&
+        a.surface === b.surface &&
+        a.depth === b.depth &&
+        a.ice === b.ice &&
+        a.soil === b.soil &&
+        a.roughness === b.roughness
+    );
 }
 
 /** Metres as shown to the players, to the decimetre: signed ("+1,6 m") for an altitude, unsigned for a depth. */

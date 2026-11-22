@@ -2477,7 +2477,14 @@ la goutte devient un flocon et l'infobulle dit « Surface de la glace » : la m�
 (`isOnFrozenWater`). Même échelle que « Tenir un niveau » des sources et des puits et que les masses de « Flux
 d'eau » (`metresOf`, 0 m = niveau du sol de la carte) : la surface lue sous le curseur se compare au niveau tenu. Le
 calcul suit chaque image mais la pastille n'est redessinée que quand un chiffre affiché (au décimètre) change
-(`showPointerGround`). Curseur hors du jeu : la ligne reste, avec des tirets, pour que rien ne bouge. Infobulle et
+(`showPointerGround`). **Le sol peint sous le curseur** colore la montagne (la teinte de l'outil Relief,
+`SOIL_TINTS` ; l'eau d'une piscine pour une piscine) et se nomme, avec les libellés de l'outil Relief, quand la mise
+en page fait au moins 1024 px de large (`@container main-layout`, pastille de 250 px, place du nom le plus long
+réservée : `SOIL_NAME_CH`) ; plus étroit, le nom n'est que dans l'infobulle. Il est lu là où l'eau le lit
+(`soilAt` de la carte, comme `WaterGrid`) : une case non peinte se dit « Terre (non peint) », car l'eau la traite en
+terre nue (même rugosité, même absorption) ; une piscine se dit « Piscine » ; sous l'eau, le sol du fond ; sous un pont
+ou un étage, le sol du dessous. L'infobulle ajoute la rugosité de Manning de ce sol (`soilRoughness`, celle que lit
+l'eau : argile 0,022, sable 0,025, terre et gravier 0,03, rocher 0,04, prairie 0,045, piscine 0,03). Curseur hors du jeu : la ligne reste, avec des tirets, pour que rien ne bouge. Infobulle et
 lecteur d'écran : « Sol sous le curseur −3,6 m · Surface de l'eau −1,2 m · Profondeur 2,4 m ». Sous une Boule posée
 dans l'eau, le serveur compte le dessus de la boule comme fond, que le navigateur ne connaît pas : la lecture peut y
 être fausse.

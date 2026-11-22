@@ -1,4 +1,4 @@
-import { cellKey, heightOfMetres, withHeights } from "@workadventure/map-editor";
+import { cellKey, heightOfMetres, poolSoilCode, soilCode, withHeights, withSoils } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
 import {
@@ -102,19 +102,19 @@ describe("pointerGround", () => {
 describe("pointerGroundAt", () => {
     it("reads the ground of the relief under the pointer, and the water over it", () => {
         const water = waterOf(relief, { "20,5": heightOfMetres(2.4) });
-        expect(pointerGroundAt(relief, { x: 168, y: 88 }, water, dry)).toEqual({ ground: 1.6 });
-        expect(pointerGroundAt(relief, { x: 328, y: 88 }, water, dry)).toEqual({
+        expect(pointerGroundAt(relief, { x: 168, y: 88 }, water, dry)).toMatchObject({ ground: 1.6 });
+        expect(pointerGroundAt(relief, { x: 328, y: 88 }, water, dry)).toMatchObject({
             ground: -0.8,
             surface: 1.6,
             depth: 2.4,
         });
-        expect(pointerGroundAt(relief, { x: 600, y: 600 }, water, dry)).toEqual({ ground: 0 });
+        expect(pointerGroundAt(relief, { x: 600, y: 600 }, water, dry)).toMatchObject({ ground: 0 });
     });
 
     it("reads the floor of a pool where its basin is dug, as the server pours the water over it", () => {
         const basin = withHeights(relief, new Map([[cellKey(30, 5), heightOfMetres(-1.5)]]));
         const water = waterOf(basin, { "30,5": heightOfMetres(1.2) });
-        expect(pointerGroundAt(relief, { x: 488, y: 88 }, water, dry)).toEqual({
+        expect(pointerGroundAt(relief, { x: 488, y: 88 }, water, dry)).toMatchObject({
             ground: -1.5,
             surface: -0.3,
             depth: 1.2,
@@ -124,7 +124,7 @@ describe("pointerGroundAt", () => {
     it("reads the ground and the water under a bridge or a raised floor, not its deck", () => {
         // The water reads its last state over the cell, whatever is built over it (a bridge reads none for walkers).
         const water = { ...waterOf(relief, { "20,5": heightOfMetres(2.4) }), walkerSettledDepthAt: () => 0 };
-        expect(pointerGroundAt(relief, { x: 328, y: 88 }, water, dry)).toEqual({
+        expect(pointerGroundAt(relief, { x: 328, y: 88 }, water, dry)).toMatchObject({
             ground: -0.8,
             surface: 1.6,
             depth: 2.4,
@@ -144,7 +144,56 @@ describe("pointerGroundAt", () => {
     });
 });
 
+describe("the soil under the pointer", () => {
+    const painted = withSoils(
+        relief,
+        new Map([
+            [cellKey(10, 5), soilCode("sand")],
+            [cellKey(20, 5), soilCode("clay")],
+            [cellKey(30, 5), poolSoilCode(0)],
+        ]),
+    );
+
+    it("is the soil painted on the cell, with the roughness the water meets there", () => {
+        expect(pointerGroundAt(painted, { x: 168, y: 88 }, waterOf(painted), dry)).toEqual({
+            ground: 1.6,
+            soil: "sand",
+            roughness: 0.025,
+        });
+    });
+
+    it("is bare earth where nothing is painted, as the water reads it", () => {
+        expect(pointerGroundAt(painted, { x: 600, y: 600 }, waterOf(painted), dry)).toEqual({
+            ground: 0,
+            roughness: 0.03,
+        });
+    });
+
+    it("is the soil of the bottom under the water, and under a bridge or a raised floor", () => {
+        const water = waterOf(painted, { "20,5": heightOfMetres(2.4) });
+        expect(pointerGroundAt(painted, { x: 328, y: 88 }, water, dry)).toEqual({
+            ground: -0.8,
+            surface: 1.6,
+            depth: 2.4,
+            soil: "clay",
+            roughness: 0.022,
+        });
+    });
+
+    it("is a pool where a pool is painted", () => {
+        expect(pointerGroundAt(painted, { x: 488, y: 88 }, waterOf(painted), dry)).toMatchObject({
+            soil: "pool",
+            roughness: 0.03,
+        });
+    });
+});
+
 describe("samePointerGround", () => {
+    it("tells a change of soil", () => {
+        expect(samePointerGround({ ground: 0, soil: "sand" }, { ground: 0, soil: "clay" })).toBe(false);
+        expect(samePointerGround({ ground: 0 }, { ground: 0, soil: "sand" })).toBe(false);
+    });
+
     it("is true when nothing shown changes", () => {
         expect(samePointerGround(undefined, undefined)).toBe(true);
         expect(samePointerGround({ ground: -3.6 }, { ground: -3.6 })).toBe(true);

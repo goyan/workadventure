@@ -916,6 +916,8 @@ const mapEditor: BaseTranslation = {
             pointerNoWater: "No water",
             pointerDepth: "Depth {depth}",
             pointerOff: "Pointer off the game",
+            pointerUnpainted: "{soil} (unpainted)",
+            pointerRoughness: "Roughness (Manning) {n}",
             ground: "Ground",
             level: "Level {height}",
             built: "floor {rank}",
