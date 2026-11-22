@@ -10,7 +10,7 @@ import {
     snowflakes,
     snowLevel,
     snowTones,
-    snowWind,
+    groundWind,
 } from "../../../../../src/front/Phaser/Game/Weather/Snowfall";
 import type { Snowflake, SnowFall } from "../../../../../src/front/Phaser/Game/Weather/Snowfall";
 import { SkyDrift } from "../../../../../src/front/Phaser/Game/Weather/Clouds";
@@ -102,22 +102,22 @@ describe("snowfall", () => {
     });
 
     it("drifts with the wind, in its direction, faster than it falls in a 13 km/h breeze", () => {
-        const fromWest = snowWind(270, 13);
+        const fromWest = groundWind(270, 13);
         expect(fromWest.x).toBeGreaterThan(0);
         expect(Math.abs(fromWest.y)).toBeLessThan(1e-9);
-        const fromSouth = snowWind(180, 13);
+        const fromSouth = groundWind(180, 13);
         expect(fromSouth.y).toBeLessThan(0);
-        expect(snowWind(90, 13).x).toBeLessThan(0);
-        expect(snowWind(270, 0).x).toBe(0);
-        expect(snowWind(270, 26).x).toBeCloseTo(2 * fromWest.x);
-        expect(snowWind(270, 13, 0).x).toBe(0);
+        expect(groundWind(90, 13).x).toBeLessThan(0);
+        expect(groundWind(270, 0).x).toBe(0);
+        expect(groundWind(270, 26).x).toBeCloseTo(2 * fromWest.x);
+        expect(groundWind(270, 13, 0).x).toBe(0);
         // 13 km/h near the ground is about 2.9 m/s: more than twice the fall of a flake.
         expect(fromWest.x / PX_PER_METRE).toBeGreaterThan(2 * FLAKE_KINDS[0].fallSpeed);
         for (const [speed, ratio] of [
             [13, 1.5],
             [60, 8],
         ] as const) {
-            const wind = snowWind(270, speed);
+            const wind = groundWind(270, speed);
             const before = byId(snowflakes(EPOCH, view, fallOf(2), steady(wind, 100)));
             const after = snowflakes(EPOCH + 500, view, fallOf(2), steady(wind, 100.5));
             let compared = 0;
@@ -153,7 +153,7 @@ describe("snowfall", () => {
         for (let frame = 0; frame < 90; frame++) {
             const epoch = EPOCH + frame * step;
             // The wind turns and strengthens, the air cools, the snow thickens, all at once.
-            const velocity = snowWind(200 + frame, 5 + frame / 2);
+            const velocity = groundWind(200 + frame, 5 + frame / 2);
             const air = { shift: drift.at(epoch, velocity), velocity };
             const fall = fallOf(0.5 + frame / 30, { temperature: -1 - frame / 6, humidity: 90 });
             const flakes = snowflakes(epoch, view, fall, air);
@@ -188,7 +188,7 @@ describe("snowfall", () => {
 
     it("stands still when motion is reduced", () => {
         const fall = fallOf(2);
-        const wind = steady(snowWind(270, 30), 0);
+        const wind = steady(groundWind(270, 30), 0);
         expect(snowflakes(EPOCH + 5000, view, fall, wind, undefined, true)).toEqual(
             snowflakes(EPOCH, view, fall, wind, undefined, true),
         );

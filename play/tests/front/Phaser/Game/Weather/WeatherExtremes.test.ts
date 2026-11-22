@@ -8,7 +8,8 @@ import { swayAmplitude, treePose, treeSwayAngle } from "@wa/front/Phaser/Game/Na
 import { cloudDrift } from "@wa/front/Phaser/Game/Weather/Clouds";
 import { frostOf, iceAt, iceOf, isFrozen } from "@wa/front/Phaser/Game/Weather/Frost";
 import { nowCellWithConditions, withManualWind } from "@wa/front/Phaser/Game/Weather/ManualConditions";
-import { rainLean } from "@wa/front/Phaser/Game/Weather/Rain";
+import { MAX_RAIN_SLANT, rainSlant } from "@wa/front/Phaser/Game/Weather/Rain";
+import { groundWind } from "@wa/front/Phaser/Game/Weather/Snowfall";
 
 /**
  * What the browser draws from the conditions of a room at the edges of what they may be set to by hand
@@ -68,11 +69,13 @@ describe("the wind at the extremes", () => {
         expect(leafActivity(STRONGEST)).toBe(1);
     });
 
-    it("leans the rain no more than one pixel sideways for one down, and the leaves at their strongest", () => {
+    it("leans the rain no further than its bound, and the leaves at their strongest", () => {
         for (const windSpeed of WINDS) {
-            const lean = rainLean(270, windSpeed);
-            finite(lean);
-            expect(Math.abs(lean)).toBeLessThanOrEqual(1);
+            for (let layer = 0; layer < 3; layer++) {
+                const slant = rainSlant(groundWind(270, windSpeed), layer);
+                finite(slant.x);
+                expect(Math.hypot(slant.x, slant.y)).toBeLessThanOrEqual(MAX_RAIN_SLANT + 1e-9);
+            }
         }
         expect(quantizeWind(STRONGEST, 270).level).toBe(4);
         expect(quantizeWind(STRONGEST, 270).level).toBe(quantizeWind(50, 270).level);
@@ -107,7 +110,10 @@ describe("the conditions set by hand at the extremes", () => {
             windSpeed: STRONGEST,
             windFrom: 270,
         });
-        const cold = nowCellWithConditions({ at: 0, weather: undefined, temperature: 2 }, conditions(COLDEST, STRONGEST));
+        const cold = nowCellWithConditions(
+            { at: 0, weather: undefined, temperature: 2 },
+            conditions(COLDEST, STRONGEST),
+        );
         expect(cold.cell).toMatchObject({ temperature: COLDEST, windSpeed: STRONGEST, windFrom: 270 });
         const hot = nowCellWithConditions({ at: 0, weather: undefined, temperature: 2 }, conditions(WARMEST, 0));
         expect(hot.cell.temperature).toBe(WARMEST);

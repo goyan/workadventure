@@ -1,5 +1,6 @@
 import { hash01 } from "../Autumn/LeafPalette";
 import type { WeatherView } from "./WeatherFrame";
+import { PX_PER_METRE } from "./Snowfall";
 
 /**
  * How hard the rain falls on the screen, 0 to 1, for a rate in mm an hour: light rain (up to 2.5 mm/h), moderate (up to
@@ -34,35 +35,61 @@ export function rainIntensity(rate: number | undefined, storm = false): number {
     return storm ? Math.max(STORM_RAIN, level) : level;
 }
 
-const DEG = Math.PI / 180;
-/** Wind (km/h) at which the rain leans the most, and that lean: sideways pixels for one pixel down. */
-const FULL_LEAN_WIND = 60;
-const FULL_LEAN = 1;
-/** Without a known wind: the usual one, from the north-west like the clouds, a light lean. */
-const USUAL_LEAN = 0.3;
+/** The wind near the ground, map pixels a second (x east, y south): groundWind, the same as for the snow. */
+export type RainWind = { x: number; y: number };
 
 /**
- * How much the rain leans, in pixels sideways for one pixel down (positive: towards the east, the right of the map),
- * for a wind coming from `windFrom` degrees (0 north, 90 east) at `windSpeed` km/h. Only the east-west part of the
- * wind shows on a map seen from above; a wind of unknown speed counts as the usual one.
+ * How fast the drops of each plane fall, m/s: drops of 1.4, 3 and 5 mm by the fit of Atlas, Srivastava and Sekhon
+ * (Rev. Geophys. 11, 1973) to the measures of Gunn and Kinzer (J. Meteor. 6, 1949), v = 9.65 - 10.3 exp(-0.6 D).
+ * The planes pass on the screen at these speeds, the near one 1.25 times faster (closer to the eye): its slant, the
+ * wind over its fall, is the same seen near or far.
  */
-export function rainLean(windFrom: number | undefined, windSpeed?: number, share = 1): number {
-    return share * windLean(windFrom, windSpeed);
+export const RAIN_FALL_SPEEDS: readonly number[] = [1.4, 3, 5].map(
+    (diameter) => 9.65 - 10.3 * Math.exp(-0.6 * diameter),
+);
+/**
+ * The steepest a drop falls aslant, pixels across for one down: a drop of 1.4 mm in a wind of about 90 km/h. A bound
+ * (a choice), so that a storm wind keeps the rain readable and the drops looked at few.
+ */
+export const MAX_RAIN_SLANT = 3;
+
+/**
+ * How a drop of a plane goes for each pixel it falls: `x` across and `y` down or up, on top of its fall, the wind over
+ * the speed of its fall, the way the wind blows (both of its parts, as the snow and the clouds). A drop goes with the
+ * air within a second (followWind): its slant is the ratio of the two speeds.
+ */
+export function rainSlant(wind: RainWind, layer: number): { x: number; y: number } {
+    const speed = RAIN_FALL_SPEEDS[layer] * PX_PER_METRE;
+    const x = Number.isFinite(wind.x) ? wind.x / speed : 0;
+    const y = Number.isFinite(wind.y) ? wind.y / speed : 0;
+    const length = Math.hypot(x, y);
+    if (length <= MAX_RAIN_SLANT) return { x: x + 0, y: y + 0 };
+    return { x: (x * MAX_RAIN_SLANT) / length, y: (y * MAX_RAIN_SLANT) / length };
 }
 
-function windLean(windFrom: number | undefined, windSpeed: number | undefined): number {
-    if (windFrom === undefined) return USUAL_LEAN;
-    const strength =
-        windSpeed === undefined ? 20 / FULL_LEAN_WIND : Math.min(1, Math.max(0, windSpeed) / FULL_LEAN_WIND);
-    return -Math.sin(windFrom * DEG) * strength * FULL_LEAN;
+/**
+ * Seconds a drop takes to go with a new wind: its speed over the gravity, from half a second for a small drop to
+ * nearly one for a big one; the rain catches a change of the wind over this long instead of jumping.
+ */
+const DROP_RESPONSE_S = 0.7;
+
+/** The wind the drops go with, `seconds` after it was `current`, the wind blowing `target`. */
+export function followWind(current: RainWind, target: RainWind, seconds: number): RainWind {
+    if (!(seconds > 0)) return current;
+    if (!Number.isFinite(seconds)) return target;
+    const share = 1 - Math.exp(-seconds / DROP_RESPONSE_S);
+    return { x: current.x + (target.x - current.x) * share, y: current.y + (target.y - current.y) * share };
 }
 
 export interface RainDrop {
     /** The head of the drop (its lowest point), map pixels. */
     x: number;
     y: number;
-    /** Height of its streak, map pixels; it leans as the rain does. */
+    /** Height of its streak for a drop falling straight, map pixels. */
     length: number;
+    /** Where its streak goes from the head, for one of its length: up its way through the air (back along its fall). */
+    dx: number;
+    dy: number;
     alpha: number;
     /** 0 far, 1 middle, 2 near. */
     layer: number;
@@ -86,6 +113,11 @@ interface RainLayer {
  * Three planes of drops, each with its own grid and speed, fixed whatever the intensity: the intensity only says which
  * drops show (a position multiplied by the time must never depend on a value that changes, or every drop would jump).
  */
+/** The screen speeds of the planes (map pixels a second), for the tests: their drops' speeds seen at their distance. */
+export function rainScreenSpeeds(): number[] {
+    return RAIN_LAYERS.map((layer) => layer.speed);
+}
+
 const RAIN_LAYERS: readonly RainLayer[] = [
     { split: 2, speed: 150, fall: 160, length: 6, alpha: 0.45, from: 0, full: 0.9 },
     { split: 2, speed: 230, fall: 240, length: 10, alpha: 0.7, from: 0.05, full: 0.7 },
@@ -132,14 +164,14 @@ export function rainCell(view: WeatherView): number {
 
 /**
  * The drops of a rain of this intensity (0 to 1) over the view, fixed to the map: each cell of a plane lets one drop
- * fall at a time, a long way down along the lean of the rain, the next one starting from another place of the cell.
+ * fall at a time, a long way down along its slant in the wind, the next one starting from another place of the cell.
  * The same for everyone at the same server time.
  */
 export function rainDrops(
     epoch: number,
     view: WeatherView,
     intensity: number,
-    lean: number,
+    wind: RainWind,
     local?: RainLocal,
 ): RainDrop[] {
     const base = rainCell(view);
@@ -151,13 +183,17 @@ export function rainDrops(
         // No drop of this plane anywhere, even under the thickest cloud.
         if ((local ? shownAt(intensity * rainUnderCloud(1)) : shown) <= 0) return;
         const cell = base / layer.split;
-        // A drop falls well below its cell and slides sideways by the lean times its fall: those of the cells above
-        // and beside the view may be in it.
-        const reach = Math.ceil((Math.abs(lean) * layer.fall) / cell) + 1;
-        const firstRow = Math.floor((view.y - layer.fall) / cell) - 1;
-        const lastRow = Math.ceil((view.y + view.height) / cell);
-        const firstColumn = Math.floor(view.x / cell) - reach;
-        const lastColumn = Math.ceil((view.x + view.width) / cell) + reach;
+        // For each pixel it falls a drop goes `slant` along with the wind: across, and down or up the screen.
+        const slant = rainSlant(wind, index);
+        const across = slant.x;
+        const down = 1 + slant.y;
+        // A drop goes far from its cell over its fall: those of the cells around the view may be in it.
+        const reachX = across * layer.fall;
+        const reachY = down * layer.fall;
+        const firstRow = Math.floor((view.y - Math.max(0, reachY)) / cell) - 1;
+        const lastRow = Math.ceil((view.y + view.height - Math.min(0, reachY)) / cell) + 1;
+        const firstColumn = Math.floor((view.x - Math.max(0, reachX)) / cell) - 1;
+        const lastColumn = Math.ceil((view.x + view.width - Math.min(0, reachX)) / cell) + 1;
         for (let row = firstRow; row <= lastRow; row++) {
             for (let column = firstColumn; column <= lastColumn; column++) {
                 // Which drops show is drawn apart from where they are: a light rain is not a corner of a heavy one.
@@ -171,9 +207,11 @@ export function rainDrops(
                 const cycle = Math.floor(falls) % FALL_CYCLES;
                 const fallen = (falls - Math.floor(falls)) * layer.fall;
                 drops.push({
-                    x: (column + hash01(column + cycle, row, 5 + index)) * cell + lean * fallen,
-                    y: (row + hash01(column, row + cycle, 13 + index)) * cell + fallen,
+                    x: (column + hash01(column + cycle, row, 5 + index)) * cell + across * fallen,
+                    y: (row + hash01(column, row + cycle, 13 + index)) * cell + down * fallen,
                     length: layer.length,
+                    dx: across,
+                    dy: down,
                     alpha: layer.alpha,
                     layer: index,
                 });

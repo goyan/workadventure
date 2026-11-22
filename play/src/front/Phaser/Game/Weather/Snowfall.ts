@@ -158,7 +158,7 @@ const USUAL_WIND_KMH = 10;
  * the south carries the snow up the screen). A flake is light: within a tenth of a second it goes with the air.
  * `lean` is the personal setting of the rain (0 to 2).
  */
-export function snowWind(windFrom: number | undefined, windSpeed: number | undefined, lean = 1): Vector {
+export function groundWind(windFrom: number | undefined, windSpeed: number | undefined, lean = 1): Vector {
     const from = windFrom === undefined || !Number.isFinite(windFrom) ? USUAL_WIND_FROM : windFrom;
     const kmh = windSpeed === undefined || !Number.isFinite(windSpeed) ? USUAL_WIND_KMH : Math.max(0, windSpeed);
     const speed = (kmh / 3.6) * NEAR_GROUND_WIND * PX_PER_METRE * Math.max(0, lean);
