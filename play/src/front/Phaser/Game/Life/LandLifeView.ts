@@ -80,8 +80,20 @@ export class LandLifeView {
         private readonly lead: (
             animal: ShownAnimal,
             now: number,
-        ) => { x: number; y: number; direction: WanderDirection; moving: boolean } | "hidden" | undefined = () =>
-            undefined,
+        ) =>
+            | {
+                  x: number;
+                  y: number;
+                  direction: WanderDirection;
+                  moving: boolean;
+                  /**
+                   * How much lower it is drawn there, when it is not as much as the ground: nothing while its master
+                   * stands on a raised floor or a deck, where it stands too.
+                   */
+                  drop?: number;
+              }
+            | "hidden"
+            | undefined = () => undefined,
         /** Whether there is grass to graze at a point of the map (map pixels): an antelope standing there eats. */
         private readonly grassAt: (x: number, y: number) => boolean = () => false,
         /** How high over the ground one walks above a point of the ground (map pixels): the bridges of the map. */
@@ -121,7 +133,7 @@ export class LandLifeView {
             const lift = led ? 0 : Math.round(this.liftAt(animal.x, animal.y));
             const placeY = Math.round(led?.y ?? animal.y);
             // On the ground it is drawn where the ground is: lower in a hollow, higher on a mount. Not on a deck.
-            const drop = lift > 0 ? 0 : Math.round(this.dropAt(x, placeY));
+            const drop = lift > 0 ? 0 : Math.round(led?.drop ?? this.dropAt(x, placeY));
             const y = placeY - lift + drop;
             const columns = this.columnsOf(species);
             const key = columns === undefined ? ensureLandTexture(this.scene, species) : this.sheetOf(species);

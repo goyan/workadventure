@@ -2650,16 +2650,39 @@ des lots A à E, décrits ci-dessous (`Terrain/GroundEngines.ts` ne les crée qu
 `Terrain/PixelBlocksShown.ts` disent « les blocs dessinent » (moteur à plat caché, piscines posées en image à leur
 image, feuilles au-dessus des blocs, herbe de la carte laissée aux blocs, écume en pixels, pas de traces du givre).
 
-**Limites.** L'écume du courant, les remous des puits et les ronds des sources, la vue des courants, les feuilles au
-sol, les flaques, les traces du givre, la vapeur des piscines chaudes, les échelles des piscines peintes, les arbres et
-les objets restent dessinés à leur place : ils ne montent pas avec un mont et ne descendent pas dans un trou (lot 2 du
-relief). Une piscine peinte sur un sol plat garde ses échelles au bon endroit ; peinte sur un relief, non. Le rendu en 3/4 est celui des
-textures du moteur à plat, pas le pixel art des blocs. Coût non mesuré sur une carte graphique intégrée. Restent aussi
-à leur place à plat : les traces de pas et de roues dans la neige, le halo de nuit d'un avatar (sur un mont de 256 px il
-est dessiné 128 px sous lui), et les reflets des nuages et des lampes sur l'eau, lus au point de la carte et non à
-l'écran. Le thème « Hiver » de la branche avait disparu avec celui d'`infogene` ; il est revenu le 2026-11-22 (voir
-« Thème saisonnier ») et blanchit le sol dans les deux moteurs. Un pont étant fait de paliers, plus de cas particulier
-d'un pont dans la nage ni le décalage de l'avatar ; le clic, lui, traite de nouveau le tablier à part.
+**Ce qui est posé sur le sol suit le relief** (2026-11-22, conception et plan :
+`docs/superpowers/{specs,plans}/2026-11-22-relief-3-4-images-posees*`). En 3/4, quel que soit le moteur, seul le
+**dessin** d'une chose est décalé : sa place sur la carte, sa collision, sa profondeur (qui est devant qui), ce que le
+serveur sait et ce que l'éditeur lit ne changent pas. Réglage coupé, éditeur ouvert ou Basique : rien n'est décalé ni
+calculé. La règle (`Terrain/GroundDrop.ts`) : `groundDropOf` = le décalage du **sol** sous le pied
+(`GameScene.groundDropAt`) ; ce qui est **sur l'eau** prend celui de la surface (`surfaceDropAt`).
+
+| Suit le relief | Comment |
+|---|---|
+| Arbres et objets posés au sol (`standsOnGround` : pas les pièces de l'outil Carte, ni ce qui est sur un palier, ni tapis et plafonniers) | `PlacedDrops` garde leur décalage (relu quand le relief ou le mode change, et deux fois par seconde) ; `CharacterDrops` les déplace le temps du dessin ; clic (`hitWhereDrawn`) et tri de la vue suivent le dessin |
+| Avatars, leurs compagnons, animaux promeneurs | `CharacterDrops` (`GameScene.drawnLower`) |
+| Antilopes, lions, tigres ; mouettes et leur ombre | décalage ajouté à la ligne dessinée (`LandLifeView`, `GullLifeView`) |
+| Flammes, fumée, braises de l'herbe et des arbres, sol qui fume | `FireView`, `TreeFireView` |
+| Comète, météore, averse, drain, flamme tenue | visée au point **vu** sous le pointeur (`GameScene.seenPointUnder`, règle des shaders) ; dessin posé à la hauteur de leur point (`drawLower`). La boule reste à plat : son centre est à l'altitude 0 de la carte |
+| Halo de nuit et lumière de la torche d'un avatar, ombre au sol des avatars et des animaux, ombre portée des objets et des arbres | `halosWhereDrawn`, `TorchManager`, `SkyMovingShadows` (`drop`), `shadowSourceEntities` |
+| Traces de pas et de roues, feuilles au sol, feuilles soulevées | `FootprintLayer`, `LeafScatterLayer`, `KickedLeafLayer` (`dropAt`) |
+| Écume du courant, remous des puits, ronds des sources | `WaterFlowView` (surface de l'eau) |
+| Calotte de neige, tas de feuilles, témoin d'interrupteur d'un objet décalé | `SnowCaps`, `LeafPiles`, `SwitchIndicator` |
+
+**Limites.** Ne suivent pas le relief : les tuiles de la carte ; les pièces de l'outil Carte (sols, murs, portes,
+fenêtres, paliers, escaliers, ponts : un bâtiment décalé pièce par pièce se déchirerait) ; la lumière des lampes et
+des fenêtres ; la vue des courants de « Visualisation » ; la vapeur et les échelles des piscines ; les feuilles qui
+tombent d'un arbre ; les reflets des nuages et des lampes sur l'eau, lus au point de la carte. Les flaques n'en ont pas
+besoin : il n'y en a que sur un sol sans relief. Une catastrophe a un seul décalage, celui de son centre : un large
+rond n'épouse pas le relief autour. Un objet posé sur un autre (une plante sur une table) a son propre décalage : sur
+une pente ils glissent l'un par rapport à l'autre. La lumière d'une torche part de là où son porteur est dessiné : sur
+un relief contre un mur, elle peut partir du mauvais côté du mur. Un clic pour marcher va au sol (au pied d'une
+paroi) : dans une eau profonde, l'avatar nage en surface et s'arrête à côté du clic. Une piscine peinte sur un sol plat
+garde ses échelles au bon endroit ; peinte sur un relief, non. Le rendu en 3/4 est celui des textures du moteur à plat,
+pas le pixel art des blocs. Coût non mesuré sur une carte graphique intégrée. Le thème « Hiver » de la branche avait
+disparu avec celui d'`infogene` ; il est revenu le 2026-11-22 (voir « Thème saisonnier ») et blanchit le sol dans les
+deux moteurs. Un pont étant fait de paliers, plus de cas particulier d'un pont dans la nage ni le décalage de l'avatar ;
+le clic, lui, traite de nouveau le tablier à part.
 
 **Seconde fusion d'`infogene` (2026-11-22, 105 commits : glace du serveur, piscines en eau réelle, écume et moutons
 dans le shader, reflets du ciel, flocons, neige de sa propre ville, traces dans la neige).** Le poids des cellules est

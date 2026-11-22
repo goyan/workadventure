@@ -421,7 +421,7 @@ import { TerrainView } from "./Terrain/TerrainView";
 import { groundDropOf, PlacedDrops } from "./Terrain/GroundDrop";
 import type { DroppedCharacter } from "./Terrain/CharacterDrops";
 import { CharacterDrops } from "./Terrain/CharacterDrops";
-import { avatarDrop, surfaceDropAt, waterDepthAtPoint } from "./Terrain/AvatarDrop";
+import { avatarDrop, ON_A_FLOOR, surfaceDropAt, waterDepthAtPoint } from "./Terrain/AvatarDrop";
 import { WaterFlowView } from "./Terrain/WaterFlowView";
 import { WaterFlowOverlay } from "./Terrain/WaterFlowOverlay";
 import { gunzip } from "./Terrain/WaterStateCodec";
@@ -4398,7 +4398,15 @@ export class GameScene extends DirtyScene {
                     () => get(jungleEnabledStore),
                     () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
                     (species) => this.gameJungle?.sheetOf(species),
-                    (animal, now) => companions.poseOf(animal.id, now),
+                    (animal, now) => {
+                        const pose = companions.poseOf(animal.id, now);
+                        if (!pose || pose === "hidden") return pose;
+                        // With its master on a raised floor or the deck of a bridge, it passes over the relief as
+                        // they do: drawn at its place, not as low as the ground under the deck.
+                        const master = animal.owner === undefined ? undefined : playerOf(animal.owner);
+                        const onFloor = master !== undefined && !master.isFlying() && master.getFloorZ() >= ON_A_FLOOR;
+                        return onFloor ? { ...pose, drop: 0 } : pose;
+                    },
                     (x, y) => this.meadow.coverAt(x, y) >= GRAZING_COVER,
                     (x, y) => this.getBridgeElevationAt(x, y),
                     (x, y) => this.groundDropAt(x, y),

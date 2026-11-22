@@ -61,6 +61,8 @@ export interface PlacedThing {
     y: number;
     displayWidth: number;
     displayHeight: number;
+    /** False once it is destroyed (a Phaser object): nothing can be asked of it any more. */
+    active?: boolean;
     standsOnGround(): boolean;
     setGroundDrop(drop: number): void;
     getGroundDrop(): number;
@@ -99,8 +101,7 @@ export class PlacedDrops<T extends PlacedThing> {
         this.readAt = now;
         if (changed) this.cache.clear();
         if (!shown) {
-            for (const thing of this.list) thing.setGroundDrop(0);
-            this.list = [];
+            this.putBack();
             return;
         }
         const list: T[] = [];
@@ -116,15 +117,27 @@ export class PlacedDrops<T extends PlacedThing> {
         this.list = list;
     }
 
-    /** The objects drawn lower or higher than their place now. */
+    /**
+     * The objects drawn lower or higher than their place now. One deleted since the objects were last read (by
+     * another player, by the editor) is gone from them at once: its scene is gone with it.
+     */
     public moved(): readonly T[] {
+        if (this.list.some((thing) => thing.active === false)) {
+            for (const thing of this.list) if (thing.active === false) this.cache.forget(thing);
+            this.list = this.list.filter((thing) => thing.active !== false);
+        }
         return this.list;
     }
 
     public destroy(): void {
-        for (const thing of this.list) thing.setGroundDrop(0);
-        this.list = [];
+        this.putBack();
         this.cache.clear();
+    }
+
+    /** Every object back at its place, but the deleted ones. */
+    private putBack(): void {
+        for (const thing of this.list) if (thing.active !== false) thing.setGroundDrop(0);
+        this.list = [];
     }
 }
 

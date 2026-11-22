@@ -218,6 +218,22 @@ describe("LandLifeView", () => {
         expect(sprites[3]).toMatchObject({ x: 400, y: 60, depth: floorDepth(20, 80) });
     });
 
+    it("a tamed animal on the deck of a bridge with its master passes over the relief, as they do", () => {
+        // A hollow drawn 40 px lower everywhere; the master is on a deck over it, then back on the ground.
+        let onDeck = true;
+        const { view, life, sprites } = createView({
+            dropAt: () => 40,
+            lead: () => ({ x: 300, y: 200, direction: "down", moving: false, ...(onDeck ? { drop: 0 } : {}) }),
+        });
+        life.receive([{ id: 1, kind: 4, x: 50, y: 80 }], 0);
+        view.update(0);
+        expect(sprites[0]).toMatchObject({ x: 300, y: 200, depth: 200 });
+        // Its master walks on the ground of the hollow: it is drawn as low as that ground, like them.
+        onDeck = false;
+        view.update(16);
+        expect(sprites[0]).toMatchObject({ x: 300, y: 240, depth: 200 });
+    });
+
     it("turns the image drawn here towards where the animal goes", () => {
         const { view, life, sprites } = createView();
         life.receive([{ id: 1, kind: 4, x: 100, y: 50 }], 0);

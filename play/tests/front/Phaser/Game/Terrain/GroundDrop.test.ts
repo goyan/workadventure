@@ -180,6 +180,70 @@ describe("the objects of a map drawn where their ground is", () => {
     });
 });
 
+describe("an object of the map deleted while it was drawn lower", () => {
+    it("is left alone when the relief stops being shown in 3/4: it is gone, nothing of it can be asked", () => {
+        const drops: number[] = [];
+        const tree = {
+            x: 0,
+            y: 0,
+            displayWidth: 32,
+            displayHeight: 32,
+            active: true,
+            drop: 0,
+            standsOnGround: () => true,
+            setGroundDrop: (drop: number) => {
+                // As an Entity: its scene is gone once it is destroyed.
+                if (!tree.active) throw new TypeError("Cannot read properties of undefined (reading 'markDirty')");
+                tree.drop = drop;
+                drops.push(drop);
+            },
+            getGroundDrop: () => tree.drop,
+        };
+        let shown = true;
+        let version = 1;
+        const placed = new PlacedDrops({
+            things: () => [tree],
+            version: () => version,
+            shown: () => shown,
+            dropAt: () => 40,
+        });
+        placed.update(0);
+        expect(placed.moved()).toEqual([tree]);
+        // Another player deletes it; the editor is opened before the objects are read again.
+        tree.active = false;
+        shown = false;
+        version = 2;
+        expect(() => placed.update(100)).not.toThrow();
+        expect(placed.moved()).toEqual([]);
+        expect(drops).toEqual([40]);
+        // And nothing is asked of it when the scene ends.
+        tree.active = true;
+        shown = true;
+        version = 3;
+        placed.update(200);
+        tree.active = false;
+        expect(() => placed.destroy()).not.toThrow();
+    });
+
+    it("is no more among the objects moved while the image is drawn", () => {
+        const tree = {
+            x: 0,
+            y: 0,
+            displayWidth: 32,
+            displayHeight: 32,
+            active: true,
+            drop: 0,
+            standsOnGround: () => true,
+            setGroundDrop: (drop: number) => (tree.drop = drop),
+            getGroundDrop: () => tree.drop,
+        };
+        const placed = new PlacedDrops({ things: () => [tree], version: () => 1, shown: () => true, dropAt: () => 40 });
+        placed.update(0);
+        tree.active = false;
+        expect(placed.moved()).toEqual([]);
+    });
+});
+
 describe("a click on an object drawn lower", () => {
     it("is tested where the object is seen: its own rows are those of the pointer less its drop", () => {
         const pixel = vi.fn((_area: unknown, _x: number, y: number) => y >= 0 && y < 10);

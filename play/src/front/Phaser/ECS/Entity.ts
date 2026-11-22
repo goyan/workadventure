@@ -492,7 +492,8 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         const rounded = Math.round(drop);
         if (rounded === this.groundDrop) return;
         this.groundDrop = rounded;
-        (this.scene as GameScene).markDirty();
+        // (Its scene is gone once it is destroyed.)
+        (this.scene as GameScene | undefined)?.markDirty();
     }
 
     /** Whether the object stands on the ground, and so follows it on a relief seen in 3/4 (standsOnGround). */
