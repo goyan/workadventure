@@ -231,6 +231,16 @@ export class WaterSimulation {
         this.save();
     }
 
+    /**
+     * Stops stepping by itself, without saving: the steps are then driven by hand (`step`), by what must know when
+     * each one happens (a test that compares two waters step by step). It steps by itself again once its map changes
+     * the grid.
+     */
+    public pause(): void {
+        if (this.timer) clearInterval(this.timer);
+        this.timer = undefined;
+    }
+
     /** Keeps the water where it survives a restart: nothing here, the server saves it (TerrainWaterManager). */
     protected save(): void {}
 

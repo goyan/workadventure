@@ -213,6 +213,17 @@ export class MeadowSimulation {
         this.save();
     }
 
+    /**
+     * Stops stepping by itself, without saving: the steps are then driven by hand (`step`), by what must know when
+     * each one happens (a test that compares two meadows step by step).
+     */
+    public pause(): void {
+        if (this.catchUpTimer) clearTimeout(this.catchUpTimer);
+        this.catchUpTimer = undefined;
+        if (this.timer) clearInterval(this.timer);
+        this.timer = undefined;
+    }
+
     /** Keeps the meadow where it survives a restart: nothing here, the server saves it (MeadowManager). */
     protected save(): void {}
 
