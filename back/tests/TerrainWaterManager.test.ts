@@ -384,6 +384,18 @@ describe("TerrainWaterManager", () => {
             expect(grid.totalPx()).toBeCloseTo(total, 1);
         });
 
+        it("stays at the level of the lake over the bed it left dry behind it", () => {
+            const { manager, grid, steps } = lowLake();
+            let ball = { id: 1, x: 240, y: 240, radiusPx: 32 };
+            manager.setBalls(() => [ball]);
+            steps(1);
+            // The water is gone from a wide hole beside it, where it is dragged next.
+            grid.takeDisc(20, 15, 2);
+            ball = { ...ball, x: 20 * 16 + 8 };
+            steps(1);
+            expect(manager.ballLevelAt(1, ball.x, 240)).toBeCloseTo(-40, 0);
+        });
+
         it("tells the level of a ball that is not placed yet, and the ground of a map without water", () => {
             const { manager } = lowLake();
             expect(manager.ballLevelAt(9, 240, 240)).toBeCloseTo(-40, 3);

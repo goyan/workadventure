@@ -280,6 +280,18 @@ describe("WaterGrid.restLevelAt", () => {
         expect(land.restLevelAt(14, 4)).toBe(24);
     });
 
+    it("is still the level of the lake on a bed a ball left dry, within reach, and the ground on a shore", () => {
+        const grid = lake(-100, -40);
+        // A ball swept the water away from the middle of the lake: its bed is dry there.
+        expect(grid.takeDisc(SIDE / 2, SIDE / 2, 6)?.takenPx).toBeGreaterThan(0);
+        expect(grid.depthAt(SIDE / 2, SIDE / 2)).toBe(0);
+        // Without looking around, it is the bed; within eight cells, the water all around says the level.
+        expect(grid.restLevelAt(SIDE / 2, SIDE / 2)).toBe(-100);
+        expect(grid.restLevelAt(SIDE / 2, SIDE / 2, 8)).toBeCloseTo(-40, 3);
+        // On the bank, higher than the lake beside it: the ground, however near the water is.
+        expect(grid.restLevelAt(BANK - 1, SIDE / 2, 8)).toBe(250);
+    });
+
     it("does not follow the wave a ball makes, nor the hole under the ball itself", () => {
         const grid = lake(-100, -40);
         const ball = { x: MIDDLE, y: MIDDLE, radiusPx: 64, levelPx: -40 };
@@ -288,7 +300,7 @@ describe("WaterGrid.restLevelAt", () => {
         const rise = cellsOf(ball, (half) => half) / LAKE_CELLS;
         expect(grid.depthAt(SIDE / 2 + 4, SIDE / 2) - 60).toBeGreaterThan(5);
         const level = grid.restLevelAt(SIDE / 2, SIDE / 2);
-        expect(level).toBeGreaterThan(-40);
+        expect(level).toBeGreaterThanOrEqual(-40);
         expect(level).toBeLessThan(-40 + 2 * rise + 0.5);
         for (let step = 0; step < 30; step++) {
             grid.setBalls([ball]);

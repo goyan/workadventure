@@ -4523,20 +4523,35 @@ traits, sans flou ; le disque est dessiné aussi là où il n'y a pas d'eau. `pl
 ## Catastrophes : la boule
 
 Sixième catastrophe du widget, et la seule qui ait un corps : une **boule solide** tenue sous le pointeur, dont le
-**centre est au niveau 0 de la carte** (l'altitude 0 du relief). Une moitié dépasse au-dessus du niveau 0, l'autre
-plonge dessous : dans le sol, ou dans l'eau d'un creux. Elle prend la place de l'eau, qui est chassée, monte autour
-et fait une vague ; quand la boule s'en va l'eau revient. C'est un instrument pour éprouver le modèle d'écoulement.
+**centre est à la surface de l'eau où elle se trouve** : elle est à moitié immergée, sur un lac en altitude comme
+sur une mer plus basse que le niveau 0 (jusqu'au 2026-11-22 son centre était à l'altitude 0 du relief). Là où il n'y
+a pas d'eau, son centre est au niveau du sol sous le pointeur : une demi-sphère posée. Elle prend la place de l'eau,
+qui est chassée, monte autour et fait une vague ; quand la boule s'en va l'eau revient. C'est un instrument pour
+éprouver le modèle d'écoulement.
+
+**À quel niveau.** Le serveur décide (`TerrainWaterManager.ballLevelAt`), parce que lui seul connaît l'eau. Le
+niveau est celui de **l'eau autour de la boule, pas sous elle** (`WaterGrid.restLevelAt`) : la médiane de la surface
+de l'eau reliée au point, sur les 4 096 cellules les plus proches, en traversant les colonnes que la boule ferme et
+les cellules à sec à moins de 20 cellules du point (le fond qu'elle vient de balayer est encore dans son lac). La
+médiane ignore le bourrelet que la boule pousse et le creux qu'elle laisse. Une eau plus basse que le sol du point
+n'est pas l'eau où il se trouve : sur une rive, c'est le sol. **Tenue immobile, la boule garde son niveau** quelle
+que soit la vague qu'elle fait : le niveau n'est relu que lorsqu'elle a bougé, et ne change que s'il s'écarte de
+plus de 6 px (`BALL_LEVEL_SLACK_PX`) : d'un lac à un autre, de la terre à l'eau, ou quand elle a elle-même fait
+monter un petit lac. Ce changement est **balayé comme un déplacement** (`sweepBalls`, une cellule d'altitude à la
+fois) : le volume chassé ne saute pas. Le niveau est annoncé à la salle (`CatastropheMessage.ballLevel` = 12).
 
 **En jeu.** La tuile « Boule » s'arme comme l'averse et le drain. Un curseur règle le **diamètre, de 1 à 16 cases**
-(4 par défaut ; 1,1 m à 17,5 m à l'échelle de la carte). **Dès le clic, la boule est là, entière**, son centre au
-niveau 0 : elle ne monte pas, ne descend pas, n'enfle pas. Tant que le clic est maintenu elle **suit le pointeur
+(4 par défaut ; 1,1 m à 17,5 m à l'échelle de la carte). **Dès le clic, la boule est là, entière**, à moitié dans
+l'eau : elle ne monte pas, ne descend pas, n'enfle pas. Tant que le clic est maintenu elle **suit le pointeur
 sans retard** (souris ou pavé tactile) ; au relâchement elle **disparaît d'un coup**. Pendant ce temps le glisser ne
 déplace pas la carte.
 
 **Sous le pointeur sans attendre le serveur.** Le joueur qui tient la boule la voit sous son propre pointeur à chaque
 mouvement (`heldBallStore`, écrit par `GameSceneUserInputHandler`) : sa boule n'est jamais dessinée d'après les
-messages du serveur, qui arrivent un aller-retour plus tard. L'eau, elle, reste celle du serveur. Les autres joueurs
-voient la boule là où le serveur la dit, en glissant d'un message au suivant (50 ms).
+messages du serveur, qui arrivent un aller-retour plus tard, sauf pour son niveau : au clic elle est montrée à la
+surface de l'eau que ce navigateur connaît sous le pointeur (`ballLevelUnder`), puis au niveau que dit le serveur
+(sous la boule le navigateur ne voit plus d'eau). L'eau, elle, reste celle du serveur. Les autres joueurs voient la
+boule là où le serveur la dit, en glissant d'un message au suivant (50 ms).
 
 **Le serveur décide.** Le navigateur dit où est la boule toutes les 50 ms quand elle a bougé, toutes les 200 ms
 quand elle est tenue immobile (`LaunchCatastropheMessage`, genre `CATASTROPHE_BALL` = 5, `radiusTiles` = le
@@ -4560,9 +4575,16 @@ plaine (crue de 33 à 75 px, jusqu'à 11 % de l'eau quitte la carte par le bord,
 finie, bilan `eau + perdue` égal au volume de départ à 1e-6 près dans tous les cas : aucune borne de vitesse n'a été
 nécessaire.
 
+**Tenue à la surface, mesuré** (lacs de 60 px de fond, l'un à +40 px sur un plateau, l'autre à −40 px dans une
+plaine, eau à inertie) : boule de 4 cases, son niveau reste à +40 ou −40 au dixième de pixel, immobile comme traînée
+à 20 ou 40 cases par seconde ; crête de 33 à 40 px à la pose, 59 à 83 px traînée, rien de perdu. Boule de 16 cases
+(aussi large que 40 % du lac) : niveau constant immobile, crête de 80 à 105 px ; traînée, elle met à sec la moitié
+du lac et l'eau restante monte de 20 à 35 px : la boule suit ce niveau réel, 1 à 4,5 % de l'eau quitte la carte.
+Aucune valeur non finie, bilan exact à 1e-6 près.
+
 **La boule dans le modèle d'eau** (`WaterGrid.setBalls`, géométrie pure dans `Terrain/WaterBall.ts`). Le modèle est
 en colonnes d'eau. Dans chaque colonne qu'elle atteint, la boule occupe les hauteurs entre son dessous et son
-dessus (`±` sa demi-hauteur autour du niveau 0, moyennée sur la cellule : les cellules d'une boule portent
+dessus (`±` sa demi-hauteur autour de son niveau, moyennée sur la cellule : les cellules d'une boule portent
 exactement le volume de la sphère, à 1 % près), moins ce qui est dans le sol (`ballColumn`).
 
 - **Une eau plus basse que le dessous de la boule n'est pas touchée** : elle continue de couler dessous.
@@ -4605,7 +4627,8 @@ les vitesses et les profondeurs du modèle.
 **Voisinage.** Aucune collision : les avatars, les animaux et les véhicules la traversent, et sous elle les colonnes
 fermées sont à sec pour eux (un poisson mis à sec meurt après 5 s, comme sous un drain). L'herbe et l'humidité du
 sol ne changent pas. La glace du serveur ne tient pas la boule : sous elle il n'y a plus d'eau à geler, la glace y
-disparaît, et l'eau liquide est chassée comme sans glace. Une pompe de piscine ne remplit pas une case où se tient
+disparaît (elle n'est jamais plus épaisse que l'eau), et l'eau liquide est chassée comme sans glace ; la glace qui
+craque sous les pas (#458) ne connaît que les joueurs, pas la boule. Une pompe de piscine ne remplit pas une case où se tient
 une boule (`ballAt`). Une porte étanche ou un mur arrête l'eau poussée. Si la carte est éditée pendant qu'une boule
 est posée, la nouvelle grille reprend toute l'eau et la boule y est remise au pas suivant. Joueur parti sans lâcher :
 la boule disparaît 600 ms après son dernier message.

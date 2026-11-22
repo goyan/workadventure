@@ -1,6 +1,7 @@
 import { gunzipSync, gzipSync } from "node:zlib";
 import {
     advanceImpactWave,
+    BALL_LEVEL_REACH_CELLS,
     BALL_LEVEL_SLACK_PX,
     heightAt,
     blastWater,
@@ -477,14 +478,18 @@ export class TerrainWaterManager {
      * it stands in there, where it is half in the water, or the ground where there is no water. A ball keeps its
      * level while it is held still, whatever the wave it makes; once it moved, it takes the level of the water it
      * came onto when that is not the one it had (BALL_LEVEL_SLACK_PX). The level is read over the water around the
-     * ball, not under it (WaterGrid.restLevelAt): the hole the ball makes does not pull it down.
+     * ball, not under it (WaterGrid.restLevelAt): the hole the ball makes does not pull it down, nor the bed it
+     * swept dry on its way (BALL_LEVEL_REACH_CELLS).
      */
     public ballLevelAt(id: number, x: number, y: number): number {
         const known = this.ballLevels.get(id);
         if (known && known.x === x && known.y === y) return known.level;
         const cellX = Math.floor(x / TERRAIN_CELL);
         const cellY = Math.floor(y / TERRAIN_CELL);
-        const rest = Number.isFinite(x) && Number.isFinite(y) ? this.grid?.restLevelAt(cellX, cellY) : undefined;
+        const rest =
+            Number.isFinite(x) && Number.isFinite(y)
+                ? this.grid?.restLevelAt(cellX, cellY, BALL_LEVEL_REACH_CELLS)
+                : undefined;
         // Off the grid of the water there is only ground: that of the relief.
         const there =
             rest ??

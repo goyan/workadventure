@@ -1035,19 +1035,24 @@ export class WaterGrid {
     }
 
     /**
-     * The level of the water a point of the map stands in, in pixels of altitude: the mean surface of the water
-     * joined to that cell (weighted by its depth, over the few thousand cells nearest to it), so that neither a
-     * wave nor the hole a ball makes changes it much; the ground of the cell where there is no water. The cells a
-     * ball closes are looked through: under a ball, it is the level of the water around it. Undefined outside the
-     * grid. It is where a ball held there is half in the water.
+     * The level of the water a point of the map stands in, in pixels of altitude: the median surface of the water
+     * joined to that cell (over the few thousand cells nearest to it), so that neither a wave nor the water a ball
+     * piles up changes it much; the ground of the cell where there is no water. The cells a
+     * ball closes are looked through: under a ball, it is the level of the water around it. So are the dry cells
+     * within `reachCells` of the point: a bed a ball just swept dry is still in its lake, at the level of the water
+     * around the hole. A water lower than the ground of the point is not the water it stands in: on a shore, it is
+     * the ground. Undefined outside the grid. It is where a ball held there is half in the water.
      */
-    public restLevelAt(cellX: number, cellY: number): number | undefined {
+    public restLevelAt(cellX: number, cellY: number, reachCells = 0): number | undefined {
         const start = this.indexOf(cellX, cellY);
         if (start === undefined) return undefined;
         const { width, height } = this.bounds;
         const closed = this.ballClosed.length > 0 ? this.ballClosed : undefined;
         const bare = closed?.[start] ? this.bareGround[start] : this.ground[start];
-        if (!closed?.[start] && this.depth[start] < FAR_MIN_DEPTH_PX) return bare;
+        const reach = Number.isFinite(reachCells) && reachCells > 0 ? reachCells : 0;
+        if (reach === 0 && !closed?.[start] && this.depth[start] < FAR_MIN_DEPTH_PX) return bare;
+        const startColumn = start % width;
+        const startRow = (start - startColumn) / width;
         this.search++;
         if (this.search === 0xffffffff) {
             this.seen.fill(0);
@@ -1055,15 +1060,11 @@ export class WaterGrid {
         }
         const cells = [start];
         this.seen[start] = this.search;
-        let held = 0;
-        let levels = 0;
-        let counted = 0;
-        for (let head = 0; head < cells.length && counted < REST_LEVEL_CELLS; head++) {
+        const surfaces: number[] = [];
+        for (let head = 0; head < cells.length && surfaces.length < REST_LEVEL_CELLS; head++) {
             const index = cells[head];
-            if (!closed?.[index]) {
-                held += this.depth[index];
-                levels += (this.ground[index] + this.depth[index]) * this.depth[index];
-                counted++;
+            if (!closed?.[index] && this.depth[index] >= FAR_MIN_DEPTH_PX) {
+                surfaces.push(this.ground[index] + this.depth[index]);
             }
             const column = index % width;
             const row = (index - column) / width;
@@ -1074,13 +1075,23 @@ export class WaterGrid {
                 if (!inside) continue;
                 const next = index + (side === 0 ? 1 : side === 1 ? -1 : side === 2 ? width : -width);
                 if (this.seen[next] === this.search) continue;
-                // Through the cells of a ball, and through the water that is more than a film.
-                if (!closed?.[next] && this.depth[next] < FAR_MIN_DEPTH_PX) continue;
+                // Through the cells of a ball, through the water that is more than a film, and through the dry
+                // cells near the point.
+                if (!closed?.[next] && this.depth[next] < FAR_MIN_DEPTH_PX) {
+                    const nextColumn = next % width;
+                    const away = Math.hypot(nextColumn - startColumn, (next - nextColumn) / width - startRow);
+                    if (away > reach) continue;
+                }
                 this.seen[next] = this.search;
                 cells.push(next);
             }
         }
-        return held > 0 ? levels / held : bare;
+        if (surfaces.length === 0) return bare;
+        // The middle one: the water a ball piles up in front of itself, and the hollow behind, are a few cells.
+        surfaces.sort((a, b) => a - b);
+        const middle = surfaces.length >> 1;
+        const level = surfaces.length % 2 === 1 ? surfaces[middle] : (surfaces[middle - 1] + surfaces[middle]) / 2;
+        return level > bare ? level : bare;
     }
 
     /** Whether a ball closes the column of a cell of the map: its water is on the ball, or held under it. */

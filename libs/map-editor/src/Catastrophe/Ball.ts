@@ -32,6 +32,12 @@ export const BALL_SWEEP_MOST_STRIDES = 32;
  */
 export const BALL_LEVEL_SLACK_PX = 6;
 
+/**
+ * The water a ball stands in is looked for through the dry cells this near the point it is held at, in cells: a
+ * ball dragged fast sweeps the bed dry under itself and behind, as far as it is wide.
+ */
+export const BALL_LEVEL_REACH_CELLS = 20;
+
 /** The diameter of a ball of that size: one out of range is the nearest; a size that is none is the usual one. */
 export function ballTiles(diameterTiles: number): number {
     if (!Number.isFinite(diameterTiles) || diameterTiles === 0) return BALL_DEFAULT_TILES;
