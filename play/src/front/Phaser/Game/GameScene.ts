@@ -38,6 +38,7 @@ import {
     type LifeFire,
     lifeFireOf,
     listeningZoneJamKey,
+    mapCellsOf,
     type Season,
     seasonAt,
     snowCoverOf,
@@ -326,7 +327,9 @@ import { levelUnderPoint } from "./MapEditor/MapLayer/FloorOperations";
 import { levelItems } from "./MapEditor/MapLayer/MapLayerLevels";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
 import { weatherAtTime } from "./Weather/WeatherFrame";
-import { setRoomConditions, shownWeatherSettings } from "./Weather/RealWeatherClient";
+import { setRoomConditions, showsChosenPlaceWeather, shownWeatherSettings } from "./Weather/RealWeatherClient";
+import { chosenWeatherNow } from "./Weather/ChosenPlaceWeather";
+import { LocalTerrainController, openModuleWorker } from "./Terrain/LocalTerrainController";
 import { isSwayingTree, TreeSway } from "./Nature/TreeSway";
 import { TreePoseTextures } from "./Nature/TreePoses";
 import { TreeSeasonEffects } from "./Nature/TreeSeasonEffects";
@@ -634,6 +637,40 @@ export class GameScene extends DirtyScene {
     private bridges: Bridges | undefined;
     /** The grass and the moisture of the soil of the map, as the server tells them. */
     private readonly meadow = new MeadowState();
+    /**
+     * The own ground of this player while they follow the weather of a place they chose (Jour dans le monde, a point
+     * of the world map): their lakes, rivers and meadow live under it, the server's are kept aside until they leave it.
+     */
+    private readonly localTerrain = new LocalTerrainController(
+        {
+            chosenPlace: () => {
+                if (isBasicActive() || get(mapEditorModeStore) || !showsChosenPlaceWeather()) return undefined;
+                const { place, state } = chosenWeatherNow();
+                return place && { place, slots: state.status === "known" ? state.slots : undefined };
+            },
+            map: () => {
+                const file = this.gameMapFrontWrapper ? this.getGameMap().getWamFile() : undefined;
+                if (!file) return undefined;
+                return {
+                    wam: file.getWam(),
+                    key: file.getLastCommandId() ?? "",
+                    mapCells: mapCellsOf(this.getGameMap().getMap()),
+                };
+            },
+            walkers: () =>
+                this.CurrentPlayer && this.CurrentPlayer.getFloorZ() < 2
+                    ? [{ x: this.CurrentPlayer.x, y: this.CurrentPlayer.y }]
+                    : [],
+            water: this.terrainWater,
+            showWaterStats: (stats) => terrainWaterStatsStore.set(stats),
+            showMeadow: (state) => this.meadow.receive(state),
+        },
+        async () => {
+            const { default: workerUrl } = await import("./Terrain/LocalTerrainWorker?worker&url");
+            return openModuleWorker(workerUrl);
+        },
+        () => this.time.now,
+    );
     private meadowSubscription: Subscription | undefined;
     private readonly treeFire = new TreeFireState();
     private treeFireSubscription: Subscription | undefined;
@@ -1685,6 +1722,7 @@ export class GameScene extends DirtyScene {
         this.terrainWaterSubscription = undefined;
         this.meadowSubscription?.unsubscribe();
         this.meadowSubscription = undefined;
+        this.localTerrain.destroy();
         this.treeFireSubscription?.unsubscribe();
         this.treeFireSubscription = undefined;
         this.fireConditionsSubscription?.unsubscribe();
@@ -2444,6 +2482,8 @@ export class GameScene extends DirtyScene {
                     (point) => isOnFrozenWater(this, point),
                 ),
             );
+            // Their own ground, for a player who follows the weather of a place they chose.
+            this.localTerrain.update();
             this.terrainView?.update(time);
             this.waterFlowView?.update(time);
             this.waterFlowOverlay?.update(time);
@@ -3075,7 +3115,10 @@ export class GameScene extends DirtyScene {
                 const depths = await gunzip(message.depths);
                 const speeds = message.speeds ? await gunzip(message.speeds) : undefined;
                 const slowSpeeds = message.slowSpeeds ? await gunzip(message.slowSpeeds) : undefined;
-                this.terrainWater.receive({ ...message, depths, speeds, slowSpeeds }, this.time.now);
+                const state = { ...message, depths, speeds, slowSpeeds };
+                // While this player lives their own ground, the server's is kept aside, not shown.
+                if (this.localTerrain.fromServerWater(state)) return;
+                this.terrainWater.receive(state, this.time.now);
                 if (message.stats) terrainWaterStatsStore.set(message.stats);
             })
             .catch((error: unknown) => console.warn("A state of the water of the relief could not be read", error));
@@ -3102,7 +3145,7 @@ export class GameScene extends DirtyScene {
                     read(message.snow),
                     read(message.ice),
                 ]);
-                this.meadow.receive({
+                const state = {
                     width: message.width,
                     height: message.height,
                     grass,
@@ -3112,7 +3155,10 @@ export class GameScene extends DirtyScene {
                     ash,
                     snow,
                     ice,
-                });
+                };
+                // While this player lives their own ground, the server's is kept aside, not shown.
+                if (this.localTerrain.fromServerMeadow(state)) return;
+                this.meadow.receive(state);
             })
             .catch((error: unknown) => console.warn("A state of the meadow of the map could not be read", error));
     }

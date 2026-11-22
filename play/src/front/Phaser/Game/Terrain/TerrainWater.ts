@@ -218,6 +218,22 @@ export class TerrainWater {
         this.states++;
     }
 
+    /**
+     * The last state received, whole, as it came (its sequence and speeds with it): where the local ground of a player
+     * starts from, and what the water goes back to when they follow the server again. Undefined before any state.
+     */
+    public wholeState(): WaterState | undefined {
+        if (!this.bytes) return undefined;
+        return {
+            ...this.grid,
+            seq: this.seq ?? 0,
+            full: true,
+            depths: this.bytes,
+            ...(this.speeds ? { speeds: Uint8Array.from(this.speeds) } : {}),
+            ...(this.slowSpeeds ? { slowSpeeds: Uint8Array.from(this.slowSpeeds) } : {}),
+        };
+    }
+
     /** Pixels of water over a point of the map (map pixels) at this time of the game: 0 where it is dry. */
     public depthAt(x: number, y: number, now: number): number {
         const column = Math.floor(x / TERRAIN_CELL) - this.grid.x;
