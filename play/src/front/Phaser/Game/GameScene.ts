@@ -48,7 +48,7 @@ import {
     WeatherType,
     bridgesOf,
 } from "@workadventure/map-editor";
-import type { Bridges, WeatherLocation } from "@workadventure/map-editor";
+import type { Bridges, TerrainData, WeatherLocation } from "@workadventure/map-editor";
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
 import Debug from "debug";
 import { asError } from "catch-unknown";
@@ -417,6 +417,7 @@ import type { PixelGround } from "./Terrain/GroundEngines";
 import { tellPixelBlocksShown } from "./Terrain/PixelBlocksShown";
 import { groundPointAt, hiddenBehindRim, shiftAt } from "./Terrain/ReliefProjection";
 import { TerrainView } from "./Terrain/TerrainView";
+import { groundDropOf } from "./Terrain/GroundDrop";
 import { CharacterDrops } from "./Terrain/CharacterDrops";
 import { avatarDrop, surfaceDropAt, waterDepthAtPoint } from "./Terrain/AvatarDrop";
 import { WaterFlowView } from "./Terrain/WaterFlowView";
@@ -693,6 +694,12 @@ export class GameScene extends DirtyScene {
      */
     private terrainView: TerrainView | undefined;
     /** The engine that draws the ground, and the image of the game it was worked out at (groundEngine). */
+    /** The relief and the mode the drops of the things on the ground were last read with (reliefDrawVersion). */
+    private reliefDrawn: { terrain: TerrainData | undefined; shown: boolean; version: number } = {
+        terrain: undefined,
+        shown: false,
+        version: 0,
+    };
     private groundEngineNow: GroundEngine = "flat";
     private groundEngineAt = -1;
     /** The characters drawn lower in the hollows of the relief, while the image is drawn. */
@@ -3241,6 +3248,27 @@ export class GameScene extends DirtyScene {
      */
     public surfaceDropAt(x: number, y: number): number {
         return this.pixelReliefShown() ? this.surfaceDropIn34(x, y) : 0;
+    }
+
+    /**
+     * How much lower what stands or lies on the ground at a point is drawn (higher on a mount): an object, an animal,
+     * a flame, a footprint. The ground alone, whatever water lies on it. Nothing while the relief is not shown in 3/4.
+     */
+    public groundDropAt(x: number, y: number): number {
+        return this.pixelReliefShown() ? groundDropOf(this.terrainWater.relief(), x, y) : 0;
+    }
+
+    /**
+     * Changes when what groundDropAt answers may have changed: another relief, or the 3/4 shown or not. For what keeps
+     * the drop of things that do not move (the objects of the map).
+     */
+    public reliefDrawVersion(): number {
+        const terrain = this.terrainWater.relief();
+        const shown = this.pixelReliefShown();
+        if (terrain !== this.reliefDrawn.terrain || shown !== this.reliefDrawn.shown) {
+            this.reliefDrawn = { terrain, shown, version: this.reliefDrawn.version + 1 };
+        }
+        return this.reliefDrawn.version;
     }
 
     /** The same, the relief being shown in 3/4 (asked many times for one point by hiddenOnWater). */
