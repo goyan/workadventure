@@ -11,6 +11,9 @@ import {
     WeatherType,
 } from "@workadventure/map-editor";
 import type {
+    Ball,
+    Downpour,
+    Drain,
     FireConditions,
     PrecipitationAir,
     RealWeatherSlot,
@@ -53,7 +56,21 @@ export type LocalTerrainCommand =
     | { kind: "start"; start: LocalTerrainStart }
     | { kind: "wam"; wam: WAMFileFormat }
     | { kind: "place"; place: WeatherLocation; slots: readonly RealWeatherSlot[] }
-    | { kind: "walkers"; walkers: readonly { x: number; y: number }[] };
+    | { kind: "walkers"; walkers: readonly { x: number; y: number }[] }
+    | ({ kind: "catastrophes" } & LocalCatastrophes)
+    | { kind: "strike" | "shatter" | "ignite"; x: number; y: number; radiusTiles: number }
+    | { kind: "burn"; x: number; y: number; radiusTiles: number; id: number }
+    | { kind: "soak"; downpour: Pick<Downpour, "x" | "y" | "radiusTiles" | "wholeMap"> };
+
+/**
+ * The catastrophes of the room that act on a water at each of its steps: the downpours falling, the drains open and
+ * the balls standing on the map now. The room has them from the server; the local ground is told when they change.
+ */
+export interface LocalCatastrophes {
+    downpours: readonly Downpour[];
+    drains: readonly Drain[];
+    balls: readonly Ball[];
+}
 
 /** What the local ground tells its player: a state of its water or of its meadow, its bytes as they are (unzipped). */
 export type LocalTerrainTold =
@@ -76,6 +93,8 @@ export class LocalTerrainSimulation {
     private slots: readonly RealWeatherSlot[];
     private readonly mapCells: { width: number; height: number };
     private walkers: readonly { x: number; y: number }[] = [];
+    /** The catastrophes of the room on this ground: none until it is told (setCatastrophes). */
+    private catastrophes: LocalCatastrophes = { downpours: [], drains: [], balls: [] };
     /** The water and the meadow, wired as the server wires its own (GroundSimulation). */
     private readonly ground: GroundSimulation;
 
@@ -142,6 +161,12 @@ export class LocalTerrainSimulation {
             },
             // A door opens for the avatar of this player, as the server opens it for every avatar standing in it.
             walkers: () => this.walkers,
+            // The catastrophes of the room reach this ground once it is told them: none by itself.
+            catastrophes: {
+                downpours: () => this.catastrophes.downpours,
+                drains: () => this.catastrophes.drains,
+                balls: () => this.catastrophes.balls,
+            },
         });
         if (start.water) this.water.seed(start.water.depths, start.water.bounds);
         if (start.meadow) this.meadow.seed(start.meadow);
@@ -185,6 +210,36 @@ export class LocalTerrainSimulation {
     /** Where the avatar of this player stands on the ground (map pixels): none while it is on a raised floor. */
     public setWalkers(walkers: readonly { x: number; y: number }[]): void {
         this.walkers = walkers;
+    }
+
+    /** The downpours, the drains and the balls of the room now: they act on this water at each of its steps. */
+    public setCatastrophes(catastrophes: LocalCatastrophes): void {
+        this.catastrophes = catastrophes;
+    }
+
+    /** A comet lands at a point of the map (pixels): it takes the water of its crater here too, and breaks its ice. */
+    public strike(x: number, y: number, radiusTiles: number): void {
+        this.ground.strike(x, y, radiusTiles);
+    }
+
+    /** A fireball lands: it boils the water of its crater away, then burns the ground it left dry. */
+    public burn(x: number, y: number, radiusTiles: number, id: number): void {
+        this.ground.burn(x, y, radiusTiles, id);
+    }
+
+    /** The ice breaks around a point of the map. */
+    public shatter(x: number, y: number, radiusTiles: number): void {
+        this.meadow.shatter(x, y, radiusTiles);
+    }
+
+    /** A downpour soaks the ground of the meadow. */
+    public soak(downpour: Pick<Downpour, "x" | "y" | "radiusTiles" | "wholeMap">): void {
+        this.meadow.soak(downpour);
+    }
+
+    /** A patch of fire a player sets burns the grass of the meadow. */
+    public ignite(x: number, y: number, radiusTiles: number): void {
+        this.meadow.ignite(x, y, radiusTiles);
     }
 
     /** The map as this ground reads it: in the real weather of the chosen place, whatever weather the map shows. */

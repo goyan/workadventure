@@ -2460,6 +2460,12 @@ ne l'est pas).
   (`LocalTerrainSimulation`), sans changement de comportement : `GroundSimulation.test.ts` compare, sur 400 pas
   avec neige, comète et boule de feu, les états dits par un sol câblé à la main et par `GroundSimulation` (mêmes
   octets).
+- **Catastrophes dans le sol d'un joueur** (`LocalTerrainSimulation`, `LocalTerrainWorker`). Le sol d'un joueur
+  (météo d'un lieu choisi) ignorait les catastrophes de la salle : il les voyait sans que son eau en soit touchée.
+  Il sait maintenant les recevoir, par le sol commun : `setCatastrophes` (averses, drains, boules du moment, qui
+  agissent à chaque pas de son eau), `strike`, `burn`, `shatter`, `soak`, `ignite`, et les commandes du même nom
+  dans le protocole de son worker (`LocalTerrainCommand`). **Rien ne les lui envoie encore** : le contrôleur et la
+  scène (`LocalTerrainController`, `GameScene`) restent à brancher ; d'ici là son comportement est inchangé.
 - **Façade du sol dans `back`** (`back/src/Model/Ground/RoomGround.ts`, `InlineRoomGround.ts`, PR 2). `GameRoom`
   ne tient plus `TerrainWaterManager` et `MeadowManager` : il parle à un `RoomGround` (démarrer l'eau, démarrer la
   prairie, arrêter, carte changée ; comète, boule de feu, glace brisée, averse qui mouille, feu posé ; niveau d'une
