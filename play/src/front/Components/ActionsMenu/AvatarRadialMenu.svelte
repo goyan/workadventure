@@ -204,9 +204,12 @@
             class:selected={selected === index}
             style:clip-path={sectorPolygon(index)}
             data-testid={action.testId}
+            aria-disabled={action.disabled === true}
             onpointerenter={() => (selected = index)}
             onfocus={() => (selected = index)}
-            onclick={action.callback}
+            onclick={() => {
+                if (!action.disabled) action.callback();
+            }}
         >
             <span
                 class="wheel-action-label"
@@ -362,6 +365,14 @@
     }
     .wheel-action.selected {
         color: #fff;
+    }
+    /* An action that cannot be taken here: greyed, its detail tells why. */
+    .wheel-action[aria-disabled="true"] {
+        cursor: default;
+    }
+    .wheel-action[aria-disabled="true"] .wheel-icon {
+        filter: grayscale(1);
+        opacity: 0.5;
     }
     .wheel-action:focus-visible .wheel-action-label {
         text-decoration: underline;

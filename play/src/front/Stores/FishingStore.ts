@@ -7,7 +7,7 @@ export const rodEquippedStore = writable(false);
 /** What just happened at the end of a line, shown a few seconds. */
 export interface FishingCard {
     id: number;
-    kind: "caught" | "missed" | "lost" | "refused" | "contestRefused";
+    kind: "caught" | "missed" | "lost" | "refused" | "contestRefused" | "iceShack";
     /** The local player's own line. */
     own: boolean;
     /** The name of the angler, for another player's catch. */
@@ -15,6 +15,8 @@ export interface FishingCard {
     /** A catch: its weight, and whether it is a female (pink) or a male (blue). */
     grams?: number;
     female?: boolean;
+    /** What happened to an ice fishing shack, already in the language of the player. */
+    text?: string;
 }
 
 /** How long a card stays. */
