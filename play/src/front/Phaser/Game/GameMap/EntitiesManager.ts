@@ -27,6 +27,7 @@ import { entityPlacementBlockerStore } from "../../../Stores/MapEditorStore";
 import { getTileCollisionGrid, reverseCollisionGrid } from "../../../Utils/EntityHitbox";
 import { actionsMenuStore } from "../../../Stores/ActionsMenuStore";
 import { armedCatastropheStore } from "../../../Stores/CatastropheStore";
+import { waterLevelPipetteArmed, waterLevelPipetteOwnsPointer } from "../../../Stores/WaterLevelPipetteStore";
 import {
     mapEditorEntityEraserStore,
     mapEditorEntityModeStore,
@@ -487,7 +488,8 @@ export class EntitiesManager extends EventEmitter {
             this.emit(EntitiesManagerEvent.UpdateEntity, data);
         });
         entity.on(Phaser.Input.Events.DRAG, (pointer: Pointer, dragX: number, dragY: number) => {
-            if (!entity.canEdit) {
+            // The pipette of a source aims: a drag moves the view, never the object under it.
+            if (!entity.canEdit || waterLevelPipetteOwnsPointer()) {
                 return;
             }
             if (
@@ -535,6 +537,10 @@ export class EntitiesManager extends EventEmitter {
             }
         });
         entity.on(Phaser.Input.Events.DRAG_END, (pointer: Pointer, dragX: number, dragY: number) => {
+            // The end of a gesture of the pipette of a source: the object was never dragged.
+            if (waterLevelPipetteOwnsPointer()) {
+                return;
+            }
             entityPlacementBlockerStore.set(undefined);
             this.dragFloorPieces = undefined;
             this.dragLevelLabel?.setVisible(false);
@@ -593,6 +599,11 @@ export class EntitiesManager extends EventEmitter {
 
             // An armed catastrophe takes the click, in the map editor too: the object under it is not picked.
             if (get(armedCatastropheStore) !== undefined) {
+                return;
+            }
+
+            // So does the pipette of the level of a source: the object under it is neither picked nor dragged.
+            if (waterLevelPipetteArmed()) {
                 return;
             }
 

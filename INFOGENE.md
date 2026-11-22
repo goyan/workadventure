@@ -2348,6 +2348,18 @@ d'eau. Un lac reste ainsi plein quelle que soit la météo, sans déborder. Sans
 l'outil Relief écrit le niveau après le débit (« +60 m³/h → −0.5 m »).
 Le panneau enregistre la propriété entière à chaque changement (`onSetProperty`) : décocher « Tenir un niveau »
 retire bien le niveau de la carte (une fusion le gardait, corrigé le 2026-11-20).
+**Pipette du niveau** (bouton à côté de « Tenir un niveau », source et puits) : un clic sur la pipette arme la visée
+(viseur sur la carte, aide et aperçu « Sous le curseur : eau −1,2 m (sol −3,6 m) » dans le panneau), le clic suivant
+sur la carte prend le niveau à ce point, active « Tenir un niveau » et l'enregistre comme une saisie. Valeur prise :
+la surface de l'eau s'il y en a (tenir un lac à son niveau), sinon le sol ; Alt + clic prend le sol sous l'eau. Même
+lecture que la pastille des étages (`groundReadingAt`, fond des piscines, dernier état du serveur, aussi sur une carte
+sans relief), au décimètre comme le champ, bornée vers l'intérieur à −8,7 … 17,5 m (`Terrain/WaterLevelPipette.ts`).
+Seul un clic sans glissement prend la valeur : glisser déplace la vue, même dans l'éditeur ; Espace + glisser et le
+bouton du milieu aussi. Le clic de visée ne fait rien d'autre : ni marche, ni objet choisi ou déplacé
+(`waterLevelPipetteArmed`/`waterLevelPipetteOwnsPointer` dans `EntitiesManager` et `EntityEditorTool`, qui
+n'ouvre plus une piscine survolée pendant la visée). Échap (capturé, il ne désélectionne pas la source) ou un second
+clic sur la pipette annule ; fermer le panneau désarme. Arrondie au décimètre, la valeur prise est à ±1,5 px de la
+surface réelle : un lac « tenu à son niveau » peut encore monter ou cesser d'être alimenté de cet écart.
 
 **Modèle** (`libs/map-editor/src/Terrain/`, lu à l'identique par `back` et par le front). Le relief est un champ
 facultatif du WAM (`terrain` : hauteurs par cellule de 16 px, 0 au sol, négatif creusé, par blocs de 16 × 16 ; absent =
