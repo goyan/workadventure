@@ -14,6 +14,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                         title: label("Place"),
                         default: label("Paris (default)"),
                         search: label("Search"),
+                        map: label("Map of the world"),
                         searching: label("Searching"),
                         noResult: label("No town"),
                         error: label("Search unavailable"),
@@ -27,6 +28,18 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
     return { LL, default: LL };
 });
 vi.mock("../../../../src/front/Phaser/Game/Weather/RealWeatherClient", () => ({ searchPlaces }));
+vi.mock("../../../../src/front/Phaser/Game/Night/PointWords", () => ({
+    pointWords: () => ({
+        north: "N",
+        south: "S",
+        east: "E",
+        west: "W",
+        far: (point: string, city: string, distance: string) => `${point} · ${city} ${distance} km away`,
+        short: (city: string, distance: string) => `${city} ${distance} km`,
+        country: (code: string) => new Intl.DisplayNames("en-US", { type: "region" }).of(code) ?? code,
+        kilometres: (km: number) => new Intl.NumberFormat("en-US").format(km),
+    }),
+}));
 
 import MapLocationPicker from "../../../../src/front/Components/Menu/MapLocationPicker.svelte";
 
@@ -110,5 +123,69 @@ describe("MapLocationPicker", () => {
         await vi.advanceTimersByTimeAsync(300);
         flushSync();
         expect(target.querySelector('[data-testid="map-location-results"]')?.textContent).toContain("Brest, France");
+    });
+});
+
+describe("MapLocationPicker, towns of the same name", () => {
+    it("tells them apart by their region and country in the list", async () => {
+        searchPlaces.mockResolvedValue([
+            { name: "Nice, Provence-Alpes-Côte d'Azur, France", latitude: 43.7, longitude: 7.27 },
+            { name: "Nice, California, United States", latitude: 39.12, longitude: -122.85 },
+        ]);
+        render();
+        type("Nice");
+        await vi.advanceTimersByTimeAsync(400);
+        const found = [...target.querySelectorAll('[data-testid="map-location-results"] button')].map((button) =>
+            button.textContent?.trim(),
+        );
+        expect(found).toEqual(["Nice, Provence-Alpes-Côte d'Azur, France", "Nice, California, United States"]);
+    });
+});
+
+describe("MapLocationPicker, the map of the world", () => {
+    function clickMap(clientX: number, clientY: number): void {
+        const map = target.querySelector<HTMLCanvasElement>('[data-testid="map-location-map"]');
+        if (!map) throw new Error("no map");
+        vi.spyOn(map, "getBoundingClientRect").mockReturnValue({
+            left: 0,
+            top: 0,
+            width: 240,
+            height: 120,
+            right: 240,
+            bottom: 120,
+            x: 0,
+            y: 0,
+            toJSON: () => ({}),
+        });
+        map.dispatchEvent(new MouseEvent("click", { clientX, clientY, bubbles: true }));
+        flushSync();
+    }
+    const field = (): string | undefined =>
+        target.querySelector<HTMLInputElement>('[data-testid="map-location-search"]')?.value;
+
+    it("makes a point clicked far from any city the place of the map, by its coordinates, shown in the field", () => {
+        render();
+        expect(target.querySelector('[data-testid="map-location-map"]')?.getAttribute("aria-label")).toBe(
+            "Map of the world",
+        );
+        // 72° S 170° E: the Ross Sea.
+        clickMap(233, 108);
+        const current = target.querySelector('[data-testid="map-location-current"]')?.textContent?.trim() ?? "";
+        expect(current).toMatch(/^72° S 170° E · .+ [\d,]+ km away$/);
+        expect(field()).toBe(current);
+    });
+
+    it("names a point near a city of the list after it, and shows a town chosen by its name in the field", async () => {
+        searchPlaces.mockResolvedValue([{ name: "Brest, France", latitude: 48.39, longitude: -4.49 }]);
+        render();
+        // Next to Paris.
+        clickMap(121.6, 27.4);
+        expect(target.querySelector('[data-testid="map-location-current"]')?.textContent?.trim()).toBe("Paris");
+        type("Bre");
+        await vi.advanceTimersByTimeAsync(400);
+        target.querySelector<HTMLButtonElement>('[data-testid="map-location-results"] button')?.click();
+        flushSync();
+        expect(target.querySelector('[data-testid="map-location-current"]')?.textContent?.trim()).toBe("Brest, France");
+        expect(field()).toBe("Brest");
     });
 });

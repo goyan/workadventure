@@ -87,7 +87,7 @@
     import CallStrip from "./Video/CallStrip/CallStrip.svelte";
     import FishingContestPanel from "./Fishing/FishingContestPanel.svelte";
     import WeatherForecastBanner from "./Weather/WeatherForecastBanner.svelte";
-    import CatastrophePanel from "./Catastrophe/CatastrophePanel.svelte";
+    import ClockLineChips from "./ClockLine/ClockLineChips.svelte";
     import VisualisationPanel from "./Visualisation/VisualisationPanel.svelte";
     import CoffeeCards from "./Coffee/CoffeeCards.svelte";
     import HelpPopUpBlocked from "./HelpSettings/HelpPopUpBlocked.svelte";
@@ -527,11 +527,13 @@
                 style:top={`${jamPanelAnchorTop}px`}
                 bind:offsetHeight={jamDockHeight}
             >
-                <!-- The clock, the floors and the weather chip: on one line from md up, the clock rightmost and the
-                     others to its left (row-reverse keeps the stacked order below md). Items start at the top so that
-                     the weather brief, unfolded under its chip, pushes what is below without moving the clock. -->
+                <!-- The clock, the floors, the weather chip and the chips of the disasters and of the visualisation:
+                     on one line from md up, the clock rightmost and the others to its left (row-reverse keeps the
+                     stacked order below md). Items start at the top so that the weather brief, unfolded under its
+                     chip, pushes what is below without moving the clock. It wraps rather than leave the window: the
+                     chips fold to their icons first, then take a row of their own (ClockLineChips). -->
                 <div
-                    class="flex flex-col items-end gap-2 @md/main-layout:flex-row-reverse @md/main-layout:items-start"
+                    class="flex flex-col items-end gap-2 @md/main-layout:flex-row-reverse @md/main-layout:flex-wrap @md/main-layout:items-start"
                     data-testid="clock-line"
                 >
                     <div class="pointer-events-auto flex items-center gap-2"><RainbowButton /><WorldClock /></div>
@@ -542,6 +544,11 @@
                     />
                     <!-- The weather now, in one hour and in four hours (apps menu, "Weather"). -->
                     <WeatherForecastBanner />
+                    <!-- The disaster picker and what to draw over the map (apps menu, "Disaster", "Visualisation"):
+                         a chip each, their controls in a popover under it. -->
+                    {#if !$basicActiveStore}
+                        <ClockLineChips />
+                    {/if}
                 </div>
                 <!-- What plays in the zone the avatar stands in (its name, its sound): in the column, never over the clock. -->
                 {#if $notificationPlayingStore}
@@ -556,10 +563,9 @@
                     start={(minutes) => gameManager.getCurrentGameScene().fishingManager?.startContest(minutes)}
                     join={() => gameManager.getCurrentGameScene().fishingManager?.toggleEquipment()}
                 />
-                <!-- The disaster picker (apps menu, "Disaster"): arms a catastrophe for the next click on the map. -->
+                <!-- What is drawn over the map, read here (chosen in the Visualisation chip of the clock line): the
+                     legend of the flows of the water, the weather board. -->
                 {#if !$basicActiveStore}
-                    <CatastrophePanel />
-                    <!-- What to draw over the map (apps menu, "Visualisation"): the flows of the water. -->
                     <VisualisationPanel />
                 {/if}
                 <JamDrawer listening={$listeningSpaceName !== undefined || $joinedJamStore !== undefined} />

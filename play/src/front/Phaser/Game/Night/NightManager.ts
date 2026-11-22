@@ -1,6 +1,5 @@
 import { derived, get, type Unsubscriber } from "svelte/store";
 import type { AreaData } from "@workadventure/map-editor";
-import LL, { locale } from "../../../../i18n/i18n-svelte";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import {
@@ -27,6 +26,7 @@ import { partyRoomsStore } from "../../../Stores/LampEffectsStore";
 import { rgbLampLightsStore, type RgbLampLight } from "../../../Stores/RgbLampStore";
 import { skyWindowLightsStore } from "../../../Stores/SkyWindowLightStore";
 import { torchLightsStore } from "../../../Stores/TorchStore";
+import { worldFallStore } from "../../../Stores/WorldFallStore";
 import type { GameScene } from "../GameScene";
 import { shownMapPlace } from "../Weather/RealWeatherClient";
 import {
@@ -51,8 +51,9 @@ import type { SunPosition } from "./NightClock";
 import { roomAmbience, type AmbienceSettings } from "./AmbientLight";
 import { moonPhaseAt, moonPositionAt } from "./MoonClock";
 import { halosWhereDrawn, NightHalos } from "./NightHalos";
-import { placeOfPoint, worldCityOf } from "./WorldDaylight";
-import type { PointWords, WorldPlace } from "./WorldDaylight";
+import { cityPlace, placeOfPoint, worldCityOf } from "./WorldDaylight";
+import type { WorldPlace } from "./WorldDaylight";
+import { pointWords } from "./PointWords";
 import { coversMostly, isInLightableArea, lightableAreas, NightLights, roomsThatLightUp } from "./NightLights";
 import type { LitArea, NightRect } from "./NightLights";
 import { NightOverlay } from "./NightOverlay";
@@ -227,7 +228,7 @@ export class NightManager {
         });
         // Another moment of the sky of the world: its city and its light at once.
         this.unsubscribeWorld = derived(
-            [worldMomentStore, worldCustomMinutesStore, worldPointStore],
+            [worldMomentStore, worldCustomMinutesStore, worldPointStore, worldFallStore],
             (values) => values,
         ).subscribe(() => {
             this.worldCity = undefined;
@@ -244,15 +245,27 @@ export class NightManager {
             const sunAt = this.sunInstant(date);
             // The sun of the place of the map (Paris when it has none), shared with its real weather.
             const mapPlace = shownMapPlace(this.scene.getGameMap().getWamFile()?.getWam().settings);
-            // The sky of the world: the point chosen on its map, or the city where it is now the moment chosen (the height of
-            // its sun for the morning, noon and the evening, its solar time for an hour chosen).
+            // The sky of the world: the point chosen on its map, the place picked where it rains or snows, or the city
+            // where it is now the moment chosen (the height of its sun for the morning, noon and the evening, its solar
+            // time for an hour chosen).
             const point = get(worldPointStore);
+            const fall = get(worldFallStore);
             this.worldCity =
                 this.mode !== NightMode.World || !date
                     ? undefined
                     : point
                       ? placeOfPoint(point, pointWords())
-                      : worldCityOf(date, get(worldMomentStore), get(worldCustomMinutesStore), this.worldCity);
+                      : cityPlace(
+                            fall
+                                ? fall.place
+                                : worldCityOf(
+                                      date,
+                                      get(worldMomentStore),
+                                      get(worldCustomMinutesStore),
+                                      this.worldCity,
+                                  ),
+                            pointWords(),
+                        );
             worldCityStore.set(this.worldCity);
             // The clock shown follows the time of the place of the map (of the city of the world).
             mapTimeZoneStore.set(this.worldCity?.timezone ?? mapPlace?.timezone);
@@ -461,19 +474,4 @@ export class NightManager {
         }
         return players;
     }
-}
-
-/** The words a point of the map of the world far from any city is named with, in the language of the player. */
-function pointWords(): PointWords {
-    const words = get(LL).menu.settings.night;
-    const kilometres = new Intl.NumberFormat(get(locale) || undefined, { maximumFractionDigits: 0 });
-    return {
-        north: words.pointNorth(),
-        south: words.pointSouth(),
-        east: words.pointEast(),
-        west: words.pointWest(),
-        far: (point, city, distance) => words.pointFar({ point, city, distance }),
-        short: (city, distance) => words.pointShort({ city, distance }),
-        kilometres: (km) => kilometres.format(km),
-    };
 }

@@ -1,4 +1,6 @@
 import type { WeatherLocation } from "@workadventure/map-editor";
+import { WORLD_CITIES } from "../../../../common/WorldCities";
+import type { WorldCity } from "../../../../common/WorldCities";
 import { NIGHT_MAX_OPACITY, nightOpacityAt, sunPositionAt, trueSolarMinutes } from "./NightClock";
 
 /** The moment of the day chosen for the sky of somewhere in the world. */
@@ -43,59 +45,8 @@ const SOLAR_NOON_MINUTES = 12 * 60;
 /** An hour chosen keeps its city while the city's solar time stays this close to it (minutes): no hopping. */
 const KEEP_CITY_MINUTES = 50;
 
-/**
- * Cities all around the world, a few degrees of longitude apart (an hour of the sun is 15°): whatever the time of the
- * server, one of them is near any moment of the day. Inhabited latitudes, for days and nights of a familiar length.
- * A few cities of the north fill what a longitude alone does not (Unalaska, St. John's, Khabarovsk, Petropavlovsk,
- * Anadyr): the sun of a northern summer climbs through the height of the morning hours before that of a temperate
- * city at the same longitude, the sun of a northern winter goes down through the height of the evening early in the
- * afternoon. Without them, for an hour or two of some days, no city of the list had a low sun the right way (a sun
- * of 45° for a morning of June, of 36° for an evening of November).
- */
-export const WORLD_CITIES: readonly WeatherLocation[] = [
-    { name: "Unalaska", latitude: 53.89, longitude: -166.53, timezone: "America/Anchorage" },
-    { name: "Honolulu", latitude: 21.31, longitude: -157.86, timezone: "Pacific/Honolulu" },
-    { name: "Anchorage", latitude: 61.22, longitude: -149.9, timezone: "America/Anchorage" },
-    { name: "Vancouver", latitude: 49.28, longitude: -123.12, timezone: "America/Vancouver" },
-    { name: "San Francisco", latitude: 37.77, longitude: -122.42, timezone: "America/Los_Angeles" },
-    { name: "Denver", latitude: 39.74, longitude: -104.99, timezone: "America/Denver" },
-    { name: "Mexico", latitude: 19.43, longitude: -99.13, timezone: "America/Mexico_City" },
-    { name: "Chicago", latitude: 41.88, longitude: -87.63, timezone: "America/Chicago" },
-    { name: "Bogotá", latitude: 4.71, longitude: -74.07, timezone: "America/Bogota" },
-    { name: "New York", latitude: 40.71, longitude: -74.01, timezone: "America/New_York" },
-    { name: "Montréal", latitude: 45.5, longitude: -73.57, timezone: "America/Toronto" },
-    { name: "Santiago", latitude: -33.45, longitude: -70.67, timezone: "America/Santiago" },
-    { name: "Buenos Aires", latitude: -34.6, longitude: -58.38, timezone: "America/Argentina/Buenos_Aires" },
-    { name: "St. John's", latitude: 47.56, longitude: -52.71, timezone: "America/St_Johns" },
-    { name: "Rio de Janeiro", latitude: -22.91, longitude: -43.17, timezone: "America/Sao_Paulo" },
-    { name: "Praia", latitude: 14.93, longitude: -23.51, timezone: "Atlantic/Cape_Verde" },
-    { name: "Reykjavik", latitude: 64.15, longitude: -21.94, timezone: "Atlantic/Reykjavik" },
-    { name: "Dakar", latitude: 14.72, longitude: -17.47, timezone: "Africa/Dakar" },
-    { name: "Lisbonne", latitude: 38.72, longitude: -9.14, timezone: "Europe/Lisbon" },
-    { name: "Casablanca", latitude: 33.57, longitude: -7.59, timezone: "Africa/Casablanca" },
-    { name: "Paris", latitude: 48.86, longitude: 2.35, timezone: "Europe/Paris" },
-    { name: "Rome", latitude: 41.9, longitude: 12.5, timezone: "Europe/Rome" },
-    { name: "Le Cap", latitude: -33.92, longitude: 18.42, timezone: "Africa/Johannesburg" },
-    { name: "Athènes", latitude: 37.98, longitude: 23.73, timezone: "Europe/Athens" },
-    { name: "Le Caire", latitude: 30.04, longitude: 31.24, timezone: "Africa/Cairo" },
-    { name: "Nairobi", latitude: -1.29, longitude: 36.82, timezone: "Africa/Nairobi" },
-    { name: "Moscou", latitude: 55.76, longitude: 37.62, timezone: "Europe/Moscow" },
-    { name: "Dubaï", latitude: 25.2, longitude: 55.27, timezone: "Asia/Dubai" },
-    { name: "Karachi", latitude: 24.86, longitude: 67.0, timezone: "Asia/Karachi" },
-    { name: "Bombay", latitude: 19.08, longitude: 72.88, timezone: "Asia/Kolkata" },
-    { name: "Katmandou", latitude: 27.72, longitude: 85.32, timezone: "Asia/Kathmandu" },
-    { name: "Bangkok", latitude: 13.76, longitude: 100.5, timezone: "Asia/Bangkok" },
-    { name: "Hong Kong", latitude: 22.32, longitude: 114.17, timezone: "Asia/Hong_Kong" },
-    { name: "Perth", latitude: -31.95, longitude: 115.86, timezone: "Australia/Perth" },
-    { name: "Séoul", latitude: 37.57, longitude: 126.98, timezone: "Asia/Seoul" },
-    { name: "Khabarovsk", latitude: 48.48, longitude: 135.08, timezone: "Asia/Vladivostok" },
-    { name: "Tokyo", latitude: 35.68, longitude: 139.69, timezone: "Asia/Tokyo" },
-    { name: "Sydney", latitude: -33.87, longitude: 151.21, timezone: "Australia/Sydney" },
-    { name: "Petropavlovsk-Kamtchatski", latitude: 53.02, longitude: 158.65, timezone: "Asia/Kamchatka" },
-    { name: "Nouméa", latitude: -22.28, longitude: 166.46, timezone: "Pacific/Noumea" },
-    { name: "Auckland", latitude: -36.85, longitude: 174.76, timezone: "Pacific/Auckland" },
-    { name: "Anadyr", latitude: 64.73, longitude: 177.52, timezone: "Asia/Anadyr" },
-];
+/** The cities of the sky of the world: in the common code, since the pusher asks their weather all at once. */
+export { WORLD_CITIES };
 
 /**
  * The time of the sun at a longitude, at an instant, in minutes since midnight (noon: the sun at its highest): the true
@@ -159,8 +110,8 @@ export function worldCityOf(
     const choices = [suns.filter(({ sun }) => sun.inPhase), suns.filter(({ sun }) => sun.climbsRightWay), suns].find(
         (cities) => cities.length > 0,
     );
-    const allowed = new Set(choices?.map(({ city }) => city));
-    const gaps = new Map(suns.map(({ city, sun }) => [city, sun.gap]));
+    const allowed = new Set<WeatherLocation>(choices?.map(({ city }) => city));
+    const gaps = new Map<WeatherLocation, number>(suns.map(({ city, sun }) => [city, sun.gap]));
     return nearestCity((city) => (allowed.has(city) ? (gaps.get(city) ?? Infinity) : Infinity));
 }
 
@@ -178,10 +129,25 @@ function nearestCity(gap: (city: WeatherLocation) => number): WeatherLocation {
     return best ?? WORLD_CITIES[0] ?? { name: "Paris", latitude: 48.86, longitude: 2.35 };
 }
 
+/** A city of the list with where it is (its country, in the language of the player); another place as it is. */
+export function cityPlace(city: WeatherLocation, words: PointWords): WorldPlace {
+    const listed = WORLD_CITIES.find(
+        (candidate) =>
+            candidate.name === city.name &&
+            candidate.latitude === city.latitude &&
+            candidate.longitude === city.longitude,
+    );
+    return listed ? { ...city, where: words.country(listed.country) } : city;
+}
+
 /** A point chosen on the map of the world. */
 export interface WorldPoint {
     latitude: number;
     longitude: number;
+    /** The town it is, when chosen by its name in the search ("Lille, Hauts-de-France, France"); absent: a point. */
+    name?: string;
+    /** The time zone of that town, as the search gave it. */
+    timezone?: string;
 }
 
 /**
@@ -208,6 +174,11 @@ export interface WorldPlace extends WeatherLocation {
      * map follows it, shared by every player (no distance in one player's language, no comma, short).
      */
     coordinates?: string;
+    /**
+     * Where it is, in the language of the player: "Provence-Alpes-Côte d'Azur, France" for a town found by its name,
+     * "France" for a city of the list; absent for a point far from any city (its long name says where).
+     */
+    where?: string;
 }
 
 /** The words a point far from any city is named with, in the language of the player. */
@@ -220,6 +191,8 @@ export interface PointWords {
     far: (point: string, city: string, distance: string) => string;
     /** The short name: the city it is told against and how far, "Auckland 4 000 km" (chip, clock). */
     short: (city: string, distance: string) => string;
+    /** A country by its ISO 3166-1 code, named for the player ("FR": "France"). */
+    country: (code: string) => string;
     /** A number of kilometres written for the player ("4 000"). */
     kilometres: (km: number) => string;
 }
@@ -241,8 +214,8 @@ export function shortCityName(name: string): string {
 }
 
 /** The nearest city of the list to a point, the great-circle way, and how far it is (km). */
-export function nearestCityOf(point: WorldPoint): { city: WeatherLocation; distanceKm: number } {
-    let city: WeatherLocation = WORLD_CITIES[0] ?? { name: "Paris", latitude: 48.86, longitude: 2.35 };
+export function nearestCityOf(point: WorldPoint): { city: WorldCity; distanceKm: number } {
+    let city: WorldCity = WORLD_CITIES[0] ?? { name: "Paris", latitude: 48.86, longitude: 2.35, country: "FR" };
     let distanceKm = Infinity;
     for (const candidate of WORLD_CITIES) {
         const distance = greatCircleKm(candidate, point);
@@ -287,15 +260,38 @@ export function pointTimeZone(
 }
 
 /**
- * The place of a point of the world: its own latitude and longitude for the sun and the weather. Within
+ * The place of a point of the world: its own latitude and longitude for the sun and the weather. A town chosen by its
+ * name keeps its name and its time zone. Within
  * NAMED_POINT_RADIUS_KM of a city of the list it is named after it; farther its short name is the nearest city and
  * how far ("Auckland 4 000 km"), its long name adds its coordinates ("72° S 170° E · Auckland à 4 000 km"). Its time zone: pointTimeZone.
  */
 export function placeOfPoint(point: WorldPoint, words: PointWords): WorldPlace {
     const nearest = nearestCityOf(point);
-    const timezone = pointTimeZone(point, nearest);
+    const timezone = point.timezone ?? pointTimeZone(point, nearest);
+    // A town chosen by its name is itself, wherever it is: its name without its region and country.
+    const [first, ...rest] = point.name?.split(",") ?? [];
+    const town = first?.trim();
+    if (town) {
+        const where = rest
+            .map((part) => part.trim())
+            .filter(Boolean)
+            .join(", ");
+        return {
+            name: town,
+            latitude: point.latitude,
+            longitude: point.longitude,
+            timezone,
+            ...(where ? { where } : {}),
+        };
+    }
     if (nearest.distanceKm <= NAMED_POINT_RADIUS_KM) {
-        return { name: nearest.city.name, latitude: point.latitude, longitude: point.longitude, timezone };
+        return {
+            name: nearest.city.name,
+            latitude: point.latitude,
+            longitude: point.longitude,
+            timezone,
+            where: words.country(nearest.city.country),
+        };
     }
     const coordinates = pointCoordinates(point, words);
     const distance = words.kilometres(roundedDistanceKm(nearest.distanceKm));

@@ -21,7 +21,6 @@
 
     let { isOpen, place, mapPlace, mapWeather, manual }: Props = $props();
     let leaveManual = $state(true);
-    let followMap = $state(true);
     let sending = $state(false);
     let failed = $state(false);
 
@@ -29,7 +28,7 @@
         if (!isOpen || sending) return;
         sending = true;
         failed = false;
-        applyPlaceToMap(place, { leaveManual: manual && leaveManual, followMap })
+        applyPlaceToMap(place, { leaveManual: manual && leaveManual })
             .then(() => modals.close())
             .catch((error: unknown) => {
                 console.error("The weather of the map could not follow the place", error);
@@ -68,11 +67,7 @@
                     dataTestId="place-to-map-leave-manual"
                 />
             {/if}
-            <InputCheckbox
-                bind:value={followMap}
-                label={$LL.actionbar.placeToMap.followMap()}
-                dataTestId="place-to-map-follow-map"
-            />
+            <p class="m-0" data-testid="place-to-map-server-time">{$LL.actionbar.placeToMap.serverTime()}</p>
             {#if failed}
                 <p class="m-0 text-danger-400" role="alert" data-testid="place-to-map-error">
                     {$LL.actionbar.placeToMap.error()}

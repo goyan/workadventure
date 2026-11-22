@@ -5,6 +5,8 @@ import { fireConditionsStore } from "../../../Stores/FireConditionsStore";
 import { gameManager } from "../GameManager";
 import { chosenPlaceForecast, chosenPlaceStore, chosenWeatherNow } from "../Weather/ChosenPlaceWeather";
 import { nowCellWithConditions } from "../Weather/ManualConditions";
+import { mapPlaceNames } from "../Weather/MapPlaceName";
+import { pointWords } from "../Night/PointWords";
 import { shownMapPlace, shownWeatherForecast, showsChosenPlaceWeather } from "../Weather/RealWeatherClient";
 
 /**
@@ -54,7 +56,8 @@ export function readDashboardRain(date: Date): DashboardRain {
     const conditions = get(fireConditionsStore);
     const forecast = shownWeatherForecast(settings, date);
     const now = forecast[0] ? nowCellWithConditions(forecast[0], conditions).cell.weather : undefined;
-    const city = shownMapPlace(settings)?.name.split(",")[0]?.trim() || get(LL).actionbar.weatherBanner.defaultCity();
+    const city =
+        mapPlaceNames(shownMapPlace(settings), pointWords)?.long ?? get(LL).actionbar.weatherBanner.defaultCity();
     // The city followed and its weather as last known, as the chip shows them (pending while another place is asked).
     const place = get(chosenPlaceStore);
     const known = chosenWeatherNow();

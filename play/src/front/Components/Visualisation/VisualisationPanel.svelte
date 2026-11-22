@@ -10,7 +10,6 @@
         weatherExplainedStore,
     } from "../../Stores/VisualisationStore";
     import WeatherBoardLive from "./WeatherBoardLive.svelte";
-    import { IconCloud, IconDroplet } from "@wa-icons";
 
     const css = (color: number): string => `#${color.toString(16).padStart(6, "0")}`;
     // The scale of the speeds, as the arrows are coloured: evenly spread along the bar.
@@ -22,41 +21,11 @@
     const explaining = $derived($weatherExplainedStore);
 </script>
 
-{#if $visualisationPanelStore}
-    <div class="pointer-events-auto flex flex-col items-start gap-1 text-xs" data-testid="visualisation-widget">
-        <div
-            class="flex items-center gap-3 rounded-full bg-contrast/80 py-1 pe-3 ps-1 backdrop-blur"
-            role="group"
-            aria-label={$LL.actionbar.visualisation.label()}
-        >
-            <button
-                type="button"
-                class="flex items-center gap-1 rounded-full px-2 py-1 {flowing
-                    ? 'bg-white/30 ring-1 ring-white'
-                    : 'bg-white/10 hover:bg-white/20'}"
-                aria-pressed={flowing}
-                data-testid="visualisation-water-flow"
-                onclick={() => waterFlowOverlayStore.update((shown) => !shown)}
-            >
-                <IconDroplet width="16" height="16" />
-                <span>{$LL.actionbar.visualisation.waterFlow()}</span>
-            </button>
-            <button
-                type="button"
-                class="flex items-center gap-1 rounded-full px-2 py-1 {explaining
-                    ? 'bg-white/30 ring-1 ring-white'
-                    : 'bg-white/10 hover:bg-white/20'}"
-                aria-pressed={explaining}
-                data-testid="visualisation-weather-explained"
-                onclick={() => weatherExplainedStore.update((shown) => !shown)}
-            >
-                <IconCloud width="16" height="16" />
-                <span>{$LL.actionbar.visualisation.weather.button()}</span>
-            </button>
-            <span class="opacity-70">
-                {flowing ? $LL.actionbar.visualisation.onHelp() : $LL.actionbar.visualisation.offHelp()}
-            </span>
-        </div>
+<!-- What is shown over the map, read here: the legend of the flows of the water and the weather board. Their tiles are
+     in the Visualisation chip of the clock line (VisualisationChip); this stays in the column under it, so that
+     closing the tiles keeps them open. -->
+{#if $visualisationPanelStore && (flowing || explaining)}
+    <div class="pointer-events-auto flex flex-col items-start gap-1 text-xs" data-testid="visualisation-shown">
         {#if flowing}
             <div
                 class="flex max-w-xs flex-col gap-1.5 rounded-xl bg-contrast/80 p-2 backdrop-blur"

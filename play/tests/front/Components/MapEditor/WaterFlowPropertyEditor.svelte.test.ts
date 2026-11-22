@@ -14,6 +14,13 @@ vi.mock("../../../../src/i18n/i18n-svelte", async (importOriginal) => {
     return { ...(await importOriginal<Record<string, unknown>>()), LL, default: LL };
 });
 
+const readWaterLevelAt = vi.hoisted(() => vi.fn((_point: { x: number; y: number }, _ground: boolean) => -1.2));
+vi.mock("../../../../src/front/Phaser/Game/Terrain/WaterLevelPipette", () => ({ readWaterLevelAt }));
+
+const { get } = await import("svelte/store");
+const { heightOfMetres } = await import("@workadventure/map-editor");
+const { takeWaterLevel, waterLevelPipetteStore, disarmWaterLevelPipette } =
+    await import("../../../../src/front/Stores/WaterLevelPipetteStore");
 const { default: WaterFlowPropertyEditor } =
     await import("../../../../src/front/Components/MapEditor/PropertyEditor/WaterFlowPropertyEditor.svelte");
 
@@ -30,6 +37,8 @@ function render(property: WaterSourcePropertyData | WaterSinkPropertyData, oncha
 }
 
 afterEach(async () => {
+    disarmWaterLevelPipette();
+    readWaterLevelAt.mockClear();
     localStorage.removeItem("waterFlowUnit");
     const mounted = component;
     component = undefined;
@@ -177,5 +186,79 @@ describe("WaterFlowPropertyEditor", () => {
         expect(property.flow).toBe(60_000_000);
         type("-4");
         expect(property.flow).toBe(0);
+    });
+
+    describe("the pipette of the level", () => {
+        const pipette = (): HTMLButtonElement => {
+            const button = target.querySelector<HTMLButtonElement>('[data-testid="water-flow-level-pipette"]');
+            if (!button) throw new Error("No pipette");
+            return button;
+        };
+
+        it("is there while no level is held, and arms and disarms the aim on the map", () => {
+            render({ id: "s", type: "waterSourcePropertyData", flow: 1000 });
+            expect(pipette().getAttribute("aria-pressed")).toBe("false");
+            expect(pipette().title).toContain("mapEditor.properties.waterLevelPipette.title");
+            pipette().click();
+            flushSync();
+            expect(get(waterLevelPipetteStore)).toBeDefined();
+            expect(pipette().getAttribute("aria-pressed")).toBe("true");
+            expect(target.textContent).toContain("mapEditor.properties.waterLevelPipette.aiming");
+            pipette().click();
+            flushSync();
+            expect(get(waterLevelPipetteStore)).toBeUndefined();
+        });
+
+        it("writes the level read at the point clicked, holds it, and saves it as typed", () => {
+            const property: WaterSourcePropertyData = { id: "s", type: "waterSourcePropertyData", flow: 1000 };
+            const onchange = render(property);
+            pipette().click();
+            flushSync();
+            takeWaterLevel({ x: 480, y: 640 }, false);
+            flushSync();
+
+            expect(readWaterLevelAt.mock.calls).toEqual([[{ x: 480, y: 640 }, false]]);
+            expect(target.querySelector<HTMLInputElement>('[data-testid="water-flow-level-value"]')?.value).toBe(
+                "-1.2",
+            );
+            expect(property.level).toBe(Math.round(heightOfMetres(-1.2)));
+            expect(onchange).toHaveBeenCalled();
+            expect(get(waterLevelPipetteStore)).toBeUndefined();
+        });
+
+        it("works for a sink, which holds a level too", () => {
+            const property: WaterSinkPropertyData = { id: "k", type: "waterSinkPropertyData", flow: 500 };
+            render(property);
+            pipette().click();
+            flushSync();
+            takeWaterLevel({ x: 1, y: 2 }, true);
+            flushSync();
+            expect(readWaterLevelAt.mock.calls).toEqual([[{ x: 1, y: 2 }, true]]);
+            expect(property.level).toBe(Math.round(heightOfMetres(-1.2)));
+        });
+
+        it("is disarmed by Escape alone: the key goes no further (it would drop the selected object)", () => {
+            render({ id: "s", type: "waterSourcePropertyData", flow: 1000 });
+            pipette().click();
+            flushSync();
+            const further = vi.fn();
+            window.addEventListener("keydown", further);
+            document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+            window.removeEventListener("keydown", further);
+            flushSync();
+
+            expect(get(waterLevelPipetteStore)).toBeUndefined();
+            expect(further).not.toHaveBeenCalled();
+        });
+
+        it("is disarmed when the panel closes", async () => {
+            render({ id: "s", type: "waterSourcePropertyData", flow: 1000 });
+            pipette().click();
+            flushSync();
+            const mounted = component;
+            component = undefined;
+            if (mounted) await unmount(mounted);
+            expect(get(waterLevelPipetteStore)).toBeUndefined();
+        });
     });
 });

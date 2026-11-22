@@ -14,6 +14,8 @@
     interface Props {
         /** The town the weather is of. */
         city: string;
+        /** Where it is, its region and its country ("Provence-Alpes-Côte d'Azur, France"), when known. */
+        where?: string;
         /**
          * Whose weather it is, shown when both are: the server's, the same for everyone (a globe), or this player's
          * own, of the city chosen on their clock (a computer). `tag` names it for the tooltip and screen readers.
@@ -29,7 +31,7 @@
         footer?: Snippet;
     }
 
-    let { city, kind, tag, cells, now, testid, footer }: Props = $props();
+    let { city, where, kind, tag, cells, now, testid, footer }: Props = $props();
 
     /** The colours of the card, from the weather of now: golden in the sun, blue under the rain, grey in the fog. */
     const TONES: Record<string, string> = {
@@ -92,7 +94,7 @@
 <div
     class="w-60 rounded-xl border border-white/10 bg-contrast/80 bg-gradient-to-br p-2 text-xs backdrop-blur {tone}"
     role="group"
-    aria-label={city}
+    aria-label={where ? `${city}, ${where}` : city}
     data-testid={testid}
 >
     <div class="flex items-center gap-2">
@@ -113,7 +115,13 @@
             </span>
         {/if}
         <!-- Up to two lines: a point far from any city says its coordinates and the nearest city. -->
-        <span class="line-clamp-2 min-w-0 break-words font-bold" title={city} data-testid="{testid}-city">{city}</span>
+        <span class="flex min-w-0 flex-col">
+            <span class="line-clamp-2 break-words font-bold" title={city} data-testid="{testid}-city">{city}</span>
+            <!-- Where it is: there are several Nice in the world. One line, cut when too long. -->
+            {#if where}
+                <span class="truncate text-white/70" title={where} data-testid="{testid}-where">{where}</span>
+            {/if}
+        </span>
         {#if now?.manual}
             <span class="rounded bg-white/20 px-1" data-testid="weather-banner-manual"
                 >{$LL.actionbar.weatherBanner.manual()}</span

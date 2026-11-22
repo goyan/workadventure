@@ -12,6 +12,7 @@ import { loadLocaleAsync } from "../../../../src/i18n/i18n-util.async";
 import { setLocale } from "../../../../src/i18n/i18n-svelte";
 import type { NerfManager } from "../../../../src/front/Phaser/Game/Nerf/NerfManager";
 import type { ActivatablesManager } from "../../../../src/front/Phaser/Game/ActivatablesManager";
+import { armWaterLevelPipette, disarmWaterLevelPipette } from "../../../../src/front/Stores/WaterLevelPipetteStore";
 
 // The wheel integration only needs the real handler methods, not character rendering or UI stores.
 vi.mock("../../../../src/front/Phaser/Player/Player", () => ({ Player: class {} }));
@@ -106,6 +107,34 @@ describe("UserInputManager wheel and Nerf events", () => {
         manager.destroy();
         mapEditorModeStore.set(false);
         vi.restoreAllMocks();
+    });
+
+    // The pipette of a source of water, through the real dispatch of the pointer (lessons-learned §2).
+    it("gives a click of the map to an armed pipette, in the map editor, without walking", () => {
+        mapEditorModeStore.set(true);
+        const camera = mock<Phaser.Cameras.Scene2D.Camera>();
+        camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(480, 640));
+        cameraManager.getCamera.mockReturnValue(camera);
+        scene.Map = mock<Phaser.Tilemaps.Tilemap>({ widthInPixels: 1504, heightInPixels: 1184 });
+        // The relief is not shown in 3/4 (never in the editor): what the pointer shows is the point under it.
+        scene.seenPointUnder.mockImplementation((point) => point);
+        const take = vi.fn();
+        armWaterLevelPipette(take);
+        try {
+            const click = mock<Phaser.Input.Pointer>({ x: 120, y: 160, wasTouch: false, id: 1 });
+            click.event = new MouseEvent("mouseup", { button: 0, detail: 1 });
+            click.leftButtonDown.mockReturnValue(true);
+            click.leftButtonReleased.mockReturnValue(true);
+            click.getDuration.mockReturnValue(50);
+            scene.input.emit(Phaser.Input.Events.POINTER_DOWN, click, []);
+            click.leftButtonDown.mockReturnValue(false);
+            scene.input.emit(Phaser.Input.Events.POINTER_UP, click, []);
+
+            expect(take.mock.calls).toEqual([[{ x: 480, y: 640 }, false]]);
+            expect(scene.moveTo.mock.calls).toEqual([]);
+        } finally {
+            disarmWaterLevelPipette();
+        }
     });
 
     describe("after a control of a panel was used", () => {

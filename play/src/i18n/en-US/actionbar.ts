@@ -82,6 +82,9 @@ const actionbar = {
         waterFlow: "Water flows",
         onHelp: "Shown on the map, for you only",
         offHelp: "Choose what to show on the map",
+        chipShown: "{count} shown",
+        chipHint: "Visualisation: what to show on the map",
+        infoLabel: "What is shown",
         speed: "Speed of the water (m/s): colour and length of the arrows",
         rising: "Rising level",
         falling: "Falling level",
@@ -306,6 +309,10 @@ const actionbar = {
         ballArmedHelp:
             "Hold the click: a solid ball is there at once, half in the water, at the surface under the pointer; it follows it and pushes away the water of its half under water · Esc to cancel",
         tabs: { catastrophes: "Disasters", weather: "Weather" },
+        chip: "Disasters",
+        chipArmed: "{name} · {size}",
+        chipHint: "Disasters: pick one, its size, or the weather of the room",
+        infoLabel: "How to throw it",
         weather: {
             manual: "Manual",
             realHint: 'Real conditions at the place of the map. Turn "Manual" on to set them, for the whole room.',
@@ -601,9 +608,9 @@ const actionbar = {
         goesReal: "The map switches to real weather (it was on “{weather}”).",
         leaveManual:
             "Back to the real conditions: they are set by hand (Disaster, Weather) and would come before this place.",
-        followMap: "Then see the weather of the map, as everyone does (your sky leaves “Daytime somewhere”).",
+        serverTime: "You will go back to the server time: the same sky, time and weather as everyone.",
         action: "Apply",
-        error: "The weather of the map could not be changed.",
+        error: "The weather of the map could not be changed (refused, or no answer from the server).",
         revert: "Back to {place}",
         revertHint: "Put the map back on its place and weather of before",
     },

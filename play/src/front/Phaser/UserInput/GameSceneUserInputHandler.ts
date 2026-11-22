@@ -42,6 +42,12 @@ import {
     drainRadiusTilesStore,
     meteorRadiusTilesStore,
 } from "@wa/front/Stores/CatastropheStore";
+import {
+    endWaterLevelGesture,
+    noteWaterLevelPress,
+    takeWaterLevel,
+    waterLevelPipetteStore,
+} from "@wa/front/Stores/WaterLevelPipetteStore";
 import { cameraDetachedStore } from "@wa/front/Stores/CameraStore";
 import { isKeyFromInteractiveElement } from "@wa/front/Utils/isKeyFromInteractiveElement";
 import { findShortcutAction } from "@wa/front/Stores/ShortcutsStore";
@@ -147,10 +153,18 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             if (armed !== this.heldKind) this.stopDownpour();
             if (wasArmed === (armed !== undefined)) return;
             wasArmed = armed !== undefined;
-            this.gameScene.input.setDefaultCursor(wasArmed ? "crosshair" : this.idleCursor());
+            this.gameScene.input.setDefaultCursor(this.aiming() ? "crosshair" : this.idleCursor());
+        });
+        // The pipette of the level of a source aims with the same crosshair.
+        let wasAiming = false;
+        const unsubscribePipette = waterLevelPipetteStore.subscribe((take) => {
+            if (wasAiming === (take !== undefined)) return;
+            wasAiming = take !== undefined;
+            this.gameScene.input.setDefaultCursor(this.aiming() ? "crosshair" : this.idleCursor());
         });
         gameScene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
             unsubscribeArmed();
+            unsubscribePipette();
             this.stopDownpour();
             this.pointerCapture.destroy();
             this.panShortcut.destroy();
@@ -184,6 +198,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     }
 
     public handlePointerUpEvent(pointer: Pointer, gameObjects: GameObject[]): void {
+        // A gesture of the pipette ends here, whatever it was (a drag of the view, a click that takes a level).
+        endWaterLevelGesture();
         if (pointer.leftButtonReleased()) {
             const wasDragging = this.draggingMap;
             const dragged = this.mapDrag.end(pointer.id);
@@ -197,6 +213,15 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             }
         }
         if (pointer.wasTouch && this.multiTouch) {
+            return;
+        }
+        // The armed pipette of the level of a source takes the click that is not a drag (the drag test above): the
+        // point clicked, and the ground under the water with Alt. Nothing else answers it: no walk, no object.
+        if (get(waterLevelPipetteStore) !== undefined && (pointer.wasTouch || pointer.leftButtonReleased())) {
+            if (!pointer.wasTouch || pointer.getDuration() <= 250) {
+                const ground = pointer.event instanceof MouseEvent && pointer.event.altKey;
+                takeWaterLevel(this.mapPointUnder(pointer), ground);
+            }
             return;
         }
         // An armed catastrophe takes the click that is not a drag (the drag test above): it walks, activates and
@@ -453,6 +478,11 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         this.heldKind = undefined;
     }
 
+    /** Whether a click of the map is aimed: an armed catastrophe, or the pipette of the level of a source. */
+    private aiming(): boolean {
+        return get(armedCatastropheStore) !== undefined || get(waterLevelPipetteStore) !== undefined;
+    }
+
     private idleCursor(): string {
         return get(mapExplorationModeStore) ? "grab" : "auto";
     }
@@ -664,6 +694,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     }
 
     public handlePointerDownEvent(pointer: Pointer, gameObjects: GameObject[]): void {
+        // A gesture pressed while the pipette aims is the pipette's to its end (see waterLevelPipetteOwnsPointer).
+        noteWaterLevelPress();
         if (pointer.wasTouch) {
             // A first finger starts a new gesture; a second one turns it into a pinch and ends the one-finger drag.
             this.multiTouch = this.touchPointersDown() > 1;
@@ -746,7 +778,11 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         // The other editor tools use the left drag themselves; they pan with MapPanShortcut instead.
         const armed = get(armedCatastropheStore);
         if (armed === "downpour" || armed === "drain" || armed === "ball") return false;
-        return this.canMoveView() && (!get(mapEditorModeStore) || get(mapExplorationModeStore));
+        // While the pipette aims, the left drag moves the view in the map editor too: only a click takes a level.
+        return (
+            this.canMoveView() &&
+            (!get(mapEditorModeStore) || get(mapExplorationModeStore) || get(waterLevelPipetteStore) !== undefined)
+        );
     }
 
     public handlePinch(zoomFactor: number, centre: { x: number; y: number }, pan: { x: number; y: number }): void {
@@ -768,7 +804,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
 
     private restoreDragCursor(): void {
         if (this.draggingMap) {
-            this.gameScene.input.setDefaultCursor(get(armedCatastropheStore) ? "crosshair" : this.idleCursor());
+            this.gameScene.input.setDefaultCursor(this.aiming() ? "crosshair" : this.idleCursor());
             this.draggingMap = false;
         }
     }
