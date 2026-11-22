@@ -121,6 +121,16 @@ describe("pointerGroundAt", () => {
         });
     });
 
+    it("reads the ground and the water under a bridge or a raised floor, not its deck", () => {
+        // The water reads its last state over the cell, whatever is built over it (a bridge reads none for walkers).
+        const water = { ...waterOf(relief, { "20,5": heightOfMetres(2.4) }), walkerSettledDepthAt: () => 0 };
+        expect(pointerGroundAt(relief, { x: 328, y: 88 }, water, dry)).toEqual({
+            ground: -0.8,
+            surface: 1.6,
+            depth: 2.4,
+        });
+    });
+
     it("tells the ice where the water is frozen", () => {
         const water = waterOf(relief, { "20,5": heightOfMetres(2.4) });
         expect(pointerGroundAt(relief, { x: 328, y: 88 }, water, () => true)).toMatchObject({ ice: true });

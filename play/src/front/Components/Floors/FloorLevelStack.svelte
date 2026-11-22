@@ -37,7 +37,14 @@
     let pointer = $derived(stack?.pointer);
     let groundFigure = $derived(pointer ? metresLabel(pointer.ground, $locale) : "—");
     let surfaceFigure = $derived(pointer?.surface === undefined ? "—" : metresLabel(pointer.surface, $locale));
-    let depthFigure = $derived(pointer?.depth === undefined ? "" : metresLabel(pointer.depth, $locale, false));
+    // A film thinner than half a decimetre is water too: told as such, not as "0 m".
+    let depthFigure = $derived(
+        pointer?.depth === undefined
+            ? ""
+            : pointer.depth === 0
+              ? `< ${metresLabel(0.1, $locale, false)}`
+              : metresLabel(pointer.depth, $locale, false),
+    );
     let waterName = $derived(
         pointer?.ice
             ? $LL.mapEditor.mapLayer.floorLevel.pointerIce()

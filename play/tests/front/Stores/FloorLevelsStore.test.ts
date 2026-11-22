@@ -82,6 +82,15 @@ describe("the stack of the floors", () => {
         );
     });
 
+    it("keeps the altitude of the raised floor of the avatar with the ground and the water under the pointer", () => {
+        const water = { ground: -3.6, surface: -1.2, depth: 2.4 };
+        expect(floorLevelStack([52], 52, undefined, name, undefined, 52, water)).toMatchObject({
+            current: 52,
+            altitude: 52,
+            pointer: water,
+        });
+    });
+
     it("tells the ground under the pointer again only when what it shows changes", () => {
         const seen: unknown[] = [];
         const unsubscribe = pointerGroundStore.subscribe((value) => seen.push(value));

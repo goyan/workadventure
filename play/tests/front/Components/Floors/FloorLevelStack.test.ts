@@ -75,6 +75,20 @@ describe("FloorLevelStack", () => {
         expect(body).toContain("-1,2 m");
     });
 
+    it("tells a film of water as less than a decimetre deep, not as nothing", () => {
+        const pointer = { ground: -3.6, surface: -3.6, depth: 0 };
+        const { body } = render(FloorLevelStack, { props: { stack: { ...stack, altitude: 48, pointer } } });
+        expect(body).toContain("Profondeur &lt; 0,1 m");
+    });
+
+    it("keeps the altitude of the avatar on a raised floor, and tells the ground and the water under the pointer", () => {
+        const pointer = { ground: -3.6, surface: -1.2, depth: 2.4 };
+        const { body } = render(FloorLevelStack, { props: { stack: { ...stack, altitude: 52, pointer } } });
+        expect(body).toContain("+1,8 m");
+        expect(body).toContain("-3,6 m");
+        expect(body).toContain("-1,2 m");
+    });
+
     it("keeps its line while the pointer is off the game, so that nothing moves under it", () => {
         const { body } = render(FloorLevelStack, { props: { stack: { ...stack, altitude: 48 } } });
         expect(body).toContain('data-testid="pointer-ground"');
