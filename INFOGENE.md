@@ -2879,30 +2879,41 @@ comprise. Sur mer modérée, cette vitesse reste sous son pas d'envoi (un quart 
 flèche. Sur mer forte, une flèche s'inverse d'une seconde à l'autre 15 à 35 % du temps, ce qui est le mouvement réel
 de l'eau sous la vague.
 
-**Courants lents** (dès 3 cm/s sur une carte à inertie). Le serveur transmet la vitesse par bloc de 4 × 4 cellules,
+**Courants lents** (dès 1 cm/s sur une carte à inertie). Le serveur transmet la vitesse par bloc de 4 × 4 cellules,
 par pas d'un quart de cellule par seconde (`speeds`, `SPEED_UNITS`, 0,137 m/s) : plus lente, elle valait zéro et
 l'overlay ne traçait rien. Un champ facultatif `slowSpeeds` (champ 10 de `TerrainWaterMessage`, même disposition)
-donne, là où `speeds` dit zéro, la vitesse en 250ᵉ de cellule par seconde (2 mm/s), dès 3 cm/s : `SLOW_SPEED_UNITS`,
+donne, là où `speeds` dit zéro, la vitesse en 250ᵉ de cellule par seconde (2 mm/s), dès 1 cm/s : `SLOW_SPEED_UNITS`,
 `SLOWEST_TOLD_METRES` (une seule constante pour le serveur, le plancher de l'overlay et la légende), codage linéaire
-(`slowSpeedByte`, `slowSpeedOf` : la plage ne va que de 14 à 31 unités, une loi plus fine n'apporterait rien et peu de
+(`slowSpeedByte`, `slowSpeedOf` : la plage ne va que de 5 à 31 unités, une loi plus fine n'apporterait rien et peu de
 valeurs se compressent bien). Le serveur l'écrit dans le même passage que `speeds` (`WaterGrid.writeSpeedBytes`) et
-ne l'envoie pas quand aucun bloc n'est lent ; `speeds` reste identique octet pour octet (test sur une rivière).
+ne l'envoie pas quand aucun bloc n'est lent ; `speeds` reste identique octet pour octet (test sur une rivière). Plancher
+de 1 cm/s choisi par l'utilisateur le 2026-11-22, sur le tableau ci-dessous.
 
 - **Compatibilité** : un `play` ancien ignore le champ ; un `back` ancien ne l'envoie pas et le `play` neuf trace
   alors dès 0,14 m/s, comme avant. Déployer `play` et `back` ensemble reste la règle (même commit, protobuf partagé).
 - **Courant des avatars et des canoës inchangé** : `speedAt` lit les vitesses lentes, mais `currentPush` et
   `waterCurrentAt` ne comptent qu'à partir de 0,2 cellule/s (`CURRENT_REST_SPEED`), au-dessus de toute vitesse lente
   (0,124 au plus) : test.
-- **Coût mesuré** (gzip par message, `speeds` puis `slowSpeeds`) : mer de 80 × 80 agitée 28 + 122 octets, qui se
-  calme 28 + 31 ; mer de 600 × 600 agitée 78 + 333 à 413, qui se calme 78 + 78 ; étang 28 à 47 + 28 à 34, rien d'envoyé
-  pour une eau sans courant lent. En octets par seconde, × 1, 5 ou 10 états par seconde : sur la mer de 600 × 600
-  agitée, 78 → 411 à 1 état/s, 390 → 2 415 à 5, 780 → 4 912 à 10 ; la finesse adaptative (#446), qui réduit la cadence
-  sous charge, réduit d'autant. Temps d'écriture du serveur inchangé (0,9 ms par message sur 600 × 600, un passage),
-  le calcul de l'eau n'est pas touché ; `FLOW_REST_SPEED` (navigateur seulement) suit le plancher.
+- **Coût mesuré** sur le code réel, octets gzip de `slowSpeeds` ajoutés par message (`speeds` seul entre parenthèses),
+  puis octets par seconde au total à 1 / 5 / 10 états par seconde ; temps d'écriture du serveur inchangé (0,9 ms par
+  message sur 600 × 600, un seul passage), calcul de l'eau non touché ; la finesse adaptative (#446) réduit la cadence
+  sous charge, donc ces débits :
+
+  | Cas | 1 cm/s | 2 cm/s | 3 cm/s |
+  |---|---|---|---|
+  | Mer 80 × 80 qui se calme (28) | +248 ; 276 / 1 378 / 2 755 | +69 ; 97 / 487 / 974 | +13 ; 41 / 203 / 405 |
+  | Mer 600 × 600, 10 s après une tempête (78) | +4 036 ; 4 114 / 20 569 / 41 138 | +1 147 ; 1 225 / 6 123 / 12 247 | +261 ; 339 / 1 695 / 3 389 |
+  | Mer 600 × 600, 1 min après (78) | +1 978 ; 2 056 / 10 278 / 20 555 | +90 ; 168 / 840 / 1 681 | +0 ; 78 / 390 / 780 |
+  | Eau au repos (28) | +0 | +0 | +0 |
+  | Étang avec source (28 à 47) | +30 à 44 ; 62 à 78 par s à 1 état/s | +28 à 39 | +28 à 34 |
+
 - **Ce que montre l'étang de la capture** (simulation : 11 × 11 cellules, 30 cm d'eau, source de 100 m³/h, trop-plein
-  par un chenal ; blocs de l'étang ayant une flèche, sur 9) : à « Vitesse de l'eau » 1, 1 au lieu de 0 ; à 4, 4 au lieu
-  de 1 ; à 60, 8 au lieu de 7. Les flèches lentes sont courtes et pâles (échelle existante). La légende dit
-  « transmises à partir de 0,03 m/s ».
+  par un chenal ; blocs de l'étang ayant une flèche, sur 9, avant / 1 cm / 2 cm / 3 cm) : à « Vitesse de l'eau » 1,
+  0 / 4 / 1 / 1 ; à 4, 1 / 8 / 6 / 4 ; à 60, 7 / 8 / 8 / 8. Les flèches lentes sont courtes et pâles (échelle
+  existante). La légende dit « transmises à partir de 0,01 m/s ».
+- **Pistes non codées** : n'envoyer `slowSpeeds` qu'aux joueurs qui ont « Flux d'eau » ouvert demanderait un message
+  du navigateur au serveur (aucun n'existe : la vue est locale) et un envoi par joueur au lieu d'un envoi à la salle ;
+  et le rendu de l'eau mince qui court lira ce champ : il reste donc envoyé à tous.
 - Écartée : deviner la vitesse d'après la pente quand le serveur dit zéro (3 à 6 cm/s sous 30 cm d'eau demandent une
   pente de 0,001 à 0,002 px par cellule, trente fois sous le bruit des profondeurs reçues).
 
