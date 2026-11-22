@@ -153,6 +153,11 @@ const EARTH_RADIUS_KM = 6371;
 export interface WorldPlace extends WeatherLocation {
     /** The name where there is room for more (weather card, sky menu, weather board); absent: `name`. */
     longName?: string;
+    /**
+     * Its coordinates in whole degrees ("24° N 122° E"), for a point far from any city: the name it is given when the
+     * map follows it, shared by every player (no distance in one player's language, no comma, short).
+     */
+    coordinates?: string;
 }
 
 /** The words a point far from any city is named with, in the language of the player. */
@@ -248,6 +253,7 @@ export function placeOfPoint(point: WorldPoint, words: PointWords): WorldPlace {
         // The city speaks to the player more than coordinates; its distance tells it is not the city itself.
         name: words.short(shortCityName(nearest.city.name), distance),
         longName: words.far(coordinates, nearest.city.name, distance),
+        coordinates,
         latitude: point.latitude,
         longitude: point.longitude,
         timezone,

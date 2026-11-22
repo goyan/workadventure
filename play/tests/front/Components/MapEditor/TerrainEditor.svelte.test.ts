@@ -40,6 +40,9 @@ vi.mock("../../../../src/front/Phaser/Game/MapEditor/Commands/Facades", () => ({
 vi.mock("../../../../src/front/Phaser/Game/Terrain/TerrainMapSettings", () => ({
     readTerrainMapSettings: () => ({ ...mapSettings }),
 }));
+vi.mock("../../../../src/front/Phaser/Game/Terrain/DashboardRain", () => ({
+    readDashboardRain: () => undefined,
+}));
 vi.mock("../../../../src/i18n/i18n-svelte", async (importOriginal) => {
     const { readable } = await import("svelte/store");
     // Any translation renders as its key.
@@ -136,6 +139,23 @@ describe("TerrainEditor", () => {
             $case: "updateMeadowSettingMessage",
             updateMeadowSettingMessage: { enabled: true, growMinutes: 25, thirstMinutes: 20, moistureHold: 1 },
         });
+    });
+
+    it("tells the multipliers of the waves as times the real value, the roughnesses of the soils being multiplied", () => {
+        render();
+        byTestId("terrain-inertia").querySelector("input")?.click();
+        flushSync();
+        for (const id of [
+            "terrain-wave-roughness",
+            "terrain-wave-breaking",
+            "terrain-wave-momentum",
+            "terrain-flow-pace",
+        ]) {
+            expect(byTestId(id).querySelector("label")?.textContent).toContain("mapEditor.terrain.waves.timesReal");
+        }
+        // The damping is a share a second, not a multiple of the real one.
+        expect(byTestId("terrain-wave-damping").querySelector("label")?.textContent).not.toContain("timesReal");
+        expect(byTestId("terrain-wave-roughness").textContent).toContain("mapEditor.terrain.waves.roughnessMultiplies");
     });
 
     it("turns the inertia of the water of the map on and off", () => {

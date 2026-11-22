@@ -2667,7 +2667,15 @@ d'Open-Meteo vivent pour cela dans `libs/map-editor/src/Weather/` (les anciens c
 **Tableau de bord** (panneau Relief, « Bilan de l'eau ») : ce qui entre (pluie, sources) et ce qui sort (puits,
 évaporation, bu par le sol, perdu au bord) en m³/h du temps de la carte, avec l'unité propre du réglage à côté (mm/h),
 une barre par ligne à la même échelle, la tendance (entrées moins sorties), le stock en m³ et la surface sous l'eau.
-Mis à jour chaque seconde par `back` tant que l'eau bouge.
+Mis à jour chaque seconde par `back` tant que l'eau bouge. La ligne de pluie dit « Pluie de la carte (Lille) » : la
+pluie de l'air du serveur, la seule qui apporte de l'eau, avec le lieu de la carte quand sa météo est réelle (comme la
+pastille météo, Paris par défaut) et « conditions réglées à la main » quand la salle est en manuel
+(`Terrain/DashboardRain.ts`, relu chaque seconde). Dessous, deux notes au besoin : il neige sur la carte (la neige
+reste au sol, seule la part de pluie est comptée, comme `liquidRainRate` du serveur) ; il pleut ou neige sur l'écran du
+joueur qui suit une autre ville (`showsChosenPlaceWeather`), « pas sur la carte : cette pluie n'apporte pas d'eau ».
+Les multiplicateurs des vagues (frottement, déferlement, élan) et la vitesse d'écoulement s'affichent « × le réel » ;
+« En savoir plus » du frottement dit qu'il multiplie les rugosités des sols (lisibles sous le curseur, pastille des
+étages).
 
 **En jeu.** `Terrain/TerrainView.ts` dessine le relief (fond assombri avec la profondeur, pentes éclairées du
 nord-ouest) et l'eau (bleu clair, plus sombre avec la profondeur, liseré sur la rive) dans un canevas lissé d'un
@@ -4840,7 +4848,17 @@ des sols). **Frange capillaire par sol** (`Meadow`, `SOIL_LIFE`) : `fringeTiles`
 `wicking` 0,15 pour sable et gravier (la diffusion latérale de `MOISTURE_SPREAD` y est faible). Humidité d'une plage
 de sable à l'équilibre, à 1, 2, 3 tuiles de l'eau : 0,80, 0,14, 0,03 (avant 0,80, 0,50, 0,17 ; la terre garde 0,80,
 0,58, 0,43). Contraste mouillé/sec mesuré sur le shader (îlot de 10 × 8 tuiles), ΔL* : jour 13,8 → 20,4, soir (voile
-0,3) 10,2 → 15,0, nuit (0,6) 6,4 → 9,4. Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
+0,3) 10,2 → 15,0, nuit (0,6) 6,4 → 9,4. **Filet qui court** (2026-11-22, `fix/filet-qui-court`, après une capture « Flux d'eau »
+avec des flèches sur une terre qui paraissait sèche entre deux flaques) : la flèche n'était pas en cause (à fort zoom,
+`flowOverBlock` ne la trace que si la cellule du milieu de son bloc a de l'eau, au moins 1/8 px) ; l'eau était bien
+transmise et dessinée, mais sous 1 px comme une terre mouillée à 5 % de teinte, indiscernable d'une terre humide
+(ΔL* 1,4). Toute eau que le serveur transmet (dès 1/8 px, 4 mm) est maintenant dessinée, qu'elle coure ou non (le rendu
+ne dépend plus des vitesses à 0,25 cellule/s du serveur) ; `WATER_SHOWN_PX` (0,5 px) ne sert plus qu'à ce que les pieds
+lisent (`AvatarAltitude`). Le courant de chaque cellule (`TerrainWater.speedAt`, eau à inertie) est donné au shader
+(paquet 10, rouge et vert, `FLOW_UNITS` 32 par cellule/s autour de 128) : un film qui court prend une teinte légère
+(`filmCover`, de 5 % immobile à 35 % dès 0,27 m/s) et des ridules étirées dans le sens du courant qui glissent à sa
+vitesse ; dès `SHORE_PX` (3 px), l'eau est la même qu'avant. Terre sous un film qui court contre terre mouillée sans
+eau : ΔL* 1,4 → 10,1. Sous 1 px, le rendu ne distingue pas 4 mm de 3 cm (niveaux entiers). Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
 (`TexturedGround`). Textures : `resources/terrain/ground-*.png` (générées, 4 tons nets ; `ground-ice.png` dans le
 style des patinoires).
 
@@ -4850,6 +4868,36 @@ une flèche du vent ; un clic ouvre le bulletin, sous la pastille. Dès 768 px d
 `worldCityStore`, nommé d'après la ville la plus proche, ou par ses coordonnées loin de toute ville) voit aussi sa ville (ordinateur), et le jeu dessine pour lui
 seul la météo de ce lieu (`ChosenPlaceWeather`, route `real-weather` du pusher) ; les autres gardent celle du
 serveur.
+
+**Appliquer sa météo à la carte** (2026-11-22). La fiche personnelle (ordinateur) a un bouton « Appliquer à la
+carte » : la carte suit alors, pour tout le monde, le lieu que ce joueur suit sur son horloge. Mécanisme : le même
+enregistrement que le panneau « Météo de la carte » (`updateWeatherSettingMessage`, commande de l'éditeur, gardé
+dans le WAM), avec le lieu (latitude, longitude, nom, fuseau) **et la météo « Réel »** : une carte en Automatique ou
+en temps fixe ne lit pas la pluie réelle de son lieu (`TerrainWaterManager`, `FireConditionsManager.real()` ne
+valent qu'en Réel). Aucun changement de serveur : `back` relit le lieu du WAM à chaque pas (`RainTimelineService`
+demande la météo du nouveau lieu à Open-Meteo, cache par lieu arrondi), sans redémarrer la salle ; neige, glace,
+eau, feu et herbe repartent de l'air du nouveau lieu. Nom enregistré : celui de la ville, ou pour un point loin de
+toute ville ses **coordonnées** (« 24° N 122° E », `WorldPlace.coordinates`) : partagé par tous, sans virgule (la
+pastille coupe le lieu de la carte à la virgule), sans distance écrite dans la langue d'un joueur. Le jour, la nuit
+et les saisons de la carte suivent ce lieu (et son fuseau) : la confirmation le dit.
+- **Droits** : ceux du panneau « Météo de la carte » (`canEditMapWeather`, `Weather/MapWeatherRights.ts`, partagé
+  avec ce panneau et l'app de bureau) ; sinon le bouton est grisé avec la raison. Grisé aussi pendant la lecture de
+  la météo du lieu, et quand elle est indisponible (« pas de météo réelle pour ce lieu ») ; « La carte suit déjà ce
+  lieu » quand la carte est en Réel au même lieu arrondi.
+- **Confirmation** (`PlaceToMapModal`, `Popup` du jeu, Échap) : la carte change pour tous, passe en météo réelle si
+  elle ne l'était pas, et son jour, sa nuit et ses saisons suivent le lieu. Deux cases cochées par défaut :
+  « Revenir aux conditions réelles » (seulement si la salle est en conditions réglées à la main, Catastrophe →
+  Météo : elles resteraient prioritaires sur le lieu ; n'importe quel joueur peut déjà les quitter) et « Voir ensuite
+  la météo de la carte » (le joueur repasse en « Heure du serveur », quitte « Jour dans le monde » et voit le monde
+  partagé : givre, neige, glace). Elles ne s'appliquent qu'une fois le changement appliqué à la carte de ce
+  navigateur (relue après l'envoi : l'éditeur journalise une commande ratée sans lever d'erreur) ; sinon rien d'autre
+  ne change et la confirmation le dit. Un refus du serveur arrivé ensuite n'est pas vu (comme pour le panneau
+  « Météo de la carte »). Le nom des coordonnées est écrit dans la langue de celui qui applique (« 40° O » ou
+  « 40° W ») ; repasser en « Heure du serveur » fait perdre le mode du ciel d'avant, quel qu'il soit.
+- **Retour arrière** : pour la session de celui qui a appliqué, la fiche de la carte (globe) propose « Revenir à
+  Lille » tant que la carte suit encore le lieu appliqué ; il remet la météo et le lieu d'avant (le lieu par défaut
+  s'il n'y en avait pas). Les conditions réglées à la main quittées ne reviennent pas. Sinon : panneau « Météo de la
+  carte ».
 
 **Gel.** À partir de l'air du lieu affiché (`Weather/Frost.ts`), pour ce joueur seul, rien n'est envoyé :
 givre au sol d'après la vapeur de l'air (voir « Givre » ci-dessous) ; l'eau gèle des hauts-fonds vers le fond entre 0 et -15 °C (toute gelée au-delà), en glace de
