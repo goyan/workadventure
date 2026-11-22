@@ -971,7 +971,7 @@ export type TerrainData = z.infer<typeof TerrainData>;
 export const DEFAULT_WATER_SETTINGS = {
     runoff: 10,
     evaporation: 0.2,
-    speed: 60,
+    speed: 1,
     absorption: 5,
     current: 1,
     maxSurface: 18,
@@ -1042,8 +1042,8 @@ export const WaterSettings = z.object({
     /** Water lost by a wet surface in dry weather, in mm an hour. */
     evaporation: z.number().min(0).max(10).default(DEFAULT_WATER_SETTINGS.evaporation),
     /**
-     * How many times faster than in reality the water of the map goes (1: as in reality, where a rain fills a lake
-     * in hours; 60 by default: a minute for an hour).
+     * How many times faster than in reality the water of the map goes, what comes in and goes out (rain, sources,
+     * sinks, evaporation): 1 by default, as in reality, where a rain fills a lake in hours; 60: a minute for an hour.
      */
     speed: z.number().min(1).max(MAX_WATER_SPEED).default(DEFAULT_WATER_SETTINGS.speed),
     /** Water the flat ground drinks from the sheet of a flood, in mm an hour: how fast a flood goes down. */
@@ -1064,8 +1064,8 @@ export const WaterSettings = z.object({
         .default(DEFAULT_WATER_SETTINGS.maxSurface),
     /**
      * Water the floors of the rooms (what the walls close, doors closed) drain, in mm an hour of the time of the map:
-     * 300 by default, a slow seep: a flooded room is dry in about two minutes at the usual speed; drains placed on
-     * the floor (sinks) take it faster. 0 keeps the water inside.
+     * 300 by default, a slow seep: a flooded room is dry in about two hours as in reality (two minutes at a speed of
+     * 60); drains placed on the floor (sinks) take it faster. 0 keeps the water inside.
      */
     indoorDrain: z.number().min(0).max(MAX_WATER_INDOOR_DRAIN).default(DEFAULT_WATER_SETTINGS.indoorDrain),
     /**

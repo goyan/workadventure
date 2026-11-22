@@ -2333,8 +2333,8 @@ de la carte. Curseurs : diamètre (1 à 12 cases), force (automatique : un huiti
 que dehors (grille extérieure de la météo), jamais sous un mur. Réglages enregistrés dans la carte, dans le même
 panneau : profondeur maximale (1 à 8 cases, 2 par défaut), ruissellement (10 par défaut : le terrain autour apporte
 dix fois la surface du creux), évaporation par temps sec (0,2 mm/h par défaut), absorption du sol plat (5 mm/h),
-**vitesse de l'eau** (60 par défaut : une minute pour une heure ; à 1, comme en vrai, une pluie remplit un lac en
-des heures). **Source** et **puits** sont des
+**vitesse de l'eau** (1 par défaut depuis le 2026-11-22, comme en vrai : une pluie remplit un lac en des heures,
+une source de 100 m³/h verse 100 m³ par heure réelle ; 60 pour un essai : une minute pour une heure ; jusqu'à 1 000). **Source** et **puits** sont des
 propriétés d'objet (`waterSourcePropertyData`, `waterSinkPropertyData`, débit enregistré en litres par minute, réglé en m³/h, L/s, L/min ou m³/s, de 0 à 1 000 m³/s), à ajouter à
 n'importe quel objet depuis son panneau : une source verse à son pied, un puits retire l'eau qui arrive au sien. Le
 pied (milieu du bas de l'image) est écrit dans la propriété par l'éditeur (`anchorX`, `anchorY`,
@@ -3435,7 +3435,9 @@ Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus
 - **Eau de fonte.** Ce qui fond humidifie le sol de sa case comme la même pluie le ferait, et est versé dans l'eau du
   relief, millimètre pour millimètre (`PX_PER_MM`, `TerrainWaterManager.pour`), compté avec la pluie dans le bilan. Hors de la grille d'eau, le sol est humidifié et le
   reste est perdu. La neige de la pluie de la carte s'accumule à la vitesse de l'eau de la carte (`water.speed`),
-  sans le ruissellement (`runoff`) : elle tient où elle tombe.
+  sans le ruissellement (`runoff`) : elle tient où elle tombe. Depuis que cette vitesse vaut 1 par défaut
+  (2026-11-22), une carte qui ne la règle pas blanchit en temps réel (5 mm/h d'eau de neige : 15 mm, sol tout blanc,
+  en trois heures), alors que fonte et sublimation gardent leur horloge ×600 (`THAW_SPEED`).
 - **Averse à l'écran.** Par temps froid, l'averse tombe en flocons au lieu de gouttes (`downpourFlakes`, mélange des
   deux dans l'entre-deux, nuage plus clair, sol qui pâlit au lieu de s'assombrir), d'après l'air de la salle
   (`roomPrecipitationAir` : réglage manuel, sinon lieu de la carte), le même pour tous les joueurs et pour le serveur,

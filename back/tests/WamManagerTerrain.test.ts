@@ -46,7 +46,8 @@ describe("WamManager relief", () => {
         expect(manager.getWam().settings?.water).toEqual({
             runoff: 3,
             evaporation: 1,
-            speed: 60,
+            // A map that never set its speed goes as in reality.
+            speed: 1,
             absorption: 5,
             current: 1,
             maxSurface: 18,
