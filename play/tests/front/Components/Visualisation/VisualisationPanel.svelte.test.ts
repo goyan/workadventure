@@ -65,27 +65,26 @@ afterEach(async () => {
 });
 
 describe("VisualisationPanel", () => {
-    it("shows nothing until the panel is opened", () => {
-        expect(find("visualisation-widget")).toBeNull();
-        visualisationPanelStore.set(true);
+    it("shows nothing until the panel is opened, nor with nothing shown on the map", () => {
+        waterFlowOverlayStore.set(true);
         flushSync();
-        expect(find("visualisation-water-flow")?.getAttribute("aria-pressed")).toBe("false");
         expect(find("visualisation-water-flow-legend")).toBeNull();
+        visualisationPanelStore.set(true);
+        waterFlowOverlayStore.set(false);
+        flushSync();
+        expect(find("visualisation-water-flow-legend")).toBeNull();
+        expect(find("weather-board-live")).toBeNull();
     });
 
-    it("turns the flows of the water on and off, with their legend", () => {
+    it("shows the legend of the flows of the water while they are drawn", () => {
         visualisationPanelStore.set(true);
+        waterFlowOverlayStore.set(true);
         flushSync();
-        find("visualisation-water-flow")?.click();
-        flushSync();
-        expect(get(waterFlowOverlayStore)).toBe(true);
-        expect(find("visualisation-water-flow")?.getAttribute("aria-pressed")).toBe("true");
         expect(find("visualisation-water-flow-legend")?.textContent).toContain("Speed");
         expect(find("visualisation-water-flow-legend")?.textContent).toContain("Over a few seconds");
         expect(find("visualisation-water-flow-legend")?.textContent).toContain("Per real minute");
-        find("visualisation-water-flow")?.click();
+        waterFlowOverlayStore.set(false);
         flushSync();
-        expect(get(waterFlowOverlayStore)).toBe(false);
         expect(find("visualisation-water-flow-legend")).toBeNull();
     });
 
@@ -95,7 +94,7 @@ describe("VisualisationPanel", () => {
         flushSync();
         visualisationPanelStore.set(false);
         flushSync();
-        expect(find("visualisation-widget")).toBeNull();
+        expect(find("visualisation-water-flow-legend")).toBeNull();
         expect(get(waterFlowOverlayStore)).toBe(true);
     });
 
@@ -134,19 +133,14 @@ describe("VisualisationPanel", () => {
         expect(totals.replace(/[^0-9m]/g, "")).toBe("1234m3567m2");
     });
 
-    it("opens and closes the weather board, which is not mounted while closed", () => {
+    it("shows the weather board while it is open, and does not mount it while closed", () => {
         visualisationPanelStore.set(true);
         flushSync();
         expect(find("weather-board-live")).toBeNull();
-        expect(find("visualisation-weather-explained")?.getAttribute("aria-pressed")).toBe("false");
-        find("visualisation-weather-explained")?.click();
+        weatherExplainedStore.set(true);
         flushSync();
-        expect(get(weatherExplainedStore)).toBe(true);
-        expect(find("visualisation-weather-explained")?.getAttribute("aria-pressed")).toBe("true");
         expect(find("weather-board-live")).not.toBeNull();
-        // The flows of the water are another thing to show: untouched.
-        expect(get(waterFlowOverlayStore)).toBe(false);
-        find("visualisation-weather-explained")?.click();
+        weatherExplainedStore.set(false);
         flushSync();
         expect(find("weather-board-live")).toBeNull();
     });

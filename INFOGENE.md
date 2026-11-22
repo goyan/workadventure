@@ -2831,10 +2831,66 @@ dessous, sous « En savoir plus ».
   autre encodage 25 % au mieux pendant un tsunami : non faits.
 
 
+## Interface compacte : Catastrophes et Visualisation en pastilles sur la ligne de l'horloge
+
+Constat de l'utilisateur sur l'écran natif d'un MacBook (fenêtre d'environ 1280 × 800) : l'interface prenait près de
+40 % de la hauteur (ligne de l'horloge, onglets des catastrophes, une rangée pleine largeur avec un long texte d'aide,
+la rangée Visualisation). Les deux rangées deviennent **deux pastilles** de la ligne de l'horloge, à gauche de la
+pastille météo (`Components/ClockLine/ClockLineChips.svelte`) ; leurs réglages s'ouvrent dans un **panneau flottant**
+ancré sous la pastille (`ClockLine/ChipPopover.svelte`). Rien d'ouvert : barre du haut et ligne de l'horloge seulement
+(dans l'aperçu à 1280 × 800, bas de l'interface à 132 px au lieu de 252).
+
+- **Qui les voit** : comme les rangées d'avant, rien de changé. Chaque pastille suit son entrée du menu des
+  applications (`catastrophePanelStore`, `visualisationPanelStore`), hors mode Basique ; dans l'éditeur de carte aussi.
+  Activée depuis le menu, la pastille ouvre aussitôt son panneau (on vient choisir).
+- **Panneau Catastrophes** : onglets Catastrophes | Météo, les six tuiles, le curseur de taille, « Toute la carte » de
+  l'averse, et l'onglet Météo (conditions manuelles, curseurs et boutons − et +) qui défile à l'intérieur quand la
+  place manque. Fermer le panneau **laisse la catastrophe armée** : la pastille le dit (« Boule · 4 cases », teinte
+  active, anneau blanc) et un clic dessus rouvre le panneau sur sa taille. Le panneau reste monté avec sa pastille :
+  onglet et taille montrée ne se perdent pas à la fermeture.
+- **Panneau Visualisation** : les tuiles « Flux d'eau » et « Météo expliquée ». La pastille dit ce qui est affiché
+  (« Flux d'eau », « Météo expliquée », ou « 2 affichés »). La légende des flux et le tableau « Météo expliquée »
+  restent dans la colonne sous la ligne, comme avant (`VisualisationPanel.svelte`) : fermer le panneau ne les ferme
+  pas ; la règle de hauteur du tableau (`WeatherBoardFit`) est inchangée et sa surimpression part toujours du bas de la
+  ligne de l'horloge (+ 8 px).
+- **Fermeture** : clic sur la pastille ; appui n'importe où ailleurs, sur la carte compris (c'est là qu'on commence à
+  viser : l'appui ferme le panneau et lance la catastrophe choisie comme avant) ; Échap. **Échap désarme d'abord**
+  (panneau ouvert ou non), puis, rien d'armé, ferme le panneau et rend le focus à sa pastille : un seul écouteur, pour
+  que la même touche ne fasse pas les deux. Un curseur ou une case du panneau resté focalisé est relâché à la fermeture
+  (un champ focalisé suspend les entrées du jeu). L'appui dehors est écouté en `pointerdown` (phase de capture) :
+  `svelte-outside` écarté, il écoute `click`/`mousedown` et ignore un événement dont le défaut est empêché, ce que fait
+  Phaser sur son canevas.
+- **Rien ne traverse** : un appui dans un panneau a pour cible le panneau, que Phaser traite comme « hors du canevas »
+  (`POINTER_DOWN_OUTSIDE`/`POINTER_UP_OUTSIDE`, jamais le `POINTER_UP` qui fait marcher ou lance) ; la molette n'y
+  zoome pas (Phaser ne lit la molette qu'au-dessus de son canevas), le panneau défile (`overscroll-contain`). Vérifié
+  par les vrais écouteurs souris de Phaser (`ChipPopoverPhaserInput.test.ts`) et, dans l'aperçu, par
+  `elementFromPoint` sur toute la surface des panneaux (seuls les coins arrondis laissent voir la carte).
+- **Place** : le panneau s'ouvre sous sa pastille, bord gauche sur le sien, décalé vers la gauche pour ne jamais sortir
+  de la fenêtre ; **sous les éléments de la ligne qu'il couvrirait** (la seconde ligne de la pile des étages, plus haute
+  que les pastilles) ; hauteur au plus la place jusqu'au bas de la fenêtre (marge 12 px, 120 px au moins), défilement
+  dedans. Règle pure `popoverPlacement` (`ClockLine/ClockLineFold.ts`).
+- **Aide « i »** (`Input/InfoTip.svelte`) : les longs textes d'aide (celui de la catastrophe choisie, « Choisissez ce
+  qu'il faut afficher sur la carte ») sont derrière un bouton « i » au bout de la rangée, mêmes textes i18n ; bulle au
+  survol, au focus clavier et au clic ou au toucher (épinglée jusqu'au clic suivant ou un appui ailleurs) ; le texte est
+  la description du bouton (`aria-describedby`). `Input/InfoButton.svelte` (survol seul, partagé par les champs) est
+  laissé tel quel.
+- **Repli par largeur** (`chipsFold`, mesuré sur la largeur du conteneur `main-layout` et les autres éléments de la
+  ligne, à chaque changement de taille) : libellés si tout tient ; sinon **icône seule** (le nom en libellé accessible
+  et en infobulle ; une catastrophe armée garde sa teinte et le nombre de cases) ; si même les icônes pousseraient
+  l'horloge, les pastilles prennent **une rangée à elles** sous la ligne, avec leurs libellés (la ligne passe en
+  `flex-wrap`, rien ne sort de la fenêtre). Sous 768 px, colonne comme avant, les pastilles en bas. Aperçu au pire
+  contenu (météo de deux lieux, horloge « 20:51 Katmandou 500 km », pile à 250 px, 🌈) : libellés à 1280 et 1024,
+  icônes à 820, rangée à part à 768.
+- **i18n** `actionbar.catastrophe.{chip, chipArmed, chipHint, infoLabel}` et
+  `actionbar.visualisation.{chipShown, chipHint, infoLabel}`, en `fr-FR` et `en-US`.
+- **Non vérifié** : rien vu en jeu par un agent (aperçus hors jeu : vrais composants, pastille météo et horloge
+  recopiées, onglet Météo et tableau remplacés par des substituts) ; écran tactile ; lecteur d'écran.
+
 ## Visualisation des flux d'eau
 
-Entrée « Visualisation » du menu des applications (sous « Catastrophe ») : un panneau sous l'horloge
-(`VisualisationPanel.svelte`, `visualisationPanelStore`) avec une tuile « Flux d'eau » (`waterFlowOverlayStore`).
+Entrée « Visualisation » du menu des applications (sous « Catastrophe ») : une pastille sur la ligne de l'horloge
+(`VisualisationChip.svelte`, `visualisationPanelStore`) dont le panneau a une tuile « Flux d'eau »
+(`waterFlowOverlayStore`) ; la légende reste sous la ligne (`VisualisationPanel.svelte`). Voir « Interface compacte ».
 Pour soi seul, pour la session ; l'affichage reste quand le panneau est fermé. Indisponible en mode basique.
 
 Par-dessus la carte (`Terrain/WaterFlowOverlay.ts`, dix dessins par seconde, au-dessus du voile de nuit) :
@@ -4330,8 +4386,8 @@ cratère en bourrelet et l'eau fait elle-même la vague (voir « Eau à inertie 
 Conception et plan dans le dépôt d'infra, `docs/superpowers/{specs,plans}/2026-11-19-catastrophes-meteore*`. Lot 1 :
 le météore, qui ne touche que l'eau du relief.
 
-**En jeu.** Le menu des applications a un bouton « Catastrophe » qui montre ou cache un petit widget sous l'horloge
-(fermé à chaque chargement de page). Il reste utilisable quand l'éditeur de carte est ouvert : tant qu'une
+**En jeu.** Le menu des applications a un bouton « Catastrophe » qui montre ou cache une pastille sur la ligne de
+l'horloge, dont le panneau flottant porte les tuiles (fermé à chaque chargement de page ; voir « Interface compacte »). Il reste utilisable quand l'éditeur de carte est ouvert : tant qu'une
 catastrophe est armée, l'éditeur met son outil de côté (aucun outil choisi, panneau de l'outil masqué) et le reprend
 dès qu'elle est désarmée ; choisir un outil désarme la catastrophe (`CatastropheToolPause.ts`,
 `MapEditorModeManager`). Dans le widget, la tuile « Météore » **arme** le tir

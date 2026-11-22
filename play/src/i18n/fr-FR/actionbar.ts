@@ -87,6 +87,9 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         waterFlow: "Flux d'eau",
         onHelp: "Affiché sur la carte, pour vous seul",
         offHelp: "Choisissez ce qu'il faut afficher sur la carte",
+        chipShown: "{count} affichés",
+        chipHint: "Visualisation : ce qu'il faut afficher sur la carte",
+        infoLabel: "Ce qui est affiché",
         speed: "Vitesse de l'eau (m/s) : couleur et longueur des flèches",
         rising: "Niveau qui monte",
         falling: "Niveau qui baisse",
@@ -309,6 +312,10 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         ballArmedHelp:
             "Maintenez le clic : une boule solide est aussitôt là, à moitié dans l'eau, à la surface sous le pointeur ; elle le suit et chasse l'eau de sa moitié immergée · Échap pour annuler",
         tabs: { catastrophes: "Catastrophes", weather: "Météo" },
+        chip: "Catastrophes",
+        chipArmed: "{name} · {size}",
+        chipHint: "Catastrophes : en choisir une, sa taille, ou la météo de la salle",
+        infoLabel: "Comment la lancer",
         weather: {
             manual: "Manuel",
             realHint:
