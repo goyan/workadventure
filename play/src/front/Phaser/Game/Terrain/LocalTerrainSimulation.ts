@@ -2,6 +2,7 @@ import {
     boundedFireConditions,
     DEFAULT_FIRE_THRESHOLDS,
     fireDanger,
+    GroundSimulation,
     MAX_WATER_SPEED,
     MeadowSimulation,
     NEUTRAL_FIRE_CONDITIONS,
@@ -75,8 +76,8 @@ export class LocalTerrainSimulation {
     private slots: readonly RealWeatherSlot[];
     private readonly mapCells: { width: number; height: number };
     private walkers: readonly { x: number; y: number }[] = [];
-    private readonly water: WaterSimulation;
-    private readonly meadow: MeadowSimulation;
+    /** The water and the meadow, wired as the server wires its own (GroundSimulation). */
+    private readonly ground: GroundSimulation;
 
     constructor(
         start: LocalTerrainStart,
@@ -102,68 +103,67 @@ export class LocalTerrainSimulation {
         const rain = { slotsFor: (): RealWeatherSlot[] => [...this.slots] };
         const asIs = (bytes: Uint8Array): Uint8Array => bytes;
         const mapCells = (): { width: number; height: number } => this.mapCells;
-        this.water = new WaterSimulation(
-            room,
-            rain,
-            asIs,
-            now,
-            mapCells,
-            () => performance.now(),
-            LOCAL_STEP_BUDGET_MS,
-        );
-        this.water.fallThrough(() => this.air());
-        // A door opens for the avatar of this player, as the server opens it for every avatar standing in it.
-        this.water.setWalkers(() => this.walkers);
-        this.meadow = new MeadowSimulation(
-            room,
-            rain,
-            () => this.water.getGrid(),
-            asIs,
-            now,
-            mapCells,
-            () => [],
-            () => {
-                const conditions = this.conditions();
-                return {
-                    danger: fireDanger(conditions, DEFAULT_FIRE_THRESHOLDS),
-                    windFrom: conditions.windFrom,
-                    windSpeed: conditions.windSpeed,
-                };
+        this.ground = new GroundSimulation({
+            makeWater: () =>
+                new WaterSimulation(room, rain, asIs, now, mapCells, () => performance.now(), LOCAL_STEP_BUDGET_MS),
+            makeMeadow: (water) =>
+                new MeadowSimulation(
+                    room,
+                    rain,
+                    water,
+                    asIs,
+                    now,
+                    mapCells,
+                    () => [],
+                    () => {
+                        const conditions = this.conditions();
+                        return {
+                            danger: fireDanger(conditions, DEFAULT_FIRE_THRESHOLDS),
+                            windFrom: conditions.windFrom,
+                            windSpeed: conditions.windSpeed,
+                        };
+                    },
+                    random,
+                ),
+            air: () => this.air(),
+            snow: () => {
+                const air = this.air();
+                return air ? { ...air, windSpeed: this.conditions().windSpeed } : undefined;
             },
-            random,
-        );
-        this.meadow.fallThrough(() => this.air());
-        this.meadow.snowUnder(() => {
-            const air = this.air();
-            return air ? { ...air, windSpeed: this.conditions().windSpeed } : undefined;
+            // A door opens for the avatar of this player, as the server opens it for every avatar standing in it.
+            walkers: () => this.walkers,
         });
-        this.meadow.pourWith(this.water.pour.bind(this.water));
         if (start.water) this.water.seed(start.water.depths, start.water.bounds);
         if (start.meadow) this.meadow.seed(start.meadow);
     }
 
+    /** The water of this player, and their meadow: those of their ground. */
+    private get water(): WaterSimulation {
+        return this.ground.water;
+    }
+
+    private get meadow(): MeadowSimulation {
+        return this.ground.meadow;
+    }
+
     /** Runs the water (ten steps a second) and the meadow (a step every two seconds) of this player. */
     public start(): void {
-        this.water.start();
-        this.meadow.start();
+        this.ground.start();
     }
 
     public stop(): void {
-        this.water.stop();
-        this.meadow.stop();
+        this.ground.stop();
     }
 
     /** One step of the water and of the meadow, for what drives them by hand (the tests). */
     public step(): void {
-        this.water.step();
-        this.meadow.step();
+        this.ground.step();
     }
 
     /** The map was edited: the ground follows its relief, its sources, its walls and its doors. */
     public setWam(wam: WAMFileFormat): void {
         this.wam = wam;
-        this.water.mapChanged();
-        this.meadow.mapChanged();
+        this.ground.mapChanged();
     }
 
     /** The player chose another place, or its weather is known again: the ground lives on under it. */
