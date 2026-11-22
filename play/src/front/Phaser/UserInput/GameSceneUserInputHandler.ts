@@ -589,6 +589,16 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 },
             });
         }
+        // On the ice: put up an ice fishing shack, or sit in one, get up, take one's own down.
+        for (const action of this.gameScene.iceShackManager?.wheelActions() ?? []) {
+            wokaMenuStore.addAction({
+                ...action,
+                callback: () => {
+                    action.callback();
+                    wokaMenuStore.clear();
+                },
+            });
+        }
         // The interaction key lets a companion go only next to it: here, all of them, from anywhere.
         const tamed = this.gameScene.tamedAnimalCount() ?? 0;
         if (tamed > 0) {

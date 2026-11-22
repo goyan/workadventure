@@ -8,6 +8,7 @@
     /** What a card says: a catch with its fish and its weight, or why the line came back empty. */
     function textOf(card: FishingCard, language: string): string {
         const texts = $LL.actionbar.rod;
+        if (card.kind === "iceShack") return card.text ?? "";
         if (card.kind !== "caught") return texts[card.kind]();
         const fish = card.female ? texts.pinkFish() : texts.blueFish();
         const weight = formatKilograms(card.grams ?? 0, language);
