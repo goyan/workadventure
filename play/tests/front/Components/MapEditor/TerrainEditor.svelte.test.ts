@@ -270,6 +270,57 @@ describe("TerrainEditor", () => {
         });
     });
 
+    it("sets the friction of the ground to the twentieth, the other waves keeping their step", () => {
+        render();
+        byTestId("terrain-inertia").querySelector("input")?.click();
+        flushSync();
+        const slider = (id: string) => byTestId(id).querySelector<HTMLInputElement>('input[type="range"]');
+        expect(slider("terrain-wave-roughness")?.step).toBe("0.05");
+        expect(slider("terrain-wave-breaking")?.step).toBe("0.1");
+        expect(slider("terrain-wave-momentum")?.step).toBe("0.05");
+        expect(slider("terrain-wave-damping")?.step).toBe("0.01");
+        expect(slider("terrain-flow-pace")?.step).toBe("0.05");
+        setRange("terrain-wave-roughness", 0.25);
+        expect(byTestId("terrain-wave-roughness").querySelector("label")?.textContent).toContain(": 0.25 ");
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: expect.objectContaining({ waveRoughness: 0.25 }),
+        });
+        // One notch up and down with the buttons, saved on the twentieth.
+        byTestId("terrain-wave-roughness-more").click();
+        flushSync();
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: expect.objectContaining({ waveRoughness: 0.3 }),
+        });
+        byTestId("terrain-wave-roughness-less").click();
+        byTestId("terrain-wave-roughness-less").click();
+        flushSync();
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: expect.objectContaining({ waveRoughness: 0.2 }),
+        });
+        expect(byTestId("terrain-wave-roughness").querySelector("label")?.textContent).toContain(": 0.2 ");
+    });
+
+    it("keeps a friction saved at the former step, and sets it back to 1 with the realistic button", () => {
+        mapSettings.waves = { ...mapSettings.waves, roughness: 0.30000000000000004 };
+        try {
+            render();
+            byTestId("terrain-inertia").querySelector("input")?.click();
+            flushSync();
+            expect(byTestId("terrain-wave-roughness").querySelector("label")?.textContent).toContain(": 0.3 ");
+            byTestId("terrain-water-realistic").querySelector("button")?.click();
+            flushSync();
+            expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+                $case: "updateWaterSettingMessage",
+                updateWaterSettingMessage: expect.objectContaining({ waveRoughness: 1 }),
+            });
+        } finally {
+            mapSettings.waves = { ...mapSettings.waves, roughness: 1 };
+        }
+    });
+
     it("sets the waves of the water with inertia, shown only for it", () => {
         render();
         expect(target.querySelector('[data-testid="terrain-wave-roughness"]')).toBeNull();

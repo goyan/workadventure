@@ -2689,7 +2689,7 @@ Une seule équation partout, mais ce qui freine l'eau dépend de la case. Curseu
 est activée ; `UpdateWaterSettingMessage.waveRoughness`, `waveDamping`, `waveBreaking`, `waveMomentum`, champs 9 à
 12, facultatifs.
 
-- **Frottement du sol** (`roughness`, × 0 à 10, 1 par défaut et en réel) : frottement de Manning. La part de débit
+- **Frottement du sol** (`roughness`, × 0 à 10, 1 par défaut et en réel ; curseur au pas de 0,05 avec des boutons − et + d'un cran, `Terrain/WaveSteps.ts`, les autres réglages des vagues gardent leur pas) : frottement de Manning. La part de débit
   perdue par seconde vaut le carré de la rugosité du sol × la vitesse de l'eau / sa profondeur à la puissance 4/3 :
   presque rien sous une houle au large, fort sous une lame d'eau rapide sur la terre. La rugosité vient du sol
   peint sur chaque case (`soilRoughness` : argile 0,022, sable 0,025, terre, gravier et case non peinte 0,03,
