@@ -2,8 +2,7 @@ import path from "path";
 import {
     isAtAreaLevel,
     canUpdateListeningZoneJams,
-    boundedFireConditions,
-    fireDanger,
+    DEFAULT_FIRE_THRESHOLDS,
     NEUTRAL_FIRE_CONDITIONS,
     GameMapProperties,
     LISTENING_ZONE_JAM_VARIABLE,
@@ -128,8 +127,8 @@ import { ListeningZoneManager } from "./AreaPropertyEvents/ListeningZoneManager"
 import { EntityStateManager } from "./EntityStateManager";
 import { SwitchTriggerEvaluator } from "./SwitchTriggerEvaluator";
 import { FireConditionsManager } from "./FireConditionsManager";
-import { MeadowManager } from "./MeadowManager";
-import { TerrainWaterManager } from "./TerrainWaterManager";
+import { InlineRoomGround } from "./Ground/InlineRoomGround";
+import type { RoomGround } from "./Ground/RoomGround";
 import { AquaticLifeManager } from "./AquaticLifeManager";
 import { CatastropheManager } from "./CatastropheManager";
 import { anglersOf, FishingManager } from "./FishingManager";
@@ -172,8 +171,8 @@ export class GameRoom implements BrothersFinder {
     private listeningZoneManager: ListeningZoneManager | undefined;
     private entityStateManager: EntityStateManager | undefined;
     private switchTriggers: SwitchTriggerEvaluator | undefined;
-    private terrainWater: TerrainWaterManager | undefined;
-    private meadow: MeadowManager | undefined;
+    /** The water of the relief and the meadow of the room. */
+    private ground: RoomGround | undefined;
     private fireConditions: FireConditionsManager | undefined;
     private aquaticLife: AquaticLifeManager | undefined;
     /** The size of the map in cells of the relief; undefined until its Tiled map is read. */
@@ -353,42 +352,47 @@ export class GameRoom implements BrothersFinder {
         // No need to unsubscribe since GameRoom.destroy completes this stream.
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => switchTriggers.stop());
-        // Keeps the water of the hollows of the relief (lakes): saved across restarts, nothing on a map without relief.
-        const terrainWater = new TerrainWaterManager(
-            gameRoom,
-            rainTimelineService,
-            { repository: await getVariablesRepository(), roomUrl },
-            undefined,
+        // The ground of the room: the water of the hollows of its relief (lakes) and its meadow, saved across restarts,
+        // nothing on a map without relief. What it reads of the room is asked each time it is needed: its
+        // catastrophes, its animals and its weather are made further down.
+        const groundParts: {
+            catastrophes?: CatastropheManager;
+            aquaticLife?: AquaticLifeManager;
+            fireConditions?: FireConditionsManager;
+        } = {};
+        const ground: RoomGround = new InlineRoomGround({
+            room: gameRoom,
+            rain: rainTimelineService,
+            store: { repository: await getVariablesRepository(), roomUrl },
             // The water stays on the map: no avatar walks on the ground shown past its edges.
-            gameRoom.mapSizeInCells.bind(gameRoom),
-        );
-        gameRoom.terrainWater = terrainWater;
+            mapSize: gameRoom.mapSizeInCells.bind(gameRoom),
+            // A door holds the water while it is closed: it opens for the avatars that stand in its passage.
+            walkers: gameRoom.groundAvatarPositions.bind(gameRoom),
+            downpours: () => groundParts.catastrophes?.downpours() ?? [],
+            drains: () => groundParts.catastrophes?.drains() ?? [],
+            balls: () => groundParts.catastrophes?.balls() ?? [],
+            // The antelopes of the life of the land graze the meadow.
+            grazers: () => groundParts.aquaticLife?.grazers() ?? [],
+            // In the cold of the room the rain of the map falls as snow; the weather is not known until it is read.
+            air: () => groundParts.fireConditions?.air(),
+            fire: () => groundParts.fireConditions?.conditions() ?? NEUTRAL_FIRE_CONDITIONS,
+            thresholds: () => groundParts.fireConditions?.thresholds() ?? DEFAULT_FIRE_THRESHOLDS,
+        });
+        gameRoom.ground = ground;
 
         // The meteors that fall on that water; the map size is passed in pixels.
-        // The ice a comet breaks is kept by the meadow, made further down: it is given there.
-        let breakIce: (x: number, y: number, radiusTiles: number) => void = () => undefined;
         const catastrophes = new CatastropheManager(
             gameRoom,
             gameRoom.mapSizeInPixels.bind(gameRoom),
             // A comet takes the water of its crater, and breaks the ice on it.
-            (x, y, radiusTiles) => {
-                terrainWater.strike(x, y, radiusTiles);
-                breakIce(x, y, radiusTiles);
-            },
+            ground.strike.bind(ground),
         );
-        terrainWater.setDownpours(() => catastrophes.downpours());
-        terrainWater.setDrains(() => catastrophes.drains());
-        terrainWater.setBalls(() => catastrophes.balls());
-        catastrophes.levelWith(terrainWater.ballLevelAt.bind(terrainWater));
-        // A door holds the water while it is closed: it opens for the avatars that stand in its passage.
-        terrainWater.setWalkers(gameRoom.groundAvatarPositions.bind(gameRoom));
+        groundParts.catastrophes = catastrophes;
+        catastrophes.levelWith(ground.ballLevelAt.bind(ground));
         gameRoom.catastrophes = catastrophes;
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => catastrophes.stop());
-        await terrainWater.restore();
-        terrainWater.start();
-        // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
-        gameRoom.destroyRoomStream.subscribe(() => terrainWater.stop());
+        await ground.startWater();
         // The life in that water (fish, dolphins): its own pace, nothing on a map whose life is off.
         // The fishing lines in that water: stepped with the life, just before it.
         const fishing = new FishingManager(
@@ -404,7 +408,7 @@ export class GameRoom implements BrothersFinder {
         await fishing.restore();
         const aquaticLife = new AquaticLifeManager(
             gameRoom,
-            terrainWater,
+            ground,
             { repository: await getVariablesRepository(), roomUrl },
             undefined,
             undefined,
@@ -419,6 +423,7 @@ export class GameRoom implements BrothersFinder {
                 stopped: (emptied) => fishing.lifeStopped(emptied),
             },
         );
+        groundParts.aquaticLife = aquaticLife;
         gameRoom.aquaticLife = aquaticLife;
         await aquaticLife.restore();
         aquaticLife.start();
@@ -428,89 +433,24 @@ export class GameRoom implements BrothersFinder {
         fireConditions.start();
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => fireConditions.stop());
-        // In the cold of the room the rain of the map falls as snow: it brings no water to the relief.
-        terrainWater.fallThrough(() => fireConditions.air());
-        // The moisture of the soil and the grass that grows by itself, over the whole map: saved across restarts.
-        const meadow = new MeadowManager(
-            gameRoom,
-            rainTimelineService,
-            () => terrainWater.getGrid(),
-            { repository: await getVariablesRepository(), roomUrl },
-            undefined,
-            gameRoom.mapSizeInCells.bind(gameRoom),
-            // The antelopes of the life of the land graze the meadow.
-            () => aquaticLife.grazers(),
-            // The grass dries by the conditions of the room, and their wind pushes its fire.
-            () => {
-                const conditions = fireConditions.conditions();
-                return {
-                    danger: fireDanger(conditions, fireConditions.thresholds()),
-                    windFrom: conditions.windFrom,
-                    windSpeed: conditions.windSpeed,
-                };
-            },
-        );
-        // Nor does a snow soak the soil of the meadow.
-        meadow.fallThrough(() => fireConditions.air());
-        // The snow that fell lies on the ground: it melts by the heat, the wind and the humidity of the room, and its
-        // water runs to the water of the relief.
-        meadow.snowUnder(() => {
-            const air = fireConditions.air();
-            return air ? { ...air, windSpeed: fireConditions.conditions().windSpeed } : undefined;
-        });
-        meadow.pourWith(terrainWater.pour.bind(terrainWater));
-        // The water of the relief lives the missed time with the meadow: under the same rain of the past.
-        meadow.liveAlong(terrainWater.liveAgain.bind(terrainWater));
-        // A room left empty lives the time it missed: with the weather of the past at the place of a map in real
-        // weather, each quarter hour read as the conditions of the room read the quarter hour of now.
-        meadow.catchUpWith(rainTimelineService.history.bind(rainTimelineService), (slot) => {
-            const conditions = boundedFireConditions(
-                {
-                    temperature: slot.temperature ?? undefined,
-                    humidity: slot.humidity,
-                    windSpeed: slot.windSpeed,
-                    windFrom: slot.windFrom,
-                },
-                NEUTRAL_FIRE_CONDITIONS,
-            );
-            const air =
-                slot.temperature !== null && slot.humidity !== undefined
-                    ? { temperature: slot.temperature, humidity: slot.humidity }
-                    : undefined;
-            return {
-                air,
-                snow: air ? { ...air, windSpeed: conditions.windSpeed } : undefined,
-                fire: {
-                    danger: fireDanger(conditions, fireConditions.thresholds()),
-                    windFrom: conditions.windFrom,
-                    windSpeed: conditions.windSpeed,
-                },
-            };
-        });
-        breakIce = meadow.shatter.bind(meadow);
+        groundParts.fireConditions = fireConditions;
         // The ice that gives way under a player is the ice the meadow keeps, broken as by a comet.
-        catastrophes.breakIceWith(meadow.shatter.bind(meadow));
+        catastrophes.breakIceWith(ground.shatter.bind(ground));
         // The animals of the map run from the fire of its grass and of its trees.
-        aquaticLife.followFire(() => meadow.lifeFire());
-        gameRoom.meadow = meadow;
+        aquaticLife.followFire(() => ground.lifeFire());
         // A downpour also soaks the ground of the meadow.
-        catastrophes.soakWith(meadow.soak.bind(meadow));
+        catastrophes.soakWith(ground.soak.bind(ground));
         // A patch of fire a player sets burns the grass of the meadow.
-        catastrophes.igniteWith(meadow.ignite.bind(meadow));
+        catastrophes.igniteWith(ground.ignite.bind(ground));
         // A fireball boils the water of its crater away first, then burns the ground it left dry.
-        catastrophes.burnWith((x, y, radiusTiles, id) => {
-            terrainWater.vaporise(x, y, radiusTiles);
-            meadow.scorch(x, y, radiusTiles, id);
-        });
-        await meadow.restore();
-        meadow.start();
+        catastrophes.burnWith(ground.burn.bind(ground));
+        await ground.startMeadow();
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
-        gameRoom.destroyRoomStream.subscribe(() => meadow.stop());
+        gameRoom.destroyRoomStream.subscribe(() => ground.stop());
         gameRoom.readMapSize(() => {
             // The water first: the life of the map lives on its grid.
-            terrainWater.mapChanged();
+            ground.mapChanged();
             aquaticLife.mapChanged();
-            meadow.mapChanged();
         });
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => aquaticLife.stop());
@@ -1304,17 +1244,17 @@ export class GameRoom implements BrothersFinder {
 
     /** The water of the relief of the map (its whole state), sent to a user who joins the room. */
     public getTerrainWater(): TerrainWaterMessage | undefined {
-        return this.terrainWater?.snapshot();
+        return this.ground?.waterSnapshot();
     }
 
     /** The meadow of the map (its whole state), sent to a user who joins the room. */
     public getMeadow(): MeadowMessage | undefined {
-        return this.meadow?.snapshot();
+        return this.ground?.meadowSnapshot();
     }
 
     /** The trees that burn or are charred, sent to a user who joins the room. */
     public getTreeFire(): TreeFireMessage | undefined {
-        return this.meadow?.treeSnapshot();
+        return this.ground?.treeSnapshot();
     }
 
     /** The conditions the fire of the room goes by, sent to a user who joins the room. */
@@ -2006,10 +1946,9 @@ export class GameRoom implements BrothersFinder {
 
         await this.wamManager.applyCommand(editMapCommandMessage);
         // The relief or the sources and sinks may have changed.
-        this.terrainWater?.mapChanged();
+        this.ground?.mapChanged();
         // After the water: the life reads its grid, and its own setting.
         this.aquaticLife?.mapChanged();
-        this.meadow?.mapChanged();
 
         if (GameRoom.commandInvalidatesJitsiModeratorTagFinder(editMapMessage.$case)) {
             this.jitsiModeratorTagFinderPromise = undefined;

@@ -2441,6 +2441,20 @@ ne l'est pas).
   (`LocalTerrainSimulation`), sans changement de comportement : `GroundSimulation.test.ts` compare, sur 400 pas
   avec neige, comète et boule de feu, les états dits par un sol câblé à la main et par `GroundSimulation` (mêmes
   octets).
+- **Façade du sol dans `back`** (`back/src/Model/Ground/RoomGround.ts`, `InlineRoomGround.ts`, PR 2). `GameRoom`
+  ne tient plus `TerrainWaterManager` et `MeadowManager` : il parle à un `RoomGround` (démarrer l'eau, démarrer la
+  prairie, arrêter, carte changée ; comète, boule de feu, glace brisée, averse qui mouille, feu posé ; niveau d'une
+  boule, grille de l'eau et sa version pour la vie aquatique, feu pour les animaux ; états entiers pour un joueur
+  qui entre). Ce que le sol lit de la salle est demandé à chaque fois par `RoomGroundInputs` (avatars, averses,
+  drains, boules, brouteurs, air, conditions et seuils du feu). La seule implémentation, `InlineRoomGround`, calcule
+  dans le fil des salles avec les deux gestionnaires d'avant, câblés par `GroundSimulation` : même comportement.
+  Deux ordres changent sans effet : à la fermeture d'une salle l'eau s'arrête juste avant la prairie (et non plus
+  avant la vie aquatique) ; à une édition de carte la prairie relit la carte avant la vie aquatique (aucune des
+  deux ne lit l'autre à ce moment-là). `back/tests/RoomGround.test.ts` compare, avec les vrais minuteurs simulés,
+  ce sol à un sol câblé à la main comme `GameRoom` le faisait : 90 s de pluie et de neige avec une source, le
+  drain d'un bâtiment (siphon sur un sol « Carte Sols »), averse, comète, boule traînée, drain, feu, boule de feu,
+  glace brisée, redoux, carte changée ; puis une salle rouverte après trois heures (rattrapage). Mêmes messages à
+  la salle, mêmes écritures Redis, mêmes niveaux de boule.
 
 Preuve d'identité : `libs/map-editor/tests/WaterFingerprints.test.ts` joue 19 scénarios de `WaterGrid` et finit
 chacun sur une empreinte (profondeurs, flux, vitesses, bilans, octets envoyés) enregistrée avec le code d'avant
