@@ -1,6 +1,11 @@
 import { cellKey, withHeights } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
-import { BreakingFoam, foamOfCell, FOAM_HALF_LIFE_MS } from "../../../../../src/front/Phaser/Game/Terrain/BreakingFoam";
+import {
+    BreakingFoam,
+    closedSidesOf,
+    foamOfCell,
+    FOAM_HALF_LIFE_MS,
+} from "../../../../../src/front/Phaser/Game/Terrain/BreakingFoam";
 import type { SettledWater } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
 
 /** A state of the water over a grid of `width` by `height` cells from the cell 0, 0. */
@@ -93,6 +98,82 @@ describe("foamOfCell", () => {
         const fall = state(20, 5, () => 3);
         expect(foamOfCell(fall, withHeights(undefined, cells), 9, 2)).toBe(1);
         expect(foamOfCell(fall, withHeights(undefined, cells), 3, 2)).toBe(0);
+    });
+});
+
+describe("foamOfCell, what is not a wave", () => {
+    /** A bank that goes down 12 px a cell towards the east, from the altitude 60 at the cell 0. */
+    const shore = (() => {
+        const cells = new Map<string, number>();
+        for (let y = 0; y < 5; y++) for (let x = 0; x < 12; x++) cells.set(cellKey(x, y), 60 - 12 * x);
+        return withHeights(undefined, cells);
+    })();
+    /** A sheet of 2.5 px lying all over it, running at `speed` cells a second (as the server tells it). */
+    const sheet = (speed: number | undefined): SettledWater => ({
+        ...state(12, 5, () => 2.5),
+        ...(speed === undefined ? {} : { speedAt: () => ({ x: speed, y: 0 }) }),
+    });
+
+    it("makes no foam on a sheet of water that creeps down a shore: the slope of the ground is not a wave", () => {
+        // 0.3 cell a second (16 cm/s) under 2.5 px of water: a trickle.
+        for (let x = 1; x < 11; x++) expect(foamOfCell(sheet(0.3), shore, x, 2)).toBe(0);
+        // Nor on a sheet that stands still.
+        for (let x = 1; x < 11; x++) expect(foamOfCell(sheet(0), shore, x, 2)).toBe(0);
+    });
+
+    it("makes foam on the same sheet when it rushes down: white water, by the speed the server tells", () => {
+        // Waves run at 1.7 cell a second in 2.5 px of water: at 4 cells a second (2 m/s) the sheet is a torrent.
+        expect(foamOfCell(sheet(4), shore, 5, 2)).toBeGreaterThan(0.6);
+        // Just faster than its waves: a little foam; slower: none.
+        const quick = foamOfCell(sheet(2.2), shore, 5, 2);
+        expect(quick).toBeGreaterThan(0);
+        expect(quick).toBeLessThan(foamOfCell(sheet(4), shore, 5, 2));
+        expect(foamOfCell(sheet(1.5), shore, 5, 2)).toBe(0);
+    });
+
+    it("makes no foam on a fast current that falls nowhere: white water is water that rushes down", () => {
+        // 30 px of water running at 12 cells a second over a flat bed, faster than its waves (6 cells a second).
+        const current: SettledWater = { ...state(12, 5, () => 30), speedAt: () => ({ x: 12, y: 0 }) };
+        for (let x = 1; x < 11; x++) expect(foamOfCell(current, undefined, x, 2)).toBe(0);
+    });
+
+    it("reads the speed off the slope where the server tells none: a steep shore foams, a gentle one does not", () => {
+        // Without inertia a sheet of 2.5 px down 12 px a cell runs at about 10 cells a second.
+        expect(foamOfCell(sheet(undefined), shore, 5, 2)).toBeGreaterThan(0.6);
+        const cells = new Map<string, number>();
+        for (let y = 0; y < 5; y++) for (let x = 0; x < 12; x++) cells.set(cellKey(x, y), 12 - x);
+        expect(foamOfCell(sheet(undefined), withHeights(undefined, cells), 5, 2)).toBe(0);
+    });
+
+    it("makes no foam between two waters a wall keeps apart, each at its level", () => {
+        // 40 px of water west of a wall, 10 px east of it, both still: a pool and the room next to it.
+        const waters = state(20, 5, (x) => (x < 10 ? 40 : 10));
+        // Without the wall, it is the rim of an impact that falls back.
+        expect(foamOfCell(waters, undefined, 9, 2)).toBeGreaterThan(0.5);
+        const east = new Set<string>();
+        for (let y = 0; y < 5; y++) east.add(cellKey(9, y));
+        const closed = closedSidesOf({ east, south: new Set() });
+        for (let x = 5; x < 15; x++) expect(foamOfCell(waters, undefined, x, 2, closed)).toBe(0);
+        // A wall along the south side of a row, the same way.
+        const rows = state(5, 20, (_x, y) => (y < 10 ? 40 : 10));
+        const south = new Set<string>();
+        for (let x = 0; x < 5; x++) south.add(cellKey(x, 9));
+        expect(foamOfCell(rows, undefined, 2, 9)).toBeGreaterThan(0.5);
+        expect(foamOfCell(rows, undefined, 2, 9, closedSidesOf({ east: new Set(), south }))).toBe(0);
+    });
+
+    it("still breaks a wave on a shore: a crest that stands in the water it runs in", () => {
+        // A beach that rises 1 px a cell, 6 px of water at its foot, and a crest of 9 px coming in.
+        const cells = new Map<string, number>();
+        for (let y = 0; y < 5; y++) for (let x = 0; x < 30; x++) cells.set(cellKey(x, y), -6 + Math.max(0, x - 20));
+        const beach = withHeights(undefined, cells);
+        const wave: SettledWater = {
+            ...state(30, 5, (x) => Math.max(0, 6 - Math.max(0, x - 20)) + 9 * Math.exp(-(((x - 18) / 2) ** 2))),
+            speedAt: () => ({ x: 0.5, y: 0 }),
+        };
+        let most = 0;
+        for (let x = 10; x < 26; x++) most = Math.max(most, foamOfCell(wave, beach, x, 2));
+        expect(most).toBeGreaterThan(0.5);
     });
 });
 
