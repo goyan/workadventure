@@ -69,8 +69,8 @@ export class FrozenPoolsView {
 
     /** Steam over the heated pools of the ground while it freezes outdoors: a few puffs rising and fading. */
     private drawSteam(now: number): void {
-        const { frost } = waterCycleNow(this.scene.getGameMap?.()?.getWamFile()?.getWam().settings);
-        const hot = frost > 0 ? getWaterRectangles(this.scene).filter((pool) => isPoolHot(pool)) : [];
+        const cycle = waterCycleNow(this.scene.getGameMap?.()?.getWamFile()?.getWam().settings);
+        const hot = poolsSteamIn(cycle) ? getWaterRectangles(this.scene).filter((pool) => isPoolHot(pool)) : [];
         if (hot.length === 0) {
             if (this.steaming) {
                 this.steam.clear();
@@ -99,4 +99,12 @@ export class FrozenPoolsView {
         }
         this.scene.markDirty();
     }
+}
+
+/**
+ * Whether the air is cold enough for a heated pool to steam: as soon as water freezes outdoors (`ice`), or hoar frost
+ * whitens the ground. Not the hoar frost alone: a dry air of -30 °C lays none, and steams the most.
+ */
+export function poolsSteamIn(cycle: { frost: number; ice: number }): boolean {
+    return cycle.ice > 0 || cycle.frost > 0;
 }
