@@ -28,6 +28,7 @@
     import { executeUpdateTerrain, executeUpdateWAMSettings } from "../../Phaser/Game/MapEditor/Commands/Facades";
     import { readTerrainMapSettings } from "../../Phaser/Game/Terrain/TerrainMapSettings";
     import { readDashboardRain } from "../../Phaser/Game/Terrain/DashboardRain";
+    import { nudgedRoughness, ROUGHNESS_STEP, roughnessFigure } from "../../Phaser/Game/Terrain/WaveSteps";
     import { nightDateStore } from "../../Stores/NightStore";
     import {
         terrainBlockedStore,
@@ -166,6 +167,11 @@
         updates = REALISTIC_WATER_SETTINGS.updates;
         flowPace = REALISTIC_WATER_SETTINGS.flowPace;
         impactReach = REALISTIC_WATER_SETTINGS.impactReach;
+        saveWater();
+    }
+
+    function nudgeRoughness(by: -1 | 1): void {
+        waveRoughness = nudgedRoughness(waveRoughness, by);
         saveWater();
     }
 
@@ -669,11 +675,35 @@
                 unit={$LL.mapEditor.terrain.waves.timesReal()}
                 min={WAVE_BOUNDS.roughness[0]}
                 max={WAVE_BOUNDS.roughness[1]}
-                step={0.1}
+                step={ROUGHNESS_STEP}
+                valueFormatter={roughnessFigure}
                 bind:value={waveRoughness}
                 onchange={saveWater}
                 buttonShape="square"
             />
+            <!-- Two hundred notches from 0 to 10: a button moves it by one, to set it finely. -->
+            <span class="flex justify-end gap-0.5 px-3">
+                <button
+                    type="button"
+                    class="h-5 w-5 rounded bg-white/10 p-0 leading-none disabled:opacity-40"
+                    disabled={waveRoughness <= WAVE_BOUNDS.roughness[0]}
+                    aria-label={$LL.actionbar.catastrophe.weather.less({
+                        label: $LL.mapEditor.terrain.waves.roughness(),
+                    })}
+                    data-testid="terrain-wave-roughness-less"
+                    onclick={() => nudgeRoughness(-1)}>−</button
+                >
+                <button
+                    type="button"
+                    class="h-5 w-5 rounded bg-white/10 p-0 leading-none disabled:opacity-40"
+                    disabled={waveRoughness >= WAVE_BOUNDS.roughness[1]}
+                    aria-label={$LL.actionbar.catastrophe.weather.more({
+                        label: $LL.mapEditor.terrain.waves.roughness(),
+                    })}
+                    data-testid="terrain-wave-roughness-more"
+                    onclick={() => nudgeRoughness(1)}>+</button
+                >
+            </span>
             <p class="retro-hint m-0">{$LL.mapEditor.terrain.waves.roughnessHint()}</p>
             {@render more(
                 `${$LL.mapEditor.terrain.waves.roughnessDetail()} ${$LL.mapEditor.terrain.waves.roughnessMultiplies()}`,
