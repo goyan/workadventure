@@ -74,6 +74,12 @@ export interface RoomGround {
     waterVersion(): number;
     /** The fire of the meadow and of its trees, for the animals that run from it. */
     lifeFire(): LifeFire | undefined;
+    /** The ice over the water of a tile (32 px), in mm: none before the meadow is made (the ice fishing shacks). */
+    iceAt(tileX: number, tileY: number): number;
+    /** Whether the meadow is made (the size of the map read): before, its ice is not known, not none. */
+    hasMeadow(): boolean;
+    /** Whether the meadow is still living the time the room missed. */
+    catchingUp(): boolean;
 
     /** The whole states sent to a user who joins the room. */
     waterSnapshot(): TerrainWaterMessage | undefined;

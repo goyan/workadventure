@@ -160,6 +160,8 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
         scene.moveTo.mockResolvedValue({ x: 480, y: 640, cancelled: false });
         currentPlayer = { toggleAirVehicle: vi.fn(), sitOnSeat: vi.fn(), stayStandingHere: vi.fn() };
         Object.defineProperty(scene, "CurrentPlayer", { configurable: true, value: currentPlayer });
+        // No ice fishing shack unless a test puts one.
+        Object.defineProperty(scene, "iceShackManager", { configurable: true, value: undefined });
         vi.mocked(findSeatAtPoint).mockReturnValue(undefined);
         handler = new GameSceneUserInputHandler(scene);
     });
@@ -449,6 +451,38 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             expect(fishingManager.toggleEquipment.mock.calls).toHaveLength(1);
             expect(get(wokaMenuStore)).toBeUndefined();
             rodEquippedStore.set(false);
+        });
+
+        it("offers the ice fishing shacks on the own-avatar wheel, a greyed one with its reason", () => {
+            const build = vi.fn();
+            Object.defineProperty(scene, "iceShackManager", {
+                configurable: true,
+                value: {
+                    wheelActions: () => [
+                        { actionName: "Build", icon: "iceShack", testId: "avatar-ice-shack-build", callback: build },
+                        {
+                            actionName: "Enter",
+                            icon: "iceShack",
+                            testId: "avatar-ice-shack-enter",
+                            disabled: true,
+                            detail: "Too thin",
+                            callback: vi.fn(),
+                        },
+                    ],
+                },
+            });
+            const self = Object.assign(Object.create(Player.prototype) as Player, {
+                playerName: "Me",
+                sprites: new Map([["body1", mock<Phaser.GameObjects.Sprite>()]]),
+            });
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            const actions = get(wokaMenuStore)?.actions ?? [];
+            const enter = actions.find(({ testId }) => testId === "avatar-ice-shack-enter");
+            expect(enter?.disabled).toBe(true);
+            expect(enter?.detail).toBe("Too thin");
+            actions.find(({ testId }) => testId === "avatar-ice-shack-build")?.callback();
+            expect(build).toHaveBeenCalledTimes(1);
+            expect(get(wokaMenuStore)).toBeUndefined();
         });
 
         it("offers a fishing contest from the own-avatar wheel, rod in hand and no contest running", () => {

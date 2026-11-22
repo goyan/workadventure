@@ -253,6 +253,11 @@ const roomManager = {
                             room.reelFishingLine(user);
                             break;
                         }
+                        case "iceShackActionMessage": {
+                            const { action, shackId } = message.message.iceShackActionMessage;
+                            room.iceShackAction(user, action, shackId);
+                            break;
+                        }
                         case "startFishingContestMessage": {
                             room.startFishingContest(user, message.message.startFishingContestMessage.minutes);
                             break;
