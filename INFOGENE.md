@@ -4817,7 +4817,17 @@ des sols). **Frange capillaire par sol** (`Meadow`, `SOIL_LIFE`) : `fringeTiles`
 `wicking` 0,15 pour sable et gravier (la diffusion latérale de `MOISTURE_SPREAD` y est faible). Humidité d'une plage
 de sable à l'équilibre, à 1, 2, 3 tuiles de l'eau : 0,80, 0,14, 0,03 (avant 0,80, 0,50, 0,17 ; la terre garde 0,80,
 0,58, 0,43). Contraste mouillé/sec mesuré sur le shader (îlot de 10 × 8 tuiles), ΔL* : jour 13,8 → 20,4, soir (voile
-0,3) 10,2 → 15,0, nuit (0,6) 6,4 → 9,4. Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
+0,3) 10,2 → 15,0, nuit (0,6) 6,4 → 9,4. **Filet qui court** (2026-11-22, `fix/filet-qui-court`, après une capture « Flux d'eau »
+avec des flèches sur une terre qui paraissait sèche entre deux flaques) : la flèche n'était pas en cause (à fort zoom,
+`flowOverBlock` ne la trace que si la cellule du milieu de son bloc a de l'eau, au moins 1/8 px) ; l'eau était bien
+transmise et dessinée, mais sous 1 px comme une terre mouillée à 5 % de teinte, indiscernable d'une terre humide
+(ΔL* 1,4). Toute eau que le serveur transmet (dès 1/8 px, 4 mm) est maintenant dessinée, qu'elle coure ou non (le rendu
+ne dépend plus des vitesses à 0,25 cellule/s du serveur) ; `WATER_SHOWN_PX` (0,5 px) ne sert plus qu'à ce que les pieds
+lisent (`AvatarAltitude`). Le courant de chaque cellule (`TerrainWater.speedAt`, eau à inertie) est donné au shader
+(paquet 10, rouge et vert, `FLOW_UNITS` 32 par cellule/s autour de 128) : un film qui court prend une teinte légère
+(`filmCover`, de 5 % immobile à 35 % dès 0,27 m/s) et des ridules étirées dans le sens du courant qui glissent à sa
+vitesse ; dès `SHORE_PX` (3 px), l'eau est la même qu'avant. Terre sous un film qui court contre terre mouillée sans
+eau : ΔL* 1,4 → 10,1. Sous 1 px, le rendu ne distingue pas 4 mm de 3 cm (niveaux entiers). Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
 (`TexturedGround`). Textures : `resources/terrain/ground-*.png` (générées, 4 tons nets ; `ground-ice.png` dans le
 style des patinoires).
 

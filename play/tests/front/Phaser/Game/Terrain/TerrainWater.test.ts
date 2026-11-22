@@ -99,24 +99,27 @@ describe("TerrainWater", () => {
         expect(water.depthAt(24, 8, 9000)).toBe(0);
     });
 
-    it("gives the levels to draw over a canvas, and leaves out a film too thin to be seen", () => {
+    it("gives the levels to draw over a canvas, down to the thinnest water the server tells", () => {
         const water = new TerrainWater();
         water.setTerrain(pit);
         water.receive(full(1, { "0,0": 12, "1,0": 0.125, "2,1": 300 }), 0);
-        // A canvas of 3 × 2 cells whose corner is the cell (0, 0).
+        // A canvas of 3 × 2 cells whose corner is the cell (0, 0). The thinnest water the server tells (1/8 px,
+        // 4 mm) is water: drawn, at the lowest level.
         const levels = new Uint8Array(6);
         expect(water.levelsOver(0, 0, 3, 2, 5000, levels)).toBe(true);
-        expect([...levels]).toEqual([12, 0, 0, 0, 0, 255]);
+        expect([...levels]).toEqual([12, 1, 0, 0, 0, 255]);
     });
 
-    it("shows a running sheet of water thinner than a still film it leaves out", () => {
+    it("shows a sheet of water a few millimetres thin, running or still", () => {
         // A sheet of 0.25 px (9 mm) over a slope of meadow, as the server tells it with its speed: the flows of the
-        // water show an arrow there, the ground is drawn wet. The same film lying still (what a flood leaves) is not.
+        // water show an arrow there. Whether its block runs or not, the water is drawn.
         const levels = new Uint8Array(6);
         const still = new TerrainWater();
         still.setTerrain(pit);
         still.receive({ ...full(1, { "0,0": 0.25, "1,0": 0.125 }), speeds: Uint8Array.from([0, 0]) }, 0);
-        expect(still.levelsOver(0, 0, 3, 2, 5000, levels)).toBe(false);
+        // Lying still, it is water too: the flows of the water show it as well, whether it runs or not.
+        expect(still.levelsOver(0, 0, 3, 2, 5000, levels)).toBe(true);
+        expect([...levels]).toEqual([1, 1, 0, 0, 0, 0]);
 
         const running = new TerrainWater();
         running.setTerrain(pit);
