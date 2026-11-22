@@ -4960,6 +4960,17 @@ touches ne vont pas au jeu pendant la frappe, `inputFormFocusStore`) et la carte
   (`mapLocationOf(placeOfPoint(…))` : une ville de la liste à 150 km au plus, sinon les coordonnées), avec le bouton
   « Enregistrer » existant ; le champ et la carte montrent le même lieu.
 
+**Pays et région d'un lieu** (2026-11-22, « il y a plusieurs Nice dans le monde »). La fiche météo dépliée (carte et
+personnelle) dit où est le lieu, sur une ligne discrète sous son nom (coupée si trop longue) : la région et le pays
+d'une ville trouvée par la recherche (le géocodage les donnait déjà, gardés dans le nom enregistré « Nice,
+Provence-Alpes-Côte d'Azur, France » que la pastille coupait à la virgule : ils ne sont plus jetés), le pays d'une
+ville de la liste `WORLD_CITIES` (code ISO ajouté à chacune dans `common/WorldCities.ts`, nommé dans la langue du
+joueur par `Intl.DisplayNames`, `PointWords.country`), rien pour un lieu enregistré sans eux (anciennes cartes : rien
+n'est inventé) ni pour un point loin de toute ville (son nom long dit déjà où il est). `WorldPlace.where`,
+`mapPlaceNames(…).where`, `cityPlace`. Pastille et horloge : nom court inchangé, le lieu complet dans leur infobulle.
+Propositions de la recherche : déjà « Nice, Provence-Alpes-Côte d'Azur, France » et « Nice, California, United
+States ». Tableau « Météo expliquée », bilan de l'eau et confirmation « Appliquer à la carte » : nom court inchangé.
+
 **Gel.** À partir de l'air du lieu affiché (`Weather/Frost.ts`), pour ce joueur seul, rien n'est envoyé :
 givre au sol d'après la vapeur de l'air (voir « Givre » ci-dessous) ; l'eau gèle des hauts-fonds vers le fond entre 0 et -15 °C (toute gelée au-delà), en glace de
 patinoire ; le sol se mouille sous la pluie et sèche en cinq minutes ; tout avance en deux minutes environ, rien ne

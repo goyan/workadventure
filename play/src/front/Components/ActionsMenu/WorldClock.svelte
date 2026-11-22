@@ -160,7 +160,11 @@
             <time data-testid="world-clock" datetime={$nightDateStore.toISOString()}
                 >{formatter.format($nightDateStore)}</time
             >
-            {#if $worldCityStore}<span class="ms-1 opacity-70">{$worldCityStore.name}</span>{/if}
+            {#if $worldCityStore}<span
+                    class="ms-1 opacity-70"
+                    title={$worldCityStore.where ? `${$worldCityStore.name}, ${$worldCityStore.where}` : undefined}
+                    data-testid="world-clock-place">{$worldCityStore.name}</span
+                >{/if}
         </button>
         {#if open}
             <div
