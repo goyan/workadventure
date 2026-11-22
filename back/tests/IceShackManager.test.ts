@@ -24,7 +24,7 @@ const repositoryOf = (saved: Record<string, string>) =>
 
 /** A frozen lake over the whole map, its ice `ice.mm` thick, 40 px of water under it. */
 function harness(options: { saved?: Record<string, string>; pool?: boolean; depth?: number } = {}) {
-    const ice = { mm: 200 };
+    const ice = { mm: 200, known: true };
     const clock = { now: 1_000_000 };
     const sent: IceShacksMessage[] = [];
     const players = new Map<number, IceShackPlayer>();
@@ -43,7 +43,7 @@ function harness(options: { saved?: Record<string, string>; pool?: boolean; dept
     const objects: { x: number; y: number }[] = [];
     const manager = new IceShackManager(
         room,
-        () => ground,
+        () => (ice.known ? ground : undefined),
         () => players,
         () => objects,
         { repository, roomUrl: "room" },
@@ -273,6 +273,23 @@ describe("kept through a restart", () => {
         const joined = again.manager.snapshot();
         expect(joined?.shacks).toHaveLength(1);
         expect(joined?.shacks[0]).toMatchObject({ x: 318, y: 200, ownerName: "ANA", occupantUserId: 0 });
+    });
+
+    it("keeps its shacks while the map is not read yet, then judges their ice", async () => {
+        const first = harness();
+        first.join(1, "ana", 300, 200);
+        first.manager.act(1, IceShackAction.ICE_SHACK_BUILD, 0);
+        const again = harness({ saved: first.saved });
+        again.ice.known = false;
+        await again.manager.restore();
+        again.manager.step();
+        again.manager.step();
+        expect(again.manager.snapshot()?.shacks).toHaveLength(1);
+        expect(again.repository.saveVariable).not.toHaveBeenCalled();
+        again.ice.known = true;
+        again.ice.mm = 0;
+        again.manager.step();
+        expect(again.events()).toEqual(["collapsed"]);
     });
 
     it("takes a shack down when who put it up stayed away a day", async () => {

@@ -54,10 +54,11 @@ const poolsOfTerrain = new WeakMap<TerrainData, { styles: unknown; cells: Set<st
 export function iceShackGround(
     wam: { terrain?: TerrainData; settings?: { pools?: PoolStyle[] } } | undefined,
     grid: Pick<WaterGrid, "depthAt"> | undefined,
-    ice: { iceAt(tileX: number, tileY: number): number },
+    ice: { iceAt(tileX: number, tileY: number): number; hasMeadow(): boolean },
 ): IceShackGround | undefined {
     const terrain = wam?.terrain;
-    if (!grid || !terrain) return undefined;
+    // Not read yet (a room just restored): its ice is not known, which is not "no ice".
+    if (!grid || !terrain || !ice.hasMeadow()) return undefined;
     const styles = wam.settings?.pools;
     let pools = poolsOfTerrain.get(terrain);
     if (!pools || pools.styles !== styles) {
@@ -108,7 +109,10 @@ export class IceShackManager {
 
     constructor(
         private readonly room: Pick<GameRoom, "sendSubMessageToRoom">,
-        /** The ice and the water the server keeps; undefined while the map has none. */
+        /**
+         * The ice and the water the server keeps; undefined while they are not known (the map not read yet, or a map
+         * without water): no shack goes up then, and none is judged.
+         */
         private readonly ground: () => IceShackGround | undefined,
         /** The players of the room, by user id. */
         private readonly players: () => ReadonlyMap<number, IceShackPlayer>,
@@ -215,7 +219,8 @@ export class IceShackManager {
             }
         }
         const ground = this.ground();
-        const judged = !this.catchingUp();
+        // The ice is judged only when it is known: a room just restored reads its map a moment after its shacks.
+        const judged = ground !== undefined && !this.catchingUp();
         for (const shack of [...this.shacks]) {
             if (iceShackAbandoned(shack, now)) {
                 this.remove(shack);
@@ -225,7 +230,7 @@ export class IceShackManager {
             }
             if (!judged) continue;
             const wasCracking = shack.crackingSince !== undefined;
-            const state = stepIceShackIce(shack, ground ? iceShackIce(shack, ground) : 0, now);
+            const state = stepIceShackIce(shack, iceShackIce(shack, ground), now);
             if (state === "collapse") {
                 this.remove(shack);
                 events.push({ userId: 0, shackId: shack.id, type: "collapsed" });

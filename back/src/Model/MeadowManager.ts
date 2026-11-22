@@ -43,6 +43,11 @@ export class MeadowManager extends MeadowSimulation {
         return this.current()?.iceAt(tileX, tileY) ?? 0;
     }
 
+    /** Whether the meadow is made (the size of the map read): before, its ice is not known, not none. */
+    public hasMeadow(): boolean {
+        return this.current() !== undefined;
+    }
+
     /** Brings back the meadow saved before a restart. A store that does not answer must not keep the room closed. */
     public async restore(): Promise<void> {
         if (!this.store) return;
