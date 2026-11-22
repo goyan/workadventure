@@ -2409,7 +2409,7 @@ Le processus des salles n'a qu'un fil ; cinq changements de plomberie, aucun de 
   −4 % ; vitesses 0,27 → 0,07 ms et −4 % ; états entiers (un toutes les 30 s, et à l'arrivée d'un joueur)
   8,6 → 2,5 ms et +6 %. Le niveau 1 de gzip sans RLE coûtait +7 à +20 % d'octets pour un gain moindre : écarté.
   Les navigateurs décompressent comme avant. La sauvegarde (Redis) garde le gzip par défaut.
-- **Rien d'écrit quand rien n'a été calculé** (`untold`) : la grille n'est réécrite en octets et comparée à l'état
+- **Rien d'écrit quand rien n'a été calculé** (`untold` dans `WaterSimulation`) : la grille n'est réécrite en octets et comparée à l'état
   connu de la salle que si un pas, un impact ou une nouvelle grille est passé depuis le dernier envoi. 600 × 600
   sans eau : 0,57 → 0,02 ms par pas ; lac au repos : 0,89 → 0,001 ms. Un test qui modifie la grille dans le dos du
   gestionnaire doit le dire (`manager["untold"] = true`).
@@ -2417,14 +2417,16 @@ Le processus des salles n'a qu'un fil ; cinq changements de plomberie, aucun de 
 - **Sélections sans branchement** dans la boucle des flux de l'eau à inertie (`Math.max`, `Math.min`, `Math.abs`
   au lieu de `a > b ? a : b`, mêmes valeurs au bit près) : `grid.step` 13,1 → 10,1 ms sur la carte d'entrée
   mouillée à 70 %.
-- **Rattrapage d'une salle vide borné en temps** (`MeadowManager.stepCatchUp`, `hurryCatchUp`) : les tranches du
+- **Rattrapage d'une salle vide borné en temps** (`MeadowSimulation.stepCatchUp`, `hurryCatchUp`) : les tranches du
   temps manqué étaient vécues par paquets de 150 toutes les 2 s, chaque paquet retenant le fil 0,3 à 0,5 s (34 fois
   pour une semaine). Elles sont vécues 8 ms à la fois (`CATCH_UP_BUDGET_MS`), avec 8 ms de pause
   (`CATCH_UP_PAUSE_MS`) : la moitié du fil au plus. Dire l'état à la salle (une fois par seconde) et le sauvegarder
   ont leur propre tour. Mêmes tranches, même ordre, même état final (test de différence dans
-  `MeadowManager.test.ts`). Mesuré sur la carte d'entrée, 7 jours manqués, minuteurs réels : retard maximal de la
-  boucle d'événements 530 → 23 ms, tour le plus long 14 ms, rattrapage fini en 28 s d'horloge au lieu de 70 s. Le
-  joueur qui entre pendant ce temps voit la prairie et l'eau avancer d'un envoi par seconde, comme avant.
+  `MeadowManager.test.ts`). Mesuré sur la carte d'entrée, 7 jours manqués : tour le plus long 422 → 15 ms ; avec
+  les minuteurs réels, retard maximal de la boucle d'événements 467 → 18 à 38 ms selon la charge de la machine de
+  mesure (99e centile 10,6 ms), rattrapage fini en 28 s d'horloge au lieu de 70 s. Le joueur qui entre pendant ce
+  temps voit la prairie et l'eau avancer d'un envoi par seconde, comme avant. Le même budget vaut dans un
+  navigateur qui fait tourner la simulation pour lui-même.
 
 Preuve d'identité : `libs/map-editor/tests/WaterFingerprints.test.ts` joue 19 scénarios de `WaterGrid` et finit
 chacun sur une empreinte (profondeurs, flux, vitesses, bilans, octets envoyés) enregistrée avec le code d'avant
@@ -2432,8 +2434,8 @@ chacun sur une empreinte (profondeurs, flux, vitesses, bilans, octets envoyés) 
 `RECORD_WATER_FINGERPRINTS=1 npx vitest run tests/WaterFingerprints.test.ts`. Côté serveur, 751 envois de la carte
 d'entrée (sources, rattrapage, pluie, météore, boule) donnent la même empreinte une fois décompressés.
 
-Bilan sur la carte d'entrée mouillée à 70 % (Mac M4 Max, Node 24) : un envoi 7,0 → 2,9 ms ; un pas entier sous la
-pluie environ 21 → 13,5 ms ; octets envoyés −4 %. Non fait dans ce lot : `WaterLoad` nourri par la somme des pas
+Bilan sur la carte d'entrée mouillée à 70 % (Mac M4 Max, Node 24, contre `infogene` à 9e5507971) : un envoi
+7,1 → 2,8 ms ; un pas entier sous la pluie 21,2 → 12,9 ms en moyenne ; octets envoyés −4 %. Non fait dans ce lot : `WaterLoad` nourri par la somme des pas
 de toutes les salles. Le retard de la boucle d'événements de `back` est déjà exposé par `prom-client`
 (`nodejs_eventloop_lag_p99_seconds` sur `/metrics`, `PrometheusController`) : rien à ajouter pour le lire sur le
 serveur, il suffit d'interroger ce point d'accès.

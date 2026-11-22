@@ -159,6 +159,8 @@ export class MeadowSimulation {
     private catchUpTimer: ReturnType<typeof setTimeout> | undefined;
     /** When the room was last told the time it lives again (ms of the stopwatch). */
     private catchUpToldAt = -Infinity;
+    /** Until when (ms of the stopwatch) no other slice is lived: the pause the other rooms pass in. */
+    private catchUpRestUntil = -Infinity;
     /** Whether slices were lived that the room is not told yet. */
     private catchUpUntold = false;
 
@@ -294,7 +296,13 @@ export class MeadowSimulation {
     /** A step from the timer. An error there would take the whole server down: the meadow of this room stops instead. */
     private tick(): void {
         try {
+            // The step of the meadow that falls right after slices of the time missed leaves them their pause.
+            if (this.catchUp && this.stopwatch() < this.catchUpRestUntil) {
+                this.hurryCatchUp();
+                return;
+            }
             this.step();
+            if (this.catchUp) this.catchUpRestUntil = this.stopwatch() + CATCH_UP_PAUSE_MS / 2;
             this.hurryCatchUp();
         } catch (error) {
             console.error("The meadow of the map stopped on an error", error);
