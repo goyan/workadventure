@@ -2460,6 +2460,21 @@ ne l'est pas).
   (`LocalTerrainSimulation`), sans changement de comportement : `GroundSimulation.test.ts` compare, sur 400 pas
   avec neige, comète et boule de feu, les états dits par un sol câblé à la main et par `GroundSimulation` (mêmes
   octets).
+- **La vie aquatique relit l'eau moins cher** (`Life/WaterBodies.ts`, `Life/LandPlaces.ts`, `Terrain/CellMask.ts`,
+  `AquaticLifeManager`). Fil de calcul allumé, ce qui tenait encore le fil des salles était la vie aquatique : deux
+  fois par seconde elle relisait toute l'eau (étendues d'eau un pas sur deux, terres toutes les 5 s), 14 ms en
+  moyenne et jusqu'à 57 ms par pas sur la carte d'entrée inondée, assez pour faire à elle seule le 99e centile du
+  retard de la boucle. Quatre changements, à résultat identique : les cellules des piscines et les tuiles sous les
+  ponts se demandent à un masque d'octets (`cellMaskOf`) au lieu d'une clé de texte fabriquée par cellule ;
+  `waterBodiesOf` lit les cellules telles qu'elles sont tenues (`WaterView.cells`) au lieu de demander chaque
+  voisine ; `landPlacesOf` demande chaque cellule une fois ; les murs, les arbres et les ponts de la carte ne sont
+  relus qu'à un changement de carte (`mapChanged`), plus à chaque pas (ils parcouraient tous les objets de la carte :
+  3 ms par pas). Mesuré sur la carte d'entrée inondée (Mac très chargé) : pas de vie 14,8 → 3,2 ms en moyenne,
+  maximum 57 → 15 ms ; un pas ordinaire dure 1 à 2 ms, il reste un pas de 7 à 16 ms toutes les 5 s (relecture des
+  terres). `WaterBodiesIdentity.test.ts` garde l'ancienne lecture comme référence : mêmes étendues, mêmes réponses
+  cellule par cellule, mêmes tirages, mêmes poissons (population comparée à chaque état) le long d'une crue qui
+  monte et redescend avec lac, étang, chenal, piscine, mur et porte qui se ferme et s'ouvre, sur la grille et sur
+  un instantané ; mêmes terres avec murs et pont.
 - **Catastrophes dans le sol d'un joueur** (`LocalTerrainSimulation`, `LocalTerrainWorker`). Le sol d'un joueur
   (météo d'un lieu choisi) ignorait les catastrophes de la salle : il les voyait sans que son eau en soit touchée.
   Il sait maintenant les recevoir, par le sol commun : `setCatastrophes` (averses, drains, boules du moment, qui

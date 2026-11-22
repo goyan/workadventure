@@ -9,6 +9,7 @@ import {
     landTreesOf,
     landWallsOf,
     bridgeTilesOf,
+    cellMaskOf,
     dryOnBridges,
     lifeCensus,
     LIFE_RANGES,
@@ -179,11 +180,21 @@ export class AquaticLifeManager {
     private bodiesGrid: WaterView | undefined;
     private bodiesVersion = -1;
     /** The cells of the pools of the map, read again when the relief or the styles of the pools change. */
-    private pools: { terrain: unknown; styles: unknown; cells: Set<string> } | undefined;
+    private pools: { terrain: unknown; styles: unknown; inPool: (cellX: number, cellY: number) => boolean } | undefined;
     private bodiesStep = -Infinity;
     /** The outdoor land of the map, for the animals that walk; undefined while the land is off or its size unknown. */
     private land: Places | undefined;
     private landKey = "";
+    /** The walls, the trees and the bridges of the land, as read from the map when it last changed. */
+    private landOfMap:
+        | {
+              wam: unknown;
+              walls: ReturnType<typeof landWallsOf>;
+              trees: ReturnType<typeof landTreesOf>;
+              bridges: ReturnType<typeof bridgeTilesOf>;
+              signature: string;
+          }
+        | undefined;
     private landVersion = -1;
     private landStep = -Infinity;
     /** What happened since the life of the map began (`since`), for its dashboard. */
@@ -394,6 +405,7 @@ export class AquaticLifeManager {
         }
         // The walls may have changed: the land is read again at the next step.
         this.landKey = "";
+        this.landOfMap = undefined;
         if (this.population.animals.length !== before) {
             this.tell();
             this.save(true);
@@ -421,12 +433,20 @@ export class AquaticLifeManager {
             this.land = undefined;
             return;
         }
-        const walls = landWallsOf(this.room.getWam());
-        // The trees the lions and the tigers live around.
-        const trees = landTreesOf(this.room.getWam());
-        // The bridges of the map: what walks crosses the water on their decks.
-        const bridges = bridgeTilesOf(this.room.getWam());
-        const key = `${size.width}x${size.height}|${walls.signature}|${trees.map((tree) => `${tree.x},${tree.y}`).join(";")}|${[...bridges].sort().join(";")}`;
+        // The walls, the trees and the bridges of the map are read again when the map changed only (mapChanged), not at
+        // each step: reading them goes over every object of the map.
+        const wam = this.room.getWam();
+        if (!this.landOfMap || this.landOfMap.wam !== wam) {
+            const walls = landWallsOf(wam);
+            // The trees the lions and the tigers live around.
+            const trees = landTreesOf(wam);
+            // The bridges of the map: what walks crosses the water on their decks.
+            const bridges = bridgeTilesOf(wam);
+            const signature = `${walls.signature}|${trees.map((tree) => `${tree.x},${tree.y}`).join(";")}|${[...bridges].sort().join(";")}`;
+            this.landOfMap = { wam, walls, trees, bridges, signature };
+        }
+        const { walls, trees, bridges } = this.landOfMap;
+        const key = `${size.width}x${size.height}|${this.landOfMap.signature}`;
         const version = grid ? this.water.waterVersion() : -1;
         const stale = version !== this.landVersion && this.steps - this.landStep >= STEPS_PER_LAND;
         if (this.land && key === this.landKey && !stale) return;
@@ -459,11 +479,11 @@ export class AquaticLifeManager {
         const terrain = wam?.terrain;
         const styles = wam?.settings?.pools;
         if (!this.pools || this.pools.terrain !== terrain || this.pools.styles !== styles) {
-            const cells = new Set(poolCells(terrain, styles).map((cell) => `${cell.cellX},${cell.cellY}`));
-            this.pools = { terrain, styles, cells };
+            // Asked for every cell the life looks at: a mask of the cells, not a key of text for each question.
+            const inPool = cellMaskOf(poolCells(terrain, styles).map((cell) => ({ x: cell.cellX, y: cell.cellY })));
+            this.pools = { terrain, styles, inPool };
         }
-        const { cells } = this.pools;
-        return (cellX, cellY) => cells.has(`${cellX},${cellY}`);
+        return this.pools.inPool;
     }
 
     /** One step of the life (two a second), and once a second the room is told. */

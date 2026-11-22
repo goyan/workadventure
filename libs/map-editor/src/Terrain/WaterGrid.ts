@@ -14,7 +14,7 @@ import type { MapCells } from "./TerrainGrid";
 import { ballColumn, ballHalfHeight } from "./WaterBall";
 import type { WaterBall } from "./WaterBall";
 import { restLevelOf, WATER_FILM_PX } from "./WaterView";
-import type { RestLevelFields, RestLevelSearch, WaterSnapshot, WaterView } from "./WaterView";
+import type { RestLevelFields, RestLevelSearch, WaterCells, WaterSnapshot, WaterView } from "./WaterView";
 
 /** Litres over one cell of the relief under one pixel of water. */
 export const CELL_LITRES_PER_PX = CELL_AREA_M2 * -metresOf(-1) * LITRES_PER_M3;
@@ -702,6 +702,10 @@ export class WaterGrid implements WaterView {
     public depthAt(cellX: number, cellY: number): number {
         const index = this.indexOf(cellX, cellY);
         return index === undefined ? 0 : this.depth[index];
+    }
+
+    public cells(): WaterCells {
+        return { depth: this.depth, closed: this.closed };
     }
 
     /**
