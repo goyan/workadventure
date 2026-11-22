@@ -61,6 +61,7 @@ import type { GroundArea } from "./TexturedGround";
 import { GroundSplat } from "./GroundSplat";
 import { BreakingFoam } from "./BreakingFoam";
 import { whitecapShare, windHeading } from "./Whitecaps";
+import { depthsSeen } from "./BuiltGround";
 import { drawnArea, heightsOver, stillCovers } from "./ObliqueView";
 import { classicPoolsShown, imagePoolCells, imagePoolsOf, signatureOf } from "./ImagePools";
 import { PoolLadders, topEdgesOf } from "./PoolLadders";
@@ -173,8 +174,13 @@ export class TerrainView {
               snapshot: BlockSnapshot;
               imagePools: string;
               oblique: boolean;
+              /** The relief seen in 3/4 it was painted with (flat under what is built). */
+              seen: TerrainData | undefined;
           }
         | undefined;
+    /** The relief seen in 3/4 at the last drawing, and how many times it changed (part of what is drawn again). */
+    private seenDrawn: TerrainData | undefined;
+    private seenChanges = 0;
     /** Whether the shaders draw the relief in 3/4 now. */
     private isOblique = false;
     private depths = new Float32Array(0);
@@ -228,6 +234,14 @@ export class TerrainView {
         private readonly oblique?: () => boolean,
         /** Whether all the ground outdoors is under the snow for this player (the winter theme they chose). */
         private readonly snowEverywhere?: () => boolean,
+        /**
+         * The relief as it is seen in 3/4 (BuiltGround.ts): flat under what is built, whose floors and walls are
+         * drawn at their place; and where the water is seen flat with it. The relief of the map without it.
+         */
+        private readonly seen?: {
+            terrain(): TerrainData | undefined;
+            isFlatAt(x: number, y: number): boolean;
+        },
     ) {
         // The shaders draw the soils and the grass: the canvas keeps only the shades of the relief, smooth. Without
         // them the mottled grass and the soils are on the canvas: sharp cells, each keeps its own shade.
@@ -289,7 +303,13 @@ export class TerrainView {
         this.splat?.setOblique(oblique);
         // The foam left behind a wave fades: drawn again five times a second while any is left.
         const foamKey = this.breaking.active(now) ? Math.floor(now / 200) : 0;
-        const key = `${foamKey}:${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}:${this.imagePools.signature}:${this.poolSettingsVersion()}:${followsServerGround()}:${this.ownSnow()}:${oblique}:${this.snowEverywhere?.() === true}`;
+        // The relief seen in 3/4 (flat under what is built): drawn again when a floor is laid or taken away.
+        const seen = oblique ? this.seen?.terrain() : undefined;
+        if (seen !== this.seenDrawn) {
+            this.seenDrawn = seen;
+            this.seenChanges++;
+        }
+        const key = `${foamKey}:${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}:${this.imagePools.signature}:${this.poolSettingsVersion()}:${followsServerGround()}:${this.ownSnow()}:${oblique}:${this.snowEverywhere?.() === true}:${this.seenChanges}`;
         const inside = this.drawn !== undefined && stillCovers(this.drawn, screen, oblique, DRAW_MARGIN / 5);
         if (key === this.lastKey && inside) return;
         this.lastKey = key;
@@ -358,6 +378,7 @@ export class TerrainView {
             kept.imagePools !== this.imagePools.signature ||
             // Turned to 3/4: the shaders are to be told the heights.
             kept.oblique !== this.isOblique ||
+            kept.seen !== this.seenDrawn ||
             !this.surface.restore?.(kept.snapshot)
         ) {
             // The soils first: the shades of the relief and the water are drawn over them.
@@ -373,15 +394,7 @@ export class TerrainView {
                     dug: relief.ground,
                     raised: relief.raised,
                     // Read from the map only when the relief is seen in 3/4.
-                    heights: this.isOblique
-                        ? (relief.heights ??= heightsOver(
-                              relief.terrain,
-                              canvas.x / TERRAIN_CELL,
-                              canvas.y / TERRAIN_CELL,
-                              canvas.columns,
-                              canvas.rows,
-                          ))
-                        : undefined,
+                    heights: this.isOblique ? this.heightsSeen(relief, canvas) : undefined,
                     straw: meadow?.straw,
                     ash: meadow?.ash,
                     fire: meadow?.fire,
@@ -477,7 +490,14 @@ export class TerrainView {
             }
             const snapshot = this.surface.snapshot?.();
             this.painted = snapshot
-                ? { relief, meadow, snapshot, imagePools: this.imagePools.signature, oblique: this.isOblique }
+                ? {
+                      relief,
+                      meadow,
+                      snapshot,
+                      imagePools: this.imagePools.signature,
+                      oblique: this.isOblique,
+                      seen: this.seenDrawn,
+                  }
                 : undefined;
         }
         // Water lies in the hollows, and on flat ground where they overflow or where a source pours.
@@ -503,6 +523,18 @@ export class TerrainView {
                     now,
                     depths,
                 );
+                // Over what is built the water is drawn at its place, like its ground.
+                const seen = this.seen;
+                if (seen) {
+                    depthsSeen(
+                        depths,
+                        (x, y) => seen.isFlatAt(x, y),
+                        canvas.x / TERRAIN_CELL,
+                        canvas.y / TERRAIN_CELL,
+                        canvas.columns,
+                        canvas.rows,
+                    );
+                }
             }
             const foamy = anyWater && this.breaking.active(now);
             if (foamy) {
@@ -553,6 +585,16 @@ export class TerrainView {
      * for a relief and a canvas (the costly part of a drawing), then kept while the water alone moves; only the
      * chunks of the relief that hold something are looked at.
      */
+    /**
+     * The exact heights of the ground over the canvas, for the shaders that draw the relief in 3/4: those of the
+     * relief seen (flat under what is built) when the scene tells it, else of the map, read once for a relief.
+     */
+    private heightsSeen(relief: ReliefLayers, canvas: BlockCanvasArea): Float32Array {
+        const read = (terrain: TerrainData | undefined): Float32Array =>
+            heightsOver(terrain, canvas.x / TERRAIN_CELL, canvas.y / TERRAIN_CELL, canvas.columns, canvas.rows);
+        return this.seen ? read(this.seenDrawn) : (relief.heights ??= read(relief.terrain));
+    }
+
     private reliefOver(canvas: BlockCanvasArea): ReliefLayers {
         const terrain: TerrainData | undefined = this.water.relief();
         const kept = this.relief;

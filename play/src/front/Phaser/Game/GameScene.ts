@@ -47,6 +47,7 @@ import {
     WAMSettingsUtils,
     WeatherType,
     bridgesOf,
+    pavedTilesOf,
 } from "@workadventure/map-editor";
 import type { Bridges, TerrainData, WeatherLocation } from "@workadventure/map-editor";
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
@@ -419,6 +420,8 @@ import { groundPointAt, heightAtPoint, hiddenBehindRim, shiftAt } from "./Terrai
 import { seenPoint } from "./Terrain/ObliqueView";
 import { TerrainView } from "./Terrain/TerrainView";
 import { groundDropOf, PlacedDrops } from "./Terrain/GroundDrop";
+import { FlatGround, SeenRelief } from "./Terrain/BuiltGround";
+import { imagePoolsOf } from "./Terrain/ImagePools";
 import type { DroppedCharacter } from "./Terrain/CharacterDrops";
 import { CharacterDrops } from "./Terrain/CharacterDrops";
 import { avatarDrop, ON_A_FLOOR, surfaceDropAt, waterDepthAtPoint } from "./Terrain/AvatarDrop";
@@ -707,6 +710,7 @@ export class GameScene extends DirtyScene {
     /** The characters drawn lower in the hollows of the relief, while the image is drawn. */
     private characterDrops: CharacterDrops | undefined;
     private placedDrops: PlacedDrops<Entity> | undefined;
+    private seenRelief: SeenRelief | undefined;
     private waterFlowView: WaterFlowView | undefined;
     private waterFlowOverlay: WaterFlowOverlay | undefined;
     private terrainWaterQueue: Promise<void> = Promise.resolve();
@@ -1815,6 +1819,7 @@ export class GameScene extends DirtyScene {
         this.characterDrops = undefined;
         this.placedDrops?.destroy();
         this.placedDrops = undefined;
+        this.seenRelief = undefined;
         this.waterFlowView?.destroy();
         this.waterFlowView = undefined;
         this.frozenPoolsView?.destroy();
@@ -2498,17 +2503,19 @@ export class GameScene extends DirtyScene {
             // in the editor and in Basique: no page to load again.
             // Its blocks only where the shaders of the flat engine cannot draw it.
             this.pixelRelief?.sync(blocksStateOf(this.groundChoice()), time);
+            // The relief as it is seen: flat under what is built, where everyone is drawn at their place.
+            if (projected) this.seenRelief?.refresh(time);
             // The objects standing on the ground, drawn where it is.
             this.placedDrops?.update(time);
             // Every character drawn as low as the ground (or the water) under it, in a hollow; at its place when the
             // relief is not seen in 3/4.
-            const relief = this.terrainWater.relief();
+            const relief = this.reliefSeen();
             const dropOf = (character: { x: number; y: number; getFloorZ(): number }): number =>
                 projected
                     ? avatarDrop(
                           relief,
                           character,
-                          waterDepthAtPoint((x, y) => this.terrainWater.depthAt(x, y, time), character.x, character.y),
+                          waterDepthAtPoint((x, y) => this.seenDepthAt(x, y, time), character.x, character.y),
                           character.getFloorZ(),
                           false,
                           // A bridge is a raised floor: who walks on its deck is on a floor (no drop), who is
@@ -3267,7 +3274,7 @@ export class GameScene extends DirtyScene {
      * a flame, a footprint. The ground alone, whatever water lies on it. Nothing while the relief is not shown in 3/4.
      */
     public groundDropAt(x: number, y: number): number {
-        return this.pixelReliefShown() ? groundDropOf(this.terrainWater.relief(), x, y) : 0;
+        return this.pixelReliefShown() ? groundDropOf(this.reliefSeen(), x, y) : 0;
     }
 
     /**
@@ -3275,7 +3282,7 @@ export class GameScene extends DirtyScene {
      * the drop of things that do not move (the objects of the map).
      */
     public reliefDrawVersion(): number {
-        const terrain = this.terrainWater.relief();
+        const terrain = this.reliefSeen();
         const shown = this.pixelReliefShown();
         if (terrain !== this.reliefDrawn.terrain || shown !== this.reliefDrawn.shown) {
             this.reliefDrawn = { terrain, shown, version: this.reliefDrawn.version + 1 };
@@ -3299,12 +3306,57 @@ export class GameScene extends DirtyScene {
         }
     }
 
+    /**
+     * The relief as it is seen in 3/4 (BuiltGround.ts): the relief of the map, flat under what is built (paved with
+     * the Carte tool, inside a building, a pool), whose floors, walls and tiles are drawn at their place whatever the
+     * relief under them. Everything drawn lower or higher reads this one: on a terrace laid on a mount, the avatar,
+     * the furniture and the pool stay where they block.
+     */
+    private reliefSeen(): TerrainData | undefined {
+        return this.seenRelief ? this.seenRelief.terrain() : this.terrainWater.relief();
+    }
+
+    /** The depth of the water at a point as the 3/4 raises or lowers its surface: none over what is built. */
+    private seenDepthAt(x: number, y: number, now: number): number {
+        return this.seenRelief?.isFlatAt(x, y) ? 0 : this.terrainWater.depthAt(x, y, now);
+    }
+
+    /** What is built on the map now, cell by cell (FlatGround). */
+    private builtGround(): FlatGround {
+        const grid = this.getOutdoorGrid();
+        const entities = this.gameMapFrontWrapper.getEntitiesManager().getEntities().values();
+        return FlatGround.of({
+            columns: Math.ceil(this.Map.widthInPixels / TERRAIN_CELL),
+            rows: Math.ceil(this.Map.heightInPixels / TERRAIN_CELL),
+            pavedTiles: pavedTilesOf(this.getGameMap().getWamFile()?.getWam()),
+            isIndoorAt: grid ? (x, y) => !grid.isOutdoorAt(x, y) : undefined,
+            pools: imagePoolsOf(entities),
+            terrain: this.terrainWater.relief(),
+        });
+    }
+
+    /** Changes when a floor of the Carte tool, a wall or a pool placed as an image is added, moved or taken away. */
+    private builtSignature(): string {
+        let floors = 0;
+        let pools = 0;
+        let hash = 0;
+        for (const entity of this.gameMapFrontWrapper.getEntitiesManager().getEntities().values()) {
+            const prefab = entity.getPrefab();
+            const pool = (prefab.water?.length ?? 0) > 0;
+            if (prefab.collectionName !== "Carte Sols" && !pool) continue;
+            if (pool) pools++;
+            else floors++;
+            hash = (hash * 31 + entity.x * 7 + entity.y * 13 + entity.displayWidth + entity.getElevation()) | 0;
+        }
+        return `${this.getOutdoorVersion()}:${floors}:${pools}:${hash}`;
+    }
+
     /** The same, the relief being shown in 3/4 (asked many times for one point by hiddenOnWater). */
     private surfaceDropIn34(x: number, y: number): number {
         const now = this.time.now;
         return surfaceDropAt(
-            this.terrainWater.relief(),
-            waterDepthAtPoint((pointX, pointY) => this.terrainWater.depthAt(pointX, pointY, now), x, y),
+            this.reliefSeen(),
+            waterDepthAtPoint((pointX, pointY) => this.seenDepthAt(pointX, pointY, now), x, y),
             x,
             y,
             // The water under the deck of a bridge (a raised floor) is drawn as low as the rest of its lake.
@@ -3317,7 +3369,7 @@ export class GameScene extends DirtyScene {
     public hiddenOnWater(x: number, y: number): boolean {
         if (!this.pixelReliefShown()) return false;
         return hiddenBehindRim(
-            this.terrainWater.relief(),
+            this.reliefSeen(),
             x,
             y,
             (pointX, pointY) => this.surfaceDropIn34(pointX, pointY),
@@ -3375,7 +3427,7 @@ export class GameScene extends DirtyScene {
     public groundPointUnder(point: { x: number; y: number }): { x: number; y: number } {
         if (!this.pixelReliefShown()) return point;
         // The deck of a bridge is a raised floor, drawn at its place over the hollow under it: a click on it is on it.
-        return groundPointAt(this.terrainWater.relief(), point, (x, y) => this.terrainWater.isBridgeAt(x, y));
+        return groundPointAt(this.reliefSeen(), point, (x, y) => this.terrainWater.isBridgeAt(x, y));
     }
 
     /**
@@ -3385,13 +3437,13 @@ export class GameScene extends DirtyScene {
      */
     public seenPointUnder(point: { x: number; y: number }): { x: number; y: number } {
         if (!this.pixelReliefShown()) return point;
-        const terrain = this.terrainWater.relief();
+        const terrain = this.reliefSeen();
         const now = this.time.now;
         const surfaceAt = (y: number): number =>
             heightAtPoint(terrain, point.x, y) +
             Math.max(
                 0,
-                waterDepthAtPoint((pointX, pointY) => this.terrainWater.depthAt(pointX, pointY, now), point.x, y),
+                waterDepthAtPoint((pointX, pointY) => this.seenDepthAt(pointX, pointY, now), point.x, y),
             );
         return { x: point.x, y: seenPoint(surfaceAt, point.y, TERRAIN_CELL).y };
     }
@@ -3405,7 +3457,8 @@ export class GameScene extends DirtyScene {
     private createPixelRelief(): PixelRelief {
         const painters = createBlockPaintPool();
         const tiles = new ReliefTiles(this, {
-            relief: () => this.terrainWater.relief(),
+            // Flat under what is built, as for the shaders.
+            relief: () => this.reliefSeen(),
             water: this.terrainWater,
             meadow: this.meadow,
             season: () => this.pixelGroundSeason(),
@@ -3435,7 +3488,7 @@ export class GameScene extends DirtyScene {
             this,
             (x, y) => footprintSurface(tiles.coverAt(x, y, this.time.now)),
             // As low as the ground is drawn.
-            (x, y) => (this.pixelBlocksShown() ? shiftAt(this.terrainWater.relief(), x, y) : 0),
+            (x, y) => (this.pixelBlocksShown() ? shiftAt(this.reliefSeen(), x, y) : 0),
             (x, y) => this.terrainWater.isBridgeAt(x, y),
         );
         let hidden = false;
@@ -4299,7 +4352,17 @@ export class GameScene extends DirtyScene {
                     () => this.pixelBlocksShown(),
                     () => this.groundEngine() === "oblique",
                     () => this.winterThemeShown(),
+                    {
+                        terrain: () => this.reliefSeen(),
+                        isFlatAt: (x, y) => this.seenRelief?.isFlatAt(x, y) ?? false,
+                    },
                 );
+                // What is built stays flat where the relief is seen in 3/4: paved, indoors, a pool.
+                this.seenRelief = new SeenRelief({
+                    terrain: () => this.terrainWater.relief(),
+                    signature: () => this.builtSignature(),
+                    flat: () => this.builtGround(),
+                });
                 // The relief in 3/4, in pixel art: only for who chose it (nothing of it is made else).
                 this.pixelRelief?.destroy();
                 this.pixelRelief = new GroundEngines(() => this.createPixelRelief());

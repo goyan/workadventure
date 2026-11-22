@@ -2669,6 +2669,19 @@ calculé. La règle (`Terrain/GroundDrop.ts`) : `groundDropOf` = le décalage du
 | Écume du courant, remous des puits, ronds des sources | `WaterFlowView` (surface de l'eau) |
 | Calotte de neige, tas de feuilles, témoin d'interrupteur d'un objet décalé | `SnowCaps`, `LeafPiles`, `SwitchIndicator` |
 
+**Le construit reste à plat** (2026-11-22, `Terrain/BuiltGround.ts`). Les sols et les murs de l'outil Carte et les
+tuiles sont des images de la carte : ils sont dessinés à leur place quel que soit le relief dessous. Sur du bâti posé
+sur un relief (la terrasse de la piscine de la carte d'équipe est à +112 px, ses bâtiments à 0), l'avatar et les
+meubles décalés ne correspondaient plus aux murs ni à leurs collisions, et l'herbe opaque du shader recouvrait le
+dallage. En 3/4, le relief **vu** (`GameScene.reliefSeen`, `SeenRelief`) est donc celui de la carte, mis à plat sous ce
+qui est construit : cases dallées par l'outil Carte (`pavedTilesOf`), intérieurs (`OutdoorGrid`), piscines posées en
+image ou peintes, plus une cellule autour (le sol est dessiné droit entre les centres des cellules). L'eau y est vue à
+sa place aussi (`seenDepthAt`, `depthsSeen`). Tout ce qui lit le décalage lit ce relief : shaders (`TerrainView`,
+dépendance `seen`), avatars, objets, animaux, clic, visée, blocs. Le relief de la carte, l'eau du serveur, le mode à
+plat et l'éditeur ne changent pas. Relu quand le relief change, et deux fois par seconde pour ce qui est construit.
+Conséquence : une terrasse bâtie sur une butte ne paraît plus surélevée, la pelouse autour est dessinée plus haut avec
+une paroi au bord.
+
 **Limites.** Ne suivent pas le relief : les tuiles de la carte ; les pièces de l'outil Carte (sols, murs, portes,
 fenêtres, paliers, escaliers, ponts : un bâtiment décalé pièce par pièce se déchirerait) ; la lumière des lampes et
 des fenêtres ; la vue des courants de « Visualisation » ; la vapeur et les échelles des piscines ; les feuilles qui
