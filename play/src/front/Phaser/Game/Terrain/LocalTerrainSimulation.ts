@@ -105,8 +105,8 @@ export class LocalTerrainSimulation {
         const asIs = (bytes: Uint8Array): Uint8Array => bytes;
         const mapCells = (): { width: number; height: number } => this.mapCells;
         this.ground = new GroundSimulation({
-            makeWater: () =>
-                new WaterSimulation(
+            makeWater: () => {
+                const water = new WaterSimulation(
                     room,
                     rain,
                     asIs,
@@ -118,7 +118,12 @@ export class LocalTerrainSimulation {
                     Number.POSITIVE_INFINITY,
                     // A worker of its own: half a core to live the water faster than reality.
                     WATER_PACE_WORKER_BUDGET_MS,
-                ),
+                );
+                // What comes in (rain, sources, snow) at the speed the player's weather asks, as before; its flow as
+                // fast as this worker holds.
+                water.inflowAt("asked");
+                return water;
+            },
             makeMeadow: (water) =>
                 new MeadowSimulation(
                     room,
