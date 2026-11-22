@@ -84,6 +84,8 @@ export class LandLifeView {
         private readonly grassAt: (x: number, y: number) => boolean = () => false,
         /** How high over the ground one walks above a point of the ground (map pixels): the bridges of the map. */
         private readonly liftAt: (x: number, y: number) => number = () => 0,
+        /** How much lower the ground at a point is drawn, the relief seen in 3/4 (GameScene.groundDropAt). */
+        private readonly dropAt: (x: number, y: number) => number = () => 0,
     ) {}
 
     public update(now: number): void {
@@ -115,7 +117,10 @@ export class LandLifeView {
             const x = Math.round(led?.x ?? animal.x);
             // On a bridge it is drawn as high as the deck, over its slabs: the life tells its place on the ground.
             const lift = led ? 0 : Math.round(this.liftAt(animal.x, animal.y));
-            const y = Math.round(led?.y ?? animal.y) - lift;
+            const placeY = Math.round(led?.y ?? animal.y);
+            // On the ground it is drawn where the ground is: lower in a hollow, higher on a mount. Not on a deck.
+            const drop = lift > 0 ? 0 : Math.round(this.dropAt(x, placeY));
+            const y = placeY - lift + drop;
             const columns = this.columnsOf(species);
             const key = columns === undefined ? ensureLandTexture(this.scene, species) : this.sheetOf(species);
             if (key === undefined) continue;
@@ -153,7 +158,8 @@ export class LandLifeView {
             entry.moving = moving;
             entry.led = led !== undefined;
             sprite.setPosition(x, y);
-            placeAtDepth(sprite, lift > 0 ? floorDepth(lift, y + lift) : y);
+            // Sorted by its place, whatever the row it is drawn at.
+            placeAtDepth(sprite, lift > 0 ? floorDepth(lift, placeY) : placeY);
             sprite.setAlpha(animal.alpha);
             // Head down at the water (the stance of the wandering animals, without its sway of a pixel: the place
             // of the sprite tells whether the animal moved).

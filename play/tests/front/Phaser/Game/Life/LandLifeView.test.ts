@@ -109,6 +109,7 @@ function createView({
     lead,
     grassAt,
     liftAt,
+    dropAt,
 }: {
     sheets?: Record<string, number>;
     sheetOf?: (species: string) => string | undefined;
@@ -116,6 +117,7 @@ function createView({
     lead?: ConstructorParameters<typeof LandLifeView>[5];
     grassAt?: ConstructorParameters<typeof LandLifeView>[6];
     liftAt?: ConstructorParameters<typeof LandLifeView>[7];
+    dropAt?: ConstructorParameters<typeof LandLifeView>[8];
 } = {}) {
     const { scene, sprites, loaded, markDirty } = createScene(sheets);
     const life = new AquaticLife(isLandKind);
@@ -128,6 +130,7 @@ function createView({
         lead,
         grassAt,
         liftAt,
+        dropAt,
     );
     return { view, life, sprites, loaded, markDirty, shown };
 }
@@ -192,6 +195,27 @@ describe("LandLifeView", () => {
         expect(sprites[1]).toMatchObject({ x: 100, y: 60, depth: floorDepth(20, 80) });
         // The slabs of the deck are drawn just under what stands on it.
         expect(sprites[1].depth).toBeGreaterThan(floorDepth(20, 0) - 1);
+    });
+
+    it("on a relief seen in 3/4 is drawn where its ground is, and still sorted by its place", () => {
+        // A hollow drawn 40 px lower from x 100 on, a mount drawn 30 px higher from x 300 on.
+        const dropAt = (x: number): number => (x >= 300 ? -30 : x >= 100 ? 40 : 0);
+        const { view, life, sprites } = createView({ dropAt, liftAt: (x) => (x >= 400 ? 20 : 0) });
+        life.receive(
+            [
+                { id: 1, kind: 4, x: 50, y: 80 },
+                { id: 2, kind: 4, x: 100, y: 80 },
+                { id: 3, kind: 4, x: 300, y: 80 },
+                { id: 4, kind: 4, x: 400, y: 80 },
+            ],
+            0,
+        );
+        view.update(0);
+        expect(sprites[0]).toMatchObject({ x: 50, y: 80, depth: 80 });
+        expect(sprites[1]).toMatchObject({ x: 100, y: 120, depth: 80 });
+        expect(sprites[2]).toMatchObject({ x: 300, y: 50, depth: 80 });
+        // On the deck of a bridge it passes over the relief: as high as the deck, no more.
+        expect(sprites[3]).toMatchObject({ x: 400, y: 60, depth: floorDepth(20, 80) });
     });
 
     it("turns the image drawn here towards where the animal goes", () => {

@@ -38,6 +38,11 @@ export class GullLifeView {
         private readonly life: AquaticLife,
         private readonly isShown: () => boolean,
         private readonly reducedMotion: () => boolean,
+        /**
+         * How much lower what lies at a point is drawn, the relief seen in 3/4: the ground or the water over it
+         * (GameScene.surfaceDropAt). A gull flies over a lake at the bottom of its hollow, its shadow on the water.
+         */
+        private readonly dropAt: (x: number, y: number) => number = () => 0,
     ) {}
 
     public update(now: number): void {
@@ -62,7 +67,8 @@ export class GullLifeView {
             seen.add(gull.id);
             const landed = gull.state === LANDED;
             const x = Math.round(gull.x);
-            const ground = Math.round(gull.y);
+            const place = Math.round(gull.y);
+            const ground = place + Math.round(this.dropAt(x, place));
             const y = landed ? ground : ground - GULL_ALTITUDE_PX;
             const pose = landed ? "landed" : reduced || Math.floor(now / GULL_FLAP_MS) % 2 === 0 ? "up" : "down";
             const key = ensureGullTexture(this.scene, pose);
@@ -87,11 +93,11 @@ export class GullLifeView {
                 changed ||= onScreen(x, y) || onScreen(sprite.x, sprite.y);
             }
             sprite.setPosition(x, y);
-            placeAtDepth(sprite, landed ? ground : GULL_FLIGHT_DEPTH);
+            placeAtDepth(sprite, landed ? place : GULL_FLIGHT_DEPTH);
             sprite.setAlpha(gull.alpha);
             sprite.setFlipX(gull.facingLeft);
             shadow.setPosition(x, ground);
-            placeAtDepth(shadow, ground - 1);
+            placeAtDepth(shadow, place - 1);
             shadow.setAlpha(gull.alpha);
             shadow.setVisible(!landed);
         }

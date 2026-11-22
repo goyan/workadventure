@@ -56,6 +56,7 @@ import LL from "../../../i18n/i18n-svelte";
 import { DEBUG_MODE } from "../../Enum/EnvironmentVariable";
 import { TexturesHelper } from "../Helpers/TexturesHelper";
 import { reachesView } from "../Game/ViewCulling";
+import { hitWhereDrawn, standsOnGround } from "../Game/Terrain/GroundDrop";
 import { getLayerDepth, stackableDepths } from "./EntityLayerDepth";
 
 import Sprite = Phaser.GameObjects.Sprite;
@@ -75,6 +76,10 @@ export enum EntityEvent {
 export const DEFAULT_ACTIVABLE_RADIUS = 14;
 
 // NOTE: Tiles-based entity for now. Individual images later on
+type HitTest = (area: unknown, x: number, y: number, object: Phaser.GameObjects.GameObject) => boolean;
+/** The hit tests already brought back to where their object is drawn (Entity.hitWhereDrawn): never wrapped twice. */
+const movedHitTests = new WeakSet<HitTest>();
+
 export class Entity extends Sprite implements ActivatableInterface, OutlineableInterface {
     public readonly activationRadius: number = DEFAULT_ACTIVABLE_RADIUS;
     private readonly outlineColorStore = createColorStore();
@@ -155,8 +160,10 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
     public override willRender(camera: Phaser.Cameras.Scene2D.Camera): boolean {
         if (!super.willRender(camera)) return false;
         if (camera !== this.scene.cameras.main) return true;
+        // Drawn lower or higher on a relief seen in 3/4: in the view at its place or where it is drawn.
+        const reach = Math.abs(this.groundDrop);
         return reachesView(
-            { x: this.x, y: this.y, width: this.displayWidth, height: this.displayHeight },
+            { x: this.x, y: this.y - reach, width: this.displayWidth, height: this.displayHeight + 2 * reach },
             camera.worldView,
         );
     }
@@ -452,7 +459,53 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
                 hitAreaCallback: () => false,
             });
         }
-        return super.setInteractive(hitArea, callback, dropZone);
+        super.setInteractive(hitArea, callback, dropZone);
+        this.hitWhereDrawn();
+        return this;
+    }
+
+    /**
+     * Phaser tests a click against the place of the object, which never moves: drawn lower or higher on a relief seen
+     * in 3/4 (getGroundDrop), it is clicked where it is seen.
+     */
+    private hitWhereDrawn(): void {
+        const input = this.input;
+        const test = input?.hitAreaCallback as HitTest | undefined;
+        if (!input || !test || movedHitTests.has(test)) return;
+        const whereDrawn = hitWhereDrawn<unknown, Entity>(
+            (area, x, y) => test(area, x, y, this),
+            () => this.groundDrop,
+        );
+        const moved: HitTest = (area, x, y) => whereDrawn(area, x, y, this);
+        movedHitTests.add(moved);
+        input.hitAreaCallback = moved;
+    }
+
+    /** How much lower the object is drawn, standing on a relief seen in 3/4 (higher on a mount): see PlacedDrops. */
+    private groundDrop = 0;
+    public getGroundDrop(): number {
+        return this.groundDrop;
+    }
+
+    /** Draws the object this much lower, only while the image is drawn (CharacterDrops): its place never changes. */
+    public setGroundDrop(drop: number): void {
+        const rounded = Math.round(drop);
+        if (rounded === this.groundDrop) return;
+        this.groundDrop = rounded;
+        (this.scene as GameScene).markDirty();
+    }
+
+    /** Whether the object stands on the ground, and so follows it on a relief seen in 3/4 (standsOnGround). */
+    public standsOnGround(): boolean {
+        const { collectionName, id, layer } = this.prefab;
+        return standsOnGround({
+            cartePiece:
+                isMapLayerPrefab(collectionName, id) ||
+                parseFloorPiece(collectionName, id) !== undefined ||
+                parseAnyLevelPrefab(collectionName, id) !== undefined,
+            layer,
+            elevation: this.entityData.elevation,
+        });
     }
 
     /**

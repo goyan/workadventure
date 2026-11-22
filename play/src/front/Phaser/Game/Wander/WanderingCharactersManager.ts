@@ -14,6 +14,7 @@ import type { GameScene } from "../GameScene";
 import { JUNGLE_RADIUS_TILES } from "../Jungle/JunglePlan";
 import type { JungleAnimal } from "../Jungle/JunglePlan";
 import { getSolidRectangles } from "../../../Utils/EntityHitbox";
+import type { DroppedCharacter } from "../Terrain/CharacterDrops";
 import { placeAtDepth } from "../DepthSort";
 import { floorDepth } from "../MapEditor/MapLayer/FloorDepth";
 import type { FloorModel } from "../MapEditor/MapLayer/FloorModel";
@@ -119,6 +120,8 @@ interface WanderingCharacter {
     z: number;
     /** What the raised floors fade it by (see floorOccupants): made once. */
     occupant?: WanderFloorOccupant;
+    /** The same character as it is drawn lower on a relief seen in 3/4 (drawnLower): made once. */
+    lowered?: DroppedCharacter;
     /** Where a wild animal runs to, away from an avatar it fears (see WanderFear); undefined when it is calm. */
     scaredTo?: Point;
 }
@@ -246,6 +249,30 @@ export class WanderingCharactersManager {
                 setAlpha: (alpha) => sprite.setAlpha(alpha),
             };
             yield character.occupant;
+        }
+    }
+
+    /**
+     * The characters shown now, as they are drawn lower in a hollow of a relief seen in 3/4 and higher on a mount
+     * (CharacterDrops moves them only while the image is drawn): as much as the ground under their feet, nothing on a
+     * raised floor. The same object for a character at each call.
+     */
+    public *drawnLower(dropAt: (x: number, y: number) => number): Generator<DroppedCharacter> {
+        for (const character of this.characters.values()) {
+            const sprite = character.sprite;
+            if (!sprite?.visible) continue;
+            character.lowered ??= {
+                get y() {
+                    return sprite.y;
+                },
+                set y(value: number) {
+                    sprite.y = value;
+                },
+                getGroundDrop: () => 0,
+            };
+            const drop = character.z >= RAISED_FROM_PX ? 0 : Math.round(dropAt(sprite.x, sprite.y));
+            character.lowered.getGroundDrop = () => drop;
+            yield character.lowered;
         }
     }
 

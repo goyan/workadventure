@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { cellKey, withHeights } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
-import { DropCache, groundDropOf } from "../../../../../src/front/Phaser/Game/Terrain/GroundDrop";
+import {
+    DropCache,
+    footOf,
+    groundDropOf,
+    hitWhereDrawn,
+    PlacedDrops,
+    standsOnGround,
+} from "../../../../../src/front/Phaser/Game/Terrain/GroundDrop";
 
 /** A relief of one height on the cells 10 to 13 across and 10 to 21 down (x 168 to 216, y 168 to 344 in its middle). */
 function plateau(height: number): TerrainData {
@@ -61,5 +68,136 @@ describe("the drops kept for the things that do not move", () => {
         cache.dropOf("a", 0, 0, 1, read);
         cache.dropOf("b", 0, 0, 1, read);
         expect(read).toHaveBeenCalledTimes(3);
+    });
+});
+
+describe("what stands on the ground among the objects of a map", () => {
+    it("is a tree or a desk put on the ground", () => {
+        expect(standsOnGround({ cartePiece: false, layer: undefined, elevation: 0 })).toBe(true);
+        expect(standsOnGround({ cartePiece: false, layer: "standing", elevation: 0 })).toBe(true);
+    });
+
+    it("is not a piece of the Carte tool, a rug, a ceiling lamp, nor anything above the ground", () => {
+        // Floors, walls, slabs, stairs, bridges: a building moved piece by piece would tear.
+        expect(standsOnGround({ cartePiece: true, layer: undefined, elevation: 0 })).toBe(false);
+        expect(standsOnGround({ cartePiece: false, layer: "floor", elevation: 0 })).toBe(false);
+        expect(standsOnGround({ cartePiece: false, layer: "overhead", elevation: 0 })).toBe(false);
+        // On a raised floor or hung on a wall: it passes over the relief.
+        expect(standsOnGround({ cartePiece: false, layer: undefined, elevation: 52 })).toBe(false);
+    });
+
+    it("has its foot at the middle of its bottom edge", () => {
+        expect(footOf({ x: 100, y: 200, displayWidth: 64, displayHeight: 96 })).toEqual({ x: 132, y: 296 });
+    });
+});
+
+describe("the objects of a map drawn where their ground is", () => {
+    function thing(x: number, y: number, stands = true) {
+        const self = {
+            x,
+            y,
+            displayWidth: 32,
+            displayHeight: 32,
+            drop: 0,
+            standsOnGround: () => stands,
+            setGroundDrop: (drop: number) => (self.drop = drop),
+            getGroundDrop: () => self.drop,
+        };
+        return self;
+    }
+
+    it("gives each one the drop of the ground under its foot, none to what does not stand on it", () => {
+        const tree = thing(0, 0);
+        const rug = thing(0, 100, false);
+        const flat = thing(500, 500);
+        const read = vi.fn((x: number, y: number) => (x < 100 ? 40 : 0));
+        const drops = new PlacedDrops({
+            things: () => [tree, rug, flat],
+            version: () => 1,
+            shown: () => true,
+            dropAt: read,
+        });
+        drops.update(0);
+        expect(tree.drop).toBe(40);
+        expect(read).toHaveBeenCalledWith(16, 32);
+        expect(rug.drop).toBe(0);
+        expect(flat.drop).toBe(0);
+        // Only the moved ones are touched at each image.
+        expect(drops.moved()).toEqual([tree]);
+    });
+
+    it("reads the ground again when the relief changed, and sees a thing that moved within half a second", () => {
+        const tree = thing(0, 0);
+        let version = 1;
+        let depth = 40;
+        const read = vi.fn(() => depth);
+        const drops = new PlacedDrops({
+            things: () => [tree],
+            version: () => version,
+            shown: () => true,
+            dropAt: read,
+        });
+        drops.update(0);
+        drops.update(16);
+        drops.update(480);
+        expect(read).toHaveBeenCalledTimes(1);
+        // The relief changed.
+        depth = 12;
+        version = 2;
+        drops.update(496);
+        expect(tree.drop).toBe(12);
+        // The tree was moved (another player edits the map).
+        tree.y = 320;
+        depth = 20;
+        drops.update(600);
+        expect(tree.drop).toBe(12);
+        drops.update(1000);
+        expect(tree.drop).toBe(20);
+    });
+
+    it("moves nothing and reads nothing while the relief is not shown in 3/4", () => {
+        const tree = thing(0, 0);
+        let shown = true;
+        let version = 1;
+        const read = vi.fn(() => 40);
+        const drops = new PlacedDrops({
+            things: () => [tree],
+            version: () => version,
+            shown: () => shown,
+            dropAt: read,
+        });
+        drops.update(0);
+        expect(drops.moved()).toEqual([tree]);
+        shown = false;
+        version = 2;
+        drops.update(16);
+        expect(tree.drop).toBe(0);
+        expect(drops.moved()).toEqual([]);
+        drops.update(5000);
+        drops.update(10_000);
+        expect(read).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("a click on an object drawn lower", () => {
+    it("is tested where the object is seen: its own rows are those of the pointer less its drop", () => {
+        const pixel = vi.fn((_area: unknown, _x: number, y: number) => y >= 0 && y < 10);
+        const object = { scaleY: 1 };
+        let drop = 40;
+        const test = hitWhereDrawn(pixel, () => drop);
+        // Seen 40 px lower: a pointer 45 px under its place is on its 6th row.
+        expect(test({}, 3, 45, object)).toBe(true);
+        expect(pixel).toHaveBeenLastCalledWith({}, 3, 5, object);
+        expect(test({}, 3, 5, object)).toBe(false);
+        // Not moved: as before.
+        drop = 0;
+        expect(test({}, 3, 5, object)).toBe(true);
+    });
+
+    it("counts the rows of an object drawn at another size in its own pixels", () => {
+        const pixel = vi.fn(() => true);
+        const test = hitWhereDrawn(pixel, () => 40);
+        test({}, 0, 30, { scaleY: 2 });
+        expect(pixel).toHaveBeenLastCalledWith({}, 0, 10, { scaleY: 2 });
     });
 });

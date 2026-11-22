@@ -417,7 +417,8 @@ import type { PixelGround } from "./Terrain/GroundEngines";
 import { tellPixelBlocksShown } from "./Terrain/PixelBlocksShown";
 import { groundPointAt, hiddenBehindRim, shiftAt } from "./Terrain/ReliefProjection";
 import { TerrainView } from "./Terrain/TerrainView";
-import { groundDropOf } from "./Terrain/GroundDrop";
+import { groundDropOf, PlacedDrops } from "./Terrain/GroundDrop";
+import type { DroppedCharacter } from "./Terrain/CharacterDrops";
 import { CharacterDrops } from "./Terrain/CharacterDrops";
 import { avatarDrop, surfaceDropAt, waterDepthAtPoint } from "./Terrain/AvatarDrop";
 import { WaterFlowView } from "./Terrain/WaterFlowView";
@@ -704,6 +705,7 @@ export class GameScene extends DirtyScene {
     private groundEngineAt = -1;
     /** The characters drawn lower in the hollows of the relief, while the image is drawn. */
     private characterDrops: CharacterDrops | undefined;
+    private placedDrops: PlacedDrops<Entity> | undefined;
     private waterFlowView: WaterFlowView | undefined;
     private waterFlowOverlay: WaterFlowOverlay | undefined;
     private terrainWaterQueue: Promise<void> = Promise.resolve();
@@ -1810,6 +1812,8 @@ export class GameScene extends DirtyScene {
         this.terrainView = undefined;
         this.characterDrops?.destroy();
         this.characterDrops = undefined;
+        this.placedDrops?.destroy();
+        this.placedDrops = undefined;
         this.waterFlowView?.destroy();
         this.waterFlowView = undefined;
         this.frozenPoolsView?.destroy();
@@ -2488,6 +2492,8 @@ export class GameScene extends DirtyScene {
             // in the editor and in Basique: no page to load again.
             // Its blocks only where the shaders of the flat engine cannot draw it.
             this.pixelRelief?.sync(blocksStateOf(this.groundChoice()), time);
+            // The objects standing on the ground, drawn where it is.
+            this.placedDrops?.update(time);
             // Every character drawn as low as the ground (or the water) under it, in a hollow; at its place when the
             // relief is not seen in 3/4.
             const relief = this.terrainWater.relief();
@@ -3269,6 +3275,22 @@ export class GameScene extends DirtyScene {
             this.reliefDrawn = { terrain, shown, version: this.reliefDrawn.version + 1 };
         }
         return this.reliefDrawn.version;
+    }
+
+    /**
+     * What is drawn lower in a hollow and higher on a mount, only while the image is drawn (CharacterDrops): the
+     * avatars and their companions, the wandering animals, the objects standing on a relief. Nobody else while the
+     * relief is not shown in 3/4 (the drop of each is then nothing).
+     */
+    private *drawnLower(): Generator<DroppedCharacter> {
+        const players = [...(this.CurrentPlayer ? [this.CurrentPlayer] : []), ...this.MapPlayersByKey.values()];
+        yield* players;
+        if (!this.pixelReliefShown()) return;
+        for (const player of players) if (player.companion) yield player.companion;
+        yield* this.placedDrops?.moved() ?? [];
+        if (this.wanderingCharactersManager) {
+            yield* this.wanderingCharactersManager.drawnLower((x, y) => this.groundDropAt(x, y));
+        }
     }
 
     /** The same, the relief being shown in 3/4 (asked many times for one point by hiddenOnWater). */
@@ -4259,10 +4281,15 @@ export class GameScene extends DirtyScene {
                 this.pixelRelief = new GroundEngines(() => this.createPixelRelief());
                 tellPixelBlocksShown(() => this.pixelBlocksShown());
                 this.characterDrops?.destroy();
-                this.characterDrops = new CharacterDrops(this, () => [
-                    ...(this.CurrentPlayer ? [this.CurrentPlayer] : []),
-                    ...this.MapPlayersByKey.values(),
-                ]);
+                // The objects standing on the ground follow it too (trees, furniture): see PlacedDrops.
+                this.placedDrops?.destroy();
+                this.placedDrops = new PlacedDrops<Entity>({
+                    things: () => this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(),
+                    version: () => this.reliefDrawVersion(),
+                    shown: () => this.pixelReliefShown(),
+                    dropAt: (x, y) => this.groundDropAt(x, y),
+                });
+                this.characterDrops = new CharacterDrops(this, () => this.drawnLower());
                 // The water seen moving: foam on its current, whirls over the sinks, rings over the sources.
                 this.waterFlowView?.destroy();
                 this.waterFlowView = new WaterFlowView(this, {
@@ -4303,6 +4330,7 @@ export class GameScene extends DirtyScene {
                     this.gullLife,
                     () => get(aquaticLifeShownStore) && !isBasicActive(),
                     () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+                    (x, y) => this.surfaceDropAt(x, y),
                 );
                 // The antelopes, the lions and the tigers of the land: hidden with the jungle.
                 // The lions and the tigers the players tamed follow them.
@@ -4349,6 +4377,7 @@ export class GameScene extends DirtyScene {
                     (animal, now) => companions.poseOf(animal.id, now),
                     (x, y) => this.meadow.coverAt(x, y) >= GRAZING_COVER,
                     (x, y) => this.getBridgeElevationAt(x, y),
+                    (x, y) => this.groundDropAt(x, y),
                 );
                 // The shadows of the sun and of the moon, outdoors. One set at a time.
                 this.skyShadowManager?.destroy();
@@ -4769,6 +4798,7 @@ export class GameScene extends DirtyScene {
             this.meadow,
             () => this.shownWeather(),
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+            (x, y) => this.groundDropAt(x, y),
         );
         // The flames in the trees on fire, and the embers that fly from them (after FireView: it draws their frames).
         this.treeFireView?.destroy();
@@ -4779,6 +4809,7 @@ export class GameScene extends DirtyScene {
             () => this.shownWeather(),
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
             () => !get(mapEditorModeStore),
+            (x, y) => this.groundDropAt(x, y),
         );
         this.downpourView?.destroy();
         const downpourView = new DownpourView(

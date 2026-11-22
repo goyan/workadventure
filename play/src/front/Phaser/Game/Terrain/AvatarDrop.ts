@@ -3,7 +3,7 @@ import type { TerrainData } from "@workadventure/map-editor";
 import { heightAtPoint, shiftOfHeight } from "./ReliefProjection";
 
 /** Above this altitude a character stands on a raised floor, not on the ground. */
-const ON_A_FLOOR = 2;
+export const ON_A_FLOOR = 2;
 
 /**
  * How much lower than its place a character is drawn, with the relief seen in 3/4 (ReliefProjection): as much as
