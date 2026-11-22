@@ -320,7 +320,7 @@ import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
 import { parseFloorPiece } from "./MapEditor/MapLayer/MapLayerFloors";
-import { RaisedCover } from "./Weather/RaisedCover";
+import { floorPieceCover, RaisedCover } from "./Weather/RaisedCover";
 import { floorPath } from "./MapEditor/MapLayer/FloorPath";
 import { levelUnderPoint } from "./MapEditor/MapLayer/FloorOperations";
 import { levelItems } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -2120,10 +2120,12 @@ export class GameScene extends DirtyScene {
             for (const entity of this.gameMapFrontWrapper.getEntitiesManager().getEntities().values()) {
                 const prefab = entity.getPrefab();
                 const image = { x: entity.x, y: entity.y, width: entity.displayWidth, height: entity.displayHeight };
-                if (parseFloorPiece(prefab.collectionName, prefab.id) !== undefined) {
+                const piece = parseFloorPiece(prefab.collectionName, prefab.id);
+                if (piece !== undefined) {
                     // A slab or a stair of a raised floor is part of a building, wherever it stands: over a room,
-                    // or over the outdoors (a storey that reaches out, a house without a floor on the ground).
-                    cover.add(image);
+                    // or over the outdoors (a storey that reaches out, a house without a floor on the ground). Only
+                    // what is drawn of it: the empty corners of the image of a ramp get the weather of the ground.
+                    for (const rect of floorPieceCover(piece, image)) cover.add(rect);
                 } else if (
                     groundPrefabOfUpper(prefab.collectionName, prefab.id) !== undefined ||
                     (MAP_LAYER_WALL_LIKE_COLLECTIONS.includes(prefab.collectionName) && TALL_WALL.test(prefab.id))
