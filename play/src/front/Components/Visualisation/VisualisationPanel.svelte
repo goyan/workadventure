@@ -1,6 +1,6 @@
 <script lang="ts">
     import { LL } from "../../../i18n/i18n-svelte";
-    import { FLOW_SPEED_SCALE } from "../../Phaser/Game/Terrain/WaterFlowField";
+    import { FLOW_SPEED_SCALE, SLOWEST_TOLD_SPEED } from "../../Phaser/Game/Terrain/WaterFlowField";
     import { FALLING_COLOR, RISING_COLOR } from "../../Phaser/Game/Terrain/WaterFlowOverlay";
     import { terrainWaterStatsStore } from "../../Stores/TerrainEditorStore";
     import {
@@ -16,6 +16,7 @@
     // The scale of the speeds, as the arrows are coloured: evenly spread along the bar.
     const gradient = `linear-gradient(to right, ${FLOW_SPEED_SCALE.map((stop) => css(stop.color)).join(", ")})`;
     const whole = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
+    const slowestTold = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(SLOWEST_TOLD_SPEED);
     const stats = $derived($terrainWaterStatsStore);
     const flowing = $derived($waterFlowOverlayStore);
     const explaining = $derived($weatherExplainedStore);
@@ -99,7 +100,7 @@
                 {/if}
                 <div class="opacity-60" data-testid="visualisation-water-speeds">
                     {$waterFlowMeasuredStore
-                        ? $LL.actionbar.visualisation.measured()
+                        ? $LL.actionbar.visualisation.measured({ slowest: slowestTold })
                         : $LL.actionbar.visualisation.estimated()}
                 </div>
             </div>
