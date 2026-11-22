@@ -74,6 +74,10 @@ function wamWith(terrain: TerrainData | undefined, weather: WeatherType = Weathe
                 maxSurface: 18,
                 indoorDrain: 0,
                 impactReach: 1,
+                // These tests were written for the water that creeps, told once a second: said so, now that the
+                // water of a map that says nothing has inertia and is told five times a second.
+                inertia: false,
+                updates: 1,
             },
         },
         terrain,
@@ -664,10 +668,24 @@ describe("TerrainWaterManager", () => {
             steps(20);
             return sent.length;
         };
-        // Two seconds: once a second for a map that says nothing, five and ten times for those that ask.
+        // Two seconds: once a second for the map of these tests, five and ten times for those that ask.
         expect(count()).toBe(2);
         expect(count(5)).toBe(10);
         expect(count(10)).toBe(20);
+    });
+
+    it("gives a map that says nothing of its water the water of reality: inertia, told five times a second", () => {
+        const wam = wamWith(wideLake);
+        if (wam.settings) delete wam.settings.water;
+        wam.entities.spring = sourceAt(15, 15, 600000);
+        const { manager, sent, steps } = createHarness({ wam });
+        manager.mapChanged();
+        steps(20);
+        // Two seconds, five times a second; the speeds of a water with inertia go with each state.
+        expect(sent).toHaveLength(10);
+        expect(sent.every((message) => message.speeds !== undefined)).toBe(true);
+        // The settings saved in the map are not written for it.
+        expect(wam.settings?.water).toBeUndefined();
     });
 
     it("does not tell again a cell whose water barely changed, and puts it right at the next whole state", () => {
@@ -904,7 +922,16 @@ describe("TerrainWaterManager", () => {
         const wam = wamWith(undefined);
         wam.settings = {
             weather: WeatherType.Clear,
-            water: { runoff: 0, evaporation: 0, speed: 60, absorption: 0, current: 1, maxSurface: 18, indoorDrain: 0 },
+            water: {
+                runoff: 0,
+                evaporation: 0,
+                speed: 60,
+                absorption: 0,
+                current: 1,
+                maxSurface: 18,
+                indoorDrain: 0,
+                updates: 1,
+            },
         };
         wam.entities = { spring: sourceAt(4, 4, 600) };
         const wallPiece = (column: number) => ({
@@ -954,7 +981,16 @@ describe("TerrainWaterManager", () => {
             const wam = wamWith(undefined);
             wam.settings = {
                 weather: WeatherType.Clear,
-                water: { runoff: 0, evaporation: 0, speed: 60, absorption: 0, current: 1, maxSurface: 18, indoorDrain },
+                water: {
+                    runoff: 0,
+                    evaporation: 0,
+                    speed: 60,
+                    absorption: 0,
+                    current: 1,
+                    maxSurface: 18,
+                    indoorDrain,
+                    updates: 1,
+                },
             };
             wam.entities = { spring: sourceAt(7, 7, 60) };
             for (let tile = 2; tile <= 5; tile++) {

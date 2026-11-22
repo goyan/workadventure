@@ -2,7 +2,17 @@ import { describe, expect, it } from "vitest";
 import { UpdateWAMSettingCommand } from "../src/Commands/WAM/UpdateWAMSettingCommand";
 import { CELL_LITRES_PER_PX } from "../src/Terrain/WaterGrid";
 import { stepInputOf } from "../src/Terrain/WaterInputs";
-import { DEFAULT_WATER_SETTINGS, REALISTIC_WATER_SETTINGS, WaterSettings } from "../src/types";
+import {
+    DEFAULT_FLOW_PACE,
+    DEFAULT_IMPACT_REACH,
+    DEFAULT_WATER_PACE,
+    DEFAULT_WATER_SETTINGS,
+    DEFAULT_WAVE_SETTINGS,
+    MIN_WATER_MAX_SURFACE,
+    REALISTIC_WATER_SETTINGS,
+    WaterSettings,
+    waterHasInertia,
+} from "../src/types";
 import type { WAMFileFormat } from "../src/types";
 
 /** What the sources of a step pour, in cubic metres. */
@@ -56,5 +66,37 @@ describe("the speed of the water by default", () => {
             message: { $case: "updateWaterSettingMessage", updateWaterSettingMessage: { runoff: 2, evaporation: 0.5 } },
         }).execute();
         expect(wam.settings?.water?.speed).toBe(60);
+    });
+});
+
+describe("the water of a map that says nothing", () => {
+    it("lets no flood be cut short, is told five times a second, and has inertia unless the map turned it off", () => {
+        expect(DEFAULT_WATER_SETTINGS.maxSurface).toBe(256);
+        expect(WaterSettings.parse({}).maxSurface).toBe(256);
+        expect(DEFAULT_WATER_PACE.updates).toBe(5);
+        expect(DEFAULT_WATER_SETTINGS.inertia).toBe(true);
+        expect(waterHasInertia(undefined)).toBe(true);
+        expect(waterHasInertia(WaterSettings.parse({}))).toBe(true);
+        expect(waterHasInertia({ inertia: false })).toBe(false);
+        expect(stepInputOf(undefined, 0, [], 0.1).inertia).toBe(true);
+        expect(stepInputOf({ ...DEFAULT_WATER_SETTINGS, inertia: false }, 0, [], 0.1).inertia).toBeUndefined();
+    });
+
+    it("keeps a lower ceiling a map set, from 18 px", () => {
+        expect(MIN_WATER_MAX_SURFACE).toBe(18);
+        expect(WaterSettings.parse({ maxSurface: 18 }).maxSurface).toBe(18);
+        expect(WaterSettings.parse({ maxSurface: 40 }).maxSurface).toBe(40);
+        expect(WaterSettings.safeParse({ maxSurface: 10 }).success).toBe(false);
+    });
+
+    it("is the realistic water: one list, the other made of it", () => {
+        expect(REALISTIC_WATER_SETTINGS).toEqual({
+            ...DEFAULT_WATER_SETTINGS,
+            waves: DEFAULT_WAVE_SETTINGS,
+            precision: DEFAULT_WATER_PACE.precision,
+            updates: DEFAULT_WATER_PACE.updates,
+            flowPace: DEFAULT_FLOW_PACE,
+            impactReach: DEFAULT_IMPACT_REACH,
+        });
     });
 });

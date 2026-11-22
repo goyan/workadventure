@@ -105,7 +105,17 @@ export class LocalTerrainSimulation {
         const mapCells = (): { width: number; height: number } => this.mapCells;
         this.ground = new GroundSimulation({
             makeWater: () =>
-                new WaterSimulation(room, rain, asIs, now, mapCells, () => performance.now(), LOCAL_STEP_BUDGET_MS),
+                new WaterSimulation(
+                    room,
+                    rain,
+                    asIs,
+                    now,
+                    mapCells,
+                    () => performance.now(),
+                    LOCAL_STEP_BUDGET_MS,
+                    // Nothing travels: the states stay in this browser, as big as they are.
+                    Number.POSITIVE_INFINITY,
+                ),
             makeMeadow: (water) =>
                 new MeadowSimulation(
                     room,
