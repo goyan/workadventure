@@ -27,7 +27,10 @@ const chosen = vi.hoisted(
     (): {
         place: {
             store:
-                | Writable<{ name: string; longName?: string; latitude: number; longitude: number } | undefined>
+                | Writable<
+                      | { name: string; longName?: string; where?: string; latitude: number; longitude: number }
+                      | undefined
+                  >
                 | undefined;
         };
         state: { store: Writable<{ place: unknown; state: unknown }> | undefined };
@@ -169,6 +172,18 @@ vi.mock("../../../../src/front/Stores/MenuStore", async () => {
     const { writable: makeWritable } = await import("svelte/store");
     return { mapEditorActivated: makeWritable(true) };
 });
+vi.mock("../../../../src/front/Phaser/Game/Night/PointWords", () => ({
+    pointWords: () => ({
+        north: "N",
+        south: "S",
+        east: "E",
+        west: "W",
+        far: (point: string, city: string, distance: string) => `${point} · ${city} ${distance} km away`,
+        short: (city: string, distance: string) => `${city} ${distance} km`,
+        country: (code: string) => new Intl.DisplayNames("en-US", { type: "region" }).of(code) ?? code,
+        kilometres: (km: number) => new Intl.NumberFormat("en-US").format(km),
+    }),
+}));
 vi.mock("@wa-modals", () => ({ modals: { open: toMap.open, close: vi.fn() } }));
 // The confirmation has its own test: here, only what the banner asks it.
 vi.mock("../../../../src/front/Components/Weather/PlaceToMapModal.svelte", () => ({ default: "PlaceToMapModal" }));
@@ -631,6 +646,56 @@ describe("WeatherForecastBanner, apply to the map", () => {
         follow();
         expect(button()?.dataset.state).toBe("already");
         expect(button()?.textContent?.trim()).toBe("The map already follows this place");
+    });
+
+    it("names a point of the world chosen as the place of the map short on the chip, long on its card", () => {
+        // Far from any city of the list: named after the nearest one and how far, as a player's own point.
+        wamSettings.value = {
+            weather: "real",
+            weatherLocation: { name: "72° S 170° E", latitude: -72.4, longitude: 170.2 },
+        };
+        render();
+        const chipName = target.querySelector('[data-testid="weather-chip-server"]')?.textContent?.trim() ?? "";
+        expect(chipName).toMatch(/^\S.* [\d,]+ km$/);
+        expect(chipName).not.toContain("°");
+        expect(target.querySelector('[data-testid="weather-card-server-city"]')?.textContent).toMatch(
+            /^72° S 170° E · .+ [\d,]+ km away$/,
+        );
+    });
+
+    it("says where the town of the map is on its card and in the tooltip of the chip, the chip short", () => {
+        wamSettings.value = {
+            weather: "real",
+            weatherLocation: { name: "Nice, Provence-Alpes-Côte d'Azur, France", latitude: 43.7, longitude: 7.27 },
+        };
+        render();
+        const chip = target.querySelector<HTMLElement>('[data-testid="weather-chip-server"]');
+        expect(chip?.textContent?.trim()).toBe("Nice");
+        expect(chip?.title).toBe("Nice, Provence-Alpes-Côte d'Azur, France");
+        expect(target.querySelector('[data-testid="weather-card-server-city"]')?.textContent).toBe("Nice");
+        expect(target.querySelector('[data-testid="weather-card-server-where"]')?.textContent).toBe(
+            "Provence-Alpes-Côte d'Azur, France",
+        );
+        expect(target.querySelector('[data-testid="weather-card-server"]')?.getAttribute("aria-label")).toBe(
+            "Nice, Provence-Alpes-Côte d'Azur, France",
+        );
+    });
+
+    it("shows no region nor country for a town of the map saved without them", () => {
+        wamSettings.value = { weather: "real", weatherLocation: { name: "Lille", latitude: 50.63, longitude: 3.06 } };
+        render();
+        expect(target.querySelector('[data-testid="weather-card-server-city"]')?.textContent).toBe("Lille");
+        expect(target.querySelector('[data-testid="weather-card-server-where"]')).toBeNull();
+        expect(target.querySelector<HTMLElement>('[data-testid="weather-chip-server"]')?.title).toBe("");
+    });
+
+    it("says where the place this player follows is on their card", () => {
+        chosen.cells = [{ at: NOW.getTime(), weather: "rain", temperature: 7 }];
+        render();
+        chosen.place.store?.set({ name: "Tokyo", where: "Japan", latitude: 35.68, longitude: 139.69 });
+        flushSync();
+        expect(target.querySelector('[data-testid="weather-card-local-where"]')?.textContent).toBe("Japan");
+        expect(target.querySelector<HTMLElement>('[data-testid="weather-chip-local"]')?.title).toBe("Tokyo, Japan");
     });
 
     it("lets the player who applied a place bring the map back from its card", () => {

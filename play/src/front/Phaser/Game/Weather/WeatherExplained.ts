@@ -11,7 +11,6 @@ import {
     SOIL_THAWED_FROM,
     soilFrostOf,
     surfaceTemperature,
-    THAW_SPEED,
     wetBulbTemperature,
 } from "@workadventure/map-editor";
 import type { PrecipitationAir } from "@workadventure/map-editor";
@@ -75,6 +74,8 @@ export interface WeatherBoardInput {
     snow: { map: number; here: number } | undefined;
     /** The wind of the conditions of the room (km/h): the one the server melts the snow by. */
     roomWind: number | undefined;
+    /** How many times faster than reality the snow of the map goes: the speed of its water (1 when absent). */
+    snowTimes?: number;
 }
 
 export type PrecipitationForm = "rain" | "mix" | "snow";
@@ -207,6 +208,8 @@ export interface SnowExplained {
     temperature?: number;
     /** Melting: the seconds a ground all white lasts under the air of the room. */
     whiteGroundMeltsIn?: number;
+    /** How many times faster than reality it goes: the speed of the water of the map. */
+    times: number;
 }
 
 export interface WeatherBoard {
@@ -390,6 +393,10 @@ function explainSnow(input: WeatherBoardInput): SnowExplained {
         shown: input.city === undefined,
         snowShare: share,
         temperature: roomAir?.temperature,
+        times:
+            input.snowTimes !== undefined && Number.isFinite(input.snowTimes) && input.snowTimes > 0
+                ? input.snowTimes
+                : 1,
     };
     if (input.mapFalling && share > 0) return { ...base, trend: "building" };
     if (base.mapCover <= 0) return { ...base, trend: "none" };
@@ -397,7 +404,7 @@ function explainSnow(input: WeatherBoardInput): SnowExplained {
     // What the server melts the snow by: the air of the room and the wind of its conditions (GameRoom, snowUnder).
     const melt = snowMeltMmPerHour({ ...roomAir, windSpeed: input.roomWind });
     if (melt <= 0) return { ...base, trend: "holding" };
-    return { ...base, trend: "melting", whiteGroundMeltsIn: (SNOW_FULL_MM / (melt * THAW_SPEED)) * 3600 };
+    return { ...base, trend: "melting", whiteGroundMeltsIn: (SNOW_FULL_MM / (melt * base.times)) * 3600 };
 }
 
 /** Why this player sees the weather they see: see the head of this file. */

@@ -1,6 +1,10 @@
 import { PARIS_LATITUDE, PARIS_LONGITUDE, roundedCoordinate, Weather, WeatherType } from "@workadventure/map-editor";
 import type { WeatherLocation } from "@workadventure/map-editor";
-import type { FireConditionsMessage, SetFireConditionsMessage } from "@workadventure/messages";
+import type {
+    FireConditionsMessage,
+    SetFireConditionsMessage,
+    UpdateWeatherSettingMessage,
+} from "@workadventure/messages";
 import { writable } from "svelte/store";
 import type { WorldPlace } from "../Night/WorldDaylight";
 import type { RealForecastState } from "./RealWeather";
@@ -66,28 +70,20 @@ export function mapLocationOf(place: WorldPlace): WeatherLocation {
     return place.timezone ? { ...location, timezone: place.timezone } : location;
 }
 
-/** What the map follows the place with: its real weather at that place. */
-export function followPlaceMessage(place: WorldPlace) {
-    return {
-        $case: "updateWeatherSettingMessage" as const,
-        updateWeatherSettingMessage: {
-            weather: Weather.parse(WeatherType.Real),
-            location: mapLocationOf(place),
-            // The automatic weather is not sent: the map keeps its own, should it go back to it.
-            autoInclude: [],
-        },
-    };
+/**
+ * What the map follows the place with, as if it had been chosen in the weather settings of the map with the real
+ * weather: its real weather at that place. The automatic weather is not sent: the map keeps its own.
+ */
+export function followPlaceUpdate(place: WorldPlace): UpdateWeatherSettingMessage {
+    return { weather: Weather.parse(WeatherType.Real), location: mapLocationOf(place), autoInclude: [] };
 }
 
 /** What brings the map back to its weather and its place of before (the default place when it had none). */
-export function revertMessage(before: MapWeatherBefore) {
+export function revertUpdate(before: MapWeatherBefore): UpdateWeatherSettingMessage {
     return {
-        $case: "updateWeatherSettingMessage" as const,
-        updateWeatherSettingMessage: {
-            weather: Weather.parse(before.weather),
-            ...(before.location ? { location: before.location } : { clearLocation: true }),
-            autoInclude: [],
-        },
+        weather: Weather.parse(before.weather),
+        ...(before.location ? { location: before.location } : { clearLocation: true }),
+        autoInclude: [],
     };
 }
 

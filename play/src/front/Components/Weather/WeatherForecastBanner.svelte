@@ -9,6 +9,8 @@
     import { weatherLook, weatherName } from "@wa/front/Components/Menu/WeatherName";
     import { canEditMapWeather } from "@wa/front/Phaser/Game/Weather/MapWeatherRights";
     import { appliedPlaceStore, placeToMapState } from "@wa/front/Phaser/Game/Weather/PlaceToMap";
+    import { mapPlaceNames } from "@wa/front/Phaser/Game/Weather/MapPlaceName";
+    import { pointWords } from "@wa/front/Phaser/Game/Night/PointWords";
     import { realWeatherAt } from "@wa/common/RealWeather";
     import { compassPointOf, windArrowOf } from "@wa/front/Phaser/Game/Weather/WindDirection";
     import type { WindArrow } from "@wa/front/Phaser/Game/Weather/WindDirection";
@@ -40,10 +42,15 @@
     const now = $derived(forecast.length > 0 ? nowCellWithConditions(forecast[0], $fireConditionsStore) : undefined);
     const cells = $derived(now ? [now.cell, ...forecast.slice(1)] : forecast);
     /** The town of the map (the place tried, if any) without its region and country; Paris by default. */
-    const city = $derived.by(() => {
-        if (!$weatherBannerStore || !$nightDateStore) return "";
-        return shownMapPlace(mapSettings())?.name.split(",")[0]?.trim() || $LL.actionbar.weatherBanner.defaultCity();
+    // A point of the world chosen as the place of the map is named as a player's own point is: short on the chip
+    // ("Hong Kong 770 km"), long on the card ("24° N 122° E · Hong Kong à 770 km").
+    const mapNames = $derived.by(() => {
+        if (!$weatherBannerStore || !$nightDateStore) return { short: "", long: "", where: undefined };
+        const fallback = $LL.actionbar.weatherBanner.defaultCity();
+        const names = mapPlaceNames(shownMapPlace(mapSettings()), pointWords);
+        return { short: names?.short ?? fallback, long: names?.long ?? fallback, where: names?.where };
     });
+    const city = $derived(mapNames.short);
 
     /**
      * This player's own weather: that of the city they chose on their clock (NightMode.World), beside the weather of
@@ -63,6 +70,7 @@
             city: place.longName ? place.name : place.name.split(",")[0]?.trim() || place.name,
             // A point far from any city: its coordinates on the chip, the nearest city and how far on the card.
             longCity: place.longName ?? (place.name.split(",")[0]?.trim() || place.name),
+            where: place.where,
             cells: chosenPlaceForecast(place, state, $nightDateStore),
             humidity,
         };
@@ -96,7 +104,8 @@
         const applied = $appliedPlaceStore;
         if (!applied || !$nightDateStore || !$mapEditorActivated || !canRevertMapPlace()) return undefined;
         return {
-            place: applied.before.location?.name.split(",")[0]?.trim() || $LL.actionbar.weatherBanner.defaultCity(),
+            place:
+                mapPlaceNames(applied.before.location, pointWords)?.long ?? $LL.actionbar.weatherBanner.defaultCity(),
         };
     });
     let reverting = $state(false);
@@ -109,7 +118,7 @@
         const weather = saved?.weather ?? WeatherType.Clear;
         modals.open(PlaceToMapModal, {
             place,
-            mapPlace: city,
+            mapPlace: mapNames.long,
             mapWeather: weather === WeatherType.Real ? undefined : weatherName($LL.mapEditor.settings.weather, weather),
             manual: $fireConditionsStore?.manual ?? false,
         });
@@ -161,12 +170,19 @@
     }
 </script>
 
-{#snippet glance(name: string, cell: ForecastCell | undefined, kind: "server" | "local" | undefined, testid: string)}
+{#snippet glance(
+    name: string,
+    where: string | undefined,
+    cell: ForecastCell | undefined,
+    kind: "server" | "local" | undefined,
+    testid: string,
+)}
     <!-- At a glance: whose weather (a globe for the server's, a computer for this player's own), the town, the weather
          of now and an arrow to where the wind goes. The full brief opens on a click. -->
     {@const look = chipLook(cell)}
     {@const arrow = chipArrow(cell)}
-    <span class="flex items-center gap-1" data-testid={testid}>
+    <!-- Where the town is, in its tooltip: the chip keeps the short name. -->
+    <span class="flex items-center gap-1" title={where ? `${name}, ${where}` : undefined} data-testid={testid}>
         {#if kind === "server"}
             <IconWorld font-size="12" class="text-white/70" />
         {:else if kind === "local"}
@@ -249,9 +265,9 @@
                 onclick={toggle}
                 data-testid="weather-chip"
             >
-                {@render glance(city, cells[0], mine ? "server" : undefined, "weather-chip-server")}
+                {@render glance(city, mapNames.where, cells[0], mine ? "server" : undefined, "weather-chip-server")}
                 {#if mine}
-                    {@render glance(mine.city, mine.cells[0], "local", "weather-chip-local")}
+                    {@render glance(mine.city, mine.where, mine.cells[0], "local", "weather-chip-local")}
                 {/if}
             </button>
             <button
@@ -265,7 +281,8 @@
         </div>
         {#if open}
             <WeatherCard
-                {city}
+                city={mapNames.long}
+                where={mapNames.where}
                 kind={mine ? "server" : undefined}
                 tag={$LL.actionbar.weatherBanner.server()}
                 {cells}
@@ -276,6 +293,7 @@
             {#if mine}
                 <WeatherCard
                     city={mine.longCity}
+                    where={mine.where}
                     kind="local"
                     tag={$LL.actionbar.weatherBanner.local()}
                     cells={mine.cells}

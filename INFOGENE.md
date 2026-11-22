@@ -1658,6 +1658,29 @@ d'heure) à ±2 min. La nuit, un voile bleu nuit
     le 21 de chaque mois, au quart d'heure : 95 % au moins, 21° au plus). Effets : l'**heure choisie** et **Midi**
     peuvent tomber sur ces villes (ex. 18 h 30 le 21 juin à 06:00 UTC : Unalaska au lieu d'Auckland) ; un **point
     cliqué** près d'elles porte leur nom et leur fuseau.
+  - **Pluie** et **Neige** (sous les moments, goutte et flocon) : le ciel d'un lieu où il pleut (ou neige) **en ce
+    moment**, d'après la météo réelle. Au clic, le navigateur demande au pusher `/real-weather/world` (authentifié,
+    30 requêtes/min par joueur comme les autres routes météo), qui pose **une seule** requête à Open-Meteo pour tous
+    les lieux (`openMeteoWorldUrl` : coordonnées séparées par des virgules, `current=weather_code,temperature_2m,
+    relative_humidity_2m,precipitation,is_day`), gardée 10 min pour tout le pusher (`WorldWeatherService`, une
+    requête partagée entre clics simultanés, nouvel essai une minute après un échec, rien de plus vieux que 30 min) ;
+    le navigateur garde la réponse 5 min (`WorldWeatherClient`). Jamais en fond : seulement au clic. Chaque lieu de
+    la requête compte comme un appel du quota gratuit (46 lieux, 10 000 appels/jour) : au plus 6 requêtes par heure.
+    Lieux : les villes du ciel du monde (`WORLD_CITIES`, déplacées dans `common/WorldCities.ts` pour le pusher) et
+    quatre lieux réputés enneigés, demandés pour la pluie et la neige seulement, pas pour les moments
+    (`WORLD_WEATHER_EXTRA_PLACES` : Sapporo, Tromsø, Nuuk, Ushuaïa ; Wikipédia et `zone1970.tab`). **Règle** comme
+    le jeu (`WorldWeatherPick.fallOf`) : il tombe quelque chose quand le code WMO est une pluie, une neige ou un
+    orage (`weatherFromWmoCode`, même avec 0 mm comptés : le jeu dessine alors une pluie faible), et c'est de la
+    **neige** dès la moitié de neige au thermomètre mouillé (`snowShare` de `Precipitation.ts`), pas d'après le code
+    (un code de neige par 9 °C est dessiné en pluie). **Choix** : de jour d'abord (pour la voir), puis la plus
+    forte, puis par nom ; un second clic prend le lieu suivant de cette liste, en boucle. Le lieu est marqué sur la
+    carte du monde (le point jaune du lieu suivi), l'horloge prend son heure (il peut y faire nuit). Le menu dit
+    « Ciel de Lisbonne : il y pleut (2,4 mm/h) » ou « … il y neige (0,4 mm/h d'eau) », « faiblement » sans eau
+    comptée, puis « Il n'y pleut plus » quand la météo du lieu suivi (relue toutes les 5 min) ne le montre plus ; le
+    lieu reste. Aucun lieu : « Il ne neige dans aucune ville de la liste en ce moment », échec : « La météo du monde
+    est indisponible pour l'instant : rien n'a changé » ; le lieu suivi ne change pas. Ordre : un point cliqué
+    l'emporte, puis le lieu de pluie ou de neige, puis le moment ; un moment ou un clic sur la carte quitte le lieu
+    (`clearWorldFall`). Choix gardé dans le navigateur (`nightWorldFall`, par le nom du lieu).
   - **Heure choisie** : inchangée, la ville dont l'**heure solaire vraie** est la plus proche (avec l'équation du
     temps, ±16 min selon la saison), gardée à 50 min près. **Point cliqué** sur la carte : le menu dit alors
     « Ciel de … (point choisi sur la carte) », surligné, puisqu'aucun moment n'est enfoncé. Le point garde ses
@@ -2310,8 +2333,8 @@ de la carte. Curseurs : diamètre (1 à 12 cases), force (automatique : un huiti
 que dehors (grille extérieure de la météo), jamais sous un mur. Réglages enregistrés dans la carte, dans le même
 panneau : profondeur maximale (1 à 8 cases, 2 par défaut), ruissellement (10 par défaut : le terrain autour apporte
 dix fois la surface du creux), évaporation par temps sec (0,2 mm/h par défaut), absorption du sol plat (5 mm/h),
-**vitesse de l'eau** (60 par défaut : une minute pour une heure ; à 1, comme en vrai, une pluie remplit un lac en
-des heures). **Source** et **puits** sont des
+**vitesse de l'eau** (1 par défaut depuis le 2026-11-22, comme en vrai : une pluie remplit un lac en des heures,
+une source de 100 m³/h verse 100 m³ par heure réelle ; 60 pour un essai : une minute pour une heure ; jusqu'à 1 000). **Source** et **puits** sont des
 propriétés d'objet (`waterSourcePropertyData`, `waterSinkPropertyData`, débit enregistré en litres par minute, réglé en m³/h, L/s, L/min ou m³/s, de 0 à 1 000 m³/s), à ajouter à
 n'importe quel objet depuis son panneau : une source verse à son pied, un puits retire l'eau qui arrive au sien. Le
 pied (milieu du bas de l'image) est écrit dans la propriété par l'éditeur (`anchorX`, `anchorY`,
@@ -2325,6 +2348,18 @@ d'eau. Un lac reste ainsi plein quelle que soit la météo, sans déborder. Sans
 l'outil Relief écrit le niveau après le débit (« +60 m³/h → −0.5 m »).
 Le panneau enregistre la propriété entière à chaque changement (`onSetProperty`) : décocher « Tenir un niveau »
 retire bien le niveau de la carte (une fusion le gardait, corrigé le 2026-11-20).
+**Pipette du niveau** (bouton à côté de « Tenir un niveau », source et puits) : un clic sur la pipette arme la visée
+(viseur sur la carte, aide et aperçu « Sous le curseur : eau −1,2 m (sol −3,6 m) » dans le panneau), le clic suivant
+sur la carte prend le niveau à ce point, active « Tenir un niveau » et l'enregistre comme une saisie. Valeur prise :
+la surface de l'eau s'il y en a (tenir un lac à son niveau), sinon le sol ; Alt + clic prend le sol sous l'eau. Même
+lecture que la pastille des étages (`groundReadingAt`, fond des piscines, dernier état du serveur, aussi sur une carte
+sans relief), au décimètre comme le champ, bornée vers l'intérieur à −8,7 … 17,5 m (`Terrain/WaterLevelPipette.ts`).
+Seul un clic sans glissement prend la valeur : glisser déplace la vue, même dans l'éditeur ; Espace + glisser et le
+bouton du milieu aussi. Le clic de visée ne fait rien d'autre : ni marche, ni objet choisi ou déplacé
+(`waterLevelPipetteArmed`/`waterLevelPipetteOwnsPointer` dans `EntitiesManager` et `EntityEditorTool`, qui
+n'ouvre plus une piscine survolée pendant la visée). Échap (capturé, il ne désélectionne pas la source) ou un second
+clic sur la pipette annule ; fermer le panneau désarme. Arrondie au décimètre, la valeur prise est à ±1,5 px de la
+surface réelle : un lac « tenu à son niveau » peut encore monter ou cesser d'être alimenté de cet écart.
 
 **Modèle** (`libs/map-editor/src/Terrain/`, lu à l'identique par `back` et par le front). Le relief est un champ
 facultatif du WAM (`terrain` : hauteurs par cellule de 16 px, 0 au sol, négatif creusé, par blocs de 16 × 16 ; absent =
@@ -2811,10 +2846,68 @@ dessous, sous « En savoir plus ».
   autre encodage 25 % au mieux pendant un tsunami : non faits.
 
 
+## Interface compacte : Catastrophes et Visualisation en pastilles sur la ligne de l'horloge
+
+Constat de l'utilisateur sur l'écran natif d'un MacBook (fenêtre d'environ 1280 × 800) : l'interface prenait près de
+40 % de la hauteur (ligne de l'horloge, onglets des catastrophes, une rangée pleine largeur avec un long texte d'aide,
+la rangée Visualisation). Les deux rangées deviennent **deux pastilles** de la ligne de l'horloge, à gauche de la
+pastille météo (`Components/ClockLine/ClockLineChips.svelte`) ; leurs réglages s'ouvrent dans un **panneau flottant**
+ancré sous la pastille (`ClockLine/ChipPopover.svelte`). Rien d'ouvert : barre du haut et ligne de l'horloge seulement
+(dans l'aperçu à 1280 × 800, bas de l'interface à 132 px au lieu de 252).
+
+- **Qui les voit** : comme les rangées d'avant, rien de changé. Chaque pastille suit son entrée du menu des
+  applications (`catastrophePanelStore`, `visualisationPanelStore`), hors mode Basique ; dans l'éditeur de carte aussi.
+  Activée depuis le menu, la pastille ouvre aussitôt son panneau (on vient choisir) : les deux restent montées,
+  masquées, tant que le menu ne les montre pas.
+- **Panneau Catastrophes** : onglets Catastrophes | Météo, les six tuiles, le curseur de taille, « Toute la carte » de
+  l'averse, et l'onglet Météo (conditions manuelles, curseurs et boutons − et +) qui défile à l'intérieur quand la
+  place manque. Fermer le panneau **laisse la catastrophe armée** : la pastille le dit (« Boule · 4 cases », teinte
+  active, anneau blanc) et un clic dessus rouvre le panneau sur sa taille. Le panneau reste monté avec sa pastille :
+  onglet et taille montrée ne se perdent pas à la fermeture.
+- **Panneau Visualisation** : les tuiles « Flux d'eau » et « Météo expliquée ». La pastille dit ce qui est affiché
+  (« Flux d'eau », « Météo expliquée », ou « 2 affichés »). La légende des flux et le tableau « Météo expliquée »
+  restent dans la colonne sous la ligne, comme avant (`VisualisationPanel.svelte`) : fermer le panneau ne les ferme
+  pas ; la règle de hauteur du tableau (`WeatherBoardFit`) est inchangée et sa surimpression part toujours du bas de la
+  ligne de l'horloge (+ 8 px).
+- **Fermeture** : clic sur la pastille ; appui n'importe où ailleurs, sur la carte compris (c'est là qu'on commence à
+  viser : l'appui ferme le panneau et lance la catastrophe choisie comme avant) ; Échap. **Échap désarme d'abord**
+  (panneau ouvert ou non), puis, rien d'armé, ferme le panneau et rend le focus à sa pastille : un seul écouteur par
+  pastille, et une touche prise par l'une (catastrophe désarmée, écoutée en phase de capture) ne ferme pas le panneau
+  de l'autre. Un curseur ou une case du panneau resté focalisé est relâché à la fermeture
+  (un champ focalisé suspend les entrées du jeu). L'appui dehors est écouté en `pointerdown` (phase de capture) :
+  `svelte-outside` écarté, il écoute `click`/`mousedown` et ignore un événement dont le défaut est empêché, ce que fait
+  Phaser sur son canevas.
+- **Rien ne traverse** : un appui dans un panneau a pour cible le panneau, que Phaser traite comme « hors du canevas »
+  (`POINTER_DOWN_OUTSIDE`/`POINTER_UP_OUTSIDE`, jamais le `POINTER_UP` qui fait marcher ou lance) ; la molette n'y
+  zoome pas (Phaser ne lit la molette qu'au-dessus de son canevas), le panneau défile (`overscroll-contain`). Vérifié
+  par les vrais écouteurs souris de Phaser (`ChipPopoverPhaserInput.test.ts`) et, dans l'aperçu, par
+  `elementFromPoint` sur toute la surface des panneaux (seuls les coins arrondis laissent voir la carte).
+- **Place** : le panneau s'ouvre sous sa pastille, bord gauche sur le sien, décalé vers la gauche pour ne jamais sortir
+  de la fenêtre ; **sous les éléments de la ligne qu'il couvrirait** (la seconde ligne de la pile des étages, plus haute
+  que les pastilles) ; hauteur au plus la place jusqu'au bas de la fenêtre (marge 12 px, 120 px au moins), défilement
+  dedans. Règle pure `popoverPlacement` (`ClockLine/ClockLineFold.ts`).
+- **Aide « i »** (`Input/InfoTip.svelte`) : les longs textes d'aide (celui de la catastrophe choisie, « Choisissez ce
+  qu'il faut afficher sur la carte ») sont derrière un bouton « i » au bout de la rangée, mêmes textes i18n ; bulle au
+  survol, au focus clavier et au clic ou au toucher (épinglée jusqu'au clic suivant ou un appui ailleurs) ; le texte est
+  la description du bouton (`aria-describedby`). `Input/InfoButton.svelte` (survol seul, partagé par les champs) est
+  laissé tel quel.
+- **Repli par largeur** (`chipsFold`, mesuré sur la largeur du conteneur `main-layout` et les autres éléments de la
+  ligne, à chaque changement de taille) : libellés si tout tient ; sinon **icône seule** (le nom en libellé accessible
+  et en infobulle ; une catastrophe armée garde sa teinte et le nombre de cases) ; si même les icônes pousseraient
+  l'horloge, les pastilles prennent **une rangée à elles** sous la ligne, avec leurs libellés (la ligne passe en
+  `flex-wrap`, rien ne sort de la fenêtre). Sous 768 px, colonne comme avant, les pastilles en bas. Aperçu au pire
+  contenu (météo de deux lieux, horloge « 20:51 Katmandou 500 km », pile à 250 px, 🌈) : libellés à 1280 et 1024,
+  icônes à 820, rangée à part à 768.
+- **i18n** `actionbar.catastrophe.{chip, chipArmed, chipHint, infoLabel}` et
+  `actionbar.visualisation.{chipShown, chipHint, infoLabel}`, en `fr-FR` et `en-US`.
+- **Non vérifié** : rien vu en jeu par un agent (aperçus hors jeu : vrais composants, pastille météo et horloge
+  recopiées, onglet Météo et tableau remplacés par des substituts) ; écran tactile ; lecteur d'écran.
+
 ## Visualisation des flux d'eau
 
-Entrée « Visualisation » du menu des applications (sous « Catastrophe ») : un panneau sous l'horloge
-(`VisualisationPanel.svelte`, `visualisationPanelStore`) avec une tuile « Flux d'eau » (`waterFlowOverlayStore`).
+Entrée « Visualisation » du menu des applications (sous « Catastrophe ») : une pastille sur la ligne de l'horloge
+(`VisualisationChip.svelte`, `visualisationPanelStore`) dont le panneau a une tuile « Flux d'eau »
+(`waterFlowOverlayStore`) ; la légende reste sous la ligne (`VisualisationPanel.svelte`). Voir « Interface compacte ».
 Pour soi seul, pour la session ; l'affichage reste quand le panneau est fermé. Indisponible en mode basique.
 
 Par-dessus la carte (`Terrain/WaterFlowOverlay.ts`, dix dessins par seconde, au-dessus du voile de nuit) :
@@ -2871,30 +2964,41 @@ comprise. Sur mer modérée, cette vitesse reste sous son pas d'envoi (un quart 
 flèche. Sur mer forte, une flèche s'inverse d'une seconde à l'autre 15 à 35 % du temps, ce qui est le mouvement réel
 de l'eau sous la vague.
 
-**Courants lents** (dès 3 cm/s sur une carte à inertie). Le serveur transmet la vitesse par bloc de 4 × 4 cellules,
+**Courants lents** (dès 1 cm/s sur une carte à inertie). Le serveur transmet la vitesse par bloc de 4 × 4 cellules,
 par pas d'un quart de cellule par seconde (`speeds`, `SPEED_UNITS`, 0,137 m/s) : plus lente, elle valait zéro et
 l'overlay ne traçait rien. Un champ facultatif `slowSpeeds` (champ 10 de `TerrainWaterMessage`, même disposition)
-donne, là où `speeds` dit zéro, la vitesse en 250ᵉ de cellule par seconde (2 mm/s), dès 3 cm/s : `SLOW_SPEED_UNITS`,
+donne, là où `speeds` dit zéro, la vitesse en 250ᵉ de cellule par seconde (2 mm/s), dès 1 cm/s : `SLOW_SPEED_UNITS`,
 `SLOWEST_TOLD_METRES` (une seule constante pour le serveur, le plancher de l'overlay et la légende), codage linéaire
-(`slowSpeedByte`, `slowSpeedOf` : la plage ne va que de 14 à 31 unités, une loi plus fine n'apporterait rien et peu de
+(`slowSpeedByte`, `slowSpeedOf` : la plage ne va que de 5 à 31 unités, une loi plus fine n'apporterait rien et peu de
 valeurs se compressent bien). Le serveur l'écrit dans le même passage que `speeds` (`WaterGrid.writeSpeedBytes`) et
-ne l'envoie pas quand aucun bloc n'est lent ; `speeds` reste identique octet pour octet (test sur une rivière).
+ne l'envoie pas quand aucun bloc n'est lent ; `speeds` reste identique octet pour octet (test sur une rivière). Plancher
+de 1 cm/s choisi par l'utilisateur le 2026-11-22, sur le tableau ci-dessous.
 
 - **Compatibilité** : un `play` ancien ignore le champ ; un `back` ancien ne l'envoie pas et le `play` neuf trace
   alors dès 0,14 m/s, comme avant. Déployer `play` et `back` ensemble reste la règle (même commit, protobuf partagé).
 - **Courant des avatars et des canoës inchangé** : `speedAt` lit les vitesses lentes, mais `currentPush` et
   `waterCurrentAt` ne comptent qu'à partir de 0,2 cellule/s (`CURRENT_REST_SPEED`), au-dessus de toute vitesse lente
   (0,124 au plus) : test.
-- **Coût mesuré** (gzip par message, `speeds` puis `slowSpeeds`) : mer de 80 × 80 agitée 28 + 122 octets, qui se
-  calme 28 + 31 ; mer de 600 × 600 agitée 78 + 333 à 413, qui se calme 78 + 78 ; étang 28 à 47 + 28 à 34, rien d'envoyé
-  pour une eau sans courant lent. En octets par seconde, × 1, 5 ou 10 états par seconde : sur la mer de 600 × 600
-  agitée, 78 → 411 à 1 état/s, 390 → 2 415 à 5, 780 → 4 912 à 10 ; la finesse adaptative (#446), qui réduit la cadence
-  sous charge, réduit d'autant. Temps d'écriture du serveur inchangé (0,9 ms par message sur 600 × 600, un passage),
-  le calcul de l'eau n'est pas touché ; `FLOW_REST_SPEED` (navigateur seulement) suit le plancher.
+- **Coût mesuré** sur le code réel, octets gzip de `slowSpeeds` ajoutés par message (`speeds` seul entre parenthèses),
+  puis octets par seconde au total à 1 / 5 / 10 états par seconde ; temps d'écriture du serveur inchangé (0,9 ms par
+  message sur 600 × 600, un seul passage), calcul de l'eau non touché ; la finesse adaptative (#446) réduit la cadence
+  sous charge, donc ces débits :
+
+  | Cas | 1 cm/s | 2 cm/s | 3 cm/s |
+  |---|---|---|---|
+  | Mer 80 × 80 qui se calme (28) | +248 ; 276 / 1 378 / 2 755 | +69 ; 97 / 487 / 974 | +13 ; 41 / 203 / 405 |
+  | Mer 600 × 600, 10 s après une tempête (78) | +4 036 ; 4 114 / 20 569 / 41 138 | +1 147 ; 1 225 / 6 123 / 12 247 | +261 ; 339 / 1 695 / 3 389 |
+  | Mer 600 × 600, 1 min après (78) | +1 978 ; 2 056 / 10 278 / 20 555 | +90 ; 168 / 840 / 1 681 | +0 ; 78 / 390 / 780 |
+  | Eau au repos (28) | +0 | +0 | +0 |
+  | Étang avec source (28 à 47) | +30 à 44 ; 62 à 78 par s à 1 état/s | +28 à 39 | +28 à 34 |
+
 - **Ce que montre l'étang de la capture** (simulation : 11 × 11 cellules, 30 cm d'eau, source de 100 m³/h, trop-plein
-  par un chenal ; blocs de l'étang ayant une flèche, sur 9) : à « Vitesse de l'eau » 1, 1 au lieu de 0 ; à 4, 4 au lieu
-  de 1 ; à 60, 8 au lieu de 7. Les flèches lentes sont courtes et pâles (échelle existante). La légende dit
-  « transmises à partir de 0,03 m/s ».
+  par un chenal ; blocs de l'étang ayant une flèche, sur 9, avant / 1 cm / 2 cm / 3 cm) : à « Vitesse de l'eau » 1,
+  0 / 4 / 1 / 1 ; à 4, 1 / 8 / 6 / 4 ; à 60, 7 / 8 / 8 / 8. Les flèches lentes sont courtes et pâles (échelle
+  existante). La légende dit « transmises à partir de 0,01 m/s ».
+- **Pistes non codées** : n'envoyer `slowSpeeds` qu'aux joueurs qui ont « Flux d'eau » ouvert demanderait un message
+  du navigateur au serveur (aucun n'existe : la vue est locale) et un envoi par joueur au lieu d'un envoi à la salle ;
+  et le rendu de l'eau mince qui court lira ce champ : il reste donc envoyé à tous.
 - Écartée : deviner la vitesse d'après la pente quand le serveur dit zéro (3 à 6 cm/s sous 30 cm d'eau demandent une
   pente de 0,001 à 0,002 px par cellule, trente fois sous le bruit des profondeurs reçues).
 
@@ -3391,8 +3495,10 @@ Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus
   - Fonte : `max(0, T) × 0,2 × (1 + vent / 20) × (0,5 + humidité / 100)` mm/h ; la pluie qui tombe dessus en fait
     fondre un dixième de son volume par °C au-dessus de 0.
   - Sublimation : `0,02 × vent × (1 − humidité / 100)` mm/h, à toute température, sans eau.
-  - Le temps de la neige court 600 fois plus vite que le réel (`THAW_SPEED`) : 15 mm fondent en une minute environ à
-    10 °C sans vent. Constante à régler à l'essai.
+  - Le temps de la neige est celui de l'eau de la carte (`waterTimesOf`, `MeadowStepInput.snowTimes`, depuis le
+    2026-11-22 ; `THAW_SPEED` ×600 retiré) : temps réel par défaut, 60 fois plus vite à « Vitesse de l'eau » 60.
+    15 mm fondent en 11 h 30 à +5 °C et 5 h 50 à +10 °C (80 % d'humidité, sans vent) en temps réel ; 11 min 30 et
+    5 min 50 à 60 (avant : 69 s et 35 s).
   - Le feu fait fondre la neige autour de lui, même par temps de gel (`Meadow.warm`) : une case en feu chauffe sa
     case et les huit voisines (15 mm par seconde à pleine flamme), un arbre en feu deux cases autour de son pied, la
     catastrophe « feu » 60 mm par touche sous son disque. Cette fonte ne mouille pas le sol (le feu le sèche) ; son
@@ -3404,7 +3510,9 @@ Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus
 - **Eau de fonte.** Ce qui fond humidifie le sol de sa case comme la même pluie le ferait, et est versé dans l'eau du
   relief, millimètre pour millimètre (`PX_PER_MM`, `TerrainWaterManager.pour`), compté avec la pluie dans le bilan. Hors de la grille d'eau, le sol est humidifié et le
   reste est perdu. La neige de la pluie de la carte s'accumule à la vitesse de l'eau de la carte (`water.speed`),
-  sans le ruissellement (`runoff`) : elle tient où elle tombe.
+  sans le ruissellement (`runoff`) : elle tient où elle tombe. Depuis que cette vitesse vaut 1 par défaut
+  (2026-11-22), une carte qui ne la règle pas blanchit en temps réel (5 mm/h d'eau de neige : 15 mm, sol tout blanc,
+  en trois heures). Fonte, sublimation et glace suivent la même horloge : elles ne peuvent plus diverger.
 - **Averse à l'écran.** Par temps froid, l'averse tombe en flocons au lieu de gouttes (`downpourFlakes`, mélange des
   deux dans l'entre-deux, nuage plus clair, sol qui pâlit au lieu de s'assombrir), d'après l'air de la salle
   (`roomPrecipitationAir` : réglage manuel, sinon lieu de la carte), le même pour tous les joueurs et pour le serveur,
@@ -3423,7 +3531,7 @@ Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus
 - **Neige de sa propre ville** (`Weather/Frost.ts`, `ownSnowAfter`, champ `snowMm` du cycle local). Pour qui suit
   une ville, ce qui tombe là-bas en neige (taux de précipitation du créneau en cours, part de neige `snowShare` de
   l'air de la ville) s'accumule sur son sol, en millimètres d'eau, à la même horloge que la neige du serveur
-  (`THAW_SPEED`), et fond ou part au vent sec avec les mêmes formules, d'après l'air de sa ville. Une seule valeur
+  (la vitesse de l'eau de la carte, `waterTimesOf`), et fond ou part au vent sec avec les mêmes formules, d'après l'air de sa ville. Une seule valeur
   pour tout le dehors de la carte : le sol blanchit partout pareil (par vingtièmes, le sol n'est repeint que quand
   elle bouge d'un cran), les arbres et la glace avec, et la marche ralentit dehors. Rien n'est envoyé au serveur et
   cette neige ne donne pas d'eau. Elle repart de zéro à chaque chargement de la carte et quand on revient au temps
@@ -3441,8 +3549,10 @@ du serveur, la glace est maintenant tenue par le serveur, case par case.
 - **Modèle** (`libs/map-editor/src/Terrain/Ice.ts`, champ `ice` de `Meadow`). Une épaisseur en millimètres sur l'eau
   de chaque case (au moins 0,5 px d'eau), jamais plus épaisse que cette eau : une flaque gèle entièrement.
   - Prise en glace sous 0 °C, loi de Stefan : `365 × (−T) × (1 + vent / 30) / max(épaisseur, 10)` mm par jour,
-    divisé par `1 + neige / 50` (la neige isole). Le temps court 600 fois plus vite que le réel (`THAW_SPEED`) :
-    5 cm en 50 s environ à −10 °C sans vent.
+    divisé par `1 + neige / 50` (la neige isole), × `ICE_GROWTH_TIMES` (2), à l'horloge de la neige (celle de l'eau).
+    En temps réel, 5 cm (la glace porte un marcheur) en 14 h à −3 °C, 4 h 20 à −10 °C, 1 h 25 à −30 °C ; 1 m en
+    228 jours, 68 jours, 23 jours. À « Vitesse de l'eau » 60 : 14 min, 4 min 20, 1 min 25. Une mer ne gèle donc plus
+    en une heure de jeu : c'est voulu, et le mode « Eau rapide » est le moyen de le voir vite.
   - Dégel au-dessus de 0 °C, au rythme de la fonte de la neige. La glace est le dessus de l'eau : geler et dégeler ne
     changent pas le volume d'eau, qui continue de couler dessous.
   - **Porte** quelqu'un à partir de 50 mm (`ICE_BEARS_MM`) : plus mince, sur une eau où l'on nage, elle cède et on
@@ -4302,8 +4412,8 @@ cratère en bourrelet et l'eau fait elle-même la vague (voir « Eau à inertie 
 Conception et plan dans le dépôt d'infra, `docs/superpowers/{specs,plans}/2026-11-19-catastrophes-meteore*`. Lot 1 :
 le météore, qui ne touche que l'eau du relief.
 
-**En jeu.** Le menu des applications a un bouton « Catastrophe » qui montre ou cache un petit widget sous l'horloge
-(fermé à chaque chargement de page). Il reste utilisable quand l'éditeur de carte est ouvert : tant qu'une
+**En jeu.** Le menu des applications a un bouton « Catastrophe » qui montre ou cache une pastille sur la ligne de
+l'horloge, dont le panneau flottant porte les tuiles (fermé à chaque chargement de page ; voir « Interface compacte »). Il reste utilisable quand l'éditeur de carte est ouvert : tant qu'une
 catastrophe est armée, l'éditeur met son outil de côté (aucun outil choisi, panneau de l'outil masqué) et le reprend
 dès qu'elle est désarmée ; choisir un outil désarme la catastrophe (`CatastropheToolPause.ts`,
 `MapEditorModeManager`). Dans le widget, la tuile « Météore » **arme** le tir
@@ -4883,34 +4993,65 @@ seul la météo de ce lieu (`ChosenPlaceWeather`, route `real-weather` du pusher
 serveur.
 
 **Appliquer sa météo à la carte** (2026-11-22). La fiche personnelle (ordinateur) a un bouton « Appliquer à la
-carte » : la carte suit alors, pour tout le monde, le lieu que ce joueur suit sur son horloge. Mécanisme : le même
-enregistrement que le panneau « Météo de la carte » (`updateWeatherSettingMessage`, commande de l'éditeur, gardé
-dans le WAM), avec le lieu (latitude, longitude, nom, fuseau) **et la météo « Réel »** : une carte en Automatique ou
-en temps fixe ne lit pas la pluie réelle de son lieu (`TerrainWaterManager`, `FireConditionsManager.real()` ne
-valent qu'en Réel). Aucun changement de serveur : `back` relit le lieu du WAM à chaque pas (`RainTimelineService`
-demande la météo du nouveau lieu à Open-Meteo, cache par lieu arrondi), sans redémarrer la salle ; neige, glace,
-eau, feu et herbe repartent de l'air du nouveau lieu. Nom enregistré : celui de la ville, ou pour un point loin de
-toute ville ses **coordonnées** (« 24° N 122° E », `WorldPlace.coordinates`) : partagé par tous, sans virgule (la
-pastille coupe le lieu de la carte à la virgule), sans distance écrite dans la langue d'un joueur. Le jour, la nuit
-et les saisons de la carte suivent ce lieu (et son fuseau) : la confirmation le dit.
-- **Droits** : ceux du panneau « Météo de la carte » (`canEditMapWeather`, `Weather/MapWeatherRights.ts`, partagé
-  avec ce panneau et l'app de bureau) ; sinon le bouton est grisé avec la raison. Grisé aussi pendant la lecture de
-  la météo du lieu, et quand elle est indisponible (« pas de météo réelle pour ce lieu ») ; « La carte suit déjà ce
-  lieu » quand la carte est en Réel au même lieu arrondi.
+carte » : la carte suit alors, pour tout le monde, le lieu que ce joueur suit sur son horloge, **comme s'il l'avait
+choisi dans les réglages de la météo de la carte** (Paramètres → Ambiance, `WeatherSettings`, avec « Réel ») : les
+deux passent par la même fonction, `saveMapWeather` (`Weather/MapWeatherSave.ts` : droits `canEditMapWeather`,
+commande de l'éditeur `updateWeatherSettingMessage` gardée dans le WAM, relecture de la carte, puis **accusé du
+serveur** attendu 10 s au plus, `MapEditorModeManager.whenCommandsSettled`). Le panneau ne dit donc plus
+« Enregistré » avant que le serveur ait accepté. Le bouton envoie le lieu (latitude, longitude, nom, fuseau) **et la
+météo « Réel »** : une carte en Automatique ou en temps fixe ne lit pas la pluie réelle de son lieu
+(`TerrainWaterManager`, `FireConditionsManager.real()` ne valent qu'en Réel). Aucun changement de serveur : `back`
+relit le lieu du WAM à chaque pas (`RainTimelineService` demande la météo du nouveau lieu à Open-Meteo, cache par lieu
+arrondi), sans redémarrer la salle ; neige, glace, eau, feu et herbe repartent de l'air du nouveau lieu. Le jour, la
+nuit, les saisons et le fuseau de la carte suivent ce lieu : la confirmation le dit.
+- **Point libre comme lieu de la carte.** Le schéma du lieu (`WeatherLocation`) acceptait déjà toute latitude et
+  longitude : pas de changement de WAM, de protocole ni de `map-storage`. Un point loin de toute ville est enregistré
+  par ses **coordonnées** (« 24° N 122° E », `WorldPlace.coordinates`), partagées par tous, sans virgule ni distance
+  écrite dans une langue (seul l'ouest dépend de la langue de celui qui l'enregistre : « O » ou « W »). À l'affichage,
+  un lieu de la carte nommé ainsi (`isPointName`) est nommé comme un point de l'horloge, dans la langue du lecteur
+  (`mapPlaceNames`, `placeOfPoint` réutilisé) : court dans la pastille (« Hong Kong 770 km »), long dans la fiche de
+  la carte, « Météo expliquée », la pluie du tableau de l'eau et le panneau des réglages (« 24° N 122° E · Hong Kong
+  à 770 km »). Une ville trouvée par la recherche garde son nom (sans région ni pays dans la pastille) : les cartes
+  déjà enregistrées ne changent pas.
+- **Droits** : ceux des réglages de la météo de la carte ; sinon le bouton est grisé avec la raison. Grisé aussi
+  pendant la lecture de la météo du lieu, et quand elle est indisponible (« pas de météo réelle pour ce lieu ») ;
+  « La carte suit déjà ce lieu » quand la carte est en Réel au même lieu arrondi.
 - **Confirmation** (`PlaceToMapModal`, `Popup` du jeu, Échap) : la carte change pour tous, passe en météo réelle si
-  elle ne l'était pas, et son jour, sa nuit et ses saisons suivent le lieu. Deux cases cochées par défaut :
-  « Revenir aux conditions réelles » (seulement si la salle est en conditions réglées à la main, Catastrophe →
-  Météo : elles resteraient prioritaires sur le lieu ; n'importe quel joueur peut déjà les quitter) et « Voir ensuite
-  la météo de la carte » (le joueur repasse en « Heure du serveur », quitte « Jour dans le monde » et voit le monde
-  partagé : givre, neige, glace). Elles ne s'appliquent qu'une fois le changement appliqué à la carte de ce
-  navigateur (relue après l'envoi : l'éditeur journalise une commande ratée sans lever d'erreur) ; sinon rien d'autre
-  ne change et la confirmation le dit. Un refus du serveur arrivé ensuite n'est pas vu (comme pour le panneau
-  « Météo de la carte »). Le nom des coordonnées est écrit dans la langue de celui qui applique (« 40° O » ou
-  « 40° W ») ; repasser en « Heure du serveur » fait perdre le mode du ciel d'avant, quel qu'il soit.
+  elle ne l'était pas, son jour, sa nuit et ses saisons suivent le lieu, et « tu repasseras sur l'heure du serveur ».
+  Salle en conditions réglées à la main (Catastrophe → Météo) : elles resteraient prioritaires sur le lieu ; une case
+  cochée par défaut, « Revenir aux conditions réelles », les quitte (n'importe quel joueur le peut déjà). **Une fois
+  le serveur d'accord**, le joueur repasse automatiquement en « Heure du serveur »
+  (`NightMode.Server`) : même ciel, même heure, même monde que tout le monde ; son point reste mémorisé, inactif. Sinon
+  (refus, pas de réponse, droits) il reste sur sa météo personnelle et la confirmation le dit. Repasser en « Heure du
+  serveur » fait perdre le mode du ciel d'avant, quel qu'il soit.
 - **Retour arrière** : pour la session de celui qui a appliqué, la fiche de la carte (globe) propose « Revenir à
   Lille » tant que la carte suit encore le lieu appliqué ; il remet la météo et le lieu d'avant (le lieu par défaut
-  s'il n'y en avait pas). Les conditions réglées à la main quittées ne reviennent pas. Sinon : panneau « Météo de la
-  carte ».
+  s'il n'y en avait pas), par la même fonction. Sinon : les réglages de la météo de la carte.
+
+**Choisir un lieu par son nom ou sur la carte du monde** (2026-11-22). Deux composants partagés : le champ de
+recherche de ville (`Components/Menu/PlaceSearch.svelte`, recherche de l'Open-Meteo par le pusher, seul le texte
+tapé est envoyé, après 300 ms de pause ; Entrée prend la première ville, Échap ferme la liste seulement ; les
+touches ne vont pas au jeu pendant la frappe, `inputFormFocusStore`) et la carte du monde cliquable
+(`Components/WorldMap/WorldMapPicker.svelte`, marqueur du lieu courant, jour et nuit du jeu, image préchargée).
+- **Menu de l'horloge**, « Jour dans le monde » : le champ au-dessus du texte d'aide et de la carte. Une ville choisie
+  devient le lieu suivi, nommée par elle-même (« Hong Kong », pas « point choisi sur la carte ») à son fuseau, même
+  loin des villes de la liste : `WorldPoint.name` et `.timezone`, gardés dans le navigateur ; un clic sur la carte
+  remplit le champ avec le nom du point. Le menu défile s'il dépasse la fenêtre (`max-h`).
+- **Réglages de la météo de la carte** (Paramètres → Ambiance, `MapLocationPicker`) : la carte sous le champ. Un clic
+  choisit un point comme lieu de la carte, enregistré comme le bouton « Appliquer à la carte » l'enregistre
+  (`mapLocationOf(placeOfPoint(…))` : une ville de la liste à 150 km au plus, sinon les coordonnées), avec le bouton
+  « Enregistrer » existant ; le champ et la carte montrent le même lieu.
+
+**Pays et région d'un lieu** (2026-11-22, « il y a plusieurs Nice dans le monde »). La fiche météo dépliée (carte et
+personnelle) dit où est le lieu, sur une ligne discrète sous son nom (coupée si trop longue) : la région et le pays
+d'une ville trouvée par la recherche (le géocodage les donnait déjà, gardés dans le nom enregistré « Nice,
+Provence-Alpes-Côte d'Azur, France » que la pastille coupait à la virgule : ils ne sont plus jetés), le pays d'une
+ville de la liste `WORLD_CITIES` (code ISO ajouté à chacune dans `common/WorldCities.ts`, nommé dans la langue du
+joueur par `Intl.DisplayNames`, `PointWords.country`), rien pour un lieu enregistré sans eux (anciennes cartes : rien
+n'est inventé) ni pour un point loin de toute ville (son nom long dit déjà où il est). `WorldPlace.where`,
+`mapPlaceNames(…).where`, `cityPlace`. Pastille et horloge : nom court inchangé, le lieu complet dans leur infobulle.
+Propositions de la recherche : déjà « Nice, Provence-Alpes-Côte d'Azur, France » et « Nice, California, United
+States ». Tableau « Météo expliquée », bilan de l'eau et confirmation « Appliquer à la carte » : nom court inchangé.
 
 **Gel.** À partir de l'air du lieu affiché (`Weather/Frost.ts`), pour ce joueur seul, rien n'est envoyé :
 givre au sol d'après la vapeur de l'air (voir « Givre » ci-dessous) ; l'eau gèle des hauts-fonds vers le fond entre 0 et -15 °C (toute gelée au-delà), en glace de
@@ -5038,9 +5179,10 @@ envoie `CATASTROPHE_ICE_BREAK` (une valeur de plus de `CatastropheKind`, même m
 par seconde par joueur), le serveur casse la glace d'une tuile autour par `meadow.shatter` (comme une comète) et le
 dit à la salle, qui ouvre le même trou. Météo personnelle : trou local. Les piscines gèlent en surface dès -3 °C
 (`POOL_ICE_DEPTH_PX` 8 px au lieu de 32, qui attendait -8,25 °C). La glace du serveur épaissit deux fois plus vite que
-l'horloge de la neige (`ICE_GROWTH_TIMES` = 2, soit 1 200 fois le temps réel ; le dégel garde ×600) : elle porte le
-woka en 1 min 30 environ à -3 °C, 38 s à -7 °C, 18 s à -15 °C (loi de Stefan, l'épaisseur croît comme la racine du
-temps).
+l'horloge de la neige (`ICE_GROWTH_TIMES` = 2). Sur l'horloge ×600 d'alors, elle portait le woka en 1 min 30 environ
+à -3 °C ; depuis le 2026-11-22, l'horloge est celle de l'eau de la carte, temps réel par défaut : 14 h à -3 °C
+(14 min à « Vitesse de l'eau » 60). Le trou ouvert sous un avatar se referme toujours en deux minutes
+(`HOLE_OPEN_MS`, horloge à part, non changée) : plus vite que la glace ne reprend en vrai.
 
 **Herbe dès l'arrivée** (`back/src/Model/MeadowManager.ts`, `GameScene.groundStatesOfJoinApplied`). Le premier joueur
 d'une salle recréée recevait un sol nu : `snapshot()` ne rendait que l'état déjà diffusé, vide jusqu'au premier pas de

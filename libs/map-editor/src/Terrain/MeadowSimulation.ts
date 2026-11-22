@@ -1,5 +1,5 @@
 import type { MeadowMessage, TreeFireMessage } from "@workadventure/messages";
-import { DEFAULT_MEADOW_SETTINGS, DEFAULT_WATER_SETTINGS, TERRAIN_CELL, TILE_PX, WeatherType } from "../types";
+import { DEFAULT_MEADOW_SETTINGS, TERRAIN_CELL, TILE_PX, WeatherType } from "../types";
 import type { TerrainData } from "../types";
 import { DOWNPOUR_PX_PER_SECOND, DOWNPOUR_REPORT_MS } from "../Catastrophe/Downpour";
 import type { Downpour } from "../Catastrophe/Downpour";
@@ -22,7 +22,7 @@ import type { SnowWeather } from "./Snow";
 import { TreeFire } from "./TreeFire";
 import type { Ember, ToldTree } from "./TreeFire";
 import type { WaterGrid } from "./WaterGrid";
-import { PX_PER_MM } from "./WaterInputs";
+import { PX_PER_MM, waterTimesOf } from "./WaterInputs";
 import type { RainSlots, SimulationRoom } from "./WaterSimulation";
 
 /** A whole state of the meadow to start from, as a room tells it (its bytes unzipped). */
@@ -392,15 +392,16 @@ export class MeadowSimulation {
     }
 
     /**
-     * What a step reads of the snow: the air over it, and the snow of the map falling on every tile, at the pace the
-     * water of the map comes (its speed), so that a snow weighs what the same rain would have.
+     * What a step reads of the snow: the air over it, the snow of the map falling on every tile, and the clock its
+     * snow falls, melts and goes and its ice takes and thaws by: all of it at the pace the water of the map comes
+     * (its speed, waterTimesOf), so that a snow weighs what the same rain would have and nothing goes by another clock.
      */
-    private snowInput(seconds: number): Pick<MeadowStepInput, "weather" | "snowfallMm"> {
-        const speed = this.room.getWam()?.settings?.water?.speed ?? DEFAULT_WATER_SETTINGS.speed;
-        const hours = (seconds * (Number.isFinite(speed) && speed > 0 ? speed : 1)) / 3600;
+    private snowInput(seconds: number): Pick<MeadowStepInput, "weather" | "snowfallMm" | "snowTimes"> {
+        const times = waterTimesOf(this.room.getWam()?.settings?.water);
         return {
             weather: this.replay?.weather ? this.replay.weather.snow : this.snowWeather(),
-            snowfallMm: this.snowRate * hours,
+            snowfallMm: (this.snowRate * seconds * times) / 3600,
+            snowTimes: times,
         };
     }
 

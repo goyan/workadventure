@@ -13,9 +13,9 @@ export const ICE_BEARS_MM = 50;
 /** From this thickness (mm) the ice is slipped on, as a rink: a frozen puddle, black ice on a flooded ground. */
 export const ICE_SLIPS_MM = 5;
 /**
- * How many times faster than the clock of the snow (THAW_SPEED) the ice thickens: on that clock alone a player would
- * wait three minutes at -3 °C for the ice to bear them; twice as fast, a minute and a half. Its thaw keeps the clock
- * of the snow.
+ * How many times faster than the clock of the snow (the speed of the water of the map) the ice thickens than Stefan's
+ * law alone gives: in real time it bears a walker after about 14 h at -3 °C, 4 h at -10 °C, 1 h 25 at -30 °C. Its
+ * thaw keeps the clock of the snow.
  */
 export const ICE_GROWTH_TIMES = 2;
 /** The thickest ice a tile holds, in mm. */

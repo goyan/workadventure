@@ -402,9 +402,21 @@ describe("the slow currents of a pond a source feeds", () => {
 
     it("codes a slow speed to about 2 mm a second, from 3 cm a second on, and nothing the quarters tell", () => {
         // The floor: 3 cm a second, the slowest arrow of the view of the flows.
-        expect(SLOWEST_TOLD_METRES).toBe(0.03);
-        expect(SLOWEST_TOLD_CELLS * CELL_METRES).toBeCloseTo(0.03, 10);
-        for (const speed of [0.055, 0.07, 0.1, 0.124, -0.06, -0.12]) {
+        expect(SLOWEST_TOLD_METRES).toBe(0.01);
+        expect(SLOWEST_TOLD_CELLS * CELL_METRES).toBeCloseTo(0.01, 10);
+        // From 1 cm a second up to just under what the quarters tell (half a quarter of a cell a second).
+        for (const speed of [
+            SLOWEST_TOLD_CELLS,
+            0.03,
+            0.055,
+            0.07,
+            0.1,
+            0.124,
+            0.1249,
+            -SLOWEST_TOLD_CELLS,
+            -0.06,
+            -0.1249,
+        ]) {
             const told = slowSpeedOf(slowSpeedByte(speed));
             expect(Math.abs(told - speed)).toBeLessThanOrEqual(1 / SLOW_SPEED_UNITS / 2 + 1e-9);
             expect(Math.sign(told)).toBe(Math.sign(speed));
@@ -412,6 +424,10 @@ describe("the slow currents of a pond a source feeds", () => {
         // Slower than 3 cm a second: still. As fast as half a quarter of a cell a second: the speeds tell it.
         expect(slowSpeedByte(SLOWEST_TOLD_CELLS * 0.99)).toBe(0);
         expect(slowSpeedByte(-SLOWEST_TOLD_CELLS * 0.99)).toBe(0);
+        // The byte never overflows: at most 31 units, well within a signed byte.
+        expect(slowSpeedByte(0.1249)).toBe(31);
+        expect(slowSpeedByte(-0.1249)).toBe(256 - 31);
+        expect(slowSpeedByte(SLOWEST_TOLD_CELLS)).toBe(5);
         expect(slowSpeedByte(0.125)).toBe(0);
         expect(slowSpeedByte(1)).toBe(0);
         expect(slowSpeedByte(Number.NaN)).toBe(0);
@@ -449,7 +465,7 @@ describe("the slow currents of a pond a source feeds", () => {
         expect(grid.writeSpeeds()).toEqual(told.speeds);
     });
 
-    it("costs a few hundred bytes zipped on a rough sea, next to nothing on a calm one", () => {
+    it("costs a few hundred bytes zipped on a sea of 80 by 80 cells that calms down", () => {
         const cells = new Map<string, number>();
         for (let y = 0; y < 80; y++)
             for (let x = 0; x < 80; x++) cells.set(cellKey(x, y), x >= 2 && y >= 2 && x < 78 && y < 78 ? -40 : 250);
@@ -466,10 +482,10 @@ describe("the slow currents of a pond a source feeds", () => {
             }
         expect(grid.readDepths(bytes)).toBe(true);
         for (let step = 0; step < 50; step++) grid.step(withWaves());
-        // Measured: 122 bytes five seconds after, 31 a minute after.
-        expect(gzipSync(grid.writeSpeedBytes()?.slow ?? new Uint8Array()).length).toBeLessThan(250);
+        // Measured at 1 cm a second: 384 bytes five seconds after, 255 a minute after (122 and 31 at 3 cm).
+        expect(gzipSync(grid.writeSpeedBytes()?.slow ?? new Uint8Array()).length).toBeLessThan(500);
         for (let step = 0; step < 550; step++) grid.step(withWaves());
-        expect(gzipSync(grid.writeSpeedBytes()?.slow ?? new Uint8Array()).length).toBeLessThan(80);
+        expect(gzipSync(grid.writeSpeedBytes()?.slow ?? new Uint8Array()).length).toBeLessThan(350);
     });
 
     it("tells nothing of a still water, not even slowly", () => {

@@ -1,14 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { Meadow, MEADOW_STEP_SECONDS } from "../src/Terrain/Meadow";
 import type { MeadowStepInput } from "../src/Terrain/Meadow";
-import { SNOW_MAX_MM, THAW_SPEED } from "../src/Terrain/Snow";
+import { SNOW_MAX_MM } from "../src/Terrain/Snow";
 import type { SnowWeather } from "../src/Terrain/Snow";
 import { cellKey } from "../src/Terrain/TerrainGrid";
 import { Season } from "../src/types";
 
+/**
+ * The clock of these tests: a map whose snow goes 600 times faster than reality (the clock of the snow before the
+ * water of reality became the default).
+ */
+const THAW_SPEED = 600;
 /** A dry night: nothing grows, nothing is wet. `random` at 1 means no luck: nothing spreads, nothing starts. */
 const night: MeadowStepInput = {
     seconds: MEADOW_STEP_SECONDS,
+    snowTimes: THAW_SPEED,
     rainMmPerHour: 0,
     daylight: false,
     season: Season.Summer,

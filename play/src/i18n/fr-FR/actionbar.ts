@@ -87,6 +87,9 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         waterFlow: "Flux d'eau",
         onHelp: "Affiché sur la carte, pour vous seul",
         offHelp: "Choisissez ce qu'il faut afficher sur la carte",
+        chipShown: "{count} affichés",
+        chipHint: "Visualisation : ce qu'il faut afficher sur la carte",
+        infoLabel: "Ce qui est affiché",
         speed: "Vitesse de l'eau (m/s) : couleur et longueur des flèches",
         rising: "Niveau qui monte",
         falling: "Niveau qui baisse",
@@ -283,8 +286,11 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
                 unknownAir: "L'air de la carte n'est pas connu : la neige ne fond pas.",
                 seconds: "{value} s",
                 minutes: "{value} min",
+                hours: "{value} h",
                 water: "Seule la part de pluie apporte de l'eau à la carte : la neige reste au sol, puis rend son eau en fondant.",
-                honest: "Tenue par le serveur, case par case : ce tableau lit ce que le serveur a envoyé, il ne calcule pas la couche lui-même. La neige y fond {times} fois plus vite qu'en vrai.",
+                honest: "Tenue par le serveur, case par case : ce tableau lit ce que le serveur a envoyé, il ne calcule pas la couche lui-même. La neige et la glace y vont {times} fois plus vite qu'en vrai : la vitesse de l'eau de la carte.",
+                honestReal:
+                    "Tenue par le serveur, case par case : ce tableau lit ce que le serveur a envoyé, il ne calcule pas la couche lui-même. La neige et la glace y vont comme en vrai : des heures pour fondre ou porter un marcheur.",
             },
         },
     },
@@ -309,6 +315,10 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         ballArmedHelp:
             "Maintenez le clic : une boule solide est aussitôt là, à moitié dans l'eau, à la surface sous le pointeur ; elle le suit et chasse l'eau de sa moitié immergée · Échap pour annuler",
         tabs: { catastrophes: "Catastrophes", weather: "Météo" },
+        chip: "Catastrophes",
+        chipArmed: "{name} · {size}",
+        chipHint: "Catastrophes : en choisir une, sa taille, ou la météo de la salle",
+        infoLabel: "Comment la lancer",
         weather: {
             manual: "Manuel",
             realHint:
@@ -605,9 +615,10 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         goesReal: "La carte passe en météo réelle (elle était en « {weather} »).",
         leaveManual:
             "Revenir aux conditions réelles : elles sont réglées à la main (Catastrophe, Météo) et resteraient prioritaires sur ce lieu.",
-        followMap: "Voir ensuite la météo de la carte, comme tout le monde (ton ciel quitte « Jour dans le monde »).",
+        serverTime:
+            "Tu repasseras sur l'heure du serveur : le même ciel, la même heure et la même météo que tout le monde.",
         action: "Appliquer",
-        error: "La météo de la carte n'a pas pu être changée.",
+        error: "La météo de la carte n'a pas pu être changée (refusée, ou pas de réponse du serveur).",
         revert: "Revenir à {place}",
         revertHint: "Remettre la carte sur son lieu et sa météo d'avant",
     },

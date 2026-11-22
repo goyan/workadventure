@@ -7,6 +7,8 @@ export interface MapSnowSettings {
     weatherAuto?: AutoWeatherSettings;
     /** Place of the map, for its real weather. */
     weatherLocation?: WeatherLocation;
+    /** The water of the map: its speed is the clock of its snow and its ice too (waterTimesOf). */
+    water?: { speed?: number };
     /** Real weather only (never saved): end of the weather under way, when a fog fades out. */
     weatherEndsAt?: number;
     /** Shown weather only (never saved): clouds of a clear sky, 0 to 1 (shownWeatherSettings). */

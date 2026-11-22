@@ -421,6 +421,12 @@ const mapEditor: BaseTranslation = {
             adaptiveHint:
                 "Standing on a floor of the Map tool, the sink takes all the water that reaches that floor up to 12 tiles around, without crossing the walls, whatever its flow: corridors and rooms stay dry. Turned off, it keeps its flow and its disc. Off a floor, it always keeps its flow.",
         },
+        waterLevelPipette: {
+            title: "Take the level of a point of the map",
+            aiming: "Click the map: the water surface, or the ground where there is no water. Alt + click: the ground under the water. Dragging moves the view; Escape cancels.",
+            previewWater: "Under the pointer: water {level} (ground {ground})",
+            previewGround: "Under the pointer: ground {level}",
+        },
         lamp: {
             label: "Light zone",
             description:
@@ -758,7 +764,7 @@ const mapEditor: BaseTranslation = {
         absorption: "Ground absorption (how fast a flood goes down)",
         indoorDrain: "Drainage of the indoor floors",
         impactReach: "Blast of a meteor in the water (times the radius of the crater)",
-        speed: "Speed of the water (1: as in reality, 60: a minute for an hour)",
+        speed: "Speed of the water, the snow and the ice (1: as in reality, 60: a minute for an hour)",
         dashboard: {
             title: "Water balance",
             waiting: "Waiting for the server: no balance while the water does not move.",
@@ -826,10 +832,10 @@ const mapEditor: BaseTranslation = {
             evaporation: "In reality: 0.05 mm/h in winter, 0.1 to 0.3 mm/h in summer (3 to 6 mm a day).",
             absorption: "In reality: clay 1 to 5 mm/h, lawn 5 to 15, sand 20 to 30; soaked ground or asphalt: 0.",
             indoorDrain:
-                "The floors of the rooms closed by walls (doors closed) drain the water that came in. 300 mm/h by default: a flooded room is dry in about two minutes; floor drains take it faster; 0 keeps the water inside. A pool dug indoors keeps its water.",
+                "The floors of the rooms closed by walls (doors closed) drain the water that came in. 300 mm/h by default: a flooded room is dry in about two hours, as in reality (two minutes at a speed of the water of 60); floor drains take it faster; 0 keeps the water inside. A pool dug indoors keeps its water.",
             impactReach:
                 "How far the impact drives the water away around its crater: all of it next to the crater, less and less further out. 1: only the water of the crater moves. In reality: the ejecta of a crater cover 2 to 3 times its radius; 2.5 by default. A pool hit in its middle is almost emptied.",
-            speed: "In reality: 1. At that speed a rain of 10 mm/h takes hours to fill a pond. 60 by default.",
+            speed: "1 by default, as in reality: a rain of 10 mm/h takes hours to fill a pond, a snow hours to melt, an ice most of a day to bear a walker at -3 °C. For a trial, 60: a minute for an hour.",
             maxSurface:
                 "18 px by default: enough to swim, under the upper floors (52 px). Higher, a flood drowns the ground deep. In reality: no cap (256 px).",
             current:
@@ -1276,7 +1282,8 @@ const mapEditor: BaseTranslation = {
             location: {
                 title: "Place of the map",
                 default: "Paris (default)",
-                search: "Search for a town",
+                search: "Search for a town…",
+                map: "Map of the world: click to choose a point",
                 searching: "Searching…",
                 noResult: "No town found",
                 error: "Search unavailable",

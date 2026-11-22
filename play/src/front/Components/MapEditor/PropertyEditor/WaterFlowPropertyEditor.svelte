@@ -21,11 +21,19 @@
         waterFlowUnit,
     } from "../../../Phaser/Game/Terrain/WaterFlowUnits";
     import type { WaterFlowUnitId } from "../../../Phaser/Game/Terrain/WaterFlowUnits";
-    import { LL } from "../../../../i18n/i18n-svelte";
+    import { LL, locale } from "../../../../i18n/i18n-svelte";
+    import { readWaterLevelAt } from "../../../Phaser/Game/Terrain/WaterLevelPipette";
+    import { metresLabel } from "../../../Phaser/Game/Floors/AvatarAltitude";
+    import { pointerGroundStore } from "../../../Stores/FloorLevelsStore";
+    import {
+        armWaterLevelPipette,
+        disarmWaterLevelPipette,
+        waterLevelPipetteStore,
+    } from "../../../Stores/WaterLevelPipetteStore";
     import InputSwitch from "../../Input/InputSwitch.svelte";
     import RangeSlider from "../../Input/RangeSlider.svelte";
     import PropertyEditorBase from "./PropertyEditorBase.svelte";
-    import { IconDroplet } from "@wa-icons";
+    import { IconColorPicker, IconDroplet } from "@wa-icons";
 
     interface Props {
         /** The object carrying the property: its foot is where the water comes out. */
@@ -121,6 +129,44 @@
         onchange?.();
     }
 
+    // The pipette: a click on the map writes the level read there (the surface of the water, or the ground), and holds
+    // it, as if typed. The panel and its object stay as they are while it aims.
+    function takeLevel(point: { x: number; y: number }, ground: boolean): void {
+        levelMetres = readWaterLevelAt(point, ground);
+        holdsLevel = true;
+        setLevel();
+    }
+    let aiming = $derived($waterLevelPipetteStore === takeLevel);
+
+    function togglePipette(): void {
+        if (aiming) disarmWaterLevelPipette();
+        else armWaterLevelPipette(takeLevel);
+    }
+
+    // What a click would take now, as the floors badge reads it under the pointer (maps with a relief).
+    let preview = $derived.by(() => {
+        const under = $pointerGroundStore;
+        if (!aiming || !under) return undefined;
+        return under.surface === undefined
+            ? $LL.mapEditor.properties.waterLevelPipette.previewGround({ level: metresLabel(under.ground, $locale) })
+            : $LL.mapEditor.properties.waterLevelPipette.previewWater({
+                  level: metresLabel(under.surface, $locale),
+                  ground: metresLabel(under.ground, $locale),
+              });
+    });
+
+    // The panel closes (another object, another tool, the editor closed): the pipette aims for nothing any more.
+    $effect(() => () => {
+        if ($waterLevelPipetteStore === takeLevel) disarmWaterLevelPipette();
+    });
+
+    // Escape cancels the aim, and only that: captured and stopped, it does not also drop the selected object.
+    function cancelOnEscape(event: KeyboardEvent): void {
+        if (!aiming || event.key !== "Escape") return;
+        event.stopPropagation();
+        disarmWaterLevelPipette();
+    }
+
     function step(direction: 1 | -1): void {
         setFlow(steppedFlow(shown, direction, waterFlowUnit(unit).first));
     }
@@ -131,6 +177,8 @@
             : $LL.mapEditor.properties.waterSink,
     );
 </script>
+
+<svelte:window onkeydowncapture={cancelOnEscape} />
 
 <PropertyEditorBase
     onclose={() => {
@@ -212,12 +260,31 @@
                 <p class="m-0 mt-1 text-xs text-white/60">{texts.radiusHint()}</p>
             </div>
             <div class="mt-3" data-testid="water-flow-level">
-                <InputSwitch
-                    id="water-flow-level-{property.id}"
-                    label={texts.level()}
-                    bind:value={holdsLevel}
-                    onchange={setLevel}
-                />
+                <div class="flex items-center justify-between gap-2">
+                    <InputSwitch
+                        id="water-flow-level-{property.id}"
+                        label={texts.level()}
+                        bind:value={holdsLevel}
+                        onchange={setLevel}
+                    />
+                    <button
+                        type="button"
+                        class="btn btn-sm shrink-0 {aiming ? 'btn-secondary' : 'btn-light btn-ghost'}"
+                        title={$LL.mapEditor.properties.waterLevelPipette.title()}
+                        aria-label={$LL.mapEditor.properties.waterLevelPipette.title()}
+                        aria-pressed={aiming}
+                        data-testid="water-flow-level-pipette"
+                        onclick={togglePipette}
+                    >
+                        <IconColorPicker font-size="16" />
+                    </button>
+                </div>
+                {#if aiming}
+                    <p class="m-0 mt-1 text-xs text-white" role="status" data-testid="water-flow-level-aiming">
+                        {$LL.mapEditor.properties.waterLevelPipette.aiming()}
+                        {#if preview}<span class="block tabular-nums text-white/80">{preview}</span>{/if}
+                    </p>
+                {/if}
                 {#if holdsLevel}
                     <div class="flex items-center gap-2 mt-1">
                         <input

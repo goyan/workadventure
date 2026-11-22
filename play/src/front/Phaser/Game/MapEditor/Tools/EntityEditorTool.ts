@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from "uuid";
 import { withNewPropertyIds } from "@workadventure/map-editor/src/Utils";
 import { openPoolAt } from "@wa/front/Phaser/Game/MapEditor/PoolOpening";
 import { mapLayerPickLevelStore } from "../../../../Stores/MapLayerStore";
+import { waterLevelPipetteArmed } from "../../../../Stores/WaterLevelPipetteStore";
 import { mapEditorPlacementLevelStore } from "../../../../Stores/MapEditorStore";
 import { floorLevelTiles } from "../MapLayer/MapLayerFloors";
 import { FLOOR_PREVIEW_DEPTH, floorDepth } from "../MapLayer/FloorDepth";
@@ -314,6 +315,10 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
     }
 
     protected handlePointerMoveEvent(pointer: Pointer, gameObjects: GameObject[]): void {
+        // The pipette of the level of a source aims: its panel stays as it is (no pool opened under the pointer).
+        if (waterLevelPipetteArmed()) {
+            return;
+        }
         // TODO: add shadow when moving into the area
         // .setDropShadow(4, 4, 0x000000);
         if (!this.entityPrefabPreview || !this.entityPrefab) {
@@ -341,6 +346,10 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
     }
 
     protected handlePointerDownEvent(pointer: Pointer, gameObjects: GameObject[]): void {
+        // The pipette of the level of a source takes the click: the source stays selected, nothing is placed.
+        if (waterLevelPipetteArmed()) {
+            return;
+        }
         if (pointer.button === 2 || pointer.rightButtonDown()) {
             this.cleanPreview();
             return;

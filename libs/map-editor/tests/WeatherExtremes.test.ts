@@ -10,7 +10,7 @@ import {
 } from "../src/Weather/HoarFrost";
 import { liquidRainRate, snowRainRate, snowShare, wetBulbTemperature } from "../src/Weather/Precipitation";
 import { soilFrost } from "../src/Weather/SoilFrost";
-import { rainMeltMm, snowMeltMmPerHour, snowSublimationMmPerHour, THAW_SPEED } from "../src/Terrain/Snow";
+import { rainMeltMm, snowMeltMmPerHour, snowSublimationMmPerHour } from "../src/Terrain/Snow";
 import { fireWindPush } from "../src/Terrain/Meadow";
 import { emberReachTiles } from "../src/Terrain/TreeFire";
 import { ICE_MAX_MM, iceGrowthMmPerDay, iceThawMmPerHour } from "../src/Terrain/Ice";
@@ -189,8 +189,9 @@ describe("the snow at the extremes", () => {
                 expect(going).toBeGreaterThanOrEqual(0);
             }
         }
-        // 80 °C, a damp air and a wind of 250 km/h: 324 mm of water an hour of the real clock, about 108 mm a step of 2 s
-        // of the game: a deep snow (600 mm) is gone in some twenty seconds, not in one step.
+        // 80 °C, a damp air and a wind of 250 km/h: 324 mm of water an hour of the real clock; on a map 600 times
+        // faster, about 108 mm a step of 2 s: a deep snow (600 mm) is gone in some twenty seconds, not in one step.
+        const THAW_SPEED = 600;
         const hottest = snowMeltMmPerHour({ temperature: WARMEST, humidity: 100, windSpeed: STRONGEST });
         expect(hottest).toBeCloseTo(324, 6);
         expect((hottest * 2 * THAW_SPEED) / 3600).toBeCloseTo(108, 6);

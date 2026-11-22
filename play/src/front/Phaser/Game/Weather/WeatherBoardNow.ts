@@ -1,8 +1,9 @@
-import { WeatherType } from "@workadventure/map-editor";
+import { waterTimesOf, WeatherType } from "@workadventure/map-editor";
 import type { FireConditionsMessage } from "@workadventure/messages";
 import { get } from "svelte/store";
 import { fireConditionsStore } from "@wa/front/Stores/FireConditionsStore";
 import type { WorldPlace } from "../Night/WorldDaylight";
+import { pointWords } from "../Night/PointWords";
 import { chosenWeatherNow } from "./ChosenPlaceWeather";
 import { frostAirNow, mapFrostAirNow, timelineAirAt, waterCycleNow } from "./Frost";
 import { precipitationAirNow, roomPrecipitationAir } from "./PrecipitationAir";
@@ -14,6 +15,7 @@ import {
     showsChosenPlaceWeather,
 } from "./RealWeatherClient";
 import type { MapSnowSettings } from "./SnowCover";
+import { mapPlaceNames } from "./MapPlaceName";
 import { explainWeather } from "./WeatherExplained";
 import type { ShownAir, WeatherBoard } from "./WeatherExplained";
 import { weatherAtTime } from "./WeatherFrame";
@@ -59,7 +61,8 @@ function mapAirShown(
     return {
         ...timelineAirAt(shownPlaceTimeline(settings), epoch),
         byHand: false,
-        place: townOf(shownMapPlace(settings)?.name),
+        // A point of the world as a place of the map: its long name, as a player's own point (MapPlaceName).
+        place: mapPlaceNames(shownMapPlace(settings), pointWords)?.long,
     };
 }
 
@@ -97,5 +100,6 @@ export function weatherBoardNow(
                 ? { map: ground.meanSnowCover(), here: avatar ? ground.snowCoverAt(avatar.x, avatar.y) : 0 }
                 : undefined,
         roomWind: conditions?.windSpeed,
+        snowTimes: waterTimesOf(settings?.water),
     });
 }

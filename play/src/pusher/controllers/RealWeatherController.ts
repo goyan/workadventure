@@ -6,6 +6,8 @@ import type { ResponseWithUserIdentifier } from "../middlewares/Authenticated";
 import { PerUserRateLimiter } from "../services/PerUserRateLimiter";
 import { placeSearchService, realWeatherService } from "../services/RealWeatherService";
 import type { PlaceSearchService, RealWeatherService } from "../services/RealWeatherService";
+import { worldWeatherService } from "../services/WorldWeatherService";
+import type { WorldWeatherService } from "../services/WorldWeatherService";
 import { validateQuery } from "../services/QueryValidator";
 import { BaseHttpController } from "./BaseHttpController";
 
@@ -18,7 +20,8 @@ const WeatherQuery = z.object({
 const PlacesQuery = z.object({ q: z.string().max(100) });
 
 /**
- * The weather timeline at the place of a map, and the towns to choose that place from. Only for players (each request may
+ * The weather timeline at the place of a map, the towns to choose that place from, and the weather now in the cities
+ * of the world (to find one where it rains or snows). Only for players (each request may
  * cost a call to Open-Meteo, whose free service is limited), 30 requests a minute each.
  */
 export class RealWeatherController extends BaseHttpController {
@@ -28,6 +31,7 @@ export class RealWeatherController extends BaseHttpController {
         app: Application,
         private readonly weather: Pick<RealWeatherService, "get"> = realWeatherService,
         private readonly places: Pick<PlaceSearchService, "search"> = placeSearchService,
+        private readonly world: Pick<WorldWeatherService, "get"> = worldWeatherService,
     ) {
         super(app);
     }
@@ -44,6 +48,15 @@ export class RealWeatherController extends BaseHttpController {
             if (res.destroyed) return;
             res.setHeader("Cache-Control", "private, no-store");
             res.json(report);
+        });
+
+        this.app.get("/real-weather/world", [authenticated], async (_req: Request, res: ResponseWithUserIdentifier) => {
+            if (!this.limiter.allow(res)) return;
+            const report = await this.world.get();
+            if (res.destroyed) return;
+            res.setHeader("Cache-Control", "private, no-store");
+            if (report === undefined) res.status(502).json({ error: "unavailable" });
+            else res.json(report);
         });
 
         this.app.get("/real-weather/places", [authenticated], async (req: Request, res: ResponseWithUserIdentifier) => {

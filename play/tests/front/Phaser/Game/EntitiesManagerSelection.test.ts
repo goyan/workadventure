@@ -18,6 +18,11 @@ import {
     mapEditorSelectedEntityStore,
     mapEditorSelectedToolStore,
 } from "../../../../src/front/Stores/MapEditorStore";
+import {
+    armWaterLevelPipette,
+    disarmWaterLevelPipette,
+    noteWaterLevelPress,
+} from "../../../../src/front/Stores/WaterLevelPipetteStore";
 
 const pickedPrefab = {
     id: "lamp",
@@ -130,6 +135,28 @@ describe("Native entity clicks while selecting a group", () => {
         pointer.rightButtonDown.mockReturnValue(button === 2);
         entityEvents.emit(Phaser.Input.Events.POINTER_DOWN, pointer);
     }
+
+    it("leaves an object alone while the pipette of a source aims: neither picked nor dragged", () => {
+        mapEditorSelectedToolStore.set(EditorToolName.EntityEditor);
+        mapEditorEntityModeStore.set("EDIT");
+        armWaterLevelPipette(vi.fn());
+        try {
+            noteWaterLevelPress();
+            clickEntity();
+            const drag = mock<Phaser.Input.Pointer>({ worldX: 200, worldY: 200 });
+            entityEvents.emit(Phaser.Input.Events.DRAG, drag, 200, 200);
+            // Released (and so disarmed) before the end of its drag: that end is still the pipette's.
+            disarmWaterLevelPipette();
+            entityEvents.emit(Phaser.Input.Events.DRAG_END, drag, 200, 200);
+
+            expect(get(mapEditorSelectedEntityStore)).toBeUndefined();
+            expect(entity.setPosition.mock.calls).toEqual([]);
+            expect(get(mapEditorSelectedEntityDraggedStore)).not.toBe(true);
+        } finally {
+            disarmWaterLevelPipette();
+            noteWaterLevelPress();
+        }
+    });
 
     it("keeps the group tool active when a marquee starts over furniture", () => {
         clickEntity();

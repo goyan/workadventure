@@ -250,7 +250,7 @@ export const SPEED_UNITS = 4;
 /**
  * The water slower than half of one of those units (told 0) is told apart, block by block, in this many units a
  * cell a second (two signed bytes a block, 0 where the speeds above say more): the slow currents of a pond a source
- * feeds, to about 2 mm a second. Linear: the range is that of half a quarter of a cell a second (from 14 to 31
+ * feeds, to about 2 mm a second. Linear: the range is that of half a quarter of a cell a second (from 5 to 31
  * units), a law that spreads it would gain nothing; few values, so that it zips well.
  */
 export const SLOW_SPEED_UNITS = 250;
@@ -262,7 +262,7 @@ export const CELL_METRES = Math.sqrt(CELL_AREA_M2);
  * The slowest water whose speed is told, in metres a second: slower, it is told still (it costs no byte), and the
  * view of the flows draws no arrow there.
  */
-export const SLOWEST_TOLD_METRES = 0.03;
+export const SLOWEST_TOLD_METRES = 0.01;
 /** The same, in cells a second. */
 export const SLOWEST_TOLD_CELLS = SLOWEST_TOLD_METRES / CELL_METRES;
 

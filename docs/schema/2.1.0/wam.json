@@ -1954,7 +1954,7 @@
                   "type": "number",
                   "minimum": 1,
                   "maximum": 1000,
-                  "default": 60
+                  "default": 1
                 },
                 "absorption": {
                   "type": "number",

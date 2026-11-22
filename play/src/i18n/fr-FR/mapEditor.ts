@@ -433,6 +433,12 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             adaptiveHint:
                 "Posé sur un sol de l'outil Carte, le puits prend toute l'eau qui arrive sur ce sol jusqu'à 12 cases autour, sans passer les murs, quel que soit son débit : couloirs et pièces restent secs. Désactivé, il garde son débit et son disque. Hors d'un sol, il garde toujours son débit.",
         },
+        waterLevelPipette: {
+            title: "Prendre le niveau d'un point de la carte",
+            aiming: "Cliquez sur la carte : la surface de l'eau, ou le sol s'il n'y a pas d'eau. Alt + clic : le sol sous l'eau. Glisser déplace la vue ; Échap annule.",
+            previewWater: "Sous le curseur : eau {level} (sol {ground})",
+            previewGround: "Sous le curseur : sol {level}",
+        },
         lamp: {
             label: "Zone de lumière",
             description:
@@ -769,7 +775,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         absorption: "Absorption du sol (retrait d'une inondation)",
         indoorDrain: "Vidange des sols intérieurs",
         impactReach: "Souffle d'un météore dans l'eau (fois le rayon du cratère)",
-        speed: "Vitesse de l'eau (1 : comme en vrai, 60 : une minute pour une heure)",
+        speed: "Vitesse de l'eau, de la neige et de la glace (1 : comme en vrai, 60 : une minute pour une heure)",
         dashboard: {
             title: "Bilan de l'eau",
             waiting: "En attente du serveur : aucun bilan tant que l'eau ne bouge pas.",
@@ -839,10 +845,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             evaporation: "En réel : 0,05 mm/h en hiver, 0,1 à 0,3 mm/h en été (3 à 6 mm par jour).",
             absorption: "En réel : argile 1 à 5 mm/h, pelouse 5 à 15, sable 20 à 30 ; sol gorgé d'eau ou bitume : 0.",
             indoorDrain:
-                "Les sols des pièces fermées par des murs (portes fermées) évacuent l'eau entrée. 300 mm/h par défaut : une pièce inondée sèche en deux minutes environ ; des grilles d'évacuation posées au sol vont plus vite ; 0 garde l'eau à l'intérieur. Un bassin creusé à l'intérieur garde son eau.",
+                "Les sols des pièces fermées par des murs (portes fermées) évacuent l'eau entrée. 300 mm/h par défaut : une pièce inondée sèche en deux heures environ, comme en vrai (deux minutes à « Vitesse de l'eau » 60) ; des grilles d'évacuation posées au sol vont plus vite ; 0 garde l'eau à l'intérieur. Un bassin creusé à l'intérieur garde son eau.",
             impactReach:
                 "Jusqu'où l'impact chasse l'eau autour de son cratère : tout près du cratère, de moins en moins ensuite. 1 : seule l'eau du cratère bouge. En réel : les projections d'un cratère couvrent 2 à 3 fois son rayon ; 2,5 par défaut. Une piscine touchée en plein milieu se vide presque entièrement.",
-            speed: "En réel : 1. À cette vitesse, une pluie de 10 mm/h met des heures à remplir un étang. 60 par défaut.",
+            speed: "1 par défaut, comme en vrai : une pluie de 10 mm/h met des heures à remplir un étang, une neige des heures à fondre, une glace près d'un jour à porter un marcheur à -3 °C. Pour un essai, 60 : une minute pour une heure.",
             maxSurface:
                 "18 px par défaut : de quoi nager, sous les étages (52 px). Plus haut, une crue noie le sol en profondeur. En réel : aucun plafond (256 px).",
             current:
@@ -1292,7 +1298,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             location: {
                 title: "Lieu de la carte",
                 default: "Paris (par défaut)",
-                search: "Chercher une ville",
+                search: "Chercher une ville…",
+                map: "Carte du monde : clique pour choisir un point",
                 searching: "Recherche…",
                 noResult: "Aucune ville trouvée",
                 error: "Recherche indisponible",
