@@ -17,8 +17,13 @@ export interface ShackShown {
     x: number;
     y: number;
     look: ShackLook;
-    /** Its stove pipe smokes: somebody sits in it, or it is being put up. */
+    /** Its stove pipe smokes: somebody sits in it. */
     smoking: boolean;
+    /**
+     * How much lower it is drawn with the relief seen in 3/4: the drop of the surface of the water under its hole (it
+     * stands on the ice), as the float of a line (GameScene.surfaceDropAt). Only the drawing moves, not its depth.
+     */
+    drop: number;
 }
 
 interface ShackObjects {
@@ -63,6 +68,9 @@ export class IceShackView {
         for (const shack of shown) {
             seen.add(shack.id);
             const objects = this.shacks.get(shack.id) ?? this.create(shack);
+            const y = shack.y + shack.drop;
+            for (const layer of [objects.ground, objects.back, objects.front, objects.smoke]) layer.setY(y);
+            objects.glow.setY(y + GLOW.y);
             // The look changes seldom (a phase, a crack, a night): drawn again only then; the auger turns.
             const key = JSON.stringify(shack.look);
             if (key !== objects.drawn) {

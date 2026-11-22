@@ -4538,7 +4538,8 @@ se voit assis chez les autres, sans message dédié. Protocole :
 
 Il faut déployer `play` et `back` ensemble. Dessin en code : `Phaser/Game/IceShack/IceShackShapes.ts`, en trois
 couches triées avec les avatars. La façade et l'avant du toit sont retirés, comme dans une maison de poupée, pour voir
-le pêcheur.
+le pêcheur. En relief 3/4, la cabane est dessinée au niveau de la surface de l'eau sous son trou
+(`GameScene.surfaceDropAt`), comme le bouchon et l'avatar posé sur la glace : seul le dessin se décale.
 
 **Limites de ce lot.** Le trou est décoratif : ce n'est pas un trou d'eau libre où l'on tombe. La pêche ordinaire
 n'est toujours pas refusée à travers la glace hors cabane. La cabane n'a pas de collision. Un seul siège, pas de

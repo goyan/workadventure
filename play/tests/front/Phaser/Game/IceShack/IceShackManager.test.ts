@@ -71,6 +71,7 @@ function harness(options: { iceMm?: number; depth?: number } = {}) {
         getTerrainWater: () => ({ settledDepthAt: () => options.depth ?? 40 }),
         getGameMap: () => ({ getWamFile: () => ({ getWam: () => ({ entities: {} }) }) }),
         getNightActive: () => false,
+        surfaceDropAt: () => 0,
         markDirty: vi.fn(),
     };
     const manager = new IceShackManager(scene as unknown as GameScene, undefined, () => ({ x: 0, y: 0 }));

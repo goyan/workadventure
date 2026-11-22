@@ -242,6 +242,7 @@ export class IceShackManager {
                           }),
                 },
                 smoking: occupied,
+                drop: this.scene.surfaceDropAt(shack.x, shack.y),
             });
             if (occupied) {
                 lights.push({
@@ -263,6 +264,7 @@ export class IceShackManager {
                 y: shack.y,
                 look: { raised: 1 - (now - since) / FOLD_MS, drilled: 1, occupied: false },
                 smoking: false,
+                drop: this.scene.surfaceDropAt(shack.x, shack.y),
             });
         }
         this.view.update(shown, time, this.wind(), night);
