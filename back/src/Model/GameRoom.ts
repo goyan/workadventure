@@ -128,7 +128,9 @@ import { EntityStateManager } from "./EntityStateManager";
 import { SwitchTriggerEvaluator } from "./SwitchTriggerEvaluator";
 import { FireConditionsManager } from "./FireConditionsManager";
 import { InlineRoomGround } from "./Ground/InlineRoomGround";
-import type { RoomGround } from "./Ground/RoomGround";
+import { groundThreads } from "./Ground/GroundThreads";
+import { RemoteRoomGround } from "./Ground/RemoteRoomGround";
+import type { RoomGround, RoomGroundInputs } from "./Ground/RoomGround";
 import { AquaticLifeManager } from "./AquaticLifeManager";
 import { CatastropheManager } from "./CatastropheManager";
 import { anglersOf, FishingManager } from "./FishingManager";
@@ -360,7 +362,7 @@ export class GameRoom implements BrothersFinder {
             aquaticLife?: AquaticLifeManager;
             fireConditions?: FireConditionsManager;
         } = {};
-        const ground: RoomGround = new InlineRoomGround({
+        const groundInputs: RoomGroundInputs = {
             room: gameRoom,
             rain: rainTimelineService,
             store: { repository: await getVariablesRepository(), roomUrl },
@@ -377,7 +379,12 @@ export class GameRoom implements BrothersFinder {
             air: () => groundParts.fireConditions?.air(),
             fire: () => groundParts.fireConditions?.conditions() ?? NEUTRAL_FIRE_CONDITIONS,
             thresholds: () => groundParts.fireConditions?.thresholds() ?? DEFAULT_FIRE_THRESHOLDS,
-        });
+        };
+        // Computed on the thread of the rooms, or on one of the threads kept for it (GROUND_THREADS).
+        const ground: RoomGround =
+            groundThreads.count > 0
+                ? new RemoteRoomGround(groundInputs, groundThreads)
+                : new InlineRoomGround(groundInputs);
         gameRoom.ground = ground;
 
         // The meteors that fall on that water; the map size is passed in pixels.

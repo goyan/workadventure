@@ -74,6 +74,30 @@ export class MeadowManager extends MeadowSimulation {
         }
     }
 
+    /** Called after each step of the meadow: what follows it from elsewhere (the ground computed on another thread). */
+    public stepped: () => void = () => undefined;
+
+    public override step(): void {
+        super.step();
+        this.stepped();
+    }
+
+    /**
+     * The tiles whose grass burns (1), row by row, with the size of the meadow: what the fire the animals see is made
+     * of (lifeFire), for who is not where the meadow is computed. Undefined while no grass burns.
+     */
+    public burningTiles(): { width: number; height: number; burning: Uint8Array } | undefined {
+        const meadow = this.current();
+        if (!meadow || meadow.burning() === 0) return undefined;
+        const burning = new Uint8Array(meadow.width * meadow.height);
+        for (let tileY = 0; tileY < meadow.height; tileY++) {
+            for (let tileX = 0; tileX < meadow.width; tileX++) {
+                if (meadow.fireAt(tileX, tileY) > 0) burning[tileY * meadow.width + tileX] = 1;
+            }
+        }
+        return { width: meadow.width, height: meadow.height, burning };
+    }
+
     protected save(): void {
         const meadow = this.current();
         if (!this.store || !meadow || !this.changedSinceSave) return;

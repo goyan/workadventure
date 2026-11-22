@@ -49,6 +49,15 @@ export function replayedWeatherOf(
 export class InlineRoomGround implements RoomGround {
     private readonly ground: GroundSimulation<TerrainWaterManager, MeadowManager>;
 
+    /** The water and the meadow themselves, for what hosts this ground on another thread (HostedGround). */
+    public get water(): TerrainWaterManager {
+        return this.ground.water;
+    }
+
+    public get meadow(): MeadowManager {
+        return this.ground.meadow;
+    }
+
     constructor(inputs: RoomGroundInputs) {
         this.ground = new GroundSimulation({
             makeWater: () =>
