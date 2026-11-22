@@ -626,6 +626,11 @@
             onchange={saveWater}
             buttonShape="square"
         />
+        {#if $terrainWaterStatsStore?.reachedSpeed !== undefined && $terrainWaterStatsStore.reachedSpeed < speed}
+            <p class="retro-hint m-0 text-warning" data-testid="terrain-speed-reached">
+                {$LL.mapEditor.terrain.speedReached({ value: $terrainWaterStatsStore.reachedSpeed, asked: speed })}
+            </p>
+        {/if}
         <p class="retro-hint m-0">{$LL.mapEditor.terrain.real.speed()}</p>
     </div>
     <div data-testid="terrain-current">

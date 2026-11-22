@@ -3164,6 +3164,34 @@ ancré sous la pastille (`ClockLine/ChipPopover.svelte`). Rien d'ouvert : barre 
 - **Non vérifié** : rien vu en jeu par un agent (aperçus hors jeu : vrais composants, pastille météo et horloge
   recopiées, onglet Météo et tableau remplacés par des substituts) ; écran tactile ; lecteur d'écran.
 
+## Accélération vraie de l'eau (« Vitesse de l'eau » > 1)
+
+Avant, une carte réglée à ×S faisait aller ses apports (pluie, sources, puits, évaporation, absorption, vidange,
+neige, glace) S fois plus vite, mais son écoulement à inertie restait au temps réel : l'eau arrivait plus vite
+qu'elle ne pouvait couler, et le modèle était faussé (crues trop hautes, flots qui ne suivaient pas). Désormais
+(`WaterSimulation.step`), chaque pas réel de 0,1 s fait vivre à l'eau k pas de 0,1 s de temps de carte
+(`grid.step` k fois), à la finesse 1 dès que k > 1 :
+
+- **k** = min(S, ce que la machine tient) (`WaterPace`) : moyenne du coût d'un pas de temps de carte, budget de la
+  moitié du pas réel (`WATER_PACE_SHARE`, 50 ms sur le serveur). k part de 1, double après une seconde de pas
+  rapides (sous un quart du pas), et baisse aussitôt quand les pas coûtent ; jamais au-dessus de S. La finesse
+  adaptative (`WaterLoad`) ne voit plus que le coût d'un pas de temps de carte.
+- **Règle des apports** (`inflowAt`) : « effective » pour l'eau d'une salle (serveur, la vitesse de la carte en mode
+  édition) : les apports vont au facteur atteint k, jamais plus vite que l'écoulement ; « asked » pour l'eau d'un
+  joueur pour lui seul (lot « Eau rapide » à venir) : les apports vont au facteur demandé, l'écoulement à k.
+- **Un seul facteur lu partout** (`livedTimes`) : les débits du bilan (`ratesOf`, en temps de carte), la neige et la
+  glace (`MeadowSimulation.timesWith`, câblé par `GroundSimulation`), et le panneau : `reachedSpeed` (champ 12 de
+  `TerrainWaterStatsMessage`) donne le facteur atteint ; sous le facteur demandé, le panneau dit « L'eau va ×k sur ×S
+  demandé : le serveur ne la calcule pas plus vite ».
+- **Échanges lointains et ruée vers les siphons** (`flowFar`, `flowSteps`) : ils ne servaient qu'à rattraper des
+  apports trop rapides ; avec la règle « effective », chaque pas de temps de carte a une vitesse de 1, donc ils ne
+  jouent plus côté serveur. Le code reste pour la règle « asked » (apports plus rapides que l'écoulement).
+- **Preuve** (`back/tests/WaterAcceleration.test.ts`) : trois scénarios vécus 4 minutes de temps de carte, au temps
+  réel puis à ×20 : débordement d'un bassin (48,0 m³ contre 48,2 ; 1 368 cellules mouillées contre 1 378), vidange
+  par un seuil (47,22 contre 47,22 m³), rivière en pente (2,00 contre 2,00 m³ ; 432 contre 434 cellules), en
+  2 400 pas réels contre 155. Les 19 empreintes de `WaterFingerprints.test.ts` sont inchangées (k = 1 au temps réel).
+- Le rattrapage d'une salle vide garde la vitesse de la carte en un bloc sans inertie, comme avant.
+
 ## Défauts de l'eau d'une carte (2026-11-22) et garde-fou réseau
 
 Une carte qui ne règle pas son eau a désormais : vitesse 1 (temps réel, #478), neige et glace à la même horloge

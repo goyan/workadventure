@@ -809,6 +809,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         precisionHint:
             "Plus haut : vagues et torrents plus rapides possibles, calcul plus lourd pour le serveur. 3 par défaut.",
         precisionEased: "Serveur chargé : finesse réduite à {value} sur {asked}, le temps que le calcul s'allège.",
+        speedReached:
+            "L'eau va ×{value} sur ×{asked} demandé : le serveur ne la calcule pas plus vite, et tout la suit (pluie, sources, neige, glace).",
         updatesEased: "Serveur ou réseau chargé : envois réduits à {value} par seconde sur {asked}.",
         updates: "Envois de l'eau aux joueurs",
         updatesHint:
@@ -849,7 +851,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 "Les sols des pièces fermées par des murs (portes fermées) évacuent l'eau entrée. 300 mm/h par défaut : une pièce inondée sèche en deux heures environ, comme en vrai (deux minutes à « Vitesse de l'eau » 60) ; des grilles d'évacuation posées au sol vont plus vite ; 0 garde l'eau à l'intérieur. Un bassin creusé à l'intérieur garde son eau.",
             impactReach:
                 "Jusqu'où l'impact chasse l'eau autour de son cratère : tout près du cratère, de moins en moins ensuite. 1 : seule l'eau du cratère bouge. En réel : les projections d'un cratère couvrent 2 à 3 fois son rayon ; 2,5 par défaut. Une piscine touchée en plein milieu se vide presque entièrement.",
-            speed: "1 par défaut, comme en vrai : une pluie de 10 mm/h met des heures à remplir un étang, une neige des heures à fondre, une glace près d'un jour à porter un marcheur à -3 °C. Pour un essai, 60 : une minute pour une heure.",
+            speed: "1 par défaut, comme en vrai : une pluie de 10 mm/h met des heures à remplir un étang, une neige des heures à fondre, une glace près d'un jour à porter un marcheur à -3 °C. Pour un essai, 60 : une minute pour une heure ; toute l'eau va alors plus vite, ses courants compris, aussi vite que le serveur le calcule.",
             maxSurface:
                 "256 px par défaut, comme en vrai : aucune crue n'est coupée. Plus bas, l'eau ne monte pas plus haut : 18 px, de quoi nager, sous les étages (52 px).",
             current:
