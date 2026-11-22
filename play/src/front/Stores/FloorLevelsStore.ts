@@ -2,6 +2,8 @@ import { derived, writable } from "svelte/store";
 import type { Readable } from "svelte/store";
 import { LL } from "../../i18n/i18n-svelte";
 import type { TranslationFunctions } from "../../i18n/i18n-types";
+import { samePointerGround } from "../Phaser/Game/Floors/AvatarAltitude";
+import type { PointerGround } from "../Phaser/Game/Floors/AvatarAltitude";
 import { floorLevelTiles } from "../Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
 import { mapEditorPlacementLevelStore } from "./MapEditorStore";
 import { mapLayerLevelStore } from "./MapLayerStore";
@@ -15,8 +17,8 @@ export interface FloorLevelStack {
     viewed?: number;
     /** The altitude of the avatar over the ground of the map, in pixels of altitude (maps with a relief only). */
     altitude?: number;
-    /** The altitude of the ground under the pointer (see pointerAltitude), told with the one of the avatar. */
-    pointerAltitude?: number;
+    /** The ground and the water under the pointer (see pointerGroundAt), told with the altitude of the avatar. */
+    pointer?: PointerGround;
 }
 
 /** The level the map editor works on: the one chosen in its panel, and in "auto" the one under the pointer. */
@@ -32,8 +34,16 @@ export const floorLevelsHiddenStore = writable<boolean>(false);
 export const floorLevelViewedStore = writable<number | undefined>(undefined);
 /** The altitude of the avatar (see avatarAltitude); undefined on a map without relief. */
 export const avatarAltitudeStore = writable<number | undefined>(undefined);
-/** The altitude of the ground under the pointer (see pointerAltitude); undefined off the game or without relief. */
-export const pointerAltitudeStore = writable<number | undefined>(undefined);
+/** The ground and the water under the pointer (see pointerGroundAt); undefined off the game or without relief. */
+export const pointerGroundStore = writable<PointerGround | undefined>(undefined);
+let shownPointerGround: PointerGround | undefined;
+
+/** Tells the ground under the pointer, read at each frame: the stack is drawn again only when what it shows changes. */
+export function showPointerGround(ground: PointerGround | undefined): void {
+    if (samePointerGround(ground, shownPointerGround)) return;
+    shownPointerGround = ground;
+    pointerGroundStore.set(ground);
+}
 
 /**
  * A floor named as in the map editor, counted from the ground: "Sol", "Étage 1", "Étage 2"… among the floors that have
@@ -49,7 +59,7 @@ export function floorLevelName(ll: TranslationFunctions, elevation: number, buil
 
 /**
  * The stack shown under the clock: none on a map without raised floors nor relief. On a map with a relief it tells the
- * altitude of the avatar, and the one of the ground under the pointer. While the map editor is open (`editor`), it
+ * altitude of the avatar, and the ground and the water under the pointer. While the map editor is open (`editor`), it
  * shows the level the editor works on instead of the floor of the avatar and of the display ceiling of the game.
  */
 export function floorLevelStack(
@@ -59,7 +69,7 @@ export function floorLevelStack(
     name: (elevation: number) => string,
     viewed?: number,
     altitude?: number,
-    pointerAltitude?: number,
+    pointer?: PointerGround,
 ): FloorLevelStack | undefined {
     if (built.length === 0 && altitude === undefined) return undefined;
     const chosen = editor === undefined || editor.choice === "auto" ? undefined : editor.choice;
@@ -69,7 +79,7 @@ export function floorLevelStack(
         current: editor === undefined ? current : (chosen ?? editor.level),
         viewed: editor === undefined ? viewed : chosen,
         ...(altitude === undefined ? {} : { altitude }),
-        ...(altitude === undefined || pointerAltitude === undefined ? {} : { pointerAltitude }),
+        ...(altitude === undefined || pointer === undefined ? {} : { pointer }),
     };
 }
 
@@ -86,7 +96,7 @@ export const floorLevelsStore: Readable<FloorLevelStack | undefined> = derived(
         LL,
         floorLevelViewedStore,
         avatarAltitudeStore,
-        pointerAltitudeStore,
+        pointerGroundStore,
         mapEditorPlacementLevelStore,
         mapLayerLevelStore,
     ],

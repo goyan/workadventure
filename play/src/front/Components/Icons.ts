@@ -190,6 +190,7 @@ export { default as IconMarquee } from "~icons/tabler/marquee-2";
 export { default as IconSquareDashed } from "~icons/tabler/square-dashed";
 export { default as IconPaw } from "~icons/tabler/paw";
 export { default as IconMagnet } from "~icons/tabler/magnet";
+export { default as IconMountain } from "~icons/tabler/mountain";
 export { default as IconArmchair } from "~icons/tabler/armchair";
 export { default as IconSwimming } from "~icons/tabler/swimming";
 export { default as IconIceSkating } from "~icons/tabler/ice-skating";

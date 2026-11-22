@@ -52,7 +52,8 @@ export interface SettledWater {
 }
 
 /** A film of water thinner than this is not drawn: what a flood leaves behind would speckle the ground. */
-const SHOWN_PX = 0.5;
+export const WATER_SHOWN_PX = 0.5;
+const SHOWN_PX = WATER_SHOWN_PX;
 /**
  * A sheet of water that runs is drawn down to this (the step of the depths the server tells, 4 mm): spread over a
  * slope, a stream runs a centimetre deep and fast, and the ground it runs over is wet (the flows of the water show it).

@@ -304,7 +304,7 @@ import { aquaticLifeShownStore, cloudsShownStore, weatherEffectsEnabledStore } f
 import { skyShadowCategoriesStore } from "../../Stores/SkyLightStore";
 import type { SkyShadowCategories } from "../../Stores/SkyLightStore";
 import { mapLayerBuiltLevelsStore, mapLayerLevelStore } from "../../Stores/MapLayerStore";
-import { avatarAltitudeStore, floorLevelsBuiltStore, pointerAltitudeStore } from "../../Stores/FloorLevelsStore";
+import { avatarAltitudeStore, floorLevelsBuiltStore, showPointerGround } from "../../Stores/FloorLevelsStore";
 import { areaHighlightHiddenStore } from "../../Stores/NightStore";
 import {
     aquaticLifeSpeciesStore,
@@ -330,7 +330,7 @@ import { setRoomConditions, shownWeatherSettings } from "./Weather/RealWeatherCl
 import { isSwayingTree, TreeSway } from "./Nature/TreeSway";
 import { TreePoseTextures } from "./Nature/TreePoses";
 import { TreeSeasonEffects } from "./Nature/TreeSeasonEffects";
-import { avatarAltitude, pointerAltitude } from "./Floors/AvatarAltitude";
+import { avatarAltitude, pointerGroundAt } from "./Floors/AvatarAltitude";
 import { FloorSpike } from "./Floors/FloorSpike";
 import type { FloorOccupant } from "./Floors/FloorSpike";
 import { FLOOR_Z_VARIABLE, decodeFloorZ } from "./Floors/FloorProtocol";
@@ -2432,10 +2432,18 @@ export class GameScene extends DirtyScene {
             avatarAltitudeStore.set(
                 avatarAltitude(terrain, this.CurrentPlayer.x, this.CurrentPlayer.y, this.CurrentPlayer.getFloorZ()),
             );
-            // And the ground under the pointer, while it is over the game.
+            // And the ground and the water under the pointer, while it is over the game (drawn again only when a
+            // figure shown changes: the water changes once a state of the server at most).
             const pointer = this.input.isOver ? this.input.activePointer : undefined;
             pointer?.updateWorldPoint(this.cameras.main);
-            pointerAltitudeStore.set(pointerAltitude(terrain, pointer && { x: pointer.worldX, y: pointer.worldY }));
+            showPointerGround(
+                pointerGroundAt(
+                    terrain,
+                    pointer && { x: pointer.worldX, y: pointer.worldY },
+                    this.terrainWater,
+                    (point) => isOnFrozenWater(this, point),
+                ),
+            );
             this.terrainView?.update(time);
             this.waterFlowView?.update(time);
             this.waterFlowOverlay?.update(time);

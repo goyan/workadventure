@@ -46,4 +46,53 @@ describe("FloorLevelStack", () => {
         expect(body).toContain("+1,6 m");
         expect(render(FloorLevelStack, { props: { stack } }).body).not.toContain("avatar-altitude");
     });
+
+    it("tells the ground under the pointer, and no water where there is none", () => {
+        const { body } = render(FloorLevelStack, {
+            props: { stack: { ...stack, altitude: 48, pointer: { ground: -3.6 } } },
+        });
+        expect(body).toContain('data-testid="pointer-ground"');
+        expect(body).toContain("Sol sous le curseur");
+        expect(body).toContain("-3,6 m");
+        expect(body).toContain('data-testid="pointer-water"');
+        expect(body).toContain("Pas d’eau");
+        expect(body).not.toContain("Profondeur");
+    });
+
+    it("tells the surface of the water under the pointer and its depth", () => {
+        const pointer = { ground: -3.6, surface: -1.2, depth: 2.4 };
+        const { body } = render(FloorLevelStack, { props: { stack: { ...stack, altitude: 48, pointer } } });
+        expect(body).toContain("Surface de l’eau");
+        expect(body).toContain("-1,2 m");
+        expect(body).toContain("Profondeur 2,4 m");
+        expect(body).not.toContain("Surface de la glace");
+    });
+
+    it("tells a frozen surface as ice", () => {
+        const pointer = { ground: -3.6, surface: -1.2, depth: 2.4, ice: true };
+        const { body } = render(FloorLevelStack, { props: { stack: { ...stack, altitude: 48, pointer } } });
+        expect(body).toContain("Surface de la glace");
+        expect(body).toContain("-1,2 m");
+    });
+
+    it("keeps its line while the pointer is off the game, so that nothing moves under it", () => {
+        const { body } = render(FloorLevelStack, { props: { stack: { ...stack, altitude: 48 } } });
+        expect(body).toContain('data-testid="pointer-ground"');
+        expect(body).toContain("Curseur hors du jeu");
+        // Without a relief, no line at all.
+        expect(render(FloorLevelStack, { props: { stack } }).body).not.toContain("pointer-ground");
+    });
+
+    it("speaks English in en-US", () => {
+        loadLocale("en-US");
+        setLocale("en-US");
+        const pointer = { ground: -3.6, surface: -1.2, depth: 2.4 };
+        const { body } = render(FloorLevelStack, { props: { stack: { ...stack, altitude: 48, pointer } } });
+        expect(body).toContain("Ground under the pointer");
+        expect(body).toContain("Water surface");
+        expect(body).toContain("Depth 2.4 m");
+        expect(body).toContain("-1.2 m");
+        loadLocale("fr-FR");
+        setLocale("fr-FR");
+    });
 });

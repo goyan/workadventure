@@ -2448,9 +2448,22 @@ sol (négative dans un creux, positive sur un mont), l'altitude de son palier qu
 a un relief ; rien ne change sur une carte sans relief. **Dans l'éditeur** la pile reste affichée, avec les mêmes
 altitudes : elle y montre le niveau sur lequel l'éditeur travaille (« Auto » suit le palier sous le pointeur) et le
 choisit, comme le sélecteur de niveau du panneau (`floorLevelStack`, paramètre `editor` ; `chooseEditorLevel` de
-`MainLayout.svelte`). À côté, après un viseur, **l'altitude du sol sous le curseur** (`pointerAltitude`,
-`pointerAltitudeStore`) : la hauteur du relief à cet endroit, même sous un étage ; rien quand le curseur est hors du
-jeu (sur un panneau, hors de la fenêtre).
+`MainLayout.svelte`). Dessous, une seconde ligne
+(pastille de 200 px) dit **ce qu'il y a sous le curseur**, après un viseur (`pointerGroundAt`, `pointerGroundStore`,
+`Floors/AvatarAltitude.ts`) : une montagne puis **l'altitude du sol**, une goutte puis **l'altitude de la surface de
+l'eau**, une double flèche puis **la profondeur** (surface affichée moins sol affiché, pour que les trois chiffres
+s'accordent). Le sol est lu là où le serveur pose l'eau (`TerrainWater.basin`) : le relief, ou le fond d'une piscine
+creusée par son style ; sous un étage ou un pont, le sol et l'eau d'en dessous (l'altitude de l'avatar reste celle de
+son palier). L'eau est celle du dernier état reçu du serveur (`settledDepthAt`, sans le glissement entre deux états),
+eau peu profonde et piscines comprises, dès le seuil où la carte la dessine (0,5 px) ; sans eau, un tiret. Gelée,
+la goutte devient un flocon et l'infobulle dit « Surface de la glace » : la même altitude, celle de l'eau
+(`isOnFrozenWater`). Même échelle que « Tenir un niveau » des sources et des puits et que les masses de « Flux
+d'eau » (`metresOf`, 0 m = niveau du sol de la carte) : la surface lue sous le curseur se compare au niveau tenu. Le
+calcul suit chaque image mais la pastille n'est redessinée que quand un chiffre affiché (au décimètre) change
+(`showPointerGround`). Curseur hors du jeu : la ligne reste, avec des tirets, pour que rien ne bouge. Infobulle et
+lecteur d'écran : « Sol sous le curseur −3,6 m · Surface de l'eau −1,2 m · Profondeur 2,4 m ». Sous une Boule posée
+dans l'eau, le serveur compte le dessus de la boule comme fond, que le navigateur ne connaît pas : la lecture peut y
+être fausse.
 
 **Monts : le relief monte au-dessus du sol.** Une case du relief va de −256 à +256 px (`TERRAIN_MAX_HEIGHT`) :
 négative creusée, positive élevée. Le mode « Élever » de l'outil Relief ajoute de la matière au pinceau, comme

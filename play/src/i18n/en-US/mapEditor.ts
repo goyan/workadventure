@@ -399,7 +399,7 @@ const mapEditor: BaseTranslation = {
             level: "Hold a level",
             levelValue: "Altitude of the water to hold, in metres",
             levelHint:
-                "The source pours only while the water at its foot is under this altitude: a lake stays full, without overflowing. 0 m: the ground of the map; negative in a hollow, positive on a mount. The altitude of the ground under the cursor is shown under the clock.",
+                "The source pours only while the water at its foot is under this altitude: a lake stays full, without overflowing. 0 m: the ground of the map; negative in a hollow, positive on a mount. The floors badge, next to the clock, shows under the pointer the altitude of the ground and of the water surface, on the same scale.",
         },
         waterSink: {
             label: "Sink (drain)",
@@ -907,7 +907,13 @@ const mapEditor: BaseTranslation = {
             cursor: "Level {height}",
             title: "Level",
             altitude: "Altitude of the avatar",
-            pointerAltitude: "Altitude of the ground under the pointer",
+            pointerAltitude: "Under the pointer",
+            pointerGround: "Ground under the pointer",
+            pointerWater: "Water surface",
+            pointerIce: "Ice surface",
+            pointerNoWater: "No water",
+            pointerDepth: "Depth {depth}",
+            pointerOff: "Pointer off the game",
             ground: "Ground",
             level: "Level {height}",
             built: "floor {rank}",

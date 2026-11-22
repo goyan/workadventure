@@ -3,9 +3,9 @@
     import { clickOutside } from "svelte-outside";
     import type { FloorLevelStack } from "../../Stores/FloorLevelsStore";
     import { LL, locale } from "../../../i18n/i18n-svelte";
-    import { altitudeLabel } from "../../Phaser/Game/Floors/AvatarAltitude";
+    import { altitudeLabel, metresLabel } from "../../Phaser/Game/Floors/AvatarAltitude";
     import { floorLevelViewedStore, levelChangePulses } from "../../Stores/FloorLevelsStore";
-    import { IconCheck, IconChevronDown } from "@wa-icons";
+    import { IconCheck, IconChevronDown, IconDroplet, IconMountain, IconSnowflake } from "@wa-icons";
 
     interface Props {
         /** The floors of the map and the one of the avatar; undefined: nothing to show. */
@@ -32,6 +32,30 @@
             label: `${level.elevation === stack.current ? "● " : ""}${level.name}`,
         })) ?? []),
     ]);
+
+    // Under the pointer: the ground, the surface of the water (or of its ice) and its depth, each one named.
+    let pointer = $derived(stack?.pointer);
+    let groundFigure = $derived(pointer ? metresLabel(pointer.ground, $locale) : "—");
+    let surfaceFigure = $derived(pointer?.surface === undefined ? "—" : metresLabel(pointer.surface, $locale));
+    let depthFigure = $derived(pointer?.depth === undefined ? "" : metresLabel(pointer.depth, $locale, false));
+    let waterName = $derived(
+        pointer?.ice
+            ? $LL.mapEditor.mapLayer.floorLevel.pointerIce()
+            : $LL.mapEditor.mapLayer.floorLevel.pointerWater(),
+    );
+    let pointerHint = $derived(
+        pointer === undefined
+            ? `${$LL.mapEditor.mapLayer.floorLevel.pointerAltitude()} · ${$LL.mapEditor.mapLayer.floorLevel.pointerOff()}`
+            : [
+                  `${$LL.mapEditor.mapLayer.floorLevel.pointerGround()} ${groundFigure}`,
+                  pointer.surface === undefined
+                      ? $LL.mapEditor.mapLayer.floorLevel.pointerNoWater()
+                      : `${waterName} ${surfaceFigure}`,
+                  ...(pointer.depth === undefined
+                      ? []
+                      : [$LL.mapEditor.mapLayer.floorLevel.pointerDepth({ depth: depthFigure })]),
+              ].join(" · "),
+    );
 
     let open = $state(false);
     let trigger = $state<HTMLButtonElement>();
@@ -139,27 +163,53 @@
                     {altitudeLabel(stack.altitude, $locale)}
                 </span>
             {/if}
-            {#if stack.pointerAltitude !== undefined}
-                <span
-                    class="flex shrink-0 items-center gap-0.5 tabular-nums opacity-60"
-                    title={$LL.mapEditor.mapLayer.floorLevel.pointerAltitude()}
-                    data-testid="pointer-altitude"
-                >
-                    <svg
-                        class="h-3 w-3 shrink-0 fill-none stroke-current"
-                        viewBox="0 0 24 24"
-                        stroke-width="2"
-                        aria-hidden="true"
-                    >
-                        <circle cx="12" cy="12" r="6" />
-                        <path d="M12 2v6M12 16v6M2 12h6M16 12h6" />
-                    </svg>
-                    <span class="sr-only">{$LL.mapEditor.mapLayer.floorLevel.pointerAltitude()}</span>
-                    {altitudeLabel(stack.pointerAltitude, $locale)}
-                </span>
-            {/if}
             <IconChevronDown class="h-3 w-3 shrink-0 opacity-60" />
         </button>
+        {#if stack.altitude !== undefined}
+            <!-- Under the pointer, on a line of its own that stays while the pointer is off the game (dashes then):
+                 the stack keeps its size, the figures keep their place. -->
+            <div
+                class="pointer-ground flex items-center gap-1.5 px-3 pb-1.5 tabular-nums"
+                title={pointerHint}
+                data-testid="pointer-ground"
+            >
+                <svg class="h-3 w-3 shrink-0 opacity-60" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="6" />
+                    <path d="M12 2v6M12 16v6M2 12h6M16 12h6" />
+                </svg>
+                <span class="sr-only">{pointerHint}</span>
+                <span class="flex shrink-0 items-center gap-0.5 opacity-80" aria-hidden="true">
+                    <IconMountain class="h-3 w-3 shrink-0" />
+                    <span class="figure">{groundFigure}</span>
+                </span>
+                <span
+                    class="flex shrink-0 items-center gap-0.5 {pointer?.surface === undefined
+                        ? 'opacity-40'
+                        : pointer.ice
+                          ? 'text-sky-100'
+                          : 'text-sky-300'}"
+                    aria-hidden="true"
+                    data-testid="pointer-water"
+                >
+                    {#if pointer?.ice}<IconSnowflake class="h-3 w-3 shrink-0" />{:else}<IconDroplet
+                            class="h-3 w-3 shrink-0"
+                        />{/if}
+                    <span class="figure">{surfaceFigure}</span>
+                </span>
+                {#if pointer?.depth !== undefined}
+                    <span
+                        class="flex shrink-0 items-center gap-0.5 opacity-70"
+                        aria-hidden="true"
+                        data-testid="pointer-depth"
+                    >
+                        <svg class="h-3 w-3 shrink-0" viewBox="0 0 24 24">
+                            <path d="M12 4v16M8 8l4-4 4 4M8 16l4 4 4-4" />
+                        </svg>
+                        {depthFigure}
+                    </span>
+                {/if}
+            </div>
+        {/if}
         {#if open}
             <div
                 bind:this={menu}
@@ -201,7 +251,18 @@
 <style>
     .floor-level-stack {
         pointer-events: auto;
-        width: 176px;
+        width: 200px;
+    }
+    /* The figures under the pointer keep their width ("+9,4 m" at most: the relief stays within ±8.8 m and the water
+       within a few decimetres over it), so that nothing moves when the pointer does. */
+    .pointer-ground {
+        font-size: 11px;
+        line-height: 14px;
+    }
+    .figure {
+        display: inline-block;
+        min-width: 6ch;
+        text-align: right;
     }
     .full-width {
         width: 100%;
