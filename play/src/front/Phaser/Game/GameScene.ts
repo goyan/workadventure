@@ -3427,7 +3427,14 @@ export class GameScene extends DirtyScene {
     public groundPointUnder(point: { x: number; y: number }): { x: number; y: number } {
         if (!this.pixelReliefShown()) return point;
         // The deck of a bridge is a raised floor, drawn at its place over the hollow under it: a click on it is on it.
-        return groundPointAt(this.reliefSeen(), point, (x, y) => this.terrainWater.isBridgeAt(x, y));
+        const now = this.time.now;
+        return groundPointAt(
+            this.reliefSeen(),
+            point,
+            (x, y) => this.terrainWater.isBridgeAt(x, y),
+            // On the water where it is drawn: one swims at its surface.
+            (x, y) => waterDepthAtPoint((pointX, pointY) => this.seenDepthAt(pointX, pointY, now), x, y),
+        );
     }
 
     /**

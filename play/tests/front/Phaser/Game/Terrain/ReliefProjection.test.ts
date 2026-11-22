@@ -141,6 +141,24 @@ describe("the relief seen in 3/4", () => {
     });
 });
 
+describe("a click on the water of a lake seen in 3/4", () => {
+    /** 100 px of water in the hollow: its surface 28 px under the ground, drawn 14 px lower than its place. */
+    const depthAt = (x: number, y: number): number => (x >= 160 && x < 224 && y >= 160 && y < 352 ? 100 : 0);
+
+    it("is on the water where it is drawn: where one swims, not on the floor of the lake under it", () => {
+        // The swimmer at (192, 250) is drawn at the surface, 14 px lower: a click on them is a click there.
+        near(groundPointAt(hollow(), { x: 192, y: 250 + 14 }, undefined, depthAt).y, 250);
+        near(groundPointAt(hollow(), { x: 192, y: 300 + 14 }, undefined, depthAt).y, 300);
+        // Read on the floor of the lake (64 px lower), the same click fell 50 px further north.
+        near(groundPointAt(hollow(), { x: 192, y: 250 + 14 }).y, 200);
+    });
+
+    it("is on the ground as ever where there is no water", () => {
+        expect(groundPointAt(hollow(), { x: 60, y: 250 }, undefined, depthAt)).toEqual({ x: 60, y: 250 });
+        near(groundPointAt(mount(), { x: 192, y: 250 - 64 }, undefined, () => 0).y, 250);
+    });
+});
+
 describe("a column of the relief drawn in 3/4", () => {
     const FLAT: Rgb = [200, 210, 220];
     const FLOOR: Rgb = [90, 100, 80];
