@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { newWaterProperties, waterAnchorOf } from "../../../../../src/front/Phaser/Game/Terrain/WaterAnchor";
+import {
+    newWaterProperties,
+    rotatedWaterProperties,
+    waterAnchorOf,
+} from "../../../../../src/front/Phaser/Game/Terrain/WaterAnchor";
 
 describe("waterAnchorOf", () => {
     it("is the middle of the foot of the object, from the corner of its image", () => {
@@ -43,5 +47,36 @@ describe("newWaterProperties", () => {
     it("never asks more than the largest flow", () => {
         const [property] = newWaterProperties({ waterFlow: { kind: "sink", flow: 1e12 } }, () => "id");
         expect(property).toMatchObject({ flow: 60_000_000 });
+    });
+});
+
+describe("rotatedWaterProperties", () => {
+    it("moves the water point of a channel turned upright, keeping its flow, radius and adaptive switch", () => {
+        const lying = [
+            {
+                id: "k",
+                type: "waterSinkPropertyData" as const,
+                flow: 1000,
+                radius: 2,
+                adaptive: false,
+                anchorX: 16,
+                anchorY: 5,
+            },
+            { id: "o", type: "openWebsite" as const, link: "https://example.org" },
+        ];
+        const upright = rotatedWaterProperties(lying as never, {
+            waterFlow: { kind: "sink", flow: 60, anchor: { x: 5, y: 16 } },
+        });
+
+        expect(upright?.[0]).toEqual({ ...lying[0], anchorX: 5, anchorY: 16 });
+        expect(upright?.[1]).toBe(lying[1]);
+    });
+
+    it("leaves the properties as they are when the catalog gives no point", () => {
+        const properties = [{ id: "k", type: "waterSinkPropertyData" as const, flow: 1, anchorX: 3, anchorY: 4 }];
+        expect(rotatedWaterProperties(properties as never, { waterFlow: { kind: "sink", flow: 1 } })).toBe(properties);
+        expect(
+            rotatedWaterProperties(undefined, { waterFlow: { kind: "sink", flow: 1, anchor: { x: 1, y: 1 } } }),
+        ).toBe(undefined);
     });
 });

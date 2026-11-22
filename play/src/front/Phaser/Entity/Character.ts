@@ -486,7 +486,13 @@ export abstract class Character extends Container implements OutlineableInterfac
         const body = { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y };
         // Frozen, it is skated on, not swum in.
         if (this.scene.isFrozenWaterAt?.(body.x, body.y)) return false;
-        return isDeepTerrainWater(this.scene.getTerrainWater?.(), body, this.scene.time.now);
+        // By the cell under the body, or as the water is drawn when the relief is shown in 3/4.
+        return isDeepTerrainWater(
+            this.scene.getTerrainWater?.(),
+            body,
+            this.scene.time.now,
+            this.scene.pixelReliefShown?.() === true,
+        );
     }
 
     /**
@@ -587,6 +593,23 @@ export abstract class Character extends Container implements OutlineableInterfac
 
     /** SPIKE (floors study): altitude of the floor the character stands on, in pixels above the ground. */
     private floorZ = 0;
+    /** How much lower the character is drawn, standing in a hollow of the relief seen in 3/4 (avatarDrop). */
+    private groundDrop = 0;
+    public getGroundDrop(): number {
+        return this.groundDrop;
+    }
+
+    /**
+     * Draws the character this much lower, in a hollow of the relief: its sprites while the image is drawn
+     * (CharacterDrops), its name here. Its place, its body and its depth do not change.
+     */
+    public setGroundDrop(drop: number): void {
+        const rounded = Math.round(drop);
+        if (rounded === this.groundDrop) return;
+        this.groundDrop = rounded;
+        this.updateUsernameDisplayPosition();
+        this.scene.markDirty();
+    }
     public getFloorZ(): number {
         return this.isFlying() ? AIRPLANE_AREA_LEVEL : this.floorZ;
     }
@@ -812,7 +835,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     protected updateUsernameDisplayPosition(x = this.x, y = this.y): void {
         // Over a plane drawn bigger as it climbs: the name keeps above its wings.
         const wings = Math.round((this.flightScale - 1) * (VEHICLE_FRAME_SIZE / 2));
-        this.usernameDisplay?.setPosition(x, y + playerNameY - this.flightLift - wings);
+        this.usernameDisplay?.setPosition(x, y + playerNameY - this.flightLift - wings + this.groundDrop);
     }
 
     public setVideoBubbleVisible(visible: boolean): void {

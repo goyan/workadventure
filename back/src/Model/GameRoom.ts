@@ -17,6 +17,7 @@ import {
     KARAOKE_LEADERBOARD_MIN_COVERAGE,
     KARAOKE_LEADERBOARD_REQUEST_EVENT,
     KaraokeLeaderboardRequestSchema,
+    mapCellsOf,
     TERRAIN_CELL,
 } from "@workadventure/map-editor";
 import * as Sentry from "@sentry/node";
@@ -146,7 +147,6 @@ const MEETING_INVITATION_MAX_REQUESTS_PER_USER = 3;
 const MEETING_INVITATION_REQUEST_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 
 /** The life of the land reads at most this many cells of the relief on each side of a map. */
-const MAX_MAP_CELLS = 4096;
 
 export class GameRoom implements BrothersFinder {
     private readonly privateMessages = new PrivateMessages((uuid) => this.getUsersByUuid(uuid));
@@ -1330,9 +1330,12 @@ export class GameRoom implements BrothersFinder {
         this.fireConditions?.set(user.id, sent);
     }
 
-    /** A player turns the fast water of the room on or off (FireConditionsManager.setFastWater). */
-    public setFastWater(user: Pick<User, "id">, on: boolean): void {
-        this.fireConditions?.setFastWater(user.id, on);
+    /**
+     * A player turns the fast water of the room on or off (FireConditionsManager.setFastWater): only one who may edit
+     * the map, checked here on the server.
+     */
+    public setFastWater(user: Pick<User, "id" | "canEdit">, on: boolean): void {
+        this.fireConditions?.setFastWater(user.id, on, user.canEdit);
     }
 
     /** The size of the map in cells of the relief (16 px), for the life of its land; undefined until it is read. */
@@ -1350,12 +1353,7 @@ export class GameRoom implements BrothersFinder {
     private readMapSize(onRead: () => void): void {
         this.getMap()
             .then((map) => {
-                const cells = (tiles: number | undefined, tilePx: number | undefined): number =>
-                    Math.min(MAX_MAP_CELLS, Math.max(0, Math.ceil(((tiles ?? 0) * (tilePx ?? 32)) / TERRAIN_CELL)));
-                this.mapCells = {
-                    width: cells(map.width, map.tilewidth),
-                    height: cells(map.height, map.tileheight),
-                };
+                this.mapCells = mapCellsOf(map);
                 onRead();
             })
             .catch((error) => console.warn("Could not read the size of the map for the life of its land", error));

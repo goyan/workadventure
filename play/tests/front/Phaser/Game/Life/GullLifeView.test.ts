@@ -24,7 +24,7 @@ interface Drawn {
     destroyed: boolean;
 }
 
-function create(shown = { value: true }) {
+function create(shown = { value: true }, dropAt?: (x: number, y: number) => number) {
     const drawn: Drawn[] = [];
     const make = (kind: Drawn["kind"], x: number, y: number, key: string) => {
         const object = {
@@ -67,6 +67,7 @@ function create(shown = { value: true }) {
         life,
         () => shown.value,
         () => false,
+        dropAt,
     );
     const sprites = () => drawn.filter((one) => one.kind === "sprite" && !one.destroyed);
     const shadows = () => drawn.filter((one) => one.kind === "ellipse" && !one.destroyed);
@@ -86,6 +87,23 @@ describe("GullLifeView", () => {
         expect(sprites()[0]).toMatchObject({ x: 100, y: 200 - GULL_ALTITUDE_PX, depth: GULL_FLIGHT_DEPTH });
         expect(shadows()[0]).toMatchObject({ x: 100, y: 200, visible: true });
         expect(shadows()[0].depth).toBeLessThan(GULL_FLIGHT_DEPTH);
+    });
+
+    it("over a relief seen in 3/4 has its shadow where the ground or the water is drawn, and flies as high over it", () => {
+        // A lake at the bottom of a hollow, its surface drawn 40 px lower.
+        const { view, life, sprites, shadows } = create(undefined, () => 40);
+        life.receive(
+            [
+                { id: 1, kind: 10, x: 100, y: 200, state: 1 },
+                { id: 2, kind: 11, x: 300, y: 200, state: 2 },
+            ],
+            0,
+        );
+        view.update(0);
+        expect(shadows()[0]).toMatchObject({ x: 100, y: 240 });
+        expect(sprites()[0]).toMatchObject({ x: 100, y: 240 - GULL_ALTITUDE_PX, depth: GULL_FLIGHT_DEPTH });
+        // Landed: on the ground where it is drawn, sorted by its place.
+        expect(sprites()[1]).toMatchObject({ x: 300, y: 240, depth: 200 });
     });
 
     it("flaps its wings as it flies", () => {

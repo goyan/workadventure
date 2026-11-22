@@ -96,3 +96,12 @@ export class NightHalos {
         this.animating = false;
     }
 }
+
+/**
+ * The halos where their players are drawn, the relief seen in 3/4: a player in a hollow is drawn lower than its place,
+ * on a mount higher (Character.getGroundDrop), and its light with it. The same list when nobody is moved.
+ */
+export function halosWhereDrawn(halos: Halo[], dropOf: (id: string) => number): Halo[] {
+    if (halos.every((halo) => dropOf(halo.id) === 0)) return halos;
+    return halos.map((halo) => ({ ...halo, y: halo.y + dropOf(halo.id) }));
+}

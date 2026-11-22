@@ -50,8 +50,11 @@ export function validPoolStyles(sent: readonly unknown[]): PoolStyle[] {
         .slice(0, MAX_POOL_STYLES);
 }
 
-/** A pool emptied is full again in this many seconds, whatever its size: its pump goes by its volume. */
-export const POOL_FILL_SECONDS = 8;
+/**
+ * A pool emptied is full again in this many seconds (ten minutes), whatever its size: its pump goes by its volume.
+ * Slow enough that a heat, a meteor or a drain leave it visibly lower for a while.
+ */
+export const POOL_FILL_SECONDS = 600;
 /** After a meteor fell in the water of the map, the pumps of its pools take this many seconds to start again. */
 export const POOL_PUMP_RESTART_SECONDS = 3;
 /** The pump fills a pool up to this many pixels under its rim: its water does not lap over the coping. */
@@ -60,6 +63,42 @@ export const POOL_FREEBOARD_PX = 2;
 export const POOL_OVERFLOW_SLACK_PX = 0.25;
 
 /** A cell of a pool, as the pump that fills it reads it. */
+/**
+ * The pool each cell belongs to: the cells of `cells` joined side by side make one pool (its pump, its drain), by
+ * the cell key ("x,y"). Numbered from 1.
+ */
+export function poolNumbersOf(cells: readonly Pick<PoolCell, "cellX" | "cellY">[]): Map<string, number> {
+    const keyOf = (x: number, y: number): string => `${x},${y}`;
+    const isPool = new Set(cells.map((cell) => keyOf(cell.cellX, cell.cellY)));
+    const numbers = new Map<string, number>();
+    let pool = 0;
+    for (const start of cells) {
+        const startKey = keyOf(start.cellX, start.cellY);
+        if (numbers.has(startKey)) continue;
+        pool++;
+        numbers.set(startKey, pool);
+        let front: { x: number; y: number }[] = [{ x: start.cellX, y: start.cellY }];
+        while (front.length > 0) {
+            const next: { x: number; y: number }[] = [];
+            for (const { x, y } of front) {
+                for (const [nx, ny] of [
+                    [x + 1, y],
+                    [x - 1, y],
+                    [x, y + 1],
+                    [x, y - 1],
+                ]) {
+                    const key = keyOf(nx, ny);
+                    if (!isPool.has(key) || numbers.has(key)) continue;
+                    numbers.set(key, pool);
+                    next.push({ x: nx, y: ny });
+                }
+            }
+            front = next;
+        }
+    }
+    return numbers;
+}
+
 export interface PoolCell {
     cellX: number;
     cellY: number;

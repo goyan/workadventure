@@ -188,10 +188,10 @@ describe("FireConditionsManager", () => {
             const { manager, sent } = createHarness();
             expect(manager.fastWater()).toBeUndefined();
             expect(manager.snapshot().fastWater).toBeUndefined();
-            expect(manager.setFastWater(1, true)).toBe(true);
+            expect(manager.setFastWater(1, true, true)).toBe(true);
             expect(manager.fastWater()).toBe(60);
             expect(sent.at(-1)?.fastWater).toBe(60);
-            expect(manager.setFastWater(2, false)).toBe(true);
+            expect(manager.setFastWater(2, false, true)).toBe(true);
             expect(manager.fastWater()).toBeUndefined();
             expect(sent.at(-1)?.fastWater).toBeUndefined();
         });
@@ -199,24 +199,35 @@ describe("FireConditionsManager", () => {
         it("keeps the conditions set by hand as they are", () => {
             const { manager } = createHarness();
             manager.set(1, hot);
-            manager.setFastWater(1, true);
+            manager.setFastWater(1, true, true);
             expect(manager.conditions().temperature).toBe(38);
             expect(manager.snapshot().manual).toBe(true);
         });
 
         it("writes nothing in the map, and is gone with the room", () => {
             const { manager, wam } = createHarness();
-            manager.setFastWater(1, true);
+            manager.setFastWater(1, true, true);
             expect(wam.settings?.water).toBeUndefined();
             manager.stop();
             // A room made again for the same map (it emptied, or the server restarted): as the map says.
             expect(createHarness().manager.fastWater()).toBeUndefined();
         });
 
+        it("is refused to whoever may not edit the map, whatever their browser sends", () => {
+            const { manager, sent } = createHarness();
+            expect(manager.setFastWater(3, true, false)).toBe(false);
+            expect(manager.fastWater()).toBeUndefined();
+            expect(sent).toHaveLength(0);
+            manager.setFastWater(1, true, true);
+            expect(manager.setFastWater(3, false, false)).toBe(false);
+            expect(manager.fastWater()).toBe(60);
+        });
+
         it("refuses the sixth change of a player within a second", () => {
             const { manager } = createHarness();
-            for (let change = 0; change < 5; change++) expect(manager.setFastWater(1, change % 2 === 0)).toBe(true);
-            expect(manager.setFastWater(1, false)).toBe(false);
+            for (let change = 0; change < 5; change++)
+                expect(manager.setFastWater(1, change % 2 === 0, true)).toBe(true);
+            expect(manager.setFastWater(1, false, true)).toBe(false);
             expect(manager.fastWater()).toBe(60);
         });
     });

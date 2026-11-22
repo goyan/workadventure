@@ -1075,7 +1075,6 @@ export class IoSocketController {
                             case "startFishingContestMessage":
                             case "launchCatastropheMessage":
                             case "setFireConditionsMessage":
-                            case "setFastWaterMessage":
                             case "entityMessage":
                             case "emotePromptMessage":
                             case "duckRushPromptMessage":
@@ -1092,6 +1091,12 @@ export class IoSocketController {
                             }
                             case "editMapCommandMessage": {
                                 socketManager.forwardMessageToBack(socket, message.message);
+                                break;
+                            }
+                            case "setFastWaterMessage": {
+                                // The fast water acts for the whole room and on the load of the server: only for who
+                                // may edit the map (checked again by the back).
+                                socketManager.forwardAdminMessageToBack(socket, message.message);
                                 break;
                             }
                             case "banPlayerMessage": {

@@ -18,8 +18,14 @@ export class FrostPrints {
     private lastFadeRedraw = Number.NEGATIVE_INFINITY;
     private alpha = Number.NaN;
 
-    constructor(scene: Phaser.Scene, takes: (x: number, y: number) => boolean, color?: string) {
-        this.layer = new FootprintLayer(scene, color);
+    /** `dropAt`: how much lower the ground at a point is drawn, the relief seen in 3/4: a print lies on it. */
+    constructor(
+        scene: Phaser.Scene,
+        takes: (x: number, y: number) => boolean,
+        color?: string,
+        dropAt?: (x: number, y: number) => number,
+    ) {
+        this.layer = new FootprintLayer(scene, color, dropAt);
         this.trail = new FootprintTrail(takes);
     }
 

@@ -28,6 +28,8 @@ export interface MovingShadowSource {
     height: number;
     sprites: readonly Phaser.GameObjects.Sprite[];
     scale?: number;
+    /** How much lower than its place it is drawn, on a relief seen in 3/4: its shadow lies under it. */
+    drop?: number;
 }
 
 export interface SkyMovingShadowsOptions {
@@ -115,8 +117,10 @@ export class SkyMovingShadows {
         ];
         for (const [kind, shown, shape, sources] of kinds) {
             if (!shown) continue;
-            for (const source of sources()) {
-                if (!this.options.isOutdoorAt(source.x, source.y)) continue;
+            for (const placed of sources()) {
+                if (!this.options.isOutdoorAt(placed.x, placed.y)) continue;
+                // Under what throws it, where that is drawn.
+                const source = placed.drop ? { ...placed, y: placed.y + placed.drop } : placed;
                 const id = `${kind}:${source.id}`;
                 // Its true silhouette, when asked for and when its sprites can be read; an oval otherwise.
                 const shadow =

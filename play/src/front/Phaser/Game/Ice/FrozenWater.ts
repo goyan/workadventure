@@ -4,7 +4,7 @@ import type { PoolStyle, TerrainData } from "@workadventure/map-editor";
 import { entityStatesManagerStore } from "@wa/front/Stores/EntityStatesStore";
 import type { GameScene } from "@wa/front/Phaser/Game/GameScene";
 import { isFrozen, ownIceMm, POOL_ICE_DEPTH_PX, waterCycleNow } from "@wa/front/Phaser/Game/Weather/Frost";
-import { followsServerGround } from "@wa/front/Phaser/Game/Weather/GroundSource";
+import { meadowHoldsSnow } from "@wa/front/Phaser/Game/Weather/GroundSource";
 import { isPoolAt, SWIM_DEPTH_PX } from "@wa/front/Phaser/Game/Water/WaterZones";
 import type { IceBreaks } from "./IceBreaks";
 import { iceOfThickness } from "./IceHold";
@@ -32,7 +32,7 @@ export function iceUnderfoot(scene: IceScene, point: { x: number; y: number }): 
     if (scene.getIceBreaks?.().holeAt(point.x, point.y, now)) return "none";
     const depth = water.depthAt(point.x, point.y, now);
     const deep = depth >= SWIM_DEPTH_PX;
-    if (followsServerGround()) return iceOfThickness(scene.getMeadow?.()?.iceAtPoint(point.x, point.y) ?? 0, deep);
+    if (meadowHoldsSnow()) return iceOfThickness(scene.getMeadow?.()?.iceAtPoint(point.x, point.y) ?? 0, deep);
     const wam = scene.getGameMap?.()?.getWamFile()?.getWam();
     const { ice } = waterCycleNow(wam?.settings);
     // A pool freezes from its surface (POOL_ICE_DEPTH_PX), whatever the depth of its basin, and never with its water
@@ -79,7 +79,7 @@ export function poolIceState(
     if (scene.getIceBreaks?.().holeIn(pool, scene.time?.now ?? 0)) return "none";
     // For a player who follows the weather of the server, a painted pool has the ice the server keeps on it (the
     // same for everyone). A pool placed as an image is not known to the server: it keeps the player's own cold.
-    if (pool.painted && followsServerGround()) {
+    if (pool.painted && meadowHoldsSnow()) {
         const ice = scene.getMeadow?.()?.iceAtPoint(pool.x + pool.width / 2, pool.y + pool.height / 2) ?? 0;
         return iceOfThickness(ice, pool.painted.depthPx >= SWIM_DEPTH_PX);
     }

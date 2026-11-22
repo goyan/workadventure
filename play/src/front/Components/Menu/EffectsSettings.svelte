@@ -1,7 +1,13 @@
 <script lang="ts">
     import { get } from "svelte/store";
     import { LL } from "../../../i18n/i18n-svelte";
-    import { detailedFlamesStore, EFFECTS, effectShownStores, type EffectName } from "../../Stores/EffectsStore";
+    import {
+        detailedFlamesStore,
+        EFFECTS,
+        effectShownStores,
+        pixelReliefStore,
+        type EffectName,
+    } from "../../Stores/EffectsStore";
     import InputSwitch from "../Input/InputSwitch.svelte";
     import SettingsSection from "./SettingsSection.svelte";
 
@@ -23,6 +29,14 @@
     $effect(() =>
         detailedFlamesStore.subscribe((value) => {
             detailedFlames = value;
+        }),
+    );
+
+    // How the ground is drawn: the relief seen in 3/4, or flat (off, the default).
+    let pixelRelief = $state(get(pixelReliefStore));
+    $effect(() =>
+        pixelReliefStore.subscribe((value) => {
+            pixelRelief = value;
         }),
     );
 </script>
@@ -52,4 +66,14 @@
             </div>
         {/if}
     {/each}
+    <div class="flex flex-col gap-1">
+        <InputSwitch
+            id="effect-pixel-relief"
+            bind:value={pixelRelief}
+            onchange={() => pixelReliefStore.set(pixelRelief)}
+            label={$LL.menu.settings.effects.pixelRelief()}
+            labelPosition="right"
+        />
+        <p class="m-0 text-xs text-white/60">{$LL.menu.settings.effects.pixelReliefHint()}</p>
+    </div>
 </SettingsSection>

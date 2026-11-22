@@ -417,6 +417,9 @@ const mapEditor: BaseTranslation = {
             levelValue: "Altitude of the water to hold, in metres",
             levelHint:
                 "The sink takes only the water over this altitude, in its disc: an overflow, which does not empty the lake. 0 m: the ground of the map; negative in a hollow, positive on a mount.",
+            adaptive: "Adaptive (keeps the building dry)",
+            adaptiveHint:
+                "Standing on a floor of the Map tool, the sink takes all the water that reaches that floor up to 12 tiles around, without crossing the walls, whatever its flow: corridors and rooms stay dry. Turned off, it keeps its flow and its disc. Off a floor, it always keeps its flow.",
         },
         waterLevelPipette: {
             title: "Take the level of a point of the map",

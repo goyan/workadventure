@@ -58,6 +58,13 @@ describe("SnowCaps", () => {
         expect(scene.add.image.mock.calls[0].slice(0, 2)).toEqual([0, 0]);
     });
 
+    it("caps an object where it is drawn on a relief seen in 3/4, outdoors by where it stands", () => {
+        const { scene, caps } = setup();
+        // On a mount, drawn 40 px higher than its place.
+        caps.rebuild([{ ...entity(0, 64), getGroundDrop: () => -40 }], grid);
+        expect(scene.add.image.mock.calls[0].slice(0, 2)).toEqual([0, 24]);
+    });
+
     it("skips walls and doors", () => {
         const { scene, caps } = setup();
         caps.rebuild(

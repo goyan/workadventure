@@ -57,6 +57,28 @@ describe("waterObjectsOf", () => {
         expect(waterObjectsOf(undefined)).toEqual([]);
     });
 
+    it("tells the step a sink that is not adaptive, and nothing for one that is (the default)", () => {
+        const objects = waterObjectsOf(
+            wam({
+                fixed: {
+                    x: 0,
+                    y: 0,
+                    prefabRef,
+                    properties: [{ id: "k", type: "waterSinkPropertyData", flow: 1, adaptive: false }],
+                },
+                smart: {
+                    x: 0,
+                    y: 0,
+                    prefabRef,
+                    properties: [{ id: "a", type: "waterSinkPropertyData", flow: 1, adaptive: true }],
+                },
+            }),
+        );
+
+        expect(objects.map((object) => object.adaptive)).toEqual([false, undefined]);
+        expect(stepInputOf(water, 0, objects, 1).flows.map((flow) => flow.adaptive)).toEqual([false, undefined]);
+    });
+
     it("reads the level a source or a sink holds, and gives it to the step", () => {
         const objects = waterObjectsOf(
             wam({

@@ -12,6 +12,8 @@ const LEAF_HEIGHT_PX = 3;
 interface Flying {
     leaf: KickedLeaf;
     shape: Phaser.GameObjects.Rectangle;
+    /** How much lower than its place it is drawn (the ground where it was kicked, on a relief seen in 3/4). */
+    drop: number;
 }
 
 /** Draws the kicked leaves: a short hop, then a fade. At most 120 at once, the oldest goes first. */
@@ -23,7 +25,11 @@ export class KickedLeafLayer {
     /** The time of the last update, used when the layer alpha changes between two updates. */
     private now = 0;
 
-    constructor(private readonly scene: Phaser.Scene) {}
+    /** `dropAt`: how much lower the ground at a point is drawn, the relief seen in 3/4 (GameScene.groundDropAt). */
+    constructor(
+        private readonly scene: Phaser.Scene,
+        private readonly dropAt: (x: number, y: number) => number = () => 0,
+    ) {}
 
     get count(): number {
         return this.pool.size;
@@ -32,14 +38,15 @@ export class KickedLeafLayer {
     add(leaves: KickedLeaf[], now: number): void {
         this.now = Math.max(this.now, now);
         for (const leaf of leaves) {
+            const drop = Math.round(this.dropAt(leaf.x, leaf.y));
             const shape = this.scene.add
-                .rectangle(leaf.x, leaf.y, LEAF_WIDTH_PX, LEAF_HEIGHT_PX, leaf.color)
+                .rectangle(leaf.x, leaf.y + drop, LEAF_WIDTH_PX, LEAF_HEIGHT_PX, leaf.color)
                 .setDepth(leaf.y - DEPTH_BELOW_FEET);
             // Tilted along its flight, so the leaves do not all look like the same little brick.
             shape.setRotation(Math.atan2(leaf.dy, leaf.dx));
             shape.setVisible(this.visible);
             shape.setAlpha(this.alpha);
-            this.pool.add({ leaf, shape }, now)?.shape.destroy();
+            this.pool.add({ leaf, shape, drop }, now)?.shape.destroy();
         }
     }
 
@@ -51,7 +58,7 @@ export class KickedLeafLayer {
             const t = Math.min(1, (this.now - addedAt) / KICK_FALL_MS);
             item.shape.setPosition(
                 item.leaf.x + item.leaf.dx * t,
-                item.leaf.y + item.leaf.dy * t - HOP_PX * Math.sin(Math.PI * t),
+                item.leaf.y + item.drop + item.leaf.dy * t - HOP_PX * Math.sin(Math.PI * t),
             );
         }
         this.applyAlpha();

@@ -90,9 +90,9 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
     basicMode: {
         label: "Basique",
         switch: "Mode basique : aucun effet",
-        on: "Mode basique actif : ni météo, ni nuit, ni lumière, ni eau, ni catastrophe. Clique pour revoir les effets.",
-        off: "Mode basique : masquer tous les effets (météo, nuit, lumière, eau, catastrophes), pour toi seul.",
-        hint: "Pour toi seul, et tes réglages détaillés sont conservés : désactivé, tout revient comme avant. L'eau du relief ne te fait plus nager ni dériver. L'éditeur de carte montre toujours tout.",
+        on: "Mode basique actif : ni météo, ni nuit, ni lumière, ni catastrophe, et l'eau en simple aplat. Clique pour revoir les effets.",
+        off: "Mode basique : masquer tous les effets (météo, nuit, lumière, catastrophes) et simplifier l'eau, pour toi seul.",
+        hint: "Pour toi seul, et tes réglages détaillés sont conservés : désactivé, tout revient comme avant. L'eau du relief reste visible, en aplat bleu sans vagues, mais ne te fait plus nager ni dériver. L'éditeur de carte montre toujours tout.",
     },
     visualisation: {
         label: "Visualisation",

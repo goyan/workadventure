@@ -5,8 +5,10 @@ import {
     DEFAULT_POOL_STYLE,
     DEFAULT_WATER_SETTINGS,
     POOL_FREEBOARD_PX,
+    POOL_FILL_SECONDS,
     poolSoilCode,
     PX_PER_MM,
+    WATER_STEP_MS,
     WeatherType,
     withHeights,
     withSoils,
@@ -725,7 +727,7 @@ describe("TerrainWaterManager", () => {
                 x: 10 * 32 - 32,
                 y,
                 prefabRef: { collectionName: "Carte Portes", id: `Carte Portes:${name}:Default:Down` },
-            } as (typeof wam.entities)[string];
+            };
         }
         const { manager, steps } = createHarness({ wam });
         let walkers: { x: number; y: number }[] = [];
@@ -1036,18 +1038,21 @@ describe("the pools of the map in the water of the relief", () => {
         return wam;
     };
     const full = DEFAULT_POOL_STYLE.depthPx - POOL_FREEBOARD_PX;
+    /** The steps (a tenth of a second each) the pump takes to fill an empty pool, and enough to have it full. */
+    const FILL_STEPS = (POOL_FILL_SECONDS * 1000) / WATER_STEP_MS;
+    const FILLED_STEPS = Math.round(FILL_STEPS * 1.5);
 
-    it("fills a pool by itself up to its rim in a few seconds, and nothing around it", () => {
+    it("fills a pool by itself up to its rim in POOL_FILL_SECONDS, and nothing around it", () => {
         const { manager, sent, steps } = createHarness({ wam: pooled(), mapSize: () => ({ width: 60, height: 60 }) });
         manager.mapChanged();
         const grid = manager.getGrid();
         expect(grid).toBeDefined();
         expect(grid?.depthAt(22, 22)).toBe(0);
-        // Half of the eight seconds: about half full.
-        steps(40);
+        // Half of the time: about half full.
+        steps(FILL_STEPS / 2);
         expect(grid?.depthAt(22, 22)).toBeGreaterThan(full * 0.35);
         expect(grid?.depthAt(22, 22)).toBeLessThan(full * 0.65);
-        steps(60);
+        steps(Math.round(FILL_STEPS * 0.75));
         expect(grid?.depthAt(22, 22)).toBeCloseTo(full, 0);
         expect(grid?.depthAt(20, 20)).toBeCloseTo(full, 0);
         expect(grid?.depthAt(19, 22)).toBe(0);
@@ -1063,7 +1068,7 @@ describe("the pools of the map in the water of the relief", () => {
     it("stops the pump of a pool where a ball stands: the ball is in the place of the water", () => {
         const { manager, sent, steps } = createHarness({ wam: pooled(), mapSize: () => ({ width: 60, height: 60 }) });
         manager.mapChanged();
-        steps(120);
+        steps(FILLED_STEPS);
         const grid = manager.getGrid();
         const before = grid?.totalPx() ?? 0;
         // A ball as wide as the pool is long, in its middle: the cell (23, 22).
@@ -1090,7 +1095,7 @@ describe("the pools of the map in the water of the relief", () => {
             };
             const { manager } = createHarness({ wam, mapSize: () => ({ width: 80, height: 60 }) });
             manager.mapChanged();
-            for (let step = 0; step < 120; step++) manager.step();
+            for (let step = 0; step < FILLED_STEPS; step++) manager.step();
             manager.vaporise(30 * 16, 25 * 16, 4);
             const grid = manager.getGrid();
             let held = 0;
@@ -1108,18 +1113,19 @@ describe("the pools of the map in the water of the relief", () => {
         expect(usual).toBeLessThan(craterOnly - 0.2);
         expect(usual).toBeLessThan(0.6);
         expect(water(4)).toBeLessThan(usual);
-    });
+        // Three pools filled by a pump of ten minutes: thousands of steps each.
+    }, 30_000);
 
     it("leaves a pool a meteor emptied empty for a moment: its pump takes three seconds to start again", () => {
         const { manager, steps } = createHarness({ wam: pooled(), mapSize: () => ({ width: 60, height: 60 }) });
         manager.mapChanged();
-        steps(120);
+        steps(FILLED_STEPS);
         const grid = manager.getGrid();
         manager.vaporise(23 * 16, 22 * 16, 4);
         // Two seconds later it is still empty; then it fills as fast as before.
         steps(20);
         expect(grid?.depthAt(22, 22)).toBeLessThan(1);
-        steps(10 + 40);
+        steps(10 + FILL_STEPS / 2);
         expect(grid?.depthAt(22, 22)).toBeGreaterThan(full * 0.35);
         expect(grid?.depthAt(22, 22)).toBeLessThan(full * 0.65);
         manager.stop();
@@ -1128,25 +1134,65 @@ describe("the pools of the map in the water of the relief", () => {
     it("fills a pool again after it was emptied", () => {
         const { manager, steps } = createHarness({ wam: pooled(), mapSize: () => ({ width: 60, height: 60 }) });
         manager.mapChanged();
-        steps(120);
+        steps(FILLED_STEPS);
         const grid = manager.getGrid();
         // A fireball boils its water away.
         manager.vaporise(23 * 16, 22 * 16, 4);
         expect(grid?.depthAt(22, 22)).toBeLessThan(1);
-        steps(120);
+        steps(FILLED_STEPS);
         expect(grid?.depthAt(22, 22)).toBeCloseTo(full, 0);
         manager.stop();
+    });
+
+    it("turns the pump of a pool off while an adaptive drain stands in its water, and on with one that is not", () => {
+        const sunk = (adaptive: boolean | undefined) => {
+            const wam = pooled();
+            const { manager, sent, steps } = createHarness({ wam, mapSize: () => ({ width: 60, height: 60 }) });
+            manager.mapChanged();
+            steps(FILLED_STEPS);
+            // A drain at the bottom of the pool, in the cell (22, 22).
+            wam.entities = {
+                drain: {
+                    x: 22 * 16,
+                    y: 22 * 16,
+                    prefabRef,
+                    properties: [
+                        {
+                            id: "k",
+                            type: "waterSinkPropertyData",
+                            flow: 600,
+                            radius: 1,
+                            ...(adaptive === undefined ? {} : { adaptive }),
+                        },
+                    ],
+                },
+            };
+            manager.mapChanged();
+            sent.length = 0;
+            steps(FILL_STEPS / 10);
+            const depth = manager.getGrid()?.depthAt(22, 22) ?? 0;
+            const pumped = sent.some((message) => (message.stats?.sources ?? 0) > 0);
+            manager.stop();
+            return { depth, pumped };
+        };
+        // Adaptive (the default): the pump is off, the pool goes down by the drain.
+        const adaptive = sunk(undefined);
+        expect(adaptive.pumped).toBe(false);
+        expect(adaptive.depth).toBeLessThan(full - 1);
+        // Not adaptive: the pump goes on making up for what the drain takes.
+        expect(sunk(false).pumped).toBe(true);
     });
 
     it("lets the overflow of a pool take what comes over its level, counted with the sinks", () => {
         const { manager, sent, steps } = createHarness({ wam: pooled(), mapSize: () => ({ width: 60, height: 60 }) });
         manager.mapChanged();
-        steps(120);
+        steps(FILLED_STEPS);
         const grid = manager.getGrid();
         // A snow melts in the pool: one more pixel of water on the two tiles of its west end.
         for (const tileY of [10, 11]) manager.pour(10, tileY, 1 / PX_PER_MM);
         expect(grid?.depthAt(20, 20)).toBeGreaterThan(full + 0.5);
-        steps(60);
+        // The overflow takes as fast as the pump fills: a pixel in a sixtieth of the time it takes.
+        steps(Math.round(FILL_STEPS / 40));
         expect(grid?.depthAt(20, 20)).toBeLessThan(full + 0.5);
         expect(grid?.depthAt(19, 20)).toBe(0);
         expect(sent.some((message) => (message.stats?.sinks ?? 0) > 0)).toBe(true);

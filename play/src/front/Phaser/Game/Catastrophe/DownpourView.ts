@@ -3,6 +3,7 @@ import { downpourTiles, TILE_PX } from "@workadventure/map-editor";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import { isEffectShown } from "../../../Stores/EffectsStore";
 import { drawFlake, flakeFadeIn, snowTones } from "../Weather/Snowfall";
+import { drawLower } from "../Terrain/GroundDrop";
 import {
     DOWNPOUR_FALL_PX,
     downpourAlpha,
@@ -68,6 +69,11 @@ export class DownpourView {
         private readonly reducedMotion: () => boolean,
         /** The share of a downpour that falls as snow in the air of the room, 0 (rain) to 1 (snow). */
         private readonly snowShare: () => number = () => 0,
+        /**
+         * How much lower what lies at a point is drawn, the relief seen in 3/4: the ground or the water over it
+         * (GameScene.surfaceDropAt).
+         */
+        private readonly dropAt: (x: number, y: number) => number = () => 0,
     ) {
         this.graphics = scene.add.graphics().setDepth(DEPTH_NIGHT_INDEX + 2);
     }
@@ -105,6 +111,13 @@ export class DownpourView {
             this.graphics.setVisible(visible);
             this.scene.markDirty();
         }
+        if (!visible) {
+            // Hidden (its own switch, or Basique): nothing drawn and the map not drawn again for it; the ended ones
+            // still leave, so that a reveal shows only what goes on.
+            for (const [id, shown] of this.shown) if (now >= shown.until) this.shown.delete(id);
+            this.lastUpdate = undefined;
+            return;
+        }
         if (this.shown.size === 0) {
             this.lastUpdate = undefined;
             return;
@@ -131,7 +144,11 @@ export class DownpourView {
                 if (!veiled) this.drawWholeMap(now, alpha, reduced, snow);
                 veiled = true;
             } else {
-                this.drawDisc(now, downpour, alpha, reduced, snow);
+                // Where what lies under it is drawn (the ground, or the water over it): its disc, its drops and its
+                // cloud with it.
+                drawLower([this.graphics], Math.round(this.dropAt(downpour.x, downpour.y)), () =>
+                    this.drawDisc(now, downpour, alpha, reduced, snow),
+                );
             }
         }
         this.scene.markDirty();

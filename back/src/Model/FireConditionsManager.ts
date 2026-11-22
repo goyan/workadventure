@@ -78,10 +78,12 @@ export class FireConditionsManager {
     /** The conditions now: set by hand, else the real ones of a map in real weather, else mild ones. */
     /**
      * A player turns the fast water of the room on or off: for everyone in it, the water, the snow and the ice of the
-     * room go FAST_WATER_TIMES times faster than reality, until it is turned off or the room empties.
+     * room go FAST_WATER_TIMES times faster than reality, until it is turned off or the room empties. Only a player
+     * who may edit the map (`canEdit`, the right the map storage checks for an edit of the map): it acts for everyone,
+     * and on the load of the server. What another one sends changes nothing, whatever their browser lets them do.
      */
-    public setFastWater(userId: number, on: boolean): boolean {
-        if (!this.allowed(userId)) return false;
+    public setFastWater(userId: number, on: boolean, canEdit: boolean): boolean {
+        if (!canEdit || !this.allowed(userId)) return false;
         this.fast = on ? FAST_WATER_TIMES : undefined;
         this.tell();
         return true;

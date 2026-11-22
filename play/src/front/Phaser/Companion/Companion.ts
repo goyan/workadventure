@@ -3,6 +3,7 @@ import type { Writable } from "svelte/store";
 import { writable } from "svelte/store";
 import type { CancelablePromise } from "cancelable-promise";
 import { PositionMessage_Direction } from "@workadventure/messages";
+import { ON_A_FLOOR } from "../Game/Terrain/AvatarDrop";
 import type { GameScene } from "../Game/GameScene";
 import type { Character } from "../Entity/Character";
 import { findSeatOfCharacter, getSeats, isSeatTaken } from "../Player/Seat";
@@ -171,6 +172,16 @@ export class Companion extends Container {
         this.exactX = x;
         this.exactY = y;
         this.setPosition(Math.round(x), Math.round(y));
+    }
+
+    /**
+     * How much lower the companion is drawn, on a relief seen in 3/4 (higher on a mount): as much as the ground under
+     * it, only while the image is drawn (CharacterDrops). Nothing while its player is on a raised floor: it is there too.
+     */
+    public getGroundDrop(): number {
+        const floorZ = this.owner.isFlying?.() ? 0 : (this.owner.getFloorZ?.() ?? 0);
+        if (floorZ >= ON_A_FLOOR) return 0;
+        return Math.round((this.scene as Partial<Pick<GameScene, "groundDropAt">>).groundDropAt?.(this.x, this.y) ?? 0);
     }
 
     private updateDirection(dx: number, dy: number): void {

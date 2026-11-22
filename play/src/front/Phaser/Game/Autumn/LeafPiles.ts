@@ -52,7 +52,10 @@ export class LeafPiles {
             const scaleY = entity.displayHeight / entity.frame.height;
             const image = this.scene.add.image(
                 entity.x + pile.left * scaleX,
-                entity.y + (pile.bottom + 1 + PILE_OVERHANG_PX - pile.height) * scaleY,
+                // At the foot of the object where it is drawn (lower in a hollow of a relief seen in 3/4).
+                entity.y +
+                    (entity.getGroundDrop?.() ?? 0) +
+                    (pile.bottom + 1 + PILE_OVERHANG_PX - pile.height) * scaleY,
                 pile.key,
             );
             image.setOrigin(0);

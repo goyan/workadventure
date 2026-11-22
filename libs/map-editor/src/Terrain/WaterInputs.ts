@@ -42,6 +42,8 @@ export interface WaterObject {
      * it always runs.
      */
     levelPx?: number;
+    /** False for a sink that keeps its flow on a floor too (see WaterSinkPropertyData.adaptive). */
+    adaptive?: false;
 }
 
 /**
@@ -65,6 +67,7 @@ export function waterObjectsOf(wam: Pick<WAMFileFormat, "entities"> | undefined)
                     ((found.radius ?? (source.success ? 0 : DEFAULT_SINK_RADIUS_TILES)) * TILE_PX) / TERRAIN_CELL,
                 ),
                 ...(found.level === undefined ? {} : { levelPx: found.level }),
+                ...(sink?.success && sink.data.adaptive === false ? { adaptive: false as const } : {}),
             });
         }
     }
@@ -151,6 +154,7 @@ export function stepInputOf(
                 px: (object.litresPerMinute * 60 * hours) / CELL_LITRES_PER_PX,
                 radius: object.radiusCells,
                 ...(object.levelPx === undefined ? {} : { level: object.levelPx }),
+                ...(object.adaptive === false ? { adaptive: false as const } : {}),
             })),
     };
 }

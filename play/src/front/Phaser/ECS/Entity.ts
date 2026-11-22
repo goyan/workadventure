@@ -56,6 +56,7 @@ import LL from "../../../i18n/i18n-svelte";
 import { DEBUG_MODE } from "../../Enum/EnvironmentVariable";
 import { TexturesHelper } from "../Helpers/TexturesHelper";
 import { reachesView } from "../Game/ViewCulling";
+import { hitWhereDrawn, standsOnGround } from "../Game/Terrain/GroundDrop";
 import { getLayerDepth, stackableDepths } from "./EntityLayerDepth";
 
 import Sprite = Phaser.GameObjects.Sprite;
@@ -75,6 +76,13 @@ export enum EntityEvent {
 export const DEFAULT_ACTIVABLE_RADIUS = 14;
 
 // NOTE: Tiles-based entity for now. Individual images later on
+/** The colour and the opacity of an object seen under the water of the relief (the blue of its shallows). */
+const SUBMERGED_TINT = 0x7fb6d9;
+const SUBMERGED_ALPHA = 0.55;
+type HitTest = (area: unknown, x: number, y: number, object: Phaser.GameObjects.GameObject) => boolean;
+/** The hit tests already brought back to where their object is drawn (Entity.hitWhereDrawn): never wrapped twice. */
+const movedHitTests = new WeakSet<HitTest>();
+
 export class Entity extends Sprite implements ActivatableInterface, OutlineableInterface {
     public readonly activationRadius: number = DEFAULT_ACTIVABLE_RADIUS;
     private readonly outlineColorStore = createColorStore();
@@ -85,6 +93,8 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
     private entityData: Required<WAMEntityData>;
     /** Depth before the manual stacking, from the position of the foot and the neighbouring images. */
     private automaticDepth = 0;
+    /** Whether the water of the relief covers it (a drain in a pool, in a flood): drawn as seen through the water. */
+    private submerged = false;
     private prefab: EntityPrefab;
     private season = Season.Summer;
     /** How much snow covers the ground, 0 to 1: a tree under snow whitens with it, at its own pace. */
@@ -155,8 +165,10 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
     public override willRender(camera: Phaser.Cameras.Scene2D.Camera): boolean {
         if (!super.willRender(camera)) return false;
         if (camera !== this.scene.cameras.main) return true;
+        // Drawn lower or higher on a relief seen in 3/4: in the view at its place or where it is drawn.
+        const reach = Math.abs(this.groundDrop);
         return reachesView(
-            { x: this.x, y: this.y, width: this.displayWidth, height: this.displayHeight },
+            { x: this.x, y: this.y - reach, width: this.displayWidth, height: this.displayHeight + 2 * reach },
             camera.worldView,
         );
     }
@@ -426,6 +438,22 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         return this.entityData;
     }
 
+    /**
+     * Shows the object under the water (tinted by it, half seen through it) while the water of the relief covers it,
+     * and as it is again once the water went down: a drain is seen at the bottom of a pool until it emptied it.
+     */
+    public setSubmerged(submerged: boolean): void {
+        if (submerged === this.submerged) return;
+        this.submerged = submerged;
+        if (submerged) {
+            this.setTint(SUBMERGED_TINT);
+            this.setAlpha(SUBMERGED_ALPHA);
+        } else {
+            this.clearTint();
+            this.setAlpha(1);
+        }
+    }
+
     public getPrefab(): EntityPrefab {
         return this.prefab;
     }
@@ -452,7 +480,54 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
                 hitAreaCallback: () => false,
             });
         }
-        return super.setInteractive(hitArea, callback, dropZone);
+        super.setInteractive(hitArea, callback, dropZone);
+        this.hitWhereDrawn();
+        return this;
+    }
+
+    /**
+     * Phaser tests a click against the place of the object, which never moves: drawn lower or higher on a relief seen
+     * in 3/4 (getGroundDrop), it is clicked where it is seen.
+     */
+    private hitWhereDrawn(): void {
+        const input = this.input;
+        const test = input?.hitAreaCallback as HitTest | undefined;
+        if (!input || !test || movedHitTests.has(test)) return;
+        const whereDrawn = hitWhereDrawn<unknown, Entity>(
+            (area, x, y) => test(area, x, y, this),
+            () => this.groundDrop,
+        );
+        const moved: HitTest = (area, x, y) => whereDrawn(area, x, y, this);
+        movedHitTests.add(moved);
+        input.hitAreaCallback = moved;
+    }
+
+    /** How much lower the object is drawn, standing on a relief seen in 3/4 (higher on a mount): see PlacedDrops. */
+    private groundDrop = 0;
+    public getGroundDrop(): number {
+        return this.groundDrop;
+    }
+
+    /** Draws the object this much lower, only while the image is drawn (CharacterDrops): its place never changes. */
+    public setGroundDrop(drop: number): void {
+        const rounded = Math.round(drop);
+        if (rounded === this.groundDrop) return;
+        this.groundDrop = rounded;
+        // (Its scene is gone once it is destroyed.)
+        (this.scene as GameScene | undefined)?.markDirty();
+    }
+
+    /** Whether the object stands on the ground, and so follows it on a relief seen in 3/4 (standsOnGround). */
+    public standsOnGround(): boolean {
+        const { collectionName, id, layer } = this.prefab;
+        return standsOnGround({
+            cartePiece:
+                isMapLayerPrefab(collectionName, id) ||
+                parseFloorPiece(collectionName, id) !== undefined ||
+                parseAnyLevelPrefab(collectionName, id) !== undefined,
+            layer,
+            elevation: this.entityData.elevation,
+        });
     }
 
     /**
@@ -893,9 +968,11 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
     // Play text on the entity
     public playText(id: string, text: string, duration = 10000, callback = () => this.destroyText()) {
         const x = this.x + this.width / 2;
-        this.speechDomElement = new SpeechDomElement(id, text, this.scene, x, this.y - 10, callback);
+        // Over the object where it is drawn: lower in a hollow of a relief seen in 3/4, higher on a mount.
+        const y = this.y + this.groundDrop;
+        this.speechDomElement = new SpeechDomElement(id, text, this.scene, x, y - 10, callback);
         this.scene.add.existing(this.speechDomElement);
-        this.speechDomElement.play(x, this.y - 20, duration);
+        this.speechDomElement.play(x, y - 20, duration);
     }
 
     // Destroy text

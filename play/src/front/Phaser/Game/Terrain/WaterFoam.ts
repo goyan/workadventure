@@ -216,3 +216,52 @@ export function wetAround(
     }
     return sum / AROUND_POINTS;
 }
+
+/** The whole pixels of a line from one point to another, both ends included, each touching the one before (pixel art). */
+export function pixelRun(fromX: number, fromY: number, toX: number, toY: number): { x: number; y: number }[] {
+    let x = Math.round(fromX);
+    let y = Math.round(fromY);
+    const endX = Math.round(toX);
+    const endY = Math.round(toY);
+    const dx = Math.abs(endX - x);
+    const dy = -Math.abs(endY - y);
+    const stepX = x < endX ? 1 : -1;
+    const stepY = y < endY ? 1 : -1;
+    let error = dx + dy;
+    const pixels = [{ x, y }];
+    while (x !== endX || y !== endY) {
+        const twice = 2 * error;
+        if (twice >= dy) {
+            error += dy;
+            x += stepX;
+        }
+        if (twice <= dx) {
+            error += dx;
+            y += stepY;
+        }
+        pixels.push({ x, y });
+    }
+    return pixels;
+}
+
+/** The pixels of a ring around a point (pixel art): 24 runs between points of the circle. */
+export function ringPixels(centreX: number, centreY: number, radius: number): { x: number; y: number }[] {
+    const pixels: { x: number; y: number }[] = [];
+    const seen = new Set<string>();
+    for (let side = 0; side < 24; side++) {
+        const from = (side / 24) * 2 * Math.PI;
+        const to = ((side + 1) / 24) * 2 * Math.PI;
+        for (const pixel of pixelRun(
+            centreX + Math.cos(from) * radius,
+            centreY + Math.sin(from) * radius,
+            centreX + Math.cos(to) * radius,
+            centreY + Math.sin(to) * radius,
+        )) {
+            const key = `${pixel.x},${pixel.y}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            pixels.push(pixel);
+        }
+    }
+    return pixels;
+}

@@ -429,6 +429,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             levelValue: "Altitude de l'eau à tenir, en mètres",
             levelHint:
                 "Le puits ne prend que l'eau au-dessus de cette altitude, dans son disque : un trop-plein, qui ne vide pas le lac. 0 m : le niveau du sol de la carte ; négatif dans un creux, positif sur un mont.",
+            adaptive: "Adaptatif (garde le bâtiment au sec)",
+            adaptiveHint:
+                "Posé sur un sol de l'outil Carte, le puits prend toute l'eau qui arrive sur ce sol jusqu'à 12 cases autour, sans passer les murs, quel que soit son débit : couloirs et pièces restent secs. Désactivé, il garde son débit et son disque. Hors d'un sol, il garde toujours son débit.",
         },
         waterLevelPipette: {
             title: "Prendre le niveau d'un point de la carte",

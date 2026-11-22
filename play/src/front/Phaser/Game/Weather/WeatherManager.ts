@@ -23,6 +23,7 @@ import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { SeasonalTheme } from "../Seasonal/SeasonalTheme";
 import type { SunPosition } from "../Night/NightClock";
 import { basicActiveStore, unlessBasic } from "../../../Stores/BasicModeStore";
+import { pixelBlocksShownNow } from "../Terrain/PixelBlocksShown";
 import { NO_WATER_REFLECTION } from "../Terrain/WaterReflection";
 import type { WaterReflection } from "../Terrain/WaterReflection";
 import type { RaisedCover } from "./RaisedCover";
@@ -38,6 +39,7 @@ import {
     outdoorCells,
     paddedView,
     stormFlash,
+    themedFall,
     weatherAtTime,
     wellInside,
 } from "./WeatherFrame";
@@ -288,19 +290,31 @@ export class WeatherManager {
         const realFogSince = real ? settings?.weatherStartedAt : undefined;
         const realFogUntil = real ? settings?.weatherEndsAt : undefined;
         const theme = this.options.seasonalTheme?.();
-        const weather = weatherAtTime(configured, serverDate, settings?.weatherAuto, settings?.weatherLocation);
-        const storm = weather === WeatherType.Storm;
+        const mapWeather = weatherAtTime(configured, serverDate, settings?.weatherAuto, settings?.weatherLocation);
         const forcedRain = forcedRainLevel(this.forcedRain, now);
-        const rain = forcedRain ?? rainIntensity(settings?.rainRate, storm);
+        const mapRaining = mapWeather === WeatherType.Storm || mapWeather === WeatherType.Rain;
+        // In cold air the precipitation falls as snow, wholly or among the drops: the weather itself stays a rain. And
+        // it snows for who chose the winter theme, whatever the weather of the map (themedFall).
+        const { weather, rain, snow, flakes } = themedFall(
+            theme,
+            mapWeather,
+            forcedRain ?? rainIntensity(settings?.rainRate, mapWeather === WeatherType.Storm),
+            mapRaining ? Math.max(0, Math.min(1, this.options.snowShare?.() ?? 0)) : 0,
+        );
+        const storm = weather === WeatherType.Storm;
         const raining = storm || weather === WeatherType.Rain;
-        // In cold air the precipitation falls as snow, wholly or among the drops: the weather itself stays a rain.
-        const snow = raining ? Math.max(0, Math.min(1, this.options.snowShare?.() ?? 0)) : 0;
         // A forced level (development) soaks the ground as much, so the puddles can be seen at once.
         const wetness = Math.max(mapGroundWetness(settings, serverDate), raining ? (forcedRain ?? 0) : 0);
         this.drawPuddles(this.weatherShown && !this.editing ? wetness : 0);
         this.sounds.update(weather, serverDate, this.editing, night, rain, snow);
         const enabled = this.weatherShown && !this.editing;
-        this.snowGround.update(now, serverDate, !this.editing, theme === SeasonalTheme.Autumn);
+        // The grass of the map: left to the blocks of the relief while it is shown in 3/4 (they draw it).
+        this.snowGround.update(
+            now,
+            serverDate,
+            !this.editing && !pixelBlocksShownNow(),
+            theme === SeasonalTheme.Autumn,
+        );
         const showWeather = enabled && weather !== WeatherType.Clear;
         // Clouds of a clear sky, still fading out over the first minutes of a bad weather; none at night.
         const cloudiness = settings?.cloudiness ?? 0;
@@ -532,7 +546,8 @@ export class WeatherManager {
             // The part that falls as rain as drops, the part that falls as snow as flakes: both in a sleet.
             if (snow < 1) this.drawRain(epoch, view, rain * (1 - snow), wind, isOutdoor, underClouds);
             const fall: SnowFall = {
-                level: Math.min(1, snowLevel(settings?.rainRate, snow, storm) * this.rainSettings.amount),
+                // The snow of the winter theme under a dry sky falls as it says, whatever the rate of the map.
+                level: Math.min(1, (flakes ?? snowLevel(settings?.rainRate, snow, storm)) * this.rainSettings.amount),
                 mix: flakeMix(this.options.precipitationAir?.()),
             };
             if (fall.level > 0) {
