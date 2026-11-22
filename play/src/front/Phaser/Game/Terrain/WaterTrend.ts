@@ -121,6 +121,11 @@ export class WaterTrend {
         return this.second;
     }
 
+    /** Whether the waves of the water were sampled long enough to tell a trend: before, nothing is shown. */
+    public ready(): boolean {
+        return this.samples >= FIRST_SAMPLES;
+    }
+
     /** Whether each cell shows a rise (1), a fall (-1) or neither (0). */
     public shown(): Int8Array {
         return this.signs;

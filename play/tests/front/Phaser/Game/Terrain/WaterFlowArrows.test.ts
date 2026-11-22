@@ -36,16 +36,22 @@ function countingScene(): { scene: ConstructorParameters<typeof WaterFlowOverlay
     return { scene: scene as unknown as ConstructorParameters<typeof WaterFlowOverlay>[0], lines: () => lines };
 }
 
-/** A lake of 32 by 32 cells, 20 px deep, whose blocks the server tells running east at `units` quarters a second. */
-function lake(units: number): TerrainWater {
+/**
+ * A lake of 32 by 32 cells, 20 px deep, whose blocks the server tells running east at `units` quarters a second,
+ * and at `slow` 250ths of a cell a second where that says nothing (absent: the server tells no slow speed).
+ */
+function lake(units: number, slow?: number): TerrainWater {
     const water = new TerrainWater();
     const cells = 32 * 32;
     const depths = new Uint8Array(cells * 2);
     for (let index = 0; index < cells; index++) depths[index * 2] = 20 * 8;
     const speeds = new Uint8Array((32 / 4) * (32 / 4) * 2);
     for (let block = 0; block < speeds.length / 2; block++) speeds[block * 2] = units & 255;
-    water.receive({ x: 0, y: 0, width: 32, height: 32, seq: 1, full: true, depths, speeds }, 0);
-    water.receive({ x: 0, y: 0, width: 32, height: 32, seq: 2, full: true, depths, speeds }, 1000);
+    const slowSpeeds = slow === undefined ? undefined : new Uint8Array(speeds.length);
+    if (slowSpeeds && slow !== undefined)
+        for (let block = 0; block < slowSpeeds.length / 2; block++) slowSpeeds[block * 2] = slow & 255;
+    water.receive({ x: 0, y: 0, width: 32, height: 32, seq: 1, full: true, depths, speeds, slowSpeeds }, 0);
+    water.receive({ x: 0, y: 0, width: 32, height: 32, seq: 2, full: true, depths, speeds, slowSpeeds }, 1000);
     return water;
 }
 
@@ -64,5 +70,13 @@ describe("the arrows of the view of the flows", () => {
 
     it("draws none over water the server tells still", () => {
         expect(arrowsOver(lake(0))).toBe(0);
+        expect(arrowsOver(lake(0, 0))).toBe(0);
+    });
+
+    it("draws the slow currents the server tells apart: 0.06 m/s, under a quarter of a cell a second", () => {
+        // 27 250ths of a cell a second: about 6 cm a second, the current of a pond a source feeds.
+        expect(arrowsOver(lake(0, 27))).toBeGreaterThan(30);
+        // 5 250ths: about a centimetre a second, still shown.
+        expect(arrowsOver(lake(0, 5))).toBeGreaterThan(30);
     });
 });

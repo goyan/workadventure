@@ -1,4 +1,11 @@
-import { CELL_METRES, heightAt, soilAt, soilRoughness, SPEED_UNITS, steadyFlowSpeed } from "@workadventure/map-editor";
+import {
+    CELL_METRES,
+    heightAt,
+    SLOWEST_TOLD_CELLS,
+    soilAt,
+    soilRoughness,
+    steadyFlowSpeed,
+} from "@workadventure/map-editor";
 import type { TerrainData, WaveSettings } from "@workadventure/map-editor";
 import type { SettledWater } from "./TerrainWater";
 import { STEADY_PX_PER_SECOND } from "./WaterTrend";
@@ -8,12 +15,12 @@ export const FLOW_MIN_DEPTH_PX = 0.5;
 /** A surface that slopes less than this, in pixels a cell, is at rest. */
 export const FLOW_REST_SLOPE = 0.02;
 /**
- * The slowest water the server tells the speed of, in metres a second: a step of its speeds (a quarter of a cell a
- * second, about 0.14 m/s). Slower water with inertia is told still: it has no arrow.
+ * The slowest water the server tells the speed of, in metres a second (its slow speeds, about a centimetre a
+ * second). Slower water with inertia is told still: it has no arrow.
  */
-export const SLOWEST_TOLD_SPEED = CELL_METRES / SPEED_UNITS;
-/** A water the server tells slower than this, in cells a second, is at rest. */
-export const FLOW_REST_SPEED = 0.1;
+export const SLOWEST_TOLD_SPEED = SLOWEST_TOLD_CELLS * CELL_METRES;
+/** A water the server tells slower than this, in cells a second, is at rest: what it tells still. */
+export const FLOW_REST_SPEED = SLOWEST_TOLD_CELLS;
 /** Ground this much lower than the surface of the water next to it is a drop: the water runs down there. */
 const DROP_PX = 1;
 

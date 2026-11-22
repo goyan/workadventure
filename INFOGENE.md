@@ -2828,8 +2828,8 @@ lisser sur 1 s ne changeait rien à 1 état par seconde, et pas assez à 5. La r
   s'éteint d'elle-même (`TerrainWater.settled(now)`).
 - **à la demande** : la tendance n'est tenue que tant que la visualisation la lit (`TerrainWater.settled(now)`, dix
   fois par seconde quand « Flux d'eau » est affiché ; aucun autre lecteur). Fermée, aucun parcours de la grille et
-  aucune mémoire (`dropTrend`, ou d'elle-même au premier état après 2 s sans lecture). Rouverte, elle repart de rien
-  (pas de teinte d'avant la fermeture) et ne teinte qu'après 3 s d'observation. Coût mesuré quand elle est tenue
+  aucune mémoire, au premier état reçu après 30 s sans lecture. Rouverte plus tard, elle repart de rien (pas de teinte
+  d'avant la fermeture) et ne teinte qu'après 3 s d'observation. Coût mesuré quand elle est tenue
   (Node, Mac M) : 2 ms par état sur une grille de 600 × 600 cellules (0,2 à 0,3 ms sur 200 × 200), soit 2, 10 ou
   18 ms par seconde à 1, 5 ou 10 états par seconde ; aucun tableau alloué par état ; 17 octets par cellule (quatre
   tableaux `Float32Array` et un `Int8Array`), 6,1 Mo pour 600 × 600. Auparavant, ce coût valait pour tout joueur,
@@ -2848,25 +2848,35 @@ comprise. Sur mer modérée, cette vitesse reste sous son pas d'envoi (un quart 
 flèche. Sur mer forte, une flèche s'inverse d'une seconde à l'autre 15 à 35 % du temps, ce qui est le mouvement réel
 de l'eau sous la vague.
 
-**Pas de flèche sous 0,14 m/s sur une carte à inertie.** Le serveur transmet la vitesse par bloc de 4 × 4 cellules,
-par pas d'un quart de cellule par seconde (`SPEED_UNITS`, 0,137 m/s, `SLOWEST_TOLD_SPEED`) : plus lente, elle est
-dite nulle et l'overlay ne trace rien. La légende le dit (« transmises à partir de 0,14 m/s »). Mesuré sur le modèle
-(étang de 11 × 11 cellules, 30 cm d'eau, source de 100 m³/h au milieu, trop-plein par un chenal) : à « Vitesse de
-l'eau » 1, courants de 6 cm/s au plus, aucun bloc transmis non nul dans l'étang (flèches dans le chenal seulement) ;
-à 4, 82 cellules sur 121 au-dessus de 3 cm/s mais un seul bloc transmis ; à 60, des flèches partout. Une eau
-arrêtée (source à son niveau) n'a de toute façon aucune flèche. La glace n'y change rien : le serveur fait couler
-l'eau sous elle, l'overlay l'ignore.
+**Courants lents** (dès 1 cm/s sur une carte à inertie). Le serveur transmet la vitesse par bloc de 4 × 4 cellules,
+par pas d'un quart de cellule par seconde (`speeds`, `SPEED_UNITS`, 0,137 m/s) : plus lente, elle valait zéro et
+l'overlay ne traçait rien. Mesuré sur le modèle (étang de 11 × 11 cellules, 30 cm d'eau, source de 100 m³/h au
+milieu, trop-plein par un chenal) : à « Vitesse de l'eau » 1, courants de 6 cm/s au plus et aucun bloc transmis dans
+l'étang ; à 4, 82 cellules sur 121 au-dessus de 3 cm/s mais un seul bloc transmis. Depuis, un champ facultatif
+`slowSpeeds` (champ 10 de `TerrainWaterMessage`, même disposition) donne, là où `speeds` dit zéro, la vitesse en
+250ᵉ de cellule par seconde (2 mm/s), dès 1 cm/s (`SLOW_SPEED_UNITS`, `SLOWEST_TOLD_CELLS`,
+`WaterGrid.writeSpeedBytes`). Le navigateur le lit dans `TerrainWater.speedAt` ; l'overlay trace dès 1 cm/s
+(`FLOW_REST_SPEED`, `SLOWEST_TOLD_SPEED`) et la légende le dit (« transmises à partir de 0,01 m/s »). Sur l'étang
+à « Vitesse de l'eau » 1 : 4 blocs sur 9 ont une flèche (pâle, courte).
+Compatibilité : un `play` ancien ignore le champ, un `back` ancien ne l'envoie pas (le `play` neuf trace alors dès
+0,14 m/s, comme avant). Le courant qui porte les avatars ne change pas : il ne compte qu'à partir de 0,2 cellule/s
+(`CURRENT_REST_SPEED`). Coût : un seul passage sur la grille, le même qu'avant (0,9 ms par message sur 600 × 600) ;
+en octets gzip par message, rien d'utile sur une eau calme ou rapide (des zéros), 0,3 à 0,5 ko sur une mer de
+80 × 80 qui se calme, 4 ko sur une mer de 600 × 600 dix secondes après une tempête, 2 ko une minute après (1,5 ko
+avec un plancher de 2 cm/s, mais l'étang n'aurait plus qu'une flèche). Écartée : deviner la vitesse d'après la pente
+quand le serveur dit zéro, car 3 à 6 cm/s sous 30 cm d'eau demandent une pente de 0,001 à 0,002 px par cellule,
+trente fois sous le bruit des profondeurs reçues (0,06 px par cellule, qui donnerait 0,8 m/s sur un étang immobile).
 
-Deux pistes écartées ou laissées en option, chiffrées :
-- **deviner la vitesse d'après la pente** quand le serveur dit zéro : 3 à 6 cm/s sous 30 cm d'eau demandent une
-  pente de 0,001 à 0,002 px par cellule, trente fois sous le bruit des profondeurs reçues (huitième de pixel, et
-  quart de pixel de bande morte : 0,06 px par cellule, qui donnerait une flèche de 0,8 m/s sur un étang immobile) ;
-- **vitesses plus fines** (loi carrée sur le même octet : 2 mm/s au plus fin, toujours 32 cellules/s au plus) :
-  change le sens des octets, donc un `play` ancien face à un `back` neuf pousserait les avatars 5 à 11 fois trop
-  fort ; à faire seulement par un nouveau champ facultatif du protocole. Coût mesuré sur une mer de 80 × 80 qui se
-  calme : 28 octets gzip par message aujourd'hui, 343 sans plancher, 142 avec un plancher de 1 cm/s, 28 avec un
-  plancher de 3 cm/s (environ 56 fois plus sur 600 × 600) ; il faudrait aussi baisser `FLOW_REST_SPEED`
-  (0,1 cellule/s, 5,5 cm/s).
+**La glace ne retient pas l'eau.** La glace du serveur (`Meadow.stepIce`) est une épaisseur à part, posée sur l'eau :
+le pré ne lit l'eau que par `depthAt` (`MeadowManager`, `water: () => Pick<WaterGrid, "depthAt">`) et n'y verse que
+la neige fondue. `WaterGrid.step` ne connaît pas la glace : une source sous un étang gelé verse tout son débit, l'eau
+coule dessous et déborde (test : l'étang garde tout ce que verse la source, puis l'eau sort par le chenal). L'overlay
+ignore aussi la glace : un courant sous la glace a ses flèches.
+
+**« … » : mesure en cours.** À l'ouverture de « Flux d'eau », la tendance n'est connue qu'après 3 s d'observation :
+les étiquettes affichent « … » au lieu de « = » (qui affirmait « ni gain ni perte »), et la légende le dit. Fermée,
+la vue garde sa tendance 30 s (`TREND_UNREAD_MS`) : rouverte dans ce délai, elle n'attend pas de nouveau ; au-delà,
+la tendance est lâchée au premier état reçu.
 
 Tout est lu des profondeurs que le navigateur reçoit déjà (`TerrainWater.settled` garde l'état d'avant et le temps
 entre les deux) : rien n'est demandé au serveur. Limites : les vitesses sont **estimées** d'après la pente de la

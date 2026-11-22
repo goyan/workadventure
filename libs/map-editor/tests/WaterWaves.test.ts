@@ -6,7 +6,7 @@ import { UpdateWAMSettingCommand } from "../src/Commands/WAM/UpdateWAMSettingCom
 import { soilCode } from "../src/Terrain/Soils";
 import type { SoilName } from "../src/Terrain/Soils";
 import { cellKey, withHeights, withSoils } from "../src/Terrain/TerrainGrid";
-import { steadyFlowSpeed, WaterGrid } from "../src/Terrain/WaterGrid";
+import { CELL_LITRES_PER_PX, steadyFlowSpeed, WaterGrid } from "../src/Terrain/WaterGrid";
 import type { WaterStepInput } from "../src/Terrain/WaterGrid";
 import { stepInputOf, stepsBetweenUpdates } from "../src/Terrain/WaterInputs";
 import { DEFAULT_WATER_SETTINGS, DEFAULT_WAVE_SETTINGS } from "../src/types";
@@ -339,6 +339,66 @@ describe("the speed of the water told to the browsers", () => {
         // Seen at half its real pace, the same water is told half as fast.
         const slow = grid.writeSpeeds(0.5);
         expect(signed(slow?.[at] ?? 0)).toBeCloseTo(signed(speeds[at]) / 2, 0);
+    });
+});
+
+describe("the slow currents of a pond a source feeds", () => {
+    /**
+     * A pond of 11 by 11 cells, 9 px under the level of its banks, spilling east by a channel 2 cells wide that runs
+     * down. A source of `m3PerHour` pours at its middle, the water going as fast as in reality.
+     */
+    const pond = (m3PerHour: number, seconds: number): { grid: WaterGrid; pouredPx: number } => {
+        const cells = new Map<string, number>();
+        for (let y = 0; y < 20; y++)
+            for (let x = 0; x < 30; x++) {
+                let height = 20;
+                if (x >= 4 && x <= 14 && y >= 4 && y <= 14) height = -9;
+                else if (x > 14 && y >= 9 && y <= 10) height = -(x - 14) * 0.5;
+                cells.set(cellKey(x, y), height);
+            }
+        const grid = new WaterGrid(withHeights(undefined, cells), { x: 0, y: 0, width: 30, height: 20 });
+        const px = (((m3PerHour * 0.1) / 3600) * 1000) / CELL_LITRES_PER_PX;
+        for (let step = 0; step < seconds * 10; step++)
+            grid.step({ ...withWaves(), flows: [{ cellX: 7, cellY: 7, px }] });
+        return { grid, pouredPx: px * seconds * 10 };
+    };
+
+    it("takes all the water of the source, and spills it down the channel once full", () => {
+        // 100 m³ an hour for 20 s: the pond is not full yet, it holds all of it.
+        const filling = pond(100, 20);
+        expect(filling.grid.totalPx()).toBeCloseTo(filling.pouredPx, 0);
+        // For 10 minutes: it is full, and its water runs out by the channel.
+        const full = pond(100, 600);
+        expect(full.grid.depthAt(24, 9)).toBeGreaterThan(0.25);
+    });
+
+    it("tells the slow currents apart, where the speeds in quarters of a cell say nothing", () => {
+        const { grid } = pond(100, 600);
+        const told = grid.writeSpeedBytes();
+        expect(told).toBeDefined();
+        if (!told) return;
+        const signed = (byte: number): number => (byte << 24) >> 24;
+        const columns = Math.ceil(30 / 4);
+        // The 9 blocks of the pond (columns and rows 1 to 3): still in quarters of a cell, not all still in thousandths.
+        let slow = 0;
+        for (let row = 1; row <= 3; row++)
+            for (let column = 1; column <= 3; column++) {
+                const at = (row * columns + column) * 2;
+                expect(told.speeds[at]).toBe(0);
+                expect(told.speeds[at + 1]).toBe(0);
+                if (told.slow[at] !== 0 || told.slow[at + 1] !== 0) slow++;
+                // Never more than what the quarters would have told: under half a quarter of a cell a second.
+                expect(Math.abs(signed(told.slow[at]))).toBeLessThanOrEqual(32);
+            }
+        expect(slow).toBeGreaterThanOrEqual(3);
+        // The speeds told by writeSpeeds are the same.
+        expect(grid.writeSpeeds()).toEqual(told.speeds);
+    });
+
+    it("tells nothing of a still water, not even slowly", () => {
+        const { grid } = pond(0, 60);
+        const told = grid.writeSpeedBytes();
+        expect(told?.slow.every((byte) => byte === 0)).toBe(true);
     });
 });
 

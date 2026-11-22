@@ -244,6 +244,19 @@ const WAVE_CELLS_PER_MOVE = 0.35;
  */
 export const SPEED_BLOCK_CELLS = 4;
 export const SPEED_UNITS = 4;
+/**
+ * The water slower than half of one of those units (told 0) is told apart, block by block, in this many units a
+ * cell a second (two signed bytes a block, 0 where the speeds above say more): the slow currents of a pond a source
+ * feeds, to about 2 mm a second.
+ */
+export const SLOW_SPEED_UNITS = 250;
+/**
+ * A water slower than this, in cells a second (about a centimetre a second), is told still: it costs no byte.
+ * Measured on a sea of 600 by 600 cells calming down after a storm: 4 kB gzipped a message ten seconds after, 2 kB
+ * after a minute, next to nothing once calm (1.5 kB ten seconds after at 2 cm a second, but a pond a source of
+ * 100 m³ an hour feeds then shows a single arrow instead of four).
+ */
+export const SLOWEST_TOLD_CELLS = 0.018;
 
 /** How wide a cell of the relief is, in metres. */
 export const CELL_METRES = Math.sqrt(CELL_AREA_M2);
@@ -1233,6 +1246,14 @@ export class WaterGrid {
      * water it holds. Undefined for a water that has no inertia: it keeps no flow to tell.
      */
     public writeSpeeds(pace = 1): Uint8Array | undefined {
+        return this.writeSpeedBytes(pace)?.speeds;
+    }
+
+    /**
+     * The speeds of writeSpeeds, and the slow ones apart (`slow`, in SLOW_SPEED_UNITS, for the blocks those speeds
+     * tell still): the two are read together, the second by the browsers that know it.
+     */
+    public writeSpeedBytes(pace = 1): { speeds: Uint8Array; slow: Uint8Array } | undefined {
         const { width, height } = this.bounds;
         const size = width * height;
         if (this.flowEast.length !== size || size === 0) return undefined;
@@ -1240,11 +1261,19 @@ export class WaterGrid {
         const columns = Math.ceil(width / SPEED_BLOCK_CELLS);
         const rows = Math.ceil(height / SPEED_BLOCK_CELLS);
         const bytes = new Uint8Array(columns * rows * 2);
+        const slow = new Uint8Array(columns * rows * 2);
         const depth = this.depth;
         const east = this.flowEast;
         const south = this.flowSouth;
         const byte = (speed: number): number => {
             const units = Math.round(speed * seen * SPEED_UNITS);
+            return (units > 127 ? 127 : units < -127 ? -127 : units) & 255;
+        };
+        // Told only where `byte` says 0 (under half a unit): within 32 units, a signed byte.
+        const slowByte = (speed: number): number => {
+            const seenSpeed = speed * seen;
+            if (Math.abs(seenSpeed) < SLOWEST_TOLD_CELLS || Math.round(seenSpeed * SPEED_UNITS) !== 0) return 0;
+            const units = Math.round(seenSpeed * SLOW_SPEED_UNITS);
             return (units > 127 ? 127 : units < -127 ? -127 : units) & 255;
         };
         for (let blockRow = 0; blockRow < rows; blockRow++) {
@@ -1268,9 +1297,14 @@ export class WaterGrid {
                 const at = (blockRow * columns + blockColumn) * 2;
                 bytes[at] = byte(towardsEast / held);
                 bytes[at + 1] = byte(towardsSouth / held);
+                // Both parts of a slow block: one of them may be fast enough for the speeds above.
+                if (bytes[at] === 0 && bytes[at + 1] === 0) {
+                    slow[at] = slowByte(towardsEast / held);
+                    slow[at + 1] = slowByte(towardsSouth / held);
+                }
             }
         }
-        return bytes;
+        return { speeds: bytes, slow };
     }
 
     /**

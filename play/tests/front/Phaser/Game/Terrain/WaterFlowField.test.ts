@@ -347,13 +347,32 @@ describe("TerrainWater.settled", () => {
 
         it("stops going through the grid once the view is closed", () => {
             const add = vi.spyOn(WaterTrend.prototype, "add");
-            const water = pond(rise, 30, false, (second) => second <= 10);
+            const water = pond(rise, 90, false, (second) => second <= 10);
             const whileOpen = add.mock.calls.length;
             expect(whileOpen).toBeGreaterThan(5);
-            // Closed at 10 s: at most the states of the next two seconds, then none.
-            expect(whileOpen).toBeLessThanOrEqual(12);
-            water.dropTrend();
+            // Closed at 10 s: kept half a minute for a quick reopening, then let go (not a state more).
+            expect(whileOpen).toBeLessThanOrEqual(41);
             expect(water.settled().trend).toBeUndefined();
+        });
+
+        it("keeps its trend for a view closed then opened again soon: no new wait", () => {
+            const water = pond(rise, 20);
+            // Closed from 21 s to 30 s, the water going on rising.
+            pond(rise, 29, false, () => false, water, 21);
+            pond(rise, 30, false, () => true, water, 30);
+            expect(flowAtCell(water.settled(30_000), undefined, 1, 1, true).tint).toBe(1);
+            expect(waterMassesOf(water.settled(30_000))[0].measuring).toBe(false);
+        });
+
+        it("says its bodies of water are being measured while the trend is not known yet", () => {
+            const water = pond(rise, 2, false, () => false);
+            // The view opens at 2 s: the trend starts from nothing.
+            water.settled(2000);
+            expect(waterMassesOf(water.settled(2000))[0].measuring).toBe(true);
+            pond(rise, 8, false, () => true, water, 3);
+            expect(waterMassesOf(water.settled(8000))[0].measuring).toBe(false);
+            // Read without the trend (no view): nothing is being measured, the rate between two states is told.
+            expect(waterMassesOf(new TerrainWater().settled())).toEqual([]);
         });
 
         it("starts again from nothing when the view is opened again: no tint left from before", () => {
@@ -397,6 +416,25 @@ describe("TerrainWater speeds", () => {
             2000,
         );
         expect(water.speedAt(5 * 16, 1 * 16)).toBeUndefined();
+    });
+
+    it("reads the slow speeds where the speeds in quarters of a cell say nothing", () => {
+        const water = new TerrainWater();
+        // The first block runs east at 2.5 cells a second; the slow ones say 0.1 east and 0.02 north for each block.
+        const speeds = Uint8Array.from([10, 0, 0, 0, 0, 0, 0, 0]);
+        const slowSpeeds = Uint8Array.from([25, 251, 25, 251, 0, 0, 0, 0]);
+        water.receive({ x: 0, y: 0, width: 8, height: 8, seq: 1, full: true, depths, speeds, slowSpeeds }, 0);
+        expect(water.speedAt(1 * 16, 1 * 16)).toEqual({ x: 2.5, y: 0 });
+        const slow = water.speedAt(5 * 16, 1 * 16);
+        expect(slow?.x).toBeCloseTo(0.1, 5);
+        expect(slow?.y).toBeCloseTo(-0.02, 5);
+        expect(water.speedAt(1 * 16, 5 * 16)).toEqual({ x: 0, y: 0 });
+        // Slow speeds of another size are not trusted: the speeds alone are read.
+        water.receive(
+            { x: 0, y: 0, width: 8, height: 8, seq: 2, full: true, depths, speeds, slowSpeeds: slowSpeeds.slice(0, 2) },
+            1000,
+        );
+        expect(water.speedAt(5 * 16, 1 * 16)).toEqual({ x: 0, y: 0 });
     });
 });
 
