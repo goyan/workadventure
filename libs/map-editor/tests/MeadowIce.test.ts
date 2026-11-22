@@ -159,6 +159,8 @@ describe("the ice kept", () => {
         const before = meadow.iceAt(10, 10);
         run(meadow, 15, under(frost, { currentAt: () => 2 }));
         expect(meadow.iceAt(10, 10)).toBe(before);
+    });
+
     it("broken (a hole), freezes again by its law at the pace of the map: hours in real time, never in a thaw", () => {
         const real = (weather: SnowWeather): MeadowStepInput => under(weather, { snowTimes: 1 });
         const minutes = (count: number): number => (count * 60) / MEADOW_STEP_SECONDS;
