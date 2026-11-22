@@ -389,6 +389,12 @@ export const WaterSinkPropertyData = PropertyBase.extend({
      * overflow). Absent: it takes all the water it finds.
      */
     level: z.number().min(MIN_WATER_LEVEL).max(MAX_WATER_LEVEL).optional(),
+    /**
+     * Standing on a floor of the "Map" tool, the sink is the drain of a building: it takes all the water that reaches
+     * that floor, whatever its flow, so that the corridors and the rooms stay dry (WaterGrid.step). False keeps its
+     * flow and its disc there too. Absent: adaptive. Off a floor it always keeps its flow.
+     */
+    adaptive: z.boolean().optional(),
     ...WaterAnchor,
 });
 

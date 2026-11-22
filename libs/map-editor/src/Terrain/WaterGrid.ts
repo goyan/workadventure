@@ -4,6 +4,7 @@ import {
     MAX_WATER_MAX_SURFACE,
     TERRAIN_CELL,
     TERRAIN_CHUNK,
+    TILE_PX,
 } from "../types";
 import type { TerrainData, WaveSettings } from "../types";
 import { CELL_AREA_M2, LITRES_PER_M3, metresOf } from "./Scale";
@@ -104,6 +105,8 @@ const STEPS_PER_SECOND = 10;
  * what is next to it, then draws down the water joined to it (its basin) when it asks for more.
  */
 const SINK_RADIUS_CELLS = 3;
+/** How far a drain standing on a floor of the "Map" tool dries it, in cells (12 tiles): the corridors and the rooms around it. */
+const FLOOR_DRAIN_REACH_CELLS = (12 * TILE_PX) / TERRAIN_CELL;
 /**
  * The most cells of its basin a sink lowers in one step: about ninety cells around it in open water. The water
  * further away has to run to it.
@@ -427,7 +430,8 @@ export interface WaterStepInput {
      * altitude of the water, in pixels, a source stops pouring at and a sink stops taking at: at each step it gives
      * or takes no more than what brings the water of its disc there.
      */
-    flows: readonly { cellX: number; cellY: number; px: number; radius?: number; level?: number }[];
+    /** `adaptive` false: a sink on a floor keeps its flow and its disc instead of drying the floor. */
+    flows: readonly { cellX: number; cellY: number; px: number; radius?: number; level?: number; adaptive?: false }[];
     /**
      * How many times the water moves towards a sink that asks for more than it finds, during the step (1 when
      * absent, MAX_FLOW_STEPS at most): more on a map whose water goes faster than reality, so that it runs to the
@@ -482,6 +486,10 @@ export class WaterGrid {
     private readonly blocked: Uint8Array;
     /** The cells indoors (see indoorCells): the floor of a room drains its water. */
     private readonly indoor: Uint8Array;
+    /** The cells a floor of the "Map" tool covers (1): what a drain standing on it dries, its pools aside (sealed). */
+    private floor = new Uint8Array(0);
+    /** The floor each drain standing on one dries (floorAreaOf), by the cell it stands on: made once, kept. */
+    private readonly floorAreas = new Map<number, Int32Array>();
     /**
      * For each cell, the sides the water cannot cross (a wall between two cells, or a blocked neighbour): a bit for
      * each side, in the order east, west, south, north.
@@ -619,6 +627,30 @@ export class WaterGrid {
     }
 
     /**
+     * The floors of the "Map" tool laid on the ground (tile keys, see pavedTilesOf): a drain standing on one is the
+     * drain of a building, and keeps its floor dry (see step). A pool dug in the floor is not floor.
+     */
+    public setFloors(tiles: ReadonlySet<string>): void {
+        const { x, y, width, height } = this.bounds;
+        const floor = new Uint8Array(width * height);
+        const cellsATile = TILE_PX / TERRAIN_CELL;
+        for (const key of tiles) {
+            const tile = cellOf(key);
+            for (let dy = 0; dy < cellsATile; dy++) {
+                for (let dx = 0; dx < cellsATile; dx++) {
+                    const column = tile.x * cellsATile + dx - x;
+                    const row = tile.y * cellsATile + dy - y;
+                    if (column < 0 || row < 0 || column >= width || row >= height) continue;
+                    const index = row * width + column;
+                    if (!this.blocked[index]) floor[index] = 1;
+                }
+            }
+        }
+        this.floor = floor;
+        this.floorAreas.clear();
+    }
+
+    /**
      * The doors that are closed now: the water does not cross their sides (keys of cellKey, as the walls), on top
      * of the walls the grid was built with. An open door is simply not told: the water goes through it.
      */
@@ -653,6 +685,8 @@ export class WaterGrid {
      */
     public seal(cells: readonly { cellX: number; cellY: number }[]): void {
         this.sealed.fill(0);
+        // The floors the drains dry go round the pools: made again with these ones.
+        this.floorAreas.clear();
         for (const { cellX, cellY } of cells) {
             const index = this.indexOf(cellX, cellY);
             if (index !== undefined) this.sealed[index] = 1;
@@ -1180,12 +1214,19 @@ export class WaterGrid {
             }
         }
         const sinks: { index: number; radius: number; left: number }[] = [];
+        let floorDrains: { area: Int32Array; level: number | undefined }[] = [];
         for (const flow of input.flows) {
             const index = this.indexOf(flow.cellX, flow.cellY);
             if (!Number.isFinite(flow.px) || flow.px === 0) continue;
             if (index === undefined || this.blocked[index]) {
                 // A source outside the grid or in a wall pours nothing that stays.
                 if (flow.px > 0) tally.lostPx += flow.px;
+                continue;
+            }
+            // The drain of a building takes what reaches its floor, whatever its flow: it dries it at the end of the step.
+            const area = flow.px < 0 && flow.adaptive !== false ? this.floorAreaOf(index) : undefined;
+            if (area) {
+                floorDrains = [...floorDrains, { area, level: flow.level }];
                 continue;
             }
             // A source or a sink that holds a level: no more than what brings the water of its disc there.
@@ -1237,7 +1278,78 @@ export class WaterGrid {
             }
             if (!asking) break;
         }
+        // Last, once the water moved: the floor of each drain of a building is dried, all that came in this step taken
+        // (down to the level the drain holds, if it holds one).
+        for (const { area, level } of floorDrains) {
+            const taken = this.dryFloor(area, level);
+            tally.sinksPx += taken;
+            if (taken > 0) tally.moved = true;
+        }
         return tally;
+    }
+
+    /**
+     * The floor a drain standing at `index` keeps dry: the cells of the floor it stands on, joined to it without
+     * crossing a wall (a door joins them: it is of the building), up to FLOOR_DRAIN_REACH_CELLS away. Undefined where
+     * the drain stands on no floor: it is a drain of the ground, with its flow and its disc.
+     */
+    private floorAreaOf(index: number): Int32Array | undefined {
+        if (this.floor[index] !== 1 || this.sealed[index]) return undefined;
+        const known = this.floorAreas.get(index);
+        if (known) return known;
+        const { width, height } = this.bounds;
+        const startColumn = index % width;
+        const startRow = (index - startColumn) / width;
+        const side = 2 * FLOOR_DRAIN_REACH_CELLS + 1;
+        const queue = new Int32Array(side * side);
+        const reached = new Uint8Array(width * height);
+        queue[0] = index;
+        reached[index] = 1;
+        let tail = 1;
+        for (let head = 0; head < tail; head++) {
+            const cell = queue[head];
+            const column = cell % width;
+            const row = (cell - column) / width;
+            const closed = this.wallClosed[cell];
+            const neighbours = [
+                { open: column + 1 < width && !(closed & 1), next: cell + 1, column: column + 1, row },
+                { open: column > 0 && !(closed & 2), next: cell - 1, column: column - 1, row },
+                { open: row + 1 < height && !(closed & 4), next: cell + width, column, row: row + 1 },
+                { open: row > 0 && !(closed & 8), next: cell - width, column, row: row - 1 },
+            ];
+            for (const neighbour of neighbours) {
+                // A pool dug in the floor (sealed, see seal) keeps its water: the floor goes round it.
+                if (
+                    !neighbour.open ||
+                    reached[neighbour.next] ||
+                    this.floor[neighbour.next] !== 1 ||
+                    this.sealed[neighbour.next]
+                ) {
+                    continue;
+                }
+                const far = Math.max(Math.abs(neighbour.column - startColumn), Math.abs(neighbour.row - startRow));
+                if (far > FLOOR_DRAIN_REACH_CELLS) continue;
+                reached[neighbour.next] = 1;
+                queue[tail++] = neighbour.next;
+            }
+        }
+        const area = queue.slice(0, tail);
+        this.floorAreas.set(index, area);
+        return area;
+    }
+
+    /** Takes the water standing on `area`, down to `level` (pixels of altitude) when one is held. Returns what it took. */
+    private dryFloor(area: Int32Array, level: number | undefined): number {
+        const depth = this.depth;
+        let taken = 0;
+        for (const cell of area) {
+            const kept = level === undefined ? 0 : Math.max(0, level - this.ground[cell]);
+            const excess = depth[cell] - kept;
+            if (excess <= 0) continue;
+            depth[cell] = kept;
+            taken += excess;
+        }
+        return taken;
     }
 
     /** The water of another grid (the map before an edit), kept cell by cell where this grid has the cell. */

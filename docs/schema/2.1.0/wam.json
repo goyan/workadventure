@@ -878,6 +878,9 @@
                           "minimum": -256,
                           "maximum": 512
                         },
+                        "adaptive": {
+                          "type": "boolean"
+                        },
                         "anchorX": {
                           "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/10/properties/anchorX"
                         },

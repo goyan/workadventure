@@ -112,6 +112,15 @@
         onchange?.();
     }
 
+    // A sink standing on a floor of the Map tool dries that floor, whatever its flow, unless turned off (adaptive).
+    let adaptive = $state(property.type === "waterSinkPropertyData" && property.adaptive !== false);
+
+    function setAdaptive(): void {
+        if (property.type !== "waterSinkPropertyData") return;
+        property.adaptive = adaptive ? undefined : false;
+        onchange?.();
+    }
+
     function step(direction: 1 | -1): void {
         setFlow(steppedFlow(shown, direction, waterFlowUnit(unit).first));
     }
@@ -225,6 +234,17 @@
                 {/if}
                 <p class="m-0 mt-1 text-xs text-white/60">{texts.levelHint()}</p>
             </div>
+            {#if property.type === "waterSinkPropertyData"}
+                <div class="mt-3" data-testid="water-sink-adaptive">
+                    <InputSwitch
+                        id="water-sink-adaptive-{property.id}"
+                        label={$LL.mapEditor.properties.waterSink.adaptive()}
+                        bind:value={adaptive}
+                        onchange={setAdaptive}
+                    />
+                    <p class="m-0 mt-1 text-xs text-white/60">{$LL.mapEditor.properties.waterSink.adaptiveHint()}</p>
+                </div>
+            {/if}
             <p class="m-0 mt-2 text-xs text-white/60">{texts.real()}</p>
         </span>
     {/snippet}

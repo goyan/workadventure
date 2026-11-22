@@ -22,7 +22,15 @@ import type { PrecipitationAir } from "../Weather/Precipitation";
 import { rainRateAt } from "../Weather/RainRate";
 import type { MapPlace, RealWeatherSlot } from "../Weather/RealWeather";
 import { landWallsOf } from "./LandWalls";
-import { POOL_FILL_SECONDS, POOL_OVERFLOW_SLACK_PX, POOL_PUMP_RESTART_SECONDS, poolBasins, poolCells } from "./Pools";
+import { pavedTilesOf } from "./Meadow";
+import {
+    POOL_FILL_SECONDS,
+    POOL_OVERFLOW_SLACK_PX,
+    POOL_PUMP_RESTART_SECONDS,
+    poolBasins,
+    poolCells,
+    poolNumbersOf,
+} from "./Pools";
 import type { PoolCell } from "./Pools";
 import { CELL_AREA_M2, LITRES_PER_M3 } from "./Scale";
 import { heightAt } from "./TerrainGrid";
@@ -110,6 +118,8 @@ export class WaterSimulation {
     private readTerrain: TerrainData | undefined | null = null;
     /** The walls the grid was built with (their signature): a wall built or removed makes a new grid. */
     private readWalls: string | undefined;
+    /** The floors the grid was last given (their signature): the drains standing on them keep them dry. */
+    private readFloors: string | undefined;
     /** The water to start from (saved before a restart, or seeded), until the first grid takes it. */
     protected saved: WaterGrid | undefined;
     private timer: ReturnType<typeof setInterval> | undefined;
@@ -124,6 +134,8 @@ export class WaterSimulation {
     private downpours: () => readonly Downpour[] = () => [];
     /** The cells of the pools of the map, with the depth of their basin: what the pumps fill at each step. */
     private pools: readonly PoolCell[] = [];
+    /** The pool each of those cells belongs to (poolNumbersOf), by cell key: a drain in its water stops its pump. */
+    private poolNumbers = new Map<string, number>();
     /** The step from which the pumps of the pools run again: a meteor that fell in the water stops them a moment. */
     private pumpsFromStep = 0;
     /** The doors of the ground of the map: closed, they hold the water; open, they let it through. */
@@ -213,6 +225,7 @@ export class WaterSimulation {
         // For the water, a pool painted on the map is a basin dug in its ground, which a pump fills.
         const terrain = poolBasins(wam?.terrain, wam?.settings?.pools);
         this.pools = poolCells(wam?.terrain, wam?.settings?.pools);
+        this.poolNumbers = poolNumbersOf(this.pools);
         // A map whose size could not be read keeps all its water: an empty size would dry the whole map.
         const size = this.mapSize();
         const bounds = gridBoundsOf(
@@ -232,12 +245,23 @@ export class WaterSimulation {
             sameBounds(bounds, this.grid?.bounds ?? undefined, this.grid !== undefined);
         // A source or a sink may have come or gone: the water is looked at again.
         this.moving = true;
-        if (sameGrid) return;
+        // The floors of the buildings, which their drains keep dry: laid again only when they changed.
+        const floors = bounds ? pavedTilesOf(wam) : new Set<string>();
+        const floorsSignature = [...floors].sort().join(";");
+        if (sameGrid) {
+            if (floorsSignature !== this.readFloors) {
+                this.readFloors = floorsSignature;
+                this.grid?.setFloors(floors);
+            }
+            return;
+        }
         this.readTerrain = terrain;
         this.readWalls = wallsSignature;
         const before = this.grid ?? this.saved;
         this.saved = undefined;
         this.grid = bounds ? new WaterGrid(terrain, bounds, undefined, walls, rooms) : undefined;
+        this.grid?.setFloors(floors);
+        this.readFloors = floorsSignature;
         // The doors of the map, all closed until someone is seen in their passage; the new grid is told at its
         // next step.
         this.doors = bounds ? waterDoorsOf(wam) : [];
@@ -340,6 +364,20 @@ export class WaterSimulation {
     }
 
     /**
+     * The pools a drain stands in (its foot in their water), adaptive (WaterSinkPropertyData.adaptive): their pumps
+     * are off while it is there, so that the pool empties by it. A drain that is not adaptive leaves the pump on.
+     */
+    private drainedPools(): Set<number> {
+        const drained = new Set<number>();
+        for (const object of this.objects) {
+            if (object.litresPerMinute >= 0 || object.adaptive === false) continue;
+            const pool = this.poolNumbers.get(`${object.cellX},${object.cellY}`);
+            if (pool !== undefined) drained.add(pool);
+        }
+        return drained;
+    }
+
+    /**
      * The pumps of the pools: each cell of a pool that stands under its level takes what fills an empty pool in
      * POOL_FILL_SECONDS, so a larger or deeper pool has a stronger pump; counted with the sources. A cell that stands
      * over its level (a snow that melted in the pool, a rain) loses as much through the overflow of the pool, counted
@@ -347,6 +385,7 @@ export class WaterSimulation {
      */
     private pumpPools(grid: WaterGrid, seconds: number): void {
         if (this.pools.length === 0) return;
+        const drained = this.drainedPools();
         let laid = 0;
         let taken = 0;
         for (const { cellX, cellY, depthPx, fullPx } of this.pools) {
@@ -356,6 +395,8 @@ export class WaterSimulation {
             const pumped = (depthPx * seconds) / POOL_FILL_SECONDS;
             if (missing > 0) {
                 if (this.steps < this.pumpsFromStep) continue;
+                // A drain stands in this pool: its pump is off, the pool empties.
+                if (drained.has(this.poolNumbers.get(`${cellX},${cellY}`) ?? 0)) continue;
                 laid += grid.rainOn(cellX, cellY, 0, Math.min(missing, pumped));
             } else if (missing < -POOL_OVERFLOW_SLACK_PX) {
                 const px = Math.min(-missing, pumped);
