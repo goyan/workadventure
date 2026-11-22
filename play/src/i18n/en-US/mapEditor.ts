@@ -1273,7 +1273,8 @@ const mapEditor: BaseTranslation = {
             location: {
                 title: "Place of the map",
                 default: "Paris (default)",
-                search: "Search for a town",
+                search: "Search for a town…",
+                map: "Map of the world: click to choose a point",
                 searching: "Searching…",
                 noResult: "No town found",
                 error: "Search unavailable",

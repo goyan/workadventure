@@ -1289,7 +1289,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             location: {
                 title: "Lieu de la carte",
                 default: "Paris (par défaut)",
-                search: "Chercher une ville",
+                search: "Chercher une ville…",
+                map: "Carte du monde : clique pour choisir un point",
                 searching: "Recherche…",
                 noResult: "Aucune ville trouvée",
                 error: "Recherche indisponible",
