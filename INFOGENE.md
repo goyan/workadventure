@@ -2841,6 +2841,26 @@ comprise. Sur mer modérée, cette vitesse reste sous son pas d'envoi (un quart 
 flèche. Sur mer forte, une flèche s'inverse d'une seconde à l'autre 15 à 35 % du temps, ce qui est le mouvement réel
 de l'eau sous la vague.
 
+**Pas de flèche sous 0,14 m/s sur une carte à inertie.** Le serveur transmet la vitesse par bloc de 4 × 4 cellules,
+par pas d'un quart de cellule par seconde (`SPEED_UNITS`, 0,137 m/s, `SLOWEST_TOLD_SPEED`) : plus lente, elle est
+dite nulle et l'overlay ne trace rien. La légende le dit (« transmises à partir de 0,14 m/s »). Mesuré sur le modèle
+(étang de 11 × 11 cellules, 30 cm d'eau, source de 100 m³/h au milieu, trop-plein par un chenal) : à « Vitesse de
+l'eau » 1, courants de 6 cm/s au plus, aucun bloc transmis non nul dans l'étang (flèches dans le chenal seulement) ;
+à 4, 82 cellules sur 121 au-dessus de 3 cm/s mais un seul bloc transmis ; à 60, des flèches partout. Une eau
+arrêtée (source à son niveau) n'a de toute façon aucune flèche. La glace n'y change rien : le serveur fait couler
+l'eau sous elle, l'overlay l'ignore.
+
+Deux pistes écartées ou laissées en option, chiffrées :
+- **deviner la vitesse d'après la pente** quand le serveur dit zéro : 3 à 6 cm/s sous 30 cm d'eau demandent une
+  pente de 0,001 à 0,002 px par cellule, trente fois sous le bruit des profondeurs reçues (huitième de pixel, et
+  quart de pixel de bande morte : 0,06 px par cellule, qui donnerait une flèche de 0,8 m/s sur un étang immobile) ;
+- **vitesses plus fines** (loi carrée sur le même octet : 2 mm/s au plus fin, toujours 32 cellules/s au plus) :
+  change le sens des octets, donc un `play` ancien face à un `back` neuf pousserait les avatars 5 à 11 fois trop
+  fort ; à faire seulement par un nouveau champ facultatif du protocole. Coût mesuré sur une mer de 80 × 80 qui se
+  calme : 28 octets gzip par message aujourd'hui, 343 sans plancher, 142 avec un plancher de 1 cm/s, 28 avec un
+  plancher de 3 cm/s (environ 56 fois plus sur 600 × 600) ; il faudrait aussi baisser `FLOW_REST_SPEED`
+  (0,1 cellule/s, 5,5 cm/s).
+
 Tout est lu des profondeurs que le navigateur reçoit déjà (`TerrainWater.settled` garde l'état d'avant et le temps
 entre les deux) : rien n'est demandé au serveur. Limites : les vitesses sont **estimées** d'après la pente de la
 surface (`steadyFlowSpeed`, selon le modèle d'eau, les réglages des vagues, la rugosité du sol et la vitesse
