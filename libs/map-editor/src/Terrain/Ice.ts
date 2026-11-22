@@ -10,6 +10,14 @@ import type { SnowWeather } from "./Snow";
 
 /** From this thickness (mm) the ice bears someone walking on it: under it, on water deep enough to swim, it gives way. */
 export const ICE_BEARS_MM = 50;
+/**
+ * From this thickness (mm) an ice fishing shack may go up on the ice (Life/IceShack): a light shelter hauled by hand,
+ * with one angler in it. The Minnesota DNR guidelines for new, clear ice ("Recommended Minimum Ice Thickness",
+ * https://files.dnr.state.mn.us/education_safety/safety/ice/ice-tickness-guidelines-poster.pdf) ask for 4 inches
+ * "on foot" and say "keep off" under it; a shelter hauled by a truck ("wheelhouse") asks for 20 inches and more.
+ * 4 inches are 101.6 mm.
+ */
+export const ICE_SHACK_MM = 102;
 /** From this thickness (mm) the ice is slipped on, as a rink: a frozen puddle, black ice on a flooded ground. */
 export const ICE_SLIPS_MM = 5;
 /**

@@ -172,6 +172,9 @@ async function byHand(inputs: RoomGroundInputs): Promise<RoomGround> {
         getGrid: () => water.getGrid(),
         waterVersion: () => water.waterVersion(),
         lifeFire: () => meadow.lifeFire(),
+        iceAt: (tileX, tileY) => meadow.iceAt(tileX, tileY),
+        hasMeadow: () => meadow.hasMeadow(),
+        catchingUp: () => meadow.catchingUp(),
         waterSnapshot: () => water.snapshot(),
         meadowSnapshot: () => meadow.snapshot(),
         treeSnapshot: () => meadow.treeSnapshot(),
@@ -248,6 +251,12 @@ describe("the ground of a room behind its door (RoomGround)", () => {
         expect(ground.waterSnapshot()).toEqual(reference.waterSnapshot());
         expect(ground.meadowSnapshot()).toEqual(reference.meadowSnapshot());
         expect(ground.treeSnapshot()).toEqual(reference.treeSnapshot());
+        // What the ice fishing shacks read: the ice of each tile, and whether the meadow is made.
+        const iceOf = (read: RoomGround): number[] =>
+            Array.from({ length: 24 * 24 }, (_, tile) => read.iceAt(tile % 24, Math.floor(tile / 24)));
+        expect(iceOf(ground)).toEqual(iceOf(reference));
+        expect(ground.hasMeadow()).toBe(true);
+        expect(ground.catchingUp()).toBe(reference.catchingUp());
     });
 
     it("keeps the floor of a building dry through its drain, as before (the sinks that dry a floor)", async () => {

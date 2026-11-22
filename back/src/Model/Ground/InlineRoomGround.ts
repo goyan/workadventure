@@ -159,6 +159,18 @@ export class InlineRoomGround implements RoomGround {
         return this.ground.meadow.lifeFire();
     }
 
+    public iceAt(tileX: number, tileY: number): number {
+        return this.ground.meadow.iceAt(tileX, tileY);
+    }
+
+    public hasMeadow(): boolean {
+        return this.ground.meadow.hasMeadow();
+    }
+
+    public catchingUp(): boolean {
+        return this.ground.meadow.catchingUp();
+    }
+
     public waterSnapshot(): TerrainWaterMessage | undefined {
         return this.ground.water.snapshot();
     }

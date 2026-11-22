@@ -117,6 +117,8 @@ function computeSeats(scene: GameScene): Seat[] {
             );
         }
     }
+    // The stools of the ice fishing shacks of the room: no object of the map, held by the server (IceShackManager).
+    seats.push(...(scene.iceShackManager?.seats() ?? []));
     return seats;
 }
 

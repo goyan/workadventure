@@ -86,6 +86,14 @@ export class FishingManager {
     public pressKey(repeat: boolean): void {
         const connection = this.scene.connection;
         if (!connection || !this.mayFish()) return;
+        // Seated in an ice fishing shack: the line goes straight down its hole, no gauge.
+        const hole = this.scene.iceShackManager?.ownHole();
+        if (hole) {
+            if (repeat) return;
+            if (this.ownLine()) connection.emitReelFishingLine();
+            else connection.emitCastFishingLine(hole.x, hole.y);
+            return;
+        }
         if (this.rod.press(Date.now(), this.ownLine() !== undefined) === "reel") {
             if (!repeat) connection.emitReelFishingLine();
             return;
@@ -96,6 +104,7 @@ export class FishingManager {
 
     /** The key goes up: the line is cast where the gauge says. */
     public releaseKey(): void {
+        if (this.scene.iceShackManager?.ownHole()) return;
         const player = this.scene.CurrentPlayer;
         const point = this.rod.release(Date.now(), {
             x: player.x,
