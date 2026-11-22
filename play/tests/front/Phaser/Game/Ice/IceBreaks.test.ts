@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { CRACK_MS, HOLE_OPEN_MS, HOLE_RADIUS_PX, IceBreaks } from "../../../../../src/front/Phaser/Game/Ice/IceBreaks";
+import { ICE_SLIPS_MM } from "@workadventure/map-editor";
+import {
+    CRACK_MS,
+    HOLE_CONFIRM_MS,
+    HOLE_OPEN_MS,
+    HOLE_RADIUS_PX,
+    IceBreaks,
+} from "../../../../../src/front/Phaser/Game/Ice/IceBreaks";
 
 describe("IceBreaks", () => {
     it("cracks under an avatar on thin ice, then breaks a hole where they stand", () => {
@@ -30,5 +37,49 @@ describe("IceBreaks", () => {
         expect(breaks.holeAt(200, 200, HOLE_OPEN_MS)).toBe(false);
         breaks.step(HOLE_OPEN_MS, undefined, false);
         expect(breaks.active()).toBe(false);
+    });
+});
+
+describe("a hole in the ice of the server", () => {
+    /** The ice the server keeps at the hole (mm), as the room was last told it. */
+    function onServerIce(): { mm: number; breaks: IceBreaks } {
+        const ice: { mm: number; breaks: IceBreaks } = { mm: 0, breaks: new IceBreaks() };
+        ice.breaks = new IceBreaks(() => () => ice.mm);
+        return ice;
+    }
+
+    it("stays open water as long as the server keeps no ice there, whatever the time", () => {
+        const ice = onServerIce();
+        ice.breaks.addHole(200, 200, 0);
+        // Hours later, still no ice: the hole has not closed on a clock of its own.
+        const hours = 3 * 3600 * 1000;
+        expect(ice.breaks.holeAt(200, 200, hours)).toBe(true);
+        expect(ice.breaks.shown(hours)[0].phase).toBe(1);
+    });
+
+    it("closes as the ice of the server takes it again, and is gone once it is ice one slips on", () => {
+        const ice = onServerIce();
+        ice.breaks.addHole(200, 200, 0);
+        ice.mm = ICE_SLIPS_MM / 2;
+        const later = HOLE_CONFIRM_MS + 1;
+        expect(ice.breaks.shown(later)[0].phase).toBeCloseTo(1.5);
+        ice.mm = ICE_SLIPS_MM;
+        expect(ice.breaks.holeAt(200, 200, later)).toBe(false);
+        ice.breaks.step(later, undefined, false);
+        expect(ice.breaks.active()).toBe(false);
+    });
+
+    it("stays open until the room is told the ice it broke: the ice before the break is not looked at", () => {
+        const ice = onServerIce();
+        ice.mm = 30;
+        ice.breaks.addHole(200, 200, 0);
+        expect(ice.breaks.holeAt(200, 200, HOLE_CONFIRM_MS - 1)).toBe(true);
+        expect(ice.breaks.holeAt(200, 200, HOLE_CONFIRM_MS)).toBe(false);
+    });
+
+    it("keeps the clock of its own for a player who follows a weather of their own", () => {
+        const breaks = new IceBreaks(() => undefined);
+        breaks.addHole(200, 200, 0);
+        expect(breaks.holeAt(200, 200, HOLE_OPEN_MS)).toBe(false);
     });
 });
