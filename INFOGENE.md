@@ -99,7 +99,9 @@ Un petit symbole flotte au-dessus du nom d'un joueur qui ne perçoit pas le mond
 sort :
 
 - **œil barré violet** : il est en **mode Basique** (ni nuit, ni météo, ni effets) ;
-- **œil dans une boule de cristal cyan** : il suit la **météo d'une autre ville** (« Jour dans le monde »).
+- **œil dans une boule de cristal cyan** : il suit la **météo d'une autre ville** (« Jour dans le monde ») ;
+- **goutte d'eau bleue** : son **eau rapide** est active (son eau du relief va 60 fois plus vite, pour lui seul).
+  Une ville suivie l'emporte sur l'eau rapide, le Basique sur les deux.
 
 Les deux portent la même étoile qui scintille ; leurs formes diffèrent (œil plat et barre, anneau), pour être distingués
 sans les couleurs. Au survol du symbole, une infobulle le dit (« Mode Basique : ne voit ni la nuit ni la météo », « Suit
@@ -109,7 +111,7 @@ sol, `TerrainView`).
 
 - **Qui le voit** : seulement un joueur qui perçoit lui-même le monde partagé (ni Basique, ni ville suivie), jamais
   au-dessus de son propre avatar (`shownPerceptionMark`, `Perception/PerceptionProtocol.ts`).
-- **Partage** : variable de joueur publique `_perception`, non sauvegardée (`none`, `basic`, `place` ; toute autre
+- **Partage** : variable de joueur publique `_perception`, non sauvegardée (`none`, `basic`, `place`, `water` ; toute autre
   valeur lue `none`), publiée à l'entrée dans la salle et à chaque changement (`PerceptionManager`). Aucun changement
   du protocole ni de `back` ; un ancien client n'affiche rien. Le Basique compte tel qu'il est choisi, même dans
   l'éditeur (le symbole ne clignote pas à chaque édition) ; un essai de météo dans le panneau de la carte n'est pas
@@ -3340,6 +3342,31 @@ qu'elle ne pouvait couler, et le modèle était faussé (crues trop hautes, flot
   inchangées (k = 1 au temps réel).
 - Le rattrapage d'une salle vide garde la vitesse de la carte en un bloc sans inertie, comme avant.
 
+## Eau rapide, pour soi seul (« Réglages → Ambiance »)
+
+Un interrupteur personnel, mémorisé dans le navigateur comme Basique (`fastWaterStore`, clé `fastWater`) : l'eau du
+relief de ce joueur va 60 fois plus vite, sous la météo de la carte, ou sous celle de la ville qu'il suit.
+
+- **Calcul** : le sol local de la météo personnelle (`LocalTerrainController`, worker `LocalTerrainSimulation`)
+  démarre aussi pour l'eau rapide seule, sans ville choisie. Il garde alors la météo de la carte, avec l'air du lieu
+  de la carte (Paris par défaut, comme le serveur). Les apports (pluie, sources, neige, et le pré qu'ils mouillent)
+  vont ×60 (règle « demandée », `FAST_WATER_SPEED`). L'écoulement va k fois plus vite, k mesuré par `WaterPace` dans
+  50 ms par pas (la moitié d'un cœur).
+- **Retrait de `LOCAL_MIN_SPEED`** : sans eau rapide, la météo d'une ville suivie fait vivre l'eau au temps de la
+  carte. Le tableau « Météo expliquée » propose alors l'eau rapide (« Pour voir l'effet de cette météo en quelques
+  minutes, activez l'eau rapide »).
+- **Indicateur** dans la barre d'actions : « Eau ×60 », ou « Eau ×60, courants ×k » quand les courants plafonnent
+  (`reachedSpeed`). Les réglages disent alors de combien l'eau qui coule est plus haute que dans la réalité :
+  (60/k)^0,6, d'après Manning.
+- **Rien n'est enregistré** : l'eau locale repart de l'eau du serveur à chaque connexion, au retour d'un onglet caché
+  (le worker est arrêté tant qu'il est caché) et avec « Resynchroniser ».
+- **Coupure** : l'eau glisse en 1 s vers l'eau du serveur, et la barre affiche « Retour à l'eau partagée ».
+  Avec une ville suivie, le sol local continue, au temps de la carte.
+- **Serveur** : rien ne lui est envoyé, sauf le symbole de perception (`water`). Les catastrophes de la salle
+  n'atteignent pas cette eau, ce que l'aide dit. Les conditions réglées à la main dans la salle (Catastrophe → Météo)
+  ne sont pas suivies par l'air local.
+- **Non vérifié** : aucun rendu vu, aucune mesure dans un navigateur.
+
 ## Défauts de l'eau d'une carte (2026-11-22) et garde-fou réseau
 
 Une carte qui ne règle pas son eau a désormais : vitesse 1 (temps réel, #478), neige et glace à la même horloge
@@ -3363,9 +3390,17 @@ le dit par le champ existant `easedUpdates` (« Serveur ou réseau chargé : env
 Mesures avec l'inertie : lac calme sur la carte d'entrée, environ 10 ko par état (47 ko/s à cinq par seconde, 72 sur
 mer agitée) : cinq par seconde tenus ; mer de 600² qui court (environ 37 ko) : deux ; carte entièrement inondée
 (130 ko et plus) : un, le minimum (encore 130 ko/s : le plafond ne peut pas descendre sous un état par seconde).
-Suite proposée, non codée : n'envoyer à 1 état par seconde que les blocs qui ont changé de plus d'un pixel, ou
-espacer au-delà d'une seconde (un état toutes les 2 s) sous le plafond. L'eau que le navigateur simule pour lui seul (#473) n'a pas de
-garde-fou : rien n'y voyage (`sendBudget` infini).
+**Au plancher, par blocs** (`WaterSendLoad.atFloor`, `holdStillBlocks`) : quand le garde-fou tient la salle à un état
+par seconde alors que la carte en demande plus, l'eau est dite par blocs de 8 × 8 cellules. Un bloc n'est dit que
+si l'une de ses cellules a bougé d'un pixel au moins, ou a séché, ou s'est mouillée. Il est alors dit en entier : pas
+de marche d'un pixel dans la surface d'un lac. Sinon, il garde ce que la salle a reçu. Chaque cellule reste donc à
+moins d'un pixel de la vérité, mouillée ou sèche comme elle l'est, et l'état entier, toutes les 30 s, remet tout
+d'aplomb. Hors du plancher, la règle d'avant ne change pas (un quart de pixel, cellule par cellule).
+Mesure sur une mer de 300² inondée, avec l'inertie et la pluie, à un état par seconde : les profondeurs passent de
+60 à 35 ko par état (−42 %), et les vitesses, environ 6 ko, ne changent pas. Non mesuré sur la carte de 600² ni
+dans un navigateur.
+Autre piste, non codée : espacer au-delà d'une seconde (un état toutes les 2 s) sous le plafond. L'eau que le
+navigateur simule pour lui seul (#473) n'a pas de garde-fou : rien n'y voyage (`sendBudget` infini).
 
 Coût de cinq états par seconde sans inertie (carte de 480 × 320, lac, à vitesse 1) : 3,6 → 9 ko/s par joueur
 (1,8 ko par état, surtout des changements nuls compressés), envoi 1,5 → 6 ms par seconde au serveur.
@@ -5726,8 +5761,21 @@ dit à la salle, qui ouvre le même trou. Météo personnelle : trou local. Les 
 (`POOL_ICE_DEPTH_PX` 8 px au lieu de 32, qui attendait -8,25 °C). La glace du serveur épaissit deux fois plus vite que
 l'horloge de la neige (`ICE_GROWTH_TIMES` = 2). Sur l'horloge ×600 d'alors, elle portait le woka en 1 min 30 environ
 à -3 °C ; depuis le 2026-11-22, l'horloge est celle de l'eau de la carte, temps réel par défaut : 14 h à -3 °C
-(14 min à « Vitesse de l'eau » 60). Le trou ouvert sous un avatar se referme toujours en deux minutes
-(`HOLE_OPEN_MS`, horloge à part, non changée) : plus vite que la glace ne reprend en vrai.
+(14 min à « Vitesse de l'eau » 60). **Depuis le 2026-11-22, le trou de la glace du serveur n'a plus d'horloge à lui**
+(demande de l'utilisateur : « se referme en 2 minutes, c'est un peu rapide, on peut pas faire réaliste ? »).
+Quand la glace casse, le serveur remet à 0 la glace des tuiles du trou (`Meadow.breakIce`, déjà le cas avant). Le trou
+regèle ensuite par la loi de la glace de la carte, à la vitesse de son eau et selon son air. En temps réel à −10 °C,
+cela fait un voile en deux minutes, la glace où l'on glisse (5 mm) en une dizaine de minutes environ, et une glace qui
+porte un marcheur au bout de quelques heures. Le trou ne regèle jamais pendant un dégel.
+
+Côté navigateur, le trou rond reste de l'eau libre tant que le serveur ne garde pas de glace en son centre. Il se
+referme à mesure que cette glace revient, et disparaît à 5 mm (`ICE_SLIPS_MM`) : à partir de là, c'est le dessin de la
+glace mince du serveur qui prend le relais. On retombe dans un trou encore ouvert. Entre 5 et 50 mm, la glace fine
+craque de nouveau sous l'avatar ; elle porte de nouveau à 50 mm. Pendant les 10 premières secondes, le temps que la
+salle reçoive la glace cassée, le trou reste ouvert quoi que dise la glace qu'elle connaissait
+(`HOLE_CONFIRM_MS`). La scène ne se redessine que si les fissures ou les trous changent, pas à chaque image : un trou
+peut rester ouvert des heures. La comète passe par le même chemin, `shatter`. En météo personnelle ou en sol local, le
+trou garde son horloge de deux minutes (`HOLE_OPEN_MS`) : il n'y a pas de glace du serveur.
 
 **Herbe dès l'arrivée** (`back/src/Model/MeadowManager.ts`, `GameScene.groundStatesOfJoinApplied`). Le premier joueur
 d'une salle recréée recevait un sol nu : `snapshot()` ne rendait que l'état déjà diffusé, vide jusqu'au premier pas de

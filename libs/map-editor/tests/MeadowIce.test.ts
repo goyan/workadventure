@@ -5,7 +5,7 @@ import type { SnowWeather } from "../src/Terrain/Snow";
 import { DEFAULT_POOL_STYLE, poolSoilCode } from "../src/Terrain/Pools";
 import { cellKey, withSoils } from "../src/Terrain/TerrainGrid";
 import { PX_PER_MM } from "../src/Terrain/WaterInputs";
-import { ICE_BEARS_MM } from "../src/Terrain/Ice";
+import { ICE_BEARS_MM, ICE_SLIPS_MM } from "../src/Terrain/Ice";
 import { Season } from "../src/types";
 
 const size = { width: 21, height: 21 };
@@ -159,6 +159,25 @@ describe("the ice kept", () => {
         const before = meadow.iceAt(10, 10);
         run(meadow, 15, under(frost, { currentAt: () => 2 }));
         expect(meadow.iceAt(10, 10)).toBe(before);
+    it("broken (a hole), freezes again by its law at the pace of the map: hours in real time, never in a thaw", () => {
+        const real = (weather: SnowWeather): MeadowStepInput => under(weather, { snowTimes: 1 });
+        const minutes = (count: number): number => (count * 60) / MEADOW_STEP_SECONDS;
+        const meadow = new Meadow(size, undefined, undefined);
+        run(meadow, 30, under(frost));
+        expect(meadow.iceAt(10, 10)).toBeGreaterThan(ICE_BEARS_MM);
+        meadow.breakIce(10, 10, 1);
+        expect(meadow.iceAt(10, 10)).toBe(0);
+        // Two minutes at -10 °C: a film, not yet the ice one slips on: the hole is open water.
+        run(meadow, minutes(2), real(frost));
+        expect(meadow.iceAt(10, 10)).toBeGreaterThan(0);
+        expect(meadow.iceAt(10, 10)).toBeLessThan(ICE_SLIPS_MM);
+        // Some hours: an ice again, that bears a walker.
+        run(meadow, minutes(6 * 60), real(frost));
+        expect(meadow.iceAt(10, 10)).toBeGreaterThan(ICE_BEARS_MM);
+        // In a thaw the hole never closes.
+        meadow.breakIce(10, 10, 1);
+        run(meadow, minutes(6 * 60), real(mild));
+        expect(meadow.iceAt(10, 10)).toBe(0);
     });
 
     it("is written in a byte a tile and read back, none in a state saved before it", () => {

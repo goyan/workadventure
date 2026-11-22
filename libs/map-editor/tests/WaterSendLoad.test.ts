@@ -32,6 +32,15 @@ describe("the network a room's water takes, a player at a time", () => {
         expect(tell(new WaterSendLoad(), 130_000, 10)).toBe(1);
     });
 
+    it("says when it holds the room at its floor: one state a second where the map asks more", () => {
+        const load = new WaterSendLoad();
+        expect(load.atFloor(5)).toBe(false);
+        tell(load, 130_000, 10);
+        expect(load.atFloor(5)).toBe(true);
+        // A map that asks one a second by itself is not held there by the network.
+        expect(load.atFloor(1)).toBe(false);
+    });
+
     it("gives the cadence back once the states are small again for a while, not at once", () => {
         const load = new WaterSendLoad();
         const clock = { step: 0 };

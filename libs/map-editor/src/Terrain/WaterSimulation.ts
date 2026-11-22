@@ -89,6 +89,14 @@ const STEPS_PER_FULL_STATE = 300;
  * less on a calm lake). Never for a cell that dries or gets wet, and the whole state puts everything right.
  */
 const UNTOLD_EIGHTHS = 2;
+/**
+ * At the floor of the network guard (WaterSendLoad.atFloor: a state a second, the network short), the water is told by
+ * blocks of this many cells a side, and a block only once a cell of it moved by FLOOR_UNTOLD_EIGHTHS (a pixel), or
+ * dried or got wet: a sea that rises everywhere a little is no longer told cell by cell, each second. A block is told
+ * whole, so that the surface of a lake shows no step inside it; the whole state every half minute puts all right.
+ */
+const FLOOR_BLOCK_CELLS = 8;
+const FLOOR_UNTOLD_EIGHTHS = 8;
 /** While the wave of an impact runs, the room is told five times a second: a wave seen once a second would jump. */
 const WAVE_STEPS_PER_MESSAGE = 2;
 /** After an impact on a water with inertia, the room is told that often for this long (half a minute). */
@@ -883,7 +891,13 @@ export class WaterSimulation {
             !previous || previous.length !== bytes.length || this.steps - this.fullAtStep >= STEPS_PER_FULL_STATE;
         let payload = bytes;
         let changed = !previous || previous.length !== bytes.length;
-        if (previous && previous.length === bytes.length) {
+        const water = this.room.getWam()?.settings?.water;
+        const asked = water?.updates ?? DEFAULT_WATER_PACE.updates;
+        if (previous && previous.length === bytes.length && !full && this.sendLoad.atFloor(asked)) {
+            changed = holdStillBlocks(bytes, previous, grid.bounds.width);
+            payload = new Uint8Array(bytes.length);
+            for (let index = 0; index < bytes.length; index++) payload[index] = bytes[index] ^ previous[index];
+        } else if (previous && previous.length === bytes.length) {
             // What barely changed since the room was told is not told again; a whole state tells it as it is.
             const told = full ? Uint8Array.from(bytes) : bytes;
             for (let index = 0; index < bytes.length; index += 2) {
@@ -907,7 +921,6 @@ export class WaterSimulation {
         this.sentBytes = bytes;
         this.sentRates = anyRate;
         // The speed of a water with inertia, so that the browsers carry what floats as the water really runs.
-        const water = this.room.getWam()?.settings?.water;
         const speeds = waterHasInertia(water) ? grid.writeSpeedBytes(water?.flowPace) : undefined;
         if (full) this.fullAtStep = this.steps;
         this.seq++;
@@ -917,7 +930,7 @@ export class WaterSimulation {
         // What each player receives of this state: the network it takes decides how many a second are told.
         this.sendLoad.record(
             depths.length + (zippedSpeeds?.length ?? 0) + (zippedSlow?.length ?? 0),
-            water?.updates ?? DEFAULT_WATER_PACE.updates,
+            asked,
             this.steps,
         );
         this.room.sendSubMessageToRoom({
@@ -936,7 +949,7 @@ export class WaterSimulation {
                         wetArea: grid.wetCells() * CELL_AREA_M2,
                         rainRate: this.rainRate,
                         ...this.eased(water),
-                        ...(waterTimesOf(water) > 1 ? { reachedSpeed: this.lived.flow } : {}),
+                        ...((this.askedTimes() ?? waterTimesOf(water)) > 1 ? { reachedSpeed: this.lived.flow } : {}),
                     },
                 },
             },
@@ -954,6 +967,47 @@ export class WaterSimulation {
                 : {}),
         };
     }
+}
+
+/**
+ * The depths to tell at the floor of the network guard (see FLOOR_BLOCK_CELLS), written over `bytes`: each block of
+ * the grid (`width` cells a row) where no cell moved by a pixel since `previous`, nor dried, nor got wet, keeps what the
+ * room was told. Whether any block is told.
+ */
+function holdStillBlocks(bytes: Uint8Array, previous: Uint8Array, width: number): boolean {
+    const height = bytes.length / 2 / width;
+    let changed = false;
+    for (let top = 0; top < height; top += FLOOR_BLOCK_CELLS) {
+        for (let left = 0; left < width; left += FLOOR_BLOCK_CELLS) {
+            const bottom = Math.min(height, top + FLOOR_BLOCK_CELLS);
+            const right = Math.min(width, left + FLOOR_BLOCK_CELLS);
+            let moved = false;
+            let differs = false;
+            for (let y = top; y < bottom && !moved; y++) {
+                for (let x = left; x < right; x++) {
+                    const index = (y * width + x) * 2;
+                    const now = bytes[index] | (bytes[index + 1] << 8);
+                    const before = previous[index] | (previous[index + 1] << 8);
+                    if (now === before) continue;
+                    differs = true;
+                    if (now === 0 || before === 0 || Math.abs(now - before) >= FLOOR_UNTOLD_EIGHTHS) {
+                        moved = true;
+                        break;
+                    }
+                }
+            }
+            if (moved) {
+                changed = true;
+                continue;
+            }
+            if (!differs) continue;
+            for (let y = top; y < bottom; y++) {
+                const from = (y * width + left) * 2;
+                bytes.set(previous.subarray(from, (y * width + right) * 2), from);
+            }
+        }
+    }
+    return changed;
 }
 
 function sameBounds(a: WaterGridBounds | undefined, b: WaterGridBounds | undefined, hasGrid: boolean): boolean {

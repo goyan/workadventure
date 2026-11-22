@@ -33,6 +33,9 @@ workerScope.onmessage = (event: MessageEvent<LocalTerrainCommand>): void => {
         case "place":
             simulation.setPlace(command.place, command.slots);
             return;
+        case "fast":
+            simulation.setFast(command.fast);
+            return;
         case "walkers":
             simulation.setWalkers(command.walkers);
             return;

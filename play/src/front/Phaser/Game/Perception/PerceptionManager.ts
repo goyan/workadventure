@@ -1,6 +1,7 @@
 import { derived, get, type Readable, type Unsubscriber } from "svelte/store";
 import LL from "../../../../i18n/i18n-svelte";
 import { basicModeStore } from "../../../Stores/BasicModeStore";
+import { fastWaterStore } from "../../../Stores/FastWaterStore";
 import type { Character } from "../../Entity/Character";
 import type { GameScene } from "../GameScene";
 import { chosenPlaceStore } from "../Weather/ChosenPlaceWeather";
@@ -16,17 +17,19 @@ import {
 /**
  * What the local player perceives. Basique as they chose it (in the map editor too, where it waits: their symbol does
  * not blink each time they edit). A city followed on their clock, as showsChosenPlaceWeather tells it: not while they
- * try a weather in the settings panel of the map, which then shows for them instead.
+ * try a weather in the settings panel of the map, which then shows for them instead. Fast water as they chose it.
  */
 export const localPerceptionStore: Readable<Perception> = derived(
-    [basicModeStore, chosenPlaceStore, weatherPreviewStore],
-    ([basic, place, preview]) => perceptionOf({ basic, place: place !== undefined && preview === undefined }),
+    [basicModeStore, chosenPlaceStore, weatherPreviewStore, fastWaterStore],
+    ([basic, place, preview, fastWater]) =>
+        perceptionOf({ basic, place: place !== undefined && preview === undefined, fastWater }),
 );
 
 /** The tooltip of a symbol: the place followed is not told (it is not sent). */
 function perceptionTitle(mark: PerceptionMark): string {
     const texts = get(LL).woka.perception;
-    return mark === "basic" ? texts.basic() : texts.place();
+    if (mark === "basic") return texts.basic();
+    return mark === "place" ? texts.place() : texts.water();
 }
 
 /**
