@@ -8,11 +8,6 @@
 export const SNOW_MAX_MM = 600;
 /** The snow, in mm of water, from which the ground under it is all white. */
 export const SNOW_FULL_MM = 15;
-/**
- * How many times faster than the real one the clock of the snow and of the ice runs: a cover of 15 mm melts in about
- * a minute at 10 °C without wind, not in nine hours.
- */
-export const THAW_SPEED = 600;
 
 /** Melt by degree and by hour: a degree-day factor of 4.8 mm/°C/day, within the usual 3 to 6. */
 const MELT_MM_PER_DEGREE_HOUR = 0.2;

@@ -78,6 +78,15 @@ const SPEED_PER_FLOW_STEP = 4;
 export const PX_PER_MM = 1 / (-metresOf(-1) * 1000);
 
 /**
+ * How many times faster than reality the water of a map goes, and with it its snow and its ice: the speed of its
+ * water (1 for a map that says nothing, or one whose speed is not a number). The one clock of all of them.
+ */
+export function waterTimesOf(water: { speed?: number } | undefined): number {
+    const speed = water?.speed ?? DEFAULT_WATER_SETTINGS.speed;
+    return Number.isFinite(speed) && speed > 0 ? speed : 1;
+}
+
+/**
  * What one step of `seconds` does to the water of a map, from its settings, how hard it rains (mm an hour) and its
  * sources and sinks: the rain on the hollows (with the runoff of the ground around), the evaporation in dry weather
  * only, what the flat ground drinks, the flows. All of it goes `speed` times faster than in reality.
@@ -90,7 +99,7 @@ export function stepInputOf(
 ): WaterStepInput {
     const settings: WaterSettings = water ?? DEFAULT_WATER_SETTINGS;
     const figure = (value: number, fallback = 0): number => (Number.isFinite(value) && value > 0 ? value : fallback);
-    const hours = (figure(seconds) * figure(settings.speed, 1)) / 3600;
+    const hours = (figure(seconds) * waterTimesOf(settings)) / 3600;
     const rain = figure(rainMmPerHour);
     return {
         rainPx: rain * hours * PX_PER_MM * (1 + figure(settings.runoff)),
@@ -102,7 +111,7 @@ export function stepInputOf(
         indoorDrainPx: figure(settings.indoorDrain ?? DEFAULT_WATER_SETTINGS.indoorDrain) * hours * PX_PER_MM,
         // A map that goes faster than reality gives its water more moves a step towards its sinks: a quarter of
         // its speed.
-        flowSteps: Math.max(1, Math.min(MAX_FLOW_STEPS, Math.round(figure(settings.speed, 1) / SPEED_PER_FLOW_STEP))),
+        flowSteps: Math.max(1, Math.min(MAX_FLOW_STEPS, Math.round(waterTimesOf(settings) / SPEED_PER_FLOW_STEP))),
         // The water with inertia, on a map that chose it: it needs the real time of the step, whatever the speed.
         ...(settings.inertia
             ? {

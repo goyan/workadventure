@@ -286,8 +286,11 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
                 unknownAir: "L'air de la carte n'est pas connu : la neige ne fond pas.",
                 seconds: "{value} s",
                 minutes: "{value} min",
+                hours: "{value} h",
                 water: "Seule la part de pluie apporte de l'eau à la carte : la neige reste au sol, puis rend son eau en fondant.",
-                honest: "Tenue par le serveur, case par case : ce tableau lit ce que le serveur a envoyé, il ne calcule pas la couche lui-même. La neige y fond {times} fois plus vite qu'en vrai.",
+                honest: "Tenue par le serveur, case par case : ce tableau lit ce que le serveur a envoyé, il ne calcule pas la couche lui-même. La neige et la glace y vont {times} fois plus vite qu'en vrai : la vitesse de l'eau de la carte.",
+                honestReal:
+                    "Tenue par le serveur, case par case : ce tableau lit ce que le serveur a envoyé, il ne calcule pas la couche lui-même. La neige et la glace y vont comme en vrai : des heures pour fondre ou porter un marcheur.",
             },
         },
     },

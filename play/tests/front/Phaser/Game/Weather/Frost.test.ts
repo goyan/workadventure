@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SNOW_MAX_MM, THAW_SPEED } from "@workadventure/map-editor";
+import { SNOW_MAX_MM } from "@workadventure/map-editor";
 import { ICE_BEARS_MM } from "@workadventure/map-editor";
 import {
     cycleAfterAbsence,
@@ -53,20 +53,25 @@ describe("Frost", () => {
 });
 
 describe("the snow of a player's own city", () => {
+    /** The clock of these tests: a map whose water, and so its snow, goes 600 times faster than reality. */
+    const THAW_SPEED = 600;
     const frost = { temperature: -5, humidity: 90, windSpeed: 0 };
     const mild = { temperature: 10, humidity: 50, windSpeed: 0 };
 
     it("lies as it falls in the cold, as fast as the clock of the snow runs, up to the most a ground holds", () => {
         // 2 mm an hour of water, all of it snow at -5 °C, 600 times faster than the real clock, for 9 s.
-        expect(ownSnowAfter(0, 9, 2, frost)).toBeCloseTo((2 * THAW_SPEED * 9) / 3600);
-        expect(ownSnowAfter(SNOW_MAX_MM - 1, 60, 500, frost)).toBe(SNOW_MAX_MM);
+        expect(ownSnowAfter(0, 9, 2, frost, THAW_SPEED)).toBeCloseTo((2 * THAW_SPEED * 9) / 3600);
+        expect(ownSnowAfter(SNOW_MAX_MM - 1, 60, 500, frost, THAW_SPEED)).toBe(SNOW_MAX_MM);
+        // On a map that says nothing, in real time, as the snow of the server.
+        expect(ownSnowAfter(0, 9, 2, frost)).toBeCloseTo((2 * 9) / 3600);
     });
 
     it("does not lie when what falls is rain, and melts in a mild air as the snow of the server does", () => {
-        expect(ownSnowAfter(0, 9, 2, mild)).toBe(0);
+        expect(ownSnowAfter(0, 9, 2, mild, THAW_SPEED)).toBe(0);
         // 2 mm an hour of melt at 10 °C, 50 %, no wind.
-        expect(ownSnowAfter(20, 3, 0, mild)).toBeCloseTo(20 - (2 * THAW_SPEED * 3) / 3600);
-        expect(ownSnowAfter(1, 60, 0, mild)).toBe(0);
+        expect(ownSnowAfter(20, 3, 0, mild, THAW_SPEED)).toBeCloseTo(20 - (2 * THAW_SPEED * 3) / 3600);
+        expect(ownSnowAfter(1, 60, 0, mild, THAW_SPEED)).toBe(0);
+        expect(ownSnowAfter(20, 3, 0, mild)).toBeCloseTo(20 - (2 * 3) / 3600);
     });
 
     it("holds in a still cold air without anything falling, and goes slowly in a dry wind", () => {
