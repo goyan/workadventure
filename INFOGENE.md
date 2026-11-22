@@ -2401,6 +2401,44 @@ finesse réduite à 5 sur 8 »), par `easedPrecision` et `easedUpdates` de `Terr
 précise (vagues plus amorties, fronts moins nets) pendant les moments les plus lourds, un tsunami compris. Sans
 inertie, seuls les envois peuvent être réduits. Seuils posés par raisonnement, non calés sur une mesure en jeu.
 
+**L'eau se pose à la fin du rattrapage** (`WaterSimulation.liveAgain`, `settle`). Le rattrapage d'une salle vide fait
+vivre l'eau sans inertie par pas de 600 s, et chaque pas ne la déplace qu'une fois : il la laisse entassée là où
+elle est arrivée et creusée là où elle est partie. L'eau à inertie repartait de ces niveaux inégaux : de fausses
+vagues et une poussée d'écume à chaque retour dans une salle restée vide. Une fois le temps manqué vécu, l'eau fait
+maintenant jusqu'à 400 pas sans inertie et sans aucun apport (ni pluie, ni source, ni puits, ni évaporation : le
+temps ne passe pas), qui ne font que la niveler dans ses lacs ; elle s'arrête plus tôt si elle est au repos.
+
+- **Qui compte le temps** : la prairie. `liveAgain` rend `true` tant que l'eau veut d'autres tours ; le rattrapage
+  de la prairie les lui donne dans son budget de 8 ms par tour, et `catchingUp()` reste vrai jusqu'au bout. Le fil
+  des salles et le fil de calcul passent par le même câblage (`GroundSimulation`).
+- **Volume** : inchangé dans un lac fermé (test) ; ne part que ce qui sort par le bord de la carte ou dépasse le
+  plafond des crues, compté dans les pertes comme à tout pas.
+- **Mesuré sur la carte d'Antoine en crue**, cellules avec écume 30 s après la réouverture (régime permanent :
+  4 300) : 10 min d'absence 13 800 → 2 100 ; 1 h 24 400 → 2 000 ; 1 jour 44 300 → 5 500. Après un jour il reste
+  une houle : l'écume remonte à 14 700 cellules à 2 min (20 200 avant). Le réveil s'allonge de 1,5 à 3,5 s
+  (1,2 à 2,6 s de calcul, étalés).
+- **Limites** : les drains des pièces et les pompes des piscines ne tournent pas pendant ces pas (aucun temps ne
+  passe) ; rien vu à l'écran.
+
+**L'allègement compte toutes les salles du fil** (`WaterLoads`, `threadWaterLoads` dans `WaterLoad.ts`). Chaque
+salle ne regardait que ses propres pas : deux grandes salles à 48 % de l'intervalle chacune saturaient le fil sans
+qu'aucune ne s'allège. Les durées moyennes des pas de toutes les eaux du fil s'additionnent maintenant, et c'est la
+somme qui est comparée aux seuils de 50 % et 25 %.
+
+- **Partage** : quand la somme dépasse 50 %, toutes les eaux du fil s'allègent en même temps, du même rapport
+  (finesse × 50 % / part du fil, un cran au moins). La plus lourde rend donc le plus de millisecondes, aucune n'est
+  épargnée, et celle dont le pas est chronométré en premier ne paie pas pour les autres. Les envois ne sont réduits
+  que lorsque plus aucune eau du fil n'a de finesse à rendre. La restitution est commune aussi : les envois
+  d'abord, puis un cran de finesse pour chacune, après 10 s sous 25 %.
+- **Sortie** : une salle qui ferme, ou dont la carte n'a plus d'eau, se retire (`WaterLoad.release`) ; les autres
+  retrouvent leur finesse.
+- **Périmètre** : « le fil » est le module chargé. Les salles du serveur partagent celui du processus ; un fil de
+  calcul (#495) aura le sien, comme le navigateur qui simule son eau. Les pas de la prairie ne sont pas comptés.
+  Un test qui crée plusieurs eaux vide le registre entre deux cas (`threadWaterLoads.clear()`), ou donne à chaque
+  eau son registre (`new WaterLoad(100, new WaterLoads())`).
+- **Limite** : une salle légère est allégée du même rapport qu'une lourde, donc elle perd de la finesse pour un
+  gain faible. Non mesuré en jeu ni sur le VPS ; seuils inchangés.
+
 **Petits gains sur le fil du serveur, à modèle inchangé** (lot 1 de l'étude du serveur de l'eau, novembre 2026).
 Le processus des salles n'a qu'un fil ; cinq changements de plomberie, aucun de physique :
 
@@ -2427,8 +2465,8 @@ Le processus des salles n'a qu'un fil ; cinq changements de plomberie, aucun de 
   `MeadowManager.test.ts`). Mesuré sur la carte d'entrée, 7 jours manqués : tour le plus long 422 → 15 ms ; avec
   les minuteurs réels, retard maximal de la boucle d'événements 467 → 18 à 38 ms selon la charge de la machine de
   mesure (99e centile 10,6 ms), rattrapage fini en 28 s d'horloge au lieu de 70 s. Le joueur qui entre pendant ce
-  temps voit la prairie et l'eau avancer d'un envoi par seconde, comme avant. Le même budget vaut dans un
-  navigateur qui fait tourner la simulation pour lui-même.
+  temps voit la prairie et l'eau avancer d'un envoi par seconde, comme avant. Un navigateur qui fait tourner la
+  simulation pour lui-même ne rattrape jamais (il part d'un état donné, `seed`) : ce chemin n'y est pas atteint.
 
 **Fil de calcul par salle** (lot 3 de la même étude, livré en plusieurs PR ; rien n'est activé tant que la dernière
 ne l'est pas).
@@ -2443,6 +2481,12 @@ ne l'est pas).
   (`LocalTerrainSimulation`), sans changement de comportement : `GroundSimulation.test.ts` compare, sur 400 pas
   avec neige, comète et boule de feu, les états dits par un sol câblé à la main et par `GroundSimulation` (mêmes
   octets).
+- **Catastrophes dans le sol d'un joueur** (`LocalTerrainSimulation`, `LocalTerrainWorker`). Le sol d'un joueur
+  (météo d'un lieu choisi) ignorait les catastrophes de la salle : il les voyait sans que son eau en soit touchée.
+  Il sait maintenant les recevoir, par le sol commun : `setCatastrophes` (averses, drains, boules du moment, qui
+  agissent à chaque pas de son eau), `strike`, `burn`, `shatter`, `soak`, `ignite`, et les commandes du même nom
+  dans le protocole de son worker (`LocalTerrainCommand`). **Rien ne les lui envoie encore** : le contrôleur et la
+  scène (`LocalTerrainController`, `GameScene`) restent à brancher ; d'ici là son comportement est inchangé.
 - **Façade du sol dans `back`** (`back/src/Model/Ground/RoomGround.ts`, `InlineRoomGround.ts`, PR 2). `GameRoom`
   ne tient plus `TerrainWaterManager` et `MeadowManager` : il parle à un `RoomGround` (démarrer l'eau, démarrer la
   prairie, arrêter, carte changée ; comète, boule de feu, glace brisée, averse qui mouille, feu posé ; niveau d'une
@@ -2495,6 +2539,23 @@ ne l'est pas).
     l'instantané que la salle tient (l'eau cachée sous une boule est perdue), la prairie depuis la dernière
     sauvegarde. Trois pertes en cinq minutes : le sol de la salle repasse dans le fil des salles.
   - **Répartition** : une salle va au fil qui a le moins de salles et n'en change plus.
+  - **Allègement dans un fil de calcul** (`WaterLoads.mayTake`, `GroundWorker`). La somme des pas des eaux d'un fil
+    (#497) est comparée à 50 % de l'intervalle dans le fil des salles, où les joueurs attendent derrière l'eau :
+    inchangé. Dans un fil de calcul personne n'attend, l'eau doit seulement tenir sa cadence : le seuil y est de
+    90 % (`GROUND_THREAD_SHARE`). La finesse y revient dès que le fil pourrait la porter (ce que les eaux
+    prendraient avec un niveau de plus, le coût supposé suivre la finesse, reste sous 95 % du seuil), et non sous
+    la moitié du seuil, qui aurait laissé un tel fil aux deux tiers de ce qu'il tient. Mesuré sur un vrai fil,
+    salles comme la carte d'entrée inondée, Mac : à 50 %, 6 salles tombent à la finesse 2 et 8 à la finesse 1 ou
+    2 ; à 80 %, 8 salles cèdent un niveau ; à 90 %, 8 salles gardent la finesse 3 (86 % d'un cœur, 10 pas par
+    seconde), 10 salles passent à 2, 12 à 1 ou 2, toujours à 10 pas par seconde. Limite : le coût ne suit pas tout
+    à fait la finesse (de 2 à 3 il monte de 26 % sur cette carte, pas de 50 %), donc après un pic (une salle qui
+    démarre) la finesse 3 ne revient que si le fil est sous 57 % à la finesse 2 : 8 salles restent alors à 2
+    (68 % d'un cœur) alors que le fil tiendrait 3.
+  - **Journaux** : au démarrage, `back` dit où le sol est calculé (« The ground of the rooms (water and meadow) is
+    computed on N thread(s) of its own (GROUND_THREADS) », ou « … on the thread of the rooms (GROUND_THREADS is
+    0) ») ; « Ground thread i of N starts for its first room » quand un fil démarre pour sa première salle ;
+    « … starts again after a loss (start k) » quand il est relancé, après l'erreur « A thread that computes the
+    ground of rooms was lost ».
   - **Mesuré** (Mac M4 Max chargé, carte d'entrée de la beta inondée à 42 %, inertie, finesse 3, 5 envois/s, vraies
     classes, deux passes alternées) : retard d'un minuteur de 2 ms sur le fil des salles, 99e centile 12 ms →
     0,4 ms ; maximum 16 à 33 ms → 2,1 à 2,6 ms ; part des retards de plus de 10 ms 1,9 % → 0. Une édition de carte
@@ -2537,6 +2598,20 @@ partir de ce qu'il reçoit déjà (profondeurs, vent) :
   croît avec la hauteur jusqu'à 12 px (40 cm). S'y ajoute le **front de crue** : une cellule sèche à l'état
   précédent, mouillée maintenant, à côté d'une eau déjà là (pas la pluie qui remplit une mare). L'écume reste
   derrière la vague et s'efface de moitié toutes les 1,8 s.
+  Deux choses ne sont pas des vagues et ne font plus d'écume : la **pente du fond** (le creux n'est plus cherché
+  sous le lit de la cellule : une nappe qui descend un rivage n'a pas de « vague » de la hauteur de la pente) et
+  la **marche entre deux eaux qu'un mur sépare** (la recherche du creux s'arrête à un mur ou à une porte, prise
+  fermée ; murs lus par `landWallsOf`, dans `TerrainView.closedSides`). L'**eau vive** garde la sienne : une eau
+  qui tombe d'au moins 3 px et court plus vite que ses propres vagues (vitesse transmise par le serveur divisée
+  par `waveSpeed(profondeur)`, le nombre de Froude : rien sous 1, tout à 2) : torrent sur une berge raide,
+  cascade. Sans vitesse transmise (eau sans inertie), la vitesse est lue sur la pente de la surface. Mesuré sur la
+  carte d'Antoine en crue (64 % sous l'eau) : cellules qui écument en permanence 1 405 → 692, écume visible
+  5 480 → 4 710 cellules, intensité totale −34 %. Le reste est fait de vraies vagues.
+  L'écume d'un état **monte pendant que l'eau y glisse** (sur le temps écoulé depuis l'état précédent, 1 s au
+  plus), au lieu d'apparaître d'un coup à sa réception : à un état par seconde (eau locale, garde-fou réseau,
+  cartes réglées à 1 envoi), elle venait par bouffées. Vague qui déferle en continu, lue toutes les 50 ms :
+  à 1 état par seconde, écume moyenne 4,64 → 5,51 (5,52 → 5,68 à 5 états), écart creux à crête 41 % → 12 %, plus
+  grand saut entre deux dessins 40 % → 1 %.
 - **Moutons** (`Terrain/Whitecaps.ts`) : le vent lève des vagues courtes qui cassent à leur crête, sans rapport
   avec la houle. Part de l'eau blanchie selon la loi usuelle (Monahan et O'Muircheartaigh, 1980 :
   3,84 × 10⁻⁶ × vent^3,41, vent en m/s) : rien sous 3 m/s, environ 0,03 % à force 3, 0,3 % à force 4, 1 % à

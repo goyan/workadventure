@@ -12,6 +12,7 @@ import {
     WeatherType,
     withHeights,
     withSoils,
+    threadWaterLoads,
 } from "@workadventure/map-editor";
 import type { TerrainData, WAMFileFormat } from "@workadventure/map-editor";
 import type { SubToPusherRoomMessage, TerrainWaterMessage } from "@workadventure/messages";
@@ -154,6 +155,8 @@ function depthsAfter(messages: readonly TerrainWaterMessage[]): {
 }
 
 afterEach(() => {
+    // The waters of a thread add up (WaterLoad): a test must not leave its own to the next one.
+    threadWaterLoads.clear();
     vi.useRealTimers();
     vi.restoreAllMocks();
 });
@@ -814,6 +817,46 @@ describe("TerrainWaterManager", () => {
         expect(grid.totalPx()).toBeLessThan(rained);
     });
 
+    it("ends the time the room missed on a water at rest: no wave left for the water with inertia to start on", () => {
+        // A source pours an hour of water at one end of a closed lake: lived by steps of ten minutes, it piles up.
+        const wam = wamWith(wideLake);
+        wam.entities = { source: sourceAt(4, 15, 1200) };
+        if (wam.settings?.water) Object.assign(wam.settings.water, { inertia: true, maxSurface: 256 });
+        const { manager } = createHarness({ wam });
+        manager.mapChanged();
+        const grid = manager.getGrid();
+        if (!grid) throw new Error("no grid");
+        /** How far the highest water of the lake stands over its lowest (the lake is flat: 30 by 30 cells). */
+        const swell = (): number => {
+            let low = Infinity;
+            let high = -Infinity;
+            for (let y = 0; y < 30; y++) {
+                for (let x = 0; x < 30; x++) {
+                    low = Math.min(low, grid.depthAt(x, y));
+                    high = Math.max(high, grid.depthAt(x, y));
+                }
+            }
+            return high - low;
+        };
+        let more: boolean | void = false;
+        for (let slice = 0; slice < 30; slice++) more = manager.liveAgain(120, 0, slice === 29);
+        const lived = grid.totalPx();
+        expect(lived).toBeGreaterThan(1000);
+        const piled = swell();
+        expect(piled).toBeGreaterThan(3);
+        // The water asks for more turns while it settles, a few steps each, and says when it is at rest.
+        expect(more).toBe(true);
+        let turns = 0;
+        while (manager.liveAgain(0, 0, true) === true && turns < 10_000) turns++;
+        expect(turns).toBeGreaterThan(0);
+        expect(turns).toBeLessThan(10_000);
+        expect(swell()).toBeLessThan(0.5);
+        // Not a drop made nor lost: the lake is closed, the water only moved.
+        expect(Math.abs(grid.totalPx() - lived)).toBeLessThan(lived * 1e-5);
+        // And nothing more to settle once it is done.
+        expect(manager.liveAgain(0, 0, true)).not.toBe(true);
+    });
+
     it("fills nothing with a rain that falls as snow in the cold of the room, and half as much with a mix", () => {
         const rainOf = (air: { temperature: number; humidity: number } | undefined): number => {
             const { manager, sent, steps } = createHarness({ wam: wamWith(lake, WeatherType.Rain) });
@@ -1296,5 +1339,51 @@ describe("the pools of the map in the water of the relief", () => {
         expect(quick?.easedPrecision ?? 8).toBeGreaterThan(slow?.easedPrecision ?? 8);
         expect(quick?.easedUpdates).toBeUndefined();
         // Seven hundred steps of a wide lake stirred at the finest: longer than the usual time of a test.
+    }, 30_000);
+
+    it("lowers the fineness of two rooms that saturate the thread together, and gives it back once one closes", () => {
+        // Each step of a room reads its clock twice: `cost` ms go by between the two.
+        const cost = { ms: 40 };
+        const room = () => {
+            const wam = wamWith(wideLake);
+            if (wam.settings?.water) Object.assign(wam.settings.water, { inertia: true, precision: 8, updates: 10 });
+            let time = 0;
+            let reads = 0;
+            const harness = createHarness({
+                wam,
+                clock: (): number => {
+                    if (reads++ % 2 === 1) time += cost.ms;
+                    return time;
+                },
+            });
+            harness.manager.mapChanged();
+            fillWideLake(harness.manager);
+            harness.manager.mapChanged();
+            return harness;
+        };
+        const eased = (harness: ReturnType<typeof room>): number => {
+            harness.manager.strike(15 * 16, 15 * 16, 2);
+            return harness.sent.at(-1)?.stats?.easedPrecision ?? 8;
+        };
+        // One room alone at 40 ms a step, under half the time between two steps: nothing is lowered.
+        const alone = room();
+        alone.steps(100);
+        expect(eased(alone)).toBe(8);
+        alone.manager.stop();
+        // Two such rooms hold the thread 80 % of the time: both are lowered, alike.
+        const rooms = [room(), room()];
+        for (let step = 0; step < 100; step++) for (const { steps } of rooms) steps(1);
+        const lowered = rooms.map(eased);
+        expect(lowered[0]).toBeLessThan(8);
+        expect(lowered[1]).toBe(lowered[0]);
+        // Quicker steps, 40 % of the thread together: over the quarter that gives a level back, they stay there.
+        cost.ms = 20;
+        for (let step = 0; step < 300; step++) for (const { steps } of rooms) steps(1);
+        expect(rooms.map(eased)).toEqual(lowered);
+        // One closes: the other one, alone at 20 %, gets its fineness back level by level.
+        rooms[1].manager.stop();
+        rooms[0].steps(300);
+        expect(eased(rooms[0])).toBeGreaterThan(lowered[0]);
+        rooms[0].manager.stop();
     }, 30_000);
 });

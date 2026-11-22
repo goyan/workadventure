@@ -1,6 +1,7 @@
 import {
     cellOf,
     heightAt,
+    landWallsOf,
     snowCover,
     snowCoverOf,
     SOILS,
@@ -60,7 +61,8 @@ import { BasicPools } from "./BasicPools";
 import { BasicWater } from "./BasicWater";
 import type { GroundArea } from "./TexturedGround";
 import { GroundSplat } from "./GroundSplat";
-import { BreakingFoam } from "./BreakingFoam";
+import { BreakingFoam, closedSidesOf } from "./BreakingFoam";
+import type { ClosedSide } from "./BreakingFoam";
 import { whitecapShare, windHeading } from "./Whitecaps";
 import { depthsSeen } from "./BuiltGround";
 import { drawnArea, heightsOver, stillCovers } from "./ObliqueView";
@@ -221,6 +223,9 @@ export class TerrainView {
     private wet = new Uint8Array(0);
     /** The foam of the waves that break and of the floods that advance, and what the shader is told of it. */
     private readonly breaking = new BreakingFoam();
+    /** The sides the water cannot cross, for the foam, and the objects of the map they were read from. */
+    private foamWalls: ClosedSide | undefined;
+    private foamWallsOf: unknown;
     private breakingVersion = -1;
     private foam = new Uint8Array(0);
     /** The current of the water over the canvas, two a cell (see currentOver). */
@@ -354,6 +359,19 @@ export class TerrainView {
      * The foam of the waves, read from each new state of the water, and the whitecaps of the wind: both drawn by the
      * water shader. None for a player who turned the moving water off.
      */
+    /**
+     * The sides the water of the map cannot cross (its walls, its doors taken closed): the foam does not read a wave
+     * between two waters a wall keeps apart. Read again when the objects of the map change.
+     */
+    private closedSides(): ClosedSide | undefined {
+        const wam = this.scene.getGameMap?.()?.getWamFile()?.getWam();
+        if (wam?.entities !== this.foamWallsOf) {
+            this.foamWallsOf = wam?.entities;
+            this.foamWalls = wam ? closedSidesOf(landWallsOf(wam)) : undefined;
+        }
+        return this.foamWalls;
+    }
+
     private readFoam(now: number): void {
         if (!this.splat) return;
         const shown = isEffectShown("waterFlow");
@@ -363,7 +381,7 @@ export class TerrainView {
             this.breakingVersion = -1;
         } else if (version !== this.breakingVersion) {
             this.breakingVersion = version;
-            this.breaking.absorb(this.water.settled(), this.water.relief(), now);
+            this.breaking.absorb(this.water.settled(), this.water.relief(), now, this.closedSides());
         }
         const wind = shown ? this.wind?.() : undefined;
         const heading = windHeading(wind?.from) ?? { x: 0, y: 1 };

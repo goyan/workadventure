@@ -134,6 +134,97 @@ describe("LocalTerrainSimulation", () => {
     });
 });
 
+describe("LocalTerrainSimulation, the catastrophes of the room", () => {
+    const bounds = { x: 0, y: 0, width: 4, height: 4 };
+    /** 8 px of water in each cell of the hollow, none around it: the water of the server the ground starts from. */
+    const lake = (): Uint8Array => {
+        const full = new Uint8Array(bounds.width * bounds.height * 2);
+        for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) full[(y * bounds.width + x) * 2] = 64;
+        return full;
+    };
+    /** The water a dry sky leaves after `steps` steps, in px over all the cells; `happen` acts on the ground first. */
+    function waterAfter(
+        steps: number,
+        happen: (simulation: LocalTerrainSimulation) => void,
+        water?: { depths: Uint8Array; bounds: typeof bounds },
+    ): number {
+        const told: LocalTerrainTold[] = [];
+        const simulation = new LocalTerrainSimulation(
+            { wam, mapCells: MAP_CELLS, place: RIO, slots: [slotAt(25, 0)], fast: false, ...(water ? { water } : {}) },
+            (message) => told.push(message),
+            () => NOW,
+            () => 1,
+        );
+        simulation.setWam(wam);
+        happen(simulation);
+        for (let step = 0; step < steps; step++) simulation.step();
+        const last = told.filter((message) => message.kind === "water").at(-1);
+        if (last?.kind !== "water") return 0;
+        // The last state told is a difference with the one before: the stock says the water there is.
+        return last.message.stats?.stock ?? 0;
+    }
+
+    it("has none by itself: a dry sky leaves a dry ground", () => {
+        expect(waterAfter(30, () => undefined)).toBe(0);
+    });
+
+    it("lets a downpour of the room rain on its water while it falls", () => {
+        const fallen = waterAfter(30, (simulation) =>
+            simulation.setCatastrophes({
+                downpours: [{ id: 1, x: 24, y: 24, radiusTiles: 1, wholeMap: true }],
+                drains: [],
+                balls: [],
+            }),
+        );
+        expect(fallen).toBeGreaterThan(0);
+    });
+
+    it("lets a drain of the room take its water", () => {
+        const start = { depths: lake(), bounds };
+        const kept = waterAfter(30, () => undefined, start);
+        const drained = waterAfter(
+            30,
+            (simulation) =>
+                simulation.setCatastrophes({
+                    downpours: [],
+                    drains: [{ id: 1, x: 24, y: 24, radiusTiles: 2 }],
+                    balls: [],
+                }),
+            start,
+        );
+        expect(kept).toBeGreaterThan(0);
+        expect(drained).toBeLessThan(kept);
+    });
+
+    it("lets a fireball of the room boil the water of its crater away", () => {
+        const start = { depths: lake(), bounds };
+        const kept = waterAfter(10, () => undefined, start);
+        const boiled = waterAfter(10, (simulation) => simulation.burn(24, 24, 2, 1), start);
+        expect(boiled).toBeLessThan(kept);
+    });
+
+    it("takes a comet, a broken ice, a soaked ground and a fire set without failing", () => {
+        const start = { depths: lake(), bounds };
+        expect(() =>
+            waterAfter(
+                10,
+                (simulation) => {
+                    simulation.strike(24, 24, 1);
+                    simulation.shatter(24, 24, 1);
+                    simulation.soak({ x: 24, y: 24, radiusTiles: 1, wholeMap: false });
+                    simulation.ignite(24, 24, 1);
+                    simulation.setCatastrophes({
+                        downpours: [],
+                        drains: [],
+                        balls: [{ id: 1, x: 24, y: 24, radiusPx: 16 }],
+                    });
+                },
+                start,
+            ),
+        ).not.toThrow();
+    });
+});
+
 describe("localWaterSettings", () => {
     const water = wam.settings?.water;
     if (!water) throw new Error("the test map has water settings");
