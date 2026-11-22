@@ -283,8 +283,11 @@ const actionbar = {
                 unknownAir: "The air of the map is not known: the snow does not melt.",
                 seconds: "{value} s",
                 minutes: "{value} min",
+                hours: "{value} h",
                 water: "Only the part that falls as rain brings water to the map: the snow lies on the ground, then gives its water back as it melts.",
-                honest: "Kept by the server, tile by tile: this board reads what the server sent, it does not work the cover out itself. The snow melts {times} times faster there than in the real world.",
+                honest: "Kept by the server, tile by tile: this board reads what the server sent, it does not work the cover out itself. The snow and the ice go {times} times faster there than in the real world: the speed of the water of the map.",
+                honestReal:
+                    "Kept by the server, tile by tile: this board reads what the server sent, it does not work the cover out itself. The snow and the ice go as in the real world: hours to melt or to bear a walker.",
             },
         },
     },

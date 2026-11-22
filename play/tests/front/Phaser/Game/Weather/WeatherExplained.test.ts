@@ -345,9 +345,21 @@ describe("explainWeather: snow on the ground", () => {
             input({ roomAir: { temperature: 10, humidity: 50 }, roomWind: 0, snow: { map: 1, here: 1 } }),
         );
         expect(snow.trend).toBe("melting");
-        // 15 mm at 10 °C without wind, 600 times faster than the real clock: about a minute (Terrain/Snow.ts).
-        expect(snow.whiteGroundMeltsIn).toBeGreaterThan(30);
-        expect(snow.whiteGroundMeltsIn).toBeLessThan(90);
+        // 15 mm at 10 °C and 50 % without wind, in real time on a map that says nothing: 7 h 30 (Terrain/Snow.ts).
+        expect(snow.whiteGroundMeltsIn).toBeCloseTo(7.5 * 3600, -1);
+        // On a map whose water goes 600 times faster, its snow too: about a minute.
+        const fast = explainWeather(
+            input({
+                roomAir: { temperature: 10, humidity: 50 },
+                roomWind: 0,
+                snow: { map: 1, here: 1 },
+                snowTimes: 600,
+            }),
+        ).snow;
+        expect(fast.whiteGroundMeltsIn).toBeGreaterThan(30);
+        expect(fast.whiteGroundMeltsIn).toBeLessThan(90);
+        expect(fast.times).toBe(600);
+        expect(snow.times).toBe(1);
         expect(snowMeltMmPerHour({ temperature: 10, humidity: 50, windSpeed: 0 })).toBeGreaterThan(0);
     });
 

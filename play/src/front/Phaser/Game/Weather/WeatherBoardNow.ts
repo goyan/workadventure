@@ -1,4 +1,4 @@
-import { WeatherType } from "@workadventure/map-editor";
+import { waterTimesOf, WeatherType } from "@workadventure/map-editor";
 import type { FireConditionsMessage } from "@workadventure/messages";
 import { get } from "svelte/store";
 import { fireConditionsStore } from "@wa/front/Stores/FireConditionsStore";
@@ -100,5 +100,6 @@ export function weatherBoardNow(
                 ? { map: ground.meanSnowCover(), here: avatar ? ground.snowCoverAt(avatar.x, avatar.y) : 0 }
                 : undefined,
         roomWind: conditions?.windSpeed,
+        snowTimes: waterTimesOf(settings?.water),
     });
 }

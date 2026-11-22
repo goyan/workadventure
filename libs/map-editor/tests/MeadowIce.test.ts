@@ -13,8 +13,14 @@ const mild: SnowWeather = { temperature: 10, humidity: 50, windSpeed: 0 };
 /** A lake of 16 px of water on the tile (10, 10), a puddle of 1 px on (4, 4), dry ground elsewhere. */
 const lake = (tileX: number, tileY: number): number =>
     tileX === 10 && tileY === 10 ? 16 : tileX === 4 && tileY === 4 ? 1 : 0;
+/**
+ * The clock of these tests: a map whose water, snow and ice go 600 times faster than reality (the clock of the snow
+ * before the water of reality became the default), so that a step shows what takes hours in reality.
+ */
+const CLOCK = 600;
 const under = (weather: SnowWeather | undefined, more: Partial<MeadowStepInput> = {}): MeadowStepInput => ({
     seconds: MEADOW_STEP_SECONDS,
+    snowTimes: CLOCK,
     rainMmPerHour: 0,
     daylight: false,
     season: Season.Summer,

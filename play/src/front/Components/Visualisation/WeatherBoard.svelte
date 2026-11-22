@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { THAW_SPEED } from "@workadventure/map-editor";
     import type {
         AirOwner,
         Audience,
@@ -276,7 +275,9 @@
                 const duration =
                     seconds < 90
                         ? t.snow.seconds({ value: whole.format(Math.max(1, Math.round(seconds))) })
-                        : t.snow.minutes({ value: whole.format(Math.round(seconds / 60)) });
+                        : seconds < 90 * 60
+                          ? t.snow.minutes({ value: whole.format(Math.round(seconds / 60)) })
+                          : t.snow.hours({ value: whole.format(Math.round(seconds / 3600)) });
                 return t.snow.melting({ temperature, duration });
             }
         }
@@ -444,7 +445,10 @@
                 why: snowTrend === undefined ? [] : [snowTrend],
                 change: [],
                 notes: [t.snow.water()],
-                more: t.snow.honest({ times: whole.format(THAW_SPEED) }),
+                more:
+                    board.snow.times === 1
+                        ? t.snow.honestReal()
+                        : t.snow.honest({ times: whole.format(board.snow.times) }),
                 server:
                     !board.snow.shown && board.city !== undefined ? [t.snow.hidden({ city: board.city })] : undefined,
             },

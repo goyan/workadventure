@@ -3480,8 +3480,10 @@ Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus
   - Fonte : `max(0, T) × 0,2 × (1 + vent / 20) × (0,5 + humidité / 100)` mm/h ; la pluie qui tombe dessus en fait
     fondre un dixième de son volume par °C au-dessus de 0.
   - Sublimation : `0,02 × vent × (1 − humidité / 100)` mm/h, à toute température, sans eau.
-  - Le temps de la neige court 600 fois plus vite que le réel (`THAW_SPEED`) : 15 mm fondent en une minute environ à
-    10 °C sans vent. Constante à régler à l'essai.
+  - Le temps de la neige est celui de l'eau de la carte (`waterTimesOf`, `MeadowStepInput.snowTimes`, depuis le
+    2026-11-22 ; `THAW_SPEED` ×600 retiré) : temps réel par défaut, 60 fois plus vite à « Vitesse de l'eau » 60.
+    15 mm fondent en 11 h 30 à +5 °C et 5 h 50 à +10 °C (80 % d'humidité, sans vent) en temps réel ; 11 min 30 et
+    5 min 50 à 60 (avant : 69 s et 35 s).
   - Le feu fait fondre la neige autour de lui, même par temps de gel (`Meadow.warm`) : une case en feu chauffe sa
     case et les huit voisines (15 mm par seconde à pleine flamme), un arbre en feu deux cases autour de son pied, la
     catastrophe « feu » 60 mm par touche sous son disque. Cette fonte ne mouille pas le sol (le feu le sèche) ; son
@@ -3495,7 +3497,7 @@ Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus
   reste est perdu. La neige de la pluie de la carte s'accumule à la vitesse de l'eau de la carte (`water.speed`),
   sans le ruissellement (`runoff`) : elle tient où elle tombe. Depuis que cette vitesse vaut 1 par défaut
   (2026-11-22), une carte qui ne la règle pas blanchit en temps réel (5 mm/h d'eau de neige : 15 mm, sol tout blanc,
-  en trois heures), alors que fonte et sublimation gardent leur horloge ×600 (`THAW_SPEED`).
+  en trois heures). Fonte, sublimation et glace suivent la même horloge : elles ne peuvent plus diverger.
 - **Averse à l'écran.** Par temps froid, l'averse tombe en flocons au lieu de gouttes (`downpourFlakes`, mélange des
   deux dans l'entre-deux, nuage plus clair, sol qui pâlit au lieu de s'assombrir), d'après l'air de la salle
   (`roomPrecipitationAir` : réglage manuel, sinon lieu de la carte), le même pour tous les joueurs et pour le serveur,
@@ -3514,7 +3516,7 @@ Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus
 - **Neige de sa propre ville** (`Weather/Frost.ts`, `ownSnowAfter`, champ `snowMm` du cycle local). Pour qui suit
   une ville, ce qui tombe là-bas en neige (taux de précipitation du créneau en cours, part de neige `snowShare` de
   l'air de la ville) s'accumule sur son sol, en millimètres d'eau, à la même horloge que la neige du serveur
-  (`THAW_SPEED`), et fond ou part au vent sec avec les mêmes formules, d'après l'air de sa ville. Une seule valeur
+  (la vitesse de l'eau de la carte, `waterTimesOf`), et fond ou part au vent sec avec les mêmes formules, d'après l'air de sa ville. Une seule valeur
   pour tout le dehors de la carte : le sol blanchit partout pareil (par vingtièmes, le sol n'est repeint que quand
   elle bouge d'un cran), les arbres et la glace avec, et la marche ralentit dehors. Rien n'est envoyé au serveur et
   cette neige ne donne pas d'eau. Elle repart de zéro à chaque chargement de la carte et quand on revient au temps
@@ -3532,8 +3534,10 @@ du serveur, la glace est maintenant tenue par le serveur, case par case.
 - **Modèle** (`libs/map-editor/src/Terrain/Ice.ts`, champ `ice` de `Meadow`). Une épaisseur en millimètres sur l'eau
   de chaque case (au moins 0,5 px d'eau), jamais plus épaisse que cette eau : une flaque gèle entièrement.
   - Prise en glace sous 0 °C, loi de Stefan : `365 × (−T) × (1 + vent / 30) / max(épaisseur, 10)` mm par jour,
-    divisé par `1 + neige / 50` (la neige isole). Le temps court 600 fois plus vite que le réel (`THAW_SPEED`) :
-    5 cm en 50 s environ à −10 °C sans vent.
+    divisé par `1 + neige / 50` (la neige isole), × `ICE_GROWTH_TIMES` (2), à l'horloge de la neige (celle de l'eau).
+    En temps réel, 5 cm (la glace porte un marcheur) en 14 h à −3 °C, 4 h 20 à −10 °C, 1 h 25 à −30 °C ; 1 m en
+    228 jours, 68 jours, 23 jours. À « Vitesse de l'eau » 60 : 14 min, 4 min 20, 1 min 25. Une mer ne gèle donc plus
+    en une heure de jeu : c'est voulu, et le mode « Eau rapide » est le moyen de le voir vite.
   - Dégel au-dessus de 0 °C, au rythme de la fonte de la neige. La glace est le dessus de l'eau : geler et dégeler ne
     changent pas le volume d'eau, qui continue de couler dessous.
   - **Porte** quelqu'un à partir de 50 mm (`ICE_BEARS_MM`) : plus mince, sur une eau où l'on nage, elle cède et on
@@ -5157,9 +5161,10 @@ envoie `CATASTROPHE_ICE_BREAK` (une valeur de plus de `CatastropheKind`, même m
 par seconde par joueur), le serveur casse la glace d'une tuile autour par `meadow.shatter` (comme une comète) et le
 dit à la salle, qui ouvre le même trou. Météo personnelle : trou local. Les piscines gèlent en surface dès -3 °C
 (`POOL_ICE_DEPTH_PX` 8 px au lieu de 32, qui attendait -8,25 °C). La glace du serveur épaissit deux fois plus vite que
-l'horloge de la neige (`ICE_GROWTH_TIMES` = 2, soit 1 200 fois le temps réel ; le dégel garde ×600) : elle porte le
-woka en 1 min 30 environ à -3 °C, 38 s à -7 °C, 18 s à -15 °C (loi de Stefan, l'épaisseur croît comme la racine du
-temps).
+l'horloge de la neige (`ICE_GROWTH_TIMES` = 2). Sur l'horloge ×600 d'alors, elle portait le woka en 1 min 30 environ
+à -3 °C ; depuis le 2026-11-22, l'horloge est celle de l'eau de la carte, temps réel par défaut : 14 h à -3 °C
+(14 min à « Vitesse de l'eau » 60). Le trou ouvert sous un avatar se referme toujours en deux minutes
+(`HOLE_OPEN_MS`, horloge à part, non changée) : plus vite que la glace ne reprend en vrai.
 
 **Herbe dès l'arrivée** (`back/src/Model/MeadowManager.ts`, `GameScene.groundStatesOfJoinApplied`). Le premier joueur
 d'une salle recréée recevait un sol nu : `snapshot()` ne rendait que l'état déjà diffusé, vide jusqu'au premier pas de

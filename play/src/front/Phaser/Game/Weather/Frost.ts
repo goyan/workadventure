@@ -7,7 +7,7 @@ import {
     snowMeltMmPerHour,
     snowShare,
     snowSublimationMmPerHour,
-    THAW_SPEED,
+    waterTimesOf,
     WeatherType,
 } from "@workadventure/map-editor";
 import { realWeatherAt } from "@wa/common/RealWeather";
@@ -86,7 +86,8 @@ export function towards(value: number, target: number, seconds: number, upRate: 
 /**
  * The snow of a player's own city after `seconds` of the game clock, from `snowMm` of water lying on their ground:
  * what falls there (`fallingMmPerHour` of water) lies by its share of snow (snowShare), and what lies melts and goes
- * in a dry wind as the snow the server keeps does (Snow.ts), on the same clock (THAW_SPEED). Local to this browser:
+ * in a dry wind as the snow the server keeps does (Snow.ts), on the same clock: `times` the real one, the speed of
+ * the water of the map (waterTimesOf; reality when absent). Local to this browser:
  * it gives no water, the water is the server's. Unchanged while the air of the city is not known.
  */
 export function ownSnowAfter(
@@ -94,10 +95,11 @@ export function ownSnowAfter(
     seconds: number,
     fallingMmPerHour: number,
     air: AirNow | undefined,
+    times = 1,
 ): number {
     if (!Number.isFinite(seconds) || seconds <= 0 || !air || air.humidity === undefined) return snowMm;
     const weather = { temperature: air.temperature, humidity: air.humidity, windSpeed: air.windSpeed ?? 0 };
-    const hours = (seconds * THAW_SPEED) / 3600;
+    const hours = (seconds * (Number.isFinite(times) && times > 0 ? times : 1)) / 3600;
     const falling = Number.isFinite(fallingMmPerHour) ? Math.max(0, fallingMmPerHour) : 0;
     const gained = falling * snowShare(weather.temperature, weather.humidity) * hours;
     const lost = (snowMeltMmPerHour(weather) + snowSublimationMmPerHour(weather)) * hours;
@@ -115,12 +117,13 @@ export function cycleAfterAbsence(
     target: Omit<WaterCycle, "snowMm">,
     fallingMmPerHour: number,
     air: AirNow | undefined,
+    times = 1,
 ): WaterCycle {
     return {
         frost: towards(kept.frost, target.frost, seconds, FROST_RATE, FROST_RATE),
         ice: towards(kept.ice, target.ice, seconds, ICE_RATE, ICE_RATE),
         wet: towards(kept.wet, target.wet, seconds, WET_RATE, DRY_RATE),
-        snowMm: ownSnowAfter(kept.snowMm, seconds, fallingMmPerHour, air),
+        snowMm: ownSnowAfter(kept.snowMm, seconds, fallingMmPerHour, air, times),
     };
 }
 
@@ -184,6 +187,8 @@ export function waterCycleNow(settings: MapSnowSettings | undefined): WaterCycle
     const elapsed = lastSecond === undefined ? Number.POSITIVE_INFINITY : Math.min(60, second - lastSecond);
     lastSecond = second;
     const air = frostAirNow(settings, date);
+    // The clock of the snow of the map, that of its water: the snow of the city of the player goes by it too.
+    const times = waterTimesOf(settings?.water);
     const celsius = air?.temperature;
     const weather = shownWeatherSettings(settings, date)?.weather;
     const raining = weather === WeatherType.Rain || weather === WeatherType.Storm;
@@ -213,7 +218,7 @@ export function waterCycleNow(settings: MapSnowSettings | undefined): WaterCycle
         // Held as it was until the air of the city is known, then moved on by the time away.
         if (state.status === "known") {
             const away = Math.min(OWN_CYCLE_MAX_ABSENCE_S, Math.max(0, (Date.now() - restored.at) / 1000));
-            cycle = cycleAfterAbsence(cycle, away, target, falling, air);
+            cycle = cycleAfterAbsence(cycle, away, target, falling, air, times);
             restored = undefined;
         }
     } else {
@@ -222,7 +227,7 @@ export function waterCycleNow(settings: MapSnowSettings | undefined): WaterCycle
             frost: towards(cycle.frost, target.frost, elapsed, FROST_RATE, FROST_RATE),
             ice: towards(cycle.ice, target.ice, elapsed, ICE_RATE, ICE_RATE),
             wet: towards(cycle.wet, target.wet, elapsed, WET_RATE, DRY_RATE),
-            snowMm: place ? ownSnowAfter(cycle.snowMm, elapsed, falling, air) : 0,
+            snowMm: place ? ownSnowAfter(cycle.snowMm, elapsed, falling, air, times) : 0,
         };
     }
     if (city && !restored) keepCycle(city, cycle);

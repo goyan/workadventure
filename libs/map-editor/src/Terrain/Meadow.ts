@@ -8,7 +8,6 @@ import {
     snowMeltMmPerHour,
     snowMmOfByte,
     snowSublimationMmPerHour,
-    THAW_SPEED,
 } from "./Snow";
 import type { SnowWeather } from "./Snow";
 import {
@@ -187,7 +186,10 @@ export interface MeadowStepInput {
     soilFrost?: number;
     /** The air over the snow (temperature, humidity, wind); absent while not known: the snow neither melts nor goes. */
     weather?: SnowWeather;
-    /** How many times faster than the real clock the snow melts; THAW_SPEED when absent. */
+    /**
+     * How many times faster than the real clock the snow falls, melts and goes, and the ice takes and thaws: the speed
+     * of the water of the map (waterTimesOf), so that they never part; real time when absent.
+     */
     snowTimes?: number;
     /** The snow that falls on every tile outdoors during this step, in mm of water; none when absent. */
     snowfallMm?: number;
@@ -837,7 +839,7 @@ export class Meadow {
         const times =
             input.snowTimes !== undefined && Number.isFinite(input.snowTimes) && input.snowTimes > 0
                 ? input.snowTimes
-                : THAW_SPEED;
+                : 1;
         const hours = (seconds * times) / 3600;
         const weather = input.weather;
         const melting = weather
@@ -888,7 +890,7 @@ export class Meadow {
         const times =
             input.snowTimes !== undefined && Number.isFinite(input.snowTimes) && input.snowTimes > 0
                 ? input.snowTimes
-                : THAW_SPEED;
+                : 1;
         const hours = (seconds * times) / 3600;
         const weather = input.weather;
         const thawing = weather ? iceThawMmPerHour(weather) * hours : 0;

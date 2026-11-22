@@ -772,7 +772,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         absorption: "Absorption du sol (retrait d'une inondation)",
         indoorDrain: "Vidange des sols intérieurs",
         impactReach: "Souffle d'un météore dans l'eau (fois le rayon du cratère)",
-        speed: "Vitesse de l'eau (1 : comme en vrai, 60 : une minute pour une heure)",
+        speed: "Vitesse de l'eau, de la neige et de la glace (1 : comme en vrai, 60 : une minute pour une heure)",
         dashboard: {
             title: "Bilan de l'eau",
             waiting: "En attente du serveur : aucun bilan tant que l'eau ne bouge pas.",
@@ -845,7 +845,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 "Les sols des pièces fermées par des murs (portes fermées) évacuent l'eau entrée. 300 mm/h par défaut : une pièce inondée sèche en deux heures environ, comme en vrai (deux minutes à « Vitesse de l'eau » 60) ; des grilles d'évacuation posées au sol vont plus vite ; 0 garde l'eau à l'intérieur. Un bassin creusé à l'intérieur garde son eau.",
             impactReach:
                 "Jusqu'où l'impact chasse l'eau autour de son cratère : tout près du cratère, de moins en moins ensuite. 1 : seule l'eau du cratère bouge. En réel : les projections d'un cratère couvrent 2 à 3 fois son rayon ; 2,5 par défaut. Une piscine touchée en plein milieu se vide presque entièrement.",
-            speed: "1 par défaut, comme en vrai : une pluie de 10 mm/h met des heures à remplir un étang. Pour un essai, 60 : une minute pour une heure.",
+            speed: "1 par défaut, comme en vrai : une pluie de 10 mm/h met des heures à remplir un étang, une neige des heures à fondre, une glace près d'un jour à porter un marcheur à -3 °C. Pour un essai, 60 : une minute pour une heure.",
             maxSurface:
                 "18 px par défaut : de quoi nager, sous les étages (52 px). Plus haut, une crue noie le sol en profondeur. En réel : aucun plafond (256 px).",
             current:

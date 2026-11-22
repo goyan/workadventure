@@ -11,7 +11,6 @@ import {
     isDaylightAt,
     pavedTilesOf,
     liquidRainRate,
-    DEFAULT_WATER_SETTINGS,
     DOWNPOUR_PX_PER_SECOND,
     DOWNPOUR_REPORT_MS,
     FIRE_THAW_MM_PER_SECOND,
@@ -24,6 +23,7 @@ import {
     TERRAIN_CELL,
     TILE_PX,
     TreeFire,
+    waterTimesOf,
     WeatherType,
     REAL_WEATHER_SLOT_MS,
 } from "@workadventure/map-editor";
@@ -411,15 +411,16 @@ export class MeadowManager {
     }
 
     /**
-     * What a step reads of the snow: the air over it, and the snow of the map falling on every tile, at the pace the
-     * water of the map comes (its speed), so that a snow weighs what the same rain would have.
+     * What a step reads of the snow: the air over it, the snow of the map falling on every tile, and the clock its
+     * snow falls, melts and goes and its ice takes and thaws by: all of it at the pace the water of the map comes
+     * (its speed, waterTimesOf), so that a snow weighs what the same rain would have and nothing goes by another clock.
      */
-    private snowInput(seconds: number): Pick<MeadowStepInput, "weather" | "snowfallMm"> {
-        const speed = this.room.getWam()?.settings?.water?.speed ?? DEFAULT_WATER_SETTINGS.speed;
-        const hours = (seconds * (Number.isFinite(speed) && speed > 0 ? speed : 1)) / 3600;
+    private snowInput(seconds: number): Pick<MeadowStepInput, "weather" | "snowfallMm" | "snowTimes"> {
+        const times = waterTimesOf(this.room.getWam()?.settings?.water);
         return {
             weather: this.replay?.weather ? this.replay.weather.snow : this.snowWeather(),
-            snowfallMm: this.snowRate * hours,
+            snowfallMm: (this.snowRate * seconds * times) / 3600,
+            snowTimes: times,
         };
     }
 

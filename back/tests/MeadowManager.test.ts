@@ -1,5 +1,5 @@
 import { gunzipSync } from "node:zlib";
-import { WeatherType } from "@workadventure/map-editor";
+import { DEFAULT_WATER_SETTINGS, WeatherType } from "@workadventure/map-editor";
 import type { PrecipitationAir, SnowWeather, WAMFileFormat } from "@workadventure/map-editor";
 import type { MeadowMessage, SubToPusherRoomMessage } from "@workadventure/messages";
 import { describe, expect, it, vi } from "vitest";
@@ -38,7 +38,10 @@ function createHarness({
     random = () => 1,
     place = undefined as Settings["weatherLocation"],
     water = undefined as (() => { depthAt(cellX: number, cellY: number): number } | undefined) | undefined,
+    waterSpeed = undefined as number | undefined,
 }: {
+    /** The speed of the water of the map, and with it the clock of its snow and its ice (none: reality). */
+    waterSpeed?: number;
     water?: () => { depthAt(cellX: number, cellY: number): number } | undefined;
     place?: Settings["weatherLocation"];
     danger?: () => number;
@@ -61,6 +64,8 @@ function createHarness({
         }),
     } satisfies VariablesRepositoryInterface;
     const wam = wamWith(weather, meadow, place);
+    if (waterSpeed !== undefined)
+        wam.settings = { ...wam.settings, water: { ...DEFAULT_WATER_SETTINGS, speed: waterSpeed } };
     const room = {
         getWam: () => wam,
         sendSubMessageToRoom: (message: SubToPusherRoomMessage): void => {
@@ -504,8 +509,10 @@ describe("the snow of the MeadowManager", () => {
     const cold: SnowWeather = { temperature: -5, humidity: 100, windSpeed: 0 };
     const warm: SnowWeather = { temperature: 10, humidity: 50, windSpeed: 0 };
     /** A room whose air can be changed, with a spy on the water its melted snow is poured into. */
+    // The snow of these tests goes 600 times faster than reality (the clock of the snow before the water of
+    // reality became the default): a few steps show what takes hours.
     const snowHarness = (options: Parameters<typeof createHarness>[0] = {}) => {
-        const harness = createHarness({ weather: WeatherType.Clear, ...options });
+        const harness = createHarness({ weather: WeatherType.Clear, waterSpeed: 600, ...options });
         const air: { now: SnowWeather | undefined } = { now: cold };
         const pour = vi.fn((_tileX: number, _tileY: number, mm: number) => mm);
         harness.manager.fallThrough((): PrecipitationAir | undefined => air.now);
@@ -563,6 +570,26 @@ describe("the snow of the MeadowManager", () => {
         expect(pour.mock.calls.every(([, , mm]) => mm > 0)).toBe(true);
         expect(snowOf(sent.at(-1))[centre]).toBeLessThan(before);
         manager.stop();
+    });
+
+    it("melts its snow at the speed of the water of the map: in real time on a map that says nothing", () => {
+        const melting = (waterSpeed: number | undefined): { laid: number; melted: number } => {
+            const { manager, sent, steps, air } = snowHarness({ waterSpeed });
+            manager.mapChanged();
+            manager.soak(downpour);
+            steps(5);
+            const before = snowOf(sent.at(-1))[centre];
+            air.now = warm;
+            steps(5);
+            const after = snowOf(sent.at(-1))[centre];
+            manager.stop();
+            return { laid: before, melted: before - after };
+        };
+        // Snow laid, then ten seconds of a mild air: nothing seen melting in reality, some at 600 times.
+        expect(melting(600).melted).toBeGreaterThan(0);
+        const real = melting(1);
+        expect(real.laid).toBeGreaterThan(0);
+        expect(real.melted).toBe(0);
     });
 
     it("keeps the snow falling and melting on a map that turned its grass off", () => {
