@@ -1,4 +1,5 @@
 import {
+    WATER_PACE_WORKER_BUDGET_MS,
     boundedFireConditions,
     DEFAULT_FIRE_THRESHOLDS,
     fireDanger,
@@ -115,6 +116,8 @@ export class LocalTerrainSimulation {
                     LOCAL_STEP_BUDGET_MS,
                     // Nothing travels: the states stay in this browser, as big as they are.
                     Number.POSITIVE_INFINITY,
+                    // A worker of its own: half a core to live the water faster than reality.
+                    WATER_PACE_WORKER_BUDGET_MS,
                 ),
             makeMeadow: (water) =>
                 new MeadowSimulation(

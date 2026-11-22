@@ -3172,10 +3172,15 @@ qu'elle ne pouvait couler, et le modèle était faussé (crues trop hautes, flot
 (`WaterSimulation.step`), chaque pas réel de 0,1 s fait vivre à l'eau k pas de 0,1 s de temps de carte
 (`grid.step` k fois), à la finesse 1 dès que k > 1 :
 
-- **k** = min(S, ce que la machine tient) (`WaterPace`) : moyenne du coût d'un pas de temps de carte, budget de la
-  moitié du pas réel (`WATER_PACE_SHARE`, 50 ms sur le serveur). k part de 1, double après une seconde de pas
-  rapides (sous un quart du pas), et baisse aussitôt quand les pas coûtent ; jamais au-dessus de S. La finesse
-  adaptative (`WaterLoad`) ne voit plus que le coût d'un pas de temps de carte.
+- **k** = min(S, ce que le budget tient) (`WaterPace`) : moyenne du coût d'un pas de temps de carte, et k pas doivent
+  tenir dans le budget d'accélération, un paramètre du constructeur de `WaterSimulation` : **15 ms par pas réel sur
+  le serveur** (`WATER_PACE_SERVER_BUDGET_MS`), sous un sixième d'un pas et loin des 50 ms où `WaterLoad` allège :
+  le serveur n'a qu'un fil pour toutes les salles, une carte accélérée ne doit jamais ralentir les autres ; une salle
+  dont le pas au temps réel prend déjà ce budget reste au temps réel (la carte d'entrée en eau, environ 13 ms sur le
+  VPS). À relever quand chaque salle aura son fil (`GROUND_THREADS`). Dans le worker de la météo locale : 50 ms
+  (`WATER_PACE_WORKER_BUDGET_MS`, la moitié d'un cœur). k part de 1, double après une seconde de pas sous la moitié
+  du budget, baisse aussitôt quand les pas coûtent ; jamais au-dessus de S. La finesse adaptative (`WaterLoad`) ne
+  voit plus que le coût d'un pas de temps de carte.
 - **Règle des apports** (`inflowAt`) : « effective » pour l'eau d'une salle (serveur, la vitesse de la carte en mode
   édition) : les apports vont au facteur atteint k, jamais plus vite que l'écoulement ; « asked » pour l'eau d'un
   joueur pour lui seul (lot « Eau rapide » à venir) : les apports vont au facteur demandé, l'écoulement à k.
@@ -3183,13 +3188,15 @@ qu'elle ne pouvait couler, et le modèle était faussé (crues trop hautes, flot
   glace (`MeadowSimulation.timesWith`, câblé par `GroundSimulation`), et le panneau : `reachedSpeed` (champ 12 de
   `TerrainWaterStatsMessage`) donne le facteur atteint ; sous le facteur demandé, le panneau dit « L'eau va ×k sur ×S
   demandé : le serveur ne la calcule pas plus vite ».
-- **Échanges lointains et ruée vers les siphons** (`flowFar`, `flowSteps`) : ils ne servaient qu'à rattraper des
-  apports trop rapides ; avec la règle « effective », chaque pas de temps de carte a une vitesse de 1, donc ils ne
-  jouent plus côté serveur. Le code reste pour la règle « asked » (apports plus rapides que l'écoulement).
-- **Preuve** (`back/tests/WaterAcceleration.test.ts`) : trois scénarios vécus 4 minutes de temps de carte, au temps
-  réel puis à ×20 : débordement d'un bassin (48,0 m³ contre 48,2 ; 1 368 cellules mouillées contre 1 378), vidange
-  par un seuil (47,22 contre 47,22 m³), rivière en pente (2,00 contre 2,00 m³ ; 432 contre 434 cellules), en
-  2 400 pas réels contre 155. Les 19 empreintes de `WaterFingerprints.test.ts` sont inchangées (k = 1 au temps réel).
+- **Échanges lointains et ruée vers les siphons** (`flowFar`, `flowSteps`) : sous inertie, ils sont coupés à chaque
+  pas de temps de carte (`flowSteps` = 1), dans les deux règles : ils rattrapaient des apports trop rapides et
+  fausseraient maintenant l'écoulement (constat de l'étude `etude-eau-serveur`). Ils restent pour l'eau sans inertie.
+- **Preuve** (`back/tests/WaterAcceleration.test.ts`) : les trois scénarios de l'étude (rapport A de
+  `etude-eau-serveur`), vécus au temps réel puis à ×6 et ×20, sondes comparées minute après minute en temps de carte
+  (tolérance de l'étude : 1,5 px en transitoire, 0,5 px à la fin) : bassin 30 × 30 de 40 px qui déborde (écart le
+  plus grand 0,06 px), vidange par un seuil (0,10 px), rivière de 200 cellules en pente de 0,1 px (0,12 px) ; en
+  635 à 3 019 pas réels au lieu de 12 000 à 18 000. Les 19 empreintes de `WaterFingerprints.test.ts` sont
+  inchangées (k = 1 au temps réel).
 - Le rattrapage d'une salle vide garde la vitesse de la carte en un bloc sans inertie, comme avant.
 
 ## Défauts de l'eau d'une carte (2026-11-22) et garde-fou réseau

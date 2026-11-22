@@ -37,7 +37,7 @@ import { CELL_AREA_M2, LITRES_PER_M3 } from "./Scale";
 import { heightAt } from "./TerrainGrid";
 import { closedDoorSides, holdsOpen, waterDoorsOf } from "./WaterDoors";
 import type { WaterDoor } from "./WaterDoors";
-import { WaterPace } from "./WaterPace";
+import { WATER_PACE_SERVER_BUDGET_MS, WaterPace } from "./WaterPace";
 import { WATER_SEND_BUDGET_BYTES_PER_SECOND, WaterSendLoad } from "./WaterSendLoad";
 import { CELL_LITRES_PER_PX, gridBoundsOf, WaterGrid } from "./WaterGrid";
 import type { WaterGridBounds, WaterTally } from "./WaterGrid";
@@ -216,9 +216,14 @@ export class WaterSimulation {
          * in a browser that simulates its own water.
          */
         sendBudget: number = WATER_SEND_BUDGET_BYTES_PER_SECOND,
+        /**
+         * The time a real step may take living faster than reality (ms, see WaterPace): small on the server, which
+         * has one thread for every room; half a core in a worker.
+         */
+        paceBudget: number = WATER_PACE_SERVER_BUDGET_MS,
     ) {
         this.load = new WaterLoad(budgetMs);
-        this.pace = new WaterPace(budgetMs);
+        this.pace = new WaterPace(paceBudget);
         this.sendLoad = new WaterSendLoad(sendBudget);
     }
 
@@ -386,6 +391,9 @@ export class WaterSimulation {
         const pouring = this.rainRate > 0 || this.objects.some((object) => object.litresPerMinute > 0);
         if (this.moving || pouring) {
             const input = stepInputOf(stepWater, this.rainRate, this.objects, WATER_STEP_MS / 1000);
+            // The water with inertia runs as it really does at each step of its time: no move more towards the sinks,
+            // no exchange from far (they made up for inflows faster than the flow, and would now distort it).
+            if (input.inertia) input.flowSteps = 1;
             for (let lived = 0; lived < times; lived++) {
                 const tally = grid.step(input);
                 this.untold = true;
