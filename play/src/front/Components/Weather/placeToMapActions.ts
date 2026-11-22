@@ -1,15 +1,15 @@
 import { WeatherType } from "@workadventure/map-editor";
 import { get } from "svelte/store";
 import { gameManager } from "../../Phaser/Game/GameManager";
-import { executeUpdateWAMSettings } from "../../Phaser/Game/MapEditor/Commands/Facades";
 import type { WorldPlace } from "../../Phaser/Game/Night/WorldDaylight";
 import { canEditMapWeather } from "../../Phaser/Game/Weather/MapWeatherRights";
+import { saveMapWeather } from "../../Phaser/Game/Weather/MapWeatherSave";
 import {
     appliedPlaceStore,
-    followPlaceMessage,
+    followPlaceUpdate,
     mapLocationOf,
     realConditionsMessage,
-    revertMessage,
+    revertUpdate,
     sameWeatherPlace,
 } from "../../Phaser/Game/Weather/PlaceToMap";
 import { fireConditionsStore } from "../../Stores/FireConditionsStore";
@@ -23,31 +23,21 @@ function mapWeatherNow() {
 }
 
 /**
- * Makes the map follow the place this player follows, for everyone: its real weather at that place, saved in the map.
- * Only once the map holds it: the conditions set by hand are left for the real ones, and this player goes back to the
- * weather of the map, when asked. Throws when this player may not, or when the change did not apply. A refusal of the
- * server coming afterwards is not seen here (as for the weather settings of the map).
+ * Makes the map follow the place this player follows, for everyone, as the weather settings of the map would
+ * (saveMapWeather): its real weather at that place. Once the server confirmed it, this player goes back to the time and
+ * the weather of the server: the map now follows their place. The place they followed stays remembered, not active.
+ * The conditions set by hand in the room are left for the real ones too, when asked.
+ * Throws, changing nothing for this player, when they may not, or when the change did not apply or was not confirmed.
  */
-export async function applyPlaceToMap(
-    place: WorldPlace,
-    options: { leaveManual: boolean; followMap: boolean },
-): Promise<void> {
-    const { canEdit, settings } = mapWeatherNow();
-    if (!canEdit) throw new Error("This player may not change the weather of the map");
+export async function applyPlaceToMap(place: WorldPlace, options: { leaveManual: boolean }): Promise<void> {
+    const { settings } = mapWeatherNow();
     const before = { weather: settings?.weather ?? WeatherType.Clear, location: settings?.weatherLocation };
-    await executeUpdateWAMSettings(followPlaceMessage(place));
-    // The editor logs a command that failed and does not throw: the map is read again to know it changed.
-    if (!followsPlace(place)) throw new Error("The weather of the map was not changed");
+    await saveMapWeather(followPlaceUpdate(place));
     appliedPlaceStore.set({ applied: mapLocationOf(place), before });
+    // Conditions set by hand come first over any place: left for the real ones when this player chose so.
     const conditions = get(fireConditionsStore);
     if (options.leaveManual && conditions?.manual) sendFireConditions(realConditionsMessage(conditions));
-    if (options.followMap) nightModeStore.set(NightMode.Server);
-}
-
-/** Whether the map, as this browser holds it, follows the place in real weather. */
-function followsPlace(place: WorldPlace): boolean {
-    const { settings } = mapWeatherNow();
-    return settings?.weather === WeatherType.Real && sameWeatherPlace(place, settings.weatherLocation);
+    nightModeStore.set(NightMode.Server);
 }
 
 /** Whether "Back to …" can be offered: this player applied a place the map still follows, and may change it again. */
@@ -66,7 +56,6 @@ export function canRevertMapPlace(): boolean {
 export async function revertMapPlace(): Promise<void> {
     const applied = get(appliedPlaceStore);
     if (!applied || !canRevertMapPlace()) throw new Error("Nothing to bring back");
-    await executeUpdateWAMSettings(revertMessage(applied.before));
-    if (followsPlace(applied.applied)) throw new Error("The weather of the map was not brought back");
+    await saveMapWeather(revertUpdate(applied.before));
     appliedPlaceStore.set(undefined);
 }

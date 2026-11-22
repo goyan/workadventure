@@ -605,9 +605,10 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         goesReal: "La carte passe en météo réelle (elle était en « {weather} »).",
         leaveManual:
             "Revenir aux conditions réelles : elles sont réglées à la main (Catastrophe, Météo) et resteraient prioritaires sur ce lieu.",
-        followMap: "Voir ensuite la météo de la carte, comme tout le monde (ton ciel quitte « Jour dans le monde »).",
+        serverTime:
+            "Tu repasseras sur l'heure du serveur : le même ciel, la même heure et la même météo que tout le monde.",
         action: "Appliquer",
-        error: "La météo de la carte n'a pas pu être changée.",
+        error: "La météo de la carte n'a pas pu être changée (refusée, ou pas de réponse du serveur).",
         revert: "Revenir à {place}",
         revertHint: "Remettre la carte sur son lieu et sa météo d'avant",
     },

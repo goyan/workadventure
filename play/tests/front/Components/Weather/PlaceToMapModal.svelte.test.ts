@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { flushSync, mount, tick, unmount } from "svelte";
+import { flushSync, mount, unmount } from "svelte";
 import { readable } from "svelte/store";
 
 const actions = vi.hoisted(() => ({ apply: vi.fn(), close: vi.fn() }));
@@ -14,7 +14,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                     `The map will follow ${place} instead of ${mapPlace}, for everyone. Day, night and seasons too.`,
                 goesReal: ({ weather }: { weather: string }) => `The map switches to real weather (was ${weather}).`,
                 leaveManual: label("Back to the real conditions"),
-                followMap: label("Then see the weather of the map"),
+                serverTime: label("You will go back to the server time."),
                 action: label("Apply"),
                 error: label("Could not change"),
             },
@@ -66,24 +66,24 @@ afterEach(async () => {
 });
 
 describe("PlaceToMapModal", () => {
-    it("says the map changes for everyone, with its day, night and seasons, and goes real", () => {
+    it("says the map changes for everyone, with its day, night and seasons, goes real, and the player goes back to the server time", () => {
         open({ mapWeather: "Auto", manual: false });
         expect(find("place-to-map-modal")?.textContent).toContain(
             "The map will follow 24° N 122° E · Hong Kong à 770 km instead of Lille, for everyone.",
         );
         expect(find("place-to-map-real")?.textContent?.trim()).toBe("The map switches to real weather (was Auto).");
-        // No conditions set by hand: nothing to leave.
-        expect(find("place-to-map-leave-manual")).toBeNull();
+        expect(find("place-to-map-server-time")?.textContent?.trim()).toBe("You will go back to the server time.");
+        // No conditions set by hand: nothing to tick (going back to the server time is not a choice).
+        expect(target.querySelector('input[type="checkbox"]')).toBeNull();
     });
 
-    it("applies the place, leaving the conditions set by hand and following the map by default", async () => {
+    it("applies the place, leaving the conditions set by hand by default, and closes once done", async () => {
         actions.apply.mockResolvedValue(undefined);
         open({ manual: true });
         expect(find("place-to-map-real")).toBeNull();
+        expect(find("place-to-map-leave-manual")).not.toBeNull();
         applyButton()?.click();
-        await tick();
-        await Promise.resolve();
-        expect(actions.apply).toHaveBeenCalledWith(POINT, { leaveManual: true, followMap: true });
+        expect(actions.apply).toHaveBeenCalledWith(POINT, { leaveManual: true });
         await vi.waitFor(() => expect(actions.close).toHaveBeenCalledOnce());
     });
 
@@ -93,7 +93,7 @@ describe("PlaceToMapModal", () => {
         find("place-to-map-leave-manual")?.querySelector("input")?.click();
         flushSync();
         applyButton()?.click();
-        expect(actions.apply).toHaveBeenCalledWith(POINT, { leaveManual: false, followMap: true });
+        expect(actions.apply).toHaveBeenCalledWith(POINT, { leaveManual: false });
     });
 
     it("stays open and says so when the map could not be changed", async () => {
