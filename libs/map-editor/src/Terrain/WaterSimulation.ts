@@ -228,6 +228,7 @@ export class WaterSimulation {
     public stop(): void {
         if (this.timer) clearInterval(this.timer);
         this.timer = undefined;
+        this.load.release();
         this.save();
     }
 
@@ -297,6 +298,7 @@ export class WaterSimulation {
         } else if (!this.grid) {
             if (this.timer) clearInterval(this.timer);
             this.timer = undefined;
+            this.load.release();
         }
     }
 
@@ -311,6 +313,7 @@ export class WaterSimulation {
             console.error("The water of the relief of the map stopped on an error", error);
             if (this.timer) clearInterval(this.timer);
             this.timer = undefined;
+            this.load.release();
         }
     }
 

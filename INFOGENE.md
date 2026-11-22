@@ -2399,6 +2399,25 @@ finesse réduite à 5 sur 8 »), par `easedPrecision` et `easedUpdates` de `Terr
 précise (vagues plus amorties, fronts moins nets) pendant les moments les plus lourds, un tsunami compris. Sans
 inertie, seuls les envois peuvent être réduits. Seuils posés par raisonnement, non calés sur une mesure en jeu.
 
+**L'allègement compte toutes les salles du fil** (`WaterLoads`, `threadWaterLoads` dans `WaterLoad.ts`). Chaque
+salle ne regardait que ses propres pas : deux grandes salles à 48 % de l'intervalle chacune saturaient le fil sans
+qu'aucune ne s'allège. Les durées moyennes des pas de toutes les eaux du fil s'additionnent maintenant, et c'est la
+somme qui est comparée aux seuils de 50 % et 25 %.
+
+- **Partage** : quand la somme dépasse 50 %, toutes les eaux du fil s'allègent en même temps, du même rapport
+  (finesse × 50 % / part du fil, un cran au moins). La plus lourde rend donc le plus de millisecondes, aucune n'est
+  épargnée, et celle dont le pas est chronométré en premier ne paie pas pour les autres. Les envois ne sont réduits
+  que lorsque plus aucune eau du fil n'a de finesse à rendre. La restitution est commune aussi : les envois
+  d'abord, puis un cran de finesse pour chacune, après 10 s sous 25 %.
+- **Sortie** : une salle qui ferme, ou dont la carte n'a plus d'eau, se retire (`WaterLoad.release`) ; les autres
+  retrouvent leur finesse.
+- **Périmètre** : « le fil » est le module chargé. Les salles du serveur partagent celui du processus ; un fil de
+  calcul (#495) aura le sien, comme le navigateur qui simule son eau. Les pas de la prairie ne sont pas comptés.
+  Un test qui crée plusieurs eaux vide le registre entre deux cas (`threadWaterLoads.clear()`), ou donne à chaque
+  eau son registre (`new WaterLoad(100, new WaterLoads())`).
+- **Limite** : une salle légère est allégée du même rapport qu'une lourde, donc elle perd de la finesse pour un
+  gain faible. Non mesuré en jeu ni sur le VPS ; seuils inchangés.
+
 **Petits gains sur le fil du serveur, à modèle inchangé** (lot 1 de l'étude du serveur de l'eau, novembre 2026).
 Le processus des salles n'a qu'un fil ; cinq changements de plomberie, aucun de physique :
 
@@ -2425,8 +2444,8 @@ Le processus des salles n'a qu'un fil ; cinq changements de plomberie, aucun de 
   `MeadowManager.test.ts`). Mesuré sur la carte d'entrée, 7 jours manqués : tour le plus long 422 → 15 ms ; avec
   les minuteurs réels, retard maximal de la boucle d'événements 467 → 18 à 38 ms selon la charge de la machine de
   mesure (99e centile 10,6 ms), rattrapage fini en 28 s d'horloge au lieu de 70 s. Le joueur qui entre pendant ce
-  temps voit la prairie et l'eau avancer d'un envoi par seconde, comme avant. Le même budget vaut dans un
-  navigateur qui fait tourner la simulation pour lui-même.
+  temps voit la prairie et l'eau avancer d'un envoi par seconde, comme avant. Un navigateur qui fait tourner la
+  simulation pour lui-même ne rattrape jamais (il part d'un état donné, `seed`) : ce chemin n'y est pas atteint.
 
 **Fil de calcul par salle** (lot 3 de la même étude, livré en plusieurs PR ; rien n'est activé tant que la dernière
 ne l'est pas).
