@@ -40,18 +40,21 @@ export class WaterPace {
         return Math.max(1, Math.min(wanted, this.ceiling));
     }
 
-    /** A real step of the water took `ms`, on a map that asks for `asked`, living `times(asked)` steps of its time. */
-    public record(ms: number, asked: number): void {
+    /**
+     * A real step of the water took `ms`, on a map that asks for `asked`, living `times(asked)` steps of its time;
+     * `leftMs`: what the other waters of its thread leave it now, when less than its budget (see WaterSimulation).
+     */
+    public record(ms: number, asked: number, leftMs = Number.POSITIVE_INFINITY): void {
         if (!Number.isFinite(ms) || ms < 0) return;
         const times = this.times(asked);
         const each = ms / times;
         this.meanEach = this.meanEach === 0 ? each : this.meanEach + (each - this.meanEach) / MEAN_STEPS;
-        const budget = this.budgetMs;
-        const share = (this.meanEach * times) / budget;
+        const budget = Math.max(0, Math.min(this.budgetMs, leftMs));
+        const share = budget > 0 ? (this.meanEach * times) / budget : Number.POSITIVE_INFINITY;
         if (share > 1) {
             this.calm = 0;
             // Straight to what the machine holds, a step at least.
-            this.ceiling = Math.max(1, Math.min(times - 1, Math.floor(budget / this.meanEach)));
+            this.ceiling = Math.max(1, Math.min(times - 1, Math.floor(budget / Math.max(this.meanEach, 1e-6))));
             return;
         }
         if (share >= CLIMB_SHARE || times >= asked) {

@@ -452,8 +452,13 @@ export class WaterSimulation {
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
         const elapsed = this.clock() - started;
         // The fineness goes by the cost of a step of its time; the pace by the cost of the real step.
-        this.load.record(elapsed / times, asked);
-        this.pace.record(elapsed, speed);
+        // Beside other waters on its thread, the whole real step counts: they see what this one really takes, and it
+        // lives faster than reality only in what they leave under the share where they would ease. Alone (a room
+        // alone on the thread, a worker in a browser), its fineness goes by a step of the time of its map, and its
+        // budget is its own.
+        const others = this.load.othersMs();
+        this.load.record(others > 0 ? elapsed : elapsed / times, asked);
+        this.pace.record(elapsed, speed, others > 0 ? this.load.quietMs() - others : Number.POSITIVE_INFINITY);
     }
 
     /**
