@@ -87,6 +87,21 @@ describe("LocalTerrainController", () => {
         expect(controller.isLocal()).toBe(false);
     });
 
+    it("starts without the snow and the ice of the server: the place chosen lays its own", async () => {
+        const { controller, water, posted, choose } = harness();
+        water.receive(stateOf(4, 1), 0);
+        controller.fromServerMeadow({ ...meadowOf(3), snow: Uint8Array.from([200]), ice: Uint8Array.from([90]) });
+        choose({ place: RIO, slots: SLOTS });
+        controller.update();
+        await opened();
+
+        const start = posted.find((command) => command.kind === "start");
+        const meadow = start?.kind === "start" ? start.start.meadow : undefined;
+        expect(meadow?.grass).toEqual(Uint8Array.from([3]));
+        expect(meadow?.snow).toBeUndefined();
+        expect(meadow?.ice).toBeUndefined();
+    });
+
     it("starts from the ground of the server, shows its own, and keeps the server's aside meanwhile", async () => {
         const { controller, water, posted, choose, tell, showMeadow } = harness();
         water.receive(stateOf(4, 1), 0);

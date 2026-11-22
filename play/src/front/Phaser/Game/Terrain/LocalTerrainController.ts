@@ -160,7 +160,7 @@ export class LocalTerrainController {
                                   },
                               }
                             : {}),
-                        ...(meadow ? { meadow } : {}),
+                        ...(meadow ? { meadow: withoutServerCold(meadow) } : {}),
                     },
                 });
                 port.postMessage({ kind: "walkers", walkers: this.scene.walkers() });
@@ -213,4 +213,13 @@ export function openModuleWorker(url: string): Worker {
 /** Whether two places are the same point of the world, whichever objects hold them. */
 function samePlace(a: WeatherLocation | undefined, b: WeatherLocation | undefined): boolean {
     return a !== undefined && b !== undefined && a.latitude === b.latitude && a.longitude === b.longitude;
+}
+
+/**
+ * The meadow of the server without its snow and its ice: they come of the weather of the server, and would stay for
+ * hours under the sun of the place chosen. The local ground lays its own, from the weather of that place.
+ */
+function withoutServerCold(meadow: MeadowState): SeededMeadow {
+    const { width, height, grass, moisture, dryness, ash } = meadow;
+    return { width, height, grass, moisture, ...(dryness && { dryness }), ...(ash && { ash }) };
 }
