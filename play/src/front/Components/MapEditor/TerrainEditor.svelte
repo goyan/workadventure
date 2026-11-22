@@ -2,12 +2,12 @@
     import {
         defaultForcePx,
         MAX_DEPTH_TILES,
-        DEFAULT_WATER_SETTINGS,
         MAX_WATER_CURRENT,
         MAX_WATER_INDOOR_DRAIN,
         FLOW_PACE_BOUNDS,
         IMPACT_REACH_BOUNDS,
         MAX_WATER_MAX_SURFACE,
+        MIN_WATER_MAX_SURFACE,
         REALISTIC_WATER_SETTINGS,
         WATER_PACE_BOUNDS,
         WAVE_BOUNDS,
@@ -647,7 +647,7 @@
             id="terrain-max-surface"
             label={$LL.mapEditor.terrain.maxSurface()}
             unit="px"
-            min={DEFAULT_WATER_SETTINGS.maxSurface}
+            min={MIN_WATER_MAX_SURFACE}
             max={MAX_WATER_MAX_SURFACE}
             step={1}
             bind:value={maxSurface}
