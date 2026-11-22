@@ -1440,7 +1440,10 @@ export class WaterGrid {
         const bytes = new Uint8Array(this.depth.length * 2);
         const under = whole && this.under.length > 0 ? this.under : undefined;
         for (let index = 0; index < this.depth.length; index++) {
-            const eighths = Math.min(65535, Math.round((this.depth[index] + (under ? under[index] : 0)) * 8));
+            // Rounded to the nearest eighth, as Math.round does for a depth (never negative, and exact in eighths
+            // before the half is added), four times faster.
+            const scaled = (this.depth[index] + (under ? under[index] : 0)) * 8;
+            const eighths = scaled >= 65535 ? 65535 : (scaled + 0.5) | 0;
             bytes[index * 2] = eighths & 255;
             bytes[index * 2 + 1] = eighths >> 8;
         }
@@ -1953,13 +1956,12 @@ export class WaterGrid {
                             const otherBed = ground[other];
                             const otherSurface = otherBed + otherHeld;
                             // The water that passes: what stands over the higher of the two grounds.
-                            const passing =
-                                (surface > otherSurface ? surface : otherSurface) - (bed > otherBed ? bed : otherBed);
+                            const passing = Math.max(surface, otherSurface) - Math.max(bed, otherBed);
                             if (passing <= DRY_PX) east[index] = 0;
                             else {
                                 const drop = surface - otherSurface;
                                 const inWater = hollow[index] === 1 && hollow[other] === 1;
-                                let flow = east[index] + pull * (passing > pulled ? pulled : passing) * drop;
+                                let flow = east[index] + pull * Math.min(passing, pulled) * drop;
                                 if (carried > 0 && inWater) {
                                     // The water brings the speed it had upstream, along the row and across it.
                                     const along = speedEast[index];
@@ -1978,7 +1980,7 @@ export class WaterGrid {
                                             : (row + 1 < height ? speedEast[index + width] : along) - along;
                                     flow -= carried * dt * passing * (along * alongChange + across * acrossChange);
                                 }
-                                const speed = (flow < 0 ? -flow : flow) / passing;
+                                const speed = Math.abs(flow) / passing;
                                 const eighths = (passing * 8) | 0;
                                 let rate =
                                     damping +
@@ -1988,8 +1990,7 @@ export class WaterGrid {
                                         speed *
                                         powers[eighths > lastPower ? lastPower : eighths];
                                 if (breaking > 0 && inWater) {
-                                    const steep = (drop < 0 ? -drop : drop) / passing - BREAKING_CALM;
-                                    if (steep > 0) rate += breaking * steep;
+                                    rate += breaking * Math.max(Math.abs(drop) / passing - BREAKING_CALM, 0);
                                 }
                                 flow /= 1 + dt * rate;
                                 if (flow > swiftest * passing) flow = swiftest * passing;
@@ -2008,13 +2009,12 @@ export class WaterGrid {
                         else {
                             const otherBed = ground[other];
                             const otherSurface = otherBed + otherHeld;
-                            const passing =
-                                (surface > otherSurface ? surface : otherSurface) - (bed > otherBed ? bed : otherBed);
+                            const passing = Math.max(surface, otherSurface) - Math.max(bed, otherBed);
                             if (passing <= DRY_PX) south[index] = 0;
                             else {
                                 const drop = surface - otherSurface;
                                 const inWater = hollow[index] === 1 && hollow[other] === 1;
-                                let flow = south[index] + pull * (passing > pulled ? pulled : passing) * drop;
+                                let flow = south[index] + pull * Math.min(passing, pulled) * drop;
                                 if (carried > 0 && inWater) {
                                     const along = speedSouth[index];
                                     const alongChange =
@@ -2032,7 +2032,7 @@ export class WaterGrid {
                                             : (column + 1 < width ? speedSouth[index + 1] : along) - along;
                                     flow -= carried * dt * passing * (along * alongChange + across * acrossChange);
                                 }
-                                const speed = (flow < 0 ? -flow : flow) / passing;
+                                const speed = Math.abs(flow) / passing;
                                 const eighths = (passing * 8) | 0;
                                 let rate =
                                     damping +
@@ -2042,8 +2042,7 @@ export class WaterGrid {
                                         speed *
                                         powers[eighths > lastPower ? lastPower : eighths];
                                 if (breaking > 0 && inWater) {
-                                    const steep = (drop < 0 ? -drop : drop) / passing - BREAKING_CALM;
-                                    if (steep > 0) rate += breaking * steep;
+                                    rate += breaking * Math.max(Math.abs(drop) / passing - BREAKING_CALM, 0);
                                 }
                                 flow /= 1 + dt * rate;
                                 if (flow > swiftest * passing) flow = swiftest * passing;
@@ -2067,10 +2066,10 @@ export class WaterGrid {
                 for (let column = 0; column < width; column++) {
                     const index = row * width + column;
                     let out = 0;
-                    if (column + 1 < width && east[index] > 0) out += east[index];
-                    if (column > 0 && east[index - 1] < 0) out -= east[index - 1];
-                    if (row + 1 < height && south[index] > 0) out += south[index];
-                    if (row > 0 && south[index - width] < 0) out -= south[index - width];
+                    if (column + 1 < width) out += Math.max(east[index], 0);
+                    if (column > 0) out += Math.max(-east[index - 1], 0);
+                    if (row + 1 < height) out += Math.max(south[index], 0);
+                    if (row > 0) out += Math.max(-south[index - width], 0);
                     afford[index] = out * dt > depth[index] ? depth[index] / (out * dt) : 1;
                 }
             }

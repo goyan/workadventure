@@ -171,6 +171,11 @@ export class WaterSimulation {
     /** The step the room was last told a whole state at. */
     private fullAtStep = -Infinity;
     protected changedSinceSave = false;
+    /**
+     * Whether anything was computed on the grid since the room was last told (a step, an impact, a new grid): while
+     * nothing was, its depths are those the room knows and there is nothing to write nor to compare.
+     */
+    private untold = true;
     /** How long the steps take, and the fineness given up while they take too long. */
     private readonly load: WaterLoad;
     /** The time missed while the room was empty that is not lived again yet, and the rain (mm) that fell in it. */
@@ -283,6 +288,7 @@ export class WaterSimulation {
         if (this.grid && before) this.grid.takeFrom(before);
         // The cells are not the same any more: the room is told the whole state at its next message.
         this.sentBytes = undefined;
+        this.untold = true;
         if (this.grid && !this.timer) {
             this.timer = setInterval(() => this.tick(), WATER_STEP_MS);
             // The water of a room must never keep the process alive.
@@ -354,6 +360,7 @@ export class WaterSimulation {
         const pouring = this.rainRate > 0 || this.objects.some((object) => object.litresPerMinute > 0);
         if (this.moving || pouring) {
             const tally = grid.step(stepInputOf(water, this.rainRate, this.objects, WATER_STEP_MS / 1000));
+            this.untold = true;
             this.moving = tally.moved;
             if (tally.moved) this.version++;
             if (tally.moved) this.changedSinceSave = true;
@@ -713,6 +720,8 @@ export class WaterSimulation {
      */
     private blast(grid: WaterGrid, cellX: number, cellY: number, radiusTiles: number): number {
         const reach = this.room.getWam()?.settings?.water?.impactReach ?? DEFAULT_IMPACT_REACH;
+        // An impact is told at once, whatever it moved.
+        this.untold = true;
         const blast = blastWater(grid, cellX, cellY, meteorShape(radiusTiles), reach);
         if (!blast) return 0;
         this.sums.lostPx += blast.lostPx;
@@ -751,6 +760,11 @@ export class WaterSimulation {
         const speed = this.room.getWam()?.settings?.water?.speed ?? DEFAULT_WATER_SETTINGS.speed;
         const rates = ratesOf(sums, (stepsSince * WATER_STEP_MS) / 1000, speed);
         const anyRate = Object.values(rates).some((rate) => rate > 0);
+        // Nothing computed since the room was last told, and no rate to tell nor to take back: nothing to say, and
+        // no need to write the depths of the whole grid to find it out.
+        const idle = !this.untold && !anyRate && !this.sentRates;
+        this.untold = false;
+        if (idle) return;
         const bytes = grid.writeDepths();
         const previous = this.sentBytes;
         // A whole state when the room knows none (or another grid), and again every half minute.
