@@ -161,8 +161,9 @@ describe("WaterGrid with inertia", () => {
 });
 
 describe("stepInputOf with inertia", () => {
-    it("asks for the water with inertia only on a map that chose it, with the time of the step", () => {
-        expect(stepInputOf(undefined, 0, [], 0.1).inertia).toBeUndefined();
+    it("asks for the water with inertia unless the map turned it off, with the time of the step", () => {
+        // A map that says nothing: the water of reality, with inertia.
+        expect(stepInputOf(undefined, 0, [], 0.1).inertia).toBe(true);
         expect(stepInputOf({ ...DEFAULT_WATER_SETTINGS, inertia: false }, 0, [], 0.1).inertia).toBeUndefined();
         const input = stepInputOf({ ...DEFAULT_WATER_SETTINGS, inertia: true }, 0, [], 0.1);
         expect(input.inertia).toBe(true);
