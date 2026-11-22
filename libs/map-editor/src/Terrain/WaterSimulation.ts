@@ -37,6 +37,7 @@ import type { PoolCell } from "./Pools";
 import { CELL_AREA_M2, LITRES_PER_M3 } from "./Scale";
 import { closedDoorSides, holdsOpen, waterDoorsOf } from "./WaterDoors";
 import type { WaterDoor } from "./WaterDoors";
+import { WATER_PACE_SERVER_BUDGET_MS, WaterPace } from "./WaterPace";
 import { WATER_SEND_BUDGET_BYTES_PER_SECOND, WaterSendLoad } from "./WaterSendLoad";
 import { CELL_LITRES_PER_PX, gridBoundsOf, WaterGrid } from "./WaterGrid";
 import type { WaterGridBounds, WaterTally } from "./WaterGrid";
@@ -48,6 +49,7 @@ import {
     WATER_MESSAGE_MS,
     WATER_STEP_MS,
     waterObjectsOf,
+    waterTimesOf,
 } from "./WaterInputs";
 import type { WaterObject } from "./WaterInputs";
 import { WaterLoad } from "./WaterLoad";
@@ -179,6 +181,18 @@ export class WaterSimulation {
     private untold = true;
     /** How long the steps take, and the fineness given up while they take too long. */
     private readonly load: WaterLoad;
+    /** How many steps of the time of its map the water lives in a real step (a map faster than reality). */
+    private readonly pace: WaterPace;
+    /**
+     * How fast what comes in and goes out goes (rain, sources, sinks, evaporation, and the snow and the ice with
+     * them): "effective", as fast as the water is computed (the water of a room: never faster than it flows); "asked",
+     * as fast as asked whatever the flow (the fast water of a player, for themself).
+     */
+    private inflow: "effective" | "asked" = "effective";
+    /** What is asked instead of the speed of the map (the fast water of a player); undefined: the map's. */
+    private askedTimes: () => number | undefined = () => undefined;
+    /** How many times faster than reality the water went at the last step, its inflows and its flow. */
+    private lived = { inflow: 1, flow: 1 };
     /** The time missed while the room was empty that is not lived again yet, and the rain (mm) that fell in it. */
     private missed = { seconds: 0, rainMm: 0 };
 
@@ -202,8 +216,14 @@ export class WaterSimulation {
          * in a browser that simulates its own water.
          */
         sendBudget: number = WATER_SEND_BUDGET_BYTES_PER_SECOND,
+        /**
+         * The time a real step may take living faster than reality (ms, see WaterPace): small on the server, which
+         * has one thread for every room; half a core in a worker.
+         */
+        paceBudget: number = WATER_PACE_SERVER_BUDGET_MS,
     ) {
         this.load = new WaterLoad(budgetMs);
+        this.pace = new WaterPace(paceBudget);
         this.sendLoad = new WaterSendLoad(sendBudget);
     }
 
@@ -345,13 +365,21 @@ export class WaterSimulation {
         }
         const started = this.clock();
         const settings = this.room.getWam()?.settings;
-        // The fineness and the tellings the map asks for are ceilings: less while the steps take too long.
+        // A map faster than reality lives `times` steps of its time in this real step, as many as the machine holds.
+        const speed = this.askedTimes() ?? waterTimesOf(settings?.water);
+        const times = this.pace.times(speed);
+        // The fineness and the tellings the map asks for are ceilings: less while the steps take too long; the
+        // least while the water goes faster than reality (its steps are many).
         const inertia = waterHasInertia(settings?.water);
         const asked = inertia ? (settings?.water?.precision ?? DEFAULT_WATER_PACE.precision) : 1;
         // A map that says nothing of its water has the water of reality, with inertia.
         const water = inertia
-            ? { ...(settings?.water ?? DEFAULT_WATER_SETTINGS), precision: this.load.precision(asked) }
+            ? { ...(settings?.water ?? DEFAULT_WATER_SETTINGS), precision: times > 1 ? 1 : this.load.precision(asked) }
             : settings?.water;
+        // Each step of its time takes its share of what comes in: as fast as it flows, or as fast as asked.
+        const inflow = this.inflow === "asked" ? Math.max(times, speed) : times;
+        this.lived = { inflow, flow: times };
+        const stepWater = { ...(water ?? DEFAULT_WATER_SETTINGS), speed: inflow / times };
         // The map says how high its water may stand; lowered, what stands over it goes at this step.
         const highest = grid.maxSurface();
         grid.setMaxSurface(settings?.water?.maxSurface ?? DEFAULT_WATER_SETTINGS.maxSurface);
@@ -375,17 +403,25 @@ export class WaterSimulation {
         if (this.waves.length > 0) this.advanceWaves(grid);
         const pouring = this.rainRate > 0 || this.objects.some((object) => object.litresPerMinute > 0);
         if (this.moving || pouring) {
-            const tally = grid.step(stepInputOf(water, this.rainRate, this.objects, WATER_STEP_MS / 1000));
-            this.untold = true;
-            this.moving = tally.moved;
-            if (tally.moved) this.version++;
-            if (tally.moved) this.changedSinceSave = true;
-            this.sums.rainPx += tally.rainPx;
-            this.sums.sourcesPx += tally.sourcesPx;
-            this.sums.sinksPx += tally.sinksPx;
-            this.sums.evaporationPx += tally.evaporationPx;
-            this.sums.absorptionPx += tally.absorptionPx;
-            this.sums.lostPx += tally.lostPx;
+            const input = stepInputOf(stepWater, this.rainRate, this.objects, WATER_STEP_MS / 1000);
+            // The water with inertia runs as it really does at each step of its time: no move more towards the sinks,
+            // no exchange from far (they made up for inflows faster than the flow, and would now distort it).
+            if (input.inertia) input.flowSteps = 1;
+            for (let lived = 0; lived < times; lived++) {
+                const tally = grid.step(input);
+                this.untold = true;
+                this.moving = tally.moved;
+                if (tally.moved) this.version++;
+                if (tally.moved) this.changedSinceSave = true;
+                this.sums.rainPx += tally.rainPx;
+                this.sums.sourcesPx += tally.sourcesPx;
+                this.sums.sinksPx += tally.sinksPx;
+                this.sums.evaporationPx += tally.evaporationPx;
+                this.sums.absorptionPx += tally.absorptionPx;
+                this.sums.lostPx += tally.lostPx;
+                // Still water with nothing coming in: the steps left would change nothing.
+                if (!tally.moved && !pouring) break;
+            }
         }
         // As often as the map asks while the water moves, less while the server or the network is loaded, and at least
         // five times a second under a wave unless the states are too big for the network.
@@ -397,7 +433,31 @@ export class WaterSimulation {
             this.tell(grid);
         }
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
-        this.load.record(this.clock() - started, asked);
+        const elapsed = this.clock() - started;
+        // The fineness goes by the cost of a step of its time; the pace by the cost of the real step.
+        this.load.record(elapsed / times, asked);
+        this.pace.record(elapsed, speed);
+    }
+
+    /**
+     * How fast what comes in goes for a player who asks for a fast water of their own ("asked"), or as fast as the
+     * water flows ("effective", the water of a room). See `inflow`.
+     */
+    public inflowAt(inflow: "effective" | "asked"): void {
+        this.inflow = inflow;
+    }
+
+    /** Asks for a speed instead of the map's (the fast water of a player); undefined: the map's again. */
+    public askWith(asked: () => number | undefined): void {
+        this.askedTimes = asked;
+    }
+
+    /**
+     * How many times faster than reality the water lived its last step: what comes in (and the snow and the ice with
+     * it), and its flow (as many steps of its time as the machine holds).
+     */
+    public livedTimes(): { inflow: number; flow: number } {
+        return this.lived;
     }
 
     /**
@@ -765,8 +825,8 @@ export class WaterSimulation {
         // Usually a second, less when an impact or its wave has the room told sooner.
         const stepsSince = Math.max(1, this.steps - this.toldAtStep);
         this.toldAtStep = this.steps;
-        const speed = this.room.getWam()?.settings?.water?.speed ?? DEFAULT_WATER_SETTINGS.speed;
-        const rates = ratesOf(sums, (stepsSince * WATER_STEP_MS) / 1000, speed);
+        // In the time of the map: as many times the real one as what came in went.
+        const rates = ratesOf(sums, (stepsSince * WATER_STEP_MS) / 1000, this.lived.inflow);
         const anyRate = Object.values(rates).some((rate) => rate > 0);
         // Nothing computed since the room was last told, and no rate to tell nor to take back: nothing to say, and
         // no need to write the depths of the whole grid to find it out.
@@ -833,6 +893,7 @@ export class WaterSimulation {
                         wetArea: grid.wetCells() * CELL_AREA_M2,
                         rainRate: this.rainRate,
                         ...this.eased(water),
+                        ...(waterTimesOf(water) > 1 ? { reachedSpeed: this.lived.flow } : {}),
                     },
                 },
             },

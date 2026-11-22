@@ -798,6 +798,8 @@ const mapEditor: BaseTranslation = {
         precisionHint:
             "Higher: faster waves and torrents are possible, heavier computation for the server. 3 by default.",
         precisionEased: "Server busy: fineness lowered to {value} out of {asked} until the computation gets lighter.",
+        speedReached:
+            "The water goes ×{value} out of ×{asked} asked: the server computes it no faster, and everything follows it (rain, sources, snow, ice).",
         updatesEased: "Server or network busy: tellings lowered to {value} a second out of {asked}.",
         updates: "Tellings of the water to the players",
         updatesHint:
@@ -836,7 +838,7 @@ const mapEditor: BaseTranslation = {
                 "The floors of the rooms closed by walls (doors closed) drain the water that came in. 300 mm/h by default: a flooded room is dry in about two hours, as in reality (two minutes at a speed of the water of 60); floor drains take it faster; 0 keeps the water inside. A pool dug indoors keeps its water.",
             impactReach:
                 "How far the impact drives the water away around its crater: all of it next to the crater, less and less further out. 1: only the water of the crater moves. In reality: the ejecta of a crater cover 2 to 3 times its radius; 2.5 by default. A pool hit in its middle is almost emptied.",
-            speed: "1 by default, as in reality: a rain of 10 mm/h takes hours to fill a pond, a snow hours to melt, an ice most of a day to bear a walker at -3 °C. For a trial, 60: a minute for an hour.",
+            speed: "1 by default, as in reality: a rain of 10 mm/h takes hours to fill a pond, a snow hours to melt, an ice most of a day to bear a walker at -3 °C. For a trial, 60: a minute for an hour; the whole water then goes faster, its currents too, as fast as the server computes it.",
             maxSurface:
                 "256 px by default, as in reality: no flood is cut short. Lower, the water rises no higher: 18 px, enough to swim, under the upper floors (52 px).",
             current:

@@ -121,7 +121,9 @@ function createHarness({
         { repository, roomUrl: "room" },
         () => Date.UTC(2026, 6, 14, 12),
         mapSize,
-        clock,
+        // A clock that does not move unless a test says: the pace and the fineness of the water then do not depend on
+        // how fast the machine that runs the tests is.
+        clock ?? (() => 0),
     );
     const steps = (count: number): void => {
         for (let step = 0; step < count; step++) manager.step();
@@ -933,6 +935,7 @@ describe("TerrainWaterManager", () => {
                 current: 1,
                 maxSurface: 18,
                 indoorDrain: 0,
+                inertia: false,
                 updates: 1,
             },
         };
@@ -966,7 +969,8 @@ describe("TerrainWaterManager", () => {
         expect(held.at(4, 8)).toBe(0);
         expect(held.at(4, 12)).toBe(0);
         walled.manager.stop();
-    });
+        // Sixty steps of the time of the map in each step: its steps cost nothing on the clock of the harness.
+    }, 60_000);
 
     it("drains the floor of a room closed by walls, at the pace the map sets", () => {
         // A room of the map tool over the tiles 2 to 5 (cells 4 to 11), a source in its middle.
@@ -992,6 +996,7 @@ describe("TerrainWaterManager", () => {
                     current: 1,
                     maxSurface: 18,
                     indoorDrain,
+                    inertia: false,
                     updates: 1,
                 },
             };
@@ -1019,7 +1024,8 @@ describe("TerrainWaterManager", () => {
         const kept = waterInRoom(0);
         expect(kept).toBeGreaterThan(50);
         expect(waterInRoom(3000)).toBeLessThan(kept / 20);
-    });
+        // Sixty steps of the time of the map in each step: its steps cost nothing on the clock of the harness.
+    }, 60_000);
 
     // A step runs in a timer: an error there would otherwise take the whole server down, with every room.
     it("stops the water of the room, without throwing, when a step fails", () => {

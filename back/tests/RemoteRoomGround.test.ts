@@ -221,6 +221,14 @@ describe("the ground of a room computed elsewhere (RemoteRoomGround)", () => {
             });
         const wetCells = (ground: RoomGround): number =>
             waterOf(ground).filter((value, at) => at > 3 && at % 3 === 1 && value > 0).length;
+        // The water of a map that goes faster than reality lives as many steps of its time as the thread holds: how
+        // soon the map is wet depends on the machine, so wait for it (5 s at most) rather than for a fixed time.
+        const untilWet = async (ground: RoomGround, cells: number): Promise<void> => {
+            for (let waited = 0; waited < 5000 && wetCells(ground) <= cells; waited += 100) {
+                // eslint-disable-next-line no-await-in-loop
+                await wait(100);
+            }
+        };
 
         it("runs by itself, tells the room, and saves as it stops", async () => {
             const { threads } = realThreads(1);
@@ -231,6 +239,7 @@ describe("the ground of a room computed elsewhere (RemoteRoomGround)", () => {
                 await ground.startMeadow();
                 state.downpours = [{ id: 1, x: 0, y: 0, radiusTiles: 4, wholeMap: true }];
                 await wait(1500);
+                await untilWet(ground, 100);
                 expect(seen.told.length).toBeGreaterThan(3);
                 expect(wetCells(ground)).toBeGreaterThan(100);
                 expect(ground.waterSnapshot()?.full).toBe(true);
@@ -256,6 +265,7 @@ describe("the ground of a room computed elsewhere (RemoteRoomGround)", () => {
                 await ground.startMeadow();
                 state.downpours = [{ id: 1, x: 0, y: 0, radiusTiles: 4, wholeMap: true }];
                 await wait(1200);
+                await untilWet(ground, 100);
                 state.downpours = [];
                 const wet = wetCells(ground);
                 expect(wet).toBeGreaterThan(100);
