@@ -1,5 +1,6 @@
 <script lang="ts">
     import type { WeatherType } from "@workadventure/map-editor";
+    import type { Snippet } from "svelte";
     import { LL } from "@wa/i18n/i18n-svelte";
     import { FORECAST_HOURS } from "@wa/front/Phaser/Game/Weather/WeatherForecast";
     import type { ForecastCell } from "@wa/front/Phaser/Game/Weather/WeatherForecast";
@@ -24,9 +25,11 @@
         /** The humidity of the air now, and whether the conditions of now were set by hand. */
         now?: { humidity: number | undefined; manual: boolean };
         testid: string;
+        /** What the card offers under the weather (apply this place to the map, bring the map back). */
+        footer?: Snippet;
     }
 
-    let { city, kind, tag, cells, now, testid }: Props = $props();
+    let { city, kind, tag, cells, now, testid, footer }: Props = $props();
 
     /** The colours of the card, from the weather of now: golden in the sun, blue under the rain, grey in the fog. */
     const TONES: Record<string, string> = {
@@ -198,4 +201,5 @@
             </div>
         {/each}
     </div>
+    {@render footer?.()}
 </div>

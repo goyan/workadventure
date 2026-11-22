@@ -4828,6 +4828,36 @@ une flèche du vent ; un clic ouvre le bulletin, sous la pastille. Dès 768 px d
 seul la météo de ce lieu (`ChosenPlaceWeather`, route `real-weather` du pusher) ; les autres gardent celle du
 serveur.
 
+**Appliquer sa météo à la carte** (2026-11-22). La fiche personnelle (ordinateur) a un bouton « Appliquer à la
+carte » : la carte suit alors, pour tout le monde, le lieu que ce joueur suit sur son horloge. Mécanisme : le même
+enregistrement que le panneau « Météo de la carte » (`updateWeatherSettingMessage`, commande de l'éditeur, gardé
+dans le WAM), avec le lieu (latitude, longitude, nom, fuseau) **et la météo « Réel »** : une carte en Automatique ou
+en temps fixe ne lit pas la pluie réelle de son lieu (`TerrainWaterManager`, `FireConditionsManager.real()` ne
+valent qu'en Réel). Aucun changement de serveur : `back` relit le lieu du WAM à chaque pas (`RainTimelineService`
+demande la météo du nouveau lieu à Open-Meteo, cache par lieu arrondi), sans redémarrer la salle ; neige, glace,
+eau, feu et herbe repartent de l'air du nouveau lieu. Nom enregistré : celui de la ville, ou pour un point loin de
+toute ville ses **coordonnées** (« 24° N 122° E », `WorldPlace.coordinates`) : partagé par tous, sans virgule (la
+pastille coupe le lieu de la carte à la virgule), sans distance écrite dans la langue d'un joueur. Le jour, la nuit
+et les saisons de la carte suivent ce lieu (et son fuseau) : la confirmation le dit.
+- **Droits** : ceux du panneau « Météo de la carte » (`canEditMapWeather`, `Weather/MapWeatherRights.ts`, partagé
+  avec ce panneau et l'app de bureau) ; sinon le bouton est grisé avec la raison. Grisé aussi pendant la lecture de
+  la météo du lieu, et quand elle est indisponible (« pas de météo réelle pour ce lieu ») ; « La carte suit déjà ce
+  lieu » quand la carte est en Réel au même lieu arrondi.
+- **Confirmation** (`PlaceToMapModal`, `Popup` du jeu, Échap) : la carte change pour tous, passe en météo réelle si
+  elle ne l'était pas, et son jour, sa nuit et ses saisons suivent le lieu. Deux cases cochées par défaut :
+  « Revenir aux conditions réelles » (seulement si la salle est en conditions réglées à la main, Catastrophe →
+  Météo : elles resteraient prioritaires sur le lieu ; n'importe quel joueur peut déjà les quitter) et « Voir ensuite
+  la météo de la carte » (le joueur repasse en « Heure du serveur », quitte « Jour dans le monde » et voit le monde
+  partagé : givre, neige, glace). Elles ne s'appliquent qu'une fois le changement appliqué à la carte de ce
+  navigateur (relue après l'envoi : l'éditeur journalise une commande ratée sans lever d'erreur) ; sinon rien d'autre
+  ne change et la confirmation le dit. Un refus du serveur arrivé ensuite n'est pas vu (comme pour le panneau
+  « Météo de la carte »). Le nom des coordonnées est écrit dans la langue de celui qui applique (« 40° O » ou
+  « 40° W ») ; repasser en « Heure du serveur » fait perdre le mode du ciel d'avant, quel qu'il soit.
+- **Retour arrière** : pour la session de celui qui a appliqué, la fiche de la carte (globe) propose « Revenir à
+  Lille » tant que la carte suit encore le lieu appliqué ; il remet la météo et le lieu d'avant (le lieu par défaut
+  s'il n'y en avait pas). Les conditions réglées à la main quittées ne reviennent pas. Sinon : panneau « Météo de la
+  carte ».
+
 **Gel.** À partir de l'air du lieu affiché (`Weather/Frost.ts`), pour ce joueur seul, rien n'est envoyé :
 givre au sol d'après la vapeur de l'air (voir « Givre » ci-dessous) ; l'eau gèle des hauts-fonds vers le fond entre 0 et -15 °C (toute gelée au-delà), en glace de
 patinoire ; le sol se mouille sous la pluie et sèche en cinq minutes ; tout avance en deux minutes environ, rien ne
