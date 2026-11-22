@@ -93,6 +93,35 @@ viser un mur, un meuble et un avatar, puis vérifier les espaces dans une saisie
 l'éditeur et une interaction ESPACE après rangement. Le son est synthétique original,
 CC0 ; aucune dépendance, texture externe ni modification du protocole protobuf.
 
+## Symbole de perception modifiée
+
+Un petit symbole flotte au-dessus du nom d'un joueur qui ne perçoit pas le monde partagé, comme sous l'effet d'un
+sort :
+
+- **œil barré violet** : il est en **mode Basique** (ni nuit, ni météo, ni effets) ;
+- **œil dans une boule de cristal cyan** : il suit la **météo d'une autre ville** (« Jour dans le monde »).
+
+Les deux portent la même étoile qui scintille ; leurs formes diffèrent (œil plat et barre, anneau), pour être distingués
+sans les couleurs. Au survol du symbole, une infobulle le dit (« Mode Basique : ne voit ni la nuit ni la météo », « Suit
+la météo d'une autre ville » : la ville n'est jamais transmise). Le Basique l'emporte sur une ville suivie : il coupe
+aussi la météo de cette ville (lu dans le code : dessin de la météo, `WeatherManager` ; nuit, `effectiveNightModeStore` ;
+sol, `TerrainView`).
+
+- **Qui le voit** : seulement un joueur qui perçoit lui-même le monde partagé (ni Basique, ni ville suivie), jamais
+  au-dessus de son propre avatar (`shownPerceptionMark`, `Perception/PerceptionProtocol.ts`).
+- **Partage** : variable de joueur publique `_perception`, non sauvegardée (`none`, `basic`, `place` ; toute autre
+  valeur lue `none`), publiée à l'entrée dans la salle et à chaque changement (`PerceptionManager`). Aucun changement
+  du protocole ni de `back` ; un ancien client n'affiche rien. Le Basique compte tel qu'il est choisi, même dans
+  l'éditeur (le symbole ne clignote pas à chaque édition) ; un essai de météo dans le panneau de la carte n'est pas
+  une ville suivie.
+- **Place** : élément de la pastille du nom (`UsernamePerceptionDisplay`), donc dans la même couche au-dessus de la
+  nuit et du brouillard, à la même échelle, et il suit le palier et l'avion comme le nom ; 2 px au-dessus de la
+  pastille, au-dessus des cœurs du Nerf quand ils s'affichent ; caché pendant une bulle de texte ou une émote, et avec
+  la pastille quand la mini-vidéo est sur l'avatar.
+- **Animation** : flottement de 1 px par pixel entier (deux positions en 2,4 s) et scintillement de l'étoile en trois
+  pas, joués par le navigateur (Web Animations) : la scène Phaser n'est jamais redessinée pour eux ; une animation du
+  navigateur par symbole visible, coût non mesuré. Immobile avec « mouvement réduit ».
+
 ## Torche
 
 Cliquer sur son avatar, puis **Équiper la torche** dans la roue d'actions ; **Ranger la torche** apparaît au même
@@ -1630,8 +1659,22 @@ d'heure) à ±2 min. La nuit, un voile bleu nuit
     peuvent tomber sur ces villes (ex. 18 h 30 le 21 juin à 06:00 UTC : Unalaska au lieu d'Auckland) ; un **point
     cliqué** près d'elles porte leur nom et leur fuseau.
   - **Heure choisie** : inchangée, la ville dont l'**heure solaire vraie** est la plus proche (avec l'équation du
-    temps, ±16 min selon la saison), gardée à 50 min près. **Point cliqué** sur la carte : inchangé ; le menu dit
-    alors « Ciel de … (point choisi sur la carte) », surligné, puisqu'aucun moment n'est enfoncé. La carte du monde du menu s'ombre avec le voile du jeu lui-même
+    temps, ±16 min selon la saison), gardée à 50 min près. **Point cliqué** sur la carte : le menu dit alors
+    « Ciel de … (point choisi sur la carte) », surligné, puisqu'aucun moment n'est enfoncé. Le point garde ses
+    coordonnées pour le soleil et la météo ; il ne porte le **nom** d'une ville de la liste qu'à 150 km d'elle au plus
+    (`NAMED_POINT_RADIUS_KM`, distance orthodromique, `nearestCityOf`). Plus loin, forme courte (horloge, pastille
+    météo) : la ville de repère et sa distance, « Auckland 4 000 km » (« Auckland 4,000 km » en anglais), jamais la
+    ville seule, qui reste réservée à un point à 150 km au plus ; un nom de ville de plus de 14 caractères y est
+    coupé d'une ellipse, la distance gardée (« Petropavlovsk… 12 300 km », `shortCityName`), pour que la ligne de
+    l'horloge tienne. La pastille ne coupe plus à la virgule le nom d'un point (la virgule du séparateur de milliers
+    anglais), seulement celui d'une ville du lieu de la carte. Forme longue, avec les coordonnées en degrés entiers « 72° S 170° E · Auckland à 4 000 km » (sans parenthèses : le tableau le met déjà entre parenthèses, « Ton air (…, −34 °C) » ; `WorldPlace.longName` : menu de
+    l'horloge, fiche météo personnelle, « Météo expliquée ») ; ouest « O » en français, « W » en anglais. Avant, un
+    clic dans l'océan Austral s'appelait « Auckland » comme le lieu du serveur : deux fiches « Auckland » à 14 °C et
+    −34 °C. Son **fuseau** : celui de la ville la plus proche à 1 000 km au plus (`CITY_TIME_ZONE_RADIUS_KM`, heure
+    civile de la région, heure d'été comprise), sinon celui de sa longitude, `Etc/GMT±N` (une heure par 15°, signe
+    inversé : `Etc/GMT-11` = UTC+11) : la ville la plus proche d'un point de l'Antarctique peut être à plusieurs
+    heures de lui. Les cases de la liste sont espacées : la plupart des clics à terre, même en Europe, se nomment
+    désormais par leurs coordonnées. La carte du monde du menu s'ombre avec le voile du jeu lui-même
   (`worldShadeAt` = `nightOpacityAt` vu de chaque point) : plein jour jusqu'à −0,833°, assombrie jusqu'à −6°, nuit
   au-delà. Dessinée pixel par pixel (240 × 120) : environ 7 ms par dessin (mesuré en conteneur Linux sur un Mac), une
   fois par seconde tant que le menu est ouvert en mode monde.
@@ -2304,6 +2347,34 @@ son seuil `shallowest`), un tourbillon sur chaque puits qui a de l'eau autour de
 tour par seconde selon le débit réglé) et des ronds qui s'élargissent sur chaque source. Dessiné 15 fois par seconde ;
 chaque navigateur a ses propres traits (un décor, rien n'est partagé). Rien pour qui a demandé moins de mouvement.
 
+**Écume des vagues et moutons du vent.** Trois écumes, chacune avec sa règle, toutes calculées par le navigateur à
+partir de ce qu'il reçoit déjà (profondeurs, vent) :
+
+- **Écume de courant** (ci-dessus) : réservée à l'eau peu profonde (moins de 32 px, une case : ruisseau, rivière,
+  nappe qui court sur la terre). En eau plus profonde, le courant d'une houle ne porte pas d'écume, sauf s'il est
+  presque au plus fort.
+- **Déferlement et rivage** (`Terrain/BreakingFoam.ts`) : une vague fait de l'écume quand elle est haute pour l'eau
+  où elle court. Hauteur de la vague (surface de la cellule moins le creux le plus bas à 3 cellules autour) divisée
+  par la profondeur sous ce creux : rien sous 0,3, tout blanc à 0,78 (seuil réel de déferlement en eau peu
+  profonde). Une houle longue sur fond profond, même haute, n'en fait donc aucune : l'onde d'une comète reste
+  lisse au large et blanchit en approchant des rives, sur les hauts-fonds et là où le bourrelet de l'impact
+  retombe. Une cascade en fait aussi. Une vague de moins de 3 px (10 cm) est une ride : aucune écume ; la dose
+  croît avec la hauteur jusqu'à 12 px (40 cm). S'y ajoute le **front de crue** : une cellule sèche à l'état
+  précédent, mouillée maintenant, à côté d'une eau déjà là (pas la pluie qui remplit une mare). L'écume reste
+  derrière la vague et s'efface de moitié toutes les 1,8 s.
+- **Moutons** (`Terrain/Whitecaps.ts`) : le vent lève des vagues courtes qui cassent à leur crête, sans rapport
+  avec la houle. Part de l'eau blanchie selon la loi usuelle (Monahan et O'Muircheartaigh, 1980 :
+  3,84 × 10⁻⁶ × vent^3,41, vent en m/s) : rien sous 3 m/s, environ 0,03 % à force 3, 0,3 % à force 4, 1 % à
+  force 5, 2,4 % à force 6. Seulement dehors, sur une eau d'au moins 8 px, non gelée ; courtes crêtes en travers
+  du vent, qui dérivent lentement sous lui. Le vent est celui que le joueur voit (météo réelle ou réglée).
+
+Le déferlement et les moutons sont dessinés par le **shader de l'eau** (`Terrain/GroundSplat.ts`), comme l'écume
+de rive : l'écume des vagues lui arrive par cellule (rouge du paquet 9), déchirée par un bruit fin qui bouillonne ;
+les moutons par un uniforme (`uWind` : sens du vent et part blanchie), dans une grille posée le long du vent. Sans
+shader (rendu de secours), ni l'un ni l'autre. Coupés avec l'effet « eau en mouvement ».
+
+Aucun réglage, rien d'envoyé par le serveur. Non vu à l'écran par un agent.
+
 **Sources et puits repérés dans l'outil Relief.** Tant que l'outil Relief est ouvert, chaque objet qui porte une
 propriété de source ou de puits est repéré sur la carte (`Terrain/WaterMarks.ts`, logique pure ;
 `Terrain/WaterMarksView.ts`, dessin, créé et détruit par `TerrainEditorTool`) : une pastille bleue marquée + pour une
@@ -2458,8 +2529,15 @@ et douze puits puissants évacuent 13 fois plus d'eau qu'avant ces deux changeme
 **Murs et portes.** Les murs de l'outil Carte arrêtent l'eau : `back` les lit dans les objets de la carte
 (`waterWallsOf`, d'après le nom et la place des pièces `Carte Murs` et `Carte Fenêtres` du sol, sans le code de
 l'éditeur ; un test du front vérifie que les deux lisent les mêmes murs). Un mur horizontal ou une fenêtre retient
-l'eau à son pied, un mur vertical entre les deux colonnes de sa ligne. Une porte laisse passer l'eau, ouverte ou
-fermée : une inondation entre dans un bâtiment par ses portes. Un puits ne prend pas l'eau de l'autre côté d'un mur,
+l'eau à son pied, un mur vertical entre les deux colonnes de sa ligne. **Une porte fermée retient l'eau comme le
+mur où elle se trouve ; ouverte, elle la laisse passer** : une inondation entre dans un bâtiment par ses portes
+ouvertes (`waterDoorsOf`, `WaterGrid.setClosedDoors`, `TerrainWaterManager.swingDoors`). Le serveur ne connaît pas
+l'animation des portes : une porte est ouverte pour l'eau tant qu'un avatar au sol se tient dans son passage (ses
+cases, élargies d'une demi-case de chaque côté du mur), et une seconde après. Les deux battants d'une porte
+s'ouvrent ensemble. Limites : un animal ou un compagnon qui ouvre une porte à l'écran ne l'ouvre pas pour l'eau ;
+une porte de zone verrouillée s'ouvre pour l'eau dès qu'un avatar est dans son passage ; la règle des navigateurs
+(sens de marche, trajet) est plus fine que celle du serveur, qui ne lit que la position. Un puits ne prend pas
+l'eau de l'autre côté d'un mur,
 une source ne verse pas à travers. Un mur construit ou retiré refait la grille en gardant l'eau là où elle est. Les
 murs d'un palier ne comptent pas (l'eau reste au sol).
 
@@ -2569,16 +2647,30 @@ peintes, glace, givre, sol mouillé, crête d'une comète, eau animée.
 précis dans les fragments), le 3/4 n'est pas compilé du tout (`#define OBLIQUE`) et le réglage activé donne les blocs
 des lots A à E, décrits ci-dessous (`Terrain/GroundEngines.ts` ne les crée que là). `GameScene.pixelReliefShown()` dit
 « le 3/4 est affiché » (avatar, nom, poissons, bouchon, clic, nage) ; `GameScene.pixelBlocksShown()` et
-`Terrain/PixelReliefShown.ts` disent « les blocs dessinent » (moteur à plat caché, piscines posées en image à leur
+`Terrain/PixelBlocksShown.ts` disent « les blocs dessinent » (moteur à plat caché, piscines posées en image à leur
 image, feuilles au-dessus des blocs, herbe de la carte laissée aux blocs, écume en pixels, pas de traces du givre).
 
 **Limites.** L'écume du courant, les remous des puits et les ronds des sources, la vue des courants, les feuilles au
 sol, les flaques, les traces du givre, la vapeur des piscines chaudes, les échelles des piscines peintes, les arbres et
 les objets restent dessinés à leur place : ils ne montent pas avec un mont et ne descendent pas dans un trou (lot 2 du
 relief). Une piscine peinte sur un sol plat garde ses échelles au bon endroit ; peinte sur un relief, non. Le rendu en 3/4 est celui des
-textures du moteur à plat, pas le pixel art des blocs. Coût non mesuré sur une carte graphique intégrée. Le thème
-« Hiver » de la branche a disparu avec celui d'`infogene` ; un pont étant fait de paliers, plus de cas particulier d'un
-pont dans la nage, le décalage de l'avatar ni le clic.
+textures du moteur à plat, pas le pixel art des blocs. Coût non mesuré sur une carte graphique intégrée. Restent aussi
+à leur place à plat : les traces de pas et de roues dans la neige, le halo de nuit d'un avatar (sur un mont de 256 px il
+est dessiné 128 px sous lui), et les reflets des nuages et des lampes sur l'eau, lus au point de la carte et non à
+l'écran. Le thème « Hiver » de la branche avait disparu avec celui d'`infogene` ; il est revenu le 2026-11-22 (voir
+« Thème saisonnier ») et blanchit le sol dans les deux moteurs. Un pont étant fait de paliers, plus de cas particulier
+d'un pont dans la nage ni le décalage de l'avatar ; le clic, lui, traite de nouveau le tablier à part.
+
+**Seconde fusion d'`infogene` (2026-11-22, 105 commits : glace du serveur, piscines en eau réelle, écume et moutons
+dans le shader, reflets du ciel, flocons, neige de sa propre ville, traces dans la neige).** Le poids des cellules est
+passé de 8 à 12 paquets et le shader de l'eau lit deux textures de plus (nuages, lampes) : l'image des hauteurs du 3/4
+reste à part, dernière texture de chaque shader (unité 9 pour le sol, 4 pour l'eau ; 10 unités demandées pour le 3/4,
+inchangé). `GroundSplat.setWater(wet, strength, foam?, depths?)` ; `TerrainView` reçoit dans l'ordre le vent, « caché »,
+« en 3/4 », « tout blanc » (thème Hiver). `TerrainWater.levelsOver` garde les nappes minces qui courent d'`infogene`
+et la troncature demandée par les blocs. Les traces dans la neige ne sont pas laissées sur les blocs (ils ont les
+leurs). Vérifié au navigateur après la fusion : shaders compilés sans erreur, 3/4 sur un mont de 256 px (décalage de
+l'avatar et clic à 1 px près sur 6 points), thème Hiver à plat et en 3/4 ; la comparaison point par point du shader
+à `seenPoint` (3 013 points) n'a pas été refaite après cette fusion.
 
 **Les blocs, repli sans shader : relief vu de trois quarts** (conception et plan dans le dépôt d'infra,
 `docs/superpowers/{specs,plans}/2026-11-20-relief-3-4*`). Hors de l'éditeur, le sol creusé est dessiné **plus bas de
@@ -2714,8 +2806,7 @@ minutes avant de se calmer.
 
 Murs et bord de la grille sont ceux de l'eau d'avant. Sources, puits, pluie, drains et les échanges lointains des
 cartes accélérées ne changent pas : ils posent ou retirent de l'eau, l'inertie la fait ensuite courir. Les débits ne
-sont ni envoyés aux navigateurs ni sauvegardés : le courant senti par les avatars reste déduit de la pente, et
-l'eau repart immobile après un redémarrage du serveur.
+sont pas sauvegardés : l'eau repart immobile après un redémarrage du serveur.
 
 ### Ce qui retient l'eau : quatre réglages (`settings.water.waves`)
 
@@ -2767,6 +2858,31 @@ réglage.
   renvoyée (jamais une cellule qui s'assèche ou se mouille) ; un état complet toutes les trente secondes remet tout
   d'aplomb.
 
+### Vitesses envoyées aux joueurs : avatars et canoës emportés
+
+Sur une carte à inertie, le serveur dit à chaque envoi à quelle vitesse l'eau court (`WaterGrid.writeSpeeds`,
+`TerrainWaterMessage.speeds`, champ 9) : deux octets signés par bloc de 4 × 4 cellules (vers l'est, vers le sud,
+en quarts de cellule par seconde, vitesse vue à l'écran, donc déjà multipliée par la vitesse d'écoulement),
+compressés. Le navigateur les garde avec l'état de l'eau (`TerrainWater.speedAt`) et s'en sert à la place de la
+pente :
+
+- **Courant senti** (`currentPush`) : qui flotte (assez d'eau pour nager, 16 px) est emporté à la vitesse de l'eau,
+  canoë à moitié ; qui a pied l'est selon ce qui renverse un piéton dans une crue, le **produit hauteur × vitesse**
+  (`sweptShare`) : rien sous 0,4 m²/s, tout à partir de 1,2 m²/s, en proportion entre les deux (repères
+  d'hydraulique des crues pour la stabilité d'un adulte, cités de mémoire). Une lame mince et rapide n'emporte
+  personne, la vague d'un tsunami emporte plus vite qu'on ne marche. Le réglage « Force du courant » multiplie le
+  tout. Sans inertie, la règle d'avant reste (pente de la surface, un quart de la vitesse de marche au plus, dès un
+  quart de case d'eau).
+- **Jamais dans un bâtiment** : le courant n'emporte personne à l'intérieur (`getOutdoorGrid().isOutdoorAt`), avec
+  ou sans inertie. Ce n'était pas le cas avant : seuls les paliers, le drain et la glace l'arrêtaient.
+- **Écume** et **visualisation des flux** : elles suivent la vitesse réelle, une vague qui passe comprise ; la
+  légende dit « Vitesses calculées par le serveur ».
+
+Les autres joueurs voient l'avatar emporté par sa position, comme pour tout déplacement.
+
+Coût mesuré hors jeu : 4 Ko de plus par envoi pendant un tsunami (+8 %), 0,05 Ko sur une eau calme ; 1,3 ms pour
+les écrire et les compresser.
+
 ### Comète, météore brûlant et drain sous inertie
 
 - **Comète : impact physique seul.** Elle ne pose plus son onde anneau par anneau (`ImpactWave`) : l'eau du cratère
@@ -2787,8 +2903,6 @@ dessous, sous « En savoir plus ».
 
 ### Limites connues
 
-- **Courant senti plus faible entre une source et un puits** : un lac est plus plat sous inertie, et le courant
-  des avatars et des canoës est encore déduit de la pente.
 - **Puits fort plus efficace** : à la vitesse 1, un puits qui demande plus que son disque vide un lac environ
   2,5 fois plus vite (mesuré avant les réglages des vagues).
 - **Trop-plein** (puits qui tient un niveau) et puits à grand disque : l'eau converge et forme une bosse, le
@@ -2818,15 +2932,124 @@ Par-dessus la carte (`Terrain/WaterFlowOverlay.ts`, dix dessins par seconde, au-
 - **une flèche là où l'eau court** : sens, vitesse par la longueur et la couleur (échelle de 0 à 3 m/s et plus,
   `FLOW_SPEED_SCALE`), point qui file le long de la flèche. Une flèche par bloc de cellules, plus gros vu de loin,
   3 000 au plus ;
-- **une teinte là où le niveau change** : bleue quand il monte, magenta quand il baisse ;
+- **une teinte là où le niveau change** : bleue quand il monte, magenta quand il baisse, plus soutenue quand il
+  change vite (pleine à partir de 0,5 px/s, 1 m par minute). Elle suit la **tendance** du niveau sur quelques
+  secondes, pas le clapot (voir ci-dessous) ;
 - **une étiquette sur les 8 plus grosses masses d'eau en vue** (`Terrain/WaterMasses.ts`) : volume en m³, surface
-  en m², profondeur moyenne en m, puis ce qu'elle gagne ou perd en m³ par minute.
+  en m², profondeur moyenne en m, puis ce qu'elle gagne ou perd en m³ par minute (somme des tendances de ses
+  cellules : elle ne saute presque plus avec les vagues). Ces débits sont en **temps réel**, alors que sources,
+  puits et pluie suivent le temps de jeu (« Vitesse de l'eau ») : à 4, une source de 100 m³/h verse 6,7 m³/min. La
+  légende le dit en une ligne.
+
+**Tendance plutôt que clapot** (`Terrain/WaterTrend.ts`, alimenté par `TerrainWater.receive`). Le serveur envoie
+l'eau une fois par seconde ; les vagues du modèle à inertie durent 2 à 4 s (mesuré : 2,3 à 3,8 s sous 40 px, jusqu'à
+5 s sous 12 px). L'écart entre deux états d'affilée est donc la pente de la vague du moment : sur une mer qui
+clapote, il changeait de signe une seconde sur deux (26 à 39 fois sur 58) et 80 à 90 % des blocs étaient teintés,
+damier bleu et magenta qui clignotait. S'y ajoutait le seuil (0,02 px/s), sous le plus petit écart que le serveur
+transmet (il ne redit une cellule qu'à partir d'un quart de pixel). Le lissage doit donc durer plus longtemps
+qu'une vague (2 à 4 s), quelle que soit la cadence des états (1 à 10 par seconde, 5 avec le réglage « Réaliste ») :
+lisser sur 1 s ne changeait rien à 1 état par seconde, et pas assez à 5. La règle, par cellule de la grille
+(indépendante du zoom et de la caméra) :
+
+- l'écart de chaque état, rapporté au temps écoulé, passe dans deux filtres exponentiels de 4 s à la suite (résolus
+  exactement, quel que soit l'intervalle entre deux états) : une vague de 3 s n'en garde qu'un soixante-dixième ;
+- **zone morte** : aucune teinte sous 0,06 px/s (2 mm/s, 12 cm par minute), ni sous 15 % de l'agitation de l'eau
+  (moyenne quadratique, sur 10 s, de sa vitesse de montée mesurée sur environ une seconde, quelle que soit la
+  cadence) : une mer forte cache une montée lente, jamais ne la montre à l'envers. Rien n'est teinté avant trois secondes d'observation ;
+- **hystérésis** : une teinte reste jusqu'à ce que la tendance retombe sous la moitié de son seuil ;
+- **silence du serveur** (rien ne bouge d'un quart de pixel, il n'envoie plus) : après 2 s sans état, la tendance
+  s'éteint d'elle-même (`TerrainWater.settled(now)`).
+- **à la demande** : la tendance n'est tenue que tant que la visualisation la lit (`TerrainWater.settled(now)`, dix
+  fois par seconde quand « Flux d'eau » est affiché ; aucun autre lecteur). Fermée, aucun parcours de la grille et
+  aucune mémoire (`dropTrend`, ou d'elle-même au premier état après 2 s sans lecture). Rouverte, elle repart de rien
+  (pas de teinte d'avant la fermeture) et ne teinte qu'après 3 s d'observation. Coût mesuré quand elle est tenue
+  (Node, Mac M) : 2 ms par état sur une grille de 600 × 600 cellules (0,2 à 0,3 ms sur 200 × 200), soit 2, 10 ou
+  18 ms par seconde à 1, 5 ou 10 états par seconde ; aucun tableau alloué par état ; 17 octets par cellule (quatre
+  tableaux `Float32Array` et un `Int8Array`), 6,1 Mo pour 600 × 600. Auparavant, ce coût valait pour tout joueur,
+  même sans la visualisation.
+
+Mesuré sur le modèle (bassin de 80 × 80 cellules, 40 px, `WaterGrid` avec inertie, bande morte du serveur
+reproduite) : 0 à 2 changements de teinte par minute et par cellule sur mer forte (vagues de 30 à 45 cm), 0 à 2
+sur mer modérée, au lieu d'un changement de signe toutes les une à deux secondes. Une montée de 0,1 px/s sous un
+clapot modéré apparaît en 5 à 11 s, une de 0,5 px/s en 2 à 3 s, une de 1 px/s sur mer forte en 1 à 4 s, puis ne
+s'éteint plus tant qu'elle dure. L'étiquette d'une masse atteint 63 % d'un nouveau débit en 8 à 9 s ; sur un
+bassin fermé de 2 400 m³ qui clapote, elle reste à « = » sauf 3 secondes sur 120 (1,2 à 1,6 m³/min, au lieu de
+±1,5 à ±14 m³/min chaque seconde auparavant). Rien n'a été vu à l'écran par un agent.
+
+Les **flèches** ne sont pas lissées : elles montrent la vitesse que le serveur calcule, une vague qui passe
+comprise. Sur mer modérée, cette vitesse reste sous son pas d'envoi (un quart de cellule par seconde) : pas de
+flèche. Sur mer forte, une flèche s'inverse d'une seconde à l'autre 15 à 35 % du temps, ce qui est le mouvement réel
+de l'eau sous la vague.
 
 Tout est lu des profondeurs que le navigateur reçoit déjà (`TerrainWater.settled` garde l'état d'avant et le temps
 entre les deux) : rien n'est demandé au serveur. Limites : les vitesses sont **estimées** d'après la pente de la
 surface (`steadyFlowSpeed`, selon le modèle d'eau, les réglages des vagues, la rugosité du sol et la vitesse
 d'écoulement de la carte), pas mesurées : une vague qui passe sous inertie ne s'y lit pas ; les masses ignorent
-les murs. Coût non mesurable en images par seconde dans le navigateur de test.
+les murs. Sur une carte à inertie, les vitesses sont celles que le serveur envoie, plus une estimation. Coût non
+mesurable en images par seconde dans le navigateur de test.
+
+### Météo expliquée : pourquoi je vois ce temps
+
+Dans le même panneau, une seconde tuile « Météo expliquée » (`weatherExplainedStore`, pour la session) ouvre un
+tableau en lecture seule (`WeatherBoard.svelte`) qui dit au joueur, en direct, pourquoi il voit ce qu'il voit. Il
+existe en effet deux airs, et chaque phénomène a le sien :
+
+- **l'air de la carte**, le même pour tous : les conditions réglées à la main dans la salle (Catastrophe → Météo),
+  sinon l'air réel du quart d'heure en cours au lieu de la carte (Paris sans lieu) ;
+- **l'air du joueur** : celui de la ville qu'il suit sur son horloge (« Jour dans le monde »), pour lui seul.
+
+En tête, les deux airs côte à côte (un seul pour qui suit le serveur) : origine, température, humidité, vent, et la
+phrase qui dit lequel s'applique. Puis une carte par phénomène, chacune avec son résultat de maintenant, sa raison
+avec les chiffres du moment, deux pastilles (« Décidé par l'air de la carte / ton air », « Vu par tout le monde /
+tous ceux qui suivent le serveur / toi seul » ; bleu pour la carte, jaune pour le joueur), ce qu'il faudrait pour que
+cela change, et la règle dans un « En savoir plus » :
+
+| Carte | Règle du jeu interrogée | Air qui décide | Vu par |
+|---|---|---|---|
+| Pluie ou neige ? | `snowShareOf(precipitationAirNow)` | ville suivie quand sa météo est dessinée, sinon carte | toi seul, ou ceux qui suivent le serveur |
+| Averse de la catastrophe | `snowShareOf(roomPrecipitationAir)` | carte, toujours | tout le monde |
+| Givre au sol | `frostOf(frostAirNow)` (`hoarFrost`) | ville suivie, sinon carte | toi seul, ou ceux qui suivent le serveur |
+| Glace sur l'eau | `iceOf(frostAirNow)`, `isFrozen` | comme le givre | comme le givre |
+| Sol gelé | `soilFrostOf(roomPrecipitationAir)` | carte (serveur) | tout le monde |
+| Neige au sol | `MeadowState` reçu du serveur, `snowMeltMmPerHour` | carte (serveur) | ceux qui suivent le serveur |
+
+**Jamais plus bas que la fenêtre.** Le tableau est sous l'horloge, les fiches météo dépliées, le concours de pêche
+et les catastrophes, dans une colonne sans borne basse : une hauteur fixe (60 % de la fenêtre) le faisait sortir de
+l'écran. `WeatherBoardLive` mesure la place qui reste sous ce qui le précède jusqu'au bas de la fenêtre (marge de
+12 px, `weatherBoardFit`) et lui donne cette hauteur, le tableau défilant dedans ; mesure refaite quand la colonne
+ou la fenêtre change de taille, pas à chaque seconde. Avec moins de 240 px de place, il s'ouvre **par-dessus** les
+panneaux du dessous, juste sous la ligne de l'horloge (et ses fiches), fond opaque, avec une croix de fermeture
+(la tuile qui l'a ouvert peut être dessous). La molette au-dessus du tableau le fait défiler, sans zoomer le jeu
+(Phaser ne lit que la molette au-dessus du canevas) ; pas de fermeture par Échap (aucun panneau voisin ne le fait,
+et Échap désarme déjà une catastrophe).
+
+**L'écran du joueur face à la carte du serveur.** Le sujet du tableau est ce que ce joueur voit. Quand il suit une
+ville, la pluie ou la neige, le givre et la glace de son écran sont calculés une seconde fois avec l'air de la carte
+(`onMap`, ce que voient ceux qui suivent le serveur ; `mapFrostAirNow` pour le givre et la glace) :
+
+- sous les deux airs, un bandeau « Ton écran et la carte, en ce moment » liste les six phénomènes en une ligne
+  chacun (« toi, neige · carte, pluie », pastille « écart », « pareil » ou « serveur ») ;
+- une carte dont le résultat diffère (`differs` : forme ou chute de la précipitation, niveau du givre, stade de la
+  glace) montre « Chez toi » puis « Sur la carte (serveur) », chacun avec sa raison, puis un encadré « Écart » : ce
+  que voient les autres, et ce que le serveur compte réellement (la pluie de la carte remplit l'eau, sa neige
+  s'accumule, rien ne tombe ; le givre et la glace ne sont que dessinés, l'eau du serveur reste liquide) ;
+- sans écart, une seule ligne (« Comme sur la carte… », ou « C'est la météo de la carte… » pour qui suit le serveur) ;
+- les cartes du serveur (averse, sol gelé, neige au sol) disent que l'air du joueur n'y change rien, et ce que le
+  serveur applique à tout le monde (sol gelé ou non, neige non montrée).
+
+Aucune physique n'est recopiée : `Weather/WeatherExplained.ts` (`explainWeather`, pur) reçoit les airs que lisent
+les lecteurs du rendu (`Weather/WeatherBoardNow.ts` les appelle : `precipitationAirNow`, `roomPrecipitationAir`,
+`frostAirNow`, `waterCycleNow`, `fireConditionsStore`, `MeadowState`) et interroge les règles du jeu. Les « il
+faudrait » sont trouvés par dichotomie sur ces mêmes règles (`thresholdBetween`), jamais par une formule à côté. Un
+test compare, sur une grille d'airs, chaque valeur expliquée à celle que rend la règle du jeu. `Frost.ts` exporte
+pour cela `frostAirNow`, `frostOf` et `iceOf`, que `waterCycleNow` utilise lui-même.
+
+Le tableau est recalculé une fois par seconde (horloge du jeu) tant qu'il est ouvert ; fermé, il n'est pas monté.
+Ce qui est honnêtement approché : le sol gelé est refait par le navigateur avec le même air que le serveur (les
+frises Open-Meteo des deux sont relevées à des moments différents) ; la neige au sol est ce que le serveur a envoyé
+(toutes les dix secondes quand elle change), sa tendance (s'épaissit, fond, tient) est déduite de l'air de la carte
+et du vent des conditions de la salle. Non couverts : sol mouillé et flaques, eau apportée par la pluie en chiffres,
+soleil et lumière, herbe, feu, saison.
 
 ## Vie aquatique (poissons et dauphins)
 
@@ -3149,13 +3372,40 @@ couverture de neige au sol et les arbres qui blanchissent décrit l'état d'avan
   restent douces hors météo Réelle : elles ne servent plus à la forme de la pluie. Un éditeur qui essaie une météo ou
   un lieu dans le panneau des réglages voit, pour lui seul et le temps de l'essai, la météo de la carte essayée et la
   forme que donne l'air du lieu essayé, même s'il suit une ville.
-- **Rendu.** Quand il pleut, la part de neige devient des flocons (`snowflakes`, les mêmes que l'ancienne neige,
-  d'autant plus nombreux que la précipitation est forte : `snowfall`), le reste des gouttes : pluie et flocons mêlés
-  dans le mélange. Les flocons sont emportés par le vent de la carte. Le voile sombre et les nuages gris de la pluie
-  restent. Son : une chute à moitié neigeuse ou plus a l'ambiance feutrée de la neige, sinon la pluie, moins forte à
+- **Rendu.** Quand il pleut, la part de neige devient des flocons, le reste des gouttes : pluie et flocons mêlés
+  dans le mélange. Depuis le 2026-11-21 les flocons sont dérivés de l'air (`Weather/Snowfall.ts`, voir « Flocons
+  dérivés de l'air » ci-dessous). Le voile sombre et les nuages gris de la pluie restent. Son : une chute à moitié neigeuse ou plus a l'ambiance feutrée de la neige, sinon la pluie, moins forte à
   proportion. Bandeau : une pluie dont au moins la moitié tombe en neige est nommée « Neige », d'après la température
   et l'humidité réelles prévues au lieu pour chaque quart d'heure (maintenant, +1 h, +4 h), ou d'après les conditions
   réglées à la main pour « maintenant ».
+- **Flocons dérivés de l'air** (`Weather/Snowfall.ts`, même chemin pour la météo de la carte et la météo
+  personnelle). Remplace les carrés blancs de 2 px qui rebouclaient dans des cellules de 64 px.
+  - **Quantité** : selon le taux d'eau de la part neige (`rainRate × snowShare`, mm/h) : faible sous 1 mm/h, forte à
+    partir de 2,5 mm/h (≈ 1 cm de neige fraîche par mm d'eau) ; courbe `snowLevel` (choix) ; taux inconnu : neige
+    modérée, orage : forte. Le réglage personnel « quantité » de la pluie s'applique.
+  - **Sortes de flocons** à vitesse et taille fixes (Locatelli et Hobbs 1974, J. Geophys. Res. 79, tableau 1) : gros
+    agrégats de 8 mm (V = 0,8 D^0,16 ≈ 1,1 m/s), moyens de 3 mm (≈ 0,95 m/s), cristaux fins de 1 mm (V = 0,69 D^0,41
+    ≈ 0,7 m/s) ; la pluie tombe à 5-9 m/s. La température du thermomètre mouillé choisit le mélange (`flakeMix`) :
+    gros flocons collants près de 0 °C, second maximum des dendrites vers -12 °C (Hobbs, Chang et Locatelli 1974),
+    cristaux fins sous -20 °C ; parts intermédiaires choisies. À eau égale, les cristaux fins sont plus nombreux
+    (N = R / (M V), montré en racine quatrième : choix).
+  - **Chute** : chaque flocon suit le repère de l'air, porté par le vent réel près du sol (profil logarithmique,
+    ≈ 0,8 du vent à 10 m) dans ses deux composantes, comme les nuages (un vent du sud fait remonter la neige à
+    l'écran ; la pluie, elle, ne penche qu'est-ouest), et tombe 9 à 15 s, puis se pose 0,8 s sans éclaboussure. Deux
+    plans (lointain plus petit et plus lent, proche plus gros et plus rapide), balancement propre à chaque flocon.
+    32 px ≈ 1,1 m : 1 m/s ≈ 29 px/s ; 13 km/h dérive ≈ 84 px/s, plus vite que la chute. Champ fixé à la carte.
+  - **Dessin** : pixel art de 1 à 5 px, éclairé en haut à gauche, un pixel d'ombre en bas à droite (lisible sur la
+    neige au sol, où les cristaux fins restent presque invisibles, comme en vrai) ; de nuit gris bleuté et un peu plus
+    pâle (`snowTones`, choix), les lampes ne les éclairent pas. Mouvement réduit : flocons immobiles. Sous abri : rien.
+  - **Partagé avec l'averse** de la catastrophe (`Catastrophe/DownpourFall.ts`) : la trajectoire d'un flocon
+    (`fallingFlake` : il descend jusqu'à son point d'arrivée, se balance de moins en moins en approchant, puis se pose),
+    son apparition en fondu (`flakeFadeIn`) et sa forme (`drawFlake`, taille 3 pour l'averse). Restent propres à
+    chacun le placement (l'averse : un point fixe du disque du nuage, chute droite de 96 px en 2,6 s ; la météo : un
+    champ fixé à l'air qui couvre la vue et que porte le vent réel), la quantité (l'averse : un nombre de flocons selon
+    son disque) et la sorte de flocon (l'averse ne connaît que la part de neige, pas la température : taille 3 fixe,
+    couleurs de jour).
+  - **Coût** : calcul ≈ 0,8 ms par image pour une forte neige près de 0 °C (≈ 900 flocons), ≈ 1,3 ms au pire (≈ 2 200
+    cristaux), contre ≈ 1,1 ms pour les gouttes d'une forte pluie (mesure Node, hors dessin Phaser).
 - **Sol et arbres.** La neige qui tombe tient au sol depuis le lot « Neige au sol » (section suivante) : le sol
   blanchit case par case et les arbres avec la couverture moyenne de la carte. Le décor de neige uni (`Christmas/` :
   sol uni, calottes, empreintes) reste débranché. Le givre et le gel de #392 sont inchangés. La neige des hauteurs du relief (`Terrain/SnowLine.ts`)
@@ -3225,12 +3475,100 @@ Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus
   de la neige des hauteurs et de la neige tombée), avec un repli en voile blanc sans shader. La marche ralentit
   (`groundPace`, comme la neige des hauteurs) et les arbres blanchissent avec la couverture moyenne de la carte.
 - **Deux modes** (`Weather/GroundSource.ts`). Un joueur qui suit le temps du serveur voit la neige du serveur. Un
-  joueur qui suit sa propre ville (météo personnelle de #392) n'en voit rien et ne la ralentit pas : son monde reste
-  local. L'eau, elle, est commune : il peut voir monter une eau de fonte sans avoir vu la neige.
-- **Limites.** La glace reste celle de #392 (personnelle, côté navigateur) : le serveur ne la connaît pas. La neige
-  tient sur l'eau dès 0 °C, même là où cette glace n'a pas encore gagné l'eau profonde à l'écran. Pas de neige locale en météo personnelle. Pas
+  joueur qui suit sa propre ville (météo personnelle de #392) n'en voit rien : son monde reste local, avec la neige
+  de sa ville (ci-dessous). L'eau, elle, est commune : il peut voir monter une eau de fonte sans avoir vu la neige.
+- **Neige de sa propre ville** (`Weather/Frost.ts`, `ownSnowAfter`, champ `snowMm` du cycle local). Pour qui suit
+  une ville, ce qui tombe là-bas en neige (taux de précipitation du créneau en cours, part de neige `snowShare` de
+  l'air de la ville) s'accumule sur son sol, en millimètres d'eau, à la même horloge que la neige du serveur
+  (`THAW_SPEED`), et fond ou part au vent sec avec les mêmes formules, d'après l'air de sa ville. Une seule valeur
+  pour tout le dehors de la carte : le sol blanchit partout pareil (par vingtièmes, le sol n'est repeint que quand
+  elle bouge d'un cran), les arbres et la glace avec, et la marche ralentit dehors. Rien n'est envoyé au serveur et
+  cette neige ne donne pas d'eau. Elle repart de zéro à chaque chargement de la carte et quand on revient au temps
+  du serveur.
+- **Limites.** La neige tient sur l'eau dès 0 °C, avant même que la glace du serveur (section suivante) n'ait pris. Pas
   d'empreintes dans la neige tombée. Sur une carte sans relief ni grille d'eau, l'eau de fonte ne fait qu'humidifier
   le sol. `play` et `back` se déploient ensemble.
+
+### Glace du serveur : l'eau gèle pour tous, et le feu la fait fondre
+
+Le gel de #392 était calculé par chaque navigateur d'après sa température, avec une seule valeur pour toute la carte :
+deux joueurs pouvaient ne pas voir la même glace, et rien (feu, météore) ne pouvait la trouer. Pour qui suit le temps
+du serveur, la glace est maintenant tenue par le serveur, case par case.
+
+- **Modèle** (`libs/map-editor/src/Terrain/Ice.ts`, champ `ice` de `Meadow`). Une épaisseur en millimètres sur l'eau
+  de chaque case (au moins 0,5 px d'eau), jamais plus épaisse que cette eau : une flaque gèle entièrement.
+  - Prise en glace sous 0 °C, loi de Stefan : `365 × (−T) × (1 + vent / 30) / max(épaisseur, 10)` mm par jour,
+    divisé par `1 + neige / 50` (la neige isole). Le temps court 600 fois plus vite que le réel (`THAW_SPEED`) :
+    5 cm en 50 s environ à −10 °C sans vent.
+  - Dégel au-dessus de 0 °C, au rythme de la fonte de la neige. La glace est le dessus de l'eau : geler et dégeler ne
+    changent pas le volume d'eau, qui continue de couler dessous.
+  - **Porte** quelqu'un à partir de 50 mm (`ICE_BEARS_MM`) : plus mince, sur une eau où l'on nage, elle cède et on
+    nage. **Glisse** dès 5 mm (`ICE_SLIPS_MM`) là où l'on marcherait (flaque gelée, verglas sur un sol inondé).
+  - La neige se pose sur la glace au lieu d'y fondre, même quand l'air repasse au-dessus de 0 °C.
+- **Feu, météore, comète.** La chaleur d'un feu (`Meadow.warm` : case en feu, arbre en feu, catastrophe « feu »)
+  fait fondre la neige d'une case puis la glace dessous. Le météore brûlant fait fondre neige et glace de son
+  cratère. La comète brise la glace du sien (`MeadowManager.shatter`). Le givre ne tient pas là où le sol brûle ni
+  sur ses cendres (shader du sol, dans les deux modes).
+- **Annonce.** `MeadowMessage.ice` (champ 9) : un octet par case (`iceByte`), gzip, vide sans glace ; annoncé toutes
+  les 2 s tant que la glace bouge ; gardé dans Redis avec le pré ; vit aussi sur une carte dont l'herbe est coupée.
+- **Navigateur, même affichage.** La texture de glace, son dessin dans le shader de l'eau, le patin, l'absence de
+  nage et de courant, les poissons figés et l'écume arrêtée de #392 sont repris tels quels : seule leur source
+  change. En mode serveur (`followsServerGround`), le shader lit la glace par case dans la texture de données
+  (9e paquet de `GroundSplat`, 12 paquets au lieu de 8, uniforme `uServerIce`), plus transparente quand elle est
+  mince, et la neige posée dessus est celle de la case. `isOnFrozenWater` lit la glace du serveur (`Ice/IceHold.ts`).
+  En météo personnelle (pastille 🖥), rien ne change : le gel local de `Frost.ts`.
+- **Température manuelle** jusqu'à −30 °C (au lieu de −10), pour geler un lac vite ; aujourd'hui jusqu'à −80 °C (voir « Conditions réglées à la main : les extrêmes »).
+- **Piscines.** L'eau d'une piscine peinte est de l'eau du relief (section « Piscines en eau réaliste ») : elle gèle
+  comme un lac, sans règle à part, sauf si son eau est chaude (jamais de glace, la neige y fond). Une piscine posée
+  comme image (ancien objet) n'est pas connue du serveur : elle garde la règle de #392 (dès −8 °C) ; la convertir en
+  piscine peinte la fait suivre le serveur.
+- **Limites.** Pas de glace du serveur dessinée sans shader (repli). La pêche n'est pas refusée sur la glace.
+  L'eau sous la glace s'évapore encore. La glace est tenue par case de 32 px, l'eau par cellule de 16 px : le bord de
+  la glace est lissé par le shader. `play` et `back` se déploient ensemble.
+
+### Piscines en eau réaliste : un bassin que le serveur remplit
+
+L'eau d'une piscine peinte n'est plus un dessin toujours plein : c'est de l'eau du relief, tenue par le serveur.
+
+- **Le bassin** (`Terrain/Pools.ts`, `poolBasins`). Pour l'eau, une piscine (les cases d'un même style qui se
+  touchent) est creusée de la profondeur de son style sous son bord, qui est le sol le plus bas le long de ses côtés :
+  un fond plat, un seul niveau. Sur une pente ou un sol inégal elle ne se vide donc pas par son côté bas. Le relief de la carte n'est pas modifié (c'est ce que
+  l'éditeur édite et ce qui est dessiné) : le serveur et le navigateur lisent ce relief « avec bassins » pour tout
+  ce qui dépend du niveau de l'eau (`TerrainWaterManager`, `TerrainWater.basin()`, courant, flèches des flux). Lu une
+  fois par carte et par liste de styles.
+- **La pompe** (`TerrainWaterManager.pumpPools`, `poolCells`). Chaque case sous son niveau reçoit de quoi remplir une
+  piscine vide en 8 secondes (`POOL_FILL_SECONDS`) : une piscine plus grande ou plus profonde a une pompe plus forte.
+  Remplissage jusqu'à 2 px sous le bord (`POOL_FREEBOARD_PX`), jamais au-dessus. Un trop-plein reprend au même débit ce
+  qui dépasse le niveau (neige fondue dans la piscine, pluie), compté avec les puits ; une inondation qui apporte plus
+  que ce débit passe quand même par-dessus le bord. Après un météore tombé dans l'eau (comète ou météore brûlant),
+  les pompes mettent 3 secondes à repartir (`POOL_PUMP_RESTART_SECONDS`) : une piscine vidée se voit vide. Compté avec les sources dans le bilan de l'eau. Le fond ne boit pas (sol de piscine, creux).
+  Le bassin est étanche (`WaterGrid.seal`) : il ne reçoit que la pluie qui tombe dessus (`sealedRainPx`), pas le
+  ruissellement du terrain autour, que la margelle arrête ; sinon une pluie le ferait déborder onze fois plus vite.
+- **Le souffle d'un météore** (`blastWater`, réglage `water.impactReach`, curseur « Souffle d'un météore dans
+  l'eau » de l'outil Relief). Un impact déplace bien plus d'eau que le volume de ce qui tombe : le choc chasse l'eau
+  autour du cratère, toute près de lui, de moins en moins ensuite (en ligne droite : un choix, le plus simple qui ne
+  laisse pas de marche dans l'eau), plus rien à `impactReach` fois le rayon du cratère. L'eau chassée retombe en
+  bourrelet juste au-delà ; ce qui n'y trouve pas de place est perdu. Défaut 2,5 (les projections d'un cratère
+  couvrent 2 à 3 fois son rayon), de 1 (l'eau du cratère seule, comme avant) à 4. Vaut pour la comète (avant qu'elle
+  projette l'eau de son cratère) et pour le météore brûlant (sa vapeur souffle l'eau autour : il n'était suivi
+  d'aucune vague avant), sur toute l'eau de la carte, lacs compris. Dans une piscine, l'essentiel de l'eau est jeté
+  dehors.
+- **Ce qui en découle.** La comète y soulève une vague, le météore brûlant fait bouillir son eau, le drain la vide,
+  et elle se remplit. La pluie et la fonte y tombent. Une inondation y entre, elle déborde. Elle gèle comme un lac.
+- **À l'écran** (`GroundSplat`, `poolColor`). La margelle et le carrelage restent ; l'eau dessinée suit le niveau du
+  serveur : la couleur de l'eau suit son niveau (à moitié vide, l'eau est pâle et le
+  carrelage se voit au travers), une piscine vidée montre son carrelage sec, puis l'eau revient à mesure qu'elle se
+  remplit. Pas de glace
+  dans une piscine vide. Le sol autour d'une piscine ne s'assombrit pas (pas d'anneau de terre mouillée sur une
+  terrasse), et l'eau de la piscine ne bave pas sur la terrasse : à côté d'une piscine, le shader lit la profondeur de
+  la case elle-même au lieu de la profondeur lissée entre cases voisines, et ne dessine pas d'eau dans le coin d'une
+  case de piscine resté hors de sa forme arrondie.
+- **Nage** (`WaterZones`). Les rectangles de piscine restent, avec le plongeon et les échelles ; un rectangle ne
+  compte comme de l'eau que s'il contient de quoi nager (16 px en son centre) : dans une piscine vidée on marche sur
+  le fond. La nage du relief s'applique aussi (c'est la même eau).
+- **Limites.** Les piscines-images gardent leur dessin plein. Une carte existante voit ses piscines se remplir au
+  premier pas du serveur. Le sol autour d'une piscine devient humide (berges) : de l'herbe peut y pousser sur un sol
+  fertile. La profondeur dessinée plafonne à 128 px. `play` et `back` se déploient ensemble.
 
 ### Arbres : feuilles d'automne et neige
 
@@ -3846,8 +4184,8 @@ seuils. Le serveur (`back/src/Model/FireConditionsManager.ts`) les tient pour to
 - Sinon, ou pour ce que la météo réelle ne donne pas : conditions neutres 20 °C, 60 %, 10 km/h du nord-ouest. Une
   carte en météo fixe ou automatique ne sèche donc qu'en manuel.
 
-Le serveur borne toute valeur (température −10 à 50 °C, humidité 0 à 100 %, vent 0 à 120 km/h ; seuils 0 à 50 °C,
-5 à 100 %, 5 à 120 km/h), refuse plus de 5 changements par seconde et par joueur, annonce les conditions à la salle à
+Le serveur borne toute valeur (température −80 à +80 °C, humidité 0 à 100 %, vent 0 à 250 km/h depuis le 2026-11-21,
+voir « Conditions réglées à la main : les extrêmes » ; seuils 0 à 50 °C, 5 à 100 %, 5 à 120 km/h), refuse plus de 5 changements par seconde et par joueur, annonce les conditions à la salle à
 chaque changement (et quand la météo réelle avance) et à l'entrée d'un joueur. Rien n'est enregistré : après un
 redémarrage de `back`, la salle revient aux conditions réelles et aux seuils 30-30-30.
 
@@ -4031,11 +4369,13 @@ est sous au moins 2 px d'eau à l'impact (d'après ce que ce navigateur sait de 
 Pour qui a demandé moins de mouvement (`prefers-reduced-motion`) : ni éclair ni météore qui tombe, il reste l'ombre
 et la gerbe. Tout est dessiné par le navigateur, en code, dans un seul calque au-dessus du voile de nuit et de la météo (`DEPTH_NIGHT_INDEX + 2`).
 
-**Taille du météore.** Le widget a un curseur : rayon du cratère de **2 à 24 cases** (4 par défaut, gardé pour la
-session). Le navigateur l'envoie avec la demande (`radiusTiles`), le serveur le ramène dans ces bornes
-(`meteorShape`) et l'annonce à la salle. Tout en découle : volume d'eau déplacé (surface du cratère × profondeur), eau
-apportée, portée de l'onde (6 fois le rayon du cratère, entre 64 et 240 cellules), taille de l'ombre, du météore, de
-la gerbe et des cercles.
+**Taille de la comète et du météore.** Le widget a un curseur : rayon du cratère de **1 à 8 cases** (4 par défaut,
+gardé pour la session ; de 2 à 24 jusqu'au 2026-11-21). Le navigateur l'envoie avec la demande (`radiusTiles`), le
+serveur le ramène dans ces bornes (`meteorShape`, `METEOR_MIN_TILES` et `METEOR_MAX_TILES`, lues aussi par le
+curseur : une valeur hors plage, comme le 24 d'un onglet ouvert avant, donne la plus proche ; 0 ou une valeur non
+numérique donne 4) et l'annonce à la salle. Tout en découle : volume d'eau déplacé (surface du cratère × profondeur), eau
+apportée, portée de l'onde (6 fois le rayon du cratère, jamais moins de 64 cellules : 64 à 96 dans ces bornes),
+taille de l'ombre, du météore (jamais dessiné à moins de 4 px de rayon), de la gerbe et des cercles.
 
 **Ce que fait l'eau.** À l'impact, le serveur vide le **cratère** (pour la taille par défaut : rayon 8 cellules de 16 px, soit 4 cases) et confie
 cette eau, **plus 8 px apportés par cellule du cratère**, à une **onde** (`Catastrophe/ImpactWave.ts`) dont le front
@@ -4258,7 +4598,7 @@ vérifiée sur un tablier. Rien de cela n'a été vu à l'écran par un agent.
 Conception et plan dans le dépôt d'infra, `docs/superpowers/{specs,plans}/2026-11-20-meteore-brulant*`.
 
 **Pour qui joue.** Tuile « Météore » du widget des catastrophes, à côté de « Comète ». Elle s'arme comme la comète
-(viseur, Échap annule), avec le même curseur de taille (rayon du cratère de 2 à 24 cases, 4 par défaut), et un clic
+(viseur, Échap annule), avec le même curseur de taille (rayon du cratère de 1 à 8 cases, 4 par défaut), et un clic
 gauche sur la carte lance le météore. Il tombe en 1,2 s comme la comète.
 
 **Ce qu'il fait à l'impact** (le serveur seul décide) :
@@ -4350,6 +4690,109 @@ tourne quatre fois plus vite. En mouvement réduit rien ne tourne.
 aquatique) ; les animaux ne sont pas aspirés ; pas de son ; tout joueur peut vider un lac ; le dessin est fait de
 traits, sans flou ; le disque est dessiné aussi là où il n'y a pas d'eau. `play` et `back` se déploient ensemble.
 
+## Catastrophes : la boule
+
+Sixième catastrophe du widget, et la seule qui ait un corps : une **boule solide** tenue sous le pointeur, dont le
+**centre est au niveau 0 de la carte** (l'altitude 0 du relief). Une moitié dépasse au-dessus du niveau 0, l'autre
+plonge dessous : dans le sol, ou dans l'eau d'un creux. Elle prend la place de l'eau, qui est chassée, monte autour
+et fait une vague ; quand la boule s'en va l'eau revient. C'est un instrument pour éprouver le modèle d'écoulement.
+
+**En jeu.** La tuile « Boule » s'arme comme l'averse et le drain. Un curseur règle le **diamètre, de 1 à 16 cases**
+(4 par défaut ; 1,1 m à 17,5 m à l'échelle de la carte). **Dès le clic, la boule est là, entière**, son centre au
+niveau 0 : elle ne monte pas, ne descend pas, n'enfle pas. Tant que le clic est maintenu elle **suit le pointeur
+sans retard** (souris ou pavé tactile) ; au relâchement elle **disparaît d'un coup**. Pendant ce temps le glisser ne
+déplace pas la carte.
+
+**Sous le pointeur sans attendre le serveur.** Le joueur qui tient la boule la voit sous son propre pointeur à chaque
+mouvement (`heldBallStore`, écrit par `GameSceneUserInputHandler`) : sa boule n'est jamais dessinée d'après les
+messages du serveur, qui arrivent un aller-retour plus tard. L'eau, elle, reste celle du serveur. Les autres joueurs
+voient la boule là où le serveur la dit, en glissant d'un message au suivant (50 ms).
+
+**Le serveur décide.** Le navigateur dit où est la boule toutes les 50 ms quand elle a bougé, toutes les 200 ms
+quand elle est tenue immobile (`LaunchCatastropheMessage`, genre `CATASTROPHE_BALL` = 5, `radiusTiles` = le
+**diamètre**), et dit qu'il la lâche (`release` = 6). Le serveur ramène le diamètre dans ses bornes (`ballTiles` ;
+0 ou une valeur non numérique donne 4), refuse un point hors de la carte ou non fini et les messages plus rapprochés
+que 20 ms. `CatastropheManager.ball` tient **une boule par joueur**, à l'endroit du dernier message ; elle disparaît
+au `release`, ou 600 ms après le dernier message d'un joueur parti sans rien dire. **8 boules au plus par salle.**
+Chaque message accepté est annoncé à la salle (`CatastropheMessage`, même `id` tant que la boule est tenue, `userId`
+= 11 pour que chacun reconnaisse la sienne, `impactInMs` = 0 quand elle est lâchée).
+
+**Une boule qui a bougé a balayé son trajet.** L'eau avance par pas de 100 ms ; une souris fait plusieurs cases
+entre deux pas. La boule n'a pas sauté : `sweepBalls` (`Catastrophe/Ball.ts`) la fait passer par le segment entre
+sa place d'avant et sa place de maintenant, **une cellule à la fois** (32 enjambées au plus par pas ; au-delà de 32
+cases par seconde les enjambées s'allongent), et `TerrainWaterManager.placeBalls` pose la boule à chaque enjambée :
+l'eau de tout le trajet est poussée devant elle. Une boule qui apparaît ou disparaît le fait en une fois.
+
+**Ce que ça donne, mesuré** (lac de 60 px de fond, environ 2 m, creusé dans une plaine, eau à inertie, boule apparue
+d'un coup puis traînée 6 s) : boule de 4 cases, crête de 19 à 29 px à la pose, 42 à 52 px traînée à 20 ou 40 cases
+par seconde, rien de perdu ; boule de 16 cases, 24 à 34 px à la pose, 60 à 89 px ensuite, et le lac déborde sur la
+plaine (crue de 33 à 75 px, jusqu'à 11 % de l'eau quitte la carte par le bord, comptée « perdue »). Aucune valeur non
+finie, bilan `eau + perdue` égal au volume de départ à 1e-6 près dans tous les cas : aucune borne de vitesse n'a été
+nécessaire.
+
+**La boule dans le modèle d'eau** (`WaterGrid.setBalls`, géométrie pure dans `Terrain/WaterBall.ts`). Le modèle est
+en colonnes d'eau. Dans chaque colonne qu'elle atteint, la boule occupe les hauteurs entre son dessous et son
+dessus (`±` sa demi-hauteur autour du niveau 0, moyennée sur la cellule : les cellules d'une boule portent
+exactement le volume de la sphère, à 1 % près), moins ce qui est dans le sol (`ballColumn`).
+
+- **Une eau plus basse que le dessous de la boule n'est pas touchée** : elle continue de couler dessous.
+- **Là où l'eau atteint la boule, la colonne est fermée** : l'eau qui tient sous la boule y reste, mise de côté
+  (`under`), et le sol de la colonne devient, pour l'eau, le dessus de la boule (`ground` et `spill` relevés d'autant).
+  Tout le reste du modèle (les deux écoulements, les sources, les puits, la pluie, les drains, les impacts) lit ce
+  sol sans rien savoir de la boule : la boule est un obstacle, l'eau qui la recouvre (une crue plus haute qu'elle)
+  coule dessus, la pluie ruisselle dessus.
+- **L'eau à qui la boule ne laisse plus de place est remise à la première colonne ouverte en s'éloignant du centre
+  de la boule** (`pushAway`), jamais à travers un mur ni hors de la grille, sans dépasser la hauteur maximale de la
+  carte (le reste va à la colonne suivante ; ce qui ne trouve aucune place reste sur la boule et en ruisselle).
+  L'eau est poussée de côté, pas vers le haut : le chemin s'arrête à un sol plus haut que le niveau où elle se
+  tenait (une berge, une falaise). C'est la condition d'une paroi qui avance : le volume qu'elle balaie passe à
+  l'eau devant elle.
+- Une colonne dont la boule touche le sol est fermée même à sec : la boule barre le chemin d'une eau qui arrive.
+- **Au retrait rien n'est rempli** : les colonnes se rouvrent, l'eau mise de côté est rendue, et le creux laissé se
+  comble par l'écoulement du modèle.
+
+Ainsi le volume chassé est exactement celui de la partie de la boule qui est dans l'eau (**Archimède**), et **aucune
+eau n'est créée ni perdue** : `totalPx` (le stock du tableau de bord) compte l'eau mise de côté, la sauvegarde aussi
+(`writeDepths(true)`), et une grille refaite après une édition de la carte la reprend (`takeFrom`).
+
+**Pourquoi pas « relever le fond » ni « poser l'eau sur la boule ».** Relever le fond sous toute l'empreinte chasse
+aussi l'eau qui passe sous la moitié basse de la boule dans un lac profond : trois fois trop de volume pour une boule
+de 2 cases dans 2 m d'eau. Poser toute l'eau chassée sur le dessus de la boule et la laisser retomber respecte
+Archimède mais la hisse jusqu'au sommet du solide : la vague ne dépend plus du volume balayé.
+
+**Ce que tout le monde voit** (`Catastrophe/BallView.ts`, règles pures dans `BallShape.ts`) : une sphère rouge en
+blocs, éclairée du haut à gauche en six tons, avec son reflet ; les blocs grossissent avec la boule (24 par rayon).
+Ce qui est dans le sol n'est pas dessiné (sur un mont plus haut que son rayon : rien que l'anneau) ; ce que l'eau
+recouvre est dessiné sous la teinte de l'eau. **Dans l'eau, elle est dans l'eau** : là où de l'eau borde la boule
+(`ballWaterline`, lu une cellule au-delà de son bord, au niveau réel de l'eau), une bande d'eau sombre contre elle et
+un liseré d'écume suivent la ligne de flottaison, rentrée vers le centre quand l'eau est plus haute que son milieu ;
+entourée d'eau, elle ne jette pas d'ombre (une ombre sur un lac disait une bille suspendue au-dessus) ; à terre elle
+garde son ombre. La boule est à la profondeur d'affichage de son milieu, comme un avatar qui s'y tiendrait ; un
+anneau fin et le reflet sont redessinés au-dessus du voile de la nuit. Elle n'est redessinée que lorsqu'elle a bougé
+ou que l'eau a changé. « Flux d'eau » (Visualisation) montre les courants qu'elle provoque sans rien de plus : il lit
+les vitesses et les profondeurs du modèle.
+
+**Voisinage.** Aucune collision : les avatars, les animaux et les véhicules la traversent, et sous elle les colonnes
+fermées sont à sec pour eux (un poisson mis à sec meurt après 5 s, comme sous un drain). L'herbe et l'humidité du
+sol ne changent pas. La glace du serveur ne tient pas la boule : sous elle il n'y a plus d'eau à geler, la glace y
+disparaît, et l'eau liquide est chassée comme sans glace. Une pompe de piscine ne remplit pas une case où se tient
+une boule (`ballAt`). Une porte étanche ou un mur arrête l'eau poussée. Si la carte est éditée pendant qu'une boule
+est posée, la nouvelle grille reprend toute l'eau et la boule y est remise au pas suivant. Joueur parti sans lâcher :
+la boule disparaît 600 ms après son dernier message.
+
+**Coût.** Sans boule : rien (retour immédiat). Avec, sur une grille de 200 × 200 : 0,1 à 0,3 ms par pas pour une
+boule immobile ou de 4 cases, jusqu'à 1,3 ms pour une boule de 16 cases traînée à 40 cases par seconde (une pose par
+enjambée). La salle reçoit l'eau cinq fois par seconde tant qu'une boule existe, et la place de chaque boule jusqu'à
+vingt fois par seconde pendant qu'elle bouge.
+
+**Limites.** L'eau enfermée sous une boule immobile y reste même si le lac baisse autour ; aucun courant ne passe
+sous la boule là où elle touche l'eau (en vrai il en passerait sous pression) ; l'eau qui rampe, sans inertie, ne
+fait pas de vague : l'eau poussée s'entasse près de la boule avant de s'étaler ; une boule qui fait déborder un lac
+envoie l'eau sur la plaine, d'où elle peut quitter la carte par le bord comme toute crue (comptée « perdue ») ; un
+navigateur d'avant dessine une comète à chaque message ; la boule apparue d'un coup n'a pas de vitesse : la vague de
+sa pose vient du volume chassé, pas d'un élan ; traînée plus vite qu'une vague ne court, elle entasse l'eau devant
+elle ; pas de son. `play` et `back` se déploient ensemble.
+
 ## Catastrophes : l'averse
 
 Deuxième catastrophe du widget (bouton « Catastrophe » du menu des applications) : une **grosse pluie sous le
@@ -4395,14 +4838,64 @@ Les sols se mélangent par leur hauteur (la luminosité de leur texture), leurs 
 la carte puis coupés net au pixel (pixel art, aucun fondu) ; les poids sont lissés 1-2-1 avant l'envoi pour que les
 bords ne suivent pas l'escalier des cases. L'herbe pousse en touffes (seuil sur la texture et un bruit), les cendres
 s'effacent par plaques. L'eau a sa couleur de sa profondeur, une surface animée en continu, une écume de rive et le
-sol mouillé autour. Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
+sol mouillé autour. **Eau mince visible** (2026-11-21, `fix/eau-invisible`) : le rivage du shader se calculait
+de la seule profondeur lissée (`profondeur × 12`, seuil 0,5), si bien qu'une nappe de moins de ~5 px (1 px d'eau =
+3,4 cm, soit ~18 cm) n'était pas dessinée au centre de sa case, et seulement par taches jusqu'à ~9 px (~30 cm) :
+un pré inondé par une source paraissait sec avec quelques points bleus, alors que le serveur y comptait l'eau (les
+animaux y boivent dès 2 px). Une présence d'eau par case (bleu du paquet 8, 255 dès qu'une case a de l'eau, au-dessus
+de `SHOWN_PX` de `TerrainWater`) est désormais lue à part de la profondeur : toute eau atteint au moins le bord de sa
+case, l'eau profonde garde son rivage d'avant (`waterShoreLevel`, jumeau TypeScript de la règle du GLSL, testé dans
+`WaterCover.test.ts`). Sous `SHORE_PX` (3 px, ~10 cm), un film est un sol luisant : opacité réduite jusqu'à 60 %,
+sans écume. Les deux replis (`TexturedGround`, canevas) dessinaient déjà toute case mouillée. **Nappe qui ruisselle** :
+une source qui déborde d'un lac court sur un pré en pente en nappe de 6 à 110 mm à 0,2-2 m/s (Manning, `steadyFlowSpeed`,
+pour 28 à 110 L/s sur 1 à 9 m de large), en partie sous `SHOWN_PX` (0,5 px, 17 mm) que `levelsOver` taisait, alors que
+« Flux d'eau » y trace ses flèches (toute profondeur > 0). Une eau qui court (vitesse du bloc non nulle, eau à inertie) est
+dessinée dès `RUNNING_SHOWN_PX` (1/8 px, 4 mm, le pas des profondeurs du serveur), en sol luisant ; une pellicule immobile
+sous 0,5 px (reste d'une crue) reste cachée. **Sol mouillé** (2026-11-21, `fix/sol-mouille-fonce`) : un sol mouillé
+est plus sombre, l'eau des pores abaissant sa réflectance (Twomey, Bohren et Mergenthaler 1986, *Applied Optics* 25:431).
+Le shader du sol l'assombrit selon le plus fort de trois états, jamais leur somme : la pluie de l'air du joueur
+(`uWet`, sur les sols peints comme avant), l'**humidité du sol tenue par le serveur** (`Meadow`, par tuile, déjà envoyée
+au navigateur : pluie, eau posée, remontée capillaire près de l'eau `BANK_MOISTURE`, séchage selon le sol, dont le
+sable en 120 s ; paquet 9, rouge) et la présence d'eau du relief (paquet 8, bleu). Courbe `groundWetness` : rapide avec
+la première eau puis plate (forme de Lobell et Asner 2002, *SSSAJ* 66:722 ; pente 3 : choix). Réflectance mouillée sur
+sèche (`WET_REFLECTANCE`, linéaire, appliquée en sRGB à la puissance 1/2,2) : terre et prairie 0,54, argile 0,48, sable
+0,55 (sols poreux 0,4 à 0,6, Lobell et Asner ; limon de 0,30 sec à 0,14 mouillé, Idso et al. 1975, *J. Appl.
+Meteorol.* 14:109 ; chiffres de ces deux articles relus par un résumé, pas sur l'article), roche 0,8, gravier 0,65,
+herbe 0,9 (**choix, non sourcés** : la pierre ne boit pas, les brins ne sont pas poreux). Mesure sur le shader : sable
+mouillé à 76 % de sa luminance sèche, roche 90 %, herbe 96 % ; la pluie fonce donc moins qu'avant (70 % partout). Sous
+un film, l'eau est claire (opacité de 20 % au plus mince) sur le sol foncé ; l'eau profonde et le rivage d'un lac ne
+changent pas. La couronne sombre du shader de l'eau n'ajoute que ce que l'humidité du modèle n'a pas déjà foncé.
+Limites : les tuiles de la carte non peintes comptent comme de la terre (le modèle les traite ainsi), pavés dehors
+compris ; l'humidité est par tuile de 32 px. **Couleur et contour** (2026-11-21, `fix/sol-mouille-couleur`, après un essai en
+dev local : tache terne, bords en marches de tuiles, teinte verte) : la couleur d'un sol peint n'est plus voilée mais
+**approfondie** (`wetColor` / `wetColour`) : luminance réduite selon `WET_REFLECTANCE`, et chaque canal assombri en
+puissance de sa clarté (la lumière traverse plus de grains absorbants dans un sol mouillé, Lekner et Dorf 1988,
+*Applied Optics* 27:1278 ; l'ampleur `WET_DEEPENING` = 0,5 est un choix, les sources ne la chiffrent pas) : la teinte est
+gardée, la saturation monte (sable : 0,33 sec, 0,41 mouillé, mesuré sur le shader). L'humidité, tenue par tuile, est lue
+sur une tuile autour (quatre points) sans paliers, et son bord est courbé par le bruit des bords des sols. Le reflet
+d'un sol trempé est blanc, plus bleu-gris. Sous un film de moins de 1 px, l'eau n'a presque plus de couleur (opacité 5 %
+au plus mince, sa teinte vient avec la profondeur jusqu'à `SHORE_PX`) : on voit le sable mouillé, plus un lavis vert.
+**Canal** : l'humidité est dans le **vert** du paquet 9, dont le rouge est l'écume des vagues (#439) ; les deux
+partageaient le rouge depuis la fusion de #439 et #444 (l'écume effaçait l'humidité, l'humidité moussait les rives).
+**Piscines** : leur bassin est étanche (`Meadow`, `poolTile`) : leur eau ne mouille pas la terrasse par remontée
+capillaire et leurs tuiles ne tiennent pas d'humidité de sol à répandre. **Ligne de mouillage** (2026-11-21, `fix/sable-mouille-net`, après un essai : sable
+mouillé « presque imperceptible ») : la surface d'un sol est mouillée dès une humidité de `SURFACE_WET_MOISTURE` (0,25,
+un choix : le serveur tient l'eau du sol, l'œil voit ses premiers millimètres, qui sèchent d'abord) ; en deçà elle est
+sèche. La limite est nette, lissée entre tuiles et courbée par le bruit des bords des sols (`WET_LINE_GAIN`) ; au-delà, la
+pleine teinte mouillée vient vite (`MOISTURE_CURVE` 6). Sable : réflectance mouillée 0,45 (bas de la fourchette 0,4 à 0,6
+des sols). **Frange capillaire par sol** (`Meadow`, `SOIL_LIFE`) : `fringeTiles` 3 tuiles pour terre, prairie et argile
+(inchangé), 1 pour sable et gravier (une frange de quelques décimètres, moins qu'une tuile de 1,1 m), 0 pour la roche ;
+`wicking` 0,15 pour sable et gravier (la diffusion latérale de `MOISTURE_SPREAD` y est faible). Humidité d'une plage
+de sable à l'équilibre, à 1, 2, 3 tuiles de l'eau : 0,80, 0,14, 0,03 (avant 0,80, 0,50, 0,17 ; la terre garde 0,80,
+0,58, 0,43). Contraste mouillé/sec mesuré sur le shader (îlot de 10 × 8 tuiles), ΔL* : jour 13,8 → 20,4, soir (voile
+0,3) 10,2 → 15,0, nuit (0,6) 6,4 → 9,4. Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
 (`TexturedGround`). Textures : `resources/terrain/ground-*.png` (générées, 4 tons nets ; `ground-ice.png` dans le
 style des patinoires).
 
 **Météo personnelle.** Le bandeau météo devient une pastille : la ville du serveur (globe) avec l'icône du temps et
 une flèche du vent ; un clic ouvre le bulletin, sous la pastille. Dès 768 px de large, la pastille météo et la pile des
 étages sont sur la ligne de l'horloge, à sa gauche (météo, étages, horloge) ; en dessous, empilées sous l'horloge. Un joueur qui suit un lieu du monde sur son horloge (mode « monde »,
-`worldCityStore`, nommé d'après la ville la plus proche) voit aussi sa ville (ordinateur), et le jeu dessine pour lui
+`worldCityStore`, nommé d'après la ville la plus proche, ou par ses coordonnées loin de toute ville) voit aussi sa ville (ordinateur), et le jeu dessine pour lui
 seul la météo de ce lieu (`ChosenPlaceWeather`, route `real-weather` du pusher) ; les autres gardent celle du
 serveur.
 
@@ -4419,16 +4912,27 @@ froid et ne gèle jamais.
 
 **Givre** (2026-11-21, `libs/map-editor/src/Weather/HoarFrost.ts` `hoarFrost`, remplace la rampe « blanc à −10 °C »
 de #392). La gelée blanche est un dépôt de la vapeur de l'air sur une surface plus froide que le point de givrage de
-cet air : il faut un sol sous 0 °C **et** un air assez humide ; par air sec il gèle sans blanchir (gelée noire), et
-l'air très froid porte peu de vapeur. Calcul : pression de vapeur de l'air d'après son humidité relative à l'eau
-(celle d'Open-Meteo et de la salle), comparée à la saturation sur la glace à la température du sol (formes de Magnus
-de l'OMM, WMO-No. 8 annexe 4.B : eau 17,62 / 243,12, glace 22,46 / 272,62, 6,112 hPa) ; givre = excès de vapeur sur
-0,25 hPa (choix : sol tout blanc à 0,25 hPa d'excès). Sol plus froid que l'air de 0,8 °C par vent calme (choix, sous
+cet air : il faut un sol sous 0 °C **et** un air saturé par rapport à la glace de ce sol ; par air plus sec il gèle sans
+blanchir (gelée noire). Calcul : pression de vapeur de l'air d'après son humidité relative à l'eau (celle d'Open-Meteo
+et de la salle), rapportée à la saturation sur la glace à la température du sol (formes de Magnus de l'OMM, WMO-No. 8
+annexe 4.B : eau 17,62 / 243,12, glace 22,46 / 272,62, 6,112 hPa ; `iceSaturationRatio`). **Corrigé le 2026-11-21
+(grand froid)** : la première version (#424) blanchissait selon un excès **absolu** de vapeur (sol blanc à 0,25 hPa),
+qu'un air à −34 °C ne peut presque pas atteindre (saturation de 0,35 hPa sur l'eau) : par grand froid il ne givrait
+plus jamais, même saturé par rapport à la glace. Le dépôt se décide sur le rapport `e / e_i(sol)` ≥ 1 (sol au point de
+givrage ou dessous : glossaire AMS « hoarfrost », UBC ATSC 113 « surface hoar ») ; sa vitesse, elle, suit l'excès
+absolu (Hachikubo et Akitaya 1997, lu en résumé seulement). D'où : blancheur = sursaturation sur la glace `e/e_i − 1`
+ramenée sur 0 à 5 % (`FULL_FROST_SUPERSATURATION`, choix), multipliée par un dépôt plus mince quand l'excès est sous
+0,1 hPa (`FULL_FROST_EXCESS_HPA`, qui change de sens : excès d'un dépôt à pleine épaisseur, choix), sans descendre
+sous la moitié (`COLD_FROST_SHARE`, choix) : jamais nul quand l'air est sursaturé sur la glace. Sol plus froid que
+l'air de 0,8 °C par vent calme (choix, sous
 les 1 à 3 °C de l'herbe par nuit claire et calme, FAO Snyder et de Melo-Abreu 2005, ch. 2), de jour comme de nuit et
 par tout ciel : ni la nuit ni la nébulosité ne sont lues (les conditions réglées à la main n'en ont pas) ; le vent
 ramène le sol à la température de l'air, en entier jusqu'à 7 km/h, plus rien à 18 km/h (choix). Vent inconnu = calme ;
-**humidité inconnue = pas de givre**. Exemples : −2 °C et 95 % → 0,70 ; −2 °C et 40 % → 0 ; −15 °C et 70 % → 0 ;
-+1 °C et 100 % → 0 (sol à +0,2 °C) ; −2 °C, 95 % et 40 km/h → 0 ; −30 °C et 95 % → 0,54. Sources, dans le même ordre
+**humidité inconnue = pas de givre**. Exemples (avant → après la correction) : −2 °C et 95 % → 0,70 → 0,73 ;
+−2 °C et 40 % → 0 ; −15 °C et 70 % → 0 (81 % sur la glace) ; +1 °C et 100 % → 0 (sol à +0,2 °C) ; −2 °C, 95 % et
+40 km/h → 0 (sol à −2 °C, 97 % sur la glace) ; −30 °C et 95 % → 0,54 → 1 ; −34 °C, 80 % et 15 km/h → 0,14 → 0,68 ;
+−34 °C et 60 % → 0 (86 % sur la glace). L'humidité de la ville suivie s'affiche aussi dans la fiche météo personnelle
+du bandeau (quart d'heure en cours de sa frise), comme celle du serveur dans la sienne. Sources, dans le même ordre
 que la température : ville suivie par le joueur (« Jour dans le monde » : température, humidité et vent de sa frise),
 sinon conditions réglées à la main dans la salle, sinon air réel du lieu de la carte. Limites : un vrai givre de nuit
 claire sous un air à +1 °C n'est pas rendu, et le givre se forme aussi de jour au soleil ; le shader le pose sur tout
@@ -4445,3 +4949,131 @@ piscines-images (objets avec eau) sont redessinées de la même façon, image ca
 piscine modifiable » dans l'éditeur d'objets la remplace par une piscine peinte (`MapEditor/PoolConversion.ts`).
 **Gel** : une piscine gèle en surface comme une eau calme de 32 px, quelle que soit sa profondeur
 (`POOL_ICE_DEPTH_PX`), soit vers -8 °C ; jamais dedans (`OutdoorGrid`) ni chauffée.
+
+## Rendu : pixels lissés, ciel par la carte graphique, reflets, arcs-en-ciel (PR #458)
+
+**Pixels lissés** (`Phaser/Services/SharpUpscale.ts`). Le jeu est calculé en pixels de jeu (`HdpiManager`) puis
+agrandi par le navigateur en `image-rendering: pixelated` : à un facteur non entier (2,53 sur un Retina au zoom par
+défaut), des pixels de jeu font 2 pixels d'écran et d'autres 3 (escaliers irréguliers, scintillement au défilement).
+Un second canvas WebGL, à la définition de l'écran, montre le canvas du jeu avec un filtre « sharp bilinear » : chaque
+pixel plat en son milieu, seul le pixel d'écran de son bord mélangé au voisin. Le bilinéaire interpole entre les
+**centres** des texels : la formule part de `floor(texel - 0,5) + 0,5` (sinon flou). Lu sur `POST_RENDER`, dans la même
+tâche que le dessin du jeu (`preserveDrawingBuffer` est faux). Le canvas est placé en tête de son parent : au-dessus du
+canvas du jeu (non positionné), sous les calques positionnés (pseudos, interface). Écarté : `smoothPixelArt` de
+Phaser 4, qui demande de tout dessiner en pleine définition (~6 fois plus de pixels dans chaque shader). Mesure
+(M4 Max) : 120 i/s avec ou sans.
+
+**Ciel par la carte graphique** (`Weather/CloudLayer.ts`). Avant : un canvas CPU d'un pixel par bloc de 4 à 64 px
+(`BlockSurface`), repeint 6 à 10 fois par seconde, des nuages qui sautaient d'un bloc (~40 px d'écran toutes les
+0,5 s). Maintenant, à chaque dessin de la météo (30 i/s quand il y a des nuages, 15 avant) : les bouffées
+(`cloudPatches`) sont additionnées dans une texture d'épaisseur de 8 px de carte par texel (fixe : un texel qui suivait
+le zoom changeait la forme des nuages à chaque palier) avec le mélange ADD de Phaser (`src + dst × alpha_dst`, d'où un
+fond **noir opaque**) ; un shader lit cette épaisseur lissée, la découpe en bosses (bruit fractal fixé au nuage :
+calculé en `monde - dérive du ciel`), éclaire les bosses depuis le nord-ouest par la pente de la densité, dessine les
+ombres (même forme, décalées à l'opposé du soleil), les voiles gris de la pluie et du ciel couvert, découpés par un
+masque « dehors » tracé depuis les rectangles d'extérieur (`veil`) tous les 4 px. Une RenderTexture Phaser se lit
+avec `1 - y`, comme un canvas (sans quoi : miroir vertical, visible seulement quand la texture dépasse la zone).
+Nuages de pluie et d'orage : `cumulonimbusPalette` (sommets éclairés bien plus clairs que `rainPalette`). Le
+brouillard reste en blocs. Réglage « Nuages fluides (carte graphique) » ; décoché ou sans WebGL : l'ancien chemin.
+« Réduire les animations » fige les bosses. Mesure en régime (M4 Max) : 4,9 à 5,5 ms de calcul, 4 ms de rendu.
+
+**Reflets dans l'eau** (`Terrain/WaterReflection.ts`, shader de l'eau de `GroundSplat`). L'eau mêle la couleur du
+ciel (bleu, gris sous un ciel couvert ou la pluie, rien la nuit), les nuages qui passent (la texture d'épaisseur de
+`CloudLayer`, relue décalée par les vagues : zoomé, quand la caméra est sous les nuages, on les voit dans l'eau),
+l'éclat du soleil sur les vagues tournées vers lui (plus fort soleil haut et ciel clair) et, la nuit, la lumière des
+lampes : le voile de nuit (`NightOverlay`, un texel par pixel d'écran, percé par les lampes, murs compris) relu sous
+la lampe, étiré vers le bas et ondulé. Rien n'est dessiné deux fois : l'eau relit ce qui est déjà calculé.
+`GameScene` passe le reflet à chaque image (`TerrainView.setWaterReflection`, comme les ondes des comètes). Réglage
+« Reflets dans l'eau ».
+
+**Arcs-en-ciel** (`Weather/Rainbow.ts`). Un arc-en-ciel se voit à 42° du point opposé au soleil : seulement s'il pleut
+avec un soleil entre 0 et 42° (fondu de 0 à 3° et de 36 à 42°), plus pâle par orage (× 0,5) et sous un ciel couvert.
+Fixé à la carte (centre, rayon 0,35 × le petit côté, 50 tuiles au plus), ouvert à l'opposé du soleil (sens des
+ombres), sa demi-ouverture `90° × (42 - hauteur) / 42` : un demi-cercle au soleil couchant, un arc court près de 42°.
+Arc secondaire pâle aux couleurs inversées, ciel plus clair dedans. Bouton 🌈 à côté de l'horloge
+(`RainbowButton.svelte`, `rainbowSpotStore` = sommet de l'arc, publié seulement quand il change) : téléporte sur la case
+libre la plus proche (`teleportNextTo`). Réglage « Afficher les arcs-en-ciel ».
+
+**Préréglages et Basique.** Les quatre effets font partie de `GraphicsProfile` : coupés en Basse, actifs au-dessus ; une
+case modifiée à la main donne « Personnalisée ». Le mode Basique les coupe tous.
+
+**Piscines en Basique** (`Terrain/BasicPools.ts`). Basique ne dessine pas l'eau du relief, et les piscines tracées
+dans l'éditeur (qui n'existent que dans le shader) disparaissaient, comme les piscines-images cachées pour lui. En
+Basique : eau fixe de la couleur du style dans ses cases, margelle sur les bords qui ne touchent pas une autre case de
+piscine, dans un `Graphics` dessiné une fois (de nouveau si le relief ou les styles changent) ; les piscines-images
+sont remontrées.
+
+**Écran noir et saccades au zoom** (corrigés dans la même PR). Écran noir : une texture d'épaisseur détruite
+(remplacée en dézoomant) restait liée au shader de l'eau, `ShaderQuad.setupTextures` levait une exception à chaque
+rendu. Le reflet est maintenant passé après la météo, et l'eau ne lie jamais une texture absente. La couche lissée
+s'efface si le contexte WebGL du jeu est perdu. Saccades (profil CPU pendant un zoom) : `gl.getError()` après chaque
+copie de la couche lissée faisait attendre le GPU (41 % du fil principal, retiré) ; `SnowGround` redessinait et
+redimensionnait sa texture à chaque image (clé de dessin au zoom exact : 14,5 % en création de framebuffers), zoom
+désormais par demi-octave et texture qui ne grandit que par pas de 256 px ; le masque « dehors » des nuages n'est plus
+recréé à chaque image ; la couche lissée attend que le canvas du jeu garde sa taille 150 ms avant de se recréer.
+Restent, d'origine : le redimensionnement du canvas par `WaScaleManager` et `smoothWeights` du sol quand la zone change.
+
+**Carte du monde de l'horloge** préchargée avec l'horloge (elle apparaissait d'un coup à la première ouverture).
+
+**La glace qui casse** (`Ice/IceBreaks.ts`, `Ice/FrozenWater.ts`, `Ice/IceHold.ts`, `CatastropheManager.iceBreak`).
+La glace a trois états sous un point (`IceState`) : aucune, fine, solide. Glace du serveur : solide dès 50 mm sur une
+eau où l'on nage (`ICE_BEARS_MM`), fine de 5 à 50 mm (avant : elle ne portait pas du tout, on passait à la nage sans
+rien voir). Météo personnelle : épaisseur lue du froid du moment (`ownIceMm`, pas d'historique : elle porte dès
+-7,5 °C). Sur une glace fine, des fissures s'étendent sous l'avatar (1,2 s au même endroit), puis elle cède : un trou
+d'eau libre de 24 px (bord irrégulier, éclats de glace), qui regèle en 2 minutes. Glace du serveur : le client
+envoie `CATASTROPHE_ICE_BREAK` (une valeur de plus de `CatastropheKind`, même message que les catastrophes, une casse
+par seconde par joueur), le serveur casse la glace d'une tuile autour par `meadow.shatter` (comme une comète) et le
+dit à la salle, qui ouvre le même trou. Météo personnelle : trou local. Les piscines gèlent en surface dès -3 °C
+(`POOL_ICE_DEPTH_PX` 8 px au lieu de 32, qui attendait -8,25 °C). La glace du serveur épaissit deux fois plus vite que
+l'horloge de la neige (`ICE_GROWTH_TIMES` = 2, soit 1 200 fois le temps réel ; le dégel garde ×600) : elle porte le
+woka en 1 min 30 environ à -3 °C, 38 s à -7 °C, 18 s à -15 °C (loi de Stefan, l'épaisseur croît comme la racine du
+temps).
+
+**Herbe dès l'arrivée** (`back/src/Model/MeadowManager.ts`, `GameScene.groundStatesOfJoinApplied`). Le premier joueur
+d'une salle recréée recevait un sol nu : `snapshot()` ne rendait que l'état déjà diffusé, vide jusqu'au premier pas de
+la prairie. Mesuré : entrée à 4,0 s sans prairie, herbe à 13,2 s (premier message périodique, toutes les 10 s). Le
+snapshot écrit désormais l'état courant si rien n'a été diffusé (toujours rien pour une carte nue et sèche) ; la carte
+attend la prairie et l'eau reçues à l'entrée (décompression) avant de s'afficher, 2 s au plus. Après : herbe à 4,4 s.
+
+## Conditions réglées à la main : les extrêmes
+
+Depuis le 2026-11-21, les conditions réglées à la main dans la salle (Catastrophe → Météo) vont de **−80 à +80 °C**
+pour la température et de **0 à 250 km/h** pour le vent (avant −10 à 50 °C et 0 à 120 km/h) ; l'humidité reste de 0
+à 100 %, les seuils du feu ne changent pas. Les bornes ne vivent qu'à un endroit, `FIRE_CONDITION_BOUNDS`
+(`libs/map-editor/src/Weather/FireConditions.ts`) : le curseur, le serveur (`boundedFireConditions`, une valeur
+au-delà est ramenée à la borne) et le tableau « Météo expliquée » (bornes de ses recherches de seuil) les lisent.
+Chaque curseur de condition a deux boutons − et + qui la déplacent d'un cran (un degré, un point, un km/h), le
+curseur gardant un cran par pixel environ. Le protocole ne change pas (champs `double`).
+
+Ce que donne chaque règle aux extrêmes, figé par `libs/map-editor/tests/WeatherExtremes.test.ts` et
+`play/tests/front/Phaser/Game/Weather/WeatherExtremes.test.ts` :
+
+- **neige ou pluie** : toute précipitation est de la neige par −20 °C et en dessous, de la pluie dès 6 °C. Le
+  thermomètre mouillé (`wetBulbTemperature`) suit l'ajustement de Stull de −20 à 50 °C ; au-delà il est tiré des
+  formules psychrométriques de l'OMM (WMO-No. 8, 2018, annexe 4.B, éq. 4.B.8 et 4.B.9, au niveau de la mer) : Stull
+  donnait −48 °C pour un air à −80 °C et 5 %, l'équation donne −80 °C. Le passage à −20 °C saute de moins de 4 °C
+  (l'erreur de Stull dans un air froid et sec), sans effet sur la neige ;
+- **givre** : les formes de Magnus de l'OMM sont gardées hors de leur domaine annoncé (eau −45 à 60 °C, glace −65 à
+  0 °C) : elles restent à moins de 2,5 % des pressions de vapeur de Murphy et Koop (2005) de −80 à +80 °C, et à 1,5 %
+  des tables de vapeur à 80 °C (474,2 hPa, Wagner et Pruss 2002). Par −80 °C le sol ne blanchit que si l'air est saturé sur la glace ; jamais par +80 °C.
+  Le vent retient le givre en ôtant le refroidissement du sol ; au-delà de 120 km/h (l'ancienne borne, rien ne change
+  en dessous), une tempête l'arrache : il s'efface jusqu'à disparaître à 250 km/h (`FROST_SWEPT_FROM_KMH`,
+  `FROST_SWEPT_KMH`, un choix : le givre de surface est un dépôt fragile d'air calme, UBC « Surface hoar ») ;
+- **sol** gelé tout entier dès −1 °C, **eau** gelée tout entière dès −15 °C (glace du navigateur) ; la glace du
+  serveur (#429) prend le lac jusqu'au fond en quelques pas par −80 °C et 250 km/h sans dépasser son eau, et fond
+  d'environ 108 mm par pas par +80 °C (loi de Stefan intégrée pas à pas : par grand froid et grand vent, le premier
+  pas surestime l'épaisseur, bornée par l'eau et par 1 m) ;
+- **neige au sol** : par +80 °C, un air humide et 250 km/h, elle fond à 324 mm d'eau par heure réelle, environ
+  108 mm par pas de 2 s du jeu (une neige de 600 mm part en une vingtaine de secondes) ; aucune fonte sous 0 °C ;
+- **feu** : danger nul par grand froid, maximal par +80 °C, air sec et grand vent. La tête du feu plafonne toujours à
+  dix cases par pas de 2 s (atteint dès 125 km/h, environ 20 km/h de course, Cheney et Cruz), les braises des arbres
+  à quarante cases (dès 120 km/h) : à 250 km/h le feu ne va pas plus vite qu'à 125 et ne traverse jamais la carte en
+  un pas ; flancs et arrière presque immobiles ;
+- **navigateur** : nuages à 180 px/s au plus (dès 60 km/h), arbres couchés et feuilles au plus fort dès 80 km/h
+  (`TreePoses`, `TreeLeafFall`), feuilles au sol au palier le plus fort dès 50 km/h, pluie penchée d'un pixel par
+  pixel au plus (dès 60 km/h), flammes couchées dès 60 km/h, fumée portée au plus dès 60 km/h : tous plafonnés, rien ne déborde.
+
+Le schéma de la météo réelle (`RealWeatherSlot`) ne borne pas la température et accepte un vent jusqu'à 500 km/h :
+un lieu réel extrême n'est pas rejeté. Rien de ces conditions n'est enregistré ; un ancien `back` ramènerait la
+valeur à ses anciennes bornes (le curseur revient alors sur ce que le serveur annonce) : `play` et `back` vont
+ensemble.

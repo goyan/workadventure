@@ -126,9 +126,9 @@ describe("WeatherTab", () => {
         expect(held?.textContent).toContain("heldBack.humidity");
         expect(held?.textContent).not.toContain("heldBack.temperature");
         expect(held?.textContent).not.toContain("heldBack.wind");
-        expect(slider("humidity").closest("label")?.getAttribute("data-met")).toBe("false");
-        expect(slider("temperature").closest("label")?.getAttribute("data-met")).toBe("true");
-        expect(slider("windSpeed").closest("label")?.getAttribute("data-met")).toBe("true");
+        expect(slider("humidity").closest("[data-met]")?.getAttribute("data-met")).toBe("false");
+        expect(slider("temperature").closest("[data-met]")?.getAttribute("data-met")).toBe("true");
+        expect(slider("windSpeed").closest("[data-met]")?.getAttribute("data-met")).toBe("true");
     });
 
     it("names all that holds the fire back, and nothing once the three conditions are met", () => {
@@ -166,5 +166,41 @@ describe("WeatherTab", () => {
         select.dispatchEvent(new Event("change", { bubbles: true }));
         flushSync();
         expect(send).toHaveBeenLastCalledWith({ ...real, manual: true, windFrom: 225 });
+    });
+});
+
+describe("WeatherTab at the bounds of the conditions", () => {
+    it("lets the heat go from -80 to +80 °C and the wind up to 250 km/h, the humidity from 0 to 100 %", () => {
+        render();
+        expect([slider("temperature").min, slider("temperature").max]).toEqual(["-80", "80"]);
+        expect([slider("windSpeed").min, slider("windSpeed").max]).toEqual(["0", "250"]);
+        expect([slider("humidity").min, slider("humidity").max]).toEqual(["0", "100"]);
+    });
+
+    it("moves a condition by one with its buttons, within its bounds, only once set by hand", () => {
+        render();
+        expect(slider("temperature-less").disabled).toBe(true);
+        slider("manual").click();
+        flushSync();
+        vi.advanceTimersByTime(300);
+        slider("temperature-less").click();
+        flushSync();
+        expect(send).toHaveBeenLastCalledWith({ ...real, manual: true, temperature: 21 });
+        vi.advanceTimersByTime(300);
+        slider("windSpeed-more").click();
+        flushSync();
+        expect(send).toHaveBeenLastCalledWith({ ...real, manual: true, temperature: 21, windSpeed: 5 });
+    });
+
+    it("shows a polar cold and a hurricane, and greys out the button that would go beyond", () => {
+        fireConditionsStore.set({ ...real, manual: true, temperature: -80, windSpeed: 250 });
+        render();
+        expect(slider("temperature").value).toBe("-80");
+        expect(slider("windSpeed").value).toBe("250");
+        expect(slider("temperature-less").disabled).toBe(true);
+        expect(slider("temperature-more").disabled).toBe(false);
+        expect(slider("windSpeed-more").disabled).toBe(true);
+        expect(target.textContent).toContain('temperatureValue:{"value":-80}');
+        expect(target.textContent).toContain('windValue:{"value":250}');
     });
 });

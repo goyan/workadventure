@@ -2,7 +2,7 @@ import * as Phaser from "phaser";
 import { get } from "svelte/store";
 import * as Sentry from "@sentry/svelte";
 import { CatastropheKind } from "@workadventure/messages";
-import { DOWNPOUR_REPORT_MS } from "@workadventure/map-editor";
+import { BALL_REPORT_MS, BALL_STILL_REPORT_MS, ballRadiusPx, DOWNPOUR_REPORT_MS } from "@workadventure/map-editor";
 import { getTileCenter } from "@wa/front/Phaser/Player/TileSnap";
 import { Player } from "@wa/front/Phaser/Player/Player";
 import { findSeatAtPoint, isSeatTaken } from "@wa/front/Phaser/Player/Seat";
@@ -34,6 +34,8 @@ import { Swimwear } from "@wa/front/Phaser/Entity/Swimwear";
 import { ENABLE_TILE_SNAP, WOKA_SPEED } from "@wa/front/Enum/EnvironmentVariable";
 import {
     armedCatastropheStore,
+    ballDiameterTilesStore,
+    heldBallStore,
     downpourRadiusTilesStore,
     downpourWholeMapStore,
     fireRadiusTilesStore,
@@ -98,7 +100,10 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     /** While the click of an armed downpour is held: tells the server where the pointer is, a few times a second. */
     private downpourReports: Phaser.Time.TimerEvent | undefined;
     /** The catastrophe a held click is throwing: a downpour that follows the pointer, or fire painted along it. */
-    private heldKind: "downpour" | "fire" | "drain" | undefined;
+    private heldKind: "downpour" | "fire" | "drain" | "ball" | undefined;
+    /** The ball held under the pointer: the pointer that holds it, and what the server was last told of it. */
+    private ballPointer: Pointer | undefined;
+    private ballTold: { x: number; y: number; tiles: number; ticksAgo: number } | undefined;
     // The current touch gesture involved two fingers or more (a pinch): lifting a finger must not count as a tap.
     private multiTouch = false;
     private pinchFreedView = false;
@@ -338,10 +343,10 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         );
     }
 
-    /** The catastrophe a held click throws, when one of those is armed: the downpour, the fire and the drain. */
-    private heldCatastrophe(): "downpour" | "fire" | "drain" | undefined {
+    /** The catastrophe a held click throws, when one of those is armed: the downpour, the fire, the drain, the ball. */
+    private heldCatastrophe(): "downpour" | "fire" | "drain" | "ball" | undefined {
         const armed = get(armedCatastropheStore);
-        return armed === "downpour" || armed === "fire" || armed === "drain" ? armed : undefined;
+        return armed === "downpour" || armed === "fire" || armed === "drain" || armed === "ball" ? armed : undefined;
     }
 
     /**
@@ -358,10 +363,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 this.stopDownpour();
                 return;
             }
-            const worldPoint = this.gameScene.getCameraManager().getCamera().getWorldPoint(pointer.x, pointer.y);
-            // A pointer past the edge rains on the edge: the cloud never leaves the map.
-            const x = Math.min(this.gameScene.Map.widthInPixels - 1, Math.max(0, worldPoint.x));
-            const y = Math.min(this.gameScene.Map.heightInPixels - 1, Math.max(0, worldPoint.y));
+            const { x, y } = this.mapPointUnder(pointer);
             if (kind === "fire") {
                 // A patch of fire at each report: the fire is painted along the way of the pointer.
                 this.gameScene.connection?.emitLaunchCatastrophe(
@@ -381,6 +383,20 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 );
                 return;
             }
+            if (kind === "ball") {
+                // The ball is under the pointer at once, here; the server is told when it moved, and now and then
+                // while it is held still.
+                const tiles = get(ballDiameterTilesStore);
+                heldBallStore.set({ x, y, radiusPx: ballRadiusPx(tiles) });
+                const told = this.ballTold;
+                if (told && told.x === x && told.y === y && told.tiles === tiles) {
+                    told.ticksAgo++;
+                    if (told.ticksAgo * BALL_REPORT_MS < BALL_STILL_REPORT_MS) return;
+                }
+                this.ballTold = { x, y, tiles, ticksAgo: 0 };
+                this.gameScene.connection?.emitLaunchCatastrophe(CatastropheKind.CATASTROPHE_BALL, x, y, tiles);
+                return;
+            }
             this.gameScene.connection?.emitLaunchCatastrophe(
                 CatastropheKind.CATASTROPHE_DOWNPOUR,
                 x,
@@ -389,17 +405,45 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 get(downpourWholeMapStore),
             );
         };
+        if (kind === "ball") this.ballPointer = pointer;
         report();
         this.downpourReports = this.gameScene.time.addEvent({
-            delay: DOWNPOUR_REPORT_MS,
+            // A ball is seen by everybody under the pointer of its player: it is told far more often.
+            delay: kind === "ball" ? BALL_REPORT_MS : DOWNPOUR_REPORT_MS,
             loop: true,
             callback: report,
         });
     }
 
+    /** The point of the map under a pointer. One past the edge is on the edge: a cloud never leaves the map. */
+    private mapPointUnder(pointer: Pointer): { x: number; y: number } {
+        const worldPoint = this.gameScene.getCameraManager().getCamera().getWorldPoint(pointer.x, pointer.y);
+        return {
+            x: Math.min(this.gameScene.Map.widthInPixels - 1, Math.max(0, worldPoint.x)),
+            y: Math.min(this.gameScene.Map.heightInPixels - 1, Math.max(0, worldPoint.y)),
+        };
+    }
+
     private stopDownpour(): void {
         this.downpourReports?.remove();
         this.downpourReports = undefined;
+        // A ball that was held is let go: gone at once here, and the server is told so.
+        if (this.heldKind === "ball") {
+            heldBallStore.set(undefined);
+            const told = this.ballTold;
+            if (told) {
+                this.gameScene.connection?.emitLaunchCatastrophe(
+                    CatastropheKind.CATASTROPHE_BALL,
+                    told.x,
+                    told.y,
+                    told.tiles,
+                    false,
+                    true,
+                );
+            }
+        }
+        this.ballPointer = undefined;
+        this.ballTold = undefined;
         this.heldKind = undefined;
     }
 
@@ -642,6 +686,11 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         if (pointer.wasTouch && this.multiTouch) {
             return;
         }
+        // A held ball is under the pointer at each of its moves, without waiting for the next report.
+        if (this.ballPointer) {
+            const { x, y } = this.mapPointUnder(this.ballPointer);
+            heldBallStore.set({ x, y, radiusPx: ballRadiusPx(get(ballDiameterTilesStore)) });
+        }
         // A held downpour follows the pointer by itself (see startDownpour): the move is no drag of the map.
         if (this.downpourReports) return;
         if (!pointer.leftButtonDown()) {
@@ -690,7 +739,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     private canDragMap(): boolean {
         // The other editor tools use the left drag themselves; they pan with MapPanShortcut instead.
         const armed = get(armedCatastropheStore);
-        if (armed === "downpour" || armed === "drain") return false;
+        if (armed === "downpour" || armed === "drain" || armed === "ball") return false;
         return this.canMoveView() && (!get(mapEditorModeStore) || get(mapExplorationModeStore));
     }
 

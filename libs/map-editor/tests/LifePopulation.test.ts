@@ -458,3 +458,15 @@ describe("stepPopulation", () => {
         });
     });
 });
+
+describe("waterBodiesOf", () => {
+    it("leaves the excluded cells (the pools) out of the water of the fish, however deep", () => {
+        const grid = gridOf(["dddd", "dddd"]);
+        const pool = (cellX: number): boolean => cellX >= 2;
+        const bodies = waterBodiesOf(grid, (cellX) => pool(cellX));
+        expect(bodies.bodyAt(0, 0)).toBeGreaterThan(0);
+        expect(bodies.bodyAt(2, 0)).toBe(0);
+        expect(bodies.swimmable(3, 1, 8)).toBe(false);
+        expect(waterBodiesOf(grid).bodyAt(2, 0)).toBeGreaterThan(0);
+    });
+});

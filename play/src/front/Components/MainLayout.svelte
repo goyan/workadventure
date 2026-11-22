@@ -104,6 +104,7 @@
     import AudioStreamWrapper from "./Video/PictureInPicture/AudioStreamWrapper.svelte";
     import RaisedHandsDock from "./Video/RaisedHandsDock.svelte";
     import WorldClock from "./ActionsMenu/WorldClock.svelte";
+    import RainbowButton from "./ActionsMenu/RainbowButton.svelte";
     import FloorLevelStack from "./Floors/FloorLevelStack.svelte";
     import JamDrawer from "./ListeningZone/JamDrawer.svelte";
     import JamAudioPlayback from "./ListeningZone/JamAudioPlayback.svelte";
@@ -533,7 +534,7 @@
                     class="flex flex-col items-end gap-2 @md/main-layout:flex-row-reverse @md/main-layout:items-start"
                     data-testid="clock-line"
                 >
-                    <div class="pointer-events-auto"><WorldClock /></div>
+                    <div class="pointer-events-auto flex items-center gap-2"><RainbowButton /><WorldClock /></div>
                     <!-- The floors of the map, the one of the avatar marked; in the map editor, the level it works on. -->
                     <FloorLevelStack
                         stack={$floorLevelsStore}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     altitudeGrowth,
+    BANK_MOISTURE,
     DRYING_SECONDS,
     GRASS_LINE_PX,
     GRAZE_SECONDS,
@@ -10,6 +11,7 @@ import {
     seasonGrowth,
 } from "../src/Terrain/Meadow";
 import type { MeadowStepInput } from "../src/Terrain/Meadow";
+import { poolSoilCode } from "../src/Terrain/Pools";
 import { SNOW_FULL_PX, SNOW_LINES, SNOW_PACE, snowCover, snowPace } from "../src/Terrain/SnowLine";
 import { soilCode } from "../src/Terrain/Soils";
 import { cellKey, withHeights, withSoils } from "../src/Terrain/TerrainGrid";
@@ -424,5 +426,36 @@ describe("the dryness of the grass", () => {
         expect(meadow.drynessAt(3, 2)).toBeGreaterThan(0.2);
         expect(meadow.drynessAt(3, 2)).toBeLessThan(0.7);
         for (const x of [4, 6, 10]) expect(meadow.drynessAt(x, 2)).toBeGreaterThan(0.8);
+    });
+});
+
+describe("the banks of the water", () => {
+    it("moisten along a lake, not along a pool: its basin is watertight", () => {
+        // The column 0 holds water 20 px deep: a lake on bare ground, or the water of a pool painted there.
+        const pool = withSoils(undefined, new Map([...tile(0, 0, poolSoilCode(0)), ...tile(0, 1, poolSoilCode(0))]));
+        const sealed = new Meadow({ width: 6, height: 2 }, pool, undefined);
+        const open = new Meadow({ width: 6, height: 2 }, undefined, undefined);
+        run(sealed, 60, lake);
+        run(open, 60, lake);
+        expect(open.moistureAt(1, 0)).toBeGreaterThanOrEqual(BANK_MOISTURE[0]);
+        expect(sealed.moistureAt(1, 0)).toBeLessThan(0.05);
+        expect(sealed.moistureAt(2, 0)).toBeLessThan(0.05);
+    });
+});
+
+describe("the capillary fringe of a sand", () => {
+    it("wets a sand a tile from the water, not three: a sand draws water up a few decimetres only", () => {
+        // A beach: sand on every tile, a lake on the column 0.
+        const cells: [string, number][] = [];
+        for (let x = 0; x < 6; x++) for (let y = 0; y < 2; y++) cells.push(...tile(x, y, soilCode("sand")));
+        const beach = new Meadow({ width: 6, height: 2 }, withSoils(undefined, new Map(cells)), undefined);
+        const earth = new Meadow({ width: 6, height: 2 }, undefined, undefined);
+        run(beach, 120, lake);
+        run(earth, 120, lake);
+        expect(beach.moistureAt(1, 0)).toBeGreaterThanOrEqual(BANK_MOISTURE[0] - 0.05);
+        expect(beach.moistureAt(2, 0)).toBeLessThan(0.2);
+        expect(beach.moistureAt(3, 0)).toBeLessThan(0.05);
+        // An earth keeps its wider fringe.
+        expect(earth.moistureAt(2, 0)).toBeGreaterThanOrEqual(BANK_MOISTURE[1] - 0.05);
     });
 });

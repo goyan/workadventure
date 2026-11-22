@@ -499,6 +499,9 @@ message UpdateWaterSettingMessage {
   optional int32 updates = 14;
   // How fast the water with inertia flows next to reality (WaterSettings.flowPace). Absent from older clients: kept.
   optional double flowPace = 15;
+  // How far the blast of a meteor fallen in the water drives it away, in times the radius of its crater
+  // (WaterSettings.impactReach). Absent from older clients: kept.
+  optional double impactReach = 16;
 }
 
 // Map-wide weather, validated against WeatherType before it is stored.
@@ -877,6 +880,12 @@ enum CatastropheKind {
   CATASTROPHE_DRAIN = 3;
   // A burning meteor: it sets its crater on fire, throws embers around and boils away the water it falls into.
   CATASTROPHE_FIREBALL = 4;
+  // A ball: a solid sphere held under the pointer of a player, its centre at the altitude 0 of the map, for as long
+  // as they keep telling. It takes the place of the water, which the server alone moves.
+  CATASTROPHE_BALL = 5;
+  // Ice that gives way under a player: too thin to bear them over deep water, it cracks, then breaks around the
+  // point. The server breaks the ice it keeps there (as a meteor does) and tells the room, which sees the hole.
+  CATASTROPHE_ICE_BREAK = 6;
 }
 
 // Browser to server: a player sets the conditions the fire of the room goes by (heat, humidity of the air, wind) by
@@ -911,11 +920,13 @@ message LaunchCatastropheMessage {
   CatastropheKind kind = 1;
   int32 x = 2;
   int32 y = 3;
-  // A meteor: the radius of its crater, in tiles. A downpour, a drain: the radius of its disc. The server keeps it
-  // within what each may be.
+  // A meteor: the radius of its crater, in tiles. A downpour, a drain: the radius of its disc. A ball: its
+  // diameter. The server keeps it within what each may be.
   int32 radiusTiles = 4;
   // A downpour: it falls on the whole map instead of a disc.
   bool wholeMap = 5;
+  // A ball: its player lets it go. It is gone at once.
+  bool release = 6;
 }
 
 // Server to room: a catastrophe is on its way.
@@ -930,6 +941,10 @@ message CatastropheMessage {
   // A downpour: it falls on the whole map. Its `id` stays the same from a message to the next while it goes on, and
   // `impactInMs` is how long it still rains when no other message comes.
   bool wholeMap = 7;
+  // A ball: it is at `x`, `y`, `radiusTiles` across (its diameter), under the pointer of the player `userId`, and
+  // stands `impactInMs` more when no other message comes: 0 when its player let it go.
+  reserved 8, 9, 10;
+  optional int32 userId = 11;
 }
 
 // A player casts their fishing line: where the float lands, in map pixels. The server decides whether it does
@@ -1072,6 +1087,9 @@ message MeadowMessage {
   // A byte a tile, the snow lying on it (snowByte in libs/map-editor: 0 none, 255 the most a tile holds), row by row,
   // gzipped. Empty when no snow lies on the map, and from an older server.
   bytes snow = 8;
+  // A byte a tile, the ice over the water lying on it (iceByte in libs/map-editor: 0 none, 255 the thickest), row by
+  // row, gzipped. Empty when no water of the map is frozen, and from an older server.
+  bytes ice = 9;
 }
 
 // The water of the relief of the map (WaterGrid in libs/map-editor): the depth of the water over each cell of a
@@ -1089,6 +1107,9 @@ message TerrainWaterMessage {
   // Two bytes a cell (eighths of a pixel of water, low byte first), row by row, gzipped.
   bytes depths = 7;
   optional TerrainWaterStatsMessage stats = 8;
+  // The speed of the water, on a map whose water has inertia: two signed bytes a block of 4 x 4 cells (towards
+  // the east, towards the south, in quarters of a cell a second), row by row, gzipped. Absent: none is known.
+  optional bytes speeds = 9;
 }
 
 // The animals living in the water of the relief of a room (fish, dolphins), told by the server once a second: all

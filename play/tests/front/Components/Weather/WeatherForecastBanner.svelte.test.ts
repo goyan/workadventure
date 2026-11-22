@@ -24,9 +24,14 @@ const place = vi.hoisted((): { value: { name: string } | undefined } => ({ value
 const clock = vi.hoisted((): { store: Writable<Date | undefined> | undefined } => ({ store: undefined }));
 const chosen = vi.hoisted(
     (): {
-        place: { store: Writable<{ name: string; latitude: number; longitude: number } | undefined> | undefined };
+        place: {
+            store:
+                | Writable<{ name: string; longName?: string; latitude: number; longitude: number } | undefined>
+                | undefined;
+        };
+        state: { store: Writable<{ place: unknown; state: unknown }> | undefined };
         cells: { at: number; weather?: string; temperature?: number; windSpeed?: number; windFrom?: number }[];
-    } => ({ place: { store: undefined }, cells: [] }),
+    } => ({ place: { store: undefined }, state: { store: undefined }, cells: [] }),
 );
 
 vi.mock("../../../../src/i18n/i18n-svelte", () => {
@@ -123,12 +128,14 @@ vi.mock("../../../../src/front/Stores/NightStore", async () => {
 });
 
 vi.mock("../../../../src/front/Phaser/Game/Weather/ChosenPlaceWeather", async () => {
-    const { readable: makeReadable, writable: makeWritable } = await import("svelte/store");
+    const { writable: makeWritable } = await import("svelte/store");
     const place = makeWritable<{ name: string; latitude: number; longitude: number } | undefined>(undefined);
     chosen.place.store = place;
+    const state = makeWritable<{ place: unknown; state: unknown }>({ place: undefined, state: { status: "pending" } });
+    chosen.state.store = state;
     return {
         chosenPlaceStore: place,
-        chosenWeatherStateStore: makeReadable({ place: undefined, state: { status: "pending" } }),
+        chosenWeatherStateStore: state,
         chosenPlaceForecast: () => chosen.cells,
     };
 });
@@ -177,6 +184,7 @@ function banner(): HTMLElement | null {
 beforeEach(() => {
     localStorage.removeItem("weatherCardsOpen");
     chosen.place.store?.set(undefined);
+    chosen.state.store?.set({ place: undefined, state: { status: "pending" } });
     chosen.cells = [];
     fireConditionsStore.set(undefined);
     place.value = undefined;
@@ -456,9 +464,66 @@ describe("WeatherForecastBanner", () => {
         ).toBe("Now -3°");
     });
 
+    it("names a point far from any city by the city it is told against on the chip, with its coordinates on the card", () => {
+        chosen.cells = [{ at: NOW.getTime(), weather: "snow", temperature: -34 }];
+        render(false);
+        chosen.place.store?.set({
+            name: "Auckland 4,000 km",
+            longName: "72° S 170° E · Auckland 4,000 km away",
+            latitude: -72.4,
+            longitude: 170.2,
+        });
+        flushSync();
+        // Whole, though English groups thousands with a comma: a point's name is never cut as a town's.
+        expect(target.querySelector('[data-testid="weather-chip-local"]')?.textContent?.trim()).toBe(
+            "Auckland 4,000 km",
+        );
+        chip()?.click();
+        flushSync();
+        expect(target.querySelector('[data-testid="weather-card-local-city"]')?.textContent).toBe(
+            "72° S 170° E · Auckland 4,000 km away",
+        );
+    });
+
     it("shows no badge while the player follows the server: there is one weather only", () => {
         render();
         expect(target.querySelector('[data-testid="weather-card-server-kind"]')).toBeNull();
         expect(target.querySelector('[data-testid="weather-card-local"]')).toBeNull();
+    });
+
+    it("adds the humidity of the city this player follows to their own weather, for now only, when known", () => {
+        const lille = { name: "Lille, Hauts-de-France, France", latitude: 50.6, longitude: 3.1 };
+        chosen.cells = [
+            { at: NOW.getTime(), weather: "cloudy", temperature: -34, windSpeed: 15, windFrom: 315 },
+            { at: NOW.getTime() + HOUR, weather: "cloudy", temperature: -33 },
+        ];
+        chosen.place.store?.set(lille);
+        render();
+        const localCells = (): NodeListOf<Element> | undefined =>
+            target
+                .querySelector('[data-testid="weather-card-local"]')
+                ?.querySelectorAll('[data-testid="weather-banner-cell"]');
+        // The weather of the city not known yet: no humidity is made up.
+        expect(localCells()?.[0]?.querySelector('[data-testid="weather-banner-humidity"]')).toBeNull();
+        const quarter = Math.floor(NOW.getTime() / (15 * 60 * 1000)) * 15 * 60 * 1000;
+        chosen.state.store?.set({
+            place: lille,
+            state: {
+                status: "known",
+                slots: [{ at: quarter, weather: "cloudy", temperature: -34, humidity: 79.6, windSpeed: 15 }],
+            },
+        });
+        flushSync();
+        const now = localCells()?.[0];
+        expect(now?.querySelector('[data-testid="weather-banner-humidity"]')?.textContent).toBe("80 % humidity");
+        // The arrow and the wind text stay together, the humidity after them.
+        expect(
+            now?.querySelector('[data-testid="weather-banner-wind-group"] [data-testid="weather-banner-wind"]'),
+        ).not.toBeNull();
+        expect(localCells()?.[1]?.textContent).not.toContain("humidity");
+        // Another city than the one known: its humidity is not shown for this one.
+        chosen.place.store?.set({ name: "Auckland", latitude: -77.8, longitude: 166.7 });
+        flushSync();
+        expect(localCells()?.[0]?.querySelector('[data-testid="weather-banner-humidity"]')).toBeNull();
     });
 });

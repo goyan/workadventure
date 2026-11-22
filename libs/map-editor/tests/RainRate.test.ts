@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { rainRateAt, STORM_RAIN_RATE, USUAL_RAIN_RATE } from "../src/Weather/RainRate";
-import { slotsFromOpenMeteo } from "../src/Weather/RealWeather";
+import { slotsFromOpenMeteo, historySlotsFromOpenMeteo } from "../src/Weather/RealWeather";
 import { autoWeatherAt } from "../src/Weather/WeatherSchedule";
 import { WeatherType } from "../src/types";
 
@@ -86,5 +86,24 @@ describe("rainRateAt", () => {
     it("never gives a broken rate", () => {
         expect(rainRateAt({ weather: WeatherType.Rain }, Number.NaN, undefined)).toBe(2);
         expect(rainRateAt({ weather: WeatherType.Automatic }, Number.NaN, undefined)).toBe(0);
+    });
+});
+
+describe("historySlotsFromOpenMeteo", () => {
+    it("gives each past hour as four quarter hours, its rain an hour as it is", () => {
+        const slots = historySlotsFromOpenMeteo({
+            hourly: {
+                time: [3600, 7200],
+                weather_code: [61, 0],
+                temperature_2m: [4, -2],
+                precipitation: [2, 0],
+                relative_humidity_2m: [90, 60],
+            },
+        });
+        expect(slots).toHaveLength(8);
+        expect(slots?.[0]).toMatchObject({ at: 3_600_000, temperature: 4, rainRate: 2, humidity: 90 });
+        expect(slots?.[3].at).toBe(3_600_000 + 3 * 15 * 60 * 1000);
+        expect(slots?.[4]).toMatchObject({ at: 7_200_000, temperature: -2 });
+        expect(historySlotsFromOpenMeteo({ minutely_15: {} })).toBeUndefined();
     });
 });

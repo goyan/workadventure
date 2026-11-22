@@ -2,7 +2,9 @@ import path from "path";
 import {
     isAtAreaLevel,
     canUpdateListeningZoneJams,
+    boundedFireConditions,
     fireDanger,
+    NEUTRAL_FIRE_CONDITIONS,
     GameMapProperties,
     LISTENING_ZONE_JAM_VARIABLE,
     parseListeningZoneJams,
@@ -363,13 +365,22 @@ export class GameRoom implements BrothersFinder {
         gameRoom.terrainWater = terrainWater;
 
         // The meteors that fall on that water; the map size is passed in pixels.
+        // The ice a comet breaks is kept by the meadow, made further down: it is given there.
+        let breakIce: (x: number, y: number, radiusTiles: number) => void = () => undefined;
         const catastrophes = new CatastropheManager(
             gameRoom,
             gameRoom.mapSizeInPixels.bind(gameRoom),
-            terrainWater.strike.bind(terrainWater),
+            // A comet takes the water of its crater, and breaks the ice on it.
+            (x, y, radiusTiles) => {
+                terrainWater.strike(x, y, radiusTiles);
+                breakIce(x, y, radiusTiles);
+            },
         );
         terrainWater.setDownpours(() => catastrophes.downpours());
         terrainWater.setDrains(() => catastrophes.drains());
+        terrainWater.setBalls(() => catastrophes.balls());
+        // A door holds the water while it is closed: it opens for the avatars that stand in its passage.
+        terrainWater.setWalkers(gameRoom.groundAvatarPositions.bind(gameRoom));
         gameRoom.catastrophes = catastrophes;
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => catastrophes.stop());
@@ -447,6 +458,37 @@ export class GameRoom implements BrothersFinder {
             return air ? { ...air, windSpeed: fireConditions.conditions().windSpeed } : undefined;
         });
         meadow.pourWith(terrainWater.pour.bind(terrainWater));
+        // The water of the relief lives the missed time with the meadow: under the same rain of the past.
+        meadow.liveAlong(terrainWater.liveAgain.bind(terrainWater));
+        // A room left empty lives the time it missed: with the weather of the past at the place of a map in real
+        // weather, each quarter hour read as the conditions of the room read the quarter hour of now.
+        meadow.catchUpWith(rainTimelineService.history.bind(rainTimelineService), (slot) => {
+            const conditions = boundedFireConditions(
+                {
+                    temperature: slot.temperature ?? undefined,
+                    humidity: slot.humidity,
+                    windSpeed: slot.windSpeed,
+                    windFrom: slot.windFrom,
+                },
+                NEUTRAL_FIRE_CONDITIONS,
+            );
+            const air =
+                slot.temperature !== null && slot.humidity !== undefined
+                    ? { temperature: slot.temperature, humidity: slot.humidity }
+                    : undefined;
+            return {
+                air,
+                snow: air ? { ...air, windSpeed: conditions.windSpeed } : undefined,
+                fire: {
+                    danger: fireDanger(conditions, fireConditions.thresholds()),
+                    windFrom: conditions.windFrom,
+                    windSpeed: conditions.windSpeed,
+                },
+            };
+        });
+        breakIce = meadow.shatter.bind(meadow);
+        // The ice that gives way under a player is the ice the meadow keeps, broken as by a comet.
+        catastrophes.breakIceWith(meadow.shatter.bind(meadow));
         // The animals of the map run from the fire of its grass and of its trees.
         aquaticLife.followFire(() => meadow.lifeFire());
         gameRoom.meadow = meadow;
@@ -1357,8 +1399,9 @@ export class GameRoom implements BrothersFinder {
         y: number,
         radiusTiles: number,
         wholeMap: boolean,
+        release = false,
     ): void {
-        this.catastrophes?.request(user.id, kind, x, y, radiusTiles, wholeMap);
+        this.catastrophes?.request(user.id, kind, x, y, radiusTiles, wholeMap, release);
     }
 
     /** A player casts their fishing line at a point of the map. */

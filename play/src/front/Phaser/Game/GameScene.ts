@@ -34,12 +34,15 @@ import {
     GameMap,
     GameMapProperties,
     GRAZING_COVER,
+    heightAt,
     type LifeFire,
     lifeFireOf,
     listeningZoneJamKey,
     type Season,
     seasonAt,
+    snowCoverOf,
     snowShareOf,
+    TERRAIN_CELL,
     type WAMFileFormat,
     WAMSettingsUtils,
     WeatherType,
@@ -178,6 +181,7 @@ import {
     mapEditorWamSettingsEditorToolCurrentMenuItemStore,
     WAM_SETTINGS_EDITOR_TOOL_MENU_ITEM,
 } from "@wa/front/Stores/MapEditorStore";
+import { heldBallStore } from "@wa/front/Stores/CatastropheStore";
 import { refreshPromptStore } from "@wa/front/Stores/RefreshPromptStore";
 import { mapDeletedPromptStore } from "@wa/front/Stores/MapDeletedPromptStore";
 import { SpaceRegistry } from "@wa/front/Space/SpaceRegistry/SpaceRegistry";
@@ -311,7 +315,7 @@ import { jungleEnabledStore } from "../../Stores/JungleStore";
 import { isEffectShown, pixelReliefStore } from "../../Stores/EffectsStore";
 import { fireConditionsStore } from "../../Stores/FireConditionsStore";
 import { isBasicActive } from "../../Stores/BasicModeStore";
-import { waterFlowOverlayStore } from "../../Stores/VisualisationStore";
+import { waterFlowMeasuredStore, waterFlowOverlayStore } from "../../Stores/VisualisationStore";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -388,9 +392,10 @@ import { WeatherManager } from "./Weather/WeatherManager";
 import { TerrainWater } from "./Terrain/TerrainWater";
 import { AquaticLife } from "./Life/AquaticLife";
 import { AquaticLifeView } from "./Life/AquaticLifeView";
-import { isOnFrozenWater, isPoolFrozen } from "./Ice/FrozenWater";
+import { iceUnderfoot, isOnFrozenWater, isPoolFrozen, poolIceState } from "./Ice/FrozenWater";
+import { IceBreaks } from "./Ice/IceBreaks";
 import { FrozenPoolsView } from "./Ice/FrozenPoolsView";
-import { getFrozenPoolRectangles } from "./Water/WaterZones";
+import { BODY_CENTER_OFFSET_Y, getFrozenPoolRectangles, isPointInWater } from "./Water/WaterZones";
 import { LandLifeView } from "./Life/LandLifeView";
 import { GullLifeView, isGullKind } from "./Life/GullLifeView";
 import { LandCompanions } from "./Life/LandCompanions";
@@ -444,6 +449,8 @@ import { WaveManager } from "./Wave/WaveManager";
 import { NerfManager } from "./Nerf/NerfManager";
 import { TorchManager } from "./Torch/TorchManager";
 import { TORCH_EQUIPPED_VARIABLE, TORCH_INTENSITY_VARIABLE } from "./Torch/TorchProtocol";
+import { PERCEPTION_VARIABLE } from "./Perception/PerceptionProtocol";
+import { PerceptionManager } from "./Perception/PerceptionManager";
 import { FishingManager } from "./Fishing/FishingManager";
 import { MeteorView } from "./Catastrophe/MeteorView";
 import { FireView } from "./Fire/FireView";
@@ -451,6 +458,7 @@ import { TreeFireState } from "./Fire/TreeFireState";
 import { TreeFireView } from "./Fire/TreeFireView";
 import { DownpourView } from "./Catastrophe/DownpourView";
 import { DrainView } from "./Catastrophe/DrainView";
+import { BallView } from "./Catastrophe/BallView";
 import { FireTorchView } from "./Catastrophe/FireTorchView";
 import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
 import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
@@ -525,6 +533,9 @@ const METEOR_WET_DEPTH_PX = 2;
 interface PixelRelief extends PixelGround {
     tiles: ReliefTiles;
 }
+
+/** How long the map waits, at most, for the meadow and the water sent on joining before it is shown. */
+const FIRST_GROUND_WAIT_MS = 2000;
 
 export class GameScene extends DirtyScene {
     Terrains: Array<Tileset>;
@@ -650,6 +661,7 @@ export class GameScene extends DirtyScene {
     private treeFireView: TreeFireView | undefined;
     private downpourView: DownpourView | undefined;
     private drainView: DrainView | undefined;
+    private ballView: BallView | undefined;
     private fireTorchView: FireTorchView | undefined;
     private catastropheSubscription: Subscription | undefined;
     /** The animals of the water of the relief, as the server tells them. */
@@ -713,6 +725,7 @@ export class GameScene extends DirtyScene {
     private _waveManager: WaveManager | undefined;
     private _nerfManager: NerfManager | undefined;
     private _torchManager: TorchManager | undefined;
+    private _perceptionManager: PerceptionManager | undefined;
     private _fishingManager: FishingManager | undefined;
     private karaokeSpotlight: KaraokeSpotlight | undefined;
     private _coffeeManager: CoffeeManager | undefined;
@@ -1378,6 +1391,7 @@ export class GameScene extends DirtyScene {
                         }
 
                         this.joinRoom()
+                            .then(() => this.groundStatesOfJoinApplied())
                             .then(() => {
                                 this.initUserPermissionsOnEntity();
                                 this.hide(false);
@@ -1832,6 +1846,8 @@ export class GameScene extends DirtyScene {
         nerfEquippedStore.set(false);
         this._torchManager?.destroy();
         this._torchManager = undefined;
+        this._perceptionManager?.destroy();
+        this._perceptionManager = undefined;
         this.karaokeSpotlight?.destroy();
         this.karaokeSpotlight = undefined;
         torchEquippedStore.set(false);
@@ -1849,6 +1865,8 @@ export class GameScene extends DirtyScene {
         this.downpourView = undefined;
         this.drainView?.destroy();
         this.drainView = undefined;
+        this.ballView?.destroy();
+        this.ballView = undefined;
         this.fireTorchView?.destroy();
         this.fireTorchView = undefined;
         rodEquippedStore.set(false);
@@ -2171,26 +2189,25 @@ export class GameScene extends DirtyScene {
         return feet;
     }
 
-    /** Feet of the players who leave footprints: everyone but the riders and the skaters. */
+    /**
+     * Feet of the players who leave footprints, and the wheels of those who ride on the ground: one track for an
+     * electric unicycle, two for a skateboard. Nothing from a skater on the ice, a canoe or a plane.
+     */
     private seasonalWalkers(): WalkerSample[] {
         const walkers: WalkerSample[] = [];
-        if (takesSteps(this.CurrentPlayer)) {
+        const sample = (id: string, character: Character & { isRunning(): boolean }): void => {
+            const wheels = groundWheelsOf(character);
+            if (wheels === undefined && !takesSteps(character)) return;
             walkers.push({
-                id: "local",
-                x: this.CurrentPlayer.x,
-                y: this.CurrentPlayer.y + CHARACTER_BODY_OFFSET_Y,
-                running: this.CurrentPlayer.isRunning(),
+                id,
+                x: character.x,
+                y: character.y + CHARACTER_BODY_OFFSET_Y,
+                running: character.isRunning(),
+                ...(wheels !== undefined && { wheels }),
             });
-        }
-        for (const player of this.MapPlayersByKey.values()) {
-            if (!takesSteps(player)) continue;
-            walkers.push({
-                id: String(player.userId),
-                x: player.x,
-                y: player.y + CHARACTER_BODY_OFFSET_Y,
-                running: player.isRunning(),
-            });
-        }
+        };
+        sample("local", this.CurrentPlayer);
+        for (const player of this.MapPlayersByKey.values()) sample(String(player.userId), player);
         return walkers;
     }
 
@@ -2407,10 +2424,12 @@ export class GameScene extends DirtyScene {
             this._fishingManager?.update(time);
             this.meteorView?.update(time);
             this.terrainView?.setWaterRings(this.meteorView?.waterRings(time) ?? []);
+            this.stepIceBreaks(time);
             this.fireView?.update(time);
             this.treeFireView?.update(time);
             this.downpourView?.update(time);
             this.drainView?.update(time);
+            this.ballView?.update(time);
             this.fireTorchView?.update(time);
             this.nightManager?.update(time);
             this.lampManager?.update(time);
@@ -2434,9 +2453,16 @@ export class GameScene extends DirtyScene {
                 this.nightManager?.isNight(),
                 this.nightManager?.sunPosition(),
             );
+            // After the weather: the textures of the clouds it drew this time (one may have just been made again).
+            if (this.weatherManager) {
+                this.terrainView?.setWaterReflection(
+                    this.weatherManager.waterReflection(this.nightManager?.lampReflection()),
+                );
+            }
             // The relief may have been edited: the water follows it (nothing is done while it stays the same).
             const terrain = this.getGameMap().getWamFile()?.getWam().terrain;
             this.terrainWater.setTerrain(terrain);
+            this.terrainWater.setPools(this.getGameMap().getWamFile()?.getWam().settings?.pools);
             // Told under the clock, with the floor of the avatar.
             avatarAltitudeStore.set(
                 avatarAltitude(terrain, this.CurrentPlayer.x, this.CurrentPlayer.y, this.CurrentPlayer.getFloorZ()),
@@ -2744,6 +2770,8 @@ export class GameScene extends DirtyScene {
         character.setNerfEquipped(update.player.variables.get(NERF_EQUIPPED_VARIABLE));
         character.setNerfHearts(update.player.variables.get(NERF_HEARTS_VARIABLE));
         character.setTorchEquipped(update.player.variables.get(TORCH_EQUIPPED_VARIABLE));
+        character.setPerception(update.player.variables.get(PERCEPTION_VARIABLE));
+        this._perceptionManager?.refresh(character);
         character.setRodEquipped(update.player.variables.get(ROD_EQUIPPED_VARIABLE));
         character.setFloorZ(decodeFloorZ(update.player.variables.get(FLOOR_Z_VARIABLE)));
         character.setTorchIntensity(update.player.variables.get(TORCH_INTENSITY_VARIABLE));
@@ -3082,11 +3110,25 @@ export class GameScene extends DirtyScene {
         aquaticLifeSpeciesStore.set(message.stats ? this.aquaticLifeSpecies.view(Date.now()) : undefined);
     }
 
+    /**
+     * The meadow and the water the room sent on joining are unzipped asynchronously: the map waits for them before
+     * being shown, so its grass, snow and water do not pop in after it. Never longer than FIRST_GROUND_WAIT_MS.
+     */
+    private groundStatesOfJoinApplied(): Promise<void> {
+        return Promise.race([
+            Promise.all([this.meadowQueue, this.terrainWaterQueue]).then(() => undefined),
+            new Promise<void>((resolve) => {
+                setTimeout(resolve, FIRST_GROUND_WAIT_MS);
+            }),
+        ]);
+    }
+
     private receiveTerrainWater(message: TerrainWaterMessage): void {
         this.terrainWaterQueue = this.terrainWaterQueue
             .then(async () => {
                 const depths = await gunzip(message.depths);
-                this.terrainWater.receive({ ...message, depths }, this.time.now);
+                const speeds = message.speeds ? await gunzip(message.speeds) : undefined;
+                this.terrainWater.receive({ ...message, depths, speeds }, this.time.now);
                 if (message.stats) terrainWaterStatsStore.set(message.stats);
             })
             .catch((error: unknown) => console.warn("A state of the water of the relief could not be read", error));
@@ -3104,13 +3146,14 @@ export class GameScene extends DirtyScene {
                 // The dryness, the fire and the ash are empty from a server that does not know them.
                 const read = (bytes: Uint8Array): Promise<Uint8Array> =>
                     bytes.length > 0 ? gunzip(bytes) : Promise.resolve(new Uint8Array(0));
-                const [grass, moisture, dryness, fire, ash, snow] = await Promise.all([
+                const [grass, moisture, dryness, fire, ash, snow, ice] = await Promise.all([
                     gunzip(message.grass),
                     gunzip(message.moisture),
                     read(message.dryness),
                     read(message.fire),
                     read(message.ash),
                     read(message.snow),
+                    read(message.ice),
                 ]);
                 this.meadow.receive({
                     width: message.width,
@@ -3121,6 +3164,7 @@ export class GameScene extends DirtyScene {
                     fire,
                     ash,
                     snow,
+                    ice,
                 });
             })
             .catch((error: unknown) => console.warn("A state of the meadow of the map could not be read", error));
@@ -3346,6 +3390,33 @@ export class GameScene extends DirtyScene {
     }
 
     /** Whether a point of the map (pixels) is in or near an open drain: the current carries no avatar there. */
+    /** The ice that cracks and gives way under the avatar, and the holes open in it (IceBreaks.ts). */
+    private readonly iceBreaks = new IceBreaks();
+
+    public getIceBreaks(): IceBreaks {
+        return this.iceBreaks;
+    }
+
+    /**
+     * The ice under the avatar, once an image: thin ice cracks under them, then gives way (the room is told when it
+     * is the ice of the server, the same for everyone); the water shader draws the cracks and the holes.
+     */
+    private stepIceBreaks(now: number): void {
+        const foot = { x: this.CurrentPlayer.x, y: this.CurrentPlayer.y + BODY_CENTER_OFFSET_Y };
+        const pool = getFrozenPoolRectangles(this).find((rectangle) => isPointInWater([rectangle], foot));
+        const thin = pool ? poolIceState(this, pool) === "thin" : iceUnderfoot(this, foot) === "thin";
+        const wasActive = this.iceBreaks.active();
+        const broken = this.iceBreaks.step(now, foot, thin);
+        if (broken && followsServerGround()) {
+            this.connection?.emitLaunchCatastrophe(CatastropheKind.CATASTROPHE_ICE_BREAK, broken.x, broken.y, 1);
+        }
+        const active = this.iceBreaks.active();
+        if (active || wasActive) {
+            this.terrainView?.setIceBreaks(this.iceBreaks.shown(now));
+            this.markDirty();
+        }
+    }
+
     /** Whether the water of the relief is frozen there for this player (FrozenWater.ts): skated on, not swum in. */
     public isFrozenWaterAt(x: number, y: number): boolean {
         return isOnFrozenWater(this, { x, y });
@@ -3408,7 +3479,7 @@ export class GameScene extends DirtyScene {
      * and the ice whiten with it.
      */
     public getMapSnowCoverage(): number {
-        return this.winterThemeShown() ? 1 : snowCoverOfMap(this.meadow);
+        return this.winterThemeShown() ? 1 : snowCoverOfMap(this.meadow, this.ownSnowCover());
     }
 
     /**
@@ -3419,9 +3490,17 @@ export class GameScene extends DirtyScene {
         return this.getSeasonalTheme() === SeasonalTheme.Christmas;
     }
 
+    /** The snow of their own city on the ground of a player who follows one (Frost.ts), 0 to 1; none otherwise. */
+    private ownSnowCover(): number {
+        return snowCoverOf(waterCycleNow(this.getGameMap().getWamFile()?.getWam().settings).snowMm);
+    }
+
     /** How much the snow that fell whitens the ground at a point of the map for this player, 0 to 1: it slows the walk. */
     public getSnowCoverAt(x: number, y: number): number {
-        return snowCoverHere(this.meadow, x, y);
+        return snowCoverHere(this.meadow, x, y, {
+            cover: this.ownSnowCover(),
+            outdoors: this.getOutdoorGrid()?.isOutdoorAt(x, y) ?? true,
+        });
     }
 
     public getGameMap(): GameMap {
@@ -4108,6 +4187,11 @@ export class GameScene extends DirtyScene {
                     },
                     seasonalTheme: () => this.getSeasonalTheme(),
                     snowShare: () => this.getSnowShare(),
+                    precipitationAir: () =>
+                        precipitationAirNow(
+                            this.getGameMap().getWamFile()?.getWam().settings,
+                            this.nightManager?.serverDate(),
+                        ),
                 });
                 // The ground outdoors in pixel art, its relief and the water of its hollows: the soils, the meadow, the
                 // grass tiles of the map and the snow of the winter, in the season of the theme.
@@ -4134,6 +4218,10 @@ export class GameScene extends DirtyScene {
                     undefined,
                     this.meadow,
                     () => this.getGroundSeason(),
+                    () => {
+                        const weather = this.shownWeather();
+                        return weather ? { speed: weather.windSpeed, from: weather.windFrom } : undefined;
+                    },
                     () => this.pixelBlocksShown(),
                     () => this.groundEngine() === "oblique",
                     () => this.winterThemeShown(),
@@ -4165,6 +4253,9 @@ export class GameScene extends DirtyScene {
                     waves: () => this.getGameMap().getWamFile()?.getWam().settings?.water?.waves,
                     pace: () => this.getGameMap().getWamFile()?.getWam().settings?.water?.flowPace,
                     shown: () => get(waterFlowOverlayStore) && !isBasicActive(),
+                    measured: (measured) => {
+                        if (get(waterFlowMeasuredStore) !== measured) waterFlowMeasuredStore.set(measured);
+                    },
                 });
                 // The fish and the dolphins of that water.
                 this.aquaticLifeView?.destroy();
@@ -4363,13 +4454,17 @@ export class GameScene extends DirtyScene {
                             ),
                         };
                     },
-                    isWet: (x, y) => isGroundUnderWater(this, this.terrainWater, x, y),
+                    // Frozen water takes the leaves and the footprints as the ground does.
+                    isWet: (x, y) => isGroundUnderWater(this, this.terrainWater, x, y) && !this.isFrozenWaterAt(x, y),
                     waterVersion: () => this.terrainWater.version(),
                     // No frost is drawn on the blocks of the relief: no footprint on it either (they have their own).
                     frost: () =>
                         this.pixelBlocksShown()
                             ? 0
                             : waterCycleNow(this.getGameMap().getWamFile()?.getWam().settings).frost,
+                    // The same for the footprints in the snow: the blocks lay their own.
+                    snowCover: () => (this.pixelBlocksShown() ? 0 : this.getMapSnowCoverage()),
+                    snowAt: (x, y) => this.getSnowCoverAt(x, y),
                 });
                 // Same: one event subscription and one timer at a time.
                 this._knockManager?.destroy();
@@ -4538,6 +4633,7 @@ export class GameScene extends DirtyScene {
         this.entityStatesManager = new EntityStatesManager(this.connection, room.entityStates);
         // The water of the relief: what the room holds now, then every change.
         this.terrainWater.setTerrain(this.getGameMap().getWamFile()?.getWam().terrain);
+        this.terrainWater.setPools(this.getGameMap().getWamFile()?.getWam().settings?.pools);
         if (room.terrainWater) this.receiveTerrainWater(room.terrainWater);
         this.terrainWaterSubscription?.unsubscribe();
         this.terrainWaterSubscription = this.connection.terrainWaterMessageStream.subscribe((message) => {
@@ -4624,6 +4720,8 @@ export class GameScene extends DirtyScene {
         this._nerfManager = new NerfManager(this);
         this._torchManager?.destroy();
         this._torchManager = new TorchManager(this);
+        this._perceptionManager?.destroy();
+        this._perceptionManager = new PerceptionManager(this);
         this._fishingManager?.destroy();
         this._fishingManager = new FishingManager(this, room.fishing);
         this.catastropheSubscription?.unsubscribe();
@@ -4674,6 +4772,23 @@ export class GameScene extends DirtyScene {
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
         );
         this.drainView = drainView;
+        this.ballView?.destroy();
+        const ballView = new BallView(
+            this,
+            // The ground as the water of the server reads it, and the water it last told.
+            (x, y) => ({
+                groundPx: heightAt(
+                    this.terrainWater.basin(),
+                    Math.floor(x / TERRAIN_CELL),
+                    Math.floor(y / TERRAIN_CELL),
+                ),
+                waterPx: this.terrainWater.settledDepthAt(x, y),
+            }),
+            () => this.terrainWater.version(),
+            () => this.connection?.getUserId(),
+            () => get(heldBallStore),
+        );
+        this.ballView = ballView;
         this.fireTorchView?.destroy();
         const fireTorchView = new FireTorchView(
             this,
@@ -4683,8 +4798,12 @@ export class GameScene extends DirtyScene {
         this.catastropheSubscription = this.connection?.catastropheMessageStream.subscribe((message) => {
             if (message.kind === CatastropheKind.CATASTROPHE_DOWNPOUR) downpourView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_DRAIN) drainView.report(message, this.time.now);
+            else if (message.kind === CatastropheKind.CATASTROPHE_BALL) ballView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_FIRE) fireTorchView.report(message, this.time.now);
-            else meteorView.add(message, this.time.now);
+            else if (message.kind === CatastropheKind.CATASTROPHE_ICE_BREAK) {
+                // The ice another player broke (or ours, told back): the same hole for everyone.
+                this.iceBreaks.addHole(message.x, message.y, this.time.now);
+            } else meteorView.add(message, this.time.now);
         });
         this.karaokeSpotlight?.destroy();
         this.karaokeSpotlight = new KaraokeSpotlight(this);
@@ -6867,6 +6986,10 @@ ${escapedMessage}
         player.setTorchIntensity(
             this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(TORCH_INTENSITY_VARIABLE),
         );
+        player.setPerception(
+            this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(PERCEPTION_VARIABLE),
+        );
+        this._perceptionManager?.refresh(player);
         player.setRodEquipped(
             this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(ROD_EQUIPPED_VARIABLE),
         );
@@ -7265,4 +7388,12 @@ ${escapedMessage}
     public get focusFx() {
         return this._focusFx;
     }
+}
+
+/** The tracks the wheels of a rider on the ground leave: undefined for one who walks, skates or rides no wheels. */
+function groundWheelsOf(character: Character): 1 | 2 | undefined {
+    if (!character.isRidingVehicle() || character.isOnIce()) return undefined;
+    if (character.vehicle === Vehicle.ElectricUnicycle) return 1;
+    if (character.vehicle === Vehicle.Skateboard) return 2;
+    return undefined;
 }

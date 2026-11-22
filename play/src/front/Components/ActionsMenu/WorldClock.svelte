@@ -61,6 +61,12 @@
     let mapCanvas: HTMLCanvasElement | undefined = $state();
     let mapImage: HTMLImageElement | undefined = $state();
 
+    // The map of the world is loaded with the clock, not at the first opening of its menu (it popped in a moment
+    // later): the image of the menu then comes from the cache.
+    $effect(() => {
+        new Image().src = WORLD_MAP;
+    });
+
     // The map of the world, with the night where it is night now, and the place whose sky is shown.
     $effect(() => {
         const canvas = mapCanvas;
@@ -220,11 +226,15 @@
                                 data-testid="world-clock-city"
                                 data-point="true"
                             >
-                                {$LL.menu.settings.night.worldPointCity({ city: $worldCityStore.name })}
+                                {$LL.menu.settings.night.worldPointCity({
+                                    city: $worldCityStore.longName ?? $worldCityStore.name,
+                                })}
                             </p>
                         {:else if $worldCityStore}
                             <p class="mt-2 px-1 text-xs" data-testid="world-clock-city">
-                                {$LL.menu.settings.night.worldCity({ city: $worldCityStore.name })}
+                                {$LL.menu.settings.night.worldCity({
+                                    city: $worldCityStore.longName ?? $worldCityStore.name,
+                                })}
                             </p>
                         {/if}
                     </div>

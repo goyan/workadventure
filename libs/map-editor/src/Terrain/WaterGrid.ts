@@ -1,9 +1,17 @@
-import { DEFAULT_WATER_SETTINGS, DEFAULT_WAVE_SETTINGS, MAX_WATER_MAX_SURFACE, TERRAIN_CHUNK } from "../types";
+import {
+    DEFAULT_WATER_SETTINGS,
+    DEFAULT_WAVE_SETTINGS,
+    MAX_WATER_MAX_SURFACE,
+    TERRAIN_CELL,
+    TERRAIN_CHUNK,
+} from "../types";
 import type { TerrainData, WaveSettings } from "../types";
 import { CELL_AREA_M2, LITRES_PER_M3, metresOf } from "./Scale";
 import { DEFAULT_SOIL_ROUGHNESS, soilDrinks, soilRoughness } from "./Soils";
 import { cellInMap, cellKey, cellOf, heightAt, reliefCells, soilAt } from "./TerrainGrid";
 import type { MapCells } from "./TerrainGrid";
+import { ballColumn, ballHalfHeight } from "./WaterBall";
+import type { WaterBall } from "./WaterBall";
 
 /** Litres over one cell of the relief under one pixel of water. */
 export const CELL_LITRES_PER_PX = CELL_AREA_M2 * -metresOf(-1) * LITRES_PER_M3;
@@ -115,6 +123,12 @@ const PARCEL_REACH_CELLS = 512;
 const BED_FILM_PX = 2;
 /** Two surfaces this close are level: the water of the one runs to a sink in the other. */
 const LEVEL_PX = 0.05;
+/** A column a ball closed stays closed while its water is within this of the underside of the ball, in pixels. */
+const BALL_TOUCH_PX = 0.01;
+/** The water a ball pushes away is laid within this many cells past the ball. */
+const PUSH_BEYOND_CELLS = 8;
+/** The most balls a grid takes. */
+const MOST_BALLS = 255;
 
 /**
  * The walls the water cannot cross, as sides of cells of the relief (keys of cellKey): `east` holds the cells whose
@@ -221,6 +235,14 @@ const FASTEST_CELLS_PER_MOVE = 0.5;
  * the computation rocks by itself (measured: a small basin never calms down); at a third it calms down.
  */
 const WAVE_CELLS_PER_MOVE = 0.35;
+/**
+ * The speed of the water with inertia is told to the browsers by blocks of this many cells a side, one byte for
+ * each of its two parts (east, south), in this many units a cell a second: within about 32 cells a second, to a
+ * quarter of a cell a second.
+ */
+export const SPEED_BLOCK_CELLS = 4;
+export const SPEED_UNITS = 4;
+
 /** How wide a cell of the relief is, in metres. */
 export const CELL_METRES = Math.sqrt(CELL_AREA_M2);
 
@@ -355,6 +377,11 @@ export function heldFlow(px: number, level: number | undefined, surface: number,
 export interface WaterStepInput {
     /** Rain falling on each dug cell (the runoff of the ground around included). */
     rainPx: number;
+    /**
+     * Rain falling on each sealed cell (see seal): the rain alone, without the runoff of the ground around, which
+     * the coping of a pool keeps out. `rainPx` when absent.
+     */
+    sealedRainPx?: number;
     /** Water lost by each wet cell in dry weather. */
     evaporationPx: number;
     /** Water the flat ground drinks from each wet cell that is not dug. */
@@ -430,6 +457,8 @@ export class WaterGrid {
      * each side, in the order east, west, south, north.
      */
     private readonly closed: Uint8Array;
+    /** The same sides as the walls alone close them: the doors that are closed are added to them (setClosedDoors). */
+    private readonly wallClosed: Uint8Array;
     /** For the search of a sink: the cells of its queue, and the search that last saw each cell. */
     private readonly queue: Int32Array;
     /** The cells of the basin of a sink, while it is lowered. */
@@ -469,9 +498,30 @@ export class WaterGrid {
      */
     private readonly hollow: Uint8Array;
     private depth: Float32Array;
+    /** The cells the runoff does not reach (see seal): 1 for a sealed cell. */
+    private readonly sealed: Uint8Array;
     /** How high the water of this map may stand over the level it spills at (see setMaxSurface). */
     private highest: number = MAX_WATER_SURFACE_PX;
     private next: Float32Array;
+    /**
+     * The balls standing in the water (setBalls), and what they changed. A ball is a solid: where it touches the
+     * water of a column, the water it leaves no room for stands on its top (`ground` and `spill` are raised to it
+     * for that column, so every move of the water reads it as a ground), and the water that fits under it is put
+     * aside (`under`) until the ball goes. None of these arrays exists on a map where no ball ever stood.
+     */
+    private balls: WaterBall[] = [];
+    /** The cells the balls reach, and how high each stands there over the altitude 0 (see ballHalfHeight). */
+    private ballCells: number[] = [];
+    private ballHalf: Float32Array = new Float32Array(0);
+    /** For each of those cells, which ball stands the highest there: the one that pushes its water away. */
+    private ballOwner: Uint8Array = new Uint8Array(0);
+    /** The cells a ball closed: 1 where the ground is raised to its top. */
+    private ballClosed: Uint8Array = new Uint8Array(0);
+    /** The water put aside under a ball, in each cell it closed. */
+    private under: Float32Array = new Float32Array(0);
+    /** The ground and the level the water spills at, as they are without any ball. */
+    private bareGround: Float32Array = new Float32Array(0);
+    private bareSpill: Float32Array = new Float32Array(0);
 
     constructor(
         terrain: TerrainData | undefined,
@@ -486,6 +536,7 @@ export class WaterGrid {
         this.ground = new Float32Array(size);
         this.blocked = new Uint8Array(size);
         this.depth = new Float32Array(size);
+        this.sealed = new Uint8Array(size);
         this.next = new Float32Array(size);
         this.queue = new Int32Array(Math.min(size, MAX_DISC_CELLS));
         this.basin = new Int32Array(Math.min(size, BASIN_CELLS));
@@ -532,6 +583,48 @@ export class WaterGrid {
                 }
             }
         }
+        this.wallClosed = Uint8Array.from(this.closed);
+    }
+
+    /**
+     * The doors that are closed now: the water does not cross their sides (keys of cellKey, as the walls), on top
+     * of the walls the grid was built with. An open door is simply not told: the water goes through it.
+     */
+    public setClosedDoors(doors: WaterWallSides | undefined): void {
+        const { x, y, width, height } = this.bounds;
+        this.closed.set(this.wallClosed);
+        if (!doors) return;
+        for (const key of doors.east) {
+            const cell = cellOf(key);
+            const column = cell.x - x;
+            const row = cell.y - y;
+            if (column < 0 || row < 0 || column + 1 >= width || row >= height) continue;
+            const index = row * width + column;
+            this.closed[index] |= 1;
+            this.closed[index + 1] |= 2;
+        }
+        for (const key of doors.south) {
+            const cell = cellOf(key);
+            const column = cell.x - x;
+            const row = cell.y - y;
+            if (column < 0 || row < 0 || column >= width || row + 1 >= height) continue;
+            const index = row * width + column;
+            this.closed[index] |= 4;
+            this.closed[index + width] |= 8;
+        }
+    }
+
+    /**
+     * These cells are sealed (the basin of a pool, behind its coping): the runoff of the ground around does not
+     * come into them, they take the rain that falls on them only (WaterStepInput.sealedRainPx). The cells sealed
+     * before are forgotten.
+     */
+    public seal(cells: readonly { cellX: number; cellY: number }[]): void {
+        this.sealed.fill(0);
+        for (const { cellX, cellY } of cells) {
+            const index = this.indexOf(cellX, cellY);
+            if (index !== undefined) this.sealed[index] = 1;
+        }
     }
 
     /** Pixels of water over a cell of the map: 0 outside the grid. */
@@ -559,6 +652,8 @@ export class WaterGrid {
     public totalPx(): number {
         let total = 0;
         for (let index = 0; index < this.depth.length; index++) total += this.depth[index];
+        // The water a ball holds under itself is still water of the map.
+        for (const index of this.ballCells) total += this.under[index];
         return total;
     }
 
@@ -598,6 +693,38 @@ export class WaterGrid {
             this.depth[index] = 0;
         }
         return { takenPx, cells: disc.length };
+    }
+
+    /**
+     * Takes a share of the water of the ring around a cell: of each cell further than `inner` cells from it and no
+     * further than `outer`, reached from it without crossing a wall, the share `share` gives for its distance (0 to
+     * 1). Returns the water taken; undefined outside the grid or in a wall.
+     */
+    public takeRing(
+        cellX: number,
+        cellY: number,
+        inner: number,
+        outer: number,
+        share: (distanceCells: number) => number,
+    ): number | undefined {
+        const centre = this.indexOf(cellX, cellY);
+        if (centre === undefined || this.blocked[centre]) return undefined;
+        const { width } = this.bounds;
+        const column = centre % width;
+        const row = (centre - column) / width;
+        let takenPx = 0;
+        for (const index of this.discAround(centre, outer, discLimit(outer))) {
+            if (this.depth[index] <= 0) continue;
+            const x = index % width;
+            const distance = Math.hypot(x - column, (index - x) / width - row);
+            if (distance <= inner) continue;
+            const part = share(distance);
+            if (!Number.isFinite(part) || part <= 0) continue;
+            const taken = this.depth[index] * Math.min(1, part);
+            this.depth[index] -= taken;
+            takenPx += taken;
+        }
+        return takenPx;
     }
 
     /**
@@ -714,6 +841,190 @@ export class WaterGrid {
         return taken;
     }
 
+    /**
+     * The balls standing on the map now (none: an empty list). A ball is a solid sphere whose centre is at the
+     * altitude 0 (see WaterBall): in each column it reaches, it fills the heights between its underside and its
+     * top, but for what of it is in the ground. Water lower than its underside is not touched and goes on running
+     * under it. Where the water reaches it, the column is closed: what fits under the ball stays there, and the
+     * ground of the column is, for the water, the top of the ball. The water the ball leaves no room for is handed
+     * to the first open column away from the centre of the ball (see pushAway): a solid that moves pushes the
+     * water in front of it, as fast as it moves and no faster. So a ball pushes away exactly the water of the part
+     * of it that is in the water (Archimedes), no water is made nor lost, and the water comes back by itself once
+     * the ball is gone. A column whose ground the ball rests on is closed even dry: the ball is in the way of a
+     * water that comes.
+     *
+     * To be told at each step: a column the water has since risen in is closed then. Returns whether anything
+     * changed for the water (a grid at rest has to move again).
+     */
+    public setBalls(balls: readonly WaterBall[]): boolean {
+        const size = this.bounds.width * this.bounds.height;
+        if (size === 0 || (balls.length === 0 && this.balls.length === 0)) return false;
+        const { x, y, width, height } = this.bounds;
+        const same =
+            balls.length === this.balls.length &&
+            balls.every(
+                (ball, at) =>
+                    ball.x === this.balls[at].x &&
+                    ball.y === this.balls[at].y &&
+                    ball.radiusPx === this.balls[at].radiusPx,
+            );
+        if (this.ballHalf.length !== size) {
+            this.ballHalf = new Float32Array(size);
+            this.ballOwner = new Uint8Array(size);
+            this.ballClosed = new Uint8Array(size);
+            this.under = new Float32Array(size);
+            this.bareGround = Float32Array.from(this.ground);
+            this.bareSpill = Float32Array.from(this.spill);
+        }
+        const half = this.ballHalf;
+        const owner = this.ballOwner;
+        let cells = this.ballCells;
+        if (!same) {
+            // The cells the balls reached before are looked at again with those they reach now.
+            const before = cells;
+            cells = [];
+            for (const index of before) half[index] = -1;
+            this.balls = balls.slice(0, MOST_BALLS).map((ball) => ({ x: ball.x, y: ball.y, radiusPx: ball.radiusPx }));
+            for (let at = 0; at < this.balls.length; at++) {
+                const ball = this.balls[at];
+                if (!Number.isFinite(ball.x) || !Number.isFinite(ball.y) || !(ball.radiusPx > 0)) continue;
+                const fromRow = Math.max(0, Math.floor((ball.y - ball.radiusPx) / TERRAIN_CELL) - y);
+                const toRow = Math.min(height - 1, Math.floor((ball.y + ball.radiusPx) / TERRAIN_CELL) - y);
+                const fromColumn = Math.max(0, Math.floor((ball.x - ball.radiusPx) / TERRAIN_CELL) - x);
+                const toColumn = Math.min(width - 1, Math.floor((ball.x + ball.radiusPx) / TERRAIN_CELL) - x);
+                for (let row = fromRow; row <= toRow; row++) {
+                    for (let column = fromColumn; column <= toColumn; column++) {
+                        const index = row * width + column;
+                        if (this.blocked[index]) continue;
+                        const stands = ballHalfHeight(ball, column + x, row + y);
+                        if (stands <= 0) continue;
+                        // Where two balls meet, the larger one fills the column: both have their centre at 0.
+                        if (half[index] <= 0) cells.push(index);
+                        else if (stands <= half[index]) continue;
+                        half[index] = stands;
+                        owner[index] = at;
+                    }
+                }
+            }
+            // A cell no ball reaches any more is told so once, then forgotten.
+            for (const index of before) {
+                if (half[index] >= 0) continue;
+                half[index] = 0;
+                cells.push(index);
+            }
+        }
+        const depth = this.depth;
+        const under = this.under;
+        const closed = this.ballClosed;
+        let changed = false;
+        let kept = 0;
+        for (const index of cells) {
+            const bed = this.bareGround[index];
+            const column = ballColumn(bed, half[index]);
+            const was = closed[index] === 1;
+            // A closed column whose ball did not move keeps its water as it is: nothing to share again.
+            if (same && was) {
+                cells[kept++] = index;
+                continue;
+            }
+            const water = depth[index] + under[index];
+            // The water reaches the ball, or the ball rests on the ground: the column is closed. One that was
+            // closed stays so while its water still touches the ball.
+            const closes =
+                column !== undefined &&
+                (column.underPx <= 0 || (was ? water >= column.underPx - BALL_TOUCH_PX : water > column.underPx));
+            if (column !== undefined && closes) {
+                const surface = this.ground[index] + depth[index];
+                const below = Math.fround(Math.min(water, column.underPx));
+                // The surface of a column does not rise because a ball moved: only the water that already stood
+                // over the top of the ball stays on it. The rest is pushed away.
+                const stays = Math.min(water - below, Math.max(0, surface - column.topPx));
+                const pushed = water - below - stays;
+                if (!was || this.ground[index] !== column.topPx || pushed > 0) changed = true;
+                under[index] = below;
+                depth[index] = stays;
+                this.ground[index] = column.topPx;
+                this.spill[index] = this.bareSpill[index] + (column.topPx - bed);
+                closed[index] = 1;
+                // What finds no way out stands on the ball, and runs off it by itself.
+                if (pushed > 0) depth[index] += this.pushAway(index, this.balls[owner[index]], pushed, surface);
+            } else if (was) {
+                under[index] = 0;
+                depth[index] = water;
+                this.ground[index] = bed;
+                this.spill[index] = this.bareSpill[index];
+                closed[index] = 0;
+                changed = true;
+            }
+            if (half[index] > 0) cells[kept++] = index;
+        }
+        cells.length = kept;
+        this.ballCells = cells;
+        return changed;
+    }
+
+    /**
+     * Hands `px` of water a ball pushes out of a column to the open water in front of it: the first column that no
+     * ball closes, going straight away from the centre of the ball, never through a wall nor off the grid. A column
+     * takes no more than what brings it to the highest level of the map: the rest goes on to the next one. The water
+     * is pushed aside, not up: the way ends at a ground higher than `level`, the level the water stood at. Returns
+     * what found no room.
+     */
+    private pushAway(from: number, ball: WaterBall, px: number, level: number): number {
+        const { x, y, width, height } = this.bounds;
+        let column = from % width;
+        let row = (from - column) / width;
+        let dx = (column + x + 0.5) * TERRAIN_CELL - ball.x;
+        let dy = (row + y + 0.5) * TERRAIN_CELL - ball.y;
+        const away = Math.hypot(dx, dy);
+        // The column under the centre of the ball has no way that is straight away: any will do.
+        if (away < 1e-6) {
+            dx = 1;
+            dy = 0;
+        } else {
+            dx /= away;
+            dy /= away;
+        }
+        // The way goes from side to side of the cells, in turn: how far along it the next side of each kind is.
+        const perColumn = dx === 0 ? Infinity : Math.abs(1 / dx);
+        const perRow = dy === 0 ? Infinity : Math.abs(1 / dy);
+        let nextColumn = perColumn / 2;
+        let nextRow = perRow / 2;
+        let index = from;
+        let left = px;
+        const reach = Math.ceil((2 * ball.radiusPx) / TERRAIN_CELL) + PUSH_BEYOND_CELLS;
+        for (let move = 0; move < reach && left > 0; move++) {
+            let side: number;
+            if (nextColumn <= nextRow) {
+                side = dx > 0 ? 0 : 1;
+                nextColumn += perColumn;
+            } else {
+                side = dy > 0 ? 2 : 3;
+                nextRow += perRow;
+            }
+            column += side === 0 ? 1 : side === 1 ? -1 : 0;
+            row += side === 2 ? 1 : side === 3 ? -1 : 0;
+            if (column < 0 || row < 0 || column >= width || row >= height) break;
+            if (this.closed[index] & (1 << side)) break;
+            index = row * width + column;
+            if (this.blocked[index]) break;
+            if (this.ballClosed[index]) continue;
+            if (this.ground[index] > level) break;
+            const room = this.spill[index] + this.highest - (this.ground[index] + this.depth[index]);
+            if (room <= 0) continue;
+            const laid = Math.min(left, room);
+            this.depth[index] += laid;
+            left -= laid;
+        }
+        return left;
+    }
+
+    /** Whether a ball closes the column of a cell of the map: its water is on the ball, or held under it. */
+    public ballAt(cellX: number, cellY: number): boolean {
+        const index = this.indexOf(cellX, cellY);
+        return index !== undefined && this.ballClosed.length > 0 && this.ballClosed[index] === 1;
+    }
+
     /** One step: what comes in and goes out, then the water moves towards the lower neighbours. */
     public step(input: WaterStepInput): WaterTally {
         const tally: WaterTally = {
@@ -727,6 +1038,7 @@ export class WaterGrid {
         };
         const amount = (value: number): number => (Number.isFinite(value) && value > 0 ? value : 0);
         const rain = amount(input.rainPx);
+        const sealedRain = input.sealedRainPx === undefined ? rain : amount(input.sealedRainPx);
         const evaporation = amount(input.evaporationPx);
         const absorption = amount(input.absorptionPx);
         const indoorDrain = amount(input.indoorDrainPx ?? 0);
@@ -736,9 +1048,10 @@ export class WaterGrid {
                 if (this.blocked[index]) continue;
                 // In a hollow: dug under the ground of the map, or under the rim of a crater on a mount.
                 const dug = this.ground[index] < this.spill[index];
-                if (rain > 0 && dug) {
-                    depth[index] += rain;
-                    tally.rainPx += rain;
+                const falling = this.sealed[index] ? sealedRain : rain;
+                if (falling > 0 && dug) {
+                    depth[index] += falling;
+                    tally.rainPx += falling;
                     tally.moved = true;
                 }
                 if (depth[index] <= 0) continue;
@@ -828,7 +1141,9 @@ export class WaterGrid {
     public takeFrom(other: WaterGrid): void {
         for (let row = 0; row < other.bounds.height; row++) {
             for (let column = 0; column < other.bounds.width; column++) {
-                const held = other.depth[row * other.bounds.width + column];
+                // The water a ball of the other grid held under itself comes along: this grid has no ball yet.
+                const from = row * other.bounds.width + column;
+                const held = other.depth[from] + (other.under.length > 0 ? other.under[from] : 0);
                 if (held <= 0) continue;
                 const index = this.indexOf(other.bounds.x + column, other.bounds.y + row);
                 if (index !== undefined && !this.blocked[index]) this.depth[index] = held;
@@ -836,11 +1151,63 @@ export class WaterGrid {
         }
     }
 
-    /** The depths as bytes: two for each cell, in eighths of a pixel. For saving and for sending. */
-    public writeDepths(): Uint8Array {
+    /**
+     * The speed of the water, block by block (SPEED_BLOCK_CELLS cells a side, row by row): two signed bytes a
+     * block, how fast it runs towards the east then towards the south, in SPEED_UNITS units a cell a second, as it
+     * is seen (`pace` times its real speed, see WaterSettings.flowPace). It is what the block carries over the
+     * water it holds. Undefined for a water that has no inertia: it keeps no flow to tell.
+     */
+    public writeSpeeds(pace = 1): Uint8Array | undefined {
+        const { width, height } = this.bounds;
+        const size = width * height;
+        if (this.flowEast.length !== size || size === 0) return undefined;
+        const seen = Number.isFinite(pace) && pace > 0 ? pace : 1;
+        const columns = Math.ceil(width / SPEED_BLOCK_CELLS);
+        const rows = Math.ceil(height / SPEED_BLOCK_CELLS);
+        const bytes = new Uint8Array(columns * rows * 2);
+        const depth = this.depth;
+        const east = this.flowEast;
+        const south = this.flowSouth;
+        const byte = (speed: number): number => {
+            const units = Math.round(speed * seen * SPEED_UNITS);
+            return (units > 127 ? 127 : units < -127 ? -127 : units) & 255;
+        };
+        for (let blockRow = 0; blockRow < rows; blockRow++) {
+            for (let blockColumn = 0; blockColumn < columns; blockColumn++) {
+                let held = 0;
+                let towardsEast = 0;
+                let towardsSouth = 0;
+                const lastRow = Math.min(height, (blockRow + 1) * SPEED_BLOCK_CELLS);
+                const lastColumn = Math.min(width, (blockColumn + 1) * SPEED_BLOCK_CELLS);
+                for (let row = blockRow * SPEED_BLOCK_CELLS; row < lastRow; row++) {
+                    for (let column = blockColumn * SPEED_BLOCK_CELLS; column < lastColumn; column++) {
+                        const index = row * width + column;
+                        if (depth[index] <= DRY_PX) continue;
+                        held += depth[index];
+                        // What crosses the cell: the mean of what comes in by one side and goes out by the other.
+                        towardsEast += (east[index] + (column > 0 ? east[index - 1] : 0)) / 2;
+                        towardsSouth += (south[index] + (row > 0 ? south[index - width] : 0)) / 2;
+                    }
+                }
+                if (held <= DRY_PX) continue;
+                const at = (blockRow * columns + blockColumn) * 2;
+                bytes[at] = byte(towardsEast / held);
+                bytes[at + 1] = byte(towardsSouth / held);
+            }
+        }
+        return bytes;
+    }
+
+    /**
+     * The depths as bytes: two for each cell, in eighths of a pixel. For sending: the water as it is seen, without
+     * what a ball hides under itself. For saving (`whole`): all the water of each cell, so that the water under a
+     * ball is not lost by a restart.
+     */
+    public writeDepths(whole = false): Uint8Array {
         const bytes = new Uint8Array(this.depth.length * 2);
+        const under = whole && this.under.length > 0 ? this.under : undefined;
         for (let index = 0; index < this.depth.length; index++) {
-            const eighths = Math.min(65535, Math.round(this.depth[index] * 8));
+            const eighths = Math.min(65535, Math.round((this.depth[index] + (under ? under[index] : 0)) * 8));
             bytes[index * 2] = eighths & 255;
             bytes[index * 2 + 1] = eighths >> 8;
         }
@@ -850,6 +1217,8 @@ export class WaterGrid {
     /** Reads depths written by a grid of the same size; bytes of another size are left alone. */
     public readDepths(bytes: Uint8Array): boolean {
         if (bytes.length !== this.depth.length * 2) return false;
+        // The depths read are those of a map without any ball: the next step puts the balls back.
+        this.setBalls([]);
         this.forgetFlows();
         for (let index = 0; index < this.depth.length; index++) {
             this.depth[index] = this.blocked[index] ? 0 : (bytes[index * 2] | (bytes[index * 2 + 1] << 8)) / 8;

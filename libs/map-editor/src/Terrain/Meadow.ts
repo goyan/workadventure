@@ -1,5 +1,5 @@
 import { Season, TERRAIN_CELL, TILE_PX } from "../types";
-import type { TerrainData, WAMFileFormat } from "../types";
+import type { PoolStyle, TerrainData, WAMFileFormat } from "../types";
 import {
     rainMeltMm,
     SNOW_FULL_MM,
@@ -11,6 +11,17 @@ import {
     THAW_SPEED,
 } from "./Snow";
 import type { SnowWeather } from "./Snow";
+import {
+    ICE_GROWTH_TIMES,
+    ICE_MAX_MM,
+    ICE_SLIPS_MM,
+    iceByte,
+    iceGrowthMmPerDay,
+    iceMmOfByte,
+    iceThawMmPerHour,
+} from "./Ice";
+import { poolStyleAt, poolStyleOf } from "./Pools";
+import { PX_PER_MM } from "./WaterInputs";
 import { snowCover } from "./SnowLine";
 import { soilName } from "./Soils";
 import type { SoilName } from "./Soils";
@@ -109,14 +120,19 @@ export const BANK_MOISTURE: readonly number[] = [0.8, 0.5, 0.17];
 /** No grass grows this high over the ground of the map, in pixels of altitude; it grows slower on the way up. */
 export const GRASS_LINE_PX = 192;
 
-/** How a soil holds the moisture and grows grass. A cell not painted is earth. */
-const SOIL_LIFE: Record<SoilName, { holdSeconds: number; fertility: number }> = {
-    earth: { holdSeconds: 600, fertility: 1 },
-    meadow: { holdSeconds: 900, fertility: 1.5 },
-    clay: { holdSeconds: 1800, fertility: 0.5 },
-    sand: { holdSeconds: 120, fertility: 0 },
-    rock: { holdSeconds: 0, fertility: 0 },
-    gravel: { holdSeconds: 60, fertility: 0 },
+/**
+ * How a soil holds the moisture and grows grass; how many tiles from open water its capillary fringe reaches
+ * (BANK_MOISTURE): metres in a loam or a clay, a few decimetres in a sand or a gravel, so the tile at the water only;
+ * and how much of the usual moisture it draws sideways from a wetter neighbour (MOISTURE_SPREAD), weak in their wide
+ * pores for the same reason. A cell not painted is earth.
+ */
+const SOIL_LIFE: Record<SoilName, { holdSeconds: number; fertility: number; fringeTiles: number; wicking: number }> = {
+    earth: { holdSeconds: 600, fertility: 1, fringeTiles: 3, wicking: 1 },
+    meadow: { holdSeconds: 900, fertility: 1.5, fringeTiles: 3, wicking: 1 },
+    clay: { holdSeconds: 1800, fertility: 0.5, fringeTiles: 3, wicking: 1 },
+    sand: { holdSeconds: 120, fertility: 0, fringeTiles: 1, wicking: 0.15 },
+    rock: { holdSeconds: 0, fertility: 0, fringeTiles: 0, wicking: 0 },
+    gravel: { holdSeconds: 60, fertility: 0, fringeTiles: 1, wicking: 0.15 },
 };
 
 /** How fast grass grows in a season, as a share of its fastest: not at all in winter. */
@@ -216,6 +232,20 @@ export class Meadow {
     /** The snow lying on each tile, in mm of water (see Snow.ts), and what melted of it at the last step. */
     private readonly snow: Float32Array;
     private readonly melted: Float32Array;
+    /** The ice over the water of each tile, in mm (see Ice.ts), and whether any of it changed at the last step. */
+    private readonly ice: Float32Array;
+    private iceChanged = false;
+    /**
+     * Whether a pool painted on a tile is heated. The water of a pool is the water of the relief (see poolBasins): it
+     * freezes as a lake does, unless it is hot.
+     */
+    private readonly hotPool: Uint8Array;
+    /** 1 on a tile any cell of which is painted as a pool: its water is held in a watertight basin. */
+    private readonly poolTile: Uint8Array;
+    /** How many tiles from open water the capillary fringe of the soil of each tile reaches (see SOIL_LIFE). */
+    private readonly fringe: Uint8Array;
+    /** How much each tile draws moisture sideways, against an earth (see SOIL_LIFE). */
+    private readonly wicking: Float32Array;
     /** The snow the heat of a fire melts on each tile at the next step, in mm of water (see warm): spent there. */
     private readonly heat: Float32Array;
     /** Seconds the ash of a tile that went out still stays whole before it goes; not saved. */
@@ -238,6 +268,8 @@ export class Meadow {
         terrain: TerrainData | undefined,
         walls: WaterWallSides | undefined,
         paved?: ReadonlySet<string>,
+        /** The styles of the pools of the map (their hot water); the default one for each when absent. */
+        pools?: readonly PoolStyle[],
     ) {
         this.width = Math.max(0, Math.floor(size.width));
         this.height = Math.max(0, Math.floor(size.height));
@@ -251,6 +283,11 @@ export class Meadow {
         this.snow = new Float32Array(tiles);
         this.melted = new Float32Array(tiles);
         this.heat = new Float32Array(tiles);
+        this.ice = new Float32Array(tiles);
+        this.hotPool = new Uint8Array(tiles);
+        this.poolTile = new Uint8Array(tiles);
+        this.fringe = new Uint8Array(tiles);
+        this.wicking = new Float32Array(tiles);
         this.smoulder = new Float32Array(tiles);
         this.fuel = new Float32Array(tiles);
         this.water = new Float32Array(tiles);
@@ -267,11 +304,20 @@ export class Meadow {
                 const cellY = tileY * CELLS_A_TILE;
                 let height = 0;
                 for (let y = 0; y < CELLS_A_TILE; y++) {
-                    for (let x = 0; x < CELLS_A_TILE; x++) height += heightAt(terrain, cellX + x, cellY + y);
+                    for (let x = 0; x < CELLS_A_TILE; x++) {
+                        height += heightAt(terrain, cellX + x, cellY + y);
+                        // A tile any cell of which is painted as a heated pool never freezes.
+                        const style = poolStyleOf(soilAt(terrain, cellX + x, cellY + y));
+                        if (style !== undefined) this.poolTile[index] = 1;
+                        if (style !== undefined && poolStyleAt(pools, style).hot) this.hotPool[index] = 1;
+                    }
                 }
                 this.ground[index] = height / (CELLS_A_TILE * CELLS_A_TILE);
                 const soil = SOIL_LIFE[soilName(soilAt(terrain, cellX, cellY)) ?? "earth"];
-                this.hold[index] = soil.holdSeconds;
+                // A pool's basin is watertight: no moisture of a soil there, none spread to the ground around it.
+                this.hold[index] = this.poolTile[index] ? 0 : soil.holdSeconds;
+                this.fringe[index] = soil.fringeTiles;
+                this.wicking[index] = soil.wicking;
                 const grows = this.outdoor[index] === 1 && !paved?.has(`${tileX},${tileY}`);
                 this.fertility[index] = grows ? soil.fertility : 0;
             }
@@ -317,6 +363,37 @@ export class Meadow {
     public snowAt(tileX: number, tileY: number): number {
         const index = this.indexOf(tileX, tileY);
         return index === undefined ? 0 : this.snow[index];
+    }
+
+    /** The ice over the water of a tile, in mm. */
+    public iceAt(tileX: number, tileY: number): number {
+        const index = this.indexOf(tileX, tileY);
+        return index === undefined ? 0 : this.ice[index];
+    }
+
+    /** Whether any water of the meadow is frozen. */
+    public icy(): boolean {
+        for (let index = 0; index < this.ice.length; index++) if (this.ice[index] > 0) return true;
+        return false;
+    }
+
+    /** Whether any ice thickened, thawed or went at the last step: the room is to be told. */
+    public iceMoved(): boolean {
+        return this.iceChanged;
+    }
+
+    /**
+     * The ice of the tiles within `radius` tiles of a tile is broken at once (the impact of a comet): the water is
+     * open again. Returns how much ice went, in mm over all the tiles.
+     */
+    public breakIce(tileX: number, tileY: number, radius: number): number {
+        let broken = 0;
+        this.forTilesAround(tileX, tileY, radius, (index) => {
+            broken += this.ice[index];
+            this.ice[index] = 0;
+        });
+        if (broken > 0) this.iceChanged = true;
+        return broken;
     }
 
     /** Whether any snow lies on the meadow. */
@@ -368,7 +445,8 @@ export class Meadow {
 
     /**
      * The heat of a fire is brought to the tiles within `radius` tiles of a tile: at the next step it melts up to
-     * `mm` of the snow of each (mm of water), whatever the cold of the air, and leaves the soil it dries as it was.
+     * `mm` of the snow of each (mm of water), then of the ice under it, whatever the cold of the air, and leaves the
+     * soil it dries as it was.
      */
     public warm(tileX: number, tileY: number, radius: number, mm: number): void {
         if (!Number.isFinite(mm) || mm <= 0) return;
@@ -378,14 +456,16 @@ export class Meadow {
     }
 
     /**
-     * The snow of the tiles within `radius` tiles of a tile melts at once (the heat of a fireball). Returns its water,
-     * in mm over all the tiles.
+     * The snow of the tiles within `radius` tiles of a tile melts at once, and the ice with it (the heat of a
+     * fireball). Returns the water of the snow, in mm over all the tiles.
      */
     public melt(tileX: number, tileY: number, radius: number): number {
         let water = 0;
         this.forTilesAround(tileX, tileY, radius, (index) => {
             water += this.snow[index];
             this.snow[index] = 0;
+            if (this.ice[index] > 0) this.iceChanged = true;
+            this.ice[index] = 0;
         });
         return water;
     }
@@ -546,7 +626,8 @@ export class Meadow {
         bankReach.fill(0);
         let tail = 0;
         for (let index = 0; index < water.length; index++) {
-            if (outdoor[index] && water[index] >= SOAKED_WATER_PX) {
+            // The water of a pool is held in a watertight basin: it wets no ground around its coping.
+            if (outdoor[index] && water[index] >= SOAKED_WATER_PX && this.poolTile[index] === 0) {
                 bankReach[index] = 1;
                 bankQueue[tail++] = index;
             }
@@ -566,7 +647,9 @@ export class Meadow {
                 if (other < 0 || other >= moisture.length || bankReach[other] !== 0 || !outdoor[other]) continue;
                 bankReach[other] = distance + 1;
                 bankQueue[tail++] = other;
-                if (hold[other] > 0) moisture[other] = Math.max(moisture[other], BANK_MOISTURE[distance - 1]);
+                if (hold[other] > 0 && distance <= this.fringe[other]) {
+                    moisture[other] = Math.max(moisture[other], BANK_MOISTURE[distance - 1]);
+                }
             }
         }
     }
@@ -618,6 +701,7 @@ export class Meadow {
             }
         }
         const thawed = this.stepSnow(input, seconds, rain, true);
+        this.stepIce(input, seconds);
         // The moisture spreads to the four neighbours, and runs from a higher tile to a lower one.
         const pace = seconds / MEADOW_STEP_SECONDS;
         const sides = [1, -1, width, -width];
@@ -631,7 +715,8 @@ export class Meadow {
                 if (other < 0 || other >= moisture.length) continue;
                 if ((side === 1 && tileX === width - 1) || (side === -1 && tileX === 0)) continue;
                 if (!outdoor[other] || hold[other] <= 0) continue;
-                change += (MOISTURE_SPREAD / 4) * (moisture[other] - moisture[index]);
+                const wicks = Math.min(this.wicking[index], this.wicking[other]);
+                change += (MOISTURE_SPREAD / 4) * wicks * (moisture[other] - moisture[index]);
                 const slope = Math.min(1, Math.abs(ground[other] - ground[index]) / TILE_PX);
                 if (ground[other] > ground[index]) change += (MOISTURE_RUNOFF / 4) * slope * moisture[other];
                 else if (ground[other] < ground[index]) change -= (MOISTURE_RUNOFF / 4) * slope * moisture[index];
@@ -723,7 +808,9 @@ export class Meadow {
                 water[index] = Number.isFinite(lying) && lying > 0 ? lying : 0;
             }
         }
-        return this.stepSnow(input, seconds, rain, false) ? { meltedMm: this.melted } : undefined;
+        const thawed = this.stepSnow(input, seconds, rain, false);
+        this.stepIce(input, seconds);
+        return thawed ? { meltedMm: this.melted } : undefined;
     }
 
     /**
@@ -732,7 +819,7 @@ export class Meadow {
      * same rain would. True when any melted: its water is in `melted`.
      */
     private stepSnow(input: MeadowStepInput, seconds: number, rain: number, wets: boolean): boolean {
-        const { snow, melted, water, outdoor, moisture, hold, heat, fire, width, height } = this;
+        const { snow, melted, water, outdoor, moisture, hold, heat, fire, width, height, ice, hotPool } = this;
         // A tile on fire warms itself and the eight around it.
         const flame = FIRE_THAW_MM_PER_SECOND * seconds;
         for (let index = 0; index < fire.length; index++) {
@@ -768,9 +855,14 @@ export class Meadow {
             // The heat of a fire first: it melts the snow whatever the air, and dries the soil it bares.
             const burnt = Math.min(lying, heat[index]);
             lying -= burnt;
+            // What is left of the heat is for the ice under the snow (stepIce).
+            heat[index] -= burnt;
             // Open water takes the snow as it falls, unless it freezes; elsewhere the heat melts it first, then the
             // wind takes its share.
-            const thaw = water[index] >= SOAKED_WATER_PX && !freezing ? lying : Math.min(lying, melting);
+            // The hot water of a pool melts the snow whatever the cold.
+            const open =
+                water[index] >= SOAKED_WATER_PX && (hotPool[index] === 1 || (!freezing && ice[index] < ICE_SLIPS_MM));
+            const thaw = open ? lying : Math.min(lying, melting);
             lying -= thaw;
             lying = Math.max(0, lying - going);
             if (thaw + burnt > 0) {
@@ -783,8 +875,44 @@ export class Meadow {
             }
             snow[index] = lying;
         }
-        heat.fill(0);
         return any;
+    }
+
+    /**
+     * The ice of one step, after the snow: on the water lying on a tile it thickens in the frost (slower under the
+     * snow), thaws in a mild air and under what the snow left of the heat of a fire, and is never thicker than the
+     * water under it. Where no water lies there is no ice. The heat of the fires is spent here.
+     */
+    private stepIce(input: MeadowStepInput, seconds: number): void {
+        const { ice, snow, water, outdoor, heat, hotPool } = this;
+        const times =
+            input.snowTimes !== undefined && Number.isFinite(input.snowTimes) && input.snowTimes > 0
+                ? input.snowTimes
+                : THAW_SPEED;
+        const hours = (seconds * times) / 3600;
+        const weather = input.weather;
+        const thawing = weather ? iceThawMmPerHour(weather) * hours : 0;
+        let changed = false;
+        for (let index = 0; index < ice.length; index++) {
+            if (!outdoor[index]) continue;
+            const before = ice[index];
+            let thick = before;
+            // The water lying on the tile, a pool's as a lake's; the hot water of a heated pool takes no ice.
+            const lying = hotPool[index] === 1 ? 0 : water[index];
+            if (lying < SOAKED_WATER_PX) {
+                thick = 0;
+            } else {
+                if (weather) thick += (iceGrowthMmPerDay(thick, weather, snow[index]) * hours * ICE_GROWTH_TIMES) / 24;
+                thick = Math.max(0, thick - thawing - heat[index]);
+                thick = Math.min(thick, lying / PX_PER_MM, ICE_MAX_MM);
+            }
+            if (thick !== before) {
+                ice[index] = thick;
+                changed = true;
+            }
+        }
+        heat.fill(0);
+        this.iceChanged = changed;
     }
 
     /**
@@ -953,9 +1081,16 @@ export class Meadow {
         return bytes;
     }
 
+    /** The ice of every tile, a byte each (see iceByte): told to the room and saved. */
+    public writeIce(): Uint8Array {
+        const bytes = new Uint8Array(this.ice.length);
+        for (let index = 0; index < bytes.length; index++) bytes[index] = iceByte(this.ice[index]);
+        return bytes;
+    }
+
     /**
      * Reads a state written by a meadow of the same size. False (and nothing read) for any other. A state saved
-     * before the grass could dry has no dryness: it is read green; one saved before the snow has none.
+     * before the grass could dry has no dryness: it is read green; one saved before the snow or the ice has none.
      */
     public read(
         grass: Uint8Array,
@@ -963,9 +1098,11 @@ export class Meadow {
         dryness?: Uint8Array,
         ash?: Uint8Array,
         snow?: Uint8Array,
+        ice?: Uint8Array,
     ): boolean {
         if (grass.length !== this.grass.length || moisture.length !== this.moisture.length) return false;
         if (snow && snow.length !== this.snow.length) return false;
+        if (ice && ice.length !== this.ice.length) return false;
         if (dryness && dryness.length !== this.dryness.length) return false;
         if (ash && ash.length !== this.ash.length) return false;
         for (let index = 0; index < grass.length; index++) {
@@ -975,6 +1112,7 @@ export class Meadow {
             this.ash[index] = this.outdoor[index] && ash ? ash[index] / 255 : 0;
             this.fire[index] = 0;
             this.snow[index] = this.outdoor[index] && snow ? snowMmOfByte(snow[index]) : 0;
+            this.ice[index] = this.outdoor[index] && ice ? iceMmOfByte(ice[index]) : 0;
         }
         return true;
     }
@@ -993,6 +1131,7 @@ export class Meadow {
                 this.ash[index] = previous.ashAt(tileX, tileY);
                 this.smoulder[index] = previous.smoulder[tileY * previous.width + tileX];
                 this.snow[index] = previous.snowAt(tileX, tileY);
+                this.ice[index] = previous.iceAt(tileX, tileY);
             }
         }
     }

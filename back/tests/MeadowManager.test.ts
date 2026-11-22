@@ -37,7 +37,9 @@ function createHarness({
     wind = { windFrom: 0, windSpeed: 0 },
     random = () => 1,
     place = undefined as Settings["weatherLocation"],
+    water = undefined as (() => { depthAt(cellX: number, cellY: number): number } | undefined) | undefined,
 }: {
+    water?: () => { depthAt(cellX: number, cellY: number): number } | undefined;
     place?: Settings["weatherLocation"];
     danger?: () => number;
     wind?: { windFrom: number; windSpeed: number };
@@ -68,7 +70,7 @@ function createHarness({
     const manager = new MeadowManager(
         room,
         { slotsFor: vi.fn(() => undefined) },
-        () => undefined,
+        water ?? (() => undefined),
         { repository, roomUrl: "room" },
         () => now,
         mapSize,
@@ -225,6 +227,7 @@ describe("MeadowManager", () => {
         dry.manager.mapChanged();
         dry.steps(100);
         expect(dry.sent).toEqual([]);
+        expect(dry.manager.snapshot()).toBeUndefined();
         dry.manager.stop();
         // By night nothing grows: once the soil is wet through, the state stops changing.
         const night = createHarness({ now: Date.UTC(2026, 6, 14, 1) });
@@ -397,6 +400,60 @@ describe("MeadowManager", () => {
         second.manager.stop();
     });
 
+    it("gives the meadow it restored to the first player, before its first step", async () => {
+        const first = createHarness();
+        first.manager.mapChanged();
+        first.steps(400);
+        first.manager.stop();
+        const before = grassOf(first.sent[first.sent.length - 1]);
+        const second = createHarness({ saved: first.store });
+        await second.manager.restore();
+        second.manager.mapChanged();
+        const snapshot = second.manager.snapshot();
+        expect(second.sent).toEqual([]);
+        expect(snapshot && grassOf(snapshot)).toEqual(before);
+        second.manager.stop();
+    });
+
+    it("lives the time the room was empty when it opens again, a slice at each step", async () => {
+        const first = createHarness();
+        first.manager.mapChanged();
+        first.steps(30);
+        first.manager.stop();
+        expect(Number(first.store.at)).toBe(Date.UTC(2026, 6, 14, 10));
+        const before = new Uint8Array(gunzipSync(Buffer.from(first.store.grass, "base64")));
+        // A day later, by the same summer rain: the meadow lives that day before the step of now.
+        const second = createHarness({ saved: first.store, now: Date.UTC(2026, 6, 15, 10) });
+        // The water of the relief lives the same day along with it, told when the meadow caught up.
+        const along: { seconds: number; last: boolean }[] = [];
+        second.manager.liveAlong((seconds, _rain, last) => along.push({ seconds, last }));
+        await second.manager.restore();
+        second.manager.mapChanged();
+        expect(second.manager.catchingUp()).toBe(true);
+        second.steps(12);
+        expect(second.manager.catchingUp()).toBe(false);
+        expect(along.reduce((total, slice) => total + slice.seconds, 0)).toBeCloseTo(24 * 3600, 0);
+        expect(along.filter((slice) => slice.last)).toHaveLength(1);
+        expect(along.at(-1)?.last).toBe(true);
+        const snapshot = second.manager.snapshot();
+        const sum = (cells: Uint8Array): number => cells.reduce((total, cell) => total + cell, 0);
+        expect(snapshot && sum(grassOf(snapshot))).toBeGreaterThan(sum(before));
+        second.manager.stop();
+    });
+
+    it("does not catch up a meadow saved without its time", async () => {
+        const first = createHarness();
+        first.manager.mapChanged();
+        first.steps(30);
+        first.manager.stop();
+        const withoutTime = Object.fromEntries(Object.entries(first.store).filter(([field]) => field !== "at"));
+        const second = createHarness({ saved: withoutTime, now: Date.UTC(2026, 6, 15, 10) });
+        await second.manager.restore();
+        second.manager.mapChanged();
+        expect(second.manager.catchingUp()).toBe(false);
+        second.manager.stop();
+    });
+
     it("follows the settings of the map: a faster growth, and a meadow turned off is wiped", () => {
         const usual = createHarness();
         const fast = createHarness({ meadow: { enabled: true, growMinutes: 2, thirstMinutes: 20, moistureHold: 1 } });
@@ -561,5 +618,98 @@ describe("the snow of the MeadowManager", () => {
         steps(1);
         expect(snowOf(sent.at(-1))[centre]).toBe(0);
         manager.stop();
+    });
+});
+
+describe("the ice of the MeadowManager", () => {
+    const iceOf = (message: MeadowMessage | undefined): Uint8Array =>
+        message && message.ice.length > 0 ? new Uint8Array(gunzipSync(message.ice)) : new Uint8Array(8 * 4);
+    const frost: SnowWeather = { temperature: -10, humidity: 100, windSpeed: 0 };
+    const mild: SnowWeather = { temperature: 10, humidity: 50, windSpeed: 0 };
+    /** A room all under 8 px of water, whose air can be changed. */
+    const iceHarness = (options: Parameters<typeof createHarness>[0] = {}) => {
+        const harness = createHarness({ weather: WeatherType.Clear, water: () => ({ depthAt: () => 8 }), ...options });
+        const air: { now: SnowWeather | undefined } = { now: frost };
+        harness.manager.fallThrough((): PrecipitationAir | undefined => air.now);
+        harness.manager.snowUnder(() => air.now);
+        return { ...harness, air };
+    };
+    const centre = 2 * 8 + 4;
+    const point = { x: 4 * 32 + 16, y: 2 * 32 + 16 };
+
+    it("freezes the water of the map in the frost, tells the room as it thickens, and thaws it in a mild air", () => {
+        const { manager, sent, steps, air } = iceHarness();
+        manager.mapChanged();
+        steps(3);
+        const thin = iceOf(sent.at(-1))[centre];
+        expect(thin).toBeGreaterThan(0);
+        steps(10);
+        expect(iceOf(sent.at(-1))[centre]).toBeGreaterThan(thin);
+        expect(manager.snapshot()?.ice.length).toBeGreaterThan(0);
+        air.now = mild;
+        steps(200);
+        expect(iceOf(sent.at(-1)).every((byte) => byte === 0)).toBe(true);
+        expect(sent.at(-1)?.ice.length).toBe(0);
+        manager.stop();
+    });
+
+    it("freezes nothing where no water lies, nor in an air that is not known", () => {
+        const dry = createHarness({ weather: WeatherType.Clear });
+        dry.manager.snowUnder(() => frost);
+        dry.manager.mapChanged();
+        dry.steps(10);
+        expect(iceOf(dry.sent.at(-1)).every((byte) => byte === 0)).toBe(true);
+        dry.manager.stop();
+        const unknown = iceHarness();
+        unknown.air.now = undefined;
+        unknown.manager.mapChanged();
+        unknown.steps(10);
+        expect(iceOf(unknown.sent.at(-1)).every((byte) => byte === 0)).toBe(true);
+        unknown.manager.stop();
+    });
+
+    it("freezes the water on a map that turned its grass off", () => {
+        const { manager, sent, steps } = iceHarness({
+            meadow: { enabled: false, growMinutes: 10, thirstMinutes: 20, moistureHold: 1 },
+        });
+        manager.mapChanged();
+        steps(5);
+        expect(iceOf(sent.at(-1))[centre]).toBeGreaterThan(0);
+        manager.stop();
+    });
+
+    it("has the ice broken by a comet, and melted by a fireball and by the fire a player holds", () => {
+        const { manager, sent, steps } = iceHarness();
+        manager.mapChanged();
+        steps(10);
+        expect(iceOf(sent.at(-1))[centre]).toBeGreaterThan(0);
+        manager.shatter(point.x, point.y, 1);
+        steps(1);
+        // Broken, then taking again in the frost: thinner than away from the crater.
+        expect(iceOf(sent.at(-1))[centre]).toBeLessThan(iceOf(sent.at(-1))[0]);
+        steps(10);
+        const before = iceOf(sent.at(-1))[centre];
+        for (let patch = 0; patch < 3; patch++) manager.ignite(point.x, point.y, 1);
+        steps(1);
+        expect(iceOf(sent.at(-1))[centre]).toBeLessThan(before);
+        manager.scorch(point.x, point.y, 1, 7);
+        steps(1);
+        expect(iceOf(sent.at(-1))[centre]).toBeLessThan(iceOf(sent.at(-1))[0]);
+        manager.stop();
+    });
+
+    it("brings the ice back after a restart", async () => {
+        const first = iceHarness();
+        first.manager.mapChanged();
+        first.steps(10);
+        first.manager.stop();
+        expect(first.store.ice).toBeDefined();
+        const second = iceHarness({ saved: first.store });
+        second.air.now = { ...frost, temperature: 0 };
+        await second.manager.restore();
+        second.manager.mapChanged();
+        second.steps(5);
+        expect(iceOf(second.sent.at(-1))[centre]).toBeGreaterThan(0);
+        second.manager.stop();
     });
 });

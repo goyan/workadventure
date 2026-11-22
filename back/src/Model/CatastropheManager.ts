@@ -1,4 +1,9 @@
 import {
+    BALL_LASTS_MS,
+    BALL_MIN_REPORT_MS,
+    ballRadiusPx,
+    BALLS_PER_ROOM,
+    ballTiles,
     DOWNPOUR_LASTS_MS,
     DOWNPOUR_MIN_REPORT_MS,
     downpourTiles,
@@ -12,10 +17,14 @@ import {
     METEOR_FALL_MS,
     meteorShape,
     METEORS_PER_ROOM,
+    TILE_PX,
 } from "@workadventure/map-editor";
-import type { Downpour, Drain } from "@workadventure/map-editor";
+import type { Ball, Downpour, Drain } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
 import type { GameRoom } from "./GameRoom";
+
+/** The ice broken around a player who goes through it, in tiles: the hole they fall into. */
+const ICE_BREAK_TILES = 1;
 
 /**
  * The catastrophes of a room: a player launches a meteor at a point of the map, the room is told when it will hit
@@ -27,6 +36,10 @@ import type { GameRoom } from "./GameRoom";
  *
  * A drain is its opposite: the water is taken hard from a disc of the map for as long as its player keeps telling
  * where. One for each player too; the water reads those that are open.
+ *
+ * A ball is a solid sphere held under the pointer of its player, its centre at the altitude 0 of the map. It is
+ * there at once, whole, follows the pointer at each message, and is gone at once when its player lets go (or a
+ * moment after their last message, when they left). The water reads where the balls are.
  */
 interface LiveDownpour extends Downpour {
     until: number;
@@ -38,8 +51,16 @@ interface LiveDrain extends Drain {
     toldAt: number;
 }
 
+interface LiveBall extends Ball {
+    /** Until when it stands if its player says nothing more. */
+    until: number;
+    toldAt: number;
+}
+
 export class CatastropheManager {
     private nextId = 1;
+    /** The ball each player holds, by the id of the player. */
+    private readonly holding = new Map<number, LiveBall>();
     /** The downpour of each player, by the id of the player. */
     private readonly raining = new Map<number, LiveDownpour>();
     /** The drain of each player, by the id of the player. */
@@ -53,6 +74,10 @@ export class CatastropheManager {
     private ignite: (x: number, y: number, radiusTiles: number) => void = () => undefined;
     /** What a fireball does where it lands: the water and the meadow of the room, given once they are made. */
     private burn: (x: number, y: number, radiusTiles: number, id: number) => void = () => undefined;
+    /** What breaks the ice under a player: given by the room (the ice the meadow keeps), as for the comets. */
+    private breakIce: (x: number, y: number, radiusTiles: number) => void = () => undefined;
+    /** When each player last broke the ice: once a second at most. */
+    private readonly iceBreaks = new Map<number, number>();
     private readonly inFlight = new Set<ReturnType<typeof setTimeout>>();
 
     constructor(
@@ -176,9 +201,115 @@ export class CatastropheManager {
         for (const [userId, drain] of this.draining) if (drain.until <= now) this.draining.delete(userId);
     }
 
+    /**
+     * A player holds a ball at a point of the map (pixels), `diameterTiles` wide: their ball is there at once, whole,
+     * or is now at that point. The room is told each time. False when it is refused.
+     */
+    public ball(userId: number, x: number, y: number, diameterTiles: number = 0): boolean {
+        if (this.stopped) return false;
+        const size = this.mapSize();
+        if (!size || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+        if (x < 0 || y < 0 || x >= size.width || y >= size.height) return false;
+        const now = this.now();
+        this.forgetBalls(now);
+        const held = this.holding.get(userId);
+        if (held ? now - held.toldAt < BALL_MIN_REPORT_MS : this.holding.size >= BALLS_PER_ROOM) return false;
+        const tiles = ballTiles(diameterTiles);
+        const ball: LiveBall = {
+            id: held?.id ?? this.nextId++,
+            x,
+            y,
+            radiusPx: ballRadiusPx(tiles),
+            until: now + BALL_LASTS_MS,
+            toldAt: now,
+        };
+        this.holding.set(userId, ball);
+        this.tellBall(userId, ball, tiles, BALL_LASTS_MS);
+        return true;
+    }
+
+    /** A player lets their ball go: it is gone at once, and the room is told. False when they held none. */
+    public release(userId: number): boolean {
+        const ball = this.holding.get(userId);
+        if (!ball) return false;
+        this.holding.delete(userId);
+        if (this.stopped) return false;
+        this.tellBall(userId, ball, Math.round((ball.radiusPx * 2) / TILE_PX), 0);
+        return true;
+    }
+
+    private tellBall(userId: number, ball: LiveBall, tiles: number, lastsMs: number): void {
+        this.room.sendSubMessageToRoom({
+            message: {
+                $case: "catastropheMessage",
+                catastropheMessage: {
+                    id: ball.id,
+                    kind: CatastropheKind.CATASTROPHE_BALL,
+                    x: ball.x,
+                    y: ball.y,
+                    impactInMs: lastsMs,
+                    radiusTiles: tiles,
+                    wholeMap: false,
+                    userId,
+                },
+            },
+        });
+    }
+
+    /** The balls standing on the map now. */
+    public balls(): Ball[] {
+        this.forgetBalls(this.now());
+        return [...this.holding.values()].map(({ id, x, y, radiusPx }) => ({ id, x, y, radiusPx }));
+    }
+
+    /** A ball whose player said nothing for too long (they left) is gone. */
+    private forgetBalls(now: number): void {
+        for (const [userId, ball] of this.holding) if (ball.until <= now) this.holding.delete(userId);
+    }
+
     /** What a fireball burns is made after the catastrophes of a room: it is given here. */
     public burnWith(burn: (x: number, y: number, radiusTiles: number, id: number) => void): void {
         this.burn = burn;
+    }
+
+    /** What breaks the ice is made after the catastrophes of a room (the meadow): it is given here. */
+    public breakIceWith(breakIce: (x: number, y: number, radiusTiles: number) => void): void {
+        this.breakIce = breakIce;
+    }
+
+    /**
+     * The ice gives way under a player (too thin to bear them over deep water: their client felt it crack): it is
+     * broken a tile around the point, and the room sees the hole open. False when refused: outside the map, or more
+     * than once a second for a player.
+     */
+    public iceBreak(userId: number, x: number, y: number): boolean {
+        if (this.stopped) return false;
+        const size = this.mapSize();
+        if (!size || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+        if (x < 0 || y < 0 || x >= size.width || y >= size.height) return false;
+        const now = this.now();
+        if (now - (this.iceBreaks.get(userId) ?? -Infinity) < 1000) return false;
+        this.iceBreaks.set(userId, now);
+        this.room.sendSubMessageToRoom({
+            message: {
+                $case: "catastropheMessage",
+                catastropheMessage: {
+                    id: this.nextId++,
+                    kind: CatastropheKind.CATASTROPHE_ICE_BREAK,
+                    x: Math.round(x),
+                    y: Math.round(y),
+                    impactInMs: 0,
+                    radiusTiles: ICE_BREAK_TILES,
+                    wholeMap: false,
+                },
+            },
+        });
+        try {
+            this.breakIce(x, y, ICE_BREAK_TILES);
+        } catch (error) {
+            console.error("The ice of the map could not be broken", error);
+        }
+        return true;
     }
 
     /** What a patch of fire lights is made after the catastrophes of a room: it is given here. */
@@ -232,7 +363,7 @@ export class CatastropheManager {
         return true;
     }
 
-    /** What a player asks for: the downpour that follows them, or a catastrophe thrown once. */
+    /** What a player asks for: the downpour, the drain or the ball that follows them, or a catastrophe thrown once. */
     public request(
         userId: number,
         kind: CatastropheKind,
@@ -240,10 +371,15 @@ export class CatastropheManager {
         y: number,
         radiusTiles: number,
         wholeMap: boolean,
+        release = false,
     ): boolean {
+        // Only a ball is let go: the others end by themselves.
+        if (release) return kind === CatastropheKind.CATASTROPHE_BALL && this.release(userId);
         if (kind === CatastropheKind.CATASTROPHE_DOWNPOUR) return this.rain(userId, x, y, radiusTiles, wholeMap);
         if (kind === CatastropheKind.CATASTROPHE_FIRE) return this.fire(userId, x, y, radiusTiles);
         if (kind === CatastropheKind.CATASTROPHE_DRAIN) return this.drain(userId, x, y, radiusTiles);
+        if (kind === CatastropheKind.CATASTROPHE_BALL) return this.ball(userId, x, y, radiusTiles);
+        if (kind === CatastropheKind.CATASTROPHE_ICE_BREAK) return this.iceBreak(userId, x, y);
         return this.launch(kind, x, y, radiusTiles);
     }
 
@@ -298,5 +434,6 @@ export class CatastropheManager {
         this.inFlight.clear();
         this.raining.clear();
         this.draining.clear();
+        this.holding.clear();
     }
 }

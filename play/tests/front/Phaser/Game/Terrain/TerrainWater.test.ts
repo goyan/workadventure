@@ -1,4 +1,4 @@
-import { cellKey, withHeights } from "@workadventure/map-editor";
+import { cellKey, DEFAULT_POOL_STYLE, heightAt, poolSoilCode, withHeights, withSoils } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
 import { TerrainWater } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
 import type { WaterState } from "../../../../../src/front/Phaser/Game/Terrain/TerrainWater";
@@ -142,6 +142,23 @@ describe("TerrainWater", () => {
         expect(depths[0]).toBe(100);
     });
 
+    it("shows a running sheet of water thinner than a still film it leaves out", () => {
+        // A sheet of 0.25 px (9 mm) over a slope of meadow, as the server tells it with its speed: the flows of the
+        // water show an arrow there, the ground is drawn wet. The same film lying still (what a flood leaves) is not.
+        const levels = new Uint8Array(6);
+        const still = new TerrainWater();
+        still.setTerrain(pit);
+        still.receive({ ...full(1, { "0,0": 0.25, "1,0": 0.125 }), speeds: Uint8Array.from([0, 0]) }, 0);
+        expect(still.levelsOver(0, 0, 3, 2, 5000, levels)).toBe(false);
+
+        const running = new TerrainWater();
+        running.setTerrain(pit);
+        // One block of speeds for this grid: a cell a second towards the south (SPEED_UNITS units).
+        running.receive({ ...full(1, { "0,0": 0.25, "1,0": 0.125, "2,0": 0.0 }), speeds: Uint8Array.from([0, 4]) }, 0);
+        expect(running.levelsOver(0, 0, 3, 2, 5000, levels)).toBe(true);
+        expect([...levels]).toEqual([1, 1, 0, 0, 0, 0]);
+    });
+
     it("says when what it shows changed: the relief, a state, or the water gliding", () => {
         const water = new TerrainWater();
         const empty = water.drawKey(0);
@@ -221,5 +238,21 @@ describe("the bridges over the water of the relief", () => {
         const same = water.version();
         water.setBridges(new Set());
         expect(water.version()).toBe(same);
+    });
+});
+
+describe("the basins of the pools, for the water", () => {
+    it("reads the pools of the map as dug in its relief, which is left as it is drawn", () => {
+        const painted = withSoils(undefined, new Map([[cellKey(5, 5), poolSoilCode(0)]]));
+        const water = new TerrainWater();
+        water.setTerrain(painted);
+        expect(water.relief()).toBe(painted);
+        expect(heightAt(water.relief(), 5, 5)).toBe(0);
+        expect(heightAt(water.basin(), 5, 5)).toBe(-DEFAULT_POOL_STYLE.depthPx);
+        const before = water.version();
+        water.setPools([{ ...DEFAULT_POOL_STYLE, depthPx: 20 }]);
+        expect(water.version()).toBeGreaterThan(before);
+        expect(heightAt(water.basin(), 5, 5)).toBe(-20);
+        expect(heightAt(water.basin(), 6, 5)).toBe(0);
     });
 });

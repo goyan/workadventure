@@ -3,6 +3,8 @@ import {
     boundedFireConditions,
     boundedFireThresholds,
     DEFAULT_FIRE_THRESHOLDS,
+    FIRE_CONDITION_BOUNDS,
+    FIRE_THRESHOLD_BOUNDS,
     fireDanger,
     fireDangerLevel,
     NEUTRAL_FIRE_CONDITIONS,
@@ -38,6 +40,17 @@ describe("fireDanger", () => {
         expect(fireDanger(at(45, 5, 90), DEFAULT_FIRE_THRESHOLDS)).toBe(1);
     });
 
+    it("holds at the extremes of the conditions: none in a great cold, the highest in a dry heat and a storm", () => {
+        for (const windSpeed of [0, 100, 180, 250]) {
+            expect(fireDanger(at(-80, 5, windSpeed), DEFAULT_FIRE_THRESHOLDS)).toBe(0);
+            expect(fireDanger(at(-40, 0, windSpeed), DEFAULT_FIRE_THRESHOLDS)).toBe(0);
+            expect(fireDanger(at(80, 100, windSpeed), DEFAULT_FIRE_THRESHOLDS)).toBe(0);
+        }
+        expect(fireDanger(at(80, 0, 250), DEFAULT_FIRE_THRESHOLDS)).toBe(1);
+        expect(fireDanger(at(60, 5, 0), DEFAULT_FIRE_THRESHOLDS)).toBe(0.5);
+        expect(fireDangerLevel(fireDanger(at(80, 0, 250), DEFAULT_FIRE_THRESHOLDS))).toBe(3);
+    });
+
     it("goes by the thresholds of the room", () => {
         const thresholds = { temperature: 40, humidity: 20, windSpeed: 50 };
         expect(fireDanger(at(30, 30, 30), thresholds)).toBeCloseTo((5 / 15) * (0.5 + 0.5 * 0.6), 6);
@@ -57,14 +70,33 @@ describe("the bounds of the conditions", () => {
                 { temperature: 999, humidity: -5, windSpeed: Number.NaN, windFrom: 725 },
                 NEUTRAL_FIRE_CONDITIONS,
             ),
-        ).toEqual({ temperature: 50, humidity: 0, windSpeed: 10, windFrom: 5 });
+        ).toEqual({ temperature: 80, humidity: 0, windSpeed: 10, windFrom: 5 });
         expect(boundedFireConditions({ temperature: Number.POSITIVE_INFINITY }, NEUTRAL_FIRE_CONDITIONS)).toEqual(
             NEUTRAL_FIRE_CONDITIONS,
         );
         expect(boundedFireConditions({ windFrom: -90 }, NEUTRAL_FIRE_CONDITIONS).windFrom).toBe(270);
     });
 
-    it("keeps the thresholds within theirs", () => {
+    it("takes a cold of -80 to a heat of +80 degrees and a wind of up to 250 km/h, and brings back what is beyond", () => {
+        expect(FIRE_CONDITION_BOUNDS).toEqual({ temperature: [-80, 80], humidity: [0, 100], windSpeed: [0, 250] });
+        const kept = (temperature: number, windSpeed: number) =>
+            boundedFireConditions({ temperature, windSpeed }, NEUTRAL_FIRE_CONDITIONS);
+        expect(kept(-80, 250)).toMatchObject({ temperature: -80, windSpeed: 250 });
+        expect(kept(80, 0)).toMatchObject({ temperature: 80, windSpeed: 0 });
+        expect(kept(-81, 251)).toMatchObject({ temperature: -80, windSpeed: 250 });
+        expect(kept(81, -1)).toMatchObject({ temperature: 80, windSpeed: 0 });
+    });
+
+    it("lets the cold go down far enough to freeze a lake, and no further than -80 °C", () => {
+        expect(boundedFireConditions({ temperature: -25 }, NEUTRAL_FIRE_CONDITIONS).temperature).toBe(-25);
+        expect(boundedFireConditions({ temperature: -90 }, NEUTRAL_FIRE_CONDITIONS).temperature).toBe(-80);
+    });
+
+    it("keeps the thresholds within theirs, each still reached by the conditions", () => {
+        for (const key of ["temperature", "humidity", "windSpeed"] as const) {
+            expect(FIRE_THRESHOLD_BOUNDS[key][0]).toBeGreaterThanOrEqual(FIRE_CONDITION_BOUNDS[key][0]);
+            expect(FIRE_THRESHOLD_BOUNDS[key][1]).toBeLessThanOrEqual(FIRE_CONDITION_BOUNDS[key][1]);
+        }
         expect(
             boundedFireThresholds({ temperature: -40, humidity: 0, windSpeed: 9999 }, DEFAULT_FIRE_THRESHOLDS),
         ).toEqual({ temperature: 0, humidity: 5, windSpeed: 120 });

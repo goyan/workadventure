@@ -1,5 +1,5 @@
 import type * as Phaser from "phaser";
-import { poolStyleAt, poolStyleOf, TERRAIN_CELL, TERRAIN_CHUNK } from "@workadventure/map-editor";
+import { poolStyleAt, poolStyleOf, soilAt, TERRAIN_CELL, TERRAIN_CHUNK } from "@workadventure/map-editor";
 import type { InteractionTrigger, PoolStyle, TerrainData } from "@workadventure/map-editor";
 import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRectangles";
 import { getObjectInteraction } from "../../../Utils/ObjectCategories";
@@ -87,7 +87,17 @@ function allWaterRectangles(scene: Phaser.Scene): CachedWater {
         }
     }
     // Asked of the scene (FrozenWater.ts through GameScene): what the cold does stays out of this module.
-    ground.push(...paintedPoolRectangles(gameScene));
+    // A painted pool holds the water of the relief (the server fills it): emptied, it is no water, one walks on its
+    // floor until it fills again.
+    const terrainWater = gameScene.getTerrainWater?.();
+    const now = scene.time?.now ?? 0;
+    ground.push(
+        ...paintedPoolRectangles(gameScene).filter(
+            (pool) =>
+                !terrainWater ||
+                terrainWater.depthAt(pool.x + pool.width / 2, pool.y + pool.height / 2, now) >= SWIM_DEPTH_PX,
+        ),
+    );
     const frozen = gameScene.isPoolFrozen ? ground.filter((rectangle) => gameScene.isPoolFrozen?.(rectangle)) : [];
     cache = {
         scene,
@@ -127,6 +137,18 @@ export function isDeepTerrainWater(
     // The water as it is drawn (between the centres of the cells, as the lake and the avatar in it are), so that one
     // swims where the water is drawn dark: not by squares of a cell.
     return waterDepthAtPoint((x, y) => water.depthAt(x, y, now), point.x, point.y) >= SWIM_DEPTH_PX;
+}
+
+/**
+ * Whether a point is in a pool painted with the relief tool (its cell kept as the soil of a pool style): water of the
+ * relief, but no water for a canoe.
+ */
+export function isPoolAt(terrain: TerrainData | undefined, point: Point): boolean {
+    if (!terrain) return false;
+    return (
+        poolStyleOf(soilAt(terrain, Math.floor(point.x / TERRAIN_CELL), Math.floor(point.y / TERRAIN_CELL))) !==
+        undefined
+    );
 }
 
 export function isPointInWater(rectangles: WaterRectangle[], point: Point): boolean {

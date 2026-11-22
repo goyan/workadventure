@@ -51,6 +51,11 @@
         shown = { ...shown, [field]: value };
         send();
     }
+    /** A button − or + moves a condition by one, within its bounds: a fine setting over a wide slider. */
+    function nudge(field: "temperature" | "humidity" | "windSpeed", by: number): void {
+        const [min, max] = FIRE_CONDITION_BOUNDS[field];
+        change(field, Math.min(max, Math.max(min, Math.round(shown[field]) + by)));
+    }
     function setManual(manual: boolean): void {
         shown = { ...shown, manual };
         send();
@@ -149,12 +154,13 @@
         <p class="m-0 max-w-xs text-white/60">{$LL.actionbar.catastrophe.weather.realHint()}</p>
     {/if}
     {#each conditionRows as row (row.field)}
-        <label
-            class="grid grid-cols-[7rem_1fr_5rem] items-center gap-2 {shown.manual ? '' : 'opacity-60'}"
+        <div
+            class="grid grid-cols-[7rem_1fr_auto_5rem] items-center gap-2 {shown.manual ? '' : 'opacity-60'}"
             data-met={met[row.field]}
         >
-            <span>{row.label}</span>
+            <label for="fire-{row.field}">{row.label}</label>
             <input
+                id="fire-{row.field}"
                 type="range"
                 min={row.bounds[0]}
                 max={row.bounds[1]}
@@ -164,12 +170,30 @@
                 data-testid="fire-{row.field}"
                 oninput={(event) => change(row.field, Number(event.currentTarget.value))}
             />
+            <span class="flex gap-0.5">
+                <button
+                    type="button"
+                    class="h-5 w-5 rounded bg-white/10 p-0 leading-none disabled:opacity-40"
+                    disabled={!shown.manual || shown[row.field] <= row.bounds[0]}
+                    aria-label={$LL.actionbar.catastrophe.weather.less({ label: row.label })}
+                    data-testid="fire-{row.field}-less"
+                    onclick={() => nudge(row.field, -1)}>−</button
+                >
+                <button
+                    type="button"
+                    class="h-5 w-5 rounded bg-white/10 p-0 leading-none disabled:opacity-40"
+                    disabled={!shown.manual || shown[row.field] >= row.bounds[1]}
+                    aria-label={$LL.actionbar.catastrophe.weather.more({ label: row.label })}
+                    data-testid="fire-{row.field}-more"
+                    onclick={() => nudge(row.field, 1)}>+</button
+                >
+            </span>
             <!-- In the pixel font, a 5 reads as an S: the figures use the system font, as in the weather banner. -->
             <span
                 class="whitespace-nowrap text-end tabular-nums {met[row.field] ? 'text-orange-300' : 'text-white/60'}"
                 style:font-family="var(--ui-font-system)">{met[row.field] ? "✓ " : ""}{row.value}</span
             >
-        </label>
+        </div>
     {/each}
     <label class="grid grid-cols-[7rem_1fr] items-center gap-2 {shown.manual ? '' : 'opacity-60'}">
         <span>{$LL.actionbar.catastrophe.weather.windFrom()}</span>

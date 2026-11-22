@@ -109,7 +109,8 @@
                 {/if}
             </span>
         {/if}
-        <span class="truncate font-bold" data-testid="{testid}-city">{city}</span>
+        <!-- Up to two lines: a point far from any city says its coordinates and the nearest city. -->
+        <span class="line-clamp-2 min-w-0 break-words font-bold" title={city} data-testid="{testid}-city">{city}</span>
         {#if now?.manual}
             <span class="rounded bg-white/20 px-1" data-testid="weather-banner-manual"
                 >{$LL.actionbar.weatherBanner.manual()}</span

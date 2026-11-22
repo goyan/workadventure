@@ -3,8 +3,14 @@
     import { FLOW_SPEED_SCALE } from "../../Phaser/Game/Terrain/WaterFlowField";
     import { FALLING_COLOR, RISING_COLOR } from "../../Phaser/Game/Terrain/WaterFlowOverlay";
     import { terrainWaterStatsStore } from "../../Stores/TerrainEditorStore";
-    import { visualisationPanelStore, waterFlowOverlayStore } from "../../Stores/VisualisationStore";
-    import { IconDroplet } from "@wa-icons";
+    import {
+        visualisationPanelStore,
+        waterFlowMeasuredStore,
+        waterFlowOverlayStore,
+        weatherExplainedStore,
+    } from "../../Stores/VisualisationStore";
+    import WeatherBoardLive from "./WeatherBoardLive.svelte";
+    import { IconCloud, IconDroplet } from "@wa-icons";
 
     const css = (color: number): string => `#${color.toString(16).padStart(6, "0")}`;
     // The scale of the speeds, as the arrows are coloured: evenly spread along the bar.
@@ -12,6 +18,7 @@
     const whole = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
     const stats = $derived($terrainWaterStatsStore);
     const flowing = $derived($waterFlowOverlayStore);
+    const explaining = $derived($weatherExplainedStore);
 </script>
 
 {#if $visualisationPanelStore}
@@ -32,6 +39,18 @@
             >
                 <IconDroplet width="16" height="16" />
                 <span>{$LL.actionbar.visualisation.waterFlow()}</span>
+            </button>
+            <button
+                type="button"
+                class="flex items-center gap-1 rounded-full px-2 py-1 {explaining
+                    ? 'bg-white/30 ring-1 ring-white'
+                    : 'bg-white/10 hover:bg-white/20'}"
+                aria-pressed={explaining}
+                data-testid="visualisation-weather-explained"
+                onclick={() => weatherExplainedStore.update((shown) => !shown)}
+            >
+                <IconCloud width="16" height="16" />
+                <span>{$LL.actionbar.visualisation.weather.button()}</span>
             </button>
             <span class="opacity-70">
                 {flowing ? $LL.actionbar.visualisation.onHelp() : $LL.actionbar.visualisation.offHelp()}
@@ -63,7 +82,9 @@
                         {$LL.actionbar.visualisation.falling()}
                     </span>
                 </div>
+                <div class="opacity-80">{$LL.actionbar.visualisation.trend()}</div>
                 <div class="opacity-80">{$LL.actionbar.visualisation.masses()}</div>
+                <div class="opacity-80">{$LL.actionbar.visualisation.realTime()}</div>
                 {#if stats}
                     <div data-testid="visualisation-water-totals">
                         {$LL.actionbar.visualisation.totals({
@@ -76,8 +97,16 @@
                         {$LL.actionbar.visualisation.noWater()}
                     </div>
                 {/if}
-                <div class="opacity-60">{$LL.actionbar.visualisation.estimated()}</div>
+                <div class="opacity-60" data-testid="visualisation-water-speeds">
+                    {$waterFlowMeasuredStore
+                        ? $LL.actionbar.visualisation.measured()
+                        : $LL.actionbar.visualisation.estimated()}
+                </div>
             </div>
+        {/if}
+        {#if explaining}
+            <!-- Why this player sees the rain, the snow, the frost and the ice they see. -->
+            <WeatherBoardLive />
         {/if}
     </div>
 {/if}

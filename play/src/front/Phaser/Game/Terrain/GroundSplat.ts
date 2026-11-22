@@ -5,10 +5,16 @@ import { refreshCanvasTexture } from "@wa/front/Phaser/Game/CanvasTextureRefresh
 import { DEEP_ICE_PX, POOL_ICE_DEPTH_PX } from "@wa/front/Phaser/Game/Weather/Frost";
 import type { WaterCycle } from "@wa/front/Phaser/Game/Weather/Frost";
 import type { WaterRing } from "@wa/front/Phaser/Game/Catastrophe/MeteorFall";
+import { MAX_SHOWN_BREAKS } from "../Ice/IceBreaks";
+import type { IceBreak } from "../Ice/IceBreaks";
+import { SHORE_PX } from "./TerrainShading";
+import { WHITECAP_MIN_DEPTH_PX } from "./Whitecaps";
 import { HEIGHT_OFFSET, HEIGHT_SCALE, OBLIQUE_HALVINGS, OBLIQUE_STEPS, writeHeights } from "./ObliqueView";
 import { DROP_SCALE, MAX_DROP, MAX_RISE } from "./Pixel/ColumnPainter";
 import { GROUND_TEXTURES } from "./TexturedGround";
 import type { GroundArea } from "./TexturedGround";
+import { NO_WATER_REFLECTION } from "./WaterReflection";
+import type { WaterReflection } from "./WaterReflection";
 
 /**
  * The grounds of the relief drawn on the graphics card, as a game draws its terrain: one picture of the weights of each
@@ -28,15 +34,55 @@ import type { GroundArea } from "./TexturedGround";
  * The picture of the weights: four packs side by side, each the size of the area (a pixel per cell): six soils, the
  * grass, the snow and the water; the relief (how deep a cell is dug, how high it is raised, in map pixels) and the
  * ash; the straw and the fire of the meadow, and what is outdoors; the pools (whether a cell is one, how deep, whether
- * hot), the colour of their water and of their coping.
+ * hot), the colour of their water and of their coping; the ice the server keeps over the water (its thickness, see
+ * iceByte), whether a cell is a pool placed as an image and whether it holds water; the moisture of the soil the
+ * server keeps (pack 9, green, its red the foam of the waves), and two packs to spare.
  */
-const PACKS = 8;
+const PACKS = 12;
 /** The packs are laid in a grid this many wide (and PACKS / PACKS_ACROSS high): a wide view stays within the size a
  * texture may have on a phone. */
 const PACKS_ACROSS = 4;
 const PACKS_DOWN = PACKS / PACKS_ACROSS;
 /** The depth of water (map pixels) the water channel reaches its full value at. */
 const WATER_SCALE_PX = 128;
+/** The depth (0 to 1 of WATER_SCALE_PX) times this is how far a deep water reaches over the cells around it. */
+const SHORE_GAIN = 12;
+/**
+ * The reflectance of a ground soaked, against the same ground dry (linear, visible light). Porous soils lose about
+ * half of it: 0.4 to 0.6 for soils (Lobell & Asner 2002, Soil Sci. Soc. Am. J. 66:722), a loam's albedo from about
+ * 0.30 dry to 0.14 wet (Idso et al. 1975, J. Appl. Meteorol. 14:109), sand about 0.4 dry and 0.23 wet; 0.45 for a beach sand,
+ * the darker end of the soils, so that a wet beach reads at once as it does. Rock, gravel and
+ * grass are a choice, not sourced: a stone does not drink (a film only), the blades of grass are not porous.
+ */
+export const WET_REFLECTANCE = {
+    earth: 0.54,
+    meadow: 0.54,
+    clay: 0.48,
+    sand: 0.45,
+    rock: 0.8,
+    gravel: 0.65,
+    grass: 0.9,
+} as const;
+const SRGB_GAMMA = 2.2;
+/** The weights of the red, green and blue in the luminance (Rec. 709, linear). */
+const LUMA = [0.2126, 0.7152, 0.0722] as const;
+/**
+ * How much a wet ground deepens its colour, 0 (a plain darkening) to 1 (each channel darkened as a grey of its own
+ * brightness would be): half, a choice; the sources give the darkening, not how much the colour deepens.
+ */
+const WET_DEEPENING = 0.5;
+/** How fast the reflectance falls with the moisture of the soil (0 to 1): most of the darkening by half of it. */
+const MOISTURE_CURVE = 6;
+/**
+ * The moisture of a soil (0 to 1, Meadow.ts) from which its surface is wet. The server keeps the water of the soil, the
+ * eye sees its first millimetres, which dry first: under this the water is in the depth and the surface is dry and
+ * light, over it the surface is wet and soon as dark as it gets. A clear wet line, as on a beach: a choice, not sourced.
+ */
+export const SURFACE_WET_MOISTURE = 0.25;
+/** How sharp the wet line is: the moisture over which it goes from dry to wet, bent by the noise of the edges, is 1/this. */
+const WET_LINE_GAIN = 3;
+/** A number as GLSL reads it. */
+const glsl = (value: number): string => value.toFixed(4);
 /** How strong the dark of the hollows and the light of the mounts are, against the bare relief: the water and the
  * textures already tell the depth. */
 const RELIEF_SHADE = 0.6;
@@ -46,7 +92,7 @@ const UNITS_NEEDED = 9;
 const OBLIQUE_DEFINE = "#define OBLIQUE 1\n";
 /** The picture of the heights is the last texture of each shader. */
 const GROUND_HEIGHTS_UNIT = 9;
-const WATER_HEIGHTS_UNIT = 2;
+const WATER_HEIGHTS_UNIT = 4;
 
 const SOIL_KEYS = [
     GROUND_TEXTURES.earth,
@@ -189,6 +235,16 @@ float luma(vec3 c) {
 float bend(float level, float noise, float strength) {
     return clamp(level + noise * strength * 4.0 * level * (1.0 - level), 0.0, 1.0);
 }
+
+// How wet the soil is from its moisture as the server keeps it (pack 9, green): fast with the first water, then level
+// (groundWetness is the twin of this rule).
+float soakedOf(float moisture) {
+    return (1.0 - exp(-${MOISTURE_CURVE}.0 * moisture)) / (1.0 - exp(-${MOISTURE_CURVE}.0));
+}
+
+float soakedAt(vec2 world) {
+    return soakedOf(pack(9.0, world).g);
+}
 `;
 
 const GROUND_FRAG = `${COMMON_GLSL}
@@ -223,6 +279,20 @@ float score(float weight, vec4 sample, float height, float index, vec2 world) {
     if (weight <= 0.001) return -1.0;
     float wobble = vnoise(world / 22.0 + index * 13.7) - 0.5;
     return bend(weight, wobble, 0.9) + luma(sample.rgb) * height;
+}
+
+// The colour of a ground of this reflectance (wet over dry) this wet: darker by the reflectance, its colour deepened
+// (wetColor is the twin of this rule).
+vec3 wetColour(vec3 colour, float reflectance, float wet) {
+    float target = 1.0 - (1.0 - reflectance) * clamp(wet, 0.0, 1.0);
+    if (target >= 0.9999) return colour;
+    vec3 weights = vec3(${LUMA.map(glsl).join(", ")});
+    vec3 linear = pow(max(colour, vec3(0.0)), vec3(${glsl(SRGB_GAMMA)}));
+    float lit = clamp(dot(linear, weights), 0.02, 0.98);
+    float power = 1.0 + log(target) / log(lit) * ${glsl(WET_DEEPENING)};
+    vec3 deep = pow(linear, vec3(power));
+    float scale = target * dot(linear, weights) / max(0.0001, dot(deep, weights));
+    return pow(min(vec3(1.0), deep * scale), vec3(1.0 / ${glsl(SRGB_GAMMA)}));
 }
 
 // Height blending: only the soils close to the best score show, the others fade out over BLEND.
@@ -265,6 +335,14 @@ void main() {
     float mixed = sum.a > 0.0 ? 1.0 - clamp((sum.a - BLEND) / BLEND, 0.0, 1.0) : 0.0;
     color *= 1.0 - 0.12 * mixed;
     vec4 outColor = vec4(color * soilAlpha, soilAlpha);
+    // The reflectance of the ground soaked against dry (WET_REFLECTANCE): by its soil, earth where none is painted (as
+    // the server counts it), then by what lies over it.
+    float weights = a.r + a.g + a.b + b.r + b.g + b.b;
+    float tone = weights > 0.001
+        ? (a.r * ${glsl(WET_REFLECTANCE.earth)} + a.g * ${glsl(WET_REFLECTANCE.meadow)}
+            + a.b * ${glsl(WET_REFLECTANCE.clay)} + b.r * ${glsl(WET_REFLECTANCE.sand)}
+            + b.g * ${glsl(WET_REFLECTANCE.rock)} + b.b * ${glsl(WET_REFLECTANCE.gravel)}) / weights
+        : ${glsl(WET_REFLECTANCE.earth)};
 
     // In 3/4 a ground dug or raised is drawn away from its place, and the tiles of the map stay where they are: they
     // must not show under it. Where no soil is painted, grass (what a bare ground dug always was, seen in 3/4).
@@ -295,6 +373,7 @@ void main() {
             blade = mix(blade, yellowed, (0.3 + 0.35 * vnoise(world / 90.0)) * uAutumn);
         }
         outColor = vec4(blade * grassAlpha, grassAlpha) + outColor * (1.0 - grassAlpha);
+        tone = mix(tone, ${glsl(WET_REFLECTANCE.grass)}, grassAlpha);
     }
 
     // What the weather and the fire did to the meadow: straw where it dried, ash where it burnt, the glow of the fire.
@@ -310,6 +389,7 @@ void main() {
         strawColor *= 0.9 + 0.15 * hash(floor(world / 2.0) + 3.0);
         float strawAlpha = dry * 0.92;
         outColor = vec4(strawColor * strawAlpha, strawAlpha) + outColor * (1.0 - strawAlpha);
+        tone = mix(tone, ${glsl(WET_REFLECTANCE.grass)}, strawAlpha);
     }
     if (ash > 0.002) {
         // Burnt ground in patches, flecked with grey ash: it goes back patch by patch as the grass grows again.
@@ -323,6 +403,7 @@ void main() {
         float glow = step(1.0 - fire, 0.5 + 0.5 * vnoise(world / 6.0 + uTime * 2.0)) * 0.85;
         vec3 glowColor = mix(vec3(1.0, 0.48, 0.1), vec3(1.0, 0.8, 0.3), vnoise(world / 4.0 - uTime * 3.0));
         outColor = vec4(glowColor * glow, glow) + outColor * (1.0 - glow);
+        tone = mix(tone, 1.0, glow);
     }
 
     // The snow of the heights, its edge bent like the soils.
@@ -331,16 +412,34 @@ void main() {
         vec4 flakes = ground(uSnow, uSnowSize, world);
         float snowAlpha = step(0.45, bend(snow, edgeNoise + (luma(flakes.rgb) - 0.8) * 0.4, 1.4));
         outColor = vec4(flakes.rgb * snowAlpha, snowAlpha) + outColor * (1.0 - snowAlpha);
+        tone = mix(tone, 1.0, snowAlpha);
     }
 
-    // The cycle of the water (Frost.ts): the ground darkened by the rain, then white with frost when it freezes.
+    // The ground wet (groundWetness): by the rain of the air of the player (Frost.ts), by the moisture of its soil the
+    // server keeps, under the water of the relief (pack 8, blue): the most of the three, never their sum. Darker as
+    // its soil drinks (tone), in clear steps, with a sheen; then white with frost when it freezes.
     float outdoors = step(0.5, pack(4.0, world).b);
-    if (uWet * outdoors > 0.001 && outColor.a > 0.0) {
-        outColor.rgb *= 1.0 - 0.3 * uWet;
-        float sheen = step(0.82, fbm(world / 7.0)) * uWet * 0.25;
-        outColor.rgb += vec3(0.55, 0.65, 0.75) * sheen * outColor.a;
+    // The rain darkens the grounds the shaders paint, as before; the moisture and the water, those of the server,
+    // wet the tiles of the map too.
+    float rain = outColor.a > 0.002 ? uWet * outdoors : 0.0;
+    // The surface is wet from SURFACE_WET_MOISTURE on (groundWetness): a clear line, smoothed between the tiles the
+    // server keeps it by and bent by the same noise as the edges of the soils; past it, soon as dark as it gets.
+    float moisture = pack(9.0, world).g;
+    float line = clamp((moisture - ${glsl(SURFACE_WET_MOISTURE)}) * ${glsl(WET_LINE_GAIN)} + 0.5, 0.0, 1.0);
+    float surface = step(0.5, bend(line, edgeNoise, 1.5));
+    float wet = min(1.0, max(max(rain, surface * soakedOf(moisture)), pack(8.0, world).b));
+    if (wet > 0.001) {
+        // The colour deepens (wetColour), it is not veiled; over a ground the shaders do not paint (the tiles of the
+        // map, whose colour the shader does not know), a veil of the darkening of a wet earth.
+        if (outColor.a > 0.002) outColor.rgb = wetColour(outColor.rgb / outColor.a, tone, wet) * outColor.a;
+        float veil = (1.0 - outColor.a) * (1.0 - ${glsl(Math.pow(WET_REFLECTANCE.earth, 1 / SRGB_GAMMA))}) * wet;
+        outColor.a += veil;
+        // A soaked ground glints here and there: the white of the sky, no colour of its own.
+        float sheen = step(0.9, fbm(world / 5.0)) * smoothstep(0.6, 1.0, wet) * 0.15;
+        outColor.rgb += vec3(sheen) * outColor.a;
     }
-    if (uFrost * outdoors > 0.001) {
+    // No frost holds where the ground burns, nor on its ash while it is still warm.
+    if (uFrost * outdoors > 0.001 && fire + ash < 0.02) {
         float rime = step(1.0 - uFrost * 0.9, 0.55 * fbm(world / 9.0) + 0.45 * hash(floor(world) + 7.0));
         float rimeAlpha = rime * 0.8;
         outColor = vec4(vec3(0.9, 0.95, 1.0) * rimeAlpha, rimeAlpha) + outColor * (1.0 - rimeAlpha);
@@ -400,10 +499,26 @@ void main() {
 
 const WATER_FRAG = `${COMMON_GLSL}
 uniform float uStrength;
+// What the water reflects (WaterReflection.ts): the sky, the clouds (the thickness texture of CloudLayer), the sun,
+// the lamps at night (the night veil, where it is pierced).
+uniform vec4 uSkyTone;       // colour of the sky, share of it
+uniform sampler2D uCloudTexture;
+uniform vec4 uCloudArea;     // the part of the map the thickness covers
+uniform vec4 uCloudTone;     // colour of the clouds, share of them (0: none)
+uniform vec3 uSun;           // towards the sun on the map, strength of its glint
+uniform sampler2D uLampTexture;
+uniform vec4 uLampArea;      // the part of the map the night veil covers
+uniform float uLampOpacity;  // the opacity of the veil where no lamp shines (0: day)
 uniform sampler2D uIceTexture;
 uniform vec2 uIceSize;
 uniform float uIce;
 uniform float uSnow;
+// 1 for a player who follows the weather of the server: the ice and the snow on it are those the server keeps, cell
+// by cell; 0 for one who follows a place of their own: the ice of their own cold (uIce), the snow of their map.
+uniform float uServerIce;
+// The wind over the water: which way it blows (a vector of length 1) and the share of open water its whitecaps
+// whiten (Whitecaps.ts), 0 in a light wind.
+uniform vec3 uWind;
 // The fronts of the waves of the comets fallen into the water (x, y, radius in map pixels, strength 0 to 1).
 uniform vec4 uRing0;
 uniform vec4 uRing1;
@@ -421,12 +536,81 @@ float ringsAt(vec2 world) {
     return ringAt(uRing0, world) + ringAt(uRing1, world) + ringAt(uRing2, world) + ringAt(uRing3, world);
 }
 
+// The ice cracked or broken under an avatar (Ice/IceBreaks.ts): x, y, radius (map pixels), phase (0 to 1 while it
+// cracks, 1 just broken to 2 frozen over again).
+uniform vec4 uBreak0;
+uniform vec4 uBreak1;
+uniform vec4 uBreak2;
+uniform vec4 uBreak3;
+
+// The cracks (x) and the open water (y) of one break at a point.
+vec2 breakOf(vec4 b, vec2 world) {
+    if (b.w <= 0.0) return vec2(0.0);
+    vec2 d = world - b.xy;
+    float r = length(d);
+    float cracking = min(b.w, 1.0);
+    float healed = clamp(b.w - 1.0, 0.0, 1.0);
+    float reach = b.z * (0.5 + 1.3 * cracking);
+    if (r > reach + 6.0) return vec2(0.0);
+    float angle = atan(d.y, d.x);
+    float seed = hash(floor(b.xy));
+    // Cracks running out from the point: seven spokes bent by a noise, and a ring where the ice bends.
+    float spoke = abs(fract(angle / 6.28318 * 7.0 + seed * 7.0 + (vnoise(vec2(r / 7.0, seed * 13.0)) - 0.5) * 0.6) - 0.5);
+    float line = 1.0 - smoothstep(0.0, 0.9 / max(r, 2.0) + 0.012, spoke);
+    float ring = 1.0 - smoothstep(0.0, 1.0, abs(r - b.z * 0.55 * (0.4 + cracking)));
+    float crack = max(line, ring * 0.7) * (1.0 - smoothstep(reach - 3.0, reach, r)) * (1.0 - healed);
+    // Open water once broken, its edge ragged, the hole closing as it freezes over.
+    float openR = b.w >= 1.0 ? b.z * (1.0 - healed) : 0.0;
+    float open = 1.0 - step(openR, r + (vnoise(vec2(angle * 3.0, seed * 5.0)) - 0.5) * 6.0);
+    return vec2(crack, open);
+}
+
+vec2 breaksAt(vec2 world) {
+    return max(max(breakOf(uBreak0, world), breakOf(uBreak1, world)), max(breakOf(uBreak2, world), breakOf(uBreak3, world)));
+}
+
+// The ice cracked: dark lines of water seen through it, a light edge along them.
+vec3 crackedIce(vec3 ice, float crack) {
+    return mix(ice, vec3(0.2, 0.31, 0.4), crack * 0.85);
+}
+
+// Broken ice floating in an open hole: pale shards.
+vec3 withShards(vec3 water, vec2 world, float open) {
+    float shard = step(0.8, hash(floor(world / 3.0))) * open;
+    return mix(water, vec3(0.86, 0.93, 0.98), shard * 0.9);
+}
+
 // The snow lying on the ice, in drifts that grow with the snow of the map.
 vec3 snowOnIce(vec3 ice, vec2 world) {
-    if (uSnow <= 0.001) return ice;
+    float snow = mix(uSnow, pack(2.0, world).g, uServerIce);
+    if (snow <= 0.001) return ice;
     float drift = 0.6 * fbm(world / 11.0) + 0.4 * hash(floor(world / 2.0));
-    float covered = step(1.0 - uSnow * 0.95, drift);
+    float covered = step(1.0 - snow * 0.95, drift);
     return mix(ice, vec3(0.95, 0.97, 1.0) * (0.94 + 0.06 * hash(floor(world))), covered);
+}
+
+// The whitecaps of the wind at a point of open water, 0 to 1: short crests lying across the wind, each in a cell of
+// a grid laid along it (14 px across the wind, 7 along). A cell breaks for a second and a half, by chance, as
+// often as the wind asks: a crest fills about a third of its cell, so the share of the cells is three times that
+// of the water. They drift slowly downwind.
+float whitecapsAt(vec2 world, float t) {
+    float share = uWind.z;
+    if (share <= 0.0) return 0.0;
+    vec2 along = uWind.xy;
+    vec2 across = vec2(-along.y, along.x);
+    vec2 p = vec2(dot(world, across) / 14.0, (dot(world, along) - t * 3.0) / 7.0);
+    // Every other row is shifted: no columns of crests.
+    p.x += 0.5 * mod(floor(p.y), 2.0);
+    vec2 cell = floor(p);
+    float phase = t / 1.5 + hash(cell + 3.7);
+    float turn = floor(phase);
+    float life = fract(phase);
+    float breaks = step(hash(cell + turn * 17.0 + 11.0), min(1.0, share * 3.0));
+    if (breaks <= 0.0) return 0.0;
+    vec2 q = fract(p) - 0.5 - (vec2(hash(cell + turn + 1.3), hash(cell + turn + 2.9)) - 0.5) * 0.3;
+    // A crest: long across the wind, thin along it, its edge torn by a fine noise.
+    float shape = 1.0 - smoothstep(0.5, 1.0, length(q * vec2(2.6, 5.0)) + (vnoise(world / 2.0) - 0.5) * 0.7);
+    return breaks * shape * smoothstep(0.0, 0.15, life) * (1.0 - smoothstep(0.55, 1.0, life));
 }
 
 const vec3 SHALLOW = vec3(0.1, 0.48, 0.52);
@@ -458,17 +642,34 @@ vec4 poolColor(vec2 world, float t) {
     }
     float depthPx = style.g * 255.0;
     float deep = clamp(depthPx / 160.0, 0.0, 1.0);
-    bool frozen = style.b < 0.5 && step(0.5, pack(4.0, world).b) > 0.5 &&
+    bool cold = style.b < 0.5 && step(0.5, pack(4.0, world).b) > 0.5 &&
         uIce >= 0.1 + 0.9 * min(1.0, ${POOL_ICE_DEPTH_PX}.0 / ${DEEP_ICE_PX}.0);
-    if (frozen) {
+    // A painted pool has the ice the server keeps on it for a player who follows its weather; a pool placed as an
+    // image (the green of pack 8), which the server does not know, keeps the rule of the cold.
+    vec3 kept = pack(8.0, world);
+    bool frozen = uServerIce > 0.5 && kept.g < 0.5 ? kept.r >= 0.0707 : cold;
+    vec2 broken = breaksAt(world);
+    if (broken.y > 0.5) frozen = false;
+    // How full the pool is, 0 to 1: a painted pool holds the water of the relief, which the server fills (it may
+    // have been emptied); a pool placed as an image is always full.
+    float held = pack(2.0, world).b * ${WATER_SCALE_PX}.0;
+    float fill = kept.g > 0.5 ? 1.0 : clamp(held / max(1.0, min(depthPx, ${WATER_SCALE_PX}.0) - 4.0), 0.0, 1.0);
+    // Wet as soon as a film of water lies on its floor; how much of the colour of deep water it takes follows its
+    // level, so a pool half emptied looks half empty: its tiles show through a thin, pale water.
+    float wetness = smoothstep(0.0, 0.06, fill);
+    if (frozen && fill > 0.05) {
         vec3 ice = texture2D(uIceTexture, fract(world / uIceSize)).rgb;
-        return vec4(snowOnIce(ice * mix(vec3(1.0), water, 0.15), world), 1.0);
+        return vec4(crackedIce(snowOnIce(ice * mix(vec3(1.0), water, 0.15), world), broken.x), 1.0);
     }
     // The floor tiles, 16 px, seen through the water: the deeper, the more the water's own colour.
     vec2 tile = mod(world, 16.0);
     float grout = max(step(15.0, tile.x), step(15.0, tile.y));
     vec3 floorColor = mix(vec3(0.9, 0.95, 0.96), vec3(0.72, 0.82, 0.86), grout);
-    vec3 c = mix(floorColor * (water * 0.6 + 0.4), water * 0.55, 0.3 + 0.55 * deep);
+    // Emptied, the dry tiles of its floor show, darker towards its walls; the water comes back over them as it fills.
+    vec3 dry = floorColor * 0.86;
+    vec3 seen = floorColor * mix(vec3(1.0), water * 0.6 + 0.4, 0.35 + 0.65 * fill);
+    vec3 c = mix(seen, water * 0.55, (0.3 + 0.55 * deep) * fill);
+    c = mix(dry, c, wetness);
     // The walls shade the water along them.
     c *= mix(0.82, 1.0, poolAround(world, 12.0));
     // Caustics over the floor, and a glint now and then on the surface.
@@ -476,10 +677,37 @@ vec4 poolColor(vec2 world, float t) {
     float n1 = fbm(p + vec2(t * 0.09, t * 0.05));
     float n2 = fbm(p * 1.7 - vec2(t * 0.06, -t * 0.08) + 5.0);
     float lines = 1.0 - smoothstep(0.0, 0.05, abs(n1 - n2));
-    c += lines * mix(0.2, 0.08, deep);
+    c += lines * mix(0.2, 0.08, deep) * wetness;
     float glint = step(0.993, hash(floor(world / 2.0) + floor(t * 3.0))) * smoothstep(0.55, 0.7, n2);
-    c = mix(c, vec3(1.0), glint * 0.7);
+    c = mix(c, vec3(1.0), glint * 0.7 * wetness);
     return vec4(c, 1.0);
+}
+
+// The sky, the clouds, the sun and the lamps mirrored by the water, bent by its waves (ripple, map pixels).
+vec3 reflected(vec3 water, vec2 world, vec2 ripple, float waves) {
+    water = mix(water, uSkyTone.rgb, uSkyTone.a);
+    if (uCloudTone.a > 0.0) {
+        vec2 uv = (world + ripple - uCloudArea.xy) / uCloudArea.zw;
+        if (uv.x > 0.0 && uv.y > 0.0 && uv.x < 1.0 && uv.y < 1.0) {
+            float cloud = smoothstep(0.1, 0.3, texture2D(uCloudTexture, vec2(uv.x, 1.0 - uv.y)).r);
+            water = mix(water, uCloudTone.rgb, cloud * uCloudTone.a);
+        }
+    }
+    if (uSun.z > 0.0) {
+        // A wave facing the sun throws its light back: bright sparks along the crests, towards the sun.
+        float facing = max(0.0, dot(normalize(ripple + vec2(0.0001)), uSun.xy));
+        water += vec3(1.0, 0.94, 0.78) * pow(facing, 6.0) * waves * uSun.z * 0.7;
+    }
+    if (uLampOpacity > 0.0) {
+        // The light of a lamp on the shore stretched down over the water, wavering with it.
+        vec2 uv = (world + vec2(ripple.x * 0.6, ripple.y * 1.6 - 10.0) - uLampArea.xy) / uLampArea.zw;
+        if (uv.x > 0.0 && uv.y > 0.0 && uv.x < 1.0 && uv.y < 1.0) {
+            float veil = texture2D(uLampTexture, vec2(uv.x, 1.0 - uv.y)).a;
+            float lit = clamp(1.0 - veil / uLampOpacity, 0.0, 1.0);
+            water += vec3(1.0, 0.84, 0.58) * lit * (0.25 + 0.35 * waves);
+        }
+    }
+    return water;
 }
 
 // How much water is over a point: 0 dry, 1 at the shore line, more inside.
@@ -491,14 +719,32 @@ void main() {
     vec2 world = worldPoint();
     float t = uTime;
     float depth = wetAt(world);
-    // The ice (Frost.ts): it takes the shallows first, the deep water last; frozen, nothing moves any more.
+    // Next to a pool, the depth smoothed between the cells would spill the water of the pool half a cell over its
+    // coping: there the water is that of the cell itself, so a dry terrace stays dry up to the stones. The corner of
+    // a cell of the pool left outside its rounded shape shows no water: it is under the coping.
+    float poolEdge = pack(5.0, world).r;
+    if (poolEdge > 0.02 && poolEdge <= 0.5) {
+        depth = packNearest(5.0, world).r > 0.5 ? 0.0 : packNearest(2.0, world).b;
+    }
+    // The ice (Frost.ts): it takes the shallows first, the deep water last; frozen, nothing moves any more. Its ragged
+    // edge never reaches over 1: at the full cold (-15 °C) the deep water freezes whole, as isFrozen says.
     float depthPx = depth * ${WATER_SCALE_PX}.0;
-    float frozenAt = 0.1 + 0.9 * min(1.0, depthPx / ${DEEP_ICE_PX}.0) + (vnoise(world / 14.0) - 0.5) * 0.08;
+    float frozenAt = min(
+        1.0,
+        0.1 + 0.9 * min(1.0, depthPx / ${DEEP_ICE_PX}.0) + (vnoise(world / 14.0) - 0.5) * 0.08
+    );
     float outdoors = step(0.5, pack(4.0, world).b);
-    float frozen = depthPx > 0.0 ? step(frozenAt, uIce) * outdoors : 0.0;
+    // The ice of the server: the root of its thickness over a metre, 0.0707 at the 5 mm one slips on.
+    float kept = pack(8.0, world).r;
+    float keptFrozen = step(0.0707, kept + (vnoise(world / 14.0) - 0.5) * 0.02);
+    float frozen = depthPx > 0.0 ? mix(step(frozenAt, uIce) * outdoors, keptFrozen, uServerIce) : 0.0;
+    vec2 broken = frozen > 0.5 ? breaksAt(world) : vec2(0.0);
+    frozen *= 1.0 - broken.y;
     float still = 1.0 - frozen;
     // The shore: the water of a cell reaches the middle of the next, bent by a noise that drifts slowly (lapping).
-    float level = clamp(depth * 12.0, 0.0, 1.0);
+    // However thin, water reaches the edge of its cell: whether a cell holds any (pack 8, blue), apart from how
+    // deep it is, keeps a film of a few centimetres from vanishing (waterShoreLevel is the twin of this rule).
+    float level = max(clamp(depth * ${SHORE_GAIN}.0, 0.0, 1.0), pack(8.0, world).b);
     float drift = fbm(world / 18.0 + vec2(t * 0.05, -t * 0.04) * still) - 0.5;
     float edge = bend(level, drift, 1.3);
     float cover = step(0.5, edge);
@@ -511,19 +757,36 @@ void main() {
         around += wetAt(world + vec2(cos(angle), sin(angle)) * cellPx * 0.9);
     }
     float damp = clamp(around * 2.5, 0.0, 1.0) * (1.0 - cover);
+    if (damp > 0.001) {
+        // The coping of a pool keeps the ground around it dry: no dark ring of wet earth on a terrace.
+        float nearPool = 0.0;
+        for (int i = 0; i < 8; i++) {
+            float angle = float(i) * 0.785398;
+            nearPool = max(nearPool, pack(5.0, world + vec2(cos(angle), sin(angle)) * cellPx * 0.9).r);
+        }
+        damp *= 1.0 - step(0.25, nearPool);
+    }
     vec4 outColor = vec4(0.0, 0.0, 0.0, 0.3 * damp);
+    // The ground shader darkens the soil by its moisture as the server keeps it: this ring adds only what that left.
+    outColor *= 1.0 - soakedAt(world);
 
     if (cover > 0.001 && frozen > 0.5) {
         // Ice as on the rinks of the map, a little darker over the deep water under it.
         vec3 ice = texture2D(uIceTexture, fract(world / uIceSize)).rgb;
         ice *= 1.0 - 0.12 * clamp(depthPx / 128.0, 0.0, 1.0);
-        ice = snowOnIce(ice, world);
-        float iceAlpha = 0.96 * cover;
+        ice = crackedIce(snowOnIce(ice, world), broken.x);
+        // A thin ice of the server lets the water show through; one that bears a walker (50 mm) is whole.
+        float thick = clamp(kept * kept * 1000.0 / 50.0, 0.0, 1.0);
+        float iceAlpha = mix(0.96, mix(0.6, 0.96, thick), uServerIce) * cover;
         outColor = vec4(ice * iceAlpha, iceAlpha) + outColor * (1.0 - iceAlpha);
     } else if (cover > 0.001) {
         float deep = clamp(depth * ${WATER_SCALE_PX}.0 / 64.0, 0.0, 1.0);
         vec3 water = mix(SHALLOW, DEEP, deep);
-        float alpha = mix(0.5, 0.92, deep);
+        // A film thinner than the shore of the water (SHORE_PX) is clear: a few centimetres of water have no colour,
+        // the wet ground shows through it, deepened by the ground shader, under the glints of its surface. The colour
+        // of the water comes with its depth.
+        float film = smoothstep(1.0, ${SHORE_PX}.0, depthPx);
+        float alpha = mix(0.5, 0.92, deep) * mix(0.05, 1.0, film);
 
         // The waves of the comets: a bright crest running to the shores, a dark trough behind, the surface pushed.
         float shock = ringsAt(world);
@@ -538,15 +801,30 @@ void main() {
         float lines = 1.0 - smoothstep(0.0, 0.04, abs(n1 - n2));
         water += lines * mix(0.14, 0.07, deep);
         water *= 0.9 + 0.2 * n1;
+        water = reflected(water, world, vec2(n1 - 0.5, n2 - 0.5) * 12.0, lines + 0.3 * n2);
         float glint = step(0.992, hash(floor(world / 2.0) + floor(t * 3.0))) * smoothstep(0.55, 0.7, n2);
         water = mix(water, FOAM, glint * 0.8);
+        water = withShards(water, world, broken.y);
         alpha = max(alpha, glint * 0.8);
 
         // The foam where the water meets the shore: a band that comes and goes, broken by a fine noise.
         float band = step(0.5, edge) * (1.0 - step(0.66, edge));
         float wave = 0.5 + 0.5 * sin(t * 1.6 + drift * 12.0);
         float froth = smoothstep(0.35, 0.6, fbm(world / 5.0 + vec2(t * 0.25, 0.0)) * (0.6 + 0.6 * wave));
-        float foam = band * froth;
+        // A film too thin to break does not froth.
+        float foam = band * froth * film;
+
+        // The foam of the waves that break and of the floods that advance (BreakingFoam.ts, the red of pack 9):
+        // a froth torn by a fine noise that boils, whole where the foam is strong, in flecks where it fades.
+        float broken = pack(9.0, world).r;
+        float boil = fbm(world / 3.5 + vec2(t * 0.35, -t * 0.25));
+        float surf = smoothstep(0.78 - 0.62 * broken, 0.9 - 0.62 * broken, boil) * step(0.03, broken);
+        foam = max(foam, surf * 0.92);
+
+        // The whitecaps of the wind, on open water outdoors.
+        float open = outdoors * step(${WHITECAP_MIN_DEPTH_PX}.0, depthPx);
+        foam = max(foam, whitecapsAt(world, t) * open * 0.85);
+
         water = mix(water, FOAM, foam);
         alpha = max(alpha, foam * 0.9);
 
@@ -570,6 +848,8 @@ void main() {
 let splatCount = 0;
 /** How many waves of comets the water shader draws at once. */
 const MAX_WATER_RINGS = 4;
+/** How many cracks and holes of the ice the water shader draws at once (as IceBreaks.MAX_SHOWN_BREAKS). */
+const MAX_ICE_BREAKS = MAX_SHOWN_BREAKS;
 
 /** What the ground shader is given: the weight of each soil (by its number in the map), the grass, the snow. */
 export interface GroundWeights {
@@ -578,6 +858,10 @@ export interface GroundWeights {
     grass: Uint8Array | undefined;
     /** The snow, 0 to 255; undefined: none. */
     snow: Uint8Array | undefined;
+    /** The ice the server keeps over the water, a byte a cell (iceByte); undefined: none. */
+    ice?: Uint8Array;
+    /** The moisture of the soil as the server keeps it, 0 (dry) to 255 (sodden); undefined: none known. */
+    moisture?: Uint8Array;
     /** 0 in summer, 1 in autumn: the grass yellows. */
     autumn: number;
     /** How deep each cell is dug and how high it is raised, in map pixels (to 255). */
@@ -677,6 +961,16 @@ export class GroundSplat {
                         setUniform("uIceSize", this.sizeOf(GROUND_TEXTURES.ice));
                         setUniform("uIce", this.cycle.ice);
                         setUniform("uSnow", this.snow);
+                        setUniform("uServerIce", this.serverIce ? 1 : 0);
+                        setUniform("uWind", [this.wind.x, this.wind.y, this.wind.share]);
+                        this.setReflectionUniforms(setUniform);
+                        for (let index = 0; index < MAX_ICE_BREAKS; index++) {
+                            const shown = this.breaks[index];
+                            setUniform(
+                                `uBreak${index}`,
+                                shown ? [shown.x, shown.y, shown.radius, shown.phase] : [0, 0, 0, 0],
+                            );
+                        }
                         for (let index = 0; index < MAX_WATER_RINGS; index++) {
                             const ring = this.rings[index];
                             setUniform(
@@ -690,7 +984,7 @@ export class GroundSplat {
                 0,
                 1,
                 1,
-                ["__DEFAULT", GROUND_TEXTURES.ice, ...(canProject ? ["__DEFAULT"] : [])],
+                ["__DEFAULT", GROUND_TEXTURES.ice, "__DEFAULT", "__DEFAULT", ...(canProject ? ["__DEFAULT"] : [])],
             )
             .setOrigin(0)
             .setDepth(waterDepth)
@@ -716,9 +1010,19 @@ export class GroundSplat {
     }
 
     /** The cycle of the water this player sees (Frost.ts): frost, ice and wet ground. */
-    private cycle: WaterCycle = { frost: 0, ice: 0, wet: 0 };
+    private cycle: WaterCycle = { frost: 0, ice: 0, wet: 0, snowMm: 0 };
     private snow = 0;
+    /** Whether the ice drawn is the one the server keeps (GroundSource), not the one of this player's own cold. */
+    private serverIce = false;
     private rings: readonly WaterRing[] = [];
+    private breaks: readonly IceBreak[] = [];
+
+    /** The cracks and the holes of the ice: the first MAX_ICE_BREAKS are drawn. */
+    public setBreaks(breaks: readonly IceBreak[]): void {
+        this.breaks = breaks;
+    }
+    /** The wind over the water: which way it blows and the share of open water its whitecaps whiten. */
+    private wind = { x: 0, y: 1, share: 0 };
 
     /** Lays the grounds over `area` from their weights. Nothing to draw: the ground shader is hidden. */
     public setGround(area: GroundArea, weights: GroundWeights): void {
@@ -758,9 +1062,13 @@ export class GroundSplat {
             data[pool + 2] = style?.hot ? 255 : 0;
             writeColor(data, at(6, cell), style?.water);
             writeColor(data, at(7, cell), style?.coping);
-            if (grass || snow || style || data[relief] || data[relief + 1] || data[relief + 2]) any = true;
+            data[at(8, cell)] = weights.ice?.[cell] ?? 0;
+            data[at(8, cell) + 1] = image ? 255 : 0;
+            const moisture = weights.moisture?.[cell] ?? 0;
+            if (grass || snow || style || moisture || data[relief] || data[relief + 1] || data[relief + 2]) any = true;
             if (data[meadow] || data[meadow + 1]) any = true;
         }
+        writeMoisture(data, weights.moisture, columns, rows);
         this.anyPool = pools.some((value) => value > 0) || (weights.imagePools?.some((value) => value > 0) ?? false);
         if (this.anyPool) spreadPoolColours(data, columns, rows);
         if (any) smoothWeights(data, columns, rows);
@@ -775,15 +1083,19 @@ export class GroundSplat {
             this.uploadHeights();
         }
         this.upload();
-        this.place(this.groundShader, area, any);
+        this.place(this.groundShader, area, any || this.anyWater);
         // The pools are drawn by the water shader, over the shades of the relief: it shows with them, water or not.
         this.place(this.waterShader, area, this.anyWater || this.anyPool);
     }
 
-    /** The depth of the water over the area (map pixels a cell, as the area of `setGround`); undefined: dry. */
+    /**
+     * The depth of the water over the area (map pixels a cell, as the area of `setGround`); undefined: dry. With the
+     * foam of its waves, cell by cell (0 to 255); undefined: none.
+     */
     public setWater(
         wet: Uint8Array | undefined,
         strength: number,
+        foam?: Uint8Array,
         /** The depth of the water as it is, cell by cell: where its surface is, seen in 3/4. */
         depths?: Float32Array,
     ): void {
@@ -801,16 +1113,14 @@ export class GroundSplat {
             writeHeights(this.heights.data, 1, this.surfaceHeights, columns, rows);
             this.uploadHeights();
         }
-        const data = pixels.data;
-        let any = false;
-        for (let cell = 0; cell < columns * rows; cell++) {
-            const depth = wet?.[cell] ?? 0;
-            if (depth > 0) any = true;
-            data[texel(2, cell, columns, rows) + 2] = Math.min(255, Math.round((depth * 255) / WATER_SCALE_PX));
-        }
+        const any = writeWater(pixels.data, wet, columns, rows);
+        // The foam of the waves, in the red of pack 9.
+        writeFoam(pixels.data, wet, foam, columns, rows);
         if (!any && !this.anyWater) return;
         this.anyWater = any;
         this.upload();
+        // The ground under the water is wet: the ground shader darkens it, painted or not.
+        this.place(this.groundShader, area, this.anyGround || any);
         this.place(this.waterShader, area, any || this.anyPool);
     }
 
@@ -820,6 +1130,62 @@ export class GroundSplat {
         this.cycle = cycle;
     }
 
+    /** The wind over the water: which way it blows (length 1) and the share of open water its whitecaps whiten. */
+    /** What the water reflects; its textures bound again only when they change. */
+    public setReflection(reflection: WaterReflection): void {
+        const before = this.reflection;
+        this.reflection = reflection;
+        // Bound again when a texture changes or is gone: a destroyed texture bound to the shader breaks the drawing
+        // of the whole game (the screen stays black).
+        const gone = (key: string | undefined): boolean => key !== undefined && !this.scene.textures.exists(key);
+        if (
+            before.clouds?.key !== reflection.clouds?.key ||
+            before.lamps?.key !== reflection.lamps?.key ||
+            gone(reflection.clouds?.key) ||
+            gone(reflection.lamps?.key)
+        ) {
+            this.bindWaterTextures();
+        }
+    }
+
+    private reflection: WaterReflection = NO_WATER_REFLECTION;
+
+    private bindWaterTextures(): void {
+        const kept = (key: string | undefined): string =>
+            key !== undefined && this.scene.textures.exists(key) ? key : "__DEFAULT";
+        this.waterShader.setTextures([
+            kept(this.key),
+            GROUND_TEXTURES.ice,
+            kept(this.reflection.clouds?.key),
+            kept(this.reflection.lamps?.key),
+            // Last, where these shaders can draw the relief in 3/4: the picture of the heights.
+            ...(this.canProject ? [kept(this.heightsKey)] : []),
+        ]);
+    }
+
+    private setReflectionUniforms(setUniform: (name: string, value: unknown) => void): void {
+        const { sky, clouds, sun, lamps } = this.reflection;
+        const rgb = (color: number): number[] => [
+            ((color >> 16) & 0xff) / 255,
+            ((color >> 8) & 0xff) / 255,
+            (color & 0xff) / 255,
+        ];
+        const area = (rect: { x: number; y: number; width: number; height: number } | undefined): number[] =>
+            rect ? [rect.x, rect.y, rect.width, rect.height] : [0, 0, 1, 1];
+        setUniform("uSkyTone", [...rgb(sky.color), sky.share]);
+        setUniform("uCloudTexture", 2);
+        setUniform("uCloudArea", area(clouds?.area));
+        setUniform("uCloudTone", clouds ? [...rgb(clouds.color), clouds.share] : [0, 0, 0, 0]);
+        setUniform("uSun", [sun.x, sun.y, sun.strength]);
+        setUniform("uLampTexture", 3);
+        setUniform("uLampArea", area(lamps?.area));
+        setUniform("uLampOpacity", lamps?.opacity ?? 0);
+    }
+
+    public setWind(wind: { x: number; y: number; share: number }): void {
+        this.wind = wind;
+    }
+
     /** The fronts of the waves of the comets fallen into the water: the first MAX_WATER_RINGS are drawn. */
     public setRings(rings: readonly WaterRing[]): void {
         this.rings = rings;
@@ -827,6 +1193,11 @@ export class GroundSplat {
 
     public hasRings(): boolean {
         return this.rings.length > 0;
+    }
+
+    /** Whether the ice drawn is the one the server keeps, cell by cell (a player who follows its weather). */
+    public setServerIce(serverIce: boolean): void {
+        this.serverIce = serverIce;
     }
 
     /** How much the snow of the map covers the ground, 0 to 1: it lies on the ice too. */
@@ -861,7 +1232,7 @@ export class GroundSplat {
             ? []
             : [this.scene.textures.exists(this.heightsKey) ? this.heightsKey : "__DEFAULT"];
         this.groundShader.setTextures([weights, ...SOIL_KEYS, GROUND_TEXTURES.grass, GROUND_TEXTURES.snow, ...heights]);
-        this.waterShader.setTextures([weights, GROUND_TEXTURES.ice, ...heights]);
+        this.bindWaterTextures();
     }
 
     /** The pixels of the heights for this area (two packs side by side); a new canvas when its size changes. */
@@ -948,7 +1319,20 @@ export class GroundSplat {
  */
 function smoothWeights(data: Uint8ClampedArray, columns: number, rows: number): void {
     const source = data.slice();
-    const channels: readonly (readonly number[])[] = [[0, 1, 2], [0, 1, 2], [0, 1], [0, 1, 2], [0, 1], [0], [], []];
+    // The ice of the server too (pack 8): its edge follows a curve.
+    const channels: readonly (readonly number[])[] = [
+        [0, 1, 2],
+        [0, 1, 2],
+        [0, 1],
+        [0, 1, 2],
+        [0, 1],
+        [0],
+        [],
+        [],
+        [0],
+        // The moisture (green); the foam of the waves (red) is written with the water, after.
+        [1],
+    ];
     for (let pack = 0; pack < PACKS; pack++) {
         for (const channel of channels[pack] ?? []) {
             for (let row = 0; row < rows; row++) {
@@ -1009,6 +1393,102 @@ function poolNeighbour(
         }
     }
     return undefined;
+}
+
+/**
+ * Writes the water of an area (pixels of water a cell, see TerrainWater.levelsOver) into the picture of the weights:
+ * its depth (pack 2, blue) and, apart from it, whether a cell holds any (pack 8, blue). Returns whether any does.
+ */
+export function writeWater(
+    data: Uint8ClampedArray,
+    wet: Uint8Array | undefined,
+    columns: number,
+    rows: number,
+): boolean {
+    let any = false;
+    for (let cell = 0; cell < columns * rows; cell++) {
+        const depth = wet?.[cell] ?? 0;
+        if (depth > 0) any = true;
+        data[texel(2, cell, columns, rows) + 2] = Math.min(255, Math.round((depth * 255) / WATER_SCALE_PX));
+        data[texel(8, cell, columns, rows) + 2] = depth > 0 ? 255 : 0;
+    }
+    return any;
+}
+
+/**
+ * The level of the shore at a point, from the depth (0 to 1 of WATER_SCALE_PX) and the presence of water (0 to 1),
+ * both smoothed between the cells: the water shader draws the point where this, bent by its noise, reaches one half.
+ * The TypeScript twin of the rule of WATER_FRAG. A deep water reaches past the edge of its cell, as far as its depth
+ * smoothed allows; however thin, water reaches the edge of its cell (the presence is one half there).
+ */
+export function waterShoreLevel(depth: number, present: number): number {
+    return Math.max(Math.min(1, Math.max(0, depth * SHORE_GAIN)), present);
+}
+
+/**
+ * The tone of a wet ground, against the same ground dry: how much of its colour is left (sRGB) when a ground of this
+ * reflectance (wet over dry) is this wet (0 to 1). Water in the pores lowers the reflectance (Twomey, Bohren &
+ * Mergenthaler 1986); the reflectance is linear, the colours drawn are sRGB. The twin of the rule of GROUND_FRAG.
+ */
+export function wetTone(reflectance: number, wet: number): number {
+    return 1 - (1 - Math.pow(reflectance, 1 / SRGB_GAMMA)) * wet;
+}
+
+/**
+ * How wet a ground is (0 to 1), from the rain of the air of the player (Frost.ts), the moisture of its soil as the
+ * server keeps it (0 to 1, Meadow.ts) and the water over it (0 to 1, its presence): wet is wet, the most of the three,
+ * never their sum. The reflectance falls fast with the first water then levels off (Lobell & Asner 2002). The twin of
+ * the rule of GROUND_FRAG.
+ */
+/**
+ * The colour (sRGB, 0 to 1) of a ground of this reflectance (wet over dry) this wet (0 to 1). Its luminance falls by the
+ * reflectance; and as the light runs longer through the wet grains (Lekner & Dorf 1988, Twomey et al. 1986), a channel
+ * the grains absorb more falls more: the colour deepens, its hue kept, never greyer. The twin of wetColour in GLSL.
+ */
+export function wetColor(colour: readonly number[], reflectance: number, wet: number): number[] {
+    const target = 1 - (1 - reflectance) * Math.min(1, Math.max(0, wet));
+    if (target >= 1) return [...colour];
+    const linear = colour.map((channel) => Math.pow(Math.max(0, channel), SRGB_GAMMA));
+    const luma = (rgb: readonly number[]): number => LUMA[0] * rgb[0] + LUMA[1] * rgb[1] + LUMA[2] * rgb[2];
+    const lit = Math.min(0.98, Math.max(0.02, luma(linear)));
+    const power = 1 + (Math.log(target) / Math.log(lit)) * WET_DEEPENING;
+    const deep = linear.map((channel) => Math.pow(channel, power));
+    const scale = (target * luma(linear)) / Math.max(1e-4, luma(deep));
+    return deep.map((channel) => Math.pow(Math.min(1, channel * scale), 1 / SRGB_GAMMA));
+}
+
+export function groundWetness(rain: number, moisture: number, present: number): number {
+    const soaked =
+        moisture >= SURFACE_WET_MOISTURE
+            ? (1 - Math.exp(-MOISTURE_CURVE * moisture)) / (1 - Math.exp(-MOISTURE_CURVE))
+            : 0;
+    return Math.min(1, Math.max(rain, soaked, present));
+}
+
+/** The byte of pack 9 that holds the moisture of the soil (green): the red is the foam of the waves. */
+export const MOISTURE_CHANNEL = 1;
+
+export function writeMoisture(
+    data: Uint8ClampedArray,
+    moisture: Uint8Array | undefined,
+    columns: number,
+    rows: number,
+): void {
+    for (let cell = 0; cell < columns * rows; cell++) {
+        data[texel(9, cell, columns, rows) + MOISTURE_CHANNEL] = moisture?.[cell] ?? 0;
+    }
+}
+
+export function writeFoam(
+    data: Uint8ClampedArray,
+    wet: Uint8Array | undefined,
+    foam: Uint8Array | undefined,
+    columns: number,
+    rows: number,
+): void {
+    for (let cell = 0; cell < columns * rows; cell++) {
+        data[texel(9, cell, columns, rows)] = (wet?.[cell] ?? 0) > 0 ? (foam?.[cell] ?? 0) : 0;
+    }
 }
 
 export function texel(pack: number, cell: number, columns: number, rows: number): number {

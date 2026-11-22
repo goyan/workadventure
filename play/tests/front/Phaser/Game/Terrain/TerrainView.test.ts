@@ -140,6 +140,7 @@ describe("TerrainView", () => {
             surface,
             undefined,
             undefined,
+            undefined,
             () => hidden.value,
         );
         view.update(0);
@@ -329,6 +330,7 @@ describe("TerrainView", () => {
                 water,
                 surface,
                 meadow,
+                undefined,
                 undefined,
                 undefined,
                 undefined,

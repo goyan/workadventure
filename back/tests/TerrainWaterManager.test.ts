@@ -1,5 +1,16 @@
 import { gunzipSync } from "node:zlib";
-import { cellKey, CELL_LITRES_PER_PX, PX_PER_MM, WeatherType, withHeights } from "@workadventure/map-editor";
+import {
+    cellKey,
+    CELL_LITRES_PER_PX,
+    DEFAULT_POOL_STYLE,
+    DEFAULT_WATER_SETTINGS,
+    POOL_FREEBOARD_PX,
+    poolSoilCode,
+    PX_PER_MM,
+    WeatherType,
+    withHeights,
+    withSoils,
+} from "@workadventure/map-editor";
 import type { TerrainData, WAMFileFormat } from "@workadventure/map-editor";
 import type { SubToPusherRoomMessage, TerrainWaterMessage } from "@workadventure/messages";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -24,6 +35,16 @@ const fillWithWater = (manager: TerrainWaterManager): void => {
     for (let index = 0; index < bytes.length; index += 2) bytes[index] = 64;
     grid.readDepths(bytes);
 };
+/** Fills the wide hollow alone with 8 px of water: none on the ground around, so none runs off the map. */
+const fillWideLake = (manager: TerrainWaterManager): void => {
+    const grid = manager.getGrid();
+    if (!grid) throw new Error("no grid");
+    const bytes = new Uint8Array(grid.writeDepths().length);
+    for (let y = 0; y < 30; y++) {
+        for (let x = 0; x < 30; x++) bytes[((y - grid.bounds.y) * grid.bounds.width + (x - grid.bounds.x)) * 2] = 64;
+    }
+    grid.readDepths(bytes);
+};
 const prefabRef = { collectionName: "eau", id: "x" };
 const sourceAt = (x: number, y: number, flow: number) => ({
     x: x * 16 + 8,
@@ -41,7 +62,17 @@ function wamWith(terrain: TerrainData | undefined, weather: WeatherType = Weathe
         entities: {},
         settings: {
             weather,
-            water: { runoff: 10, evaporation: 0, speed: 1, absorption: 0, current: 1, maxSurface: 18, indoorDrain: 0 },
+            // The blast of an impact has its own tests: here a meteor moves the water of its crater alone.
+            water: {
+                runoff: 10,
+                evaporation: 0,
+                speed: 1,
+                absorption: 0,
+                current: 1,
+                maxSurface: 18,
+                indoorDrain: 0,
+                impactReach: 1,
+            },
         },
         terrain,
     };
@@ -222,6 +253,100 @@ describe("TerrainWaterManager", () => {
         expect(sent.at(-1)?.stats?.sinks).toBeGreaterThan(0);
     });
 
+    it("a ball takes the place of the water under it, and the map keeps all its water", () => {
+        const { manager, sent, steps, repository } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        fillWideLake(manager);
+        const grid = manager.getGrid();
+        const before = grid?.totalPx() ?? 0;
+        // The point is the cell (15, 15); a radius of 64 px is 4 cells. The lake is 32 px deep.
+        manager.setBalls(() => [{ id: 1, x: 240, y: 240, radiusPx: 64 }]);
+        sent.length = 0;
+        steps(10);
+        expect(grid?.ballAt(15, 15)).toBe(true);
+        expect(grid?.depthAt(15, 15)).toBeLessThan(1);
+        expect(grid?.totalPx()).toBeCloseTo(before, 1);
+        // The room sees the water move as often as under a wave, and is told a stock that did not change.
+        expect(sent.length).toBeGreaterThanOrEqual(5);
+        const stock = sent.at(-1)?.stats?.stock ?? 0;
+        expect(stock).toBeCloseTo((before * CELL_LITRES_PER_PX) / 1000, 1);
+        expect(sent.every((message) => (message.stats?.lost ?? 0) === 0)).toBe(true);
+        // The ball goes: the water comes back where it stood.
+        manager.setBalls(() => []);
+        steps(300);
+        expect(grid?.ballAt(15, 15)).toBe(false);
+        expect(grid?.depthAt(15, 15)).toBeGreaterThan(7);
+        expect(grid?.totalPx()).toBeCloseTo(before, 1);
+        expect(repository.saveVariable).toHaveBeenCalled();
+    });
+
+    it("takes a ball that moved since the last step along its way: it pushed the water of the whole way", () => {
+        const { manager, steps } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        fillWideLake(manager);
+        const grid = manager.getGrid();
+        if (!grid) throw new Error("no grid");
+        const before = grid.totalPx();
+        let ball = { id: 1, x: 100, y: 240, radiusPx: 32 };
+        manager.setBalls(() => [ball]);
+        steps(1);
+        const placed = vi.spyOn(grid, "setBalls");
+        // Under the pointer at once: 200 px further at the next step.
+        ball = { ...ball, x: 300 };
+        steps(1);
+        // 200 px: thirteen strides of a cell at most, the last one where the ball is.
+        expect(placed).toHaveBeenCalledTimes(13);
+        expect(placed.mock.calls.at(-1)?.[0]).toEqual([ball]);
+        const first = placed.mock.calls[0][0][0];
+        expect(first.x).toBeGreaterThan(100);
+        expect(first.x).toBeLessThanOrEqual(116);
+        expect(grid.totalPx()).toBeCloseTo(before, 1);
+        // Gone at once: one go, no way to sweep.
+        placed.mockClear();
+        manager.setBalls(() => []);
+        steps(1);
+        expect(placed).toHaveBeenCalledTimes(1);
+        expect(grid.ballAt(18, 15)).toBe(false);
+    });
+
+    it("saves the water a ball holds under itself", () => {
+        // A hollow 96 px deep: a ball of 32 px of radius leaves 64 px of room under its middle.
+        const deep: [number, number, number][] = [];
+        for (let y = 0; y < 30; y++) for (let x = 0; x < 30; x++) deep.push([x, y, -96]);
+        const { manager, repository } = createHarness({ wam: wamWith(terrainOf(deep)) });
+        manager.mapChanged();
+        const grid = manager.getGrid();
+        if (!grid) throw new Error("no grid");
+        const bytes = new Uint8Array(grid.writeDepths().length);
+        // 96 px of water in each cell: 768 eighths.
+        for (let index = 0; index < bytes.length; index += 2) bytes[index + 1] = 3;
+        grid.readDepths(bytes);
+        manager.setBalls(() => [{ id: 1, x: 240, y: 240, radiusPx: 32 }]);
+        manager.step();
+        expect(grid.ballAt(15, 15)).toBe(true);
+        manager.stop();
+        const saved = repository.saveVariable.mock.calls.find(([, key]) => key === "grid")?.[2];
+        if (!saved) throw new Error("nothing saved");
+        const depths = new Uint8Array(gunzipSync(Buffer.from(saved, "base64")));
+        const at = ((15 - grid.bounds.y) * grid.bounds.width + (15 - grid.bounds.x)) * 2;
+        expect((depths[at] | (depths[at + 1] << 8)) / 8).toBeGreaterThan(60);
+    });
+
+    it("a ball on a map without water does nothing, and one that is no number neither", () => {
+        const dry = createHarness({ wam: wamWith(undefined) });
+        dry.manager.mapChanged();
+        dry.manager.setBalls(() => [{ id: 1, x: 240, y: 240, radiusPx: 64 }]);
+        expect(() => dry.steps(3)).not.toThrow();
+        const { manager, steps } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        fillWideLake(manager);
+        const before = manager.getGrid()?.totalPx();
+        manager.setBalls(() => [{ id: 1, x: Number.NaN, y: 240, radiusPx: 64 }]);
+        steps(3);
+        expect(manager.getGrid()?.totalPx()).toBe(before);
+        expect(manager.getGrid()?.ballAt(15, 15)).toBe(false);
+    });
+
     it("a drain on a map without water does nothing", () => {
         const { manager, steps } = createHarness({ wam: wamWith(undefined) });
         manager.mapChanged();
@@ -283,6 +408,27 @@ describe("TerrainWaterManager", () => {
         sent.length = 0;
         steps(5);
         expect(sent.length).toBeLessThan(5);
+    });
+
+    it("a fireball blows the water around its crater outwards, as far as the map says", () => {
+        const depthAfter = (impactReach: number | undefined): number | undefined => {
+            const wam = wamWith(wideLake);
+            wam.settings = {
+                ...wam.settings,
+                water: { ...DEFAULT_WATER_SETTINGS, ...wam.settings?.water, impactReach },
+            };
+            const { manager } = createHarness({ wam });
+            manager.mapChanged();
+            fillWithWater(manager);
+            manager.vaporise(240, 240, 4);
+            // Ten cells from the middle of a crater of eight.
+            return manager.getGrid()?.depthAt(25, 15);
+        };
+        expect(depthAfter(1)).toBe(8);
+        // The usual blast reaches 2.5 times the crater: five sixths of the water there are gone.
+        expect(depthAfter(undefined)).toBeCloseTo(8 / 6, 1);
+        // A blast that reaches four times the crater is stronger there: eleven twelfths are gone.
+        expect(depthAfter(4)).toBeCloseTo(8 / 12, 1);
     });
 
     it("a fireball on a map without water does nothing", () => {
@@ -376,6 +522,24 @@ describe("TerrainWaterManager", () => {
         expect(sent).toHaveLength(told);
     });
 
+    it("tells the room how fast the water runs on a map whose water has inertia, and nothing of it otherwise", () => {
+        const told = (inertia: boolean): TerrainWaterMessage => {
+            const wam = wamWith(wideLake);
+            if (wam.settings?.water) wam.settings.water.inertia = inertia;
+            wam.entities.spring = sourceAt(15, 15, 600000);
+            const { manager, sent, steps } = createHarness({ wam });
+            manager.mapChanged();
+            steps(20);
+            return sent[sent.length - 1];
+        };
+        expect(told(false).speeds).toBeUndefined();
+        const message = told(true);
+        const speeds = new Uint8Array(gunzipSync(message.speeds ?? new Uint8Array()));
+        // Two bytes a block of 4 cells a side over the whole grid, some of them moving.
+        expect(speeds).toHaveLength(Math.ceil(message.width / 4) * Math.ceil(message.height / 4) * 2);
+        expect(speeds.some((byte) => byte !== 0)).toBe(true);
+    });
+
     it("tells the room as often as the map asks while the water moves", () => {
         const count = (updates?: number): number => {
             const wam = wamWith(wideLake);
@@ -421,6 +585,38 @@ describe("TerrainWaterManager", () => {
         expect(depthsAfter(sent).at(grid.bounds.x + 20, grid.bounds.y + 20)).toBeCloseTo(before + 5 / 8, 5);
     });
 
+    it("holds the water at a closed door, opens it for an avatar in its passage, and closes it a second after", () => {
+        const wam = wamWith(wideLake);
+        // A vertical door on the wall line of the tile column 10, its leaves on the tile rows 6 and 7.
+        for (const [id, name, y] of [
+            ["top", "porte-v-gris-haut", 5 * 32 + 12],
+            ["bottom", "porte-v-gris-bas", 6 * 32 + 12],
+        ] as const) {
+            wam.entities[id] = {
+                x: 10 * 32 - 32,
+                y,
+                prefabRef: { collectionName: "Carte Portes", id: `Carte Portes:${name}:Default:Down` },
+            } as (typeof wam.entities)[string];
+        }
+        const { manager, steps } = createHarness({ wam });
+        let walkers: { x: number; y: number }[] = [];
+        manager.setWalkers(() => walkers);
+        manager.mapChanged();
+        const crosses = (): boolean => manager.getGrid()?.canCross(19, 13, "east") ?? false;
+        steps(1);
+        expect(crosses()).toBe(false);
+        // Someone stands in the doorway: the water goes through.
+        walkers = [{ x: 10 * 32, y: 7 * 32 }];
+        steps(1);
+        expect(crosses()).toBe(true);
+        // They walk away: the door stays open a second, then holds the water again.
+        walkers = [{ x: 30 * 32, y: 7 * 32 }];
+        steps(9);
+        expect(crosses()).toBe(true);
+        steps(2);
+        expect(crosses()).toBe(false);
+    });
+
     it("fills the hollows with the rain of the map, and counts it", () => {
         const { manager, sent, steps } = createHarness({ wam: wamWith(lake, WeatherType.Rain) });
         manager.mapChanged();
@@ -430,6 +626,22 @@ describe("TerrainWaterManager", () => {
         expect(sent[0].stats?.rain).toBeCloseTo(0.0594, 4);
         expect(depthsAfter(sent).at(1, 1)).toBeGreaterThanOrEqual(0);
         expect(sent[0].stats?.stock).toBeGreaterThan(0);
+    });
+
+    it("lives again the time the room missed: the rain of the past fills its hollows, its dry days lower them", () => {
+        const { manager, wam } = createHarness();
+        manager.mapChanged();
+        const grid = manager.getGrid();
+        if (!grid) throw new Error("no grid");
+        // Less than ten minutes missed waits for what comes after it, unless the meadow caught up.
+        manager.liveAgain(120, 2, false);
+        expect(grid.totalPx()).toBe(0);
+        for (let slice = 0; slice < 30; slice++) manager.liveAgain(120, 2, slice === 29);
+        const rained = grid.totalPx();
+        expect(rained).toBeGreaterThan(0);
+        if (wam.settings?.water) wam.settings.water.evaporation = 1;
+        for (let slice = 0; slice < 30; slice++) manager.liveAgain(120, 0, slice === 29);
+        expect(grid.totalPx()).toBeLessThan(rained);
     });
 
     it("fills nothing with a rain that falls as snow in the cold of the room, and half as much with a mix", () => {
@@ -681,6 +893,141 @@ describe("the snow and the water of the relief", () => {
         expect(manager.pour(7, 7, Number.NaN)).toBe(0);
         steps(10);
         expect(sent.at(-1)?.stats?.rain).toBeGreaterThan(0);
+        manager.stop();
+    });
+});
+
+describe("the pools of the map in the water of the relief", () => {
+    /** A flat map with a pool of 6 × 4 cells at (20, 20), 48 px deep. */
+    const poolCells: [string, number][] = [];
+    for (let y = 20; y < 24; y++) for (let x = 20; x < 26; x++) poolCells.push([cellKey(x, y), poolSoilCode(0)]);
+    const pooled = (): WAMFileFormat => {
+        const wam = wamWith(withSoils(undefined, new Map(poolCells)));
+        wam.settings = { ...wam.settings, pools: [DEFAULT_POOL_STYLE] };
+        return wam;
+    };
+    const full = DEFAULT_POOL_STYLE.depthPx - POOL_FREEBOARD_PX;
+
+    it("fills a pool by itself up to its rim in a few seconds, and nothing around it", () => {
+        const { manager, sent, steps } = createHarness({ wam: pooled(), mapSize: () => ({ width: 60, height: 60 }) });
+        manager.mapChanged();
+        const grid = manager.getGrid();
+        expect(grid).toBeDefined();
+        expect(grid?.depthAt(22, 22)).toBe(0);
+        // Half of the eight seconds: about half full.
+        steps(40);
+        expect(grid?.depthAt(22, 22)).toBeGreaterThan(full * 0.35);
+        expect(grid?.depthAt(22, 22)).toBeLessThan(full * 0.65);
+        steps(60);
+        expect(grid?.depthAt(22, 22)).toBeCloseTo(full, 0);
+        expect(grid?.depthAt(20, 20)).toBeCloseTo(full, 0);
+        expect(grid?.depthAt(19, 22)).toBe(0);
+        expect(grid?.depthAt(26, 22)).toBe(0);
+        // Full, the pump stops: the water stays at its level.
+        steps(50);
+        expect(grid?.depthAt(22, 22)).toBeCloseTo(full, 0);
+        // What the pump brought is counted with the sources.
+        expect(sent.some((message) => (message.stats?.sources ?? 0) > 0)).toBe(true);
+        manager.stop();
+    });
+
+    it("stops the pump of a pool where a ball stands: the ball is in the place of the water", () => {
+        const { manager, sent, steps } = createHarness({ wam: pooled(), mapSize: () => ({ width: 60, height: 60 }) });
+        manager.mapChanged();
+        steps(120);
+        const grid = manager.getGrid();
+        const before = grid?.totalPx() ?? 0;
+        // A ball as wide as the pool is long, in its middle: the cell (23, 22).
+        manager.setBalls(() => [{ id: 1, x: 23 * 16, y: 22 * 16, radiusPx: 64 }]);
+        sent.length = 0;
+        steps(200);
+        expect(grid?.ballAt(22, 22)).toBe(true);
+        // The pump brought nothing more: the water the ball pushed out of the pool went over its rim instead.
+        expect(sent.every((message) => (message.stats?.sources ?? 0) === 0)).toBe(true);
+        expect(grid?.totalPx() ?? 0).toBeLessThanOrEqual(before + 0.01);
+        manager.stop();
+    });
+
+    it("has a meteor that falls in a wide pool throw far more water out than its crater holds", () => {
+        // A pool of 40 × 30 cells, a crater of 4 tiles (8 cells) in its middle.
+        const wide: [string, number][] = [];
+        for (let y = 10; y < 40; y++) for (let x = 10; x < 50; x++) wide.push([cellKey(x, y), poolSoilCode(0)]);
+        const water = (reach: number | undefined): number => {
+            const wam = wamWith(withSoils(undefined, new Map(wide)));
+            wam.settings = {
+                ...wam.settings,
+                pools: [DEFAULT_POOL_STYLE],
+                water: { ...DEFAULT_WATER_SETTINGS, ...wam.settings?.water, impactReach: reach },
+            };
+            const { manager } = createHarness({ wam, mapSize: () => ({ width: 80, height: 60 }) });
+            manager.mapChanged();
+            for (let step = 0; step < 120; step++) manager.step();
+            manager.vaporise(30 * 16, 25 * 16, 4);
+            const grid = manager.getGrid();
+            let held = 0;
+            for (const [key] of wide) {
+                const [x, y] = key.split(",").map(Number);
+                held += grid?.depthAt(x, y) ?? 0;
+            }
+            manager.stop();
+            return held / (wide.length * full);
+        };
+        // The crater alone: a sixth of the water of the pool. The usual blast takes far more of it, a wider one more.
+        const craterOnly = water(1);
+        const usual = water(undefined);
+        expect(craterOnly).toBeGreaterThan(0.75);
+        expect(usual).toBeLessThan(craterOnly - 0.2);
+        expect(usual).toBeLessThan(0.6);
+        expect(water(4)).toBeLessThan(usual);
+    });
+
+    it("leaves a pool a meteor emptied empty for a moment: its pump takes three seconds to start again", () => {
+        const { manager, steps } = createHarness({ wam: pooled(), mapSize: () => ({ width: 60, height: 60 }) });
+        manager.mapChanged();
+        steps(120);
+        const grid = manager.getGrid();
+        manager.vaporise(23 * 16, 22 * 16, 4);
+        // Two seconds later it is still empty; then it fills as fast as before.
+        steps(20);
+        expect(grid?.depthAt(22, 22)).toBeLessThan(1);
+        steps(10 + 40);
+        expect(grid?.depthAt(22, 22)).toBeGreaterThan(full * 0.35);
+        expect(grid?.depthAt(22, 22)).toBeLessThan(full * 0.65);
+        manager.stop();
+    });
+
+    it("fills a pool again after it was emptied", () => {
+        const { manager, steps } = createHarness({ wam: pooled(), mapSize: () => ({ width: 60, height: 60 }) });
+        manager.mapChanged();
+        steps(120);
+        const grid = manager.getGrid();
+        // A fireball boils its water away.
+        manager.vaporise(23 * 16, 22 * 16, 4);
+        expect(grid?.depthAt(22, 22)).toBeLessThan(1);
+        steps(120);
+        expect(grid?.depthAt(22, 22)).toBeCloseTo(full, 0);
+        manager.stop();
+    });
+
+    it("lets the overflow of a pool take what comes over its level, counted with the sinks", () => {
+        const { manager, sent, steps } = createHarness({ wam: pooled(), mapSize: () => ({ width: 60, height: 60 }) });
+        manager.mapChanged();
+        steps(120);
+        const grid = manager.getGrid();
+        // A snow melts in the pool: one more pixel of water on the two tiles of its west end.
+        for (const tileY of [10, 11]) manager.pour(10, tileY, 1 / PX_PER_MM);
+        expect(grid?.depthAt(20, 20)).toBeGreaterThan(full + 0.5);
+        steps(60);
+        expect(grid?.depthAt(20, 20)).toBeLessThan(full + 0.5);
+        expect(grid?.depthAt(19, 20)).toBe(0);
+        expect(sent.some((message) => (message.stats?.sinks ?? 0) > 0)).toBe(true);
+        manager.stop();
+    });
+
+    it("keeps a map without relief nor pool without any water to step", () => {
+        const { manager } = createHarness({ wam: wamWith(undefined), mapSize: () => ({ width: 60, height: 60 }) });
+        manager.mapChanged();
+        expect(manager.getGrid()).toBeUndefined();
         manager.stop();
     });
 });

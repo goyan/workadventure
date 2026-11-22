@@ -7,12 +7,14 @@ import {
     CategorySettings,
     DEFAULT_AIR_LIFE_SETTINGS,
     DEFAULT_FLOW_PACE,
+    DEFAULT_IMPACT_REACH,
     DEFAULT_LAND_LIFE_SETTINGS,
     DEFAULT_LIFE_SETTINGS,
     DEFAULT_MEADOW_SETTINGS,
     DEFAULT_WATER_SETTINGS,
     DEFAULT_WAVE_SETTINGS,
     FLOW_PACE_BOUNDS,
+    IMPACT_REACH_BOUNDS,
     LAND_LIFE_BOUNDS,
     LIFE_BOUNDS,
     MAX_POOL_LADDERS,
@@ -146,6 +148,7 @@ export class UpdateWAMSettingCommand extends Command {
                     precision,
                     updates,
                     flowPace,
+                    impactReach,
                 } = message.updateWaterSettingMessage;
                 const within = (value: number, min: number, max: number, fallback: number): number =>
                     Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
@@ -189,6 +192,13 @@ export class UpdateWAMSettingCommand extends Command {
                     flowPace === undefined || !Number.isFinite(flowPace)
                         ? keptWater?.flowPace
                         : within(flowPace, FLOW_PACE_BOUNDS[0], FLOW_PACE_BOUNDS[1], DEFAULT_FLOW_PACE);
+                // What is not a number is no reach: an older client says nothing, the map keeps what it had.
+                const keptImpactReach =
+                    impactReach === undefined
+                        ? keptWater?.impactReach
+                        : Number.isFinite(impactReach)
+                          ? within(impactReach, IMPACT_REACH_BOUNDS[0], IMPACT_REACH_BOUNDS[1], DEFAULT_IMPACT_REACH)
+                          : keptWater?.impactReach;
                 this.wam.settings.water = {
                     runoff: within(runoff, 0, 100, DEFAULT_WATER_SETTINGS.runoff),
                     evaporation: within(evaporation, 0, 10, DEFAULT_WATER_SETTINGS.evaporation),
@@ -216,6 +226,7 @@ export class UpdateWAMSettingCommand extends Command {
                         : { precision: paced("precision", precision) }),
                     ...(paced("updates", updates) === undefined ? {} : { updates: paced("updates", updates) }),
                     ...(keptFlowPace === undefined ? {} : { flowPace: keptFlowPace }),
+                    ...(keptImpactReach === undefined ? {} : { impactReach: keptImpactReach }),
                 };
                 break;
             }
@@ -226,7 +237,9 @@ export class UpdateWAMSettingCommand extends Command {
             }
             case "updatePoolLaddersSettingMessage": {
                 const cells = [
-                    ...new Set(message.updatePoolLaddersSettingMessage.cells.filter((cell) => POOL_LADDER_CELL.test(cell))),
+                    ...new Set(
+                        message.updatePoolLaddersSettingMessage.cells.filter((cell) => POOL_LADDER_CELL.test(cell)),
+                    ),
                 ].slice(0, MAX_POOL_LADDERS);
                 this.wam.settings.poolLadders = cells.length > 0 ? cells : undefined;
                 break;

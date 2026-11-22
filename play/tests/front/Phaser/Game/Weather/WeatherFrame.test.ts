@@ -9,8 +9,6 @@ import {
     keepOutdoorParticles,
     lastStrike,
     lightningBolt,
-    snowfall,
-    snowflakes,
     stormFlash,
     weatherAtTime,
     themedFall,
@@ -20,50 +18,6 @@ import { autoWeatherAt, slotStart } from "../../../../../src/front/Phaser/Game/W
 import { OutdoorGrid } from "../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid";
 
 const view = { x: 0, y: 0, width: 800, height: 600 };
-
-describe("world weather", () => {
-    it("does no flake work when nothing falls as snow", () => {
-        expect(snowflakes(1000, view, 0)).toEqual([]);
-        expect(snowfall(0.5, 0)).toBe(0);
-        expect(snowfall(0, 1)).toBe(0);
-        expect(snowfall(1, Number.NaN)).toBe(0);
-    });
-    it("keeps overlapping flakes fixed in the world when the camera moves", () => {
-        const original = snowflakes(1000, view, 1);
-        const shifted = snowflakes(1000, { ...view, x: 64 }, 1);
-        expect(original.length).toBeGreaterThan(100);
-        expect(original.filter((particle) => particle.x >= 0 && particle.x < 800)).toEqual(
-            shifted.filter((particle) => particle.x >= 0 && particle.x < 800),
-        );
-        expect(snowflakes(1100, view, 1)).not.toEqual(original);
-    });
-    it("bounds flake work even when zoomed far out", () => {
-        expect(snowflakes(1000, { ...view, width: 20000, height: 20000 }, 1).length).toBeLessThan(500);
-    });
-    it("shows more flakes the more of the precipitation is snow and the harder it falls, the same ones first", () => {
-        expect(snowfall(0.5, 1)).toBeCloseTo(0.65);
-        expect(snowfall(1, 1)).toBe(1);
-        expect(snowfall(0.5, 0.5)).toBeCloseTo(0.325);
-        expect(snowfall(0.5, 0.2)).toBeLessThan(snowfall(0.5, 0.8));
-        expect(snowfall(0.2, 1)).toBeLessThan(snowfall(0.9, 1));
-        const few = snowflakes(1000, view, 0.3);
-        const many = snowflakes(1000, view, 0.8);
-        const all = snowflakes(1000, view, 1);
-        expect(few.length).toBeGreaterThan(0);
-        expect(few.length).toBeLessThan(many.length);
-        expect(many.length).toBeLessThan(all.length);
-        // A sleet turning to snow adds flakes, it never moves the ones already falling.
-        for (const flake of few) expect(many).toContainEqual(flake);
-    });
-    it("carries the flakes the way the wind leans the rain", () => {
-        const still = snowflakes(1000, view, 1);
-        const east = snowflakes(1000, view, 1, 0.5);
-        const west = snowflakes(1000, view, 1, -0.5);
-        expect(east.every((flake, index) => flake.x >= still[index].x && flake.y === still[index].y)).toBe(true);
-        expect(west.every((flake, index) => flake.x <= still[index].x)).toBe(true);
-        expect(east.some((flake, index) => flake.x > still[index].x)).toBe(true);
-    });
-});
 
 describe("storm", () => {
     it("strikes every 12 to 30 seconds, at the same times for everyone, without a fixed rhythm", () => {
@@ -407,8 +361,14 @@ describe("what falls for who chose the winter theme", () => {
                 weather: WeatherType.Rain,
                 rain: WINTER_SNOWFALL,
                 snow: 1,
+                flakes: WINTER_SNOWFALL,
             });
         }
+    });
+
+    it("leaves how hard the flakes fall to the rain of the map when it rains", () => {
+        expect(themedFall(SeasonalTheme.Christmas, WeatherType.Rain, 0.8, 0).flakes).toBeUndefined();
+        expect(themedFall(undefined, WeatherType.Rain, 0.8, 1).flakes).toBeUndefined();
     });
 
     it("is the rain or the storm of the map, as hard, all in flakes", () => {

@@ -1,4 +1,7 @@
 import {
+    BALL_LASTS_MS,
+    BALL_MIN_REPORT_MS,
+    BALLS_PER_ROOM,
     DOWNPOUR_DEFAULT_TILES,
     DOWNPOUR_LASTS_MS,
     DOWNPOUR_MAX_TILES,
@@ -96,9 +99,9 @@ describe("CatastropheManager", () => {
         expect(manager.launch(METEOR, 10, 10, 9999)).toBe(true);
         expect(manager.launch(METEOR, 10, 10, -3)).toBe(true);
         expect(manager.launch(METEOR, 10, 10, Number.NaN)).toBe(true);
-        expect(sent.map((message) => message.radiusTiles)).toEqual([24, 2, 4]);
+        expect(sent.map((message) => message.radiusTiles)).toEqual([8, 1, 4]);
         vi.advanceTimersByTime(1200);
-        expect(strike.mock.calls.map((call) => call[2])).toEqual([24, 2, 4]);
+        expect(strike.mock.calls.map((call) => call[2])).toEqual([8, 1, 4]);
     });
 
     it("a strike that throws stops nothing", () => {
@@ -283,6 +286,99 @@ describe("CatastropheManager, drains", () => {
     });
 });
 
+describe("CatastropheManager, balls", () => {
+    const BALL = CatastropheKind.CATASTROPHE_BALL;
+
+    it("a ball is there at once, whole, under the pointer, and the room is told whose it is", () => {
+        const { manager, sent } = harness();
+        expect(manager.request(7, BALL, 100, 80, 0, false)).toBe(true);
+        // A size that is none is the usual diameter, 4 tiles: 64 px of radius, from the first message.
+        expect(sent[0]).toMatchObject({ kind: BALL, x: 100, y: 80, radiusTiles: 4, wholeMap: false, userId: 7 });
+        expect(sent[0].impactInMs).toBe(BALL_LASTS_MS);
+        expect(manager.balls()).toEqual([{ id: sent[0].id, x: 100, y: 80, radiusPx: 64 }]);
+    });
+
+    it("is under the pointer of its player at each message, under the same id", () => {
+        const { manager, sent } = harness();
+        manager.ball(7, 100, 80, 4);
+        vi.advanceTimersByTime(BALL_MIN_REPORT_MS);
+        expect(manager.ball(7, 500, 300, 6)).toBe(true);
+        expect(sent[1]).toMatchObject({ id: sent[0].id, x: 500, y: 300, radiusTiles: 6 });
+        expect(manager.balls()).toEqual([{ id: sent[0].id, x: 500, y: 300, radiusPx: 96 }]);
+    });
+
+    it("ignores messages that come too fast", () => {
+        const { manager, sent } = harness();
+        manager.ball(7, 100, 80, 4);
+        vi.advanceTimersByTime(BALL_MIN_REPORT_MS - 1);
+        expect(manager.ball(7, 300, 90, 4)).toBe(false);
+        expect(sent).toHaveLength(1);
+        expect(manager.balls()[0]).toMatchObject({ x: 100, y: 80 });
+    });
+
+    it("keeps the diameter within 1 to 16 tiles", () => {
+        const { manager, sent } = harness();
+        expect(manager.ball(7, 100, 80, 99)).toBe(true);
+        expect(manager.ball(8, 100, 80, -5)).toBe(true);
+        expect(sent.map((message) => message.radiusTiles)).toEqual([16, 1]);
+        expect(manager.balls().map((ball) => ball.radiusPx)).toEqual([256, 16]);
+    });
+
+    it("is gone at once when its player lets go, and the room is told", () => {
+        const { manager, sent } = harness();
+        manager.ball(7, 100, 80, 4);
+        vi.advanceTimersByTime(5);
+        expect(manager.request(7, BALL, 100, 80, 4, false, true)).toBe(true);
+        expect(manager.balls()).toHaveLength(0);
+        expect(sent[1]).toMatchObject({ id: sent[0].id, kind: BALL, impactInMs: 0, userId: 7 });
+        // Letting go of nothing says nothing.
+        expect(manager.request(7, BALL, 100, 80, 4, false, true)).toBe(false);
+        expect(sent).toHaveLength(2);
+        // A release never lets go of another catastrophe.
+        manager.drain(7, 100, 80);
+        expect(manager.request(7, CatastropheKind.CATASTROPHE_DRAIN, 100, 80, 3, false, true)).toBe(false);
+        expect(manager.drains()).toHaveLength(1);
+    });
+
+    it("is gone a moment after the last message of a player who left without letting go", () => {
+        const { manager } = harness();
+        manager.ball(7, 100, 80, 2);
+        vi.advanceTimersByTime(BALL_LASTS_MS - 1);
+        expect(manager.balls()).toHaveLength(1);
+        vi.advanceTimersByTime(1);
+        expect(manager.balls()).toHaveLength(0);
+    });
+
+    it("a new click makes a new ball", () => {
+        const { manager, sent } = harness();
+        manager.ball(7, 100, 80, 4);
+        manager.release(7);
+        vi.advanceTimersByTime(100);
+        expect(manager.ball(7, 400, 300, 4)).toBe(true);
+        expect(sent.at(-1)?.id).not.toBe(sent[0].id);
+        expect(manager.balls()).toEqual([expect.objectContaining({ x: 400, y: 300 })]);
+    });
+
+    it("refuses a point outside the map, numbers that are not, and one ball more than the room may have", () => {
+        const { manager, sent } = harness();
+        expect(manager.ball(1, -1, 10, 4)).toBe(false);
+        expect(manager.ball(1, 10, MAP.height, 4)).toBe(false);
+        expect(manager.ball(1, Number.NaN, 10, 4)).toBe(false);
+        expect(manager.ball(1, 10, Number.POSITIVE_INFINITY, 4)).toBe(false);
+        for (let user = 1; user <= BALLS_PER_ROOM; user++) expect(manager.ball(user, 10, 10, 4)).toBe(true);
+        expect(manager.ball(99, 10, 10, 4)).toBe(false);
+        expect(sent).toHaveLength(BALLS_PER_ROOM);
+    });
+
+    it("no ball once the room stops", () => {
+        const { manager } = harness();
+        manager.ball(7, 100, 80, 4);
+        manager.stop();
+        expect(manager.balls()).toHaveLength(0);
+        expect(manager.ball(7, 100, 80, 4)).toBe(false);
+    });
+});
+
 describe("a patch of fire", () => {
     const FIRE = CatastropheKind.CATASTROPHE_FIRE;
     function fireHarness() {
@@ -393,12 +489,16 @@ describe("a patch of fire", () => {
             expect(strike).not.toHaveBeenCalled();
         });
 
-        it("keeps its size within 2 to 24 tiles", () => {
+        it("keeps its size within 1 to 8 tiles: one out of range is the nearest, none is the usual one", () => {
             const { manager, sent } = burning();
             manager.launch(FIREBALL, 10, 10, 99);
             manager.launch(FIREBALL, 10, 10, Number.NaN);
             manager.launch(FIREBALL, 10, 10, 0);
-            expect(sent.map((message) => message.radiusTiles)).toEqual([24, 4, 2]);
+            manager.launch(FIREBALL, 10, 10, 1);
+            // A tab opened before, still at 24: kept, at the largest.
+            manager.launch(METEOR, 10, 10, 24);
+            manager.launch(METEOR, 10, 10, -3);
+            expect(sent.map((message) => message.radiusTiles)).toEqual([8, 4, 4, 1, 8, 1]);
         });
 
         it("is counted with the meteors against the twenty in flight", () => {
@@ -427,5 +527,44 @@ describe("a patch of fire", () => {
             expect(() => vi.advanceTimersByTime(METEOR_FALL_MS)).not.toThrow();
             expect(logged).toHaveBeenCalled();
         });
+    });
+});
+
+describe("ice that gives way", () => {
+    const ICE = CatastropheKind.CATASTROPHE_ICE_BREAK;
+
+    it("breaks the ice a tile around the player, tells the room, and once a second at most for a player", () => {
+        const broken: { x: number; y: number; radiusTiles: number }[] = [];
+        const told: { kind: CatastropheKind; x: number; y: number; radiusTiles: number }[] = [];
+        const clock = { now: 1_000_000 };
+        const room = {
+            sendSubMessageToRoom: (message: SubToPusherRoomMessage): void => {
+                if (message.message?.$case === "catastropheMessage") told.push(message.message.catastropheMessage);
+            },
+        };
+        const manager = new CatastropheManager(
+            room,
+            () => MAP,
+            () => undefined,
+            () => undefined,
+            () => clock.now,
+        );
+        manager.breakIceWith((x, y, radiusTiles) => broken.push({ x, y, radiusTiles }));
+        expect(manager.request(1, ICE, 320, 160, 0, false)).toBe(true);
+        expect(manager.request(1, ICE, 330, 160, 0, false)).toBe(false);
+        expect(manager.request(2, ICE, 330, 160, 0, false)).toBe(true);
+        expect(manager.request(3, ICE, -5, 160, 0, false)).toBe(false);
+        clock.now += 1000;
+        expect(manager.request(1, ICE, 340, 160, 0, false)).toBe(true);
+        expect(broken).toEqual([
+            { x: 320, y: 160, radiusTiles: 1 },
+            { x: 330, y: 160, radiusTiles: 1 },
+            { x: 340, y: 160, radiusTiles: 1 },
+        ]);
+        expect(told.map(({ kind, x, radiusTiles }) => ({ kind, x, radiusTiles }))).toEqual([
+            { kind: ICE, x: 320, radiusTiles: 1 },
+            { kind: ICE, x: 330, radiusTiles: 1 },
+            { kind: ICE, x: 340, radiusTiles: 1 },
+        ]);
     });
 });

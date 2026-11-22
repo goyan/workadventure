@@ -69,7 +69,10 @@ export class FootprintLayer {
                     : this.scene.add
                           .image(mark.x1, mark.y1 + drop, this.trailTexture)
                           .setOrigin(0, 0.5)
-                          .setDisplaySize(Math.hypot(mark.x2 - mark.x1, mark.y2 - mark.y1), TRAIL_WIDTH_PX)
+                          .setDisplaySize(
+                              Math.hypot(mark.x2 - mark.x1, mark.y2 - mark.y1),
+                              mark.width ?? TRAIL_WIDTH_PX,
+                          )
                           .setRotation(Math.atan2(mark.y2 - mark.y1, mark.x2 - mark.x1));
             const feetY = mark.kind === "step" ? mark.y : Math.max(mark.y1, mark.y2);
             image.setDepth(feetY + drop - DEPTH_BELOW_FEET);

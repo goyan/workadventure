@@ -7,6 +7,7 @@
         chosenWeatherStateStore,
     } from "@wa/front/Phaser/Game/Weather/ChosenPlaceWeather";
     import { weatherLook } from "@wa/front/Components/Menu/WeatherName";
+    import { realWeatherAt } from "@wa/common/RealWeather";
     import { compassPointOf, windArrowOf } from "@wa/front/Phaser/Game/Weather/WindDirection";
     import type { WindArrow } from "@wa/front/Phaser/Game/Weather/WindDirection";
     import { LL } from "../../../i18n/i18n-svelte";
@@ -48,9 +49,16 @@
         if (!place || !$nightDateStore || !$weatherBannerStore) return undefined;
         const same = known.place?.latitude === place.latitude && known.place?.longitude === place.longitude;
         const state = same ? known.state : { status: "pending" as const };
+        // The humidity of the quarter hour under way at that city, which its frost goes by; none while not known.
+        const humidity =
+            state.status === "known" ? realWeatherAt(state.slots, $nightDateStore.getTime())?.humidity : undefined;
         return {
-            city: place.name.split(",")[0]?.trim() || place.name,
+            // A town without its region and country; a point far from any city whole ("Auckland 4,000 km").
+            city: place.longName ? place.name : place.name.split(",")[0]?.trim() || place.name,
+            // A point far from any city: its coordinates on the chip, the nearest city and how far on the card.
+            longCity: place.longName ?? (place.name.split(",")[0]?.trim() || place.name),
             cells: chosenPlaceForecast(place, state, $nightDateStore),
+            humidity,
         };
     });
 
@@ -144,10 +152,11 @@
             />
             {#if mine}
                 <WeatherCard
-                    city={mine.city}
+                    city={mine.longCity}
                     kind="local"
                     tag={$LL.actionbar.weatherBanner.local()}
                     cells={mine.cells}
+                    now={{ humidity: mine.humidity, manual: false }}
                     testid="weather-card-local"
                 />
             {/if}

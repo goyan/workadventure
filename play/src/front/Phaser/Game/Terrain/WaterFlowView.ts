@@ -61,6 +61,13 @@ const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").m
  */
 /** About how long a streak of foam is, in map pixels: under two screen pixels it is not drawn. */
 const FOAM_STREAK_PX = 8;
+/**
+ * The foam the current carries shows on shallow water (a stream, a river, a sheet running on land): under this
+ * depth, in pixels (a tile deep). Deeper, moving water is a swell, which carries no foam unless it runs very hard:
+ * the foam of the waves that break and the whitecaps of the wind are drawn by the water shader (GroundSplat).
+ */
+const STREAM_FOAM_DEPTH_PX = 32;
+const DEEP_FOAM_CURRENT = 0.9;
 
 export class WaterFlowView {
     private readonly reducedMotion: boolean;
@@ -79,9 +86,17 @@ export class WaterFlowView {
         this.reducedMotion = options.reducedMotion ?? REDUCED_MOTION;
         this.foamGraphics = scene.add.graphics().setDepth(FOAM_DEPTH);
         this.marksGraphics = scene.add.graphics().setDepth(MARKS_DEPTH);
-        this.foam = new WaterFoam((x, y, now) =>
-            options.isFrozenAt?.(x, y) ? { x: 0, y: 0 } : waterCurrentAt(options.water, x, y, now, FOAM_MIN_DEPTH_PX),
-        );
+        this.foam = new WaterFoam((x, y, now) => {
+            if (options.isFrozenAt?.(x, y)) return { x: 0, y: 0 };
+            const current = waterCurrentAt(options.water, x, y, now, FOAM_MIN_DEPTH_PX);
+            if (
+                options.water.depthAt(x, y, now) >= STREAM_FOAM_DEPTH_PX &&
+                Math.hypot(current.x, current.y) < DEEP_FOAM_CURRENT
+            ) {
+                return { x: 0, y: 0 };
+            }
+            return current;
+        });
     }
 
     /** `now` in ms of the game. */

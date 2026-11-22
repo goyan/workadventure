@@ -27,6 +27,7 @@ import {
     getWaterRectangles,
     isDeepTerrainWater,
     isPointInWater,
+    isPoolAt,
     isWithinOneTileOfWater,
 } from "@wa/front/Phaser/Game/Water/WaterZones";
 import { getIceRectangles, isOnIce } from "@wa/front/Phaser/Game/Ice/IceZones";
@@ -56,6 +57,12 @@ import { decodeRodEquipped } from "@wa/front/Phaser/Game/Fishing/FishingProtocol
 import type { TorchFlameShape } from "@wa/front/Phaser/Game/Torch/TorchFlameShape";
 import { decodeNerfHearts } from "@wa/front/Phaser/Game/Nerf/NerfProtocol";
 import { heartsDropped } from "@wa/front/Phaser/Game/Nerf/NerfHearts";
+import { perceptionMarkLift } from "@wa/front/Phaser/Game/Perception/PerceptionMarkShape";
+import {
+    decodePerception,
+    type Perception,
+    type PerceptionMark,
+} from "@wa/front/Phaser/Game/Perception/PerceptionProtocol";
 import { NERF_BLINK_ALPHA, NERF_BLINK_TINT, nerfBlinkTinted } from "@wa/front/Phaser/Game/Nerf/NerfBlink";
 import {
     cardinalVehicleHeading,
@@ -119,6 +126,9 @@ export type PathFollowResult = {
     blocked?: boolean;
 };
 
+/** From this snow cover (0 to 1) on frozen water, one walks on it rather than skates. */
+const SNOW_WALKED_ON = 0.5;
+
 export abstract class Character extends Container implements OutlineableInterface, Movable {
     private readonly movedSubject = new Subject<PositionInterface>();
     public readonly moved$ = this.movedSubject.asObservable();
@@ -152,6 +162,13 @@ export abstract class Character extends Container implements OutlineableInterfac
     private clickable: boolean;
     public companion?: Companion;
     private emote: DOMElement | null = null;
+    /** A speech bubble or a thinking cloud is shown over the avatar (see say). */
+    private bubbleShown = false;
+    /** What this player perceives, from their player variable (see PerceptionProtocol). */
+    private perception: Perception = "none";
+    /** The symbol drawn over this player for the local one, and its tooltip (see PerceptionManager). */
+    private perceptionMark: PerceptionMark | undefined;
+    private perceptionTitle = "";
     private emoteTween: Tween | null = null;
     private texts: Map<string, DOMElement> = new Map();
     private textsToBuild = new Map();
@@ -361,6 +378,7 @@ export abstract class Character extends Container implements OutlineableInterfac
             this.usernameDisplay.setListeningMusic(this.listeningMusic);
             this.usernameDisplay.setVideoBubbleVisible(this.videoBubbleVisible);
             this.usernameDisplay.setPlayerDepth(this.depth);
+            this.applyPerceptionMark();
 
             this.outlineColorStoreUnsubscribe = this.outlineColorStore.subscribe((color) => {
                 this.usernameDisplay?.setPlayerNameOutlineColor(color);
@@ -455,6 +473,12 @@ export abstract class Character extends Container implements OutlineableInterfac
         return !isCanoeAfloat(this.vehicleState) && this.isOverDeepTerrainWater();
     }
 
+    /** Whether the body of the character is in a pool painted with the relief tool: one swims there, no canoe. */
+    protected isInPool(): boolean {
+        const terrain = this.scene.getGameMap?.()?.getWamFile()?.getWam().terrain;
+        return isPoolAt(terrain, { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y });
+    }
+
     /** Whether the body of the character is over water of the relief deep enough to swim, on the ground. */
     protected isOverDeepTerrainWater(): boolean {
         // Basique hides the water of the relief: here nobody swims nor floats in it (the pools of the map remain).
@@ -473,14 +497,19 @@ export abstract class Character extends Container implements OutlineableInterfac
 
     /**
      * The speed the current of the water of the relief gives the character, in pixels a second: nothing out of the
-     * water, in still or shallow water, on a raised floor, or on a map that set its current to nothing. At its
-     * hardest (and the usual strength) it carries at a quarter of the speed one walks at (`walkSpeed`).
+     * water, in still or shallow water, on a raised floor, inside a building, or on a map that set its current to
+     * nothing. A water with inertia carries at the speed it runs at; else, at its hardest (and the usual strength),
+     * at a quarter of the speed one walks at (`walkSpeed`).
      */
     protected waterCurrentPush(walkSpeed: number): CurrentVector {
         const water = this.floorZ < 2 && !isBasicActive() ? this.scene?.getTerrainWater?.() : undefined;
         if (!water) return { x: 0, y: 0 };
         // A drain of the catastrophes pulls the water, never who is in it.
         if (this.scene.isDrainCalm?.(this.x, this.y + BODY_CENTER_OFFSET_Y)) return { x: 0, y: 0 };
+        // Inside a building the current carries nobody: one is not swept out of a flooded room.
+        if (this.scene.getOutdoorGrid?.()?.isOutdoorAt(this.x, this.y + BODY_CENTER_OFFSET_Y) === false) {
+            return { x: 0, y: 0 };
+        }
         // Under the ice, the current carries nobody.
         if (this.scene.isFrozenWaterAt?.(this.x, this.y + BODY_CENTER_OFFSET_Y)) return { x: 0, y: 0 };
         const strength =
@@ -496,11 +525,13 @@ export abstract class Character extends Container implements OutlineableInterfac
         // The ice is on the ground too.
         if (!this.scene || this.floorZ > 0) return false;
         const body = { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y };
-        // A rink of the map, or the water of the relief frozen by the cold.
+        // A rink of the map, or the water of the relief frozen by the cold: under a snow that covers it, the frozen
+        // water is walked on, leaving footprints, not skated on.
         return (
             (isOnIce(getIceRectangles(this.scene), body) ||
                 isPointInWater(getFrozenPoolRectangles(this.scene), body) ||
-                this.scene.isFrozenWaterAt?.(body.x, body.y) === true) &&
+                (this.scene.isFrozenWaterAt?.(body.x, body.y) === true &&
+                    (this.scene.getSnowCoverAt?.(body.x, body.y) ?? 0) < SNOW_WALKED_ON)) &&
             !this.isSwimmingHere()
         );
     }
@@ -876,6 +907,7 @@ export abstract class Character extends Container implements OutlineableInterfac
             this.seated,
             this.getNerfHeading(),
         );
+        this.applyPerceptionMark();
         this.scene.markDirty();
     }
 
@@ -885,7 +917,39 @@ export abstract class Character extends Container implements OutlineableInterfac
         if (heartsDropped(previous, this.nerfHearts)) this.flashNerfHit();
         if (this.nerfHearts !== undefined) this.nerfHeartsEffect ??= new NerfHeartsEffect(this.scene, this);
         this.nerfHeartsEffect?.update(this.nerfHearts, this.nerfEquipped && !this.invisible);
+        this.applyPerceptionMark();
         this.scene.markDirty();
+    }
+
+    /** What this player perceives, from their player variable: an unknown value is the shared world. */
+    public setPerception(value: unknown): void {
+        this.perception = decodePerception(value);
+    }
+
+    public getPerception(): Perception {
+        return this.perception;
+    }
+
+    /** The symbol of a changed perception the local player sees over this one (none: no symbol), and its tooltip. */
+    public showPerceptionMark(mark: PerceptionMark | undefined, title: string): void {
+        if (mark === this.perceptionMark && title === this.perceptionTitle) return;
+        this.perceptionMark = mark;
+        this.perceptionTitle = title;
+        this.applyPerceptionMark();
+    }
+
+    /**
+     * Over the name tag, above the Nerf hearts when they show; put away while a bubble or an emote takes its place
+     * over the head.
+     */
+    private applyPerceptionMark(): void {
+        const covered = this.bubbleShown || this.emote !== null;
+        const heartsShown = this.nerfEquipped && this.nerfHearts !== undefined && !this.invisible;
+        this.usernameDisplay?.setPerceptionMark(
+            covered ? undefined : this.perceptionMark,
+            this.perceptionTitle,
+            perceptionMarkLift(heartsShown),
+        );
     }
 
     /** Blinks red and see-through after a Nerf hit (see NerfBlink), for the local player and the others alike. */
@@ -1238,6 +1302,8 @@ export abstract class Character extends Container implements OutlineableInterfac
             this.remove(this.bubble);
             this.bubble.destroy();
         }
+        this.bubbleShown = Boolean(text);
+        this.applyPerceptionMark();
         // If text is empty, let's just remove the previous bubble and say nothing.
         if (!text) {
             return;
@@ -1307,6 +1373,7 @@ export abstract class Character extends Container implements OutlineableInterfac
         // The emote comes from another player: it is plain text (an emoji) and must never be interpreted as HTML.
         span.textContent = emote;
         this.emote = new DOMElement(this.scene, -1, 0, span, "z-index:10;");
+        this.applyPerceptionMark();
         this.emote.setAlpha(0);
         this.add(this.emote);
         this.createStartTransition(emoteY);
@@ -1417,6 +1484,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     private destroyEmote() {
         this.emote?.destroy();
         this.emote = null;
+        this.applyPerceptionMark();
     }
 
     destroyText(id: string) {
