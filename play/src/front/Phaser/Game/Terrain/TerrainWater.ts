@@ -223,6 +223,22 @@ export class TerrainWater {
         this.states++;
     }
 
+    /**
+     * The last state received, whole, as it came (its sequence and speeds with it): where the local ground of a player
+     * starts from, and what the water goes back to when they follow the server again. Undefined before any state.
+     */
+    public wholeState(): WaterState | undefined {
+        if (!this.bytes) return undefined;
+        return {
+            ...this.grid,
+            seq: this.seq ?? 0,
+            full: true,
+            depths: this.bytes,
+            ...(this.speeds ? { speeds: Uint8Array.from(this.speeds) } : {}),
+            ...(this.slowSpeeds ? { slowSpeeds: Uint8Array.from(this.slowSpeeds) } : {}),
+        };
+    }
+
     /** The deepest water of the map (px), as shown or gliding: how much higher a lake on a mount draws its surface. */
     public deepest(): number {
         return this.deepestDepth;

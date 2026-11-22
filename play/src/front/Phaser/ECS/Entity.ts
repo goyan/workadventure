@@ -76,6 +76,9 @@ export enum EntityEvent {
 export const DEFAULT_ACTIVABLE_RADIUS = 14;
 
 // NOTE: Tiles-based entity for now. Individual images later on
+/** The colour and the opacity of an object seen under the water of the relief (the blue of its shallows). */
+const SUBMERGED_TINT = 0x7fb6d9;
+const SUBMERGED_ALPHA = 0.55;
 type HitTest = (area: unknown, x: number, y: number, object: Phaser.GameObjects.GameObject) => boolean;
 /** The hit tests already brought back to where their object is drawn (Entity.hitWhereDrawn): never wrapped twice. */
 const movedHitTests = new WeakSet<HitTest>();
@@ -90,6 +93,8 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
     private entityData: Required<WAMEntityData>;
     /** Depth before the manual stacking, from the position of the foot and the neighbouring images. */
     private automaticDepth = 0;
+    /** Whether the water of the relief covers it (a drain in a pool, in a flood): drawn as seen through the water. */
+    private submerged = false;
     private prefab: EntityPrefab;
     private season = Season.Summer;
     /** How much snow covers the ground, 0 to 1: a tree under snow whitens with it, at its own pace. */
@@ -431,6 +436,22 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
 
     public getEntityData(): Required<WAMEntityData> {
         return this.entityData;
+    }
+
+    /**
+     * Shows the object under the water (tinted by it, half seen through it) while the water of the relief covers it,
+     * and as it is again once the water went down: a drain is seen at the bottom of a pool until it emptied it.
+     */
+    public setSubmerged(submerged: boolean): void {
+        if (submerged === this.submerged) return;
+        this.submerged = submerged;
+        if (submerged) {
+            this.setTint(SUBMERGED_TINT);
+            this.setAlpha(SUBMERGED_ALPHA);
+        } else {
+            this.clearTint();
+            this.setAlpha(1);
+        }
     }
 
     public getPrefab(): EntityPrefab {

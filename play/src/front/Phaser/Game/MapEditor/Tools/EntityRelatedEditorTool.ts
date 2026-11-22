@@ -26,6 +26,7 @@ import { TexturesHelper } from "../../../Helpers/TexturesHelper";
 import type { Entity } from "../../../ECS/Entity";
 import { isMapLayerPrefab } from "../MapLayer/MapLayerCatalog";
 import { armEntityDuplicate } from "../EntityDuplicate";
+import { rotatedWaterProperties } from "../../Terrain/WaterAnchor";
 import { MapEditorTool } from "./MapEditorTool";
 
 import Image = Phaser.GameObjects.Image;
@@ -360,7 +361,12 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
             new CreateEntityFrontCommand(
                 wamFile,
                 entity.entityId,
-                { ...data, prefabRef: { collectionName: next.collectionName, id: next.id } },
+                {
+                    ...data,
+                    prefabRef: { collectionName: next.collectionName, id: next.id },
+                    // A drain or a source turned with its image: its water point follows the new direction.
+                    properties: rotatedWaterProperties(data.properties, next),
+                },
                 undefined,
                 this.entitiesManager,
                 { width: entity.width, height: entity.height },

@@ -38,6 +38,7 @@ import {
     type LifeFire,
     lifeFireOf,
     listeningZoneJamKey,
+    mapCellsOf,
     type Season,
     seasonAt,
     snowCoverOf,
@@ -327,7 +328,11 @@ import { levelUnderPoint } from "./MapEditor/MapLayer/FloorOperations";
 import { levelItems } from "./MapEditor/MapLayer/MapLayerLevels";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
 import { weatherAtTime } from "./Weather/WeatherFrame";
-import { setRoomConditions, shownWeatherSettings } from "./Weather/RealWeatherClient";
+import { setRoomConditions, showsChosenPlaceWeather, shownWeatherSettings } from "./Weather/RealWeatherClient";
+import { chosenWeatherNow } from "./Weather/ChosenPlaceWeather";
+import { groundSnowAt, snowLinePeak } from "./Terrain/GroundPace";
+import { LocalTerrainController, openModuleWorker } from "./Terrain/LocalTerrainController";
+import { SubmergedDrains } from "./Terrain/SubmergedDrains";
 import { isSwayingTree, TreeSway } from "./Nature/TreeSway";
 import { TreePoseTextures } from "./Nature/TreePoses";
 import { TreeSeasonEffects } from "./Nature/TreeSeasonEffects";
@@ -341,7 +346,14 @@ import { wallBarriers } from "./MapEditor/MapLayer/MapLayerBarriers";
 import { readMapLayerEntityStates } from "./MapEditor/MapLayer/MapLayerSync";
 import { autumnProgress } from "./Nature/TreeLeafFall";
 import { isGroundUnderWater } from "./Water/WaterZones";
-import { followsServerGround, snowCoverHere, snowCoverOfMap } from "./Weather/GroundSource";
+import {
+    followsServerGround,
+    meadowHoldsSnow,
+    setLocalGroundShown,
+    snowCoverHere,
+    snowCoverOfMap,
+    snowPeakOfMap,
+} from "./Weather/GroundSource";
 import { precipitationAirNow, roomPrecipitationAir } from "./Weather/PrecipitationAir";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
 import { gameManager } from "./GameManager";
@@ -656,6 +668,45 @@ export class GameScene extends DirtyScene {
     private bridges: Bridges | undefined;
     /** The grass and the moisture of the soil of the map, as the server tells them. */
     private readonly meadow = new MeadowState();
+    /**
+     * The own ground of this player while they follow the weather of a place they chose (Jour dans le monde, a point
+     * of the world map): their lakes, rivers and meadow live under it, the server's are kept aside until they leave it.
+     */
+    /** The drains seen under the water that covers them, until they drained it. */
+    private readonly submergedDrains = new SubmergedDrains(
+        () => this.gameMapFrontWrapper?.getEntitiesManager().getEntities().values() ?? [],
+        (x, y) => this.terrainWater.depthAt(x, y, this.time.now),
+    );
+    private readonly localTerrain = new LocalTerrainController(
+        {
+            chosenPlace: () => {
+                if (isBasicActive() || get(mapEditorModeStore) || !showsChosenPlaceWeather()) return undefined;
+                const { place, state } = chosenWeatherNow();
+                return place && { place, slots: state.status === "known" ? state.slots : undefined };
+            },
+            map: () => {
+                const file = this.gameMapFrontWrapper ? this.getGameMap().getWamFile() : undefined;
+                if (!file) return undefined;
+                return {
+                    wam: file.getWam(),
+                    key: file.getLastCommandId() ?? "",
+                    mapCells: mapCellsOf(this.getGameMap().getMap()),
+                };
+            },
+            walkers: () =>
+                this.CurrentPlayer && this.CurrentPlayer.getFloorZ() < 2
+                    ? [{ x: this.CurrentPlayer.x, y: this.CurrentPlayer.y }]
+                    : [],
+            water: this.terrainWater,
+            showWaterStats: (stats) => terrainWaterStatsStore.set(stats),
+            showMeadow: (state) => this.meadow.receive(state),
+        },
+        async () => {
+            const { default: workerUrl } = await import("./Terrain/LocalTerrainWorker?worker&url");
+            return openModuleWorker(workerUrl);
+        },
+        () => this.time.now,
+    );
     private meadowSubscription: Subscription | undefined;
     private readonly treeFire = new TreeFireState();
     private treeFireSubscription: Subscription | undefined;
@@ -1062,6 +1113,8 @@ export class GameScene extends DirtyScene {
         this.input.topOnly = false;
         this.preloading = false;
         this.cleanupDone = false;
+        // Its own ground, once shown, holds the snow and the ice of this player (GroundSource.meadowHoldsSnow).
+        setLocalGroundShown(() => this.localTerrain.isLocal());
 
         this.bindSceneEventHandlers();
 
@@ -1730,6 +1783,8 @@ export class GameScene extends DirtyScene {
         this.terrainWaterSubscription = undefined;
         this.meadowSubscription?.unsubscribe();
         this.meadowSubscription = undefined;
+        this.localTerrain.destroy();
+        setLocalGroundShown(() => false);
         this.treeFireSubscription?.unsubscribe();
         this.treeFireSubscription = undefined;
         this.fireConditionsSubscription?.unsubscribe();
@@ -2502,6 +2557,8 @@ export class GameScene extends DirtyScene {
                     isOnFrozenWater(this, point),
                 ),
             );
+            // Their own ground, for a player who follows the weather of a place they chose.
+            this.localTerrain.update();
             // One engine draws the ground: the relief in 3/4 where the player chose it (never in the editor nor in
             // Basique), the flat one else (nothing in Basique).
             const projected = this.pixelReliefShown();
@@ -2514,6 +2571,7 @@ export class GameScene extends DirtyScene {
             if (projected) this.seenRelief?.refresh(time);
             // The objects standing on the ground, drawn where it is.
             this.placedDrops?.update(time);
+            this.submergedDrains.update(time);
             // Every character drawn as low as the ground (or the water) under it, in a hollow; at its place when the
             // relief is not seen in 3/4.
             const relief = this.reliefSeen();
@@ -3162,7 +3220,10 @@ export class GameScene extends DirtyScene {
                 const depths = await gunzip(message.depths);
                 const speeds = message.speeds ? await gunzip(message.speeds) : undefined;
                 const slowSpeeds = message.slowSpeeds ? await gunzip(message.slowSpeeds) : undefined;
-                this.terrainWater.receive({ ...message, depths, speeds, slowSpeeds }, this.time.now);
+                const state = { ...message, depths, speeds, slowSpeeds };
+                // While this player lives their own ground, the server's is kept aside, not shown.
+                if (this.localTerrain.fromServerWater(state)) return;
+                this.terrainWater.receive(state, this.time.now);
                 if (message.stats) terrainWaterStatsStore.set(message.stats);
             })
             .catch((error: unknown) => console.warn("A state of the water of the relief could not be read", error));
@@ -3189,7 +3250,7 @@ export class GameScene extends DirtyScene {
                     read(message.snow),
                     read(message.ice),
                 ]);
-                this.meadow.receive({
+                const state = {
                     width: message.width,
                     height: message.height,
                     grass,
@@ -3199,7 +3260,10 @@ export class GameScene extends DirtyScene {
                     ash,
                     snow,
                     ice,
-                });
+                };
+                // While this player lives their own ground, the server's is kept aside, not shown.
+                if (this.localTerrain.fromServerMeadow(state)) return;
+                this.meadow.receive(state);
             })
             .catch((error: unknown) => console.warn("A state of the meadow of the map could not be read", error));
     }
@@ -3481,7 +3545,7 @@ export class GameScene extends DirtyScene {
             // their own (GroundSource).
             // All white for who chose the winter theme.
             snowCoverAt: (x, y) => (this.winterThemeShown() ? 1 : this.getSnowCoverAt(x, y)),
-            groundVersion: () => (followsServerGround() ? 1 : 0) + (this.winterThemeShown() ? 2 : 0),
+            groundVersion: () => (meadowHoldsSnow() ? 1 : 0) + (this.winterThemeShown() ? 2 : 0),
             layout: this.mapGroundLayout,
             snowLineSeason: () => this.getGroundSeason(),
             // Far out, the blocks are drawn no finer than the screen shows them.
@@ -3622,6 +3686,25 @@ export class GameScene extends DirtyScene {
      */
     public getMapSnowCoverage(): number {
         return this.winterThemeShown() ? 1 : snowCoverOfMap(this.meadow, this.ownSnowCover());
+    }
+
+    /**
+     * The cover of the snowiest place of the map for this player, 0 to 1: the snow that fell (GroundSource.snowPeakOfMap)
+     * or the snow of its heights.
+     */
+    public getMapSnowPeak(): number {
+        if (this.winterThemeShown()) return 1;
+        const fallen = snowPeakOfMap(this.meadow, this.ownSnowCover());
+        return Math.max(fallen, snowLinePeak(this.terrainWater.relief(), this.getGroundSeason()));
+    }
+
+    /** How white the ground is at a point of the map for this player, 0 to 1: the snow that fell, or that of the heights. */
+    public getGroundSnowAt(x: number, y: number): number {
+        return groundSnowAt(this.terrainWater.relief(), x, y, {
+            fallen: this.getSnowCoverAt(x, y),
+            season: this.getGroundSeason(),
+            outdoors: this.getOutdoorGrid()?.isOutdoorAt(x, y) ?? true,
+        });
     }
 
     /**
@@ -4633,8 +4716,9 @@ export class GameScene extends DirtyScene {
                             ? 0
                             : waterCycleNow(this.getGameMap().getWamFile()?.getWam().settings).frost,
                     // The same for the footprints in the snow: the blocks lay their own.
-                    snowCover: () => (this.pixelBlocksShown() ? 0 : this.getMapSnowCoverage()),
-                    snowAt: (x, y) => this.getSnowCoverAt(x, y),
+                    // The snowiest tile, not the mean: the snow of the heights alone gets its prints (snowAt says where).
+                    snowCover: () => (this.pixelBlocksShown() ? 0 : this.getMapSnowPeak()),
+                    snowAt: (x, y) => this.getGroundSnowAt(x, y),
                 });
                 // Same: one event subscription and one timer at a time.
                 this._knockManager?.destroy();
@@ -4922,7 +5006,8 @@ export class GameScene extends DirtyScene {
             (id) => this.gameMapFrontWrapper?.getEntitiesManager()?.getEntities().get(id),
             () => this.shownWeather(),
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
-            () => !get(mapEditorModeStore),
+            // Hidden as the fire on the ground is: its own switch, or Basique.
+            () => !get(mapEditorModeStore) && isEffectShown("fire"),
             (x, y) => this.groundDropAt(x, y),
         );
         this.downpourView?.destroy();

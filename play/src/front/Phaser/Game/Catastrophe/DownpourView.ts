@@ -111,6 +111,13 @@ export class DownpourView {
             this.graphics.setVisible(visible);
             this.scene.markDirty();
         }
+        if (!visible) {
+            // Hidden (its own switch, or Basique): nothing drawn and the map not drawn again for it; the ended ones
+            // still leave, so that a reveal shows only what goes on.
+            for (const [id, shown] of this.shown) if (now >= shown.until) this.shown.delete(id);
+            this.lastUpdate = undefined;
+            return;
+        }
         if (this.shown.size === 0) {
             this.lastUpdate = undefined;
             return;

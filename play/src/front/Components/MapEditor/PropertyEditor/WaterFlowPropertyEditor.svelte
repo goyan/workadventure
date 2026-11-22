@@ -120,6 +120,15 @@
         onchange?.();
     }
 
+    // A sink standing on a floor of the Map tool dries that floor, whatever its flow, unless turned off (adaptive).
+    let adaptive = $state(property.type === "waterSinkPropertyData" && property.adaptive !== false);
+
+    function setAdaptive(): void {
+        if (property.type !== "waterSinkPropertyData") return;
+        property.adaptive = adaptive ? undefined : false;
+        onchange?.();
+    }
+
     // The pipette: a click on the map writes the level read there (the surface of the water, or the ground), and holds
     // it, as if typed. The panel and its object stay as they are while it aims.
     function takeLevel(point: { x: number; y: number }, ground: boolean): void {
@@ -292,6 +301,17 @@
                 {/if}
                 <p class="m-0 mt-1 text-xs text-white/60">{texts.levelHint()}</p>
             </div>
+            {#if property.type === "waterSinkPropertyData"}
+                <div class="mt-3" data-testid="water-sink-adaptive">
+                    <InputSwitch
+                        id="water-sink-adaptive-{property.id}"
+                        label={$LL.mapEditor.properties.waterSink.adaptive()}
+                        bind:value={adaptive}
+                        onchange={setAdaptive}
+                    />
+                    <p class="m-0 mt-1 text-xs text-white/60">{$LL.mapEditor.properties.waterSink.adaptiveHint()}</p>
+                </div>
+            {/if}
             <p class="m-0 mt-2 text-xs text-white/60">{texts.real()}</p>
         </span>
     {/snippet}

@@ -52,7 +52,7 @@ describe("the basins of the pools", () => {
         expect(cells).toContainEqual({ cellX: 10, cellY: 10, depthPx: 48, fullPx: 48 - POOL_FREEBOARD_PX });
         expect(cells).toContainEqual({ cellX: 20, cellY: 10, depthPx: 24, fullPx: 24 - POOL_FREEBOARD_PX });
         expect(poolCells(undefined, styles)).toEqual([]);
-        expect(POOL_FILL_SECONDS).toBe(8);
+        expect(POOL_FILL_SECONDS).toBe(600);
         expect(POOL_FREEBOARD_PX).toBeGreaterThan(0);
     });
 

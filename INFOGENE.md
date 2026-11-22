@@ -2582,6 +2582,21 @@ au sol : objets `layer: "floor"` (sous les objets et les avatars), sans collisio
 eau. L'eau évacuée compte avec les puits dans le bilan. Tant que la cour reste inondée, l'eau continue d'entrer par
 la porte : seul le seuil reste humide. Une pièce que le bord de la grille d'eau coupe compte comme extérieure.
 
+**Puits adaptatifs des bâtiments.** Un puits posé sur un sol de l'outil Carte (collection `Carte Sols`,
+`pavedTilesOf`) en est le drain : à chaque pas, une fois l'eau déplacée, il prend toute l'eau arrivée sur ce sol,
+quel que soit son débit (`WaterGrid.setFloors`, `floorAreaOf`). Son sol va jusqu'à 12 cases autour de lui ; il
+s'arrête aux murs mais pas aux portes, qui font partie du bâtiment. Il ne prend ni le sol nu ni un bassin creusé dans
+le sol. S'il tient un niveau, il garde l'eau jusqu'à ce niveau. Couloirs et pièces restent secs même quand une source
+ou une crue amène bien plus que la somme des débits réglés. L'eau prise compte avec les puits dans le bilan.
+L'interrupteur « Adaptatif » de l'éditeur de puits (`adaptive: false`) lui rend son débit et son disque. Absent,
+il est adaptatif. Hors d'un sol, un puits garde toujours son débit.
+
+**Puits sous l'eau, puits tournés.** Un puits que l'eau recouvre d'au moins 1 px à son point d'eau se dessine teinté du
+bleu de l'eau et à moitié transparent, vu à travers elle, jusqu'à ce que l'eau soit descendue
+(`SubmergedDrains`, `Entity.setSubmerged`, revu quatre fois par seconde). La grille d'évacuation et le caniveau du
+catalogue `Infogène Eau` existent dans les quatre directions (bouton ⟳ de l'éditeur). Tourné, un puits reprend le point
+d'eau de sa nouvelle image (`rotatedWaterProperties`) et garde son débit, son rayon, son niveau et son réglage adaptatif.
+
 **Eau plus vive autour des puits.** L'eau n'avance que d'une cellule par pas ; sur une carte accélérée, un puits
 puissant vidait son disque puis attendait une eau qui arrivait trop lentement. Autour d'un puits qui demande encore
 de l'eau (son disque et 16 cellules de plus), l'eau avance de nouveau pendant le même pas, jusqu'à 16 fois : une
@@ -3780,8 +3795,11 @@ L'eau d'une piscine peinte n'est plus un dessin toujours plein : c'est de l'eau 
   l'éditeur édite et ce qui est dessiné) : le serveur et le navigateur lisent ce relief « avec bassins » pour tout
   ce qui dépend du niveau de l'eau (`TerrainWaterManager`, `TerrainWater.basin()`, courant, flèches des flux). Lu une
   fois par carte et par liste de styles.
-- **La pompe** (`TerrainWaterManager.pumpPools`, `poolCells`). Chaque case sous son niveau reçoit de quoi remplir une
-  piscine vide en 8 secondes (`POOL_FILL_SECONDS`) : une piscine plus grande ou plus profonde a une pompe plus forte.
+- **La pompe** (`WaterSimulation.pumpPools`, `poolCells`). Chaque case sous son niveau reçoit de quoi remplir une
+  piscine vide en 10 minutes (`POOL_FILL_SECONDS`, 8 secondes avant le 2026-11-22) : une piscine plus grande ou plus
+  profonde a une pompe plus forte. Une chaleur, un météore ou un puits laissent ainsi un niveau visiblement plus bas un
+  moment. Un puits adaptatif dont le pied est dans l'eau d'une piscine (`poolNumbersOf`) éteint la pompe de cette
+  piscine tant qu'il y est : elle se vide à son débit. Un puits non adaptatif laisse la pompe tourner.
   Remplissage jusqu'à 2 px sous le bord (`POOL_FREEBOARD_PX`), jamais au-dessus. Un trop-plein reprend au même débit ce
   qui dépasse le niveau (neige fondue dans la piscine, pluie), compté avec les puits ; une inondation qui apporte plus
   que ce débit passe quand même par-dessus le bord. Après un météore tombé dans l'eau (comète ou météore brûlant),
