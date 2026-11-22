@@ -2,8 +2,9 @@
  * How many steps of the time of its map the water lives in a step of the real clock: a map whose water goes S times
  * faster than reality lives S steps of 0.1 s of its time in each step of 0.1 s of the real one, as long as they fit in
  * the time given to it (its budget, ms a real step); fewer otherwise, so that the water never goes faster than it can
- * be computed. Measured all along, as WaterLoad does for the fineness: it climbs a few seconds after a map asks, falls
- * at once when the steps grow costly. A map at the pace of reality never takes more than it did.
+ * be computed. Measured all along, as WaterLoad does for the fineness: it climbs within a second after a map asks
+ * (four times as many steps each fifth of a second at most), falls at once when the steps grow costly. A map at the
+ * pace of reality never takes more than it did.
  */
 
 /**
@@ -20,8 +21,8 @@ export const WATER_PACE_WORKER_BUDGET_MS = 50;
 const CLIMB_SHARE = 0.5;
 /** The time of a step is a mean over about these many steps (half a second). */
 const MEAN_STEPS = 5;
-/** These many quick steps in a row (a second) let the pace double. */
-const CALM_STEPS = 10;
+/** These many quick steps in a row (a fifth of a second) let the pace climb to what the budget holds. */
+const CALM_STEPS = 2;
 
 export class WaterPace {
     /** The mean time of a sub-step (ms). */
@@ -60,7 +61,8 @@ export class WaterPace {
         this.calm++;
         if (this.calm < CALM_STEPS) return;
         this.calm = 0;
-        // Doubled, never over what keeps under the half of the time between two steps.
-        this.ceiling = Math.max(times, Math.min(times * 2, Math.floor(budget / Math.max(this.meanEach, 1e-6))));
+        // Straight to what the budget holds by the steps measured, at most four times as many: a step that costs
+        // more than they did is caught at the next one.
+        this.ceiling = Math.max(times, Math.min(times * 4, Math.floor(budget / Math.max(this.meanEach, 1e-6))));
     }
 }

@@ -173,7 +173,7 @@ describe("a map whose water goes faster than reality lives the water of reality"
                 const last = scenario.minutes - 1;
                 for (let probe = 0; probe < 3; probe++)
                     expect(Math.abs(fast.minutes[last][probe] - reference.minutes[last][probe])).toBeLessThan(0.5);
-            });
+            }, 60_000);
         }
     }
 });

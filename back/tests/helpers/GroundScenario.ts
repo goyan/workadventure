@@ -204,6 +204,8 @@ export async function byHand(
         inputs.random,
     );
     meadow.fallThrough(() => inputs.air());
+    // The snow and the ice go as fast as what comes in to the water, as GroundSimulation wires them.
+    meadow.timesWith(() => water.livedTimes().inflow);
     meadow.snowUnder(() => {
         const air = inputs.air();
         return air ? { ...air, windSpeed: inputs.fire().windSpeed } : undefined;

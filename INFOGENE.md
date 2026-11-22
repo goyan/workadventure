@@ -3244,8 +3244,8 @@ qu'elle ne pouvait couler, et le modèle était faussé (crues trop hautes, flot
   le serveur n'a qu'un fil pour toutes les salles, une carte accélérée ne doit jamais ralentir les autres ; une salle
   dont le pas au temps réel prend déjà ce budget reste au temps réel (la carte d'entrée en eau, environ 13 ms sur le
   VPS). À relever quand chaque salle aura son fil (`GROUND_THREADS`). Dans le worker de la météo locale : 50 ms
-  (`WATER_PACE_WORKER_BUDGET_MS`, la moitié d'un cœur). k part de 1, double après une seconde de pas sous la moitié
-  du budget, baisse aussitôt quand les pas coûtent ; jamais au-dessus de S. La finesse adaptative (`WaterLoad`) ne
+  (`WATER_PACE_WORKER_BUDGET_MS`, la moitié d'un cœur). k part de 1, monte jusqu'à ce que le budget tient (au plus ×4
+  tous les deux pas calmes, sous la moitié du budget), baisse aussitôt quand les pas coûtent ; jamais au-dessus de S. La finesse adaptative (`WaterLoad`) ne
   voit plus que le coût d'un pas de temps de carte.
 - **Règle des apports** (`inflowAt`) : « effective » pour l'eau d'une salle (serveur, la vitesse de la carte en mode
   édition) : les apports vont au facteur atteint k, jamais plus vite que l'écoulement ; « asked » pour l'eau d'un
