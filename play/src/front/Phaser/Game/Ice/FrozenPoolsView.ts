@@ -84,9 +84,11 @@ export class FrozenPoolsView {
 
     /** Steam over the heated pools of the ground while it freezes outdoors: a few puffs rising and fading. */
     private drawSteam(now: number): void {
-        const date = get(nightDateStore);
+        // The clock of the night when it runs; the time of now under « Toujours jour » or « Toujours nuit », which leave
+        // it empty: the air of the place is the same.
+        const date = get(nightDateStore) ?? new Date();
         const settings = this.scene.getGameMap?.()?.getWamFile()?.getWam().settings;
-        const steam = date ? steamOver(frostAirNow(settings, date)) : 0;
+        const steam = steamOver(frostAirNow(settings, date));
         const hot = steam > 0 ? steamingPools(getWaterRectangles(this.scene).filter((pool) => isPoolHot(pool))) : [];
         if (hot.length === 0) {
             if (this.steaming) {
