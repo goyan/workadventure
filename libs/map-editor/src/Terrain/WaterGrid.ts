@@ -15,6 +15,7 @@ import { ballColumn, ballHalfHeight } from "./WaterBall";
 import type { WaterBall } from "./WaterBall";
 import { affordPass, depthsPass, DRY_PX, fluxPass, scalePass } from "./WaterKernel";
 import type { InertiaMove } from "./WaterKernel";
+import { WasmWaterKernel } from "./WaterKernelWasm";
 import { restLevelOf, WATER_FILM_PX } from "./WaterView";
 import type { RestLevelFields, RestLevelSearch, WaterSnapshot, WaterView } from "./WaterView";
 
@@ -466,6 +467,24 @@ export interface WaterTally {
 }
 
 /**
+ * What computes the moves of the water with inertia: the passes written in TypeScript (WaterKernel.ts), or the
+ * same passes compiled to WebAssembly (WaterKernelWasm.ts), about twice as fast. Both give the same water, to the
+ * bit; a grid that asks for the compiled ones and cannot have them computes in TypeScript.
+ */
+export type WaterKernelKind = "typescript" | "wasm";
+
+let usualKernel: WaterKernelKind = "typescript";
+
+/** The kernel the grids made from now on compute with, unless they are told another. */
+export function setWaterKernel(kind: WaterKernelKind): void {
+    usualKernel = kind;
+}
+
+export function waterKernel(): WaterKernelKind {
+    return usualKernel;
+}
+
+/**
  * The water of a map, cell by cell: each cell has a depth of water, and at each step water moves from a cell to its
  * neighbours whose surface (ground and water) is lower. So a source makes a pool at its foot that runs down the
  * slope, a full hollow spills over its lowest edge, and a flood rises and advances on flat ground while water comes.
@@ -538,6 +557,8 @@ export class WaterGrid implements WaterView {
      */
     private readonly hollow: Uint8Array;
     private depth: Float32Array;
+    /** The compiled kernel of this grid, when it computes with one: its arrays live in its memory. */
+    private readonly wasm: WasmWaterKernel | undefined;
     /** The cells the runoff does not reach (see seal): 1 for a sealed cell. */
     private readonly sealed: Uint8Array;
     /** How high the water of this map may stand over the level it spills at (see setMaxSurface). */
@@ -572,14 +593,18 @@ export class WaterGrid implements WaterView {
         walls?: WaterWallSides,
         /** The walls that close the rooms (doors closed): what they close is indoors. No room when absent. */
         rooms?: WaterWallSides,
+        /** What computes the moves of its water with inertia: the usual kernel (setWaterKernel) when absent. */
+        kernel: WaterKernelKind = usualKernel,
     ) {
         this.bounds = bounds ?? { x: 0, y: 0, width: 0, height: 0 };
         const size = this.bounds.width * this.bounds.height;
-        this.ground = new Float32Array(size);
+        // The arrays the compiled kernel reads and writes live in its memory.
+        this.wasm = kernel === "wasm" ? WasmWaterKernel.create(size, DEPTH_POWERS.length) : undefined;
+        this.ground = this.floats(size);
         this.blocked = new Uint8Array(size);
-        this.depth = new Float32Array(size);
+        this.depth = this.floats(size);
         this.sealed = new Uint8Array(size);
-        this.next = new Float32Array(size);
+        this.next = this.floats(size);
         this.queue = new Int32Array(Math.min(size, MAX_DISC_CELLS));
         this.basin = new Int32Array(Math.min(size, BASIN_CELLS));
         this.basinAbove = new Float32Array(this.basin.length);
@@ -594,11 +619,12 @@ export class WaterGrid implements WaterView {
                 if (blocked?.(cellX, cellY)) this.blocked[index] = 1;
             }
         }
-        this.spill = spillLevels(this.ground, this.bounds.width, this.bounds.height);
+        this.spill = this.floats(size);
+        this.spill.set(spillLevels(this.ground, this.bounds.width, this.bounds.height));
         this.indoor = indoorCells(this.bounds, rooms);
         this.drinks = new Float32Array(size);
-        this.rough = new Float32Array(size);
-        this.hollow = new Uint8Array(size);
+        this.rough = this.floats(size);
+        this.hollow = this.wasm?.bytes(size) ?? new Uint8Array(size);
         for (let row = 0; row < this.bounds.height; row++) {
             for (let column = 0; column < this.bounds.width; column++) {
                 const index = row * this.bounds.width + column;
@@ -608,7 +634,7 @@ export class WaterGrid implements WaterView {
                 this.drinks[index] = soilDrinks(soil, this.ground[index] < this.spill[index]);
             }
         }
-        this.closed = new Uint8Array(size);
+        this.closed = this.wasm?.bytes(size) ?? new Uint8Array(size);
         const { width, height } = this.bounds;
         for (let row = 0; row < height; row++) {
             for (let column = 0; column < width; column++) {
@@ -694,6 +720,16 @@ export class WaterGrid implements WaterView {
             const index = this.indexOf(cellX, cellY);
             if (index !== undefined) this.sealed[index] = 1;
         }
+    }
+
+    /** What computes the moves of the water with inertia of this grid. */
+    public kernelName(): WaterKernelKind {
+        return this.wasm ? "wasm" : "typescript";
+    }
+
+    /** An array of floats for this grid, a cell each: in the memory of its compiled kernel when it has one. */
+    private floats(length: number): Float32Array<ArrayBuffer> {
+        return this.wasm?.floats(length) ?? new Float32Array(length);
     }
 
     /** Pixels of water over a cell of the map: 0 outside the grid. */
@@ -1866,13 +1902,13 @@ export class WaterGrid implements WaterView {
         const { width, height } = this.bounds;
         const size = width * height;
         if (this.flowEast.length !== size) {
-            this.flowEast = new Float32Array(size);
-            this.flowSouth = new Float32Array(size);
-            this.afford = new Float32Array(size);
-            this.speedEast = new Float32Array(size);
-            this.speedSouth = new Float32Array(size);
-            this.nextSpeedEast = new Float32Array(size);
-            this.nextSpeedSouth = new Float32Array(size);
+            this.flowEast = this.floats(size);
+            this.flowSouth = this.floats(size);
+            this.afford = this.floats(size);
+            this.speedEast = this.floats(size);
+            this.speedSouth = this.floats(size);
+            this.nextSpeedEast = this.floats(size);
+            this.nextSpeedSouth = this.floats(size);
         }
         const figure = (value: number | undefined, fallback: number): number =>
             value !== undefined && Number.isFinite(value) && value >= 0 ? value : fallback;
@@ -1947,6 +1983,19 @@ export class WaterGrid implements WaterView {
             breaking,
             carried,
         };
+        if (this.wasm) {
+            // The same passes, compiled: all the moves of the step in one call.
+            const stepped = this.wasm.step(move, moves, tally.lostPx);
+            tally.lostPx = stepped.lost;
+            // The speeds of a move take the place of those of the move before: an odd number of moves swaps them.
+            if (moves % 2 === 1) {
+                this.speedEast = nextSpeedEast;
+                this.speedSouth = nextSpeedSouth;
+                this.nextSpeedEast = speedEast;
+                this.nextSpeedSouth = speedSouth;
+            }
+            return stepped.moved;
+        }
         let moved = false;
         for (let step = 0; step < moves; step++) {
             fluxPass(move, 0, height);

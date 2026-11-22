@@ -2399,6 +2399,28 @@ finesse réduite à 5 sur 8 »), par `easedPrecision` et `easedUpdates` de `Terr
 précise (vagues plus amorties, fronts moins nets) pendant les moments les plus lourds, un tsunami compris. Sans
 inertie, seuls les envois peuvent être réduits. Seuils posés par raisonnement, non calés sur une mesure en jeu.
 
+**Noyau de l'eau compilé en WebAssembly** (`libs/map-editor/kernel/water_kernel.c`, `Terrain/WaterKernel.ts`,
+`Terrain/WaterKernelWasm.ts`). Les quatre passes d'un mouvement de l'eau à inertie (flux, ce qu'une cellule peut
+donner, mise à l'échelle, profondeurs) existent deux fois, au bit près : en TypeScript (`WaterKernel.ts`, la
+référence et le repli) et en C compilé en WebAssembly. **Éteint par défaut** : `setWaterKernel("wasm")` l'allume
+pour les grilles créées ensuite, ou le sixième paramètre de `WaterGrid` pour une seule.
+
+- **Mesure** (carte d'Antoine inondée, 480 × 320, finesse 3, médiane de 300 pas, trois passes alternées) : un pas
+  de la grille 10,5 → 6,6 ms (×1,6) ; les passes seules 9,7 → 5,8 ms (×1,67). `-O3` et le SIMD n'apportent rien.
+- **Mémoire** : les tableaux que le noyau lit et écrit sont découpés dans la mémoire WebAssembly de la grille,
+  dimensionnée une fois ; le reste du code les lit comme des `Float32Array` ordinaires, sans copie.
+- **Mêmes bits** : doubles entre la lecture et l'écriture d'un flottant simple, opérations dans l'ordre du
+  TypeScript, `f64.max`/`f64.min` de WebAssembly (qui traitent NaN et les deux zéros comme JavaScript), table des
+  puissances calculée par le TypeScript, ni `-ffast-math` ni contraction. Juge : `tests/WaterKernelWasm.test.ts`
+  joue les 19 scénarios et une carte accélérée sur les deux noyaux côte à côte, compare tout à chaque pas, et
+  vérifie les passes par plage de lignes ; il tourne aussi dans les tests de `play`, donc dans la CI de PR.
+- **Construction** : `libs/map-editor/kernel/build.sh` (Docker seul : `clang` 19 de Debian 13), binaire de 3,9 Ko
+  commité en base64 dans `WaterKernelWasm.generated.ts` avec l'empreinte de son source. Le job « Noyau de l'eau
+  reconstruit » de `pr-checks` le reconstruit et compare, hors du contrôle exigé.
+- **Pour la suite** : le noyau n'a pas d'état et chaque passe prend une plage de lignes ; relié avec
+  `--shared-memory`, plusieurs fils pourront l'appeler sur la même mémoire (essayé en compilant, pas branché).
+  Si le chargement échoue, la grille calcule en TypeScript, la même eau.
+
 **L'eau se pose à la fin du rattrapage** (`WaterSimulation.liveAgain`, `settle`). Le rattrapage d'une salle vide fait
 vivre l'eau sans inertie par pas de 600 s, et chaque pas ne la déplace qu'une fois : il la laisse entassée là où
 elle est arrivée et creusée là où elle est partie. L'eau à inertie repartait de ces niveaux inégaux : de fausses
