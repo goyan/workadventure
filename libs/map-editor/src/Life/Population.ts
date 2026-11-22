@@ -1,4 +1,4 @@
-import type { WaterGrid } from "../Terrain/WaterGrid";
+import type { WaterView } from "../Terrain/WaterView";
 import { DEFAULT_AIR_LIFE_SETTINGS, DEFAULT_LAND_LIFE_SETTINGS, TERRAIN_CELL } from "../types";
 import type { LifeSettings } from "../types";
 import type { Animal } from "./Animal";
@@ -319,7 +319,7 @@ function nearest(from: Animal, candidates: readonly Animal[]): Animal | undefine
  */
 export function stepPopulation(
     population: Population,
-    grid: WaterGrid,
+    grid: WaterView,
     bodies: WaterBodies,
     settings: LifeSettings,
     dtMs: number,
