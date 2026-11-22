@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { cellKey, withHeights } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 import {
+    drawLower,
     DropCache,
     footOf,
     groundDropOf,
@@ -199,5 +200,31 @@ describe("a click on an object drawn lower", () => {
         const test = hitWhereDrawn(pixel, () => 40);
         test({}, 0, 30, { scaleY: 2 });
         expect(pixel).toHaveBeenLastCalledWith({}, 0, 10, { scaleY: 2 });
+    });
+});
+
+describe("a drawing laid lower with the ground", () => {
+    function fakeGraphics() {
+        const calls: string[] = [];
+        return {
+            calls,
+            save: () => calls.push("save"),
+            translateCanvas: (x: number, y: number) => calls.push(`translate ${x} ${y}`),
+            restore: () => calls.push("restore"),
+        };
+    }
+
+    it("is drawn between a move down by the drop and its undoing, on each layer", () => {
+        const ground = fakeGraphics();
+        const glow = fakeGraphics();
+        drawLower([ground, glow], 40, () => ground.calls.push("drawn"));
+        expect(ground.calls).toEqual(["save", "translate 0 40", "drawn", "restore"]);
+        expect(glow.calls).toEqual(["save", "translate 0 40", "restore"]);
+    });
+
+    it("is drawn as ever where there is no drop", () => {
+        const ground = fakeGraphics();
+        drawLower([ground], 0, () => ground.calls.push("drawn"));
+        expect(ground.calls).toEqual(["drawn"]);
     });
 });

@@ -415,7 +415,8 @@ import type { GroundEngine } from "./Terrain/GroundEngineChoice";
 import { GroundEngines } from "./Terrain/GroundEngines";
 import type { PixelGround } from "./Terrain/GroundEngines";
 import { tellPixelBlocksShown } from "./Terrain/PixelBlocksShown";
-import { groundPointAt, hiddenBehindRim, shiftAt } from "./Terrain/ReliefProjection";
+import { groundPointAt, heightAtPoint, hiddenBehindRim, shiftAt } from "./Terrain/ReliefProjection";
+import { seenPoint } from "./Terrain/ObliqueView";
 import { TerrainView } from "./Terrain/TerrainView";
 import { groundDropOf, PlacedDrops } from "./Terrain/GroundDrop";
 import type { DroppedCharacter } from "./Terrain/CharacterDrops";
@@ -3372,6 +3373,24 @@ export class GameScene extends DirtyScene {
         return groundPointAt(this.terrainWater.relief(), point, (x, y) => this.terrainWater.isBridgeAt(x, y));
     }
 
+    /**
+     * The point of the map the eye sees under a point of the screen: itself, unless the relief is shown in 3/4. Then
+     * the ground or the water drawn there (the rule of the shaders, ObliqueView.seenPoint): where a catastrophe aimed
+     * with the pointer falls. (A click to walk goes to the ground instead, at the foot of a face: groundPointUnder.)
+     */
+    public seenPointUnder(point: { x: number; y: number }): { x: number; y: number } {
+        if (!this.pixelReliefShown()) return point;
+        const terrain = this.terrainWater.relief();
+        const now = this.time.now;
+        const surfaceAt = (y: number): number =>
+            heightAtPoint(terrain, point.x, y) +
+            Math.max(
+                0,
+                waterDepthAtPoint((pointX, pointY) => this.terrainWater.depthAt(pointX, pointY, now), point.x, y),
+            );
+        return { x: point.x, y: seenPoint(surfaceAt, point.y, TERRAIN_CELL).y };
+    }
+
     /** The season the relief in 3/4 is drawn in: the one of the theme this person forces (as their trees), else the map's. */
     private pixelGroundSeason(): Season | undefined {
         return forcedTreeSeason(this.getSeasonalTheme()) ?? this.getGroundSeason();
@@ -4789,6 +4808,7 @@ export class GameScene extends DirtyScene {
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
             () => this.getGameMap().getWamFile()?.getWam().settings?.water?.inertia === true,
             () => this.terrainView?.drawsWaterRings() === true && !this.pixelBlocksShown(),
+            (x, y) => this.surfaceDropAt(x, y),
         );
         this.meteorView = meteorView;
         // The flames of the tiles on fire, laid by the wind of the scene.
@@ -4823,12 +4843,14 @@ export class GameScene extends DirtyScene {
                         this.nightManager?.serverDate(),
                     ),
                 ),
+            (x, y) => this.surfaceDropAt(x, y),
         );
         this.downpourView = downpourView;
         this.drainView?.destroy();
         const drainView = new DrainView(
             this,
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+            (x, y) => this.surfaceDropAt(x, y),
         );
         this.drainView = drainView;
         this.ballView?.destroy();
@@ -4852,6 +4874,7 @@ export class GameScene extends DirtyScene {
         const fireTorchView = new FireTorchView(
             this,
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+            (x, y) => this.surfaceDropAt(x, y),
         );
         this.fireTorchView = fireTorchView;
         this.catastropheSubscription = this.connection?.catastropheMessageStream.subscribe((message) => {

@@ -142,3 +142,27 @@ export function hitWhereDrawn<A, O extends { scaleY: number }>(
         return test(area, x, by === 0 ? y : y - by / (object.scaleY || 1), object);
     };
 }
+
+/** A layer of drawing whose canvas can be moved for a while (a Phaser `Graphics` fits). */
+export interface MovableDrawing {
+    save(): unknown;
+    translateCanvas(x: number, y: number): unknown;
+    restore(): unknown;
+}
+
+/**
+ * Draws what `draw` lays on these layers lower by a drop (higher on a mount): a catastrophe at the place its ground
+ * or its water is drawn, the relief seen in 3/4. Nothing more than `draw` where there is no drop.
+ */
+export function drawLower(layers: readonly MovableDrawing[], drop: number, draw: () => void): void {
+    if (drop === 0) {
+        draw();
+        return;
+    }
+    for (const layer of layers) {
+        layer.save();
+        layer.translateCanvas(0, drop);
+    }
+    draw();
+    for (const layer of layers) layer.restore();
+}
