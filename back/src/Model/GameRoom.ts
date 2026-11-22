@@ -47,6 +47,8 @@ import type {
     AquaticLifeMessage,
     CatastropheKind,
     FishingMessage,
+    IceShackAction,
+    IceShacksMessage,
     JoinRoomMessage,
     MapBbbData,
     MapDetailsData,
@@ -133,6 +135,8 @@ import { TerrainWaterManager } from "./TerrainWaterManager";
 import { AquaticLifeManager } from "./AquaticLifeManager";
 import { CatastropheManager } from "./CatastropheManager";
 import { anglersOf, FishingManager } from "./FishingManager";
+import { iceShackGround, IceShackManager } from "./IceShackManager";
+import type { IceShackPlayer } from "./IceShackManager";
 import { rainTimelineService } from "./Services/RainTimelineService";
 import { KaraokeLeaderboardManager } from "./AreaPropertyEvents/KaraokeLeaderboardManager";
 import { MaxUsersInAreaManager } from "./AreaPropertyEvents/MaxUsersInAreaManager";
@@ -179,6 +183,7 @@ export class GameRoom implements BrothersFinder {
     /** The size of the map in cells of the relief; undefined until its Tiled map is read. */
     private mapCells: { width: number; height: number } | undefined;
     private fishing: FishingManager | undefined;
+    private iceShacks: IceShackManager | undefined;
     private catastrophes: CatastropheManager | undefined;
     private karaokeLeaderboard: KaraokeLeaderboardManager | undefined;
     private readonly wamManager?: WamManager;
@@ -506,6 +511,22 @@ export class GameRoom implements BrothersFinder {
         meadow.start();
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => meadow.stop());
+        // The ice fishing shacks stand on the ice the meadow keeps, over the water of the relief: made once both are.
+        const shacksRepository = await getVariablesRepository();
+        const wamOfRoom = gameRoom.getWam.bind(gameRoom);
+        const iceShacks = new IceShackManager(
+            gameRoom,
+            () => iceShackGround(wamOfRoom(), terrainWater.getGrid(), meadow),
+            gameRoom.iceShackPlayers.bind(gameRoom),
+            () => Object.values(wamOfRoom()?.entities ?? {}),
+            { repository: shacksRepository, roomUrl },
+        );
+        iceShacks.catchUpWith(meadow.catchingUp.bind(meadow));
+        gameRoom.keepIceShacks(iceShacks);
+        await iceShacks.restore();
+        iceShacks.start();
+        // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
+        gameRoom.destroyRoomStream.subscribe(() => iceShacks.stop());
         gameRoom.readMapSize(() => {
             // The water first: the life of the map lives on its grid.
             terrainWater.mapChanged();
@@ -712,6 +733,8 @@ export class GameRoom implements BrothersFinder {
         user.disconnected = true;
         // The animals they tamed are free again, now rather than at the next step of the life.
         this.aquaticLife?.release(user.id);
+        // Nor do they sit in an ice fishing shack any more.
+        this.iceShacks?.userLeft(user.id);
 
         if (!this.users.has(user.id)) {
             console.warn("User ", user.id, "does not belong to this game room! It should!");
@@ -1424,6 +1447,31 @@ export class GameRoom implements BrothersFinder {
     /** The fishing lines of the room, sent to a user who joins it. */
     public getFishing(): FishingMessage | undefined {
         return this.fishing?.snapshot();
+    }
+
+    /** The ice fishing shacks of the room, once made. */
+    private keepIceShacks(iceShacks: IceShackManager): void {
+        this.iceShacks = iceShacks;
+    }
+
+    /** The players of the room as the ice fishing shacks see them, by user id. */
+    public iceShackPlayers(): Map<number, IceShackPlayer> {
+        const players = new Map<number, IceShackPlayer>();
+        for (const user of this.users.values()) {
+            const { x, y } = user.getPosition();
+            players.set(user.id, { id: user.id, key: user.uuid, name: user.name, x, y, floorZ: user.getFloorZ() });
+        }
+        return players;
+    }
+
+    /** A player puts up, enters, leaves or takes down an ice fishing shack. */
+    public iceShackAction(user: Pick<User, "id">, action: IceShackAction, shackId: number): void {
+        this.iceShacks?.act(user.id, action, shackId);
+    }
+
+    /** The ice fishing shacks of the room, sent to a user who joins it. */
+    public getIceShacks(): IceShacksMessage | undefined {
+        return this.iceShacks?.snapshot();
     }
 
     /** The animals of the water of the relief, sent to a user who joins the room. */

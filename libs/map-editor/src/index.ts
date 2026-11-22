@@ -58,6 +58,7 @@ export * from "./Life/FireFear";
 export * from "./Life/LifeHistory";
 export * from "./Life/Fishing";
 export * from "./Life/FishingContest";
+export * from "./Life/IceShack";
 export * from "./Weather/SeasonClock";
 export * from "./Weather/FireConditions";
 export * from "./Weather/WeatherSchedule";

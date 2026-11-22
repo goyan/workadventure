@@ -797,6 +797,7 @@ message ClientToServerMessage {
     StartFishingContestMessage startFishingContestMessage = 64;
     LaunchCatastropheMessage launchCatastropheMessage = 65;
     SetFireConditionsMessage setFireConditionsMessage = 70;
+    IceShackActionMessage iceShackActionMessage = 81;
     VideoQualityReportMessage videoQualityReportMessage = 50;
     AnalyticsEventReportMessage analyticsEventReportMessage = 52;
     EntityMessage entityMessage = 53;
@@ -1000,6 +1001,56 @@ message FishingMessage {
 // meanwhile counts for the player who makes it; the server keeps the scores and ends the contest on time.
 message StartFishingContestMessage {
   uint32 minutes = 1;
+}
+
+// What a player does with an ice fishing shack. The server checks everything from where it knows the player stands,
+// on the ice it keeps: a shack is an object of the room, never an edit of the map.
+enum IceShackAction {
+  // Drills a hole in the ice under the player and puts a shack up around it (shackId unused).
+  ICE_SHACK_BUILD = 0;
+  // Sits on the stool of the shack, in front of its hole: one player at a time.
+  ICE_SHACK_ENTER = 1;
+  // Gets up from the stool: the shack stays.
+  ICE_SHACK_LEAVE = 2;
+  // Takes the shack down: who put it up only.
+  ICE_SHACK_DISMANTLE = 3;
+}
+
+message IceShackActionMessage {
+  IceShackAction action = 1;
+  int32 shackId = 2;
+}
+
+// An ice fishing shack standing on the ice of the room.
+message IceShackMessage {
+  int32 id = 1;
+  // The centre of its hole in the ice, in map pixels.
+  int32 x = 2;
+  int32 y = 3;
+  // The name of who put it up, and their user id while they are in the room (0 otherwise).
+  string ownerName = 4;
+  int32 ownerUserId = 5;
+  // Who sits in it; 0 when nobody.
+  int32 occupantUserId = 6;
+  // How long ago it was put up when this is sent (the hole is drilled, then the shack goes up): no clock of a browser
+  // is trusted.
+  uint32 ageMs = 7;
+  // The ice under it is too thin for it now: it cracks, and is taken down in this many ms (0: it does not crack).
+  uint32 crackingMs = 8;
+}
+
+// Something that just happened to a shack or to the action of a player.
+message IceShackEventMessage {
+  int32 userId = 1;
+  int32 shackId = 2;
+  // See IceShackEvent in libs/map-editor (Life/IceShack): a refusal and its reason, a crack, a shack gone.
+  int32 type = 3;
+}
+
+// All the ice fishing shacks of the room, sent whenever one changes, with what just happened.
+message IceShacksMessage {
+  repeated IceShackMessage shacks = 1;
+  repeated IceShackEventMessage events = 2;
 }
 
 // A player of a fishing contest, in the order of the ranking.
@@ -1858,6 +1909,7 @@ message SubMessage {
     CatastropheMessage catastropheMessage = 42;
     FireConditionsMessage fireConditionsMessage = 47;
     TreeFireMessage treeFireMessage = 48;
+    IceShacksMessage iceShacksMessage = 59;
   }
 }
 
@@ -1968,6 +2020,8 @@ message RoomJoinedMessage {
   optional FireConditionsMessage fireConditions = 35;
   // The trees that burn or are charred (all of them), for a player who joins the room. Absent when every tree is green.
   optional TreeFireMessage treeFire = 36;
+  // The ice fishing shacks standing on the ice of the room, for a player who joins it. Absent when there is none.
+  optional IceShacksMessage iceShacks = 47;
 }
 
 message WebRtcStartMessage {
@@ -2513,6 +2567,7 @@ message PusherToBackMessage {
     StartFishingContestMessage startFishingContestMessage = 48;
     LaunchCatastropheMessage launchCatastropheMessage = 49;
     SetFireConditionsMessage setFireConditionsMessage = 54;
+    IceShackActionMessage iceShackActionMessage = 65;
   }
 }
 
@@ -2540,6 +2595,7 @@ message SubToPusherRoomMessage {
     CatastropheMessage catastropheMessage = 22;
     FireConditionsMessage fireConditionsMessage = 27;
     TreeFireMessage treeFireMessage = 28;
+    IceShacksMessage iceShacksMessage = 39;
   }
 }
 
