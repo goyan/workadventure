@@ -2428,6 +2428,20 @@ Le processus des salles n'a qu'un fil ; cinq changements de plomberie, aucun de 
   temps voit la prairie et l'eau avancer d'un envoi par seconde, comme avant. Le même budget vaut dans un
   navigateur qui fait tourner la simulation pour lui-même.
 
+**Fil de calcul par salle** (lot 3 de la même étude, livré en plusieurs PR ; rien n'est activé tant que la dernière
+ne l'est pas).
+
+- **Sol commun** (`Terrain/GroundSimulation.ts`, PR 1). Le câblage de l'eau du relief et de la prairie était écrit
+  deux fois : dans `GameRoom` pour le serveur, dans `LocalTerrainSimulation` pour le sol d'un joueur. Il vit
+  maintenant dans `GroundSimulation` : l'air dit pluie ou neige aux deux, la neige qui fond sur la prairie coule
+  vers l'eau, l'eau mouille la prairie, les avatars tiennent les portes ; en option les catastrophes qui agissent
+  sur l'eau à chaque pas (averses, drains, boules) et le rattrapage d'un sol laissé seul (l'eau le vit alors avec
+  la prairie). `strike` (comète : l'eau du cratère, puis la glace) et `burn` (boule de feu : l'eau, puis le sol)
+  appellent les deux dans l'ordre que `GameRoom` suivait. Dans cette PR seul le navigateur s'en sert
+  (`LocalTerrainSimulation`), sans changement de comportement : `GroundSimulation.test.ts` compare, sur 400 pas
+  avec neige, comète et boule de feu, les états dits par un sol câblé à la main et par `GroundSimulation` (mêmes
+  octets).
+
 Preuve d'identité : `libs/map-editor/tests/WaterFingerprints.test.ts` joue 19 scénarios de `WaterGrid` et finit
 chacun sur une empreinte (profondeurs, flux, vitesses, bilans, octets envoyés) enregistrée avec le code d'avant
 (`eb17d9b92`) ; un changement voulu de la physique les réenregistre par
