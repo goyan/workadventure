@@ -92,6 +92,8 @@ describe("UpdateTerrainCommand", () => {
             current: 2,
             maxSurface: 256,
             indoorDrain: 10000,
+            // A client that says nothing of the inertia, on a map that said nothing: the water of reality.
+            inertia: true,
         });
         await new UpdateWAMSettingCommand(wam, {
             message: {
@@ -107,6 +109,7 @@ describe("UpdateTerrainCommand", () => {
             current: 2,
             maxSurface: 256,
             indoorDrain: 10000,
+            inertia: true,
         });
         // An older client sends no speed: the one of the map is kept.
         await new UpdateWAMSettingCommand(wam, {
@@ -129,7 +132,7 @@ describe("UpdateTerrainCommand", () => {
         expect(wam.settings?.water?.indoorDrain).toBe(0);
     });
 
-    it("keeps the inertia of the water until a client says otherwise, and writes nothing for a water that creeps", async () => {
+    it("keeps the inertia of the water until a client says otherwise, and writes it off once turned off", async () => {
         const wam = emptyWam();
         const send = (inertia?: boolean): Promise<unknown> =>
             new UpdateWAMSettingCommand(wam, {
@@ -142,15 +145,19 @@ describe("UpdateTerrainCommand", () => {
                     },
                 },
             }).execute();
+        // A map that said nothing has the water of reality, with inertia.
         await send();
-        expect(wam.settings?.water).not.toHaveProperty("inertia");
+        expect(wam.settings?.water?.inertia).toBe(true);
         await send(true);
         expect(wam.settings?.water?.inertia).toBe(true);
         // An older client says nothing of it: the map keeps its water with inertia.
         await send();
         expect(wam.settings?.water?.inertia).toBe(true);
+        // Turned off, it is written off, and stays off.
         await send(false);
-        expect(wam.settings?.water).not.toHaveProperty("inertia");
+        expect(wam.settings?.water?.inertia).toBe(false);
+        await send();
+        expect(wam.settings?.water?.inertia).toBe(false);
     });
 });
 

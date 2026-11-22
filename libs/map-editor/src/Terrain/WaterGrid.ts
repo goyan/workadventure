@@ -1,5 +1,5 @@
 import {
-    DEFAULT_WATER_SETTINGS,
+    MIN_WATER_MAX_SURFACE,
     DEFAULT_WAVE_SETTINGS,
     MAX_WATER_MAX_SURFACE,
     TERRAIN_CELL,
@@ -26,7 +26,7 @@ const MAX_GRID_SIDE = 600;
  * building (52 px), so one keeps dry feet upstairs. What a source pours beyond it is lost, and so is what the rain
  * or the running water would pile over it.
  */
-export const MAX_WATER_SURFACE_PX = DEFAULT_WATER_SETTINGS.maxSurface;
+export const MAX_WATER_SURFACE_PX = MIN_WATER_MAX_SURFACE;
 
 /**
  * For each cell, the level its water spills at: the lowest level a water standing there must reach to run away to
