@@ -772,7 +772,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             waiting: "En attente du serveur : aucun bilan tant que l'eau ne bouge pas.",
             inflows: "Ce qui entre",
             outflows: "Ce qui sort",
-            rain: "Pluie",
+            rain: "Pluie de la carte",
+            rainAt: "Pluie de la carte ({place})",
+            manualAir: "conditions réglées à la main",
+            snowLies:
+                "Il neige sur la carte : la neige reste au sol, seule la part de pluie apporte de l'eau (elle la rend en fondant).",
+            ownRain: "Il pleut sur votre écran ({place}), pas sur la carte : cette pluie n'apporte pas d'eau.",
+            ownSnow: "Il neige sur votre écran ({place}), pas sur la carte : cette neige n'apporte pas d'eau.",
             sources: "Sources",
             sinks: "Puits",
             evaporation: "Évaporation",
@@ -798,6 +804,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         updates: "Envois de l'eau aux joueurs",
         updatesHint: "Plus haut : on voit les vagues courir au lieu de se fondre, au prix du réseau. 1 par défaut.",
         waves: {
+            timesReal: "× le réel",
+            roughnessMultiplies:
+                "Ce réglage multiplie ces rugosités (1 : telles quelles) ; elles ne se règlent pas ici. La rugosité du sol sous le curseur se lit dans l'infobulle de la pastille des étages, à côté de l'horloge.",
             roughness: "Frottement du sol",
             roughnessHint:
                 "Freine l'eau rapide ou peu profonde, selon le sol peint. Plus haut : les vagues montent moins loin. En réel : 1.",

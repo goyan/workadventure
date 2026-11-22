@@ -27,6 +27,8 @@
     import { LL } from "../../../i18n/i18n-svelte";
     import { executeUpdateTerrain, executeUpdateWAMSettings } from "../../Phaser/Game/MapEditor/Commands/Facades";
     import { readTerrainMapSettings } from "../../Phaser/Game/Terrain/TerrainMapSettings";
+    import { readDashboardRain } from "../../Phaser/Game/Terrain/DashboardRain";
+    import { nightDateStore } from "../../Stores/NightStore";
     import {
         terrainBlockedStore,
         terrainBrushStore,
@@ -50,6 +52,10 @@
 
     // What the map says now; each slider below writes its change back to the map, for every editor.
     const saved = readTerrainMapSettings();
+    // The rain the dashboard counts and the one this player may see instead: read again at each second of the clock.
+    let dashboardRain = $derived(
+        $terrainWaterStatsStore && $nightDateStore ? readDashboardRain($nightDateStore) : undefined,
+    );
     let maxDepthTiles = $state(saved.maxDepthTiles);
     let runoff = $state(saved.runoff);
     let evaporation = $state(saved.evaporation);
@@ -508,7 +514,7 @@
         {/if}
     </div>
 
-    <TerrainWaterDashboard {evaporation} {absorption} />
+    <TerrainWaterDashboard {evaporation} {absorption} rain={dashboardRain} />
 
     <span class="retro-title mt-2">{$LL.mapEditor.terrain.mapSettings()}</span>
     <div data-testid="terrain-water-realistic">
@@ -660,7 +666,7 @@
             <RangeSlider
                 id="terrain-wave-roughness"
                 label={$LL.mapEditor.terrain.waves.roughness()}
-                unit="×"
+                unit={$LL.mapEditor.terrain.waves.timesReal()}
                 min={WAVE_BOUNDS.roughness[0]}
                 max={WAVE_BOUNDS.roughness[1]}
                 step={0.1}
@@ -669,7 +675,9 @@
                 buttonShape="square"
             />
             <p class="retro-hint m-0">{$LL.mapEditor.terrain.waves.roughnessHint()}</p>
-            {@render more($LL.mapEditor.terrain.waves.roughnessDetail())}
+            {@render more(
+                `${$LL.mapEditor.terrain.waves.roughnessDetail()} ${$LL.mapEditor.terrain.waves.roughnessMultiplies()}`,
+            )}
         </div>
         <div data-testid="terrain-wave-damping">
             <RangeSlider
@@ -690,7 +698,7 @@
             <RangeSlider
                 id="terrain-wave-breaking"
                 label={$LL.mapEditor.terrain.waves.breaking()}
-                unit="×"
+                unit={$LL.mapEditor.terrain.waves.timesReal()}
                 min={WAVE_BOUNDS.breaking[0]}
                 max={WAVE_BOUNDS.breaking[1]}
                 step={0.1}
@@ -705,7 +713,7 @@
             <RangeSlider
                 id="terrain-wave-momentum"
                 label={$LL.mapEditor.terrain.waves.momentum()}
-                unit="×"
+                unit={$LL.mapEditor.terrain.waves.timesReal()}
                 min={WAVE_BOUNDS.momentum[0]}
                 max={WAVE_BOUNDS.momentum[1]}
                 step={0.05}
@@ -720,7 +728,7 @@
             <RangeSlider
                 id="terrain-flow-pace"
                 label={$LL.mapEditor.terrain.flowPace()}
-                unit="×"
+                unit={$LL.mapEditor.terrain.waves.timesReal()}
                 min={FLOW_PACE_BOUNDS[0]}
                 max={FLOW_PACE_BOUNDS[1]}
                 step={0.05}
