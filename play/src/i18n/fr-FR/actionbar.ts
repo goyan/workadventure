@@ -91,12 +91,13 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         rising: "Niveau qui monte",
         falling: "Niveau qui baisse",
         trend: "La teinte suit la tendance du niveau sur quelques secondes : une eau qui ne fait que clapoter n'en a pas.",
-        masses: "Sur chaque masse d'eau : volume, surface, profondeur moyenne, puis ce qu'elle gagne ou perd par minute.",
+        masses: "Sur chaque masse d'eau : volume, surface, profondeur moyenne, puis ce qu'elle gagne ou perd par minute (« … » : mesure en cours, quelques secondes après l'ouverture).",
         realTime: "Débits en temps réel : à « Vitesse de l'eau » 4, une source de 100 m³/h verse 6,7 m³/min.",
         totals: "Sur toute la carte : {stock} m³ d'eau, {area} m² sous l'eau",
         noWater: "Le serveur n'a encore rien dit de l'eau de cette carte.",
         estimated: "Vitesses estimées d'après la pente de la surface de l'eau.",
-        measured: "Vitesses calculées par le serveur (eau à inertie).",
+        measured:
+            "Vitesses calculées par le serveur (eau à inertie), transmises à partir de {slowest} m/s : un courant plus lent n'a pas de flèche.",
         weather: {
             button: "Météo expliquée",
             title: "Pourquoi ce temps ?",
@@ -306,7 +307,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         ball: "Boule",
         ballSizeLabel: "Taille de la boule : son diamètre, en cases",
         ballArmedHelp:
-            "Maintenez le clic : une boule solide est aussitôt là, son centre au niveau 0 de la carte ; elle suit le pointeur et chasse l'eau de sa partie immergée · Échap pour annuler",
+            "Maintenez le clic : une boule solide est aussitôt là, à moitié dans l'eau, à la surface sous le pointeur ; elle le suit et chasse l'eau de sa moitié immergée · Échap pour annuler",
         tabs: { catastrophes: "Catastrophes", weather: "Météo" },
         weather: {
             manual: "Manuel",
@@ -590,6 +591,25 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         errorNotFound: "Vous n'avez pas encore de bureau personnel",
         errorMoving: "Impossible d'atteindre votre bureau personnel",
         errorUnclaiming: "Impossible de libérer votre bureau personnel",
+    },
+    placeToMap: {
+        apply: "Appliquer à la carte",
+        hint: "Faire suivre ce lieu à la météo de la carte, pour tout le monde",
+        already: "La carte suit déjà ce lieu",
+        noRight: "Seuls ceux qui peuvent modifier la carte peuvent changer sa météo.",
+        pending: "Lecture de la météo de ce lieu…",
+        noData: "Pas de météo réelle pour ce lieu : la carte ne peut pas le suivre.",
+        title: "Appliquer cette météo à la carte ?",
+        confirm:
+            "La carte suivra la météo réelle de {place} au lieu de {mapPlace}, pour tout le monde. Le jour, la nuit et les saisons de la carte suivront aussi ce lieu ; l'eau, la neige, la glace, le feu et l'herbe évolueront à partir de son air.",
+        goesReal: "La carte passe en météo réelle (elle était en « {weather} »).",
+        leaveManual:
+            "Revenir aux conditions réelles : elles sont réglées à la main (Catastrophe, Météo) et resteraient prioritaires sur ce lieu.",
+        followMap: "Voir ensuite la météo de la carte, comme tout le monde (ton ciel quitte « Jour dans le monde »).",
+        action: "Appliquer",
+        error: "La météo de la carte n'a pas pu être changée.",
+        revert: "Revenir à {place}",
+        revertHint: "Remettre la carte sur son lieu et sa météo d'avant",
     },
 };
 

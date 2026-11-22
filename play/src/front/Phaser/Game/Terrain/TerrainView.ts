@@ -216,6 +216,8 @@ export class TerrainView {
     private readonly breaking = new BreakingFoam();
     private breakingVersion = -1;
     private foam = new Uint8Array(0);
+    /** The current of the water over the canvas, two a cell (see currentOver). */
+    private current = new Float32Array(0);
     private shore = new Uint8Array(0);
 
     constructor(
@@ -552,6 +554,7 @@ export class TerrainView {
                 anyWater ? wet : undefined,
                 this.seeThrough ? SEE_THROUGH : 1,
                 foamy ? this.foam : undefined,
+                anyWater ? this.currentOver(canvas, wet) : undefined,
                 depths,
             );
         } else if (this.grounds) {
@@ -578,6 +581,34 @@ export class TerrainView {
             this.surface.paintField(canvas, shore, everywhere, NO_SHIFT, SHORE_WATER.color, () => SHORE_WATER.alpha);
         }
         this.surface.end();
+    }
+
+    /**
+     * The current of the water over a canvas, as the server tells it (cells a second, east then south, two a cell), on
+     * the wet cells only: the water shader slides the ripples of a running film with it. Undefined without a current
+     * told (a water without inertia).
+     */
+    private currentOver(canvas: BlockCanvasArea, wet: Uint8Array): Float32Array | undefined {
+        const size = canvas.columns * canvas.rows;
+        if (this.current.length !== size * 2) this.current = new Float32Array(size * 2);
+        const current = this.current;
+        current.fill(0);
+        let any = false;
+        for (let row = 0; row < canvas.rows; row++) {
+            for (let column = 0; column < canvas.columns; column++) {
+                const index = row * canvas.columns + column;
+                if (wet[index] === 0) continue;
+                const speed = this.water.speedAt(
+                    canvas.x + (column + 0.5) * TERRAIN_CELL,
+                    canvas.y + (row + 0.5) * TERRAIN_CELL,
+                );
+                if (!speed) return undefined;
+                current[index * 2] = speed.x;
+                current[index * 2 + 1] = speed.y;
+                if (speed.x !== 0 || speed.y !== 0) any = true;
+            }
+        }
+        return any ? current : undefined;
     }
 
     /**

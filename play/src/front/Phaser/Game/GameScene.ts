@@ -305,7 +305,7 @@ import { aquaticLifeShownStore, cloudsShownStore, weatherEffectsEnabledStore } f
 import { skyShadowCategoriesStore } from "../../Stores/SkyLightStore";
 import type { SkyShadowCategories } from "../../Stores/SkyLightStore";
 import { mapLayerBuiltLevelsStore, mapLayerLevelStore } from "../../Stores/MapLayerStore";
-import { avatarAltitudeStore, floorLevelsBuiltStore, pointerAltitudeStore } from "../../Stores/FloorLevelsStore";
+import { avatarAltitudeStore, floorLevelsBuiltStore, showPointerGround } from "../../Stores/FloorLevelsStore";
 import { areaHighlightHiddenStore } from "../../Stores/NightStore";
 import {
     aquaticLifeSpeciesStore,
@@ -321,7 +321,7 @@ import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
 import { parseFloorPiece } from "./MapEditor/MapLayer/MapLayerFloors";
-import { RaisedCover } from "./Weather/RaisedCover";
+import { floorPieceCover, RaisedCover } from "./Weather/RaisedCover";
 import { floorPath } from "./MapEditor/MapLayer/FloorPath";
 import { levelUnderPoint } from "./MapEditor/MapLayer/FloorOperations";
 import { levelItems } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -331,7 +331,7 @@ import { setRoomConditions, shownWeatherSettings } from "./Weather/RealWeatherCl
 import { isSwayingTree, TreeSway } from "./Nature/TreeSway";
 import { TreePoseTextures } from "./Nature/TreePoses";
 import { TreeSeasonEffects } from "./Nature/TreeSeasonEffects";
-import { avatarAltitude, pointerAltitude } from "./Floors/AvatarAltitude";
+import { avatarAltitude, pointerGroundAt } from "./Floors/AvatarAltitude";
 import { FloorSpike } from "./Floors/FloorSpike";
 import type { FloorOccupant } from "./Floors/FloorSpike";
 import { FLOOR_Z_VARIABLE, decodeFloorZ } from "./Floors/FloorProtocol";
@@ -416,7 +416,7 @@ import type { GroundEngine } from "./Terrain/GroundEngineChoice";
 import { GroundEngines } from "./Terrain/GroundEngines";
 import type { PixelGround } from "./Terrain/GroundEngines";
 import { tellPixelBlocksShown } from "./Terrain/PixelBlocksShown";
-import { groundPointAt, heightAtPoint, hiddenBehindRim, shiftAt } from "./Terrain/ReliefProjection";
+import { groundPointAt, heightAtPoint, hiddenBehindRim, shiftAt, shiftOfHeight } from "./Terrain/ReliefProjection";
 import { seenPoint } from "./Terrain/ObliqueView";
 import { TerrainView } from "./Terrain/TerrainView";
 import { groundDropOf, PlacedDrops } from "./Terrain/GroundDrop";
@@ -2179,10 +2179,12 @@ export class GameScene extends DirtyScene {
             for (const entity of this.gameMapFrontWrapper.getEntitiesManager().getEntities().values()) {
                 const prefab = entity.getPrefab();
                 const image = { x: entity.x, y: entity.y, width: entity.displayWidth, height: entity.displayHeight };
-                if (parseFloorPiece(prefab.collectionName, prefab.id) !== undefined) {
+                const piece = parseFloorPiece(prefab.collectionName, prefab.id);
+                if (piece !== undefined) {
                     // A slab or a stair of a raised floor is part of a building, wherever it stands: over a room,
-                    // or over the outdoors (a storey that reaches out, a house without a floor on the ground).
-                    cover.add(image);
+                    // or over the outdoors (a storey that reaches out, a house without a floor on the ground). Only
+                    // what is drawn of it: the empty corners of the image of a ramp get the weather of the ground.
+                    for (const rect of floorPieceCover(piece, image)) cover.add(rect);
                 } else if (
                     groundPrefabOfUpper(prefab.collectionName, prefab.id) !== undefined ||
                     (MAP_LAYER_WALL_LIKE_COLLECTIONS.includes(prefab.collectionName) && TALL_WALL.test(prefab.id))
@@ -2489,12 +2491,17 @@ export class GameScene extends DirtyScene {
             avatarAltitudeStore.set(
                 avatarAltitude(terrain, this.CurrentPlayer.x, this.CurrentPlayer.y, this.CurrentPlayer.getFloorZ()),
             );
-            // And the ground under the pointer, while it is over the game.
+            // And the ground and the water under the pointer, while it is over the game (drawn again only when a
+            // figure shown changes: the water changes once a state of the server at most).
             const pointer = this.input.isOver ? this.input.activePointer : undefined;
             pointer?.updateWorldPoint(this.cameras.main);
             // The ground drawn under the pointer: down in a hollow when the relief is seen in 3/4.
             const pointed = pointer && { x: pointer.worldX, y: pointer.worldY };
-            pointerAltitudeStore.set(pointerAltitude(terrain, pointed && this.groundPointUnder(pointed)));
+            showPointerGround(
+                pointerGroundAt(terrain, pointed && this.groundPointUnder(pointed), this.terrainWater, (point) =>
+                    isOnFrozenWater(this, point),
+                ),
+            );
             // One engine draws the ground: the relief in 3/4 where the player chose it (never in the editor nor in
             // Basique), the flat one else (nothing in Basique).
             const projected = this.pixelReliefShown();
@@ -3154,7 +3161,8 @@ export class GameScene extends DirtyScene {
             .then(async () => {
                 const depths = await gunzip(message.depths);
                 const speeds = message.speeds ? await gunzip(message.speeds) : undefined;
-                this.terrainWater.receive({ ...message, depths, speeds }, this.time.now);
+                const slowSpeeds = message.slowSpeeds ? await gunzip(message.slowSpeeds) : undefined;
+                this.terrainWater.receive({ ...message, depths, speeds, slowSpeeds }, this.time.now);
                 if (message.stats) terrainWaterStatsStore.set(message.stats);
             })
             .catch((error: unknown) => console.warn("A state of the water of the relief could not be read", error));
@@ -4954,6 +4962,10 @@ export class GameScene extends DirtyScene {
             () => this.terrainWater.version(),
             () => this.connection?.getUserId(),
             () => get(heldBallStore),
+            // In 3/4 it is drawn as low as the water it floats on (not what lies under it: it pushes the water away),
+            // and at its place over what is built.
+            (ball) =>
+                this.pixelReliefShown() && !this.seenRelief?.isFlatAt(ball.x, ball.y) ? shiftOfHeight(ball.levelPx) : 0,
         );
         this.ballView = ballView;
         this.fireTorchView?.destroy();

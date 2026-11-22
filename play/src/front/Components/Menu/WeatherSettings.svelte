@@ -9,11 +9,10 @@
     } from "@workadventure/map-editor";
     import type { AutoWeatherFrequency, AutoWeatherSettings, WeatherLocation } from "@workadventure/map-editor";
     import { onDestroy } from "svelte";
-    import { get } from "svelte/store";
-    import { mapEditorActivated } from "../../Stores/MenuStore";
     import { LL } from "../../../i18n/i18n-svelte";
     import { gameManager } from "../../Phaser/Game/GameManager";
     import { executeUpdateWAMSettings } from "../../Phaser/Game/MapEditor/Commands/Facades";
+    import { canEditMapWeather } from "../../Phaser/Game/Weather/MapWeatherRights";
     import { autoWeatherAt, autoWeatherChanges } from "../../Phaser/Game/Weather/WeatherSchedule";
     import { seasonAt } from "../../Phaser/Game/Nature/SeasonClock";
     import ButtonState from "../Input/ButtonState.svelte";
@@ -156,12 +155,7 @@
 
     async function save(): Promise<string> {
         const scene = gameManager.getCurrentGameScene();
-        if (
-            !get(mapEditorActivated) ||
-            !scene.connection ||
-            !scene.getMapEditorModeManager() ||
-            !scene.getGameMap().getWamFile()
-        ) {
+        if (!canEditMapWeather(scene)) {
             throw new Error($LL.mapEditor.settings.weather.error());
         }
         try {

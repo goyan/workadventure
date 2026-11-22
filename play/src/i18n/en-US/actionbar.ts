@@ -86,12 +86,13 @@ const actionbar = {
         rising: "Rising level",
         falling: "Falling level",
         trend: "The tint follows the trend of the level over a few seconds: water that only ripples has none.",
-        masses: "On each body of water: volume, surface, mean depth, then what it gains or loses a minute.",
+        masses: 'On each body of water: volume, surface, mean depth, then what it gains or loses a minute ("…": being measured, a few seconds after opening).',
         realTime: 'Flows in real time: at "Speed of the water" 4, a source of 100 m³/h pours 6.7 m³/min.',
         totals: "On the whole map: {stock} m³ of water, {area} m² under water",
         noWater: "The server has said nothing yet of the water of this map.",
         estimated: "Speeds estimated from the slope of the surface of the water.",
-        measured: "Speeds computed by the server (water with inertia).",
+        measured:
+            "Speeds computed by the server (water with inertia), told from {slowest} m/s on: a slower current has no arrow.",
         weather: {
             button: "Weather explained",
             title: "Why this weather?",
@@ -303,7 +304,7 @@ const actionbar = {
         ball: "Ball",
         ballSizeLabel: "Size of the ball: its diameter, in tiles",
         ballArmedHelp:
-            "Hold the click: a solid ball is there at once, its centre at level 0 of the map; it follows the pointer and pushes away the water of its part under water · Esc to cancel",
+            "Hold the click: a solid ball is there at once, half in the water, at the surface under the pointer; it follows it and pushes away the water of its half under water · Esc to cancel",
         tabs: { catastrophes: "Disasters", weather: "Weather" },
         weather: {
             manual: "Manual",
@@ -586,6 +587,25 @@ const actionbar = {
         errorNotFound: "You don't have a personal desk yet",
         errorMoving: "Unable to reach your personal desk",
         errorUnclaiming: "Unable to unclaim your personal desk",
+    },
+    placeToMap: {
+        apply: "Apply to the map",
+        hint: "Make the weather of the map follow this place, for everyone",
+        already: "The map already follows this place",
+        noRight: "Only those who can edit the map can change its weather.",
+        pending: "Reading the weather of this place…",
+        noData: "No real weather for this place: the map cannot follow it.",
+        title: "Apply this weather to the map?",
+        confirm:
+            "The map will follow the real weather of {place} instead of {mapPlace}, for everyone. The day, the night and the seasons of the map will follow this place too; the water, the snow, the ice, the fire and the grass will change from its air.",
+        goesReal: "The map switches to real weather (it was on “{weather}”).",
+        leaveManual:
+            "Back to the real conditions: they are set by hand (Disaster, Weather) and would come before this place.",
+        followMap: "Then see the weather of the map, as everyone does (your sky leaves “Daytime somewhere”).",
+        action: "Apply",
+        error: "The weather of the map could not be changed.",
+        revert: "Back to {place}",
+        revertHint: "Put the map back on its place and weather of before",
     },
 } satisfies BaseTranslation & Translation["actionbar"];
 export default actionbar;

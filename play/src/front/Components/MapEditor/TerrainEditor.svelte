@@ -27,6 +27,9 @@
     import { LL } from "../../../i18n/i18n-svelte";
     import { executeUpdateTerrain, executeUpdateWAMSettings } from "../../Phaser/Game/MapEditor/Commands/Facades";
     import { readTerrainMapSettings } from "../../Phaser/Game/Terrain/TerrainMapSettings";
+    import { readDashboardRain } from "../../Phaser/Game/Terrain/DashboardRain";
+    import { nudgedRoughness, ROUGHNESS_STEP, roughnessFigure } from "../../Phaser/Game/Terrain/WaveSteps";
+    import { nightDateStore } from "../../Stores/NightStore";
     import {
         terrainBlockedStore,
         terrainBrushStore,
@@ -35,6 +38,7 @@
         terrainHoverMeadowStore,
         terrainHoverSoilStore,
         selectedPoolStore,
+        terrainWaterStatsStore,
     } from "../../Stores/TerrainEditorStore";
     import { SOIL_TINTS } from "../../Phaser/Game/Terrain/TerrainShading";
     import InputSwitch from "../Input/InputSwitch.svelte";
@@ -49,6 +53,10 @@
 
     // What the map says now; each slider below writes its change back to the map, for every editor.
     const saved = readTerrainMapSettings();
+    // The rain the dashboard counts and the one this player may see instead: read again at each second of the clock.
+    let dashboardRain = $derived(
+        $terrainWaterStatsStore && $nightDateStore ? readDashboardRain($nightDateStore) : undefined,
+    );
     let maxDepthTiles = $state(saved.maxDepthTiles);
     let runoff = $state(saved.runoff);
     let evaporation = $state(saved.evaporation);
@@ -159,6 +167,11 @@
         updates = REALISTIC_WATER_SETTINGS.updates;
         flowPace = REALISTIC_WATER_SETTINGS.flowPace;
         impactReach = REALISTIC_WATER_SETTINGS.impactReach;
+        saveWater();
+    }
+
+    function nudgeRoughness(by: -1 | 1): void {
+        waveRoughness = nudgedRoughness(waveRoughness, by);
         saveWater();
     }
 
@@ -507,7 +520,7 @@
         {/if}
     </div>
 
-    <TerrainWaterDashboard {evaporation} {absorption} />
+    <TerrainWaterDashboard {evaporation} {absorption} rain={dashboardRain} />
 
     <span class="retro-title mt-2">{$LL.mapEditor.terrain.mapSettings()}</span>
     <div data-testid="terrain-water-realistic">
@@ -659,16 +672,42 @@
             <RangeSlider
                 id="terrain-wave-roughness"
                 label={$LL.mapEditor.terrain.waves.roughness()}
-                unit="×"
+                unit={$LL.mapEditor.terrain.waves.timesReal()}
                 min={WAVE_BOUNDS.roughness[0]}
                 max={WAVE_BOUNDS.roughness[1]}
-                step={0.1}
+                step={ROUGHNESS_STEP}
+                valueFormatter={roughnessFigure}
                 bind:value={waveRoughness}
                 onchange={saveWater}
                 buttonShape="square"
             />
+            <!-- Two hundred notches from 0 to 10: a button moves it by one, to set it finely. -->
+            <span class="flex justify-end gap-0.5 px-3">
+                <button
+                    type="button"
+                    class="h-5 w-5 rounded bg-white/10 p-0 leading-none disabled:opacity-40"
+                    disabled={waveRoughness <= WAVE_BOUNDS.roughness[0]}
+                    aria-label={$LL.actionbar.catastrophe.weather.less({
+                        label: $LL.mapEditor.terrain.waves.roughness(),
+                    })}
+                    data-testid="terrain-wave-roughness-less"
+                    onclick={() => nudgeRoughness(-1)}>−</button
+                >
+                <button
+                    type="button"
+                    class="h-5 w-5 rounded bg-white/10 p-0 leading-none disabled:opacity-40"
+                    disabled={waveRoughness >= WAVE_BOUNDS.roughness[1]}
+                    aria-label={$LL.actionbar.catastrophe.weather.more({
+                        label: $LL.mapEditor.terrain.waves.roughness(),
+                    })}
+                    data-testid="terrain-wave-roughness-more"
+                    onclick={() => nudgeRoughness(1)}>+</button
+                >
+            </span>
             <p class="retro-hint m-0">{$LL.mapEditor.terrain.waves.roughnessHint()}</p>
-            {@render more($LL.mapEditor.terrain.waves.roughnessDetail())}
+            {@render more(
+                `${$LL.mapEditor.terrain.waves.roughnessDetail()} ${$LL.mapEditor.terrain.waves.roughnessMultiplies()}`,
+            )}
         </div>
         <div data-testid="terrain-wave-damping">
             <RangeSlider
@@ -689,7 +728,7 @@
             <RangeSlider
                 id="terrain-wave-breaking"
                 label={$LL.mapEditor.terrain.waves.breaking()}
-                unit="×"
+                unit={$LL.mapEditor.terrain.waves.timesReal()}
                 min={WAVE_BOUNDS.breaking[0]}
                 max={WAVE_BOUNDS.breaking[1]}
                 step={0.1}
@@ -704,7 +743,7 @@
             <RangeSlider
                 id="terrain-wave-momentum"
                 label={$LL.mapEditor.terrain.waves.momentum()}
-                unit="×"
+                unit={$LL.mapEditor.terrain.waves.timesReal()}
                 min={WAVE_BOUNDS.momentum[0]}
                 max={WAVE_BOUNDS.momentum[1]}
                 step={0.05}
@@ -719,7 +758,7 @@
             <RangeSlider
                 id="terrain-flow-pace"
                 label={$LL.mapEditor.terrain.flowPace()}
-                unit="×"
+                unit={$LL.mapEditor.terrain.waves.timesReal()}
                 min={FLOW_PACE_BOUNDS[0]}
                 max={FLOW_PACE_BOUNDS[1]}
                 step={0.05}
@@ -742,6 +781,14 @@
                 onchange={saveWater}
                 buttonShape="square"
             />
+            {#if $terrainWaterStatsStore?.easedPrecision}
+                <p class="retro-hint m-0 text-warning" data-testid="terrain-precision-eased">
+                    {$LL.mapEditor.terrain.precisionEased({
+                        value: $terrainWaterStatsStore.easedPrecision,
+                        asked: precision,
+                    })}
+                </p>
+            {/if}
             <p class="retro-hint m-0">{$LL.mapEditor.terrain.precisionHint()}</p>
             {@render more($LL.mapEditor.terrain.precisionDetail())}
         </div>
@@ -758,6 +805,11 @@
             onchange={saveWater}
             buttonShape="square"
         />
+        {#if $terrainWaterStatsStore?.easedUpdates}
+            <p class="retro-hint m-0 text-warning" data-testid="terrain-updates-eased">
+                {$LL.mapEditor.terrain.updatesEased({ value: $terrainWaterStatsStore.easedUpdates, asked: updates })}
+            </p>
+        {/if}
         <p class="retro-hint m-0">{$LL.mapEditor.terrain.updatesHint()}</p>
         {@render more($LL.mapEditor.terrain.updatesDetail())}
     </div>

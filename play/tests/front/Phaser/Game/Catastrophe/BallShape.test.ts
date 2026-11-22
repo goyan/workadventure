@@ -4,6 +4,7 @@ import {
     BALL_TONES,
     ballBlockPx,
     ballBlocks,
+    ballLevelUnder,
     ballWaterline,
     glideBall,
     tellBall,
@@ -109,6 +110,48 @@ describe("ballWaterline", () => {
     });
 });
 
+describe("a ball held at the level of the water", () => {
+    const ball = { x: 320, y: 320, radiusPx: 64, levelPx: 40 };
+
+    it("is at the surface of the water under the pointer, or on the ground where there is none", () => {
+        expect(ballLevelUnder(320, 320, () => ({ groundPx: -60, waterPx: 100 }))).toBe(40);
+        expect(ballLevelUnder(320, 320, () => ({ groundPx: -100, waterPx: 60 }))).toBe(-40);
+        expect(ballLevelUnder(320, 320, () => ({ groundPx: 24, waterPx: 0 }))).toBe(24);
+        // A film of water is no lake.
+        expect(ballLevelUnder(320, 320, () => ({ groundPx: 24, waterPx: 0.3 }))).toBe(24);
+    });
+
+    it("has its line of water at its rim in a lake at its own level, wherever that level is", () => {
+        const line = ballWaterline(ball, () => ({ groundPx: -60, waterPx: 100 }));
+        expect(line.afloat).toBe(true);
+        for (const point of line.arcs[0].points) expect(Math.hypot(point.x - 320, point.y - 320)).toBeCloseTo(64, 5);
+        // Water 30 px higher than it is held: the line draws in.
+        const higher = ballWaterline(ball, () => ({ groundPx: -60, waterPx: 130 }));
+        const within = Math.sqrt(64 ** 2 - 30 ** 2);
+        for (const point of higher.arcs[0].points) {
+            expect(Math.hypot(point.x - 320, point.y - 320)).toBeCloseTo(within, 5);
+        }
+        // Held at the level 0 over a lake 80 px higher, it is under the water: no line.
+        expect(ballWaterline({ ...ball, levelPx: 0 }, () => ({ groundPx: -60, waterPx: 140 })).arcs).toEqual([]);
+    });
+
+    it("shows its upper half over the ground it rests on, and hides what is under a higher ground", () => {
+        const whole = ballBlocks({ ...ball, levelPx: 24 }, () => ({ groundPx: 24, waterPx: 0 }));
+        expect(whole.length).toBe(ballBlocks({ x: 320, y: 320, radiusPx: 64 }, dry).length);
+        // Held 40 px under a flat ground: only what stands more than 40 px over its middle shows.
+        const cap = ballBlocks({ ...ball, levelPx: -40 }, () => ({ groundPx: 0, waterPx: 0 }));
+        expect(cap.length).toBeGreaterThan(0);
+        for (const block of cap) expect(Math.hypot(block.x - 320, block.y - 320)).toBeLessThan(52);
+        // In a lake at its level nothing of it is under the water: the server tells none where the ball stands.
+        const afloat = ballBlocks(ball, (x, y) => ({
+            groundPx: -60,
+            waterPx: Math.hypot(x - 320, y - 320) < 72 ? 0 : 100,
+        }));
+        expect(afloat.every((block) => !block.wet)).toBe(true);
+        expect(afloat.length).toBe(whole.length);
+    });
+});
+
 describe("glideBall", () => {
     it("takes the ball of another player to where the server last told it, in the time between two messages", () => {
         const shown = { x: 100, y: 300, radiusPx: 64, fromX: 100, fromY: 300, toldAt: 1000, until: 1600 };
@@ -122,6 +165,9 @@ describe("glideBall", () => {
 
     it("is whole where the server tells it, at once, when it is new", () => {
         const told = tellBall(undefined, { x: 180, y: 300, radiusTiles: 6, impactInMs: 600 }, 1050);
-        expect(glideBall(told, 1050)).toEqual({ x: 180, y: 300, radiusPx: 96 });
+        expect(glideBall(told, 1050)).toEqual({ x: 180, y: 300, radiusPx: 96, levelPx: 0 });
+        // At the level the server holds it at.
+        const low = tellBall(told, { x: 180, y: 300, radiusTiles: 6, impactInMs: 600, ballLevel: -40 }, 1100);
+        expect(glideBall(low, 1100).levelPx).toBe(-40);
     });
 });

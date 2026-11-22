@@ -399,7 +399,7 @@ const mapEditor: BaseTranslation = {
             level: "Hold a level",
             levelValue: "Altitude of the water to hold, in metres",
             levelHint:
-                "The source pours only while the water at its foot is under this altitude: a lake stays full, without overflowing. 0 m: the ground of the map; negative in a hollow, positive on a mount. The altitude of the ground under the cursor is shown under the clock.",
+                "The source pours only while the water at its foot is under this altitude: a lake stays full, without overflowing. 0 m: the ground of the map; negative in a hollow, positive on a mount. The floors badge, next to the clock, shows under the pointer the altitude of the ground and of the water surface, on the same scale.",
         },
         waterSink: {
             label: "Sink (drain)",
@@ -761,7 +761,13 @@ const mapEditor: BaseTranslation = {
             waiting: "Waiting for the server: no balance while the water does not move.",
             inflows: "What comes in",
             outflows: "What goes out",
-            rain: "Rain",
+            rain: "Rain of the map",
+            rainAt: "Rain of the map ({place})",
+            manualAir: "conditions set by hand",
+            snowLies:
+                "It is snowing on the map: the snow stays on the ground, only the share of rain brings water (it gives it back as it melts).",
+            ownRain: "It is raining on your screen ({place}), not on the map: this rain brings no water.",
+            ownSnow: "It is snowing on your screen ({place}), not on the map: this snow brings no water.",
             sources: "Sources",
             sinks: "Sinks",
             evaporation: "Evaporation",
@@ -782,9 +788,14 @@ const mapEditor: BaseTranslation = {
         precision: "Fineness of the computation of the water",
         precisionHint:
             "Higher: faster waves and torrents are possible, heavier computation for the server. 3 by default.",
+        precisionEased: "Server busy: fineness lowered to {value} out of {asked} until the computation gets lighter.",
+        updatesEased: "Server busy: tellings lowered to {value} a second out of {asked}.",
         updates: "Tellings of the water to the players",
         updatesHint: "Higher: waves are seen running instead of fading, for more network. 1 by default.",
         waves: {
+            timesReal: "× real",
+            roughnessMultiplies:
+                "This setting multiplies these roughnesses (1: as they are); they are not set here. The roughness of the ground under the pointer shows in the hint of the floors badge, next to the clock.",
             roughness: "Friction of the ground",
             roughnessHint:
                 "Holds back fast or shallow water, by the painted soil. Higher: waves run less far up. In reality: 1.",
@@ -907,7 +918,15 @@ const mapEditor: BaseTranslation = {
             cursor: "Level {height}",
             title: "Level",
             altitude: "Altitude of the avatar",
-            pointerAltitude: "Altitude of the ground under the pointer",
+            pointerAltitude: "Under the pointer",
+            pointerGround: "Ground under the pointer",
+            pointerWater: "Water surface",
+            pointerIce: "Ice surface",
+            pointerNoWater: "No water",
+            pointerDepth: "Depth {depth}",
+            pointerOff: "Pointer off the game",
+            pointerUnpainted: "{soil} (unpainted)",
+            pointerRoughness: "Roughness (Manning) {n}",
             ground: "Ground",
             level: "Level {height}",
             built: "floor {rank}",

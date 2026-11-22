@@ -379,6 +379,7 @@ export class GameRoom implements BrothersFinder {
         terrainWater.setDownpours(() => catastrophes.downpours());
         terrainWater.setDrains(() => catastrophes.drains());
         terrainWater.setBalls(() => catastrophes.balls());
+        catastrophes.levelWith(terrainWater.ballLevelAt.bind(terrainWater));
         // A door holds the water while it is closed: it opens for the avatars that stand in its passage.
         terrainWater.setWalkers(gameRoom.groundAvatarPositions.bind(gameRoom));
         gameRoom.catastrophes = catastrophes;

@@ -83,7 +83,10 @@ function createHarness({
     saved = {},
     failingStore = false,
     mapSize = () => undefined,
+    clock,
 }: {
+    /** A clock in ms to time the steps with; the real one when none is given. */
+    clock?: () => number;
     wam?: WAMFileFormat;
     saved?: Record<string, string>;
     failingStore?: boolean;
@@ -111,6 +114,7 @@ function createHarness({
         { repository, roomUrl: "room" },
         () => Date.UTC(2026, 6, 14, 12),
         mapSize,
+        clock,
     );
     const steps = (count: number): void => {
         for (let step = 0; step < count; step++) manager.step();
@@ -296,7 +300,7 @@ describe("TerrainWaterManager", () => {
         steps(1);
         // 200 px: thirteen strides of a cell at most, the last one where the ball is.
         expect(placed).toHaveBeenCalledTimes(13);
-        expect(placed.mock.calls.at(-1)?.[0]).toEqual([ball]);
+        expect(placed.mock.calls.at(-1)?.[0]).toEqual([expect.objectContaining(ball)]);
         const first = placed.mock.calls[0][0][0];
         expect(first.x).toBeGreaterThan(100);
         expect(first.x).toBeLessThanOrEqual(116);
@@ -309,6 +313,103 @@ describe("TerrainWaterManager", () => {
         expect(grid.ballAt(18, 15)).toBe(false);
     });
 
+    describe("a ball held at the surface of the water", () => {
+        // A hollow 96 px deep with 56 px of water: its surface is 40 px under the level 0.
+        const deep: [number, number, number][] = [];
+        for (let y = 0; y < 30; y++) for (let x = 0; x < 30; x++) deep.push([x, y, -96]);
+        function lowLake() {
+            const harness = createHarness({ wam: wamWith(terrainOf(deep)) });
+            harness.manager.mapChanged();
+            const grid = harness.manager.getGrid();
+            if (!grid) throw new Error("no grid");
+            const bytes = new Uint8Array(grid.writeDepths().length);
+            for (let y = 0; y < 30; y++) {
+                for (let x = 0; x < 30; x++) {
+                    const at = ((y - grid.bounds.y) * grid.bounds.width + (x - grid.bounds.x)) * 2;
+                    bytes[at] = (56 * 8) & 255;
+                    bytes[at + 1] = (56 * 8) >> 8;
+                }
+            }
+            grid.readDepths(bytes);
+            return { ...harness, grid };
+        }
+
+        it("is half in the water of a lake lower than the level 0, and pushes its lower half away", () => {
+            const { manager, grid, steps } = lowLake();
+            const before = grid.totalPx();
+            manager.setBalls(() => [{ id: 1, x: 240, y: 240, radiusPx: 32 }]);
+            steps(1);
+            expect(manager.ballLevelAt(1, 240, 240)).toBeCloseTo(-40, 1);
+            // Its underside is 72 px under the level 0, 24 px over the bed: the water reaches it.
+            expect(grid.ballAt(15, 15)).toBe(true);
+            expect(grid.totalPx()).toBeCloseTo(before, 1);
+        });
+
+        it("stays at its level while it is held still, whatever the wave it makes", () => {
+            const { manager, wam, steps } = lowLake();
+            if (!wam.settings?.water) throw new Error("no water settings");
+            wam.settings.water.inertia = true;
+            manager.setBalls(() => [{ id: 1, x: 240, y: 240, radiusPx: 64 }]);
+            steps(1);
+            const level = manager.ballLevelAt(1, 240, 240);
+            for (let step = 0; step < 60; step++) {
+                steps(1);
+                expect(manager.ballLevelAt(1, 240, 240)).toBe(level);
+            }
+        });
+
+        it("rests on the ground where there is no water: nothing moves, and it is in the way", () => {
+            const { manager, grid, steps } = lowLake();
+            const before = grid.writeDepths();
+            // The cell (40, 15) is flat ground beside the lake.
+            manager.setBalls(() => [{ id: 1, x: 648, y: 240, radiusPx: 32 }]);
+            steps(3);
+            expect(manager.ballLevelAt(1, 648, 240)).toBe(0);
+            expect(grid.ballAt(40, 15)).toBe(true);
+            expect(grid.writeDepths()).toEqual(before);
+        });
+
+        it("goes down to the water when it is dragged from the ground into the lake, along the way", () => {
+            const { manager, grid, steps } = lowLake();
+            const total = grid.totalPx();
+            let ball = { id: 1, x: 648, y: 240, radiusPx: 32 };
+            manager.setBalls(() => [ball]);
+            steps(1);
+            const placed = vi.spyOn(grid, "setBalls");
+            ball = { ...ball, x: 240 };
+            steps(1);
+            expect(manager.ballLevelAt(1, 240, 240)).toBeCloseTo(-40, 1);
+            const levels = placed.mock.calls.map(([balls]) => balls[0].levelPx ?? Number.NaN);
+            // From the ground to the water, a little at each stride: never a leap.
+            expect(levels[0]).toBeLessThan(0);
+            expect(levels[0]).toBeGreaterThan(-5);
+            for (let at = 1; at < levels.length; at++) expect(levels[at - 1] - levels[at]).toBeLessThan(5);
+            expect(levels.at(-1)).toBeCloseTo(-40, 1);
+            expect(grid.totalPx()).toBeCloseTo(total, 1);
+        });
+
+        it("stays at the level of the lake over the bed it left dry behind it", () => {
+            const { manager, grid, steps } = lowLake();
+            let ball = { id: 1, x: 240, y: 240, radiusPx: 32 };
+            manager.setBalls(() => [ball]);
+            steps(1);
+            // The water is gone from a wide hole beside it, where it is dragged next.
+            grid.takeDisc(20, 15, 2);
+            ball = { ...ball, x: 20 * 16 + 8 };
+            steps(1);
+            expect(manager.ballLevelAt(1, ball.x, 240)).toBeCloseTo(-40, 0);
+        });
+
+        it("tells the level of a ball that is not placed yet, and the ground of a map without water", () => {
+            const { manager } = lowLake();
+            expect(manager.ballLevelAt(9, 240, 240)).toBeCloseTo(-40, 3);
+            expect(manager.ballLevelAt(10, 648, 240)).toBe(0);
+            const dry = createHarness({ wam: wamWith(undefined) });
+            dry.manager.mapChanged();
+            expect(dry.manager.ballLevelAt(1, 240, 240)).toBe(0);
+        });
+    });
+
     it("saves the water a ball holds under itself", () => {
         // A hollow 96 px deep: a ball of 32 px of radius leaves 64 px of room under its middle.
         const deep: [number, number, number][] = [];
@@ -318,8 +419,12 @@ describe("TerrainWaterManager", () => {
         const grid = manager.getGrid();
         if (!grid) throw new Error("no grid");
         const bytes = new Uint8Array(grid.writeDepths().length);
-        // 96 px of water in each cell: 768 eighths.
-        for (let index = 0; index < bytes.length; index += 2) bytes[index + 1] = 3;
+        // 96 px of water in each cell of the hollow, full to the level 0: 768 eighths.
+        for (let y = 0; y < 30; y++) {
+            for (let x = 0; x < 30; x++) {
+                bytes[((y - grid.bounds.y) * grid.bounds.width + (x - grid.bounds.x)) * 2 + 1] = 3;
+            }
+        }
         grid.readDepths(bytes);
         manager.setBalls(() => [{ id: 1, x: 240, y: 240, radiusPx: 32 }]);
         manager.step();
@@ -538,6 +643,13 @@ describe("TerrainWaterManager", () => {
         // Two bytes a block of 4 cells a side over the whole grid, some of them moving.
         expect(speeds).toHaveLength(Math.ceil(message.width / 4) * Math.ceil(message.height / 4) * 2);
         expect(speeds.some((byte) => byte !== 0)).toBe(true);
+        // The slow ones apart, in the same layout when any, and none on a map whose water has no inertia.
+        expect(told(false).slowSpeeds).toBeUndefined();
+        if (message.slowSpeeds) {
+            const slow = new Uint8Array(gunzipSync(message.slowSpeeds));
+            expect(slow).toHaveLength(speeds.length);
+            expect(slow.some((byte) => byte !== 0)).toBe(true);
+        }
     });
 
     it("tells the room as often as the map asks while the water moves", () => {
@@ -1030,4 +1142,35 @@ describe("the pools of the map in the water of the relief", () => {
         expect(manager.getGrid()).toBeUndefined();
         manager.stop();
     });
+
+    it("lowers the fineness and says so while its steps take too long, and gives it back level by level once they are quick", () => {
+        const wam = wamWith(wideLake);
+        if (wam.settings?.water) Object.assign(wam.settings.water, { inertia: true, precision: 8, updates: 10 });
+        // Each step reads the clock twice: `cost` ms go by between the two.
+        let cost = 80;
+        let time = 0;
+        let reads = 0;
+        const clock = (): number => {
+            if (reads++ % 2 === 1) time += cost;
+            return time;
+        };
+        const { manager, sent, steps } = createHarness({ wam, clock });
+        manager.mapChanged();
+        fillWithWater(manager);
+        // A strike stirs the water: the room is told while it moves.
+        manager.strike(240, 240, 4);
+        steps(100);
+        const slow = sent.at(-1)?.stats;
+        expect(slow?.easedPrecision).toBeDefined();
+        expect(slow?.easedPrecision).toBeLessThan(8);
+        cost = 2;
+        steps(600);
+        manager.strike(240, 240, 4);
+        steps(20);
+        const quick = sent.at(-1)?.stats;
+        // Given back a level every ten seconds: higher than it was, and the room told as often as the map asks.
+        expect(quick?.easedPrecision ?? 8).toBeGreaterThan(slow?.easedPrecision ?? 8);
+        expect(quick?.easedUpdates).toBeUndefined();
+        // Seven hundred steps of a wide lake stirred at the finest: longer than the usual time of a test.
+    }, 30_000);
 });

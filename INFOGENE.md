@@ -2347,6 +2347,23 @@ son seuil `shallowest`), un tourbillon sur chaque puits qui a de l'eau autour de
 tour par seconde selon le débit réglé) et des ronds qui s'élargissent sur chaque source. Dessiné 15 fois par seconde ;
 chaque navigateur a ses propres traits (un décor, rien n'est partagé). Rien pour qui a demandé moins de mouvement.
 
+**Finesse qui s'allège quand le serveur sature** (`Terrain/WaterLoad.ts`, `TerrainWaterManager`). Le serveur des
+salles n'a qu'un fil : un pas de l'eau qui dure autant que l'intervalle entre deux pas (100 ms) retient tout le
+reste (déplacements, chat, autres salles). Chaque pas est chronométré ; la durée est une moyenne glissante sur
+environ 2 s (un pas lent isolé ne change rien). La finesse et les envois demandés par la carte deviennent des
+**plafonds** :
+
+- au-delà de **50 %** de l'intervalle : la finesse baisse, d'un coup jusqu'à ce qui devrait suffire (le coût suit
+  la finesse), d'un cran au moins ; à la finesse 1, les envois aux joueurs passent à 1 par seconde ;
+- sous **25 %** pendant 10 s : un cran est rendu (les envois d'abord), jamais au-dessus du réglage de la carte ;
+- entre les deux : rien ne bouge, pour que la finesse n'oscille pas.
+
+Par salle : une carte lourde ne dégrade pas les autres. L'outil Relief le dit sous le curseur (« Serveur chargé :
+finesse réduite à 5 sur 8 »), par `easedPrecision` et `easedUpdates` de `TerrainWaterStatsMessage` (champs 10 et
+11, absents quand rien n'est réduit). Le réglage enregistré de la carte ne change pas. Effet : une eau moins
+précise (vagues plus amorties, fronts moins nets) pendant les moments les plus lourds, un tsunami compris. Sans
+inertie, seuls les envois peuvent être réduits. Seuils posés par raisonnement, non calés sur une mesure en jeu.
+
 **Écume des vagues et moutons du vent.** Trois écumes, chacune avec sa règle, toutes calculées par le navigateur à
 partir de ce qu'il reçoit déjà (profondeurs, vent) :
 
@@ -2448,9 +2465,29 @@ sol (négative dans un creux, positive sur un mont), l'altitude de son palier qu
 a un relief ; rien ne change sur une carte sans relief. **Dans l'éditeur** la pile reste affichée, avec les mêmes
 altitudes : elle y montre le niveau sur lequel l'éditeur travaille (« Auto » suit le palier sous le pointeur) et le
 choisit, comme le sélecteur de niveau du panneau (`floorLevelStack`, paramètre `editor` ; `chooseEditorLevel` de
-`MainLayout.svelte`). À côté, après un viseur, **l'altitude du sol sous le curseur** (`pointerAltitude`,
-`pointerAltitudeStore`) : la hauteur du relief à cet endroit, même sous un étage ; rien quand le curseur est hors du
-jeu (sur un panneau, hors de la fenêtre).
+`MainLayout.svelte`). Dessous, une seconde ligne
+(pastille de 200 px) dit **ce qu'il y a sous le curseur**, après un viseur (`pointerGroundAt`, `pointerGroundStore`,
+`Floors/AvatarAltitude.ts`) : une montagne puis **l'altitude du sol**, une goutte puis **l'altitude de la surface de
+l'eau**, une double flèche puis **la profondeur** (surface affichée moins sol affiché, pour que les trois chiffres
+s'accordent). Le sol est lu là où le serveur pose l'eau (`TerrainWater.basin`) : le relief, ou le fond d'une piscine
+creusée par son style ; sous un étage ou un pont, le sol et l'eau d'en dessous (l'altitude de l'avatar reste celle de
+son palier). L'eau est celle du dernier état reçu du serveur (`settledDepthAt`, sans le glissement entre deux états),
+eau peu profonde et piscines comprises, dès le seuil où la carte la dessine (0,5 px) ; sans eau, un tiret. Gelée,
+la goutte devient un flocon et l'infobulle dit « Surface de la glace » : la même altitude, celle de l'eau
+(`isOnFrozenWater`). Même échelle que « Tenir un niveau » des sources et des puits et que les masses de « Flux
+d'eau » (`metresOf`, 0 m = niveau du sol de la carte) : la surface lue sous le curseur se compare au niveau tenu. Le
+calcul suit chaque image mais la pastille n'est redessinée que quand un chiffre affiché (au décimètre) change
+(`showPointerGround`). **Le sol peint sous le curseur** colore la montagne (la teinte de l'outil Relief,
+`SOIL_TINTS` ; l'eau d'une piscine pour une piscine) et se nomme, avec les libellés de l'outil Relief, quand la mise
+en page fait au moins 1024 px de large (`@container main-layout`, pastille de 250 px, place du nom le plus long
+réservée : `SOIL_NAME_CH`) ; plus étroit, le nom n'est que dans l'infobulle. Il est lu là où l'eau le lit
+(`soilAt` de la carte, comme `WaterGrid`) : une case non peinte se dit « Terre (non peint) », car l'eau la traite en
+terre nue (même rugosité, même absorption) ; une piscine se dit « Piscine » ; sous l'eau, le sol du fond ; sous un pont
+ou un étage, le sol du dessous. L'infobulle ajoute la rugosité de Manning de ce sol (`soilRoughness`, celle que lit
+l'eau : argile 0,022, sable 0,025, terre et gravier 0,03, rocher 0,04, prairie 0,045, piscine 0,03). Curseur hors du jeu : la ligne reste, avec des tirets, pour que rien ne bouge. Infobulle et
+lecteur d'écran : « Sol sous le curseur −3,6 m · Surface de l'eau −1,2 m · Profondeur 2,4 m ». Sous une Boule posée
+dans l'eau, le serveur compte le dessus de la boule comme fond, que le navigateur ne connaît pas : la lecture peut y
+être fausse.
 
 **Monts : le relief monte au-dessus du sol.** Une case du relief va de −256 à +256 px (`TERRAIN_MAX_HEIGHT`) :
 négative creusée, positive élevée. Le mode « Élever » de l'outil Relief ajoute de la matière au pinceau, comme
@@ -2607,7 +2644,15 @@ d'Open-Meteo vivent pour cela dans `libs/map-editor/src/Weather/` (les anciens c
 **Tableau de bord** (panneau Relief, « Bilan de l'eau ») : ce qui entre (pluie, sources) et ce qui sort (puits,
 évaporation, bu par le sol, perdu au bord) en m³/h du temps de la carte, avec l'unité propre du réglage à côté (mm/h),
 une barre par ligne à la même échelle, la tendance (entrées moins sorties), le stock en m³ et la surface sous l'eau.
-Mis à jour chaque seconde par `back` tant que l'eau bouge.
+Mis à jour chaque seconde par `back` tant que l'eau bouge. La ligne de pluie dit « Pluie de la carte (Lille) » : la
+pluie de l'air du serveur, la seule qui apporte de l'eau, avec le lieu de la carte quand sa météo est réelle (comme la
+pastille météo, Paris par défaut) et « conditions réglées à la main » quand la salle est en manuel
+(`Terrain/DashboardRain.ts`, relu chaque seconde). Dessous, deux notes au besoin : il neige sur la carte (la neige
+reste au sol, seule la part de pluie est comptée, comme `liquidRainRate` du serveur) ; il pleut ou neige sur l'écran du
+joueur qui suit une autre ville (`showsChosenPlaceWeather`), « pas sur la carte : cette pluie n'apporte pas d'eau ».
+Les multiplicateurs des vagues (frottement, déferlement, élan) et la vitesse d'écoulement s'affichent « × le réel » ;
+« En savoir plus » du frottement dit qu'il multiplie les rugosités des sols (lisibles sous le curseur, pastille des
+étages).
 
 **En jeu.** `Terrain/TerrainView.ts` dessine le relief (fond assombri avec la profondeur, pentes éclairées du
 nord-ouest) et l'eau (bleu clair, plus sombre avec la profondeur, liseré sur la rive) dans un canevas lissé d'un
@@ -2663,7 +2708,7 @@ calculé. La règle (`Terrain/GroundDrop.ts`) : `groundDropOf` = le décalage du
 | Avatars, leurs compagnons, animaux promeneurs | `CharacterDrops` (`GameScene.drawnLower`) |
 | Antilopes, lions, tigres ; mouettes et leur ombre | décalage ajouté à la ligne dessinée (`LandLifeView`, `GullLifeView`) |
 | Flammes, fumée, braises de l'herbe et des arbres, sol qui fume | `FireView`, `TreeFireView` |
-| Comète, météore, averse, drain, flamme tenue | visée au point **vu** sous le pointeur (`GameScene.seenPointUnder`, règle des shaders) ; dessin posé à la hauteur de leur point (`drawLower`). La boule reste à plat : son centre est à l'altitude 0 de la carte |
+| Comète, météore, averse, drain, flamme tenue, boule | visée au point **vu** sous le pointeur (`GameScene.seenPointUnder`, règle des shaders) ; dessin posé à la hauteur de leur point (`drawLower`). La boule, qui flotte à la surface de l'eau depuis la fusion du 2026-11-22, est dessinée à la hauteur de son niveau (`BallView`, `dropOf`), pas de ce qui est sous elle : elle chasse l'eau |
 | Halo de nuit et lumière de la torche d'un avatar, ombre au sol des avatars et des animaux, ombre portée des objets et des arbres | `halosWhereDrawn`, `TorchManager`, `SkyMovingShadows` (`drop`), `shadowSourceEntities` |
 | Traces de pas et de roues, feuilles au sol, feuilles soulevées | `FootprintLayer`, `LeafScatterLayer`, `KickedLeafLayer` (`dropAt`) |
 | Écume du courant, remous des puits, ronds des sources | `WaterFlowView` (surface de l'eau) |
@@ -2690,7 +2735,7 @@ besoin : il n'y en a que sur un sol sans relief. Une catastrophe a un seul déca
 rond n'épouse pas le relief autour. Un objet posé sur un autre (une plante sur une table) a son propre décalage : sur
 une pente ils glissent l'un par rapport à l'autre. La lumière d'une torche part de là où son porteur est dessiné : sur
 un relief contre un mur, elle peut partir du mauvais côté du mur. Un clic pour marcher va au sol (au pied d'une
-paroi) : dans une eau profonde, l'avatar nage en surface et s'arrête à côté du clic. Une piscine peinte sur un sol plat
+paroi), et sur l'eau à sa surface, là où l'on nage (`groundPointAt` reçoit la profondeur de l'eau). Une piscine peinte sur un sol plat
 garde ses échelles au bon endroit ; peinte sur un relief, non. Le rendu en 3/4 est celui des textures du moteur à plat,
 pas le pixel art des blocs. Coût non mesuré sur une carte graphique intégrée. Le thème « Hiver » de la branche avait
 disparu avec celui d'`infogene` ; il est revenu le 2026-11-22 (voir « Thème saisonnier ») et blanchit le sol dans les
@@ -2850,7 +2895,7 @@ Une seule équation partout, mais ce qui freine l'eau dépend de la case. Curseu
 est activée ; `UpdateWaterSettingMessage.waveRoughness`, `waveDamping`, `waveBreaking`, `waveMomentum`, champs 9 à
 12, facultatifs.
 
-- **Frottement du sol** (`roughness`, × 0 à 10, 1 par défaut et en réel) : frottement de Manning. La part de débit
+- **Frottement du sol** (`roughness`, × 0 à 10, 1 par défaut et en réel ; curseur au pas de 0,05 avec des boutons − et + d'un cran, `Terrain/WaveSteps.ts`, les autres réglages des vagues gardent leur pas) : frottement de Manning. La part de débit
   perdue par seconde vaut le carré de la rugosité du sol × la vitesse de l'eau / sa profondeur à la puissance 4/3 :
   presque rien sous une houle au large, fort sous une lame d'eau rapide sur la terre. La rugosité vient du sol
   peint sur chaque case (`soilRoughness` : argile 0,022, sable 0,025, terre, gravier et case non peinte 0,03,
@@ -2997,8 +3042,8 @@ lisser sur 1 s ne changeait rien à 1 état par seconde, et pas assez à 5. La r
   s'éteint d'elle-même (`TerrainWater.settled(now)`).
 - **à la demande** : la tendance n'est tenue que tant que la visualisation la lit (`TerrainWater.settled(now)`, dix
   fois par seconde quand « Flux d'eau » est affiché ; aucun autre lecteur). Fermée, aucun parcours de la grille et
-  aucune mémoire (`dropTrend`, ou d'elle-même au premier état après 2 s sans lecture). Rouverte, elle repart de rien
-  (pas de teinte d'avant la fermeture) et ne teinte qu'après 3 s d'observation. Coût mesuré quand elle est tenue
+  aucune mémoire, au premier état reçu après 30 s sans lecture. Rouverte plus tard, elle repart de rien (pas de teinte
+  d'avant la fermeture) et ne teinte qu'après 3 s d'observation. Coût mesuré quand elle est tenue
   (Node, Mac M) : 2 ms par état sur une grille de 600 × 600 cellules (0,2 à 0,3 ms sur 200 × 200), soit 2, 10 ou
   18 ms par seconde à 1, 5 ou 10 états par seconde ; aucun tableau alloué par état ; 17 octets par cellule (quatre
   tableaux `Float32Array` et un `Int8Array`), 6,1 Mo pour 600 × 600. Auparavant, ce coût valait pour tout joueur,
@@ -3016,6 +3061,44 @@ Les **flèches** ne sont pas lissées : elles montrent la vitesse que le serveur
 comprise. Sur mer modérée, cette vitesse reste sous son pas d'envoi (un quart de cellule par seconde) : pas de
 flèche. Sur mer forte, une flèche s'inverse d'une seconde à l'autre 15 à 35 % du temps, ce qui est le mouvement réel
 de l'eau sous la vague.
+
+**Courants lents** (dès 3 cm/s sur une carte à inertie). Le serveur transmet la vitesse par bloc de 4 × 4 cellules,
+par pas d'un quart de cellule par seconde (`speeds`, `SPEED_UNITS`, 0,137 m/s) : plus lente, elle valait zéro et
+l'overlay ne traçait rien. Un champ facultatif `slowSpeeds` (champ 10 de `TerrainWaterMessage`, même disposition)
+donne, là où `speeds` dit zéro, la vitesse en 250ᵉ de cellule par seconde (2 mm/s), dès 3 cm/s : `SLOW_SPEED_UNITS`,
+`SLOWEST_TOLD_METRES` (une seule constante pour le serveur, le plancher de l'overlay et la légende), codage linéaire
+(`slowSpeedByte`, `slowSpeedOf` : la plage ne va que de 14 à 31 unités, une loi plus fine n'apporterait rien et peu de
+valeurs se compressent bien). Le serveur l'écrit dans le même passage que `speeds` (`WaterGrid.writeSpeedBytes`) et
+ne l'envoie pas quand aucun bloc n'est lent ; `speeds` reste identique octet pour octet (test sur une rivière).
+
+- **Compatibilité** : un `play` ancien ignore le champ ; un `back` ancien ne l'envoie pas et le `play` neuf trace
+  alors dès 0,14 m/s, comme avant. Déployer `play` et `back` ensemble reste la règle (même commit, protobuf partagé).
+- **Courant des avatars et des canoës inchangé** : `speedAt` lit les vitesses lentes, mais `currentPush` et
+  `waterCurrentAt` ne comptent qu'à partir de 0,2 cellule/s (`CURRENT_REST_SPEED`), au-dessus de toute vitesse lente
+  (0,124 au plus) : test.
+- **Coût mesuré** (gzip par message, `speeds` puis `slowSpeeds`) : mer de 80 × 80 agitée 28 + 122 octets, qui se
+  calme 28 + 31 ; mer de 600 × 600 agitée 78 + 333 à 413, qui se calme 78 + 78 ; étang 28 à 47 + 28 à 34, rien d'envoyé
+  pour une eau sans courant lent. En octets par seconde, × 1, 5 ou 10 états par seconde : sur la mer de 600 × 600
+  agitée, 78 → 411 à 1 état/s, 390 → 2 415 à 5, 780 → 4 912 à 10 ; la finesse adaptative (#446), qui réduit la cadence
+  sous charge, réduit d'autant. Temps d'écriture du serveur inchangé (0,9 ms par message sur 600 × 600, un passage),
+  le calcul de l'eau n'est pas touché ; `FLOW_REST_SPEED` (navigateur seulement) suit le plancher.
+- **Ce que montre l'étang de la capture** (simulation : 11 × 11 cellules, 30 cm d'eau, source de 100 m³/h, trop-plein
+  par un chenal ; blocs de l'étang ayant une flèche, sur 9) : à « Vitesse de l'eau » 1, 1 au lieu de 0 ; à 4, 4 au lieu
+  de 1 ; à 60, 8 au lieu de 7. Les flèches lentes sont courtes et pâles (échelle existante). La légende dit
+  « transmises à partir de 0,03 m/s ».
+- Écartée : deviner la vitesse d'après la pente quand le serveur dit zéro (3 à 6 cm/s sous 30 cm d'eau demandent une
+  pente de 0,001 à 0,002 px par cellule, trente fois sous le bruit des profondeurs reçues).
+
+**La glace ne retient pas l'eau.** La glace du serveur (`Meadow.stepIce`) est une épaisseur à part, posée sur l'eau :
+le pré ne lit l'eau que par `depthAt` (`MeadowManager`, `water: () => Pick<WaterGrid, "depthAt">`) et n'y verse que
+la neige fondue. `WaterGrid.step` ne connaît pas la glace : une source sous un étang gelé verse tout son débit, l'eau
+coule dessous et déborde (test : l'étang garde tout ce que verse la source, puis l'eau sort par le chenal). L'overlay
+ignore aussi la glace : un courant sous la glace a ses flèches.
+
+**« … » : mesure en cours.** À l'ouverture de « Flux d'eau », la tendance n'est connue qu'après 3 s d'observation :
+les étiquettes affichent « … » au lieu de « = » (qui affirmait « ni gain ni perte »), et la légende le dit. Fermée,
+la vue garde sa tendance 30 s (`TREND_UNREAD_MS`) : rouverte dans ce délai, elle n'attend pas de nouveau ; au-delà,
+la tendance est lâchée au premier état reçu.
 
 Tout est lu des profondeurs que le navigateur reçoit déjà (`TerrainWater.settled` garde l'état d'avant et le temps
 entre les deux) : rien n'est demandé au serveur. Limites : les vitesses sont **estimées** d'après la pente de la
@@ -3331,10 +3414,25 @@ de 0 à 100 %, avec sauvegarde personnelle. Les appels et les Jams conservent le
 « Outils → Cycle jour/nuit » ouvre directement le choix personnel serveur / ordinateur / désactivé.
 Cette première version couvre toute la carte, sans accumulation de neige ni distinction entre intérieur et extérieur.
 
+**Pluie au vent réel** (2026-11-22, `Weather/Rain.ts` `rainSlant`, `followWind`). Les gouttes suivent le même vent
+que la neige (`groundWind` : vent réel près du sol, ≈ 0,8 du vent à 10 m, ses deux composantes ; nord-ouest à
+10 km/h quand il n'est pas connu ; réglage personnel « inclinaison » appliqué). Pour chaque pixel de chute, une goutte
+se déplace de vent / vitesse de chute, dans le sens du vent : vers l'est par vent d'ouest, vers le haut de l'écran par
+vent du sud (elle y descend alors moins vite, trait plus court), vers le bas par vent du nord, verticale par vent nul.
+Vitesses de chute des trois plans : gouttes de 1,4, 3 et 5 mm, 5,2, 7,9 et 9,1 m/s, par l'ajustement d'Atlas,
+Srivastava et Sekhon (Rev. Geophys. 11, 1973) aux mesures de Gunn et Kinzer (J. Meteor. 6, 1949),
+v = 9,65 − 10,3 e^(−0,6 D) ; les petites gouttes penchent donc plus que les grosses. Ces vitesses sont celles que les
+plans avaient déjà à l'écran (150, 230 et 330 px/s, le plan proche vu 1,25 fois plus vite). Par 13 km/h les gouttes
+fines penchent de 0,55 px par px, la neige dérive 2 à 4 fois plus : dans un grésil, gouttes et flocons vont dans le
+même sens, les flocons plus couchés. Pente bornée à 3 (choix, atteinte vers 90 km/h pour les gouttes fines). Une
+goutte rattrape un nouveau vent en environ 0,7 s (sa vitesse sur la gravité) : pas de saut quand le vent change ; en
+mouvement réduit, le vent est pris tel quel. Éclaboussures et flaques inchangées. L'averse de la catastrophe garde
+ses gouttes, qui penchent un peu, sans vent, vers son disque : le serveur y verse l'eau, le vent les en ferait sortir.
+
 **Pluie selon son intensité.** La pluie et l’orage (météo fixe, automatique ou réelle) sont dessinés par
 `Weather/Rain.ts` : gouttes en trois plans (tête claire et traîne), d’autant plus nombreuses que la pluie est forte,
-autant à l’écran quel que soit le zoom ; elles penchent avec le vent de la carte (`rainLean`, vers l’est sans vent
-connu) ; il pleut davantage sous l’épaisseur d’un nuage de pluie que dans une trouée ; éclaboussures au sol (aucune
+autant à l’écran quel que soit le zoom ; elles suivent le vent réel près du sol (voir « Pluie au vent réel »
+ci-dessous) ; il pleut davantage sous l’épaisseur d’un nuage de pluie que dans une trouée ; éclaboussures au sol (aucune
 en mouvement réduit) ; voile et volume de la pluie selon l’intensité. En météo **Réelle**, l’intensité vient des
 précipitations d’Open-Meteo (`precipitation` de `minutely_15`, champ facultatif `RealWeatherSlot.rainRate` en mm/h,
 changée en 10 min) : pluie faible jusqu’à 2,5 mm/h, modérée jusqu’à 7,6, forte au-delà (glossaire de l’AMS ; la
@@ -3427,7 +3525,7 @@ couverture de neige au sol et les arbres qui blanchissent décrit l'état d'avan
     (N = R / (M V), montré en racine quatrième : choix).
   - **Chute** : chaque flocon suit le repère de l'air, porté par le vent réel près du sol (profil logarithmique,
     ≈ 0,8 du vent à 10 m) dans ses deux composantes, comme les nuages (un vent du sud fait remonter la neige à
-    l'écran ; la pluie, elle, ne penche qu'est-ouest), et tombe 9 à 15 s, puis se pose 0,8 s sans éclaboussure. Deux
+    l'écran ; la pluie suit le même vent depuis le 2026-11-22), et tombe 9 à 15 s, puis se pose 0,8 s sans éclaboussure. Deux
     plans (lointain plus petit et plus lent, proche plus gros et plus rapide), balancement propre à chaque flocon.
     32 px ≈ 1,1 m : 1 m/s ≈ 29 px/s ; 13 km/h dérive ≈ 84 px/s, plus vite que la chute. Champ fixé à la carte.
   - **Dessin** : pixel art de 1 à 5 px, éclairé en haut à gauche, un pixel d'ombre en bas à droite (lisible sur la
@@ -3846,6 +3944,21 @@ change, à chaque division par deux de la résolution au zoom, à un changement 
 n'atteigne le bord ; un fondu ne change que l'opacité. Coupées dans l'éditeur. « Désactiver la nuit » : soleil seul tant
 qu'il est levé, pas de lune.
 
+**Ombre des ponts et des paliers** (`floorShadowCasters`, `plateShadow`, `slopeShadow`) : le tablier d'un pont, et plus
+généralement les dalles de tout palier (terrasse, étage), projette son ombre sur le sol et l'eau qu'il surplombe. Une
+dalle est une plaque à la hauteur de son étage (20 px pour un pont bas, 52 pour un haut), épaisse de 8 px : son ombre est
+son emprise au sol décalée à l'opposé de l'astre de hauteur / tan(élévation), avec les mêmes bornes de longueur, la même
+couleur et la même opacité que les autres ombres ; le jour passe dessous (le sol juste sous le bord éclairé reste au
+soleil). Les dalles voisines d'un même étage font une seule ombre. Un escalier ou une rampe est une pente : de son pied,
+au sol, jusqu'à son haut décalé de la hauteur de l'étage ; un escalier à flanc plein est plein dessous. Rangées avec les
+murs dans « Ce qui projette une ombre ». Calculées avec les autres ombres fixes : relues quand une pièce change, puis
+redessinées seulement quand l'astre bouge d'un demi-degré, rien à chaque image. Dessinées sous les dalles (profondeur
+0,7) : jamais sur le dessus de leur propre tablier ; sous un tablier, l'ombre est cachée par lui (soleil haut dans l'axe
+du pont). Limites : les ombres des arbres, des murs, des objets, des avatars et des animaux tombent toujours au sol et
+passent sous un tablier sans se poser dessus ; ce qui se tient sur un palier (objets, murs d'étage, avatars, animaux) ne
+projette pas d'ombre ; les garde-corps non plus. Un avatar sous un pont n'est pas assombri (comme à l'ombre d'un mur).
+Rendu non vu à l'écran à l'écriture de ce paragraphe.
+
 **Réglages personnels** (Paramètres → Ambiance, `Stores/SkyLightStore.ts`, gardés dans le navigateur, rien ne change
 pour les autres) : un interrupteur par astre, « Ombres et lumière du soleil » et « Ombres et lumière de la lune »
 (activés par défaut) ; chacun coupe pour son astre les ombres, la teinte et l'éclaircissement du voile et les taches par
@@ -4068,7 +4181,11 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   s'aligne sur la grille de ses dalles.
 - **Eau et météo** : on nage dans une piscine du palier où l'on se trouve (`getWaterRectangles(scene, altitude)`) ;
   la météo ne se dessine sur aucune dalle ni aucun escalier de palier, ni sur le haut des murs de 2 cases et plus
-  (`Weather/RaisedCover.ts`) : un étage est un morceau de bâtiment, où qu'il se tienne.
+  (`Weather/RaisedCover.ts`) : un étage est un morceau de bâtiment, où qu'il se tienne. Seule la partie dessinée
+  d'un escalier ou d'une rampe qui monte vers l'est ou l'ouest est épargnée (`floorPieceCover` : la bande en biais,
+  et le flanc d'un escalier plein), pas toute son image. Les coins vides de l'image laissent voir le sol, qui reçoit
+  la pluie et le voile du ciel comme autour. Avant, la boîte entière de l'image restait claire : un rectangle sans
+  voile au-dessus et sous chaque rampe de pont, signalé le 2026-11-22.
 - **Lumière sur un mur haut** (`Lamps/RgbLampObstacles.ts`, `wallSegments`) : un mur horizontal de 2 cases et plus
   arrête la lumière au niveau de son dessus (dessiné au-dessus de son pied), pas à son pied : une lampe ou une
   torche au sud éclaire toute la façade, une lampe dans la pièce derrière n'en éclaire rien. Les côtés de la façade
@@ -4729,20 +4846,35 @@ traits, sans flou ; le disque est dessiné aussi là où il n'y a pas d'eau. `pl
 ## Catastrophes : la boule
 
 Sixième catastrophe du widget, et la seule qui ait un corps : une **boule solide** tenue sous le pointeur, dont le
-**centre est au niveau 0 de la carte** (l'altitude 0 du relief). Une moitié dépasse au-dessus du niveau 0, l'autre
-plonge dessous : dans le sol, ou dans l'eau d'un creux. Elle prend la place de l'eau, qui est chassée, monte autour
-et fait une vague ; quand la boule s'en va l'eau revient. C'est un instrument pour éprouver le modèle d'écoulement.
+**centre est à la surface de l'eau où elle se trouve** : elle est à moitié immergée, sur un lac en altitude comme
+sur une mer plus basse que le niveau 0 (jusqu'au 2026-11-22 son centre était à l'altitude 0 du relief). Là où il n'y
+a pas d'eau, son centre est au niveau du sol sous le pointeur : une demi-sphère posée. Elle prend la place de l'eau,
+qui est chassée, monte autour et fait une vague ; quand la boule s'en va l'eau revient. C'est un instrument pour
+éprouver le modèle d'écoulement.
+
+**À quel niveau.** Le serveur décide (`TerrainWaterManager.ballLevelAt`), parce que lui seul connaît l'eau. Le
+niveau est celui de **l'eau autour de la boule, pas sous elle** (`WaterGrid.restLevelAt`) : la médiane de la surface
+de l'eau reliée au point, sur les 4 096 cellules les plus proches, en traversant les colonnes que la boule ferme et
+les cellules à sec à moins de 20 cellules du point (le fond qu'elle vient de balayer est encore dans son lac). La
+médiane ignore le bourrelet que la boule pousse et le creux qu'elle laisse. Une eau plus basse que le sol du point
+n'est pas l'eau où il se trouve : sur une rive, c'est le sol. **Tenue immobile, la boule garde son niveau** quelle
+que soit la vague qu'elle fait : le niveau n'est relu que lorsqu'elle a bougé, et ne change que s'il s'écarte de
+plus de 6 px (`BALL_LEVEL_SLACK_PX`) : d'un lac à un autre, de la terre à l'eau, ou quand elle a elle-même fait
+monter un petit lac. Ce changement est **balayé comme un déplacement** (`sweepBalls`, une cellule d'altitude à la
+fois) : le volume chassé ne saute pas. Le niveau est annoncé à la salle (`CatastropheMessage.ballLevel` = 12).
 
 **En jeu.** La tuile « Boule » s'arme comme l'averse et le drain. Un curseur règle le **diamètre, de 1 à 16 cases**
-(4 par défaut ; 1,1 m à 17,5 m à l'échelle de la carte). **Dès le clic, la boule est là, entière**, son centre au
-niveau 0 : elle ne monte pas, ne descend pas, n'enfle pas. Tant que le clic est maintenu elle **suit le pointeur
+(4 par défaut ; 1,1 m à 17,5 m à l'échelle de la carte). **Dès le clic, la boule est là, entière**, à moitié dans
+l'eau : elle ne monte pas, ne descend pas, n'enfle pas. Tant que le clic est maintenu elle **suit le pointeur
 sans retard** (souris ou pavé tactile) ; au relâchement elle **disparaît d'un coup**. Pendant ce temps le glisser ne
 déplace pas la carte.
 
 **Sous le pointeur sans attendre le serveur.** Le joueur qui tient la boule la voit sous son propre pointeur à chaque
 mouvement (`heldBallStore`, écrit par `GameSceneUserInputHandler`) : sa boule n'est jamais dessinée d'après les
-messages du serveur, qui arrivent un aller-retour plus tard. L'eau, elle, reste celle du serveur. Les autres joueurs
-voient la boule là où le serveur la dit, en glissant d'un message au suivant (50 ms).
+messages du serveur, qui arrivent un aller-retour plus tard, sauf pour son niveau : au clic elle est montrée à la
+surface de l'eau que ce navigateur connaît sous le pointeur (`ballLevelUnder`), puis au niveau que dit le serveur
+(sous la boule le navigateur ne voit plus d'eau). L'eau, elle, reste celle du serveur. Les autres joueurs voient la
+boule là où le serveur la dit, en glissant d'un message au suivant (50 ms).
 
 **Le serveur décide.** Le navigateur dit où est la boule toutes les 50 ms quand elle a bougé, toutes les 200 ms
 quand elle est tenue immobile (`LaunchCatastropheMessage`, genre `CATASTROPHE_BALL` = 5, `radiusTiles` = le
@@ -4766,9 +4898,16 @@ plaine (crue de 33 à 75 px, jusqu'à 11 % de l'eau quitte la carte par le bord,
 finie, bilan `eau + perdue` égal au volume de départ à 1e-6 près dans tous les cas : aucune borne de vitesse n'a été
 nécessaire.
 
+**Tenue à la surface, mesuré** (lacs de 60 px de fond, l'un à +40 px sur un plateau, l'autre à −40 px dans une
+plaine, eau à inertie) : boule de 4 cases, son niveau reste à +40 ou −40 au dixième de pixel, immobile comme traînée
+à 20 ou 40 cases par seconde ; crête de 33 à 40 px à la pose, 59 à 83 px traînée, rien de perdu. Boule de 16 cases
+(aussi large que 40 % du lac) : niveau constant immobile, crête de 80 à 105 px ; traînée, elle met à sec la moitié
+du lac et l'eau restante monte de 20 à 35 px : la boule suit ce niveau réel, 1 à 4,5 % de l'eau quitte la carte.
+Aucune valeur non finie, bilan exact à 1e-6 près.
+
 **La boule dans le modèle d'eau** (`WaterGrid.setBalls`, géométrie pure dans `Terrain/WaterBall.ts`). Le modèle est
 en colonnes d'eau. Dans chaque colonne qu'elle atteint, la boule occupe les hauteurs entre son dessous et son
-dessus (`±` sa demi-hauteur autour du niveau 0, moyennée sur la cellule : les cellules d'une boule portent
+dessus (`±` sa demi-hauteur autour de son niveau, moyennée sur la cellule : les cellules d'une boule portent
 exactement le volume de la sphère, à 1 % près), moins ce qui est dans le sol (`ballColumn`).
 
 - **Une eau plus basse que le dessous de la boule n'est pas touchée** : elle continue de couler dessous.
@@ -4811,7 +4950,8 @@ les vitesses et les profondeurs du modèle.
 **Voisinage.** Aucune collision : les avatars, les animaux et les véhicules la traversent, et sous elle les colonnes
 fermées sont à sec pour eux (un poisson mis à sec meurt après 5 s, comme sous un drain). L'herbe et l'humidité du
 sol ne changent pas. La glace du serveur ne tient pas la boule : sous elle il n'y a plus d'eau à geler, la glace y
-disparaît, et l'eau liquide est chassée comme sans glace. Une pompe de piscine ne remplit pas une case où se tient
+disparaît (elle n'est jamais plus épaisse que l'eau), et l'eau liquide est chassée comme sans glace ; la glace qui
+craque sous les pas (#458) ne connaît que les joueurs, pas la boule. Une pompe de piscine ne remplit pas une case où se tient
 une boule (`ballAt`). Une porte étanche ou un mur arrête l'eau poussée. Si la carte est éditée pendant qu'une boule
 est posée, la nouvelle grille reprend toute l'eau et la boule y est remise au pas suivant. Joueur parti sans lâcher :
 la boule disparaît 600 ms après son dernier message.
@@ -4924,7 +5064,17 @@ des sols). **Frange capillaire par sol** (`Meadow`, `SOIL_LIFE`) : `fringeTiles`
 `wicking` 0,15 pour sable et gravier (la diffusion latérale de `MOISTURE_SPREAD` y est faible). Humidité d'une plage
 de sable à l'équilibre, à 1, 2, 3 tuiles de l'eau : 0,80, 0,14, 0,03 (avant 0,80, 0,50, 0,17 ; la terre garde 0,80,
 0,58, 0,43). Contraste mouillé/sec mesuré sur le shader (îlot de 10 × 8 tuiles), ΔL* : jour 13,8 → 20,4, soir (voile
-0,3) 10,2 → 15,0, nuit (0,6) 6,4 → 9,4. Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
+0,3) 10,2 → 15,0, nuit (0,6) 6,4 → 9,4. **Filet qui court** (2026-11-22, `fix/filet-qui-court`, après une capture « Flux d'eau »
+avec des flèches sur une terre qui paraissait sèche entre deux flaques) : la flèche n'était pas en cause (à fort zoom,
+`flowOverBlock` ne la trace que si la cellule du milieu de son bloc a de l'eau, au moins 1/8 px) ; l'eau était bien
+transmise et dessinée, mais sous 1 px comme une terre mouillée à 5 % de teinte, indiscernable d'une terre humide
+(ΔL* 1,4). Toute eau que le serveur transmet (dès 1/8 px, 4 mm) est maintenant dessinée, qu'elle coure ou non (le rendu
+ne dépend plus des vitesses à 0,25 cellule/s du serveur) ; `WATER_SHOWN_PX` (0,5 px) ne sert plus qu'à ce que les pieds
+lisent (`AvatarAltitude`). Le courant de chaque cellule (`TerrainWater.speedAt`, eau à inertie) est donné au shader
+(paquet 10, rouge et vert, `FLOW_UNITS` 32 par cellule/s autour de 128) : un film qui court prend une teinte légère
+(`filmCover`, de 5 % immobile à 35 % dès 0,27 m/s) et des ridules étirées dans le sens du courant qui glissent à sa
+vitesse ; dès `SHORE_PX` (3 px), l'eau est la même qu'avant. Terre sous un film qui court contre terre mouillée sans
+eau : ΔL* 1,4 → 10,1. Sous 1 px, le rendu ne distingue pas 4 mm de 3 cm (niveaux entiers). Repli : sans WebGL ou avec moins de 9 unités de texture, les sols masqués d'avant
 (`TexturedGround`). Textures : `resources/terrain/ground-*.png` (générées, 4 tons nets ; `ground-ice.png` dans le
 style des patinoires).
 
@@ -4934,6 +5084,36 @@ une flèche du vent ; un clic ouvre le bulletin, sous la pastille. Dès 768 px d
 `worldCityStore`, nommé d'après la ville la plus proche, ou par ses coordonnées loin de toute ville) voit aussi sa ville (ordinateur), et le jeu dessine pour lui
 seul la météo de ce lieu (`ChosenPlaceWeather`, route `real-weather` du pusher) ; les autres gardent celle du
 serveur.
+
+**Appliquer sa météo à la carte** (2026-11-22). La fiche personnelle (ordinateur) a un bouton « Appliquer à la
+carte » : la carte suit alors, pour tout le monde, le lieu que ce joueur suit sur son horloge. Mécanisme : le même
+enregistrement que le panneau « Météo de la carte » (`updateWeatherSettingMessage`, commande de l'éditeur, gardé
+dans le WAM), avec le lieu (latitude, longitude, nom, fuseau) **et la météo « Réel »** : une carte en Automatique ou
+en temps fixe ne lit pas la pluie réelle de son lieu (`TerrainWaterManager`, `FireConditionsManager.real()` ne
+valent qu'en Réel). Aucun changement de serveur : `back` relit le lieu du WAM à chaque pas (`RainTimelineService`
+demande la météo du nouveau lieu à Open-Meteo, cache par lieu arrondi), sans redémarrer la salle ; neige, glace,
+eau, feu et herbe repartent de l'air du nouveau lieu. Nom enregistré : celui de la ville, ou pour un point loin de
+toute ville ses **coordonnées** (« 24° N 122° E », `WorldPlace.coordinates`) : partagé par tous, sans virgule (la
+pastille coupe le lieu de la carte à la virgule), sans distance écrite dans la langue d'un joueur. Le jour, la nuit
+et les saisons de la carte suivent ce lieu (et son fuseau) : la confirmation le dit.
+- **Droits** : ceux du panneau « Météo de la carte » (`canEditMapWeather`, `Weather/MapWeatherRights.ts`, partagé
+  avec ce panneau et l'app de bureau) ; sinon le bouton est grisé avec la raison. Grisé aussi pendant la lecture de
+  la météo du lieu, et quand elle est indisponible (« pas de météo réelle pour ce lieu ») ; « La carte suit déjà ce
+  lieu » quand la carte est en Réel au même lieu arrondi.
+- **Confirmation** (`PlaceToMapModal`, `Popup` du jeu, Échap) : la carte change pour tous, passe en météo réelle si
+  elle ne l'était pas, et son jour, sa nuit et ses saisons suivent le lieu. Deux cases cochées par défaut :
+  « Revenir aux conditions réelles » (seulement si la salle est en conditions réglées à la main, Catastrophe →
+  Météo : elles resteraient prioritaires sur le lieu ; n'importe quel joueur peut déjà les quitter) et « Voir ensuite
+  la météo de la carte » (le joueur repasse en « Heure du serveur », quitte « Jour dans le monde » et voit le monde
+  partagé : givre, neige, glace). Elles ne s'appliquent qu'une fois le changement appliqué à la carte de ce
+  navigateur (relue après l'envoi : l'éditeur journalise une commande ratée sans lever d'erreur) ; sinon rien d'autre
+  ne change et la confirmation le dit. Un refus du serveur arrivé ensuite n'est pas vu (comme pour le panneau
+  « Météo de la carte »). Le nom des coordonnées est écrit dans la langue de celui qui applique (« 40° O » ou
+  « 40° W ») ; repasser en « Heure du serveur » fait perdre le mode du ciel d'avant, quel qu'il soit.
+- **Retour arrière** : pour la session de celui qui a appliqué, la fiche de la carte (globe) propose « Revenir à
+  Lille » tant que la carte suit encore le lieu appliqué ; il remet la météo et le lieu d'avant (le lieu par défaut
+  s'il n'y en avait pas). Les conditions réglées à la main quittées ne reviennent pas. Sinon : panneau « Météo de la
+  carte ».
 
 **Gel.** À partir de l'air du lieu affiché (`Weather/Frost.ts`), pour ce joueur seul, rien n'est envoyé :
 givre au sol d'après la vapeur de l'air (voir « Givre » ci-dessous) ; l'eau gèle des hauts-fonds vers le fond entre 0 et -15 °C (toute gelée au-delà), en glace de

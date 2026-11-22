@@ -20,7 +20,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 totals: ({ stock, area }: { stock: string; area: string }) => `${stock} m3, ${area} m2`,
                 noWater: label("No water told yet"),
                 estimated: label("Estimated"),
-                measured: label("Measured"),
+                measured: ({ slowest }: { slowest: string }) => `Measured, told from ${slowest} m/s`,
                 weather: { button: label("Weather explained") },
             },
         },
@@ -107,6 +107,8 @@ describe("VisualisationPanel", () => {
         waterFlowMeasuredStore.set(true);
         flushSync();
         expect(find("visualisation-water-speeds")?.textContent).toContain("Measured");
+        // The server tells the speed of the water from 3 cm a second: slower, no arrow.
+        expect(find("visualisation-water-speeds")?.textContent).toMatch(/told from 0[.,]03 m\/s/);
         waterFlowMeasuredStore.set(false);
     });
 

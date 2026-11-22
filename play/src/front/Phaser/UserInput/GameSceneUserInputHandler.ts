@@ -419,11 +419,11 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     }
 
     /** The point of the map under a pointer. One past the edge is on the edge: a cloud never leaves the map. */
-    private mapPointUnder(pointer: Pointer, kind = this.heldKind): { x: number; y: number } {
-        const under = this.gameScene.getCameraManager().getCamera().getWorldPoint(pointer.x, pointer.y);
-        // What the pointer shows: the ground or the water drawn there, where the relief is seen in 3/4. A ball has
-        // its centre at the altitude 0 of the map, whatever lies under it: it is drawn at its place, under the pointer.
-        const worldPoint = kind === "ball" ? under : this.gameScene.seenPointUnder(under);
+    private mapPointUnder(pointer: Pointer): { x: number; y: number } {
+        // What the pointer shows: the ground or the water drawn there, where the relief is seen in 3/4.
+        const worldPoint = this.gameScene.seenPointUnder(
+            this.gameScene.getCameraManager().getCamera().getWorldPoint(pointer.x, pointer.y),
+        );
         return {
             x: Math.min(this.gameScene.Map.widthInPixels - 1, Math.max(0, worldPoint.x)),
             y: Math.min(this.gameScene.Map.heightInPixels - 1, Math.max(0, worldPoint.y)),

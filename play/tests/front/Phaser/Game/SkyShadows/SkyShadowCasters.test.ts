@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { MapLayerModel } from "../../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerModel";
 import {
+    slabImagePosition,
+    stairImagePosition,
+} from "../../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorModel";
+import {
+    LOW_FLOOR_ELEVATION,
+    SLAB_THICKNESS,
+} from "../../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
+import {
     OBJECT_SHADOW_RISE,
     readShadowCasters,
     wallShadowBoxes,
@@ -166,7 +174,7 @@ describe("readShadowCasters", () => {
             details: false,
         });
         expect(none.signature).not.toBe(all.signature);
-        expect(none.casters).toEqual({ boxes: [], trees: [], details: [], pictures: [] });
+        expect(none.casters).toEqual({ boxes: [], trees: [], details: [], pictures: [], plates: [], slopes: [] });
         expect(readShadowCasters(entities, none.signature).casters?.trees).toHaveLength(1);
     });
 
@@ -185,7 +193,7 @@ describe("readShadowCasters", () => {
         expect(tree.crownHeight).toBeGreaterThan(48);
     });
 
-    it("leaves out what stands on a raised floor (shadows are cast on the ground only) and the walking animals", () => {
+    it("leaves out the objects standing on a raised floor (their shadow would fall on it) and the walking animals", () => {
         const { casters } = readShadowCasters([
             entity({ elevation: 64, prefab: { collectionName: "Nature", id: "Nature:tree-oak" } }),
             entity({
@@ -198,7 +206,91 @@ describe("readShadowCasters", () => {
                 },
             }),
         ]);
-        expect(casters).toEqual({ boxes: [], trees: [], details: [], pictures: [] });
+        expect(casters).toEqual({ boxes: [], trees: [], details: [], pictures: [], plates: [], slopes: [] });
+    });
+
+    /** A piece of the raised floors, placed where the map editor places it. */
+    const slab = (column: number, row: number, elevation: number): ShadowSourceEntity => ({
+        ...slabImagePosition({ x: column, y: row }, elevation),
+        displayWidth: 32,
+        displayHeight: 32 + SLAB_THICKNESS,
+        elevation,
+        prefab: { collectionName: "Carte Paliers", id: "Carte Paliers:dalle-bois:Default:Down" },
+    });
+
+    it("reads the deck of a bridge as one plate as high as its floor, its slabs joined", () => {
+        const { casters } = readShadowCasters([slab(3, 5, LOW_FLOOR_ELEVATION), slab(4, 5, LOW_FLOOR_ELEVATION)]);
+        expect(casters?.plates).toEqual([
+            { x: 96, y: 160, width: 64, height: 32, rise: LOW_FLOOR_ELEVATION, thickness: SLAB_THICKNESS },
+        ]);
+        // Not a wall standing on the ground.
+        expect(casters?.boxes).toEqual([]);
+    });
+
+    it("reads the ramps of a bridge as a slope from its foot on the ground to the edge of the deck", () => {
+        const shape = { direction: "e" as const, width: 1 as const, rise: 20 as const, open: true, ramp: true };
+        const { casters } = readShadowCasters([
+            {
+                ...stairImagePosition(shape, { x: 2, y: 5 }, 0),
+                displayWidth: 32,
+                displayHeight: 52,
+                elevation: 0,
+                prefab: { collectionName: "Carte Paliers", id: "Carte Paliers:rampe-e-l1-h1:Default:Down" },
+            },
+        ]);
+        expect(casters?.slopes).toEqual([
+            {
+                low: [
+                    { x: 64, y: 160 },
+                    { x: 64, y: 192 },
+                ],
+                base: 0,
+                high: [
+                    { x: 96, y: 160 },
+                    { x: 96, y: 192 },
+                ],
+                top: 20,
+            },
+        ]);
+    });
+
+    it("reads a full stair as solid under its steps, its whole footprint on the floor it starts from", () => {
+        const shape = { direction: "n" as const, width: 1 as const, rise: 52 as const, open: false };
+        const { casters } = readShadowCasters([
+            {
+                ...stairImagePosition(shape, { x: 2, y: 5 }, 0),
+                displayWidth: 32,
+                displayHeight: 116,
+                elevation: 0,
+                prefab: { collectionName: "Carte Paliers", id: "Carte Paliers:escalier-n-l1-h2:Default:Down" },
+            },
+        ]);
+        // Two tiles of run going north, its foot on the row 5: its top edge on the north of the row 4.
+        expect(casters?.slopes).toEqual([
+            {
+                low: [
+                    { x: 64, y: 192 },
+                    { x: 96, y: 192 },
+                ],
+                base: 0,
+                high: [
+                    { x: 64, y: 128 },
+                    { x: 96, y: 128 },
+                ],
+                top: 52,
+                footprint: { x: 64, y: 128, width: 32, height: 64 },
+            },
+        ]);
+    });
+
+    it("leaves the raised floors out with the walls turned off, and reads them again when a slab moves", () => {
+        const deck = [slab(3, 5, LOW_FLOOR_ELEVATION)];
+        const off = { walls: false, objects: true, trees: true, details: true };
+        expect(readShadowCasters(deck, undefined, off).casters?.plates).toEqual([]);
+        const { signature } = readShadowCasters(deck);
+        expect(readShadowCasters(deck, signature).casters).toBeUndefined();
+        expect(readShadowCasters([slab(4, 5, LOW_FLOOR_ELEVATION)], signature).casters?.plates).toHaveLength(1);
+        expect(readShadowCasters([slab(3, 5, 52)], signature).casters?.plates?.[0]?.rise).toBe(52);
     });
 
     it("does not read the walls again when nothing changed since a signature", () => {

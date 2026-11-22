@@ -51,12 +51,12 @@ import {
     rainDrops,
     rainFineness,
     rainIntensity,
-    rainLean,
+    followWind,
     rainSplashes,
     rainUnderCloud,
     rainVeilAlpha,
 } from "./Rain";
-import type { RainLocal } from "./Rain";
+import type { RainLocal, RainWind } from "./Rain";
 import { mapGroundWetness, PUDDLE_ROW, puddleRows, puddlesIn } from "./Puddles";
 import {
     cloudAlpha,
@@ -87,7 +87,7 @@ import type { CloudSky } from "./CloudLayer";
 import { screenScale, seenFromFar } from "./ScreenScale";
 import type { BlockCanvasArea, BlockSurface } from "./BlockSurface";
 import { WeatherSounds } from "./WeatherSounds";
-import { drawFlake, flakeMix, snowflakes, snowLevel, snowTones, snowWind } from "./Snowfall";
+import { drawFlake, flakeMix, groundWind, snowflakes, snowLevel, snowTones } from "./Snowfall";
 import type { SnowFall } from "./Snowfall";
 
 /** The system asks for less motion: the fog patches stand still. */
@@ -216,6 +216,8 @@ export class WeatherManager {
     private readonly skyDrift = new SkyDrift();
     /** Where the air near the ground has carried the snow, with the real wind (map pixels): the flakes go with it. */
     private readonly snowDrift = new SkyDrift();
+    /** The wind the drops go with, and when it was last read (ms): it follows the real one within a second. */
+    private rainWind: { wind: RainWind; at: number } | undefined;
     private readonly reducedMotion: boolean;
     // Development override of the rain intensity (`?rainLevel`), fixed for the life of the scene.
     private readonly forcedRain = parseRainLevel(window.location.search, import.meta.env.DEV);
@@ -536,9 +538,13 @@ export class WeatherManager {
                     };
                 }
             }
-            const lean = rainLean(settings?.windFrom, settings?.windSpeed, this.rainSettings.lean);
+            // The drops go with the wind near the ground, as the flakes do: the same way in a sleet.
+            const wind = this.rainWindAt(
+                now,
+                groundWind(settings?.windFrom, settings?.windSpeed, this.rainSettings.lean),
+            );
             // The part that falls as rain as drops, the part that falls as snow as flakes: both in a sleet.
-            if (snow < 1) this.drawRain(epoch, view, rain * (1 - snow), lean, isOutdoor, underClouds);
+            if (snow < 1) this.drawRain(epoch, view, rain * (1 - snow), wind, isOutdoor, underClouds);
             const fall: SnowFall = {
                 // The snow of the winter theme under a dry sky falls as it says, whatever the rate of the map.
                 level: Math.min(1, (flakes ?? snowLevel(settings?.rainRate, snow, storm)) * this.rainSettings.amount),
@@ -904,6 +910,15 @@ export class WeatherManager {
         }
     }
 
+    /** The wind the drops go with now: the real one, caught within a second (followWind); at once if motion is reduced. */
+    private rainWindAt(now: number, target: RainWind): RainWind {
+        const kept = this.rainWind;
+        const wind =
+            kept && !this.reducedMotion ? followWind(kept.wind, target, Math.max(0, now - kept.at) / 1000) : target;
+        this.rainWind = { wind, at: now };
+        return wind;
+    }
+
     /**
      * The rain: drops in three planes leaning with the wind, each a faint streak ending in a brighter head, and the
      * splashes of those reaching the ground (none when motion is reduced). Outdoors only, over everything.
@@ -912,7 +927,7 @@ export class WeatherManager {
         epoch: number,
         view: WeatherView,
         intensity: number,
-        lean: number,
+        wind: RainWind,
         isOutdoor: ((x: number, y: number) => boolean) | undefined,
         local: RainLocal | undefined,
     ): void {
@@ -926,7 +941,7 @@ export class WeatherManager {
                 : { x: view.x * fine, y: view.y * fine, width: view.width * fine, height: view.height * fine };
         const localFine: RainLocal | undefined = local && fine !== 1 ? (x, y) => local(x / fine, y / fine) : local;
         // A drop shows where its whole streak is outdoors (head, middle and tail): no trail over the edge of a roof.
-        const drops = rainDrops(epoch, finer, amount, lean, localFine)
+        const drops = rainDrops(epoch, finer, amount, wind, localFine)
             .map((drop) =>
                 fine === 1 ? drop : { ...drop, x: drop.x / fine, y: drop.y / fine, length: drop.length / fine },
             )
@@ -934,7 +949,7 @@ export class WeatherManager {
                 (drop) =>
                     !isOutdoor ||
                     [0, 0.5, 1].every((share) =>
-                        isOutdoor(drop.x - lean * drop.length * share, drop.y - drop.length * share),
+                        isOutdoor(drop.x - drop.dx * drop.length * share, drop.y - drop.dy * drop.length * share),
                     ),
             );
         for (let layer = 0; layer < 3; layer++) {
@@ -950,7 +965,7 @@ export class WeatherManager {
                 this.graphics.beginPath();
                 for (const drop of plane) {
                     const height = drop.length * share;
-                    this.graphics.moveTo(drop.x - lean * height, drop.y - height);
+                    this.graphics.moveTo(drop.x - drop.dx * height, drop.y - drop.dy * height);
                     this.graphics.lineTo(drop.x, drop.y);
                 }
                 this.graphics.strokePath();
@@ -999,7 +1014,7 @@ export class WeatherManager {
         isOutdoor: ((x: number, y: number) => boolean) | undefined,
         local: RainLocal | undefined,
     ): void {
-        const velocity = snowWind(windFrom, windSpeed, this.rainSettings.lean);
+        const velocity = groundWind(windFrom, windSpeed, this.rainSettings.lean);
         // The air goes on with the wind, without a jump when the wind changes; still when motion is reduced.
         const air = this.reducedMotion
             ? { shift: { x: 0, y: 0 }, velocity }

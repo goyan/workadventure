@@ -1006,14 +1006,14 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 drainRadiusTilesStore.set(3);
             });
 
-            it("a ball stays under the pointer where the relief is seen in 3/4: its centre is at the altitude 0 of the map", () => {
+            it("a ball is held on what the pointer shows where the relief is seen in 3/4: it floats at the surface of that water", () => {
                 scene.seenPointUnder.mockImplementation((point) => ({ x: point.x, y: point.y - 64 }));
                 catastrophePanelStore.set(true);
                 toggleArmedCatastrophe("ball");
                 ballDiameterTilesStore.set(6);
                 handler.handlePointerDownEvent(held(), []);
-                expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_BALL, 480, 640, 6]]);
-                expect(get(heldBallStore)).toEqual({ x: 480, y: 640, radiusPx: 96 });
+                expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_BALL, 480, 576, 6]]);
+                expect(get(heldBallStore)).toEqual({ x: 480, y: 576, radiusPx: 96 });
             });
 
             it("holds a ball under the pointer at once, tells it as it moves, and lets it go at the release", () => {

@@ -1,3 +1,4 @@
+import { WeatherType } from "@workadventure/map-editor";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync, mount, unmount } from "svelte";
 import { get, readable } from "svelte/store";
@@ -87,6 +88,17 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 local: label("Your weather"),
                 defaultCity: label("Paris"),
             },
+            placeToMap: {
+                apply: label("Apply to the map"),
+                hint: label("Make the map follow this place"),
+                already: label("The map already follows this place"),
+                noRight: label("Only map editors"),
+                pending: label("Reading"),
+                noData: label("No real weather here"),
+                revert: ({ place }: { place: string }) => `Back to ${place}`,
+                revertHint: label("Put the map back"),
+                error: label("Could not change"),
+            },
         },
         mapEditor: {
             settings: {
@@ -140,7 +152,29 @@ vi.mock("../../../../src/front/Phaser/Game/Weather/ChosenPlaceWeather", async ()
     };
 });
 
+const toMap = vi.hoisted(() => ({
+    canEdit: true,
+    canRevert: false,
+    open: vi.fn(),
+    revert: vi.fn(() => Promise.resolve()),
+}));
+vi.mock("../../../../src/front/Phaser/Game/Weather/MapWeatherRights", () => ({
+    canEditMapWeather: () => toMap.canEdit,
+}));
+vi.mock("../../../../src/front/Components/Weather/placeToMapActions", () => ({
+    canRevertMapPlace: () => toMap.canRevert,
+    revertMapPlace: toMap.revert,
+}));
+vi.mock("../../../../src/front/Stores/MenuStore", async () => {
+    const { writable: makeWritable } = await import("svelte/store");
+    return { mapEditorActivated: makeWritable(true) };
+});
+vi.mock("@wa-modals", () => ({ modals: { open: toMap.open, close: vi.fn() } }));
+// The confirmation has its own test: here, only what the banner asks it.
+vi.mock("../../../../src/front/Components/Weather/PlaceToMapModal.svelte", () => ({ default: "PlaceToMapModal" }));
+
 import WeatherForecastBanner from "../../../../src/front/Components/Weather/WeatherForecastBanner.svelte";
+import { appliedPlaceStore } from "../../../../src/front/Phaser/Game/Weather/PlaceToMap";
 import { fireConditionsStore } from "../../../../src/front/Stores/FireConditionsStore";
 import { weatherBannerStore } from "../../../../src/front/Stores/WeatherBannerStore";
 
@@ -183,6 +217,11 @@ function banner(): HTMLElement | null {
 
 beforeEach(() => {
     localStorage.removeItem("weatherCardsOpen");
+    toMap.canEdit = true;
+    toMap.canRevert = false;
+    toMap.open.mockReset();
+    toMap.revert.mockClear();
+    appliedPlaceStore.set(undefined);
     chosen.place.store?.set(undefined);
     chosen.state.store?.set({ place: undefined, state: { status: "pending" } });
     chosen.cells = [];
@@ -525,5 +564,92 @@ describe("WeatherForecastBanner", () => {
         chosen.place.store?.set({ name: "Auckland", latitude: -77.8, longitude: 166.7 });
         flushSync();
         expect(localCells()?.[0]?.querySelector('[data-testid="weather-banner-humidity"]')).toBeNull();
+    });
+});
+
+describe("WeatherForecastBanner, apply to the map", () => {
+    const HONG_KONG_POINT = {
+        name: "Hong Kong 770 km",
+        longName: "24° N 122° E · Hong Kong à 770 km",
+        coordinates: "24° N 122° E",
+        latitude: 24.2,
+        longitude: 121.9,
+    };
+    const known = { status: "known", slots: [{ at: NOW.getTime(), weather: "rain", temperature: 7 }] };
+
+    function follow(): void {
+        chosen.cells = [{ at: NOW.getTime(), weather: "rain", temperature: 7 }];
+        chosen.place.store?.set(HONG_KONG_POINT);
+        chosen.state.store?.set({ place: HONG_KONG_POINT, state: known });
+        flushSync();
+    }
+    const button = (): HTMLButtonElement | null =>
+        target.querySelector<HTMLButtonElement>('[data-testid="weather-card-local"] [data-testid="place-to-map"]');
+
+    it("offers an editor to make the map follow their own place, and asks first", () => {
+        wamSettings.value = {
+            weather: "automatic",
+            weatherLocation: { name: "Lille", latitude: 50.63, longitude: 3.06 },
+        };
+        fireConditionsStore.set(conditions);
+        render();
+        expect(button()).toBeNull();
+        follow();
+        expect(button()?.dataset.state).toBe("ready");
+        expect(button()?.disabled).toBe(false);
+        expect(button()?.textContent?.trim()).toBe("Apply to the map");
+        button()?.click();
+        expect(toMap.open).toHaveBeenCalledWith("PlaceToMapModal", {
+            place: HONG_KONG_POINT,
+            mapPlace: "Lille",
+            mapWeather: "Auto",
+            manual: true,
+        });
+    });
+
+    it("says why a player who may not edit the map cannot, and waits for the weather of the place", () => {
+        toMap.canEdit = false;
+        render();
+        follow();
+        expect(button()?.dataset.state).toBe("noRight");
+        expect(button()?.disabled).toBe(true);
+        expect(target.querySelector('[data-testid="place-to-map-why"]')?.textContent?.trim()).toBe("Only map editors");
+        button()?.click();
+        expect(toMap.open).not.toHaveBeenCalled();
+        toMap.canEdit = true;
+        chosen.state.store?.set({ place: HONG_KONG_POINT, state: { status: "unavailable" } });
+        flushSync();
+        expect(button()?.dataset.state).toBe("noData");
+    });
+
+    it("says the map already follows the place", () => {
+        wamSettings.value = {
+            weather: "real",
+            weatherLocation: { name: "24° N 122° E", latitude: 24.2, longitude: 121.9 },
+        };
+        render();
+        follow();
+        expect(button()?.dataset.state).toBe("already");
+        expect(button()?.textContent?.trim()).toBe("The map already follows this place");
+    });
+
+    it("lets the player who applied a place bring the map back from its card", () => {
+        appliedPlaceStore.set({
+            applied: { name: "24° N 122° E", latitude: 24.2, longitude: 121.9 },
+            before: {
+                weather: WeatherType.Automatic,
+                location: { name: "Lille, Nord", latitude: 50.63, longitude: 3.06 },
+            },
+        });
+        toMap.canRevert = true;
+        render();
+        nightDate().set(new Date(NOW.getTime() + 1000));
+        flushSync();
+        const back = target.querySelector<HTMLButtonElement>(
+            '[data-testid="weather-card-server"] [data-testid="place-to-map-revert"]',
+        );
+        expect(back?.textContent?.trim()).toBe("Back to Lille");
+        back?.click();
+        expect(toMap.revert).toHaveBeenCalledOnce();
     });
 });
