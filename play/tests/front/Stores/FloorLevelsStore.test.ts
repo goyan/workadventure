@@ -8,6 +8,8 @@ import {
     floorLevelsHiddenStore,
     floorLevelsStore,
     levelChangePulses,
+    pointerGroundStore,
+    showPointerGround,
 } from "../../../src/front/Stores/FloorLevelsStore";
 
 import { mapEditorPlacementLevelStore } from "../../../src/front/Stores/MapEditorStore";
@@ -34,7 +36,7 @@ describe("the stack of the floors", () => {
 
     it("shows the level the map editor works on while it is open, with the altitudes", () => {
         // "auto": the level under the pointer is the current one, the display ceiling of the game is left aside.
-        expect(floorLevelStack([52], 0, { choice: "auto", level: 52 }, name, 116, 48, -24)).toEqual({
+        expect(floorLevelStack([52], 0, { choice: "auto", level: 52 }, name, 116, 48, { ground: -0.8 })).toEqual({
             levels: [
                 { elevation: 52, name: "Niveau 52" },
                 { elevation: 0, name: "Sol" },
@@ -42,7 +44,7 @@ describe("the stack of the floors", () => {
             current: 52,
             viewed: undefined,
             altitude: 48,
-            pointerAltitude: -24,
+            pointer: { ground: -0.8 },
         });
         // A level chosen in the editor is listed even without slabs.
         expect(floorLevelStack([52], 0, { choice: 116, level: 52 }, name)).toEqual({
@@ -67,16 +69,38 @@ describe("the stack of the floors", () => {
         expect(floorLevelStack([52], 52, undefined, name, undefined, 0)?.altitude).toBe(0);
     });
 
-    it("tells the altitude under the pointer with the one of the avatar", () => {
-        expect(floorLevelStack([], 0, undefined, name, undefined, 48, -24)).toMatchObject({
+    it("tells the ground and the water under the pointer with the altitude of the avatar", () => {
+        const water = { ground: -3.6, surface: -1.2, depth: 2.4 };
+        expect(floorLevelStack([], 0, undefined, name, undefined, 48, water)).toMatchObject({
             altitude: 48,
-            pointerAltitude: -24,
+            pointer: water,
         });
-        expect(floorLevelStack([], 0, undefined, name, undefined, 48)).not.toHaveProperty("pointerAltitude");
+        expect(floorLevelStack([], 0, undefined, name, undefined, 48)).not.toHaveProperty("pointer");
         // No relief, no altitude: nothing under the pointer either.
-        expect(floorLevelStack([52], 0, undefined, name, undefined, undefined, 16)).not.toHaveProperty(
-            "pointerAltitude",
+        expect(floorLevelStack([52], 0, undefined, name, undefined, undefined, { ground: 0.5 })).not.toHaveProperty(
+            "pointer",
         );
+    });
+
+    it("keeps the altitude of the raised floor of the avatar with the ground and the water under the pointer", () => {
+        const water = { ground: -3.6, surface: -1.2, depth: 2.4 };
+        expect(floorLevelStack([52], 52, undefined, name, undefined, 52, water)).toMatchObject({
+            current: 52,
+            altitude: 52,
+            pointer: water,
+        });
+    });
+
+    it("tells the ground under the pointer again only when what it shows changes", () => {
+        const seen: unknown[] = [];
+        const unsubscribe = pointerGroundStore.subscribe((value) => seen.push(value));
+        showPointerGround({ ground: -3.6 });
+        showPointerGround({ ground: -3.6 });
+        showPointerGround({ ground: -3.6, surface: -1.2, depth: 2.4 });
+        showPointerGround(undefined);
+        showPointerGround(undefined);
+        unsubscribe();
+        expect(seen).toEqual([undefined, { ground: -3.6 }, { ground: -3.6, surface: -1.2, depth: 2.4 }, undefined]);
     });
 
     it("follows the floor of the avatar", () => {

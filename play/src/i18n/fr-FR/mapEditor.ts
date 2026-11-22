@@ -411,7 +411,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             level: "Tenir un niveau",
             levelValue: "Altitude de l'eau à tenir, en mètres",
             levelHint:
-                "La source ne verse que tant que l'eau à son pied est sous cette altitude : un lac reste plein, sans déborder. 0 m : le niveau du sol de la carte ; négatif dans un creux, positif sur un mont. L'altitude du sol sous le curseur s'affiche sous l'horloge.",
+                "La source ne verse que tant que l'eau à son pied est sous cette altitude : un lac reste plein, sans déborder. 0 m : le niveau du sol de la carte ; négatif dans un creux, positif sur un mont. La pastille des étages, à côté de l'horloge, montre sous le curseur l'altitude du sol et celle de la surface de l'eau, sur la même échelle.",
         },
         waterSink: {
             label: "Puits (évacuation)",
@@ -922,7 +922,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             cursor: "Niveau {height}",
             title: "Niveau",
             altitude: "Altitude de l'avatar",
-            pointerAltitude: "Altitude du sol sous le curseur",
+            pointerAltitude: "Sous le curseur",
+            pointerGround: "Sol sous le curseur",
+            pointerWater: "Surface de l’eau",
+            pointerIce: "Surface de la glace",
+            pointerNoWater: "Pas d’eau",
+            pointerDepth: "Profondeur {depth}",
+            pointerOff: "Curseur hors du jeu",
             ground: "Sol",
             level: "Niveau {height}",
             built: "palier {rank}",
