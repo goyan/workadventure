@@ -3125,10 +3125,25 @@ de 0 à 100 %, avec sauvegarde personnelle. Les appels et les Jams conservent le
 « Outils → Cycle jour/nuit » ouvre directement le choix personnel serveur / ordinateur / désactivé.
 Cette première version couvre toute la carte, sans accumulation de neige ni distinction entre intérieur et extérieur.
 
+**Pluie au vent réel** (2026-11-22, `Weather/Rain.ts` `rainSlant`, `followWind`). Les gouttes suivent le même vent
+que la neige (`groundWind` : vent réel près du sol, ≈ 0,8 du vent à 10 m, ses deux composantes ; nord-ouest à
+10 km/h quand il n'est pas connu ; réglage personnel « inclinaison » appliqué). Pour chaque pixel de chute, une goutte
+se déplace de vent / vitesse de chute, dans le sens du vent : vers l'est par vent d'ouest, vers le haut de l'écran par
+vent du sud (elle y descend alors moins vite, trait plus court), vers le bas par vent du nord, verticale par vent nul.
+Vitesses de chute des trois plans : gouttes de 1,4, 3 et 5 mm, 5,2, 7,9 et 9,1 m/s, par l'ajustement d'Atlas,
+Srivastava et Sekhon (Rev. Geophys. 11, 1973) aux mesures de Gunn et Kinzer (J. Meteor. 6, 1949),
+v = 9,65 − 10,3 e^(−0,6 D) ; les petites gouttes penchent donc plus que les grosses. Ces vitesses sont celles que les
+plans avaient déjà à l'écran (150, 230 et 330 px/s, le plan proche vu 1,25 fois plus vite). Par 13 km/h les gouttes
+fines penchent de 0,55 px par px, la neige dérive 2 à 4 fois plus : dans un grésil, gouttes et flocons vont dans le
+même sens, les flocons plus couchés. Pente bornée à 3 (choix, atteinte vers 90 km/h pour les gouttes fines). Une
+goutte rattrape un nouveau vent en environ 0,7 s (sa vitesse sur la gravité) : pas de saut quand le vent change ; en
+mouvement réduit, le vent est pris tel quel. Éclaboussures et flaques inchangées. L'averse de la catastrophe garde
+ses gouttes, qui penchent un peu, sans vent, vers son disque : le serveur y verse l'eau, le vent les en ferait sortir.
+
 **Pluie selon son intensité.** La pluie et l’orage (météo fixe, automatique ou réelle) sont dessinés par
 `Weather/Rain.ts` : gouttes en trois plans (tête claire et traîne), d’autant plus nombreuses que la pluie est forte,
-autant à l’écran quel que soit le zoom ; elles penchent avec le vent de la carte (`rainLean`, vers l’est sans vent
-connu) ; il pleut davantage sous l’épaisseur d’un nuage de pluie que dans une trouée ; éclaboussures au sol (aucune
+autant à l’écran quel que soit le zoom ; elles suivent le vent réel près du sol (voir « Pluie au vent réel »
+ci-dessous) ; il pleut davantage sous l’épaisseur d’un nuage de pluie que dans une trouée ; éclaboussures au sol (aucune
 en mouvement réduit) ; voile et volume de la pluie selon l’intensité. En météo **Réelle**, l’intensité vient des
 précipitations d’Open-Meteo (`precipitation` de `minutely_15`, champ facultatif `RealWeatherSlot.rainRate` en mm/h,
 changée en 10 min) : pluie faible jusqu’à 2,5 mm/h, modérée jusqu’à 7,6, forte au-delà (glossaire de l’AMS ; la
@@ -3221,7 +3236,7 @@ couverture de neige au sol et les arbres qui blanchissent décrit l'état d'avan
     (N = R / (M V), montré en racine quatrième : choix).
   - **Chute** : chaque flocon suit le repère de l'air, porté par le vent réel près du sol (profil logarithmique,
     ≈ 0,8 du vent à 10 m) dans ses deux composantes, comme les nuages (un vent du sud fait remonter la neige à
-    l'écran ; la pluie, elle, ne penche qu'est-ouest), et tombe 9 à 15 s, puis se pose 0,8 s sans éclaboussure. Deux
+    l'écran ; la pluie suit le même vent depuis le 2026-11-22), et tombe 9 à 15 s, puis se pose 0,8 s sans éclaboussure. Deux
     plans (lointain plus petit et plus lent, proche plus gros et plus rapide), balancement propre à chaque flocon.
     32 px ≈ 1,1 m : 1 m/s ≈ 29 px/s ; 13 km/h dérive ≈ 84 px/s, plus vite que la chute. Champ fixé à la carte.
   - **Dessin** : pixel art de 1 à 5 px, éclairé en haut à gauche, un pixel d'ombre en bas à droite (lisible sur la
