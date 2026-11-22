@@ -1,12 +1,25 @@
 import { parentPort } from "node:worker_threads";
+import { threadWaterLoads } from "@workadventure/map-editor";
 import type { GroundCommand, GroundTold } from "./GroundProtocol";
 import { HostedGround } from "./HostedGround";
+
+/**
+ * The share of the time between two steps the waters of this thread may take together before they ease their
+ * fineness. On the thread of the rooms it is half (the players wait behind the water); here no one waits, the water
+ * only has to keep its pace, so it may take most of the thread, the rest being left to the meadows and to the memory
+ * that is cleaned. Measured with rooms like the map of the entry, flooded: at 0.9 eight of them keep the fineness
+ * their map asks for (86 % of a core, ten steps a second each); at 0.8 they give a level up.
+ */
+const GROUND_THREAD_SHARE = 0.9;
 
 /**
  * Entry point of a thread that computes the grounds of rooms (the water of their relief and their meadow), away from
  * the thread of the rooms: one HostedGround for each room it is given. The commands of a room are run one after the
  * other, in the order they were sent.
  */
+// Nothing but grounds is computed here: their water may take most of the thread before it eases.
+threadWaterLoads.mayTake(GROUND_THREAD_SHARE);
+
 const port = parentPort;
 if (!port) throw new Error("GroundWorker runs in a worker thread only");
 
