@@ -12,6 +12,7 @@ import type {
     FireConditionsMessage,
     AquaticLifeMessage,
     FishingMessage,
+    IceShacksMessage,
 } from "@workadventure/messages";
 import type { WokaTextureDescriptionInterface } from "../Phaser/Entity/PlayerTextures";
 import type { CompanionTextureDescriptionInterface } from "../Phaser/Companion/CompanionTextures";
@@ -104,6 +105,8 @@ export interface RoomJoinedMessageInterface {
     fireConditions?: FireConditionsMessage;
     /** The fishing lines of the room when it was joined; absent when nobody ever fished there. */
     fishing?: FishingMessage;
+    /** The ice fishing shacks of the room when it was joined; absent when there is none. */
+    iceShacks?: IceShacksMessage;
     characterTextures: WokaTextureDescriptionInterface[];
     companionTexture?: CompanionTextureDescriptionInterface;
     commandsToApply?: EditMapCommandMessage[];

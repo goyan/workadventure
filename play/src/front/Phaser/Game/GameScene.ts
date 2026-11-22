@@ -470,6 +470,8 @@ import { TORCH_EQUIPPED_VARIABLE, TORCH_INTENSITY_VARIABLE } from "./Torch/Torch
 import { PERCEPTION_VARIABLE } from "./Perception/PerceptionProtocol";
 import { PerceptionManager } from "./Perception/PerceptionManager";
 import { FishingManager } from "./Fishing/FishingManager";
+import { IceShackManager } from "./IceShack/IceShackManager";
+import { groundWind } from "./Weather/Snowfall";
 import { MeteorView } from "./Catastrophe/MeteorView";
 import { FireView } from "./Fire/FireView";
 import { TreeFireState } from "./Fire/TreeFireState";
@@ -792,6 +794,7 @@ export class GameScene extends DirtyScene {
     private _torchManager: TorchManager | undefined;
     private _perceptionManager: PerceptionManager | undefined;
     private _fishingManager: FishingManager | undefined;
+    private _iceShackManager: IceShackManager | undefined;
     private karaokeSpotlight: KaraokeSpotlight | undefined;
     private _coffeeManager: CoffeeManager | undefined;
     /** Animated treadmills move their belt only while someone runs on them. */
@@ -1925,6 +1928,8 @@ export class GameScene extends DirtyScene {
         torchEquippedStore.set(false);
         this._fishingManager?.destroy();
         this._fishingManager = undefined;
+        this._iceShackManager?.destroy();
+        this._iceShackManager = undefined;
         this.catastropheSubscription?.unsubscribe();
         this.catastropheSubscription = undefined;
         this.meteorView?.destroy();
@@ -2501,6 +2506,7 @@ export class GameScene extends DirtyScene {
             // Before the night veil: it is pierced with the lights the torches have just drawn.
             this._torchManager?.update(time);
             this._fishingManager?.update(time);
+            this._iceShackManager?.update(time);
             this.meteorView?.update(time);
             this.terrainView?.setWaterRings(this.meteorView?.waterRings(time) ?? []);
             this.stepIceBreaks(time);
@@ -3774,6 +3780,10 @@ export class GameScene extends DirtyScene {
         return this._torchManager;
     }
 
+    public get iceShackManager(): IceShackManager | undefined {
+        return this._iceShackManager;
+    }
+
     public get fishingManager(): FishingManager | undefined {
         return this._fishingManager;
     }
@@ -4992,6 +5002,12 @@ export class GameScene extends DirtyScene {
         this._perceptionManager = new PerceptionManager(this);
         this._fishingManager?.destroy();
         this._fishingManager = new FishingManager(this, room.fishing);
+        // The ice fishing shacks of the room: their smoke goes with the wind of the air of the map, as the snow.
+        this._iceShackManager?.destroy();
+        this._iceShackManager = new IceShackManager(this, room.iceShacks, () => {
+            const weather = this.shownWeather();
+            return groundWind(weather?.windFrom, weather?.windSpeed);
+        });
         this.catastropheSubscription?.unsubscribe();
         this.meteorView?.destroy();
         const meteorView = new MeteorView(
