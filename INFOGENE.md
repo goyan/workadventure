@@ -3862,7 +3862,11 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   s'aligne sur la grille de ses dalles.
 - **Eau et météo** : on nage dans une piscine du palier où l'on se trouve (`getWaterRectangles(scene, altitude)`) ;
   la météo ne se dessine sur aucune dalle ni aucun escalier de palier, ni sur le haut des murs de 2 cases et plus
-  (`Weather/RaisedCover.ts`) : un étage est un morceau de bâtiment, où qu'il se tienne.
+  (`Weather/RaisedCover.ts`) : un étage est un morceau de bâtiment, où qu'il se tienne. Seule la partie dessinée
+  d'un escalier ou d'une rampe qui monte vers l'est ou l'ouest est épargnée (`floorPieceCover` : la bande en biais,
+  et le flanc d'un escalier plein), pas toute son image. Les coins vides de l'image laissent voir le sol, qui reçoit
+  la pluie et le voile du ciel comme autour. Avant, la boîte entière de l'image restait claire : un rectangle sans
+  voile au-dessus et sous chaque rampe de pont, signalé le 2026-11-22.
 - **Lumière sur un mur haut** (`Lamps/RgbLampObstacles.ts`, `wallSegments`) : un mur horizontal de 2 cases et plus
   arrête la lumière au niveau de son dessus (dessiné au-dessus de son pied), pas à son pied : une lampe ou une
   torche au sud éclaire toute la façade, une lampe dans la pièce derrière n'en éclaire rien. Les côtés de la façade

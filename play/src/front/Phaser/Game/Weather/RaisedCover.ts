@@ -1,3 +1,6 @@
+import { MAP_LAYER_TILE_SIZE } from "../MapEditor/MapLayer/MapLayerCatalog";
+import type { FloorPiece } from "../MapEditor/MapLayer/MapLayerFloors";
+
 interface Rect {
     x: number;
     y: number;
@@ -91,4 +94,26 @@ export class RaisedCover {
         }
         return out;
     }
+}
+
+/**
+ * What a slab or a stair of a raised floor covers of the screen, its image being at `image`: the whole image of a slab
+ * or of a stair going north or south; for a stair or a ramp going east or west only the slanted band it is drawn as
+ * (and, for a full stair, its side down to the bottom of its image), strip by strip of COVER_CELL. The empty corners of
+ * its image show the ground: the weather falls there as around it.
+ */
+export function floorPieceCover(piece: FloorPiece, image: Rect): Rect[] {
+    if (piece.kind === "slab" || piece.direction === "n" || piece.direction === "s") return [image];
+    const band = piece.width * MAP_LAYER_TILE_SIZE;
+    const rects: Rect[] = [];
+    for (let x = image.x; x < image.x + image.width; x += COVER_CELL) {
+        const width = Math.min(COVER_CELL, image.x + image.width - x);
+        // How far up the stair is at the middle of the strip: 0 at its foot, 1 at its head.
+        const across = (x + width / 2 - image.x) / image.width;
+        const progress = piece.direction === "e" ? across : 1 - across;
+        const top = image.y + piece.rise * (1 - progress);
+        const bottom = piece.open ? Math.min(top + band, image.y + image.height) : image.y + image.height;
+        rects.push({ x, y: top, width, height: bottom - top });
+    }
+    return rects;
 }
