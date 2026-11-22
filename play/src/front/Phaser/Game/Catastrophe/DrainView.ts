@@ -2,6 +2,7 @@ import * as Phaser from "phaser";
 import type { CatastropheMessage } from "@workadventure/messages";
 import { drainCalms, drainTiles, TILE_PX } from "@workadventure/map-editor";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
+import { isBasicActive } from "../../../Stores/BasicModeStore";
 import { downpourAlpha } from "./DownpourFall";
 import { drainRings, drainStrands } from "./DrainSwirl";
 
@@ -73,6 +74,17 @@ export class DrainView {
     }
 
     public update(now: number): void {
+        // Basique: the drain goes on (its water is the server's), unseen and costing no drawing.
+        const visible = !isBasicActive();
+        if (this.graphics.visible !== visible) {
+            this.graphics.setVisible(visible);
+            this.glow.setVisible(visible);
+            this.scene.markDirty();
+        }
+        if (!visible) {
+            for (const [id, drain] of this.shown) if (now >= drain.until) this.shown.delete(id);
+            return;
+        }
         if (this.shown.size === 0) return;
         const graphics = this.graphics;
         graphics.clear();

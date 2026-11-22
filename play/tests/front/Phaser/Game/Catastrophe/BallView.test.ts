@@ -5,8 +5,16 @@ import type { CatastropheMessage } from "@workadventure/messages";
 import { describe, expect, it, vi } from "vitest";
 import { BallView } from "@wa/front/Phaser/Game/Catastrophe/BallView";
 
+const basic = vi.hoisted(() => ({ active: false }));
+vi.mock("@wa/front/Stores/BasicModeStore", () => ({ isBasicActive: () => basic.active }));
+
 function graphics() {
     const made = {
+        visible: true,
+        setVisible: vi.fn((visible: boolean) => {
+            made.visible = visible;
+            return made;
+        }),
         setDepth: vi.fn(() => made),
         clear: vi.fn(),
         fillStyle: vi.fn(),
@@ -186,6 +194,31 @@ describe("BallView", () => {
         ashore.view.update(1000);
         expect(ashore.made[1].strokePath).not.toHaveBeenCalled();
         expect(ashore.made[1].fillEllipse).toHaveBeenCalled();
+    });
+
+    it("hides the balls of the others in Basique, without drawing them again, and keeps one's own", () => {
+        const { view, scene, made, message, hold } = harness();
+        view.report(message(), 1000);
+        view.update(1000);
+        const body = made[1];
+        const drawn = body.fillRect.mock.calls.length;
+        basic.active = true;
+        try {
+            view.report(message({ x: 600 }), 1100);
+            view.update(1100);
+            expect(body.visible).toBe(false);
+            const dirty = scene.markDirty.mock.calls.length;
+            view.update(1116);
+            expect(body.fillRect.mock.calls.length).toBe(drawn);
+            expect(scene.markDirty).toHaveBeenCalledTimes(dirty);
+            hold({ x: 400, y: 200, radiusPx: 32 });
+            view.update(1132);
+            expect(made[2].fillRect).toHaveBeenCalled();
+        } finally {
+            basic.active = false;
+        }
+        view.update(1148);
+        expect(body.visible).toBe(true);
     });
 
     it("costs nothing while no ball stands on the map", () => {

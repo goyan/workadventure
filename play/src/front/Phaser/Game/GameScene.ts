@@ -4504,7 +4504,8 @@ export class GameScene extends DirtyScene {
             (id) => this.gameMapFrontWrapper?.getEntitiesManager()?.getEntities().get(id),
             () => this.shownWeather(),
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
-            () => !get(mapEditorModeStore),
+            // Hidden as the fire on the ground is: its own switch, or Basique.
+            () => !get(mapEditorModeStore) && isEffectShown("fire"),
         );
         this.downpourView?.destroy();
         const downpourView = new DownpourView(

@@ -133,6 +133,12 @@ export class MeteorView {
             this.graphics.setVisible(visible);
             this.scene.markDirty();
         }
+        if (!visible) {
+            // Hidden (its own switch, or Basique): the falls are let go, nothing drawn and the map not drawn again for
+            // them. Their craters and waves are the server's.
+            this.meteors.length = 0;
+            return;
+        }
         if (this.meteors.length === 0) return;
         const graphics = this.graphics;
         graphics.clear();

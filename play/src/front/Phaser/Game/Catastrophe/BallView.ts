@@ -1,6 +1,7 @@
 import type { WaterBall } from "@workadventure/map-editor";
 import type { CatastropheMessage } from "@workadventure/messages";
 import { DEPTH_NIGHT_INDEX } from "@wa/front/Phaser/Game/DepthIndexes";
+import { isBasicActive } from "@wa/front/Stores/BasicModeStore";
 import { BALL_TONES, ballBlockPx, ballBlocks, ballLevelUnder, ballWaterline, glideBall, tellBall } from "./BallShape";
 import type { BallCover, ToldBall } from "./BallShape";
 
@@ -132,6 +133,8 @@ export class BallView {
             dirty = true;
         };
         if (this.own && held) show(this.own, { ...held, levelPx: this.ownLevel });
+        // Basique keeps the ball held here (what the player does), not those of the others.
+        const basic = isBasicActive();
         for (const [id, shown] of this.shown) {
             if (!shown.told || now >= shown.told.until) {
                 shown.body.destroy();
@@ -139,6 +142,11 @@ export class BallView {
                 dirty = true;
                 continue;
             }
+            if (shown.body.visible === basic) {
+                shown.body.setVisible(!basic);
+                dirty = true;
+            }
+            if (basic) continue;
             show(shown, glideBall(shown.told, now));
         }
         if (rings !== this.ringDrawn) {
