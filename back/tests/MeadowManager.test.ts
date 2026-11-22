@@ -446,6 +446,48 @@ describe("MeadowManager", () => {
         second.manager.stop();
     });
 
+    it("lives the time missed a few slices at a time when they take long, and ends on the very same meadow", async () => {
+        const first = createHarness();
+        first.manager.mapChanged();
+        first.steps(30);
+        first.manager.stop();
+        // Three days later. One room lives them by ticks of all their slices, as a fast server does; the other one
+        // has a clock that says each slice takes 2 ms: its ticks stop at the budget of 8 ms, four slices in.
+        const wake = async (slow: boolean) => {
+            const room = createHarness({ saved: first.store, now: Date.UTC(2026, 6, 17, 10) });
+            const along: { seconds: number; rain: number; last: boolean }[] = [];
+            room.manager.liveAlong((seconds, rain, last) => along.push({ seconds, rain, last }));
+            let clock = 0;
+            room.manager.timeCatchUpWith(() => (slow ? (clock += 2) : 0));
+            await room.manager.restore();
+            room.manager.mapChanged();
+            let ticks = 0;
+            let longest = 0;
+            while (room.manager.catchingUp()) {
+                const before = along.length;
+                room.steps(1);
+                longest = Math.max(longest, along.length - before);
+                ticks++;
+            }
+            room.manager.stop();
+            return { along, ticks, longest, store: room.store, sent: room.sent.length };
+        };
+        const fast = await wake(false);
+        const slow = await wake(true);
+        // Three days by slices of 120 s: 2160 of them, 150 a tick or four a tick.
+        expect(fast.along).toHaveLength(2160);
+        expect(fast.longest).toBe(150);
+        expect(fast.ticks).toBe(15);
+        expect(slow.longest).toBe(4);
+        // 540 ticks of four slices, and a few ticks that only tell the room.
+        expect(slow.ticks).toBeGreaterThanOrEqual(540);
+        expect(slow.ticks).toBeLessThan(560);
+        expect(slow.along).toStrictEqual(fast.along);
+        expect(slow.store).toStrictEqual(fast.store);
+        // The room is not told at each of the short ticks.
+        expect(slow.sent).toBeLessThan(slow.ticks / 10);
+    });
+
     it("does not catch up a meadow saved without its time", async () => {
         const first = createHarness();
         first.manager.mapChanged();
