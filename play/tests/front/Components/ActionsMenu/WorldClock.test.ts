@@ -11,6 +11,8 @@ import {
     worldPointStore,
 } from "../../../../src/front/Stores/NightStore";
 import { WorldMoment } from "../../../../src/front/Phaser/Game/Night/WorldDaylight";
+import { WorldFall } from "../../../../src/front/Phaser/Game/Night/WorldWeatherPick";
+import { chooseWorldFall, worldFallNoticeStore, worldFallStore } from "../../../../src/front/Stores/WorldFallStore";
 
 // Every label reads as its own key, with its parameters: what is shown is told apart without the real translations.
 vi.mock("../../../../src/i18n/i18n-svelte", async () => {
@@ -42,6 +44,9 @@ describe("WorldClock", () => {
         basicModeStore.set(false);
         worldPointStore.set(undefined);
         worldCityStore.set(undefined);
+        worldFallStore.set(undefined);
+        worldFallNoticeStore.set(undefined);
+        vi.unstubAllGlobals();
     });
 
     function openMenu(): void {
@@ -92,5 +97,115 @@ describe("WorldClock", () => {
         expect(target.querySelector("[data-testid='world-clock-moment-evening']")?.getAttribute("aria-pressed")).toBe(
             "true",
         );
+    });
+
+    const LISBON = { name: "Lisbonne", latitude: 38.72, longitude: -9.14, timezone: "Europe/Lisbon" };
+    const fallButton = (fall: WorldFall): HTMLButtonElement | null =>
+        target.querySelector<HTMLButtonElement>(`[data-testid='world-clock-fall-${fall}']`);
+
+    it("offers to look for a place of the world where it rains or snows, next to the moments", () => {
+        nightModeStore.set(NightMode.World);
+        openMenu();
+        expect(fallButton(WorldFall.Rain)?.textContent).toContain("LL.menu.settings.night.worldRain");
+        expect(fallButton(WorldFall.Snow)?.textContent).toContain("LL.menu.settings.night.worldSnow");
+        expect(fallButton(WorldFall.Rain)?.querySelector("[data-testid='pixel-icon']")).not.toBeNull();
+        expect(fallButton(WorldFall.Rain)?.getAttribute("aria-pressed")).toBe("false");
+    });
+
+    it("says why the sky is that of the place picked, with how hard it falls, and presses its button only", () => {
+        nightModeStore.set(NightMode.World);
+        worldMomentStore.set(WorldMoment.Evening);
+        worldFallStore.set({ fall: WorldFall.Rain, place: LISBON, rainRate: 2.4 });
+        worldCityStore.set(LISBON);
+        openMenu();
+        const city = target.querySelector("[data-testid='world-clock-city']");
+        expect(city?.textContent).toContain("LL.menu.settings.night.worldRainCity(Lisbonne,2,4)");
+        expect(fallButton(WorldFall.Rain)?.getAttribute("aria-pressed")).toBe("true");
+        expect(target.querySelector("[data-testid='world-clock-moment-evening']")?.getAttribute("aria-pressed")).toBe(
+            "false",
+        );
+    });
+
+    it("says it snows lightly when no water is counted yet", () => {
+        nightModeStore.set(NightMode.World);
+        worldFallStore.set({ fall: WorldFall.Snow, place: LISBON, rainRate: 0 });
+        worldCityStore.set(LISBON);
+        openMenu();
+        expect(target.querySelector("[data-testid='world-clock-city']")?.textContent).toContain(
+            "LL.menu.settings.night.worldSnowCityLight(Lisbonne)",
+        );
+    });
+
+    it("says it snows nowhere in the list, and keeps the place followed", async () => {
+        nightModeStore.set(NightMode.World);
+        worldMomentStore.set(WorldMoment.Noon);
+        worldCityStore.set({ name: "Dakar", latitude: 14.72, longitude: -17.47 });
+        await chooseWorldFall(WorldFall.Snow, () => Promise.resolve({ status: "none" }));
+        openMenu();
+        expect(target.querySelector("[data-testid='world-clock-fall-notice']")?.textContent).toContain(
+            "LL.menu.settings.night.worldNoSnow",
+        );
+        expect(target.querySelector("[data-testid='world-clock-city']")?.textContent).toContain(
+            "LL.menu.settings.night.worldCity(Dakar)",
+        );
+        expect(target.querySelector("[data-testid='world-clock-moment-noon']")?.getAttribute("aria-pressed")).toBe(
+            "true",
+        );
+    });
+
+    it("says the weather of the world could not be read, and changes nothing", async () => {
+        worldFallStore.set({ fall: WorldFall.Rain, place: LISBON, rainRate: 1 });
+        await chooseWorldFall(WorldFall.Snow, () => Promise.resolve({ status: "failed" }));
+        nightModeStore.set(NightMode.World);
+        openMenu();
+        expect(target.querySelector("[data-testid='world-clock-fall-notice']")?.textContent).toContain(
+            "LL.menu.settings.night.worldFallFailed",
+        );
+        expect(target.querySelector("[data-testid='world-clock-city']")?.getAttribute("data-fall")).toBe("rain");
+    });
+
+    it("asks the weather of the world at a click, and follows the place where it rains", async () => {
+        const answer = {
+            at: 0,
+            places: [
+                {
+                    name: "Lisbonne",
+                    weatherCode: 61,
+                    temperature: 14,
+                    humidity: 90,
+                    rainRate: 1.2,
+                    isDay: true,
+                },
+            ],
+        };
+        const fetchMock = vi.fn<typeof fetch>(() =>
+            Promise.resolve(new Response(JSON.stringify(answer), { status: 200 })),
+        );
+        vi.stubGlobal("fetch", fetchMock);
+        nightModeStore.set(NightMode.World);
+        worldPointStore.set({ latitude: 10, longitude: 10 });
+        openMenu();
+        fallButton(WorldFall.Rain)?.click();
+        await vi.waitFor(() => {
+            let value: unknown;
+            worldFallStore.subscribe((choice) => (value = choice))();
+            expect(value).toMatchObject({ fall: WorldFall.Rain, place: { name: "Lisbonne" }, rainRate: 1.2 });
+        });
+        const asked = fetchMock.mock.calls[0]?.[0];
+        expect(asked instanceof URL ? asked.pathname : asked).toMatch(/real-weather\/world$/);
+        let point: unknown = "unset";
+        worldPointStore.subscribe((value) => (point = value))();
+        expect(point).toBeUndefined();
+    });
+
+    it("leaves the place picked for a moment", () => {
+        nightModeStore.set(NightMode.World);
+        worldFallStore.set({ fall: WorldFall.Rain, place: LISBON, rainRate: 1 });
+        openMenu();
+        target.querySelector<HTMLButtonElement>("[data-testid='world-clock-moment-morning']")?.click();
+        flushSync();
+        let value: unknown = "unset";
+        worldFallStore.subscribe((choice) => (value = choice))();
+        expect(value).toBeUndefined();
     });
 });

@@ -1658,6 +1658,29 @@ d'heure) à ±2 min. La nuit, un voile bleu nuit
     le 21 de chaque mois, au quart d'heure : 95 % au moins, 21° au plus). Effets : l'**heure choisie** et **Midi**
     peuvent tomber sur ces villes (ex. 18 h 30 le 21 juin à 06:00 UTC : Unalaska au lieu d'Auckland) ; un **point
     cliqué** près d'elles porte leur nom et leur fuseau.
+  - **Pluie** et **Neige** (sous les moments, goutte et flocon) : le ciel d'un lieu où il pleut (ou neige) **en ce
+    moment**, d'après la météo réelle. Au clic, le navigateur demande au pusher `/real-weather/world` (authentifié,
+    30 requêtes/min par joueur comme les autres routes météo), qui pose **une seule** requête à Open-Meteo pour tous
+    les lieux (`openMeteoWorldUrl` : coordonnées séparées par des virgules, `current=weather_code,temperature_2m,
+    relative_humidity_2m,precipitation,is_day`), gardée 10 min pour tout le pusher (`WorldWeatherService`, une
+    requête partagée entre clics simultanés, nouvel essai une minute après un échec, rien de plus vieux que 30 min) ;
+    le navigateur garde la réponse 5 min (`WorldWeatherClient`). Jamais en fond : seulement au clic. Chaque lieu de
+    la requête compte comme un appel du quota gratuit (46 lieux, 10 000 appels/jour) : au plus 6 requêtes par heure.
+    Lieux : les villes du ciel du monde (`WORLD_CITIES`, déplacées dans `common/WorldCities.ts` pour le pusher) et
+    quatre lieux réputés enneigés, demandés pour la pluie et la neige seulement, pas pour les moments
+    (`WORLD_WEATHER_EXTRA_PLACES` : Sapporo, Tromsø, Nuuk, Ushuaïa ; Wikipédia et `zone1970.tab`). **Règle** comme
+    le jeu (`WorldWeatherPick.fallOf`) : il tombe quelque chose quand le code WMO est une pluie, une neige ou un
+    orage (`weatherFromWmoCode`, même avec 0 mm comptés : le jeu dessine alors une pluie faible), et c'est de la
+    **neige** dès la moitié de neige au thermomètre mouillé (`snowShare` de `Precipitation.ts`), pas d'après le code
+    (un code de neige par 9 °C est dessiné en pluie). **Choix** : de jour d'abord (pour la voir), puis la plus
+    forte, puis par nom ; un second clic prend le lieu suivant de cette liste, en boucle. Le lieu est marqué sur la
+    carte du monde (le point jaune du lieu suivi), l'horloge prend son heure (il peut y faire nuit). Le menu dit
+    « Ciel de Lisbonne : il y pleut (2,4 mm/h) » ou « … il y neige (0,4 mm/h d'eau) », « faiblement » sans eau
+    comptée, puis « Il n'y pleut plus » quand la météo du lieu suivi (relue toutes les 5 min) ne le montre plus ; le
+    lieu reste. Aucun lieu : « Il ne neige dans aucune ville de la liste en ce moment », échec : « La météo du monde
+    est indisponible pour l'instant : rien n'a changé » ; le lieu suivi ne change pas. Ordre : un point cliqué
+    l'emporte, puis le lieu de pluie ou de neige, puis le moment ; un moment ou un clic sur la carte quitte le lieu
+    (`clearWorldFall`). Choix gardé dans le navigateur (`nightWorldFall`, par le nom du lieu).
   - **Heure choisie** : inchangée, la ville dont l'**heure solaire vraie** est la plus proche (avec l'équation du
     temps, ±16 min selon la saison), gardée à 50 min près. **Point cliqué** sur la carte : le menu dit alors
     « Ciel de … (point choisi sur la carte) », surligné, puisqu'aucun moment n'est enfoncé. Le point garde ses
