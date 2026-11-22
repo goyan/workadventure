@@ -488,6 +488,72 @@ describe("MeadowManager", () => {
         expect(slow.sent).toBeLessThan(slow.ticks / 10);
     });
 
+    it("hurries the time missed by its own timer, a short tick at a time, and leaves no timer behind", async () => {
+        const first = createHarness();
+        first.manager.mapChanged();
+        first.steps(30);
+        first.manager.stop();
+        const room = createHarness({ saved: first.store, now: Date.UTC(2026, 6, 15, 10) });
+        const along: number[] = [];
+        room.manager.liveAlong((seconds) => along.push(seconds));
+        await room.manager.restore();
+        vi.useFakeTimers();
+        try {
+            // A clock that follows the timers, on which each slice takes 2 ms: a tick stops at its budget of 8 ms.
+            let spent = 0;
+            room.manager.timeCatchUpWith(() => Date.now() + (spent += 2));
+            room.manager.mapChanged();
+            expect(room.manager.catchingUp()).toBe(true);
+            // Nothing before the first step of the meadow, two seconds in; then a tick of four slices.
+            vi.advanceTimersByTime(1999);
+            expect(along).toHaveLength(0);
+            vi.advanceTimersByTime(1);
+            expect(along).toHaveLength(4);
+            // The next ticks come by themselves a short pause later, not at the next step two seconds away.
+            let longest = 0;
+            for (let pause = 0; pause < 50; pause++) {
+                const before = along.length;
+                vi.advanceTimersByTime(8);
+                longest = Math.max(longest, along.length - before);
+            }
+            expect(longest).toBe(4);
+            expect(along.length).toBeGreaterThan(100);
+            // A day is 720 slices: lived within a few seconds of the timers, where 150 slices every two seconds
+            // took ten.
+            vi.advanceTimersByTime(4000);
+            expect(room.manager.catchingUp()).toBe(false);
+            expect(along).toHaveLength(720);
+            // Caught up: only the step of the meadow is left, and nothing once the room closes.
+            expect(vi.getTimerCount()).toBe(1);
+            room.manager.stop();
+            expect(vi.getTimerCount()).toBe(0);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it("stops the timer of the time missed when the room closes while it catches up", async () => {
+        const first = createHarness();
+        first.manager.mapChanged();
+        first.steps(30);
+        first.manager.stop();
+        const room = createHarness({ saved: first.store, now: Date.UTC(2026, 6, 17, 10) });
+        await room.manager.restore();
+        vi.useFakeTimers();
+        try {
+            let spent = 0;
+            room.manager.timeCatchUpWith(() => Date.now() + (spent += 2));
+            room.manager.mapChanged();
+            vi.advanceTimersByTime(2100);
+            expect(room.manager.catchingUp()).toBe(true);
+            expect(vi.getTimerCount()).toBe(2);
+            room.manager.stop();
+            expect(vi.getTimerCount()).toBe(0);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it("does not catch up a meadow saved without its time", async () => {
         const first = createHarness();
         first.manager.mapChanged();
