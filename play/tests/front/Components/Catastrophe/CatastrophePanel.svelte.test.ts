@@ -25,7 +25,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 drainSizeLabel: label("Size of the drain"),
                 ball: label("Ball"),
                 ballSizeLabel: label("Size of the ball: its diameter"),
-                ballArmedHelp: label("Hold the click: a solid ball, its centre at level 0"),
+                ballArmedHelp: label("Hold the click: a solid ball, half in the water under the pointer"),
             },
         },
     });
@@ -197,7 +197,7 @@ describe("CatastrophePanel", () => {
         expect(get(ballDiameterTilesStore)).toBe(9);
         expect(target.textContent).toContain("9 tiles");
         ballDiameterTilesStore.set(4);
-        expect(target.textContent).toContain("Hold the click: a solid ball, its centre at level 0");
+        expect(target.textContent).toContain("Hold the click: a solid ball, half in the water under the pointer");
         expect(target.textContent).not.toContain("Hold the click on the map");
     });
 

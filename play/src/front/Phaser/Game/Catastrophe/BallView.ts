@@ -1,7 +1,7 @@
 import type { WaterBall } from "@workadventure/map-editor";
 import type { CatastropheMessage } from "@workadventure/messages";
 import { DEPTH_NIGHT_INDEX } from "@wa/front/Phaser/Game/DepthIndexes";
-import { BALL_TONES, ballBlockPx, ballBlocks, ballWaterline, glideBall, tellBall } from "./BallShape";
+import { BALL_TONES, ballBlockPx, ballBlocks, ballLevelUnder, ballWaterline, glideBall, tellBall } from "./BallShape";
 import type { BallCover, ToldBall } from "./BallShape";
 
 /** The tones of the ball, from its shade to its glint: a red buoy, read against the water as against the grass. */
@@ -40,8 +40,8 @@ function blend(from: number, to: number, share: number): number {
 const WET_COLORS = TONE_COLORS.map((color) => blend(color, WATER_COLOR, WET_BLEND));
 
 /**
- * The balls of the room: each a solid sphere held under the pointer of its player, its centre at the altitude 0 of
- * the map. A ball is whole at once and gone at once. The one this player holds is drawn under their own pointer,
+ * The balls of the room: each a solid sphere held under the pointer of its player, its centre at the surface of the
+ * water it stands in (on the ground where there is none). A ball is whole at once and gone at once. The one this player holds is drawn under their own pointer,
  * without waiting for the server; those of the others are drawn where the server tells them. Drawn in code, in
  * blocks lit from the top left: plainly what stands out of the ground and of the water, under the tint of the water
  * what the water stands over, not at all what is in the ground; where the water meets the ball, a dark band and a
@@ -52,6 +52,11 @@ export class BallView {
     private readonly shown = new Map<number, Shown>();
     /** The ball this player holds, while they hold one. */
     private own: Shown | undefined;
+    /**
+     * The altitude it is shown at: the surface of the water under the pointer when the click was pressed, as this
+     * browser knows it, then what the server says, which alone decides it.
+     */
+    private ownLevel = 0;
     private readonly ring: Phaser.GameObjects.Graphics;
     private ringDrawn = "";
 
@@ -72,7 +77,13 @@ export class BallView {
     /** `receivedAt` in ms of the game: the ball stands `message.impactInMs` more, none when its player let it go. */
     public report(message: CatastropheMessage, receivedAt: number): void {
         // One's own ball is under one's own pointer: what the server says of it comes a round trip late.
-        if (message.userId !== undefined && message.userId === this.ownUserId()) return;
+        if (message.userId !== undefined && message.userId === this.ownUserId()) {
+            // But for its level: the server knows the water under it, which the ball hides here.
+            if (this.own && message.impactInMs > 0 && message.ballLevel !== undefined) {
+                if (Number.isFinite(message.ballLevel)) this.ownLevel = message.ballLevel;
+            }
+            return;
+        }
         const known = this.shown.get(message.id);
         if (message.impactInMs <= 0) {
             if (known) known.told = { ...tellBall(known.told, message, receivedAt), until: receivedAt };
@@ -92,8 +103,10 @@ export class BallView {
     public update(now: number): void {
         const held = this.held();
         let dirty = false;
-        if (held && !this.own) this.own = { told: undefined, body: this.scene.add.graphics(), drawn: "" };
-        else if (!held && this.own) {
+        if (held && !this.own) {
+            this.own = { told: undefined, body: this.scene.add.graphics(), drawn: "" };
+            this.ownLevel = ballLevelUnder(held.x, held.y, this.cover);
+        } else if (!held && this.own) {
             this.own.body.destroy();
             this.own = undefined;
             dirty = true;
@@ -101,11 +114,16 @@ export class BallView {
         if (this.shown.size === 0 && !this.own && !dirty) return;
         const version = this.coverVersion();
         let rings = "";
-        const places: { x: number; y: number; radiusPx: number }[] = [];
+        const places: { x: number; y: number; radiusPx: number; levelPx: number }[] = [];
         const show = (shown: Shown, ball: WaterBall): void => {
             // To the pixel: a ball that barely moved is not drawn again.
-            const place = { x: Math.round(ball.x), y: Math.round(ball.y), radiusPx: Math.round(ball.radiusPx * 2) / 2 };
-            const key = `${place.x},${place.y},${place.radiusPx}`;
+            const place = {
+                x: Math.round(ball.x),
+                y: Math.round(ball.y),
+                radiusPx: Math.round(ball.radiusPx * 2) / 2,
+                levelPx: Math.round(ball.levelPx ?? 0),
+            };
+            const key = `${place.x},${place.y},${place.radiusPx},${place.levelPx}`;
             rings += `${key};`;
             places.push(place);
             if (shown.drawn === `${key},${version}`) return;
@@ -113,7 +131,7 @@ export class BallView {
             this.draw(shown.body, place);
             dirty = true;
         };
-        if (this.own && held) show(this.own, held);
+        if (this.own && held) show(this.own, { ...held, levelPx: this.ownLevel });
         for (const [id, shown] of this.shown) {
             if (!shown.told || now >= shown.told.until) {
                 shown.body.destroy();
@@ -131,7 +149,10 @@ export class BallView {
         if (dirty) this.scene.markDirty();
     }
 
-    private draw(body: Phaser.GameObjects.Graphics, ball: { x: number; y: number; radiusPx: number }): void {
+    private draw(
+        body: Phaser.GameObjects.Graphics,
+        ball: { x: number; y: number; radiusPx: number; levelPx: number },
+    ): void {
         body.clear();
         body.setDepth(ball.y);
         if (ball.radiusPx <= 0) return;

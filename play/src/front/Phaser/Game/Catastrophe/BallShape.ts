@@ -36,13 +36,16 @@ export function ballBlockPx(radiusPx: number): number {
 }
 
 /**
- * A ball seen from above, in blocks: a sphere lit from the top left, in a few flat tones. What of it is in the
- * ground is not drawn (on a mount higher than its radius, nothing); what the water stands over is told wet, so that
- * it is drawn under the tint of the water. The water lower than its underside does not wet it.
+ * A ball seen from above, in blocks: a sphere lit from the top left, in a few flat tones. Its middle is at the
+ * altitude it is held at (`levelPx`: the surface of the water it stands in). What of it is in the ground is not
+ * drawn (under a ground higher than its top, nothing); what the water stands over is told wet, so that it is drawn
+ * under the tint of the water. The water lower than its underside does not wet it.
  */
 export function ballBlocks(ball: WaterBall, coverAt: BallCover): BallBlock[] {
     const { x, y, radiusPx } = ball;
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(radiusPx) || radiusPx <= 0) return [];
+    const level = ball.levelPx ?? 0;
+    if (!Number.isFinite(level)) return [];
     const size = ballBlockPx(radiusPx);
     const square = radiusPx * radiusPx;
     const blocks: BallBlock[] = [];
@@ -63,22 +66,31 @@ export function ballBlocks(ball: WaterBall, coverAt: BallCover): BallBlock[] {
             if (!cell) {
                 const cover = coverAt(x + dx, y + dy);
                 const stands = ballHalfHeight(ball, cellX, cellY);
-                const solid = ballColumn(cover.groundPx, stands);
+                const solid = ballColumn(cover.groundPx, stands, level);
                 // The water stands over the ball when there is more of it than fits under: up to that altitude.
                 const over = solid && cover.waterPx > solid.underPx + FILM_PX ? solid.topPx + cover.waterPx : -Infinity;
                 cell = { groundPx: cover.groundPx, overPx: over };
                 cells.set(key, cell);
             }
-            if (height <= cell.groundPx) continue;
+            if (level + height <= cell.groundPx) continue;
             const light = (dx * LIGHT.x + dy * LIGHT.y + height * LIGHT.z) / radiusPx;
             const tone =
                 light >= GLINT_FROM
                     ? BALL_TONES - 1
                     : Math.min(BALL_TONES - 2, Math.floor(Math.max(0, light) * (BALL_TONES - 1)));
-            blocks.push({ x: x + column * size, y: y + row * size, tone, wet: height <= cell.overPx });
+            blocks.push({ x: x + column * size, y: y + row * size, tone, wet: level + height <= cell.overPx });
         }
     }
     return blocks;
+}
+
+/**
+ * The altitude a ball held at a point of the map (pixels) is shown at before the server says: the surface of the
+ * water there, where it is half in the water, or the ground where there is none.
+ */
+export function ballLevelUnder(x: number, y: number, coverAt: BallCover): number {
+    const cover = coverAt(x, y);
+    return cover.waterPx > FILM_PX ? cover.groundPx + cover.waterPx : cover.groundPx;
 }
 
 /** The line where the water meets a ball, seen from above: its arcs, and whether water is nearly all around. */
@@ -89,9 +101,9 @@ export interface BallWaterline {
 
 /**
  * Where the water around a ball meets it: looked at all around, a cell past its rim. Where water stands there, the
- * line is where the sphere crosses its level: drawn in when the water is higher than the middle of the ball, at the
- * rim when it is lower (the ball then touches it under its widest part). None along dry ground, nor around a ball
- * the water stands over.
+ * line is where the sphere crosses its level: at the rim of a ball held at the level of that water (it is half in
+ * it) or higher (it then touches the water under its widest part), drawn in when the water is higher than its
+ * middle. None along dry ground, nor around a ball the water stands over.
  */
 export function ballWaterline(ball: WaterBall, coverAt: BallCover): BallWaterline {
     const { x, y, radiusPx } = ball;
@@ -105,8 +117,9 @@ export function ballWaterline(ball: WaterBall, coverAt: BallCover): BallWaterlin
         const angle = (2 * Math.PI * (at + 0.5)) / count;
         const away = { x: Math.cos(angle), y: Math.sin(angle) };
         const cover = coverAt(x + away.x * (radiusPx + TERRAIN_CELL), y + away.y * (radiusPx + TERRAIN_CELL));
-        const level = cover.groundPx + cover.waterPx;
-        if (cover.waterPx <= FILM_PX || level >= radiusPx) {
+        // How high the water stands over the middle of the ball.
+        const level = cover.groundPx + cover.waterPx - (ball.levelPx ?? 0);
+        if (cover.waterPx <= FILM_PX || !(level < radiusPx)) {
             points.push(undefined);
             continue;
         }
@@ -143,7 +156,7 @@ export interface ToldBall extends WaterBall {
     until: number;
 }
 
-type BallReport = Pick<CatastropheMessage, "x" | "y" | "radiusTiles" | "impactInMs">;
+type BallReport = Pick<CatastropheMessage, "x" | "y" | "radiusTiles" | "impactInMs" | "ballLevel">;
 
 /**
  * The ball of a message of the server: whole, where its player holds it, `message.impactInMs` more. One already
@@ -155,6 +168,11 @@ export function tellBall(known: ToldBall | undefined, message: BallReport, recei
         x: message.x,
         y: message.y,
         radiusPx: ballRadiusPx(message.radiusTiles),
+        // The level the server holds it at; that of before for a message that says none.
+        levelPx:
+            message.ballLevel !== undefined && Number.isFinite(message.ballLevel)
+                ? message.ballLevel
+                : (known?.levelPx ?? 0),
         fromX: from.x,
         fromY: from.y,
         toldAt: receivedAt,
@@ -172,5 +190,6 @@ export function glideBall(ball: ToldBall, now: number): WaterBall {
         x: ball.fromX + (ball.x - ball.fromX) * share,
         y: ball.fromY + (ball.y - ball.fromY) * share,
         radiusPx: ball.radiusPx,
+        levelPx: ball.levelPx ?? 0,
     };
 }
