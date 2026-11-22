@@ -756,8 +756,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         forceAuto: "Force automatique (un huitième du diamètre)",
         force: "Force (épaisseur enlevée par passage)",
         mapSettings: "Réglages de la carte",
-        realistic: "Réaliste",
-        realisticHint: "Remet tous les réglages de l'eau sur leurs valeurs physiques.",
+        realistic: "Remettre les réglages réels",
+        realisticHint: "Remet tous les réglages de l'eau sur leurs valeurs par défaut, celles du réel.",
         more: "En savoir plus",
         realisticDetail:
             "Vitesse 1, eau à inertie, vagues selon le sol et la profondeur, vitesse d'écoulement 1, 5 envois par seconde, hauteur d'eau non plafonnée (256 px), ruissellement 10, évaporation 0,2 mm/h, absorption 5 mm/h, vidange 300 mm/h. Seul l'amorti (0,02) n'est pas physique.",
@@ -802,7 +802,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         current: "Force du courant (0 : les avatars ne sont pas emportés)",
         maxSurface: "Hauteur maximale de l'eau au-dessus du sol",
-        inertia: "Eau à inertie (à l'essai)",
+        inertia: "Eau à inertie",
         flowPace: "Vitesse d'écoulement",
         flowPaceHint: "Ralentit ou accélère tout ce qui coule : vagues, crues, courants. En réel : 1.",
         precision: "Finesse du calcul de l'eau",
@@ -840,7 +840,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         real: {
             inertia:
-                "L'eau garde son élan : des vagues courent, cassent et noient les rives. Coupé : l'eau avance de proche en proche. En réel : activée.",
+                "L'eau garde son élan : des vagues courent, cassent et noient les rives. Coupé : l'eau avance de proche en proche. Activée par défaut, comme en vrai.",
             maxDepth: "En réel : une case fait environ 1,10 m. Mare : 1 case ; étang : 2 à 3 ; lac : 4 et plus.",
             runoff: "En réel : le terrain qui alimente une mare fait 5 à 20 fois sa surface ; 0 pour un bassin maçonné.",
             evaporation: "En réel : 0,05 mm/h en hiver, 0,1 à 0,3 mm/h en été (3 à 6 mm par jour).",

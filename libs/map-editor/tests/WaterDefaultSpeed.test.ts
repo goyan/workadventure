@@ -11,6 +11,7 @@ import {
     MIN_WATER_MAX_SURFACE,
     REALISTIC_WATER_SETTINGS,
     WaterSettings,
+    waterHasInertia,
 } from "../src/types";
 import type { WAMFileFormat } from "../src/types";
 
@@ -69,12 +70,16 @@ describe("the speed of the water by default", () => {
 });
 
 describe("the water of a map that says nothing", () => {
-    it("lets no flood be cut short and is told five times a second, without inertia", () => {
+    it("lets no flood be cut short, is told five times a second, and has inertia unless the map turned it off", () => {
         expect(DEFAULT_WATER_SETTINGS.maxSurface).toBe(256);
         expect(WaterSettings.parse({}).maxSurface).toBe(256);
         expect(DEFAULT_WATER_PACE.updates).toBe(5);
-        expect(WaterSettings.parse({}).inertia).toBeUndefined();
-        expect(stepInputOf(undefined, 0, [], 0.1).inertia).toBeUndefined();
+        expect(DEFAULT_WATER_SETTINGS.inertia).toBe(true);
+        expect(waterHasInertia(undefined)).toBe(true);
+        expect(waterHasInertia(WaterSettings.parse({}))).toBe(true);
+        expect(waterHasInertia({ inertia: false })).toBe(false);
+        expect(stepInputOf(undefined, 0, [], 0.1).inertia).toBe(true);
+        expect(stepInputOf({ ...DEFAULT_WATER_SETTINGS, inertia: false }, 0, [], 0.1).inertia).toBeUndefined();
     });
 
     it("keeps a lower ceiling a map set, from 18 px", () => {
@@ -84,10 +89,9 @@ describe("the water of a map that says nothing", () => {
         expect(WaterSettings.safeParse({ maxSurface: 10 }).success).toBe(false);
     });
 
-    it("is the realistic water but for the inertia: one list, the other made of it", () => {
+    it("is the realistic water: one list, the other made of it", () => {
         expect(REALISTIC_WATER_SETTINGS).toEqual({
             ...DEFAULT_WATER_SETTINGS,
-            inertia: true,
             waves: DEFAULT_WAVE_SETTINGS,
             precision: DEFAULT_WATER_PACE.precision,
             updates: DEFAULT_WATER_PACE.updates,

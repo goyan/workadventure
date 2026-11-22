@@ -5,6 +5,7 @@ import {
     DEFAULT_WATER_SETTINGS,
     TERRAIN_CELL,
     TILE_PX,
+    waterHasInertia,
     WeatherType,
 } from "../types";
 import type { TerrainData, WAMFileFormat, WaterSettings } from "../types";
@@ -332,9 +333,11 @@ export class WaterSimulation {
         const started = this.clock();
         const settings = this.room.getWam()?.settings;
         // The fineness and the tellings the map asks for are ceilings: less while the steps take too long.
-        const asked = settings?.water?.inertia ? (settings.water.precision ?? DEFAULT_WATER_PACE.precision) : 1;
-        const water = settings?.water?.inertia
-            ? { ...settings.water, precision: this.load.precision(asked) }
+        const inertia = waterHasInertia(settings?.water);
+        const asked = inertia ? (settings?.water?.precision ?? DEFAULT_WATER_PACE.precision) : 1;
+        // A map that says nothing of its water has the water of reality, with inertia.
+        const water = inertia
+            ? { ...(settings?.water ?? DEFAULT_WATER_SETTINGS), precision: this.load.precision(asked) }
             : settings?.water;
         // The map says how high its water may stand; lowered, what stands over it goes at this step.
         const highest = grid.maxSurface();
@@ -449,7 +452,15 @@ export class WaterSimulation {
         const { seconds: lived, rainMm } = this.missed;
         this.missed = { seconds: 0, rainMm: 0 };
         const water = this.room.getWam()?.settings?.water;
-        grid.step(stepInputOf(water && { ...water, inertia: false }, (rainMm * 3600) / lived, this.objects, lived));
+        // Without inertia: the water ends where it rests, whatever the map does with it.
+        grid.step(
+            stepInputOf(
+                { ...(water ?? DEFAULT_WATER_SETTINGS), inertia: false },
+                (rainMm * 3600) / lived,
+                this.objects,
+                lived,
+            ),
+        );
         this.pumpPools(grid, lived);
         this.moving = true;
         this.version++;
@@ -666,7 +677,7 @@ export class WaterSimulation {
         this.stopPumps();
         // The shock first drives the water around the crater away; then the water of the crater is thrown up.
         this.blast(grid, cellX, cellY, radiusTiles);
-        if (this.room.getWam()?.settings?.water?.inertia === true) {
+        if (waterHasInertia(this.room.getWam()?.settings?.water)) {
             // A water with inertia makes its own wave: the impact only throws the water of the crater around it.
             const struck = strikeWater(grid, cellX, cellY, shape);
             if (!struck) return;
@@ -797,7 +808,7 @@ export class WaterSimulation {
         this.sentRates = anyRate;
         // The speed of a water with inertia, so that the browsers carry what floats as the water really runs.
         const water = this.room.getWam()?.settings?.water;
-        const speeds = water?.inertia === true ? grid.writeSpeedBytes(water.flowPace) : undefined;
+        const speeds = waterHasInertia(water) ? grid.writeSpeedBytes(water?.flowPace) : undefined;
         if (full) this.fullAtStep = this.steps;
         this.seq++;
         const depths = this.zip(payload);
@@ -833,7 +844,7 @@ export class WaterSimulation {
 
     /** What the server lowered under what the map asks, for the relief tool to say so; nothing when nothing is. */
     private eased(water: WaterSettings | undefined): { easedPrecision?: number; easedUpdates?: number } {
-        const precision = water?.inertia ? (water.precision ?? DEFAULT_WATER_PACE.precision) : 1;
+        const precision = waterHasInertia(water) ? (water?.precision ?? DEFAULT_WATER_PACE.precision) : 1;
         const updates = water?.updates ?? DEFAULT_WATER_PACE.updates;
         return {
             ...(this.load.precision(precision) < precision ? { easedPrecision: this.load.precision(precision) } : {}),

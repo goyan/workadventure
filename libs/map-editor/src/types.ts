@@ -974,9 +974,8 @@ export const TerrainData = z.object({
 export type TerrainData = z.infer<typeof TerrainData>;
 
 /**
- * How fast the water of the relief comes and goes on a map that says nothing: at its real pace, and no flood cut
- * short. Its inertia is not on by default (it waits for a thread of its own for the water of each room): the
- * "Realistic" button adds it.
+ * How fast the water of the relief comes and goes on a map that says nothing: as in reality. It goes at its real
+ * pace, has inertia, and no flood is cut short.
  */
 export const DEFAULT_WATER_SETTINGS = {
     runoff: 10,
@@ -986,7 +985,12 @@ export const DEFAULT_WATER_SETTINGS = {
     current: 1,
     maxSurface: 256,
     indoorDrain: 300,
+    inertia: true,
 } as const;
+/** Whether the water of a map has inertia: unless the map turned it off, it has. */
+export function waterHasInertia(water: { inertia?: boolean } | undefined): boolean {
+    return water?.inertia ?? DEFAULT_WATER_SETTINGS.inertia;
+}
 /**
  * The lowest a map may set for how high its water stands over the level it spills at, in pixels: just over the
  * depth one swims at and under the floors of the buildings (the default before no flood was cut short).
@@ -1025,13 +1029,13 @@ export const DEFAULT_IMPACT_REACH = 2.5;
 export const IMPACT_REACH_BOUNDS = [1, 4] as const;
 
 /**
- * The water of a map as in reality (the "Realistic" button of the relief tool): the defaults, and the inertia on, so
- * that it makes its waves as the ground and its depth make them. The damping is the only figure that is not physical
- * (0 in reality): the least that keeps the computation calm. Made of the defaults, never a list of its own.
+ * Every setting of the water of a map as it is by default, as in reality (the button of the relief tool that sets
+ * them back): it goes at its real pace, has inertia and makes its waves as the ground and its depth make them, and
+ * no flood is cut short. The damping is the only figure that is not physical (0 in reality): the least that keeps
+ * the computation calm. Made of the defaults, never a list of its own.
  */
 export const REALISTIC_WATER_SETTINGS = {
     ...DEFAULT_WATER_SETTINGS,
-    inertia: true,
     waves: DEFAULT_WAVE_SETTINGS,
     precision: DEFAULT_WATER_PACE.precision,
     updates: DEFAULT_WATER_PACE.updates,
@@ -1078,8 +1082,9 @@ export const WaterSettings = z.object({
      */
     indoorDrain: z.number().min(0).max(MAX_WATER_INDOOR_DRAIN).default(DEFAULT_WATER_SETTINGS.indoorDrain),
     /**
-     * Whether the water has inertia (on trial): it keeps its flow from a step to the next, so waves run and a lake
-     * levels as fast as its depth allows. Absent or false: the water creeps from cell to cell.
+     * Whether the water has inertia: it keeps its flow from a step to the next, so waves run and a lake levels as
+     * fast as its depth allows. Absent: it has (DEFAULT_WATER_SETTINGS.inertia, read by waterHasInertia); false:
+     * the water creeps from cell to cell. Left optional, so that the settings a map writes need not say it.
      */
     inertia: z.boolean().optional(),
     /**

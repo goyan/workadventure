@@ -74,8 +74,9 @@ function wamWith(terrain: TerrainData | undefined, weather: WeatherType = Weathe
                 maxSurface: 18,
                 indoorDrain: 0,
                 impactReach: 1,
-                // These tests were written for a room told once a second: said so, now that a map that says
-                // nothing is told five times a second.
+                // These tests were written for the water that creeps, told once a second: said so, now that the
+                // water of a map that says nothing has inertia and is told five times a second.
+                inertia: false,
                 updates: 1,
             },
         },
@@ -673,14 +674,18 @@ describe("TerrainWaterManager", () => {
         expect(count(10)).toBe(20);
     });
 
-    it("tells a map that says nothing of its pace five times a second", () => {
+    it("gives a map that says nothing of its water the water of reality: inertia, told five times a second", () => {
         const wam = wamWith(wideLake);
-        if (wam.settings?.water) delete wam.settings.water.updates;
+        if (wam.settings) delete wam.settings.water;
         wam.entities.spring = sourceAt(15, 15, 600000);
         const { manager, sent, steps } = createHarness({ wam });
         manager.mapChanged();
         steps(20);
+        // Two seconds, five times a second; the speeds of a water with inertia go with each state.
         expect(sent).toHaveLength(10);
+        expect(sent.every((message) => message.speeds !== undefined)).toBe(true);
+        // The settings saved in the map are not written for it.
+        expect(wam.settings?.water).toBeUndefined();
     });
 
     it("does not tell again a cell whose water barely changed, and puts it right at the next whole state", () => {

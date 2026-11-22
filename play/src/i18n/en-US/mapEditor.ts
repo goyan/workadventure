@@ -745,8 +745,8 @@ const mapEditor: BaseTranslation = {
         forceAuto: "Automatic force (an eighth of the diameter)",
         force: "Force (thickness taken off by a stroke)",
         mapSettings: "Map settings",
-        realistic: "Realistic",
-        realisticHint: "Sets every setting of the water back to its physical value.",
+        realistic: "Reset to the real settings",
+        realisticHint: "Sets every setting of the water back to its default, that of reality.",
         more: "Learn more",
         realisticDetail:
             "Speed 1, water with inertia, waves as the ground and the depth make them, pace of the flow 1, 5 tellings a second, water height not capped (256 px), runoff 10, evaporation 0.2 mm/h, absorption 5 mm/h, drainage 300 mm/h. Only the damping (0.02) is not physical.",
@@ -791,7 +791,7 @@ const mapEditor: BaseTranslation = {
         },
         current: "Strength of the current (0: avatars are not carried)",
         maxSurface: "Highest water over the ground",
-        inertia: "Water with inertia (on trial)",
+        inertia: "Water with inertia",
         flowPace: "Pace of the flow",
         flowPaceHint: "Slows down or speeds up all that flows: waves, floods, currents. In reality: 1.",
         precision: "Fineness of the computation of the water",
@@ -827,7 +827,7 @@ const mapEditor: BaseTranslation = {
         },
         real: {
             inertia:
-                "The water keeps its momentum: waves run, break and flood the shores. Off: the water creeps from cell to cell. In reality: on.",
+                "The water keeps its momentum: waves run, break and flood the shores. Off: the water creeps from cell to cell. On by default, as in reality.",
             maxDepth: "In reality: a tile is about 1.10 m. Pond: 1 tile; large pond: 2 to 3; lake: 4 and more.",
             runoff: "In reality: the ground feeding a pond is 5 to 20 times its surface; 0 for a built basin.",
             evaporation: "In reality: 0.05 mm/h in winter, 0.1 to 0.3 mm/h in summer (3 to 6 mm a day).",

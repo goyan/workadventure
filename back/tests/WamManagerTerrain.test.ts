@@ -52,6 +52,7 @@ describe("WamManager relief", () => {
             current: 1,
             maxSurface: 256,
             indoorDrain: 300,
+            inertia: true,
         });
     });
 

@@ -30,6 +30,7 @@ import {
     PrefabOverride,
     RecordingSettings,
     WATER_PACE_BOUNDS,
+    waterHasInertia,
     WAVE_BOUNDS,
     Weather,
     WeatherLocation,
@@ -209,18 +210,14 @@ export class UpdateWAMSettingCommand extends Command {
                     maxSurface:
                         maxSurface === undefined
                             ? keptMaxSurface
-                            : within(
-                                  maxSurface,
-                                  MIN_WATER_MAX_SURFACE,
-                                  MAX_WATER_MAX_SURFACE,
-                                  keptMaxSurface,
-                              ),
+                            : within(maxSurface, MIN_WATER_MAX_SURFACE, MAX_WATER_MAX_SURFACE, keptMaxSurface),
                     indoorDrain:
                         indoorDrain === undefined
                             ? keptIndoorDrain
                             : within(indoorDrain, 0, MAX_WATER_INDOOR_DRAIN, keptIndoorDrain),
-                    // An older client says nothing of the inertia: the map keeps the water it had.
-                    ...((inertia ?? this.wam.settings.water?.inertia) ? { inertia: true } : {}),
+                    // An older client says nothing of the inertia: the map keeps the water it had (with inertia when it
+                    // said nothing). Written either way: a map that turned it off keeps it off.
+                    inertia: inertia ?? waterHasInertia(this.wam.settings.water),
                     ...(waves ? { waves } : {}),
                     ...(paced("precision", precision) === undefined
                         ? {}

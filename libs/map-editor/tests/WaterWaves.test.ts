@@ -295,7 +295,9 @@ describe("the precision of the water with inertia", () => {
     it("goes from the settings of the map to the step, three moves when the map says nothing", () => {
         expect(stepInputOf({ ...DEFAULT_WATER_SETTINGS, inertia: true }, 0, [], 0.1).moves).toBe(3);
         expect(stepInputOf({ ...DEFAULT_WATER_SETTINGS, inertia: true, precision: 6 }, 0, [], 0.1).moves).toBe(6);
-        expect(stepInputOf({ ...DEFAULT_WATER_SETTINGS, precision: 6 }, 0, [], 0.1).moves).toBeUndefined();
+        expect(
+            stepInputOf({ ...DEFAULT_WATER_SETTINGS, inertia: false, precision: 6 }, 0, [], 0.1).moves,
+        ).toBeUndefined();
         expect(stepInputOf({ ...DEFAULT_WATER_SETTINGS, inertia: true }, 0, [], 0.1).pace).toBe(1);
         expect(stepInputOf({ ...DEFAULT_WATER_SETTINGS, inertia: true, flowPace: 0.25 }, 0, [], 0.1).pace).toBe(0.25);
     });
@@ -568,7 +570,8 @@ describe("the settings of the waves", () => {
     });
 
     it("go to the water with inertia, the usual ones for a map that set none", () => {
-        expect(stepInputOf({ ...DEFAULT_WATER_SETTINGS }, 0, [], 0.1).waves).toBeUndefined();
+        expect(stepInputOf({ ...DEFAULT_WATER_SETTINGS, inertia: false }, 0, [], 0.1).waves).toBeUndefined();
+        expect(stepInputOf({ ...DEFAULT_WATER_SETTINGS }, 0, [], 0.1).waves).toEqual(DEFAULT_WAVE_SETTINGS);
         expect(stepInputOf({ ...DEFAULT_WATER_SETTINGS, inertia: true }, 0, [], 0.1).waves).toEqual(
             DEFAULT_WAVE_SETTINGS,
         );

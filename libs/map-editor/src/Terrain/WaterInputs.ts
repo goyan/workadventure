@@ -6,6 +6,7 @@ import {
     DEFAULT_WAVE_SETTINGS,
     TERRAIN_CELL,
     TILE_PX,
+    waterHasInertia,
     WaterSinkPropertyData,
     WaterSourcePropertyData,
 } from "../types";
@@ -116,7 +117,7 @@ export function stepInputOf(
         // its speed.
         flowSteps: Math.max(1, Math.min(MAX_FLOW_STEPS, Math.round(waterTimesOf(settings) / SPEED_PER_FLOW_STEP))),
         // The water with inertia, on a map that chose it: it needs the real time of the step, whatever the speed.
-        ...(settings.inertia
+        ...(waterHasInertia(settings)
             ? {
                   inertia: true,
                   seconds: figure(seconds),
