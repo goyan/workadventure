@@ -1,6 +1,7 @@
 import type { FireConditionsMessage } from "@workadventure/messages";
 import Debug from "debug";
 import { WeatherLocation, WeatherType } from "@workadventure/map-editor";
+import type { RealWeatherSlot } from "@workadventure/map-editor";
 import { derived, writable } from "svelte/store";
 import type { Readable } from "svelte/store";
 import { z } from "zod";
@@ -83,6 +84,18 @@ function follow(place: MapPlace | undefined): void {
 /** The weather timeline known for this place (Paris when absent), without asking: pending for a place not followed. */
 function knownFor(place: MapPlace | undefined): RealForecastState {
     return placeKey(place) === followedKey || state.status === "known" ? state : { status: "pending" };
+}
+
+/**
+ * The weather timeline of the place of the map (Paris when absent, as the server reads it), followed from now on
+ * whatever weather the map shows: the air the server pours its water through. Undefined until it answers, none when
+ * it failed (the air is then unknown, mild).
+ */
+export function mapPlaceSlotsNow(place: MapPlace | undefined): readonly RealWeatherSlot[] | undefined {
+    follow(place);
+    const known = knownFor(place);
+    if (known.status === "known") return known.slots;
+    return known.status === "unavailable" ? [] : undefined;
 }
 
 /** The weather at the place followed, at the clock of the game (ticking each second), for the settings panel. */
