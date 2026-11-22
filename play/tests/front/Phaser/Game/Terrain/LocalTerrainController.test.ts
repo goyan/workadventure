@@ -37,9 +37,13 @@ function harness(open?: () => Promise<LocalTerrainPort>) {
         onmessage: null,
     };
     let chosen: ReturnType<LocalTerrainScene["chosenPlace"]>;
+    let fast: ReturnType<LocalTerrainScene["fastWater"]>;
     const water = new TerrainWater();
+    const backToShared = vi.fn();
     const scene: LocalTerrainScene = {
         chosenPlace: () => chosen,
+        fastWater: () => fast,
+        backToSharedWater: backToShared,
         map: () => ({ wam: WAM, key: "1", mapCells: { width: 2, height: 1 } }),
         walkers: () => [{ x: 8, y: 8 }],
         water,
@@ -55,8 +59,12 @@ function harness(open?: () => Promise<LocalTerrainPort>) {
         showMeadow,
         posted,
         opened,
+        backToShared,
         choose: (place: ReturnType<LocalTerrainScene["chosenPlace"]>) => {
             chosen = place;
+        },
+        fastWater: (on: ReturnType<LocalTerrainScene["fastWater"]>) => {
+            fast = on;
         },
         tell: (told: LocalTerrainTold) => port.onmessage?.({ data: told } as MessageEvent<LocalTerrainTold>),
     };
@@ -154,6 +162,97 @@ describe("LocalTerrainController", () => {
 
         expect(posted).toContainEqual({ kind: "place", place: paris, slots: SLOTS });
         expect(posted).toContainEqual({ kind: "walkers", walkers: [{ x: 8, y: 8 }] });
+    });
+
+    it("runs fast water alone under the weather of the map, from the water of the server", async () => {
+        const { controller, water, posted, fastWater } = harness();
+        water.receive(stateOf(4, 1), 0);
+        fastWater({ slots: undefined });
+        controller.update();
+        // The weather of the map is not known yet: nothing starts.
+        expect(controller.isLocal()).toBe(false);
+
+        fastWater({ slots: SLOTS });
+        controller.update();
+        await opened();
+
+        const start = posted.find((command) => command.kind === "start");
+        expect(start?.kind === "start" && start.start.place).toBeUndefined();
+        expect(start?.kind === "start" && start.start.fast).toBe(true);
+        expect(start?.kind === "start" && start.start.slots).toBe(SLOTS);
+        expect(start?.kind === "start" && start.start.water?.depths).toEqual(stateOf(4, 1).depths);
+    });
+
+    it("tells the ground of a city followed that fast water stops, and keeps it", async () => {
+        const { controller, posted, choose, fastWater, terminate } = harness();
+        choose({ place: RIO, slots: SLOTS });
+        fastWater({ slots: SLOTS });
+        controller.update();
+        await opened();
+        expect(posted.find((command) => command.kind === "start")).toMatchObject({ start: { place: RIO, fast: true } });
+
+        fastWater(undefined);
+        controller.update();
+
+        expect(posted).toContainEqual({ kind: "fast", fast: false });
+        expect(terminate).not.toHaveBeenCalled();
+        expect(controller.isLocal()).toBe(true);
+    });
+
+    it("glides back to the water of the server when fast water stops, and says so", async () => {
+        const { controller, water, fastWater, backToShared, terminate } = harness();
+        water.receive(stateOf(4, 1), 0);
+        fastWater({ slots: SLOTS });
+        controller.update();
+        await opened();
+        controller.fromServerWater(stateOf(9, 2));
+
+        fastWater(undefined);
+        controller.update();
+
+        expect(terminate).toHaveBeenCalled();
+        expect(water.settledDepthAt(0, 0)).toBe(9);
+        expect(backToShared).toHaveBeenCalledTimes(1);
+    });
+
+    it("stops its worker while the tab is hidden, and starts again from the water of the server", async () => {
+        const { controller, water, posted, fastWater, terminate, tell } = harness();
+        water.receive(stateOf(4, 1), 0);
+        fastWater({ slots: SLOTS });
+        controller.update();
+        await opened();
+        tell({ kind: "water", message: { ...stateOf(1, 7), stats: undefined } });
+        controller.fromServerWater(stateOf(6, 2));
+
+        controller.hidden(true);
+        expect(terminate).toHaveBeenCalledTimes(1);
+        controller.update();
+        expect(controller.isLocal()).toBe(false);
+
+        controller.hidden(false);
+        controller.update();
+        await opened();
+        const starts = posted.filter((command) => command.kind === "start");
+        expect(starts).toHaveLength(2);
+        const last = starts.at(-1);
+        expect(last?.kind === "start" && last.start.water?.depths).toEqual(stateOf(6, 2).depths);
+    });
+
+    it("starts again from the water of the server on « Resynchroniser »", async () => {
+        const { controller, water, posted, fastWater, tell } = harness();
+        water.receive(stateOf(4, 1), 0);
+        fastWater({ slots: SLOTS });
+        controller.update();
+        await opened();
+        tell({ kind: "water", message: { ...stateOf(1, 7), stats: undefined } });
+        controller.fromServerWater(stateOf(5, 2));
+
+        controller.resynchronize();
+        controller.update();
+        await opened();
+
+        const last = posted.filter((command) => command.kind === "start").at(-1);
+        expect(last?.kind === "start" && last.start.water?.depths).toEqual(stateOf(5, 2).depths);
     });
 
     it("keeps the ground of the server when the local one cannot start", async () => {

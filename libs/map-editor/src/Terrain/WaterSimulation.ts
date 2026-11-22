@@ -936,7 +936,7 @@ export class WaterSimulation {
                         wetArea: grid.wetCells() * CELL_AREA_M2,
                         rainRate: this.rainRate,
                         ...this.eased(water),
-                        ...(waterTimesOf(water) > 1 ? { reachedSpeed: this.lived.flow } : {}),
+                        ...((this.askedTimes() ?? waterTimesOf(water)) > 1 ? { reachedSpeed: this.lived.flow } : {}),
                     },
                 },
             },

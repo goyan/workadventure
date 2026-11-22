@@ -205,6 +205,14 @@ describe("how fast what comes in goes", () => {
         expect((grid.totalPx() - before) / poured).toBeCloseTo(1, 1);
     });
 
+    it("tells how fast the currents go when a player asks for fast water on a map at the pace of reality", () => {
+        const { manager, sent } = room(SCENARIOS.basin, { speed: 1 });
+        manager.inflowAt("asked");
+        manager.askWith(() => 60);
+        for (let real = 0; real < 20; real++) manager.step();
+        expect(sent.at(-1)?.stats?.reachedSpeed).toBe(manager.livedTimes().flow);
+    });
+
     it("at the pace of reality on a map that says nothing: one step of its time a real step", () => {
         const { manager, sent } = room(SCENARIOS.basin, {});
         for (let real = 0; real < 20; real++) manager.step();

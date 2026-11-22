@@ -5,8 +5,9 @@ import type { PerceptionMark } from "./PerceptionProtocol";
  * The two symbols of a perception changed by a spell, drawn in pixels like the icons of the wheel: one letter per
  * pixel (its color below), "." for transparent, "s" for the sparkles of the spell, which twinkle.
  * Basique: an eye crossed out (the world is not seen any more). Another place: an open eye inside a crystal ball
- * (another sky is seen). Both carry the same star, the sign of the spell; their outlines differ (a flat eye and its
- * stroke, a ring), so that they are told apart without their colors.
+ * (another sky is seen). Fast water: a drop of water (the water runs faster for them). All carry the same star, the
+ * sign of the spell; their outlines differ (a flat eye and its stroke, a ring, a drop), so that they are told apart
+ * without their colors.
  */
 const MARK_GRIDS: Record<PerceptionMark, readonly string[]> = {
     basic: [
@@ -37,6 +38,20 @@ const MARK_GRIDS: Record<PerceptionMark, readonly string[]> = {
         ".kkcccckk...",
         "...kkkk.....",
     ],
+    water: [
+        "..........s.",
+        ".....k...sss",
+        "....kbk...s.",
+        "....kbk.....",
+        "...kbbbk....",
+        "...kbwbk....",
+        "..kbwbbbk...",
+        "..kbwbbbk...",
+        "..kbbbbbk...",
+        "...kbbbk....",
+        "....kkk.....",
+        "............",
+    ],
 };
 
 export const PERCEPTION_MARK_COLORS = {
@@ -45,13 +60,15 @@ export const PERCEPTION_MARK_COLORS = {
     c: "#9fe3f5", // the glass of the ball, light cyan
     w: "#f4f4f4", // white of the eye, glint
     n: "#2b3a67", // pupil
+    b: "#3d8bfd", // the drop of water, blue
     s: "#ffd36b", // sparkle
 } as const;
 
-/** The glow around each symbol (a CSS drop shadow): a violet spell, a cyan one. */
+/** The glow around each symbol (a CSS drop shadow): a violet spell, a cyan one, a blue one. */
 export const PERCEPTION_MARK_AURA: Record<PerceptionMark, string> = {
     basic: "#b48cff",
     place: "#7fd6f0",
+    water: "#5aa9ff",
 };
 
 export interface MarkPixel {
