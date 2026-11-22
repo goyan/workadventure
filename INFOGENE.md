@@ -2711,8 +2711,214 @@ pixel par cellule, sous les objets et les avatars, redessiné seulement quand le
 (16 px), comme dans une piscine, sans invite ; en dessous on marche. Un avatar sur un palier ne nage pas. Les flaques
 de la pluie ne se posent pas sur le relief ; les éclaboussures deviennent des ronds sur l'eau.
 
+**Relief en 3/4 : par le shader du sol, blocs en repli** (2026-11-21, conception et plan dans le dépôt d'infra,
+`docs/superpowers/{specs,plans}/2026-11-21-relief-3-4-shader*` ; la fusion d'`infogene` qui a amené là :
+`…/2026-11-21-fusion-infogene-deux-moteurs*`). Réglage personnel « Relief en 3/4 » (Paramètres → Graphismes → Effets ;
+`pixelReliefStore`, clé `terrainPixelRelief`, coupé par défaut), sans recharger ; jamais dans l'éditeur ni en mode
+Basique. Une règle dit qui dessine (`Terrain/GroundEngineChoice.ts` : `groundEngineOf`, et `blocksStateOf` pour les blocs),
+lue par `GameScene` :
+
+| Réglage | Éditeur ou Basique | Shader capable | Qui dessine le sol |
+|---|---|---|---|
+| coupé | — | — | le moteur à plat (`TerrainView`, `GroundSplat`) ; rien en Basique |
+| activé | oui | — | le moteur à plat ; rien en Basique |
+| activé | non | oui | le même moteur, ses shaders en 3/4 |
+| activé | non | non | les blocs en pixel art (`ReliefTiles`), en 3/4 |
+
+**En shader.** Les deux shaders de `GroundSplat` partent de `worldPoint()` (quel point de la carte est sous ce pixel).
+En 3/4 cette fonction rend le point du sol **vu** au pixel : le plus au sud dessiné à cette ligne, la surface étant le
+sol ou l'eau posée dessus, dessinée plus haut de la moitié de sa hauteur (±128 px au plus). Elle remonte vers le nord
+depuis 128 px au sud du pixel, une rangée de centres de cellules à la fois (18 au plus), puis 6 moitiés entre les deux
+dernières. `Terrain/ObliqueView.ts` en est le jumeau en TypeScript (`seenPoint`), testé ; le shader a été comparé à lui
+au navigateur (3 013 points, tous à 1 px). Les hauteurs exactes vont au shader dans une image à part (deux octets par
+cellule : `encodeHeight`, sol à gauche, surface à droite ; `TerrainWater.depthsOver` pour l'eau, sans plafond), envoyée
+seulement en 3/4. La zone dessinée dépasse alors l'écran d'au moins 288 px en haut et en bas (`drawnArea`,
+`stillCovers`). En 3/4 le shader ajoute : de l'herbe sous un relief sans sol peint (les tuiles de la carte restent à
+plat dessous), les **parois** (là où le sol descend vite vers le sud : roche par strates, plus sombre), les **courbes
+de niveau** (une par 32 px, sombre côté bas, claire côté haut). Tout le reste est celui du moteur à plat : piscines
+peintes, glace, givre, sol mouillé, crête d'une comète, eau animée.
+
+**Où le shader ne peut pas** (`GroundSplat.create` : pas de WebGL, moins de 10 unités de texture, ou pas de nombres
+précis dans les fragments), le 3/4 n'est pas compilé du tout (`#define OBLIQUE`) et le réglage activé donne les blocs
+des lots A à E, décrits ci-dessous (`Terrain/GroundEngines.ts` ne les crée que là). `GameScene.pixelReliefShown()` dit
+« le 3/4 est affiché » (avatar, nom, poissons, bouchon, clic, nage) ; `GameScene.pixelBlocksShown()` et
+`Terrain/PixelBlocksShown.ts` disent « les blocs dessinent » (moteur à plat caché, piscines posées en image à leur
+image, feuilles au-dessus des blocs, herbe de la carte laissée aux blocs, écume en pixels, pas de traces du givre).
+
+**Ce qui est posé sur le sol suit le relief** (2026-11-22, conception et plan :
+`docs/superpowers/{specs,plans}/2026-11-22-relief-3-4-images-posees*`). En 3/4, quel que soit le moteur, seul le
+**dessin** d'une chose est décalé : sa place sur la carte, sa collision, sa profondeur (qui est devant qui), ce que le
+serveur sait et ce que l'éditeur lit ne changent pas. Réglage coupé, éditeur ouvert ou Basique : rien n'est décalé ni
+calculé. La règle (`Terrain/GroundDrop.ts`) : `groundDropOf` = le décalage du **sol** sous le pied
+(`GameScene.groundDropAt`) ; ce qui est **sur l'eau** prend celui de la surface (`surfaceDropAt`).
+
+| Suit le relief | Comment |
+|---|---|
+| Arbres et objets posés au sol (`standsOnGround` : pas les pièces de l'outil Carte, ni ce qui est sur un palier, ni tapis et plafonniers) | `PlacedDrops` garde leur décalage (relu quand le relief ou le mode change, et deux fois par seconde) ; `CharacterDrops` les déplace le temps du dessin ; clic (`hitWhereDrawn`) et tri de la vue suivent le dessin |
+| Avatars, leurs compagnons, animaux promeneurs | `CharacterDrops` (`GameScene.drawnLower`) |
+| Antilopes, lions, tigres ; mouettes et leur ombre | décalage ajouté à la ligne dessinée (`LandLifeView`, `GullLifeView`) |
+| Flammes, fumée, braises de l'herbe et des arbres, sol qui fume | `FireView`, `TreeFireView` |
+| Comète, météore, averse, drain, flamme tenue, boule | visée au point **vu** sous le pointeur (`GameScene.seenPointUnder`, règle des shaders) ; dessin posé à la hauteur de leur point (`drawLower`). La boule, qui flotte à la surface de l'eau depuis la fusion du 2026-11-22, est dessinée à la hauteur de son niveau (`BallView`, `dropOf`), pas de ce qui est sous elle : elle chasse l'eau |
+| Halo de nuit et lumière de la torche d'un avatar, ombre au sol des avatars et des animaux, ombre portée des objets et des arbres | `halosWhereDrawn`, `TorchManager`, `SkyMovingShadows` (`drop`), `shadowSourceEntities` |
+| Traces de pas et de roues, feuilles au sol, feuilles soulevées | `FootprintLayer`, `LeafScatterLayer`, `KickedLeafLayer` (`dropAt`) |
+| Écume du courant, remous des puits, ronds des sources | `WaterFlowView` (surface de l'eau) |
+| Calotte de neige, tas de feuilles, témoin d'interrupteur d'un objet décalé | `SnowCaps`, `LeafPiles`, `SwitchIndicator` |
+
+**Le construit reste à plat** (2026-11-22, `Terrain/BuiltGround.ts`). Les sols et les murs de l'outil Carte et les
+tuiles sont des images de la carte : ils sont dessinés à leur place quel que soit le relief dessous. Sur du bâti posé
+sur un relief (la terrasse de la piscine de la carte d'équipe est à +112 px, ses bâtiments à 0), l'avatar et les
+meubles décalés ne correspondaient plus aux murs ni à leurs collisions, et l'herbe opaque du shader recouvrait le
+dallage. En 3/4, le relief **vu** (`GameScene.reliefSeen`, `SeenRelief`) est donc celui de la carte, mis à plat sous ce
+qui est construit : cases dallées par l'outil Carte (`pavedTilesOf`), intérieurs (`OutdoorGrid`), piscines posées en
+image ou peintes, plus une cellule autour (le sol est dessiné droit entre les centres des cellules). L'eau y est vue à
+sa place aussi (`seenDepthAt`, `depthsSeen`). Tout ce qui lit le décalage lit ce relief : shaders (`TerrainView`,
+dépendance `seen`), avatars, objets, animaux, clic, visée, blocs. Le relief de la carte, l'eau du serveur, le mode à
+plat et l'éditeur ne changent pas. Relu quand le relief change, et deux fois par seconde pour ce qui est construit.
+Conséquence : une terrasse bâtie sur une butte ne paraît plus surélevée, la pelouse autour est dessinée plus haut avec
+une paroi au bord.
+
+**Limites.** Ne suivent pas le relief : les tuiles de la carte ; les pièces de l'outil Carte (sols, murs, portes,
+fenêtres, paliers, escaliers, ponts : un bâtiment décalé pièce par pièce se déchirerait) ; la lumière des lampes et
+des fenêtres ; la vue des courants de « Visualisation » ; la vapeur et les échelles des piscines ; les feuilles qui
+tombent d'un arbre ; les reflets des nuages et des lampes sur l'eau, lus au point de la carte. Les flaques n'en ont pas
+besoin : il n'y en a que sur un sol sans relief. Une catastrophe a un seul décalage, celui de son centre : un large
+rond n'épouse pas le relief autour. Un objet posé sur un autre (une plante sur une table) a son propre décalage : sur
+une pente ils glissent l'un par rapport à l'autre. La lumière d'une torche part de là où son porteur est dessiné : sur
+un relief contre un mur, elle peut partir du mauvais côté du mur. Un clic pour marcher va au sol (au pied d'une
+paroi), et sur l'eau à sa surface, là où l'on nage (`groundPointAt` reçoit la profondeur de l'eau). Une piscine peinte sur un sol plat
+garde ses échelles au bon endroit ; peinte sur un relief, non. Le rendu en 3/4 est celui des textures du moteur à plat,
+pas le pixel art des blocs. Coût non mesuré sur une carte graphique intégrée. Le thème « Hiver » de la branche avait
+disparu avec celui d'`infogene` ; il est revenu le 2026-11-22 (voir « Thème saisonnier ») et blanchit le sol dans les
+deux moteurs. Un pont étant fait de paliers, plus de cas particulier d'un pont dans la nage ni le décalage de l'avatar ;
+le clic, lui, traite de nouveau le tablier à part.
+
+**Seconde fusion d'`infogene` (2026-11-22, 105 commits : glace du serveur, piscines en eau réelle, écume et moutons
+dans le shader, reflets du ciel, flocons, neige de sa propre ville, traces dans la neige).** Le poids des cellules est
+passé de 8 à 12 paquets et le shader de l'eau lit deux textures de plus (nuages, lampes) : l'image des hauteurs du 3/4
+reste à part, dernière texture de chaque shader (unité 9 pour le sol, 4 pour l'eau ; 10 unités demandées pour le 3/4,
+inchangé). `GroundSplat.setWater(wet, strength, foam?, depths?)` ; `TerrainView` reçoit dans l'ordre le vent, « caché »,
+« en 3/4 », « tout blanc » (thème Hiver). `TerrainWater.levelsOver` garde les nappes minces qui courent d'`infogene`
+et la troncature demandée par les blocs. Les traces dans la neige ne sont pas laissées sur les blocs (ils ont les
+leurs). Vérifié au navigateur après la fusion : shaders compilés sans erreur, 3/4 sur un mont de 256 px (décalage de
+l'avatar et clic à 1 px près sur 6 points), thème Hiver à plat et en 3/4 ; la comparaison point par point du shader
+à `seenPoint` (3 013 points) n'a pas été refaite après cette fusion.
+
+**Les blocs, repli sans shader : relief vu de trois quarts** (conception et plan dans le dépôt d'infra,
+`docs/superpowers/{specs,plans}/2026-11-20-relief-3-4*`). Hors de l'éditeur, le sol creusé est dessiné **plus bas de
+la moitié de sa profondeur**, comme les étages sont dessinés plus haut de leur altitude : un trou de 8 cases (256 px)
+a une paroi de 128 px. Là où le sol descend en allant vers le sud, on voit sa paroi (roche teintée par le sol du bord,
+claire à l'arête, sombre au pied, strates) ; le bord sud cache le fond derrière lui ; l'eau est dessinée au niveau de
+sa surface. La position vraie reste au sol (serveur, collisions, bulles, eau de `back` inchangés) : seul le dessin
+bouge. `Terrain/ReliefProjection.ts` (pur : `dropAt`, `groundPointAt` de l'écran vers le sol, `paintColumn`),
+`Terrain/ReliefTiles.ts` (une image par bloc de relief de 16 × 16 cellules, au-dessus du relief plat à 0,66),
+`Terrain/ReliefTileSchedule.ts` (un bloc n'est redessiné que si son relief, ses sols peints, celui des 8 rangées au
+nord, son eau, ce qui couvre ses cellules ou la saison changent ; jamais en marchant ni en zoomant ; un bloc à la
+fois, les visibles d'abord, son dessin étalé sur plusieurs images à 6 ms par image au plus ; 64 blocs gardés).
+
+**En pixel art net** (conception `docs/superpowers/specs/2026-11-20-terrain-pixel-art-design.md` du dépôt d'infra,
+lot A) : un pixel du bloc pour un pixel de la carte, jamais lissé. Chaque point du sol prend une **matière**
+(`Terrain/Pixel/MaterialField.ts` : neige, braise, cendre, paille, herbe de la prairie, puis sol peint, herbe sinon),
+avec une frontière nette et irrégulière entre deux matières et un liseré d'1 px (sombre côté herbe et côté de la
+matière la plus sombre, clair côté neige) ; sa **couleur** (`Pixel/GroundPixel.ts`) vient de la texture de la
+matière (tables de 512 px), de la lumière de la pente (nord-ouest) et de la profondeur, réduite à une rampe de
+4 teintes par une trame 4 × 4 (`Pixel/PixelPalette.ts`, `Pixel/PixelNoise.ts`). Une **paroi** commence là où le
+dessin tombe de plus de 2 px pour un pixel de sol (`FACE_JUMP_PX`, sur la chute exacte) : tout ce qui tombe dessus
+prend sa couleur (plus de rayures), le haut d'une paroi est cerné de sombre (`RIM_OUTLINE`) ; plus doux, le sol est
+étiré, éclairé par sa pente même douce, et une **courbe de niveau** d'1 px plus sombre marque chaque case de
+profondeur (`isContour`) : la forme d'une cuvette se lit même sous la neige. Sur un **pont**,
+un avatar reste au niveau du tablier et un clic vise le tablier.
+
+**Tout le sol dehors** (lot B) : les mêmes blocs dessinent aussi le sol plat, carte sans relief comprise. Une cellule
+prend une matière (`Pixel/MaterialField.ts`) : rien dans une pièce ni sur un sol de l'outil Carte ou le tablier d'un
+pont (les tuiles de la carte se voient), neige là où la neige de la carte est tombée, neige des hauteurs (ligne
+de neige du calendrier), braise, cendre, paille, herbe de la prairie, **boue** (argile mouillée, règle de la marche),
+sol peint, herbe sur les **tuiles d'herbe de la carte** (`Terrain/MapGroundLayout.ts`, même détection que l'ancienne
+herbe saisonnière) ou au fond d'un trou ; sinon rien. Les couleurs suivent **la saison du thème, sinon du
+calendrier** (`forcedTreeSeason` du thème, sinon `GameScene.getGroundSeason`, selon le lieu de la carte ; `Pixel/PixelPalette.ts` `rampsFor`) ; fleurs d'1 px dans l'herbe
+dense au printemps (plus rares en été), feuilles tombées en automne. Dans l'éditeur et réglage coupé, c'est l'autre
+moteur qui dessine (`TerrainView`, herbe de la carte par `Weather/SnowGround.ts`) ; rien en mode Basique. **Traces de pas** (`Terrain/Footprints.ts`) : toute
+l'année, dans la neige, la boue et le sable, de la couleur du sol, posées au fond d'un trou à son décalage.
+
+**L'eau** (lot C) : dans les mêmes blocs, en pixel art (`Pixel/WaterPixel.ts`) : 4 teintes de la saison (été plus
+turquoise, automne plus sombre, hiver plus pâle), plus sombre avec la profondeur, la teinte la plus claire là où l'on marche dans l'eau (sous 16 px, `SWIM_DEPTH_PX`), plus sombre dès qu'on y nage, un liseré d'écume d'1 px au bord (de
+glace en hiver) ; pendant l'outil Relief, un pixel sur deux de la trame laisse voir le fond. Un bloc n'est redessiné
+que si l'eau d'une de ses cellules change de 2 px (`WATER_STEP_PX`). **Reflets** (`Terrain/WaterGlints.ts`) : quelques
+points d'1-2 px qui s'allument et s'éteignent sur l'eau d'au moins 2 px, redessinés 8 fois par seconde au plus sans
+toucher aux blocs ; aucun en mouvement réduit, en mode Basique ni très dézoomé. **Écume du courant**, tourbillons et
+ronds des sources tracés en pixels entiers (`pixelRun`, `ringPixels`). **Poissons, dauphins, bouchon de pêche et
+reflets** sont posés à la surface de l'eau dessinée, au fond d'un trou en 3/4 (`GameScene.surfaceDropAt`) ; rien n'est
+décalé sur un pont ni dans l'éditeur. La canne reste à la place vraie de l'avatar. **Avatars** : chacun, le sien et ceux des autres, est dessiné plus bas de la
+profondeur du sol (ou de la surface de l'eau où il nage) sous lui (`Terrain/AvatarDrop.ts`), seulement le temps du
+dessin (`Terrain/CharacterDrops.ts`, comme les arbres au vent) ; son nom suit (`Character.setGroundDrop`) ; rien sur
+un palier. **Clic** et altitude sous le pointeur passent par `groundPointAt` : un clic sur une paroi mène à son pied.
+**Éditeur ouvert** : c'est l'autre moteur qui dessine, à plat, pour creuser et poser là où l'on vise (depuis le
+2026-11-21 ; avant, les blocs étaient redessinés à plat). Neige du fond : la neige tombée de la carte
+(`GroundSource.snowCoverHere`). **Limites (lot 1)** : objets, arbres, animaux, compagnons,
+écume et tourbillons de l'eau restent dessinés à leur place (un arbre au fond d'un trou flotte au niveau du bord) ;
+le fond est peint aux matières du relief, pas avec les tuiles de la carte ; la
+zone cliquable d'un avatar dans un trou reste à sa place ; les éclaboussures de la nage partent de sa place.
+
+**Les monts** (lot D) : un sol élevé est dessiné plus haut de la moitié de sa hauteur (128 px au plus,
+`ReliefProjection.shiftAt`, décalage signé : positif dans un trou, négatif sur un mont) et cache le sol derrière lui.
+Un bloc lit 8 rangées de cases au sud (un mont du bloc du sud y monte) et 8 colonnes à l'ouest (l'ombre du plus haut
+mont, 113 px), une seule fenêtre pour
+le dessin et ses signatures (`ReliefTileSchedule.blockCellWindow`). Son **flanc sud** est son sol à l'ombre, en roche
+là où c'est une falaise (le dessin y saute de 6 px et plus par pixel de sol, `CLIFF_JUMP_PX`), cerné d'un liseré sombre
+à son pied ; la **silhouette** de ce qui cache le sol derrière lui (sommet d'un mont, bord sud d'un trou) est cernée
+aussi (`SILHOUETTE_GAP_PX`). **Ombre portée** au sud-est : un point est à l'ombre quand le relief au nord-ouest s'élève
+au-dessus d'un rayon de pente 1,6 (`Pixel/GroundPixel.ts` `shadowHorizon`, horizon cumulé le long des diagonales du
+bloc), direction fixe ; aussi sous le bord nord-ouest d'un trou. Neige au sommet au-dessus de la ligne de neige.
+Avatars, poissons, reflets, bouchon et traces montent avec le mont ; un clic sur le mont donne le mont ; rien ne monte
+sur un palier, un pont ni dans l'éditeur. **Limites** : un avatar, un objet ou un animal derrière un mont est dessiné
+par-dessus lui (lot 2 du relief). Un clic sur le flanc sud d'un mont donne le mont (son bord quand le flanc est une
+falaise), pas le sol à son pied. Courbes de niveau sur les monts comme dans les trous ; neige aux teintes écartées.
+**Coût des poissons** : savoir si le bord sud de son trou cache un poisson demande de lire le relief jusqu'à 128 px au
+sud de lui ; ce n'est demandé que pour les animaux à portée de la vue (`AquaticLifeView`, `NEAR_PX`), dix fois par
+seconde au plus par animal (`HIDDEN_CHECK_MS`). Avant, c'était pour les 300 animaux de la carte à chaque image : 17 à
+18 % du fil du jeu sur la carte d'équipe (mont de 256 px), mesuré au profileur.
+
+**Chargement du terrain** : un bloc de la vue jamais dessiné est d'abord dessiné **grossier** (un point sur 4 dans
+chaque sens, 16 fois moins cher : `ReliefTileSchedule.COARSE_TEXEL`), puis **net** ; la vue est remplie en quelques
+images, puis affinée, les blocs visibles d'abord, du milieu de la vue vers ses bords (`nearestFirst`). Très dézoomé, un bloc n'est pas dessiné plus fin que l'écran ne le
+montre (`texelFor` : un point pour 1, 2 ou 4 px de carte selon le zoom de la caméra, un point dessiné au plus un tiers
+plus gros qu'un pixel d'écran : net au-dessus du zoom 0,67, 2 px jusqu'à 0,34, 4 px en deçà) ; il est redessiné plus
+fin quand on zoome, jamais plus grossier quand on dézoome. **Cache** : les blocs qu'on quitte sont gardés, dans la
+limite de 256 blocs nets (`KEPT_WEIGHT`, environ 65 Mo de textures depuis le lot E ; un bloc à 2 px compte un quart, un
+grossier ne compte pas),
+les moins récemment vus lâchés d'abord, jamais ceux autour de la vue : zoomer, dézoomer ou revenir ne redessine rien.
+**Carte dessinée d'avance** : une fois la vue dessinée, le reste de la carte l'est en grossier, du plus proche au plus
+loin (`drawAhead`, `ReliefInputs.mapSize`) : dézoomer ou se déplacer montre tout de suite le sol, affiné ensuite. Le
+relief des blocs d'une vue immense est lu 48 blocs par image au plus. Plusieurs blocs peu chers par image, dans la limite de 6 ms
+(`DRAW_BUDGET_MS`). Mesuré le 2026-11-21 dans Chromium sur la carte d'équipe locale (72 blocs visibles, zoom 1) : vue
+remplie en 12 images, tout net en 155 images, 7,6 ms par bloc net (75 ms avant : les boucles tournaient dans le
+générateur et les courbes de niveau allouaient un tableau par point).
+
+**Blocs peints hors du fil du jeu** (lot E, `docs/superpowers/specs/2026-11-21-terrain-blocs-worker-design.md` du
+dépôt d'infra) : le dessin d'un bloc est un module pur (`Terrain/Pixel/BlockPainter.ts`) qui peint à partir de données
+simples (`BlockJob` : hauteurs, eau, matière de chaque case de la fenêtre, herbe dense), lues une fois par bloc par
+`ReliefTiles.jobOf` (0,18 ms). Deux **workers** au plus (`Terrain/BlockPaintWorker.ts`, `BlockPaintPool.ts`,
+`BlockPaintWorkers.ts`) calculent les pixels ; chacun reçoit ses blocs d'avance (environ deux images de travail,
+`WORK_AN_IMAGE`) et les enchaîne seul. Le fil du jeu ne fait que préparer les blocs et envoyer les pixels revenus à la
+carte graphique : 6 ms par image tant que la vue n'est pas nette, 3 ms ensuite (`HANDOVER_BUDGET_MS`). Les workers
+démarrent par un blob de même origine qui importe leur script (le navigateur refuse un worker dont le script vient du
+domaine des ressources). **Repli** : sans `Worker`, ou après une erreur, un message illisible ou 5 s de silence, les
+blocs sont peints sur le fil du jeu comme avant (un avertissement dans la console, une fois). Le worker ne charge ni
+la bibliothèque des cartes ni Phaser (`Pixel/TerrainUnits.ts` recopie les unités, un test garde l'égalité ;
+`Pixel/WorkerImports.test.ts` refuse tout import lourd) : 13,7 ko minifié. **Une seule copie par bloc**
+(`Terrain/ReliefSurface.ts`) : en WebGL les pixels vont droit à une texture (`addUint8Array`, mise à jour sur place)
+par un tampon partagé par taille, sans canvas par bloc ; au retour d'un contexte WebGL perdu, tous les blocs sont
+redessinés. Les blocs à dessiner sont choisis une fois par image (`plan`), un bloc sans relief n'est pas lu case par
+case. Mesuré le 2026-11-21 dans Chromium (Apple M4 Max, carte d'équipe locale, 72 blocs visibles et 99 autour, zoom 1,
+jeu à 27 images/s au repos), sur le fil du jeu puis avec les workers : vue remplie en grossier 1,05 s → 0,4 s ; vue
+nette 11,6 s → 0,9 s ; tout net autour 16 s → 1,3 à 1,4 s ; temps du terrain sur le fil du jeu 1 800 ms → 153 à
+169 ms ; 18 → 24 à 25 images/s pendant le chargement ; mêmes pixels (0 octet d'écart sur 4 blocs) ; textures du
+terrain après un parcours de zooms 41 Mo, aucun canvas. Cibles de la conception non atteintes : 95 % des images sous
+2 ms (4,5 à 5 ms au milieu, 6,5 à 7,5 ms au pire pendant 1,3 s : l'envoi des pixels à la carte graphique reste sur le
+fil du jeu) et 110 blocs nets en moins d'une seconde (99 en 1,3 s). Très dézoomé depuis rien : 600 blocs grossiers en
+3 s, jusqu'à 15 ms par image pendant ce temps.
+
 **Limites.** L'eau traverse encore les murs (elle devra passer par les portes seulement : `back` ne connaît pas les
-murs). Pas de mode Rivière tracée. Relief négatif seulement, au sol et dehors. Animaux et compagnons ignorent l'eau.
+murs). Pas de mode Rivière tracée. Relief au sol et dehors seulement. Animaux et compagnons ignorent l'eau.
 Pas de courant qui pousse l'avatar. Un geste immense part en plusieurs commandes (autant d'annulations). Les valeurs
 par défaut du rythme sont à doser avec le tableau de bord. `play`, `back` et `map-storage` se déploient ensemble.
 
@@ -3672,13 +3878,28 @@ plus ; la piste de danse et la lumière des fenêtres, plus bas, sont voilées c
 Limites : le brouillard du dehors reste sous les lumières (une lampe dehors le perce comme avant) ; pluie et neige
 gardent leur voile au dehors seul.
 
-**Thème saisonnier** (« Paramètres → Ambiance → Thème saisonnier ») : Auto, Automne, Aucun (Noël retiré, voir plus bas). Réglage perso
+**Thème saisonnier** (« Paramètres → Ambiance → Thème saisonnier ») : Auto, Automne, Hiver, Aucun (Noël retiré puis
+remis sous le nom « Hiver », voir plus bas). Réglage perso
 (`seasonalTheme` dans le navigateur), appliqué sans recharger. Il remplace « Thème de Noël » (repris une fois :
 Toujours → Auto depuis le retrait de Noël, Jamais → Aucun) et « Sol extérieur » (effacé). Auto suit la saison du lieu
 de la carte (Paris sans lieu), revérifiée chaque minute : automne du 1er septembre au 30 novembre au nord, du 1er mars
 au 31 mai au sud ; tant que l'heure du serveur
 n'est pas reçue, Auto n'affiche rien (`Seasonal/SeasonalTheme.ts`). `SeasonalThemeManager` crée le décor du thème
 (`SeasonalDecor`), le masque pendant l'édition et le reconstruit quand un mur ou un objet change.
+
+**Thème « Hiver » remis** le 2026-11-22, à la demande du tech lead (« remets le thème hiver si je veux que ça soit
+permanent », « en mode hiver, je m'attends à ce qu'il neige »), deux jours après le retrait décrit ci-dessous. Choix
+personnel `winter` (`SeasonalThemeMode.Winter`), jamais affiché de lui-même : Auto reste sans hiver, et un `christmas`
+enregistré avant vaut toujours Auto (personne ne retrouve l'hiver sans le choisir). Tant qu'il est choisi, pour ce
+joueur seul : il **neige** quel que soit le temps de la carte (`Weather/WeatherFrame.ts` `themedFall` : tout en
+flocons, à l'intensité de la pluie ou de l'orage de la carte, légère (`WINTER_SNOWFALL` 0,3) sous un ciel d'où rien ne
+tombe ; le ciel se couvre comme sous une pluie) ; tout le **sol dehors est blanc**, avec la texture de neige du moteur
+du sol (`TerrainView`, dépendance `snowEverywhere` ; en repli, les blocs par `snowCoverAt`) : c'est ce qui manquait
+au thème retiré, dont le sol était un blanc uni ; arbres en image d'hiver (`forcedTreeSeason`) et enneigés
+(`GameScene.getMapSnowCoverage` vaut 1), décor de neige de `Christmas/` (calottes, empreintes). Un décor : la marche
+n'est pas ralentie (`getSnowCoverAt` ne change pas), rien ne se pose sur le sol de la carte, les autres ne voient rien.
+Le retrait du 2026-11-20 avait été demandé pour une raison de fond (« la neige est une résultante des conditions
+météo, ce n'est pas un script ») : ce retour la contredit pour qui choisit le thème, à dire dans la PR.
 
 **Thème Noël retiré** le 2026-11-20, à la demande de l'utilisateur (« la neige est une résultante des conditions
 météo, ce n'est pas un script ») : son sol de neige uni cachait la texture des tuiles. Plus de choix « Noël » (un choix
@@ -3733,7 +3954,7 @@ Limites : un mur manquant laisse entrer le décor ; une image d'objet illisible 
 déplacé par une autre personne garde son décor à l'ancien endroit jusqu'au prochain changement de mur ou à la sortie de
 l'éditeur.
 
-Recette : thème « Automne » puis « Noël », marcher puis courir dehors et dans une pièce, poser un objet dehors, ouvrir
+Recette : thème « Automne » puis « Hiver », marcher puis courir dehors et dans une pièce, poser un objet dehors, ouvrir
 l'éditeur et retirer un mur d'une pièce puis le remettre ; « Aucun » et une carte en orage : pluie et voile seulement
 dehors.
 

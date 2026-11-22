@@ -3,6 +3,8 @@ import { poolStyleAt, poolStyleOf, soilAt, TERRAIN_CELL, TERRAIN_CHUNK } from "@
 import type { InteractionTrigger, PoolStyle, TerrainData } from "@workadventure/map-editor";
 import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRectangles";
 import { getObjectInteraction } from "../../../Utils/ObjectCategories";
+import { waterDepthAtPoint } from "../Terrain/AvatarDrop";
+import { SWIM_DEPTH_PX } from "../Terrain/Pixel/TerrainUnits";
 import type { GameScene } from "../GameScene";
 import { MASS_MIN_DEPTH_PX } from "../Terrain/WaterMasses";
 
@@ -113,7 +115,7 @@ export function getFrozenPoolRectangles(scene: Phaser.Scene): WaterRectangle[] {
 }
 
 /** One swims in the water of the relief from this depth on, in pixels (half a tile); under it one walks. */
-export const SWIM_DEPTH_PX = 16;
+export { SWIM_DEPTH_PX };
 
 /**
  * Whether a point is in water of the relief deep enough to swim (TerrainWater): the lakes dug in the ground, unlike
@@ -123,9 +125,18 @@ export function isDeepTerrainWater(
     water: { depthAt(x: number, y: number, now: number): number } | undefined,
     point: Point,
     now: number,
+    /**
+     * Whether the water is drawn smooth between the centres of the cells (the relief in 3/4): one swims where it is
+     * drawn dark. Else by the cell under the point.
+     */
+    asDrawn = true,
 ): boolean {
     if (water === undefined) return false;
-    return water.depthAt(point.x, point.y, now) >= SWIM_DEPTH_PX;
+    // Not drawn smooth (the other engine of the ground): by the cell under the point.
+    if (!asDrawn) return water.depthAt(point.x, point.y, now) >= SWIM_DEPTH_PX;
+    // The water as it is drawn (between the centres of the cells, as the lake and the avatar in it are), so that one
+    // swims where the water is drawn dark: not by squares of a cell.
+    return waterDepthAtPoint((x, y) => water.depthAt(x, y, now), point.x, point.y) >= SWIM_DEPTH_PX;
 }
 
 /**

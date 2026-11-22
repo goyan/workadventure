@@ -71,6 +71,11 @@ export class BallView {
         private readonly ownUserId: () => number | undefined,
         /** The ball this player holds under their pointer now. */
         private readonly held: () => WaterBall | undefined,
+        /**
+         * How much lower a ball is drawn, the relief seen in 3/4: as the water it floats on (its level), or the
+         * ground it stands on. Nothing without it.
+         */
+        private readonly dropOf: (ball: { x: number; y: number; levelPx: number }) => number = () => 0,
     ) {
         this.ring = scene.add.graphics().setDepth(DEPTH_NIGHT_INDEX + 2);
     }
@@ -115,7 +120,7 @@ export class BallView {
         if (this.shown.size === 0 && !this.own && !dirty) return;
         const version = this.coverVersion();
         let rings = "";
-        const places: { x: number; y: number; radiusPx: number; levelPx: number }[] = [];
+        const places: { x: number; y: number; radiusPx: number; levelPx: number; drop: number }[] = [];
         const show = (shown: Shown, ball: WaterBall): void => {
             // To the pixel: a ball that barely moved is not drawn again.
             const place = {
@@ -124,12 +129,15 @@ export class BallView {
                 radiusPx: Math.round(ball.radiusPx * 2) / 2,
                 levelPx: Math.round(ball.levelPx ?? 0),
             };
-            const key = `${place.x},${place.y},${place.radiusPx},${place.levelPx}`;
+            // Where the water it floats on is drawn: the whole body is moved, its blocks are those of its place.
+            const drop = Math.round(this.dropOf(place));
+            const key = `${place.x},${place.y},${place.radiusPx},${place.levelPx},${drop}`;
             rings += `${key};`;
-            places.push(place);
+            places.push({ ...place, drop });
             if (shown.drawn === `${key},${version}`) return;
             shown.drawn = `${key},${version}`;
             this.draw(shown.body, place);
+            shown.body.setY(drop);
             dirty = true;
         };
         if (this.own && held) show(this.own, { ...held, levelPx: this.ownLevel });
@@ -211,10 +219,11 @@ export class BallView {
         }
     }
 
-    private drawRings(places: readonly { x: number; y: number; radiusPx: number }[]): void {
+    private drawRings(places: readonly { x: number; y: number; radiusPx: number; drop: number }[]): void {
         this.ring.clear();
-        for (const { x, y, radiusPx } of places) {
+        for (const { x, y: place, radiusPx, drop } of places) {
             if (radiusPx <= 0) continue;
+            const y = place + drop;
             this.ring.lineStyle(1.5, RING_COLOR, RING_ALPHA);
             this.ring.strokeCircle(x, y, radiusPx);
             this.ring.fillStyle(RING_COLOR, GLINT_ALPHA);

@@ -50,6 +50,8 @@ interface Shown {
     atY: number;
     /** Since when it drinks, undefined while it does not. */
     drinkingSince: number | undefined;
+    /** How much lower than its place it is drawn (the relief seen in 3/4). */
+    drop: number;
 }
 
 type SceneOfView = Pick<Phaser.Scene, "add" | "cameras" | "textures" | "load"> & { markDirty(): void };
@@ -78,12 +80,26 @@ export class LandLifeView {
         private readonly lead: (
             animal: ShownAnimal,
             now: number,
-        ) => { x: number; y: number; direction: WanderDirection; moving: boolean } | "hidden" | undefined = () =>
-            undefined,
+        ) =>
+            | {
+                  x: number;
+                  y: number;
+                  direction: WanderDirection;
+                  moving: boolean;
+                  /**
+                   * How much lower it is drawn there, when it is not as much as the ground: nothing while its master
+                   * stands on a raised floor or a deck, where it stands too.
+                   */
+                  drop?: number;
+              }
+            | "hidden"
+            | undefined = () => undefined,
         /** Whether there is grass to graze at a point of the map (map pixels): an antelope standing there eats. */
         private readonly grassAt: (x: number, y: number) => boolean = () => false,
         /** How high over the ground one walks above a point of the ground (map pixels): the bridges of the map. */
         private readonly liftAt: (x: number, y: number) => number = () => 0,
+        /** How much lower the ground at a point is drawn, the relief seen in 3/4 (GameScene.groundDropAt). */
+        private readonly dropAt: (x: number, y: number) => number = () => 0,
     ) {}
 
     public update(now: number): void {
@@ -115,7 +131,10 @@ export class LandLifeView {
             const x = Math.round(led?.x ?? animal.x);
             // On a bridge it is drawn as high as the deck, over its slabs: the life tells its place on the ground.
             const lift = led ? 0 : Math.round(this.liftAt(animal.x, animal.y));
-            const y = Math.round(led?.y ?? animal.y) - lift;
+            const placeY = Math.round(led?.y ?? animal.y);
+            // On the ground it is drawn where the ground is: lower in a hollow, higher on a mount. Not on a deck.
+            const drop = lift > 0 ? 0 : Math.round(led?.drop ?? this.dropAt(x, placeY));
+            const y = placeY - lift + drop;
             const columns = this.columnsOf(species);
             const key = columns === undefined ? ensureLandTexture(this.scene, species) : this.sheetOf(species);
             if (key === undefined) continue;
@@ -132,6 +151,7 @@ export class LandLifeView {
                     atX: animal.x,
                     atY: animal.y,
                     drinkingSince: undefined,
+                    drop,
                 };
                 this.shown.set(animal.id, entry);
                 changed ||= onScreen(x, y);
@@ -152,8 +172,10 @@ export class LandLifeView {
             if (moved || sprite.alpha !== animal.alpha) changed ||= onScreen(x, y) || onScreen(sprite.x, sprite.y);
             entry.moving = moving;
             entry.led = led !== undefined;
+            entry.drop = drop;
             sprite.setPosition(x, y);
-            placeAtDepth(sprite, lift > 0 ? floorDepth(lift, y + lift) : y);
+            // Sorted by its place, whatever the row it is drawn at.
+            placeAtDepth(sprite, lift > 0 ? floorDepth(lift, placeY) : placeY);
             sprite.setAlpha(animal.alpha);
             // Head down at the water (the stance of the wandering animals, without its sway of a pixel: the place
             // of the sprite tells whether the animal moved).
@@ -198,10 +220,12 @@ export class LandLifeView {
         callback: (
             id: number,
             sprite: Phaser.GameObjects.Sprite,
-            animal: { species: LandSpecies; moving: boolean; led: boolean },
+            animal: { species: LandSpecies; moving: boolean; led: boolean; drop: number },
         ) => void,
     ): void {
-        for (const [id, { sprite, species, moving, led }] of this.shown) callback(id, sprite, { species, moving, led });
+        for (const [id, { sprite, species, moving, led, drop }] of this.shown) {
+            callback(id, sprite, { species, moving, led, drop });
+        }
     }
 
     public destroy(): void {

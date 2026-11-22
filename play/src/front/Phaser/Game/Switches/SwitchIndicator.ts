@@ -24,7 +24,8 @@ export class SwitchIndicator {
     /** Follows the switch and shows whether a target is on. True when something changed on the screen. */
     public update(entity: Entity, lit: boolean): boolean {
         const x = entity.x + entity.displayWidth - INSET;
-        const y = entity.y + INSET;
+        // On the switch where it is drawn: lower in a hollow of a relief seen in 3/4, higher on a mount.
+        const y = entity.y + INSET + entity.getGroundDrop();
         const key = `${x},${y},${entity.depth},${entity.visible}`;
         if (key === this.key && lit === this.lit) {
             return false;

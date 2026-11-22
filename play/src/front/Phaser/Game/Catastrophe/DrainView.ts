@@ -3,6 +3,7 @@ import type { CatastropheMessage } from "@workadventure/messages";
 import { drainCalms, drainTiles, TILE_PX } from "@workadventure/map-editor";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import { isBasicActive } from "../../../Stores/BasicModeStore";
+import { drawLower } from "../Terrain/GroundDrop";
 import { downpourAlpha } from "./DownpourFall";
 import { drainRings, drainStrands } from "./DrainSwirl";
 
@@ -47,6 +48,11 @@ export class DrainView {
     constructor(
         private readonly scene: Phaser.Scene & { markDirty(): void },
         private readonly reducedMotion: () => boolean,
+        /**
+         * How much lower what lies at a point is drawn, the relief seen in 3/4: the ground or the water over it
+         * (GameScene.surfaceDropAt).
+         */
+        private readonly dropAt: (x: number, y: number) => number = () => 0,
     ) {
         this.graphics = scene.add.graphics().setDepth(DEPTH_NIGHT_INDEX + 2);
         this.glow = scene.add
@@ -95,11 +101,14 @@ export class DrainView {
                 this.shown.delete(id);
                 continue;
             }
-            this.draw(
-                drain,
-                now - drain.beganAt,
-                downpourAlpha(now - drain.beganAt, drain.until - now, drain.lasts),
-                reduced,
+            // Where the water under it is drawn: lower at the bottom of a hollow.
+            drawLower([this.graphics, this.glow], Math.round(this.dropAt(drain.x, drain.y)), () =>
+                this.draw(
+                    drain,
+                    now - drain.beganAt,
+                    downpourAlpha(now - drain.beganAt, drain.until - now, drain.lasts),
+                    reduced,
+                ),
             );
         }
         this.scene.markDirty();

@@ -1,5 +1,6 @@
 import { get } from "svelte/store";
 import { entityStatesManagerStore } from "@wa/front/Stores/EntityStatesStore";
+import { pixelBlocksShownNow } from "./PixelBlocksShown";
 
 /**
  * The pools of the map placed as images (objects with water): drawn by the shaders in their place, as the pools
@@ -29,8 +30,12 @@ export interface PlacedPool {
     setVisible(visible: boolean): unknown;
 }
 
-/** Whether the pools placed as images keep their image (to compare with the pools drawn by the shaders). */
+/**
+ * Whether the pools placed as images keep their image: to compare with the pools drawn by the shaders, and while the
+ * blocks of the relief draw the ground (no shader draws it then).
+ */
 export function classicPoolsShown(): boolean {
+    if (pixelBlocksShownNow()) return true;
     try {
         return (
             new URLSearchParams(window.location.search).has("classicPools") ||

@@ -291,7 +291,9 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             }
         }
         const cameraManager = this.gameScene.getCameraManager();
-        const worldPoint = cameraManager.getCamera().getWorldPoint(pointer.x, pointer.y);
+        const clicked = cameraManager.getCamera().getWorldPoint(pointer.x, pointer.y);
+        // In a hollow of the relief seen in 3/4, the ground is drawn lower than its place: aim at the ground drawn there.
+        const worldPoint = this.gameScene.groundPointUnder(clicked);
         if (
             isDoubleClick &&
             (worldPoint.x < 0 ||
@@ -346,7 +348,10 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         if (!this.gameScene.userInputManager.isControlsEnabled || (pointer.wasTouch && pointer.getDuration() > 250)) {
             return;
         }
-        const worldPoint = this.gameScene.getCameraManager().getCamera().getWorldPoint(pointer.x, pointer.y);
+        // What the pointer shows: the ground or the water drawn there, where the relief is seen in 3/4.
+        const worldPoint = this.gameScene.seenPointUnder(
+            this.gameScene.getCameraManager().getCamera().getWorldPoint(pointer.x, pointer.y),
+        );
         if (
             worldPoint.x < 0 ||
             worldPoint.y < 0 ||
@@ -440,7 +445,10 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
 
     /** The point of the map under a pointer. One past the edge is on the edge: a cloud never leaves the map. */
     private mapPointUnder(pointer: Pointer): { x: number; y: number } {
-        const worldPoint = this.gameScene.getCameraManager().getCamera().getWorldPoint(pointer.x, pointer.y);
+        // What the pointer shows: the ground or the water drawn there, where the relief is seen in 3/4.
+        const worldPoint = this.gameScene.seenPointUnder(
+            this.gameScene.getCameraManager().getCamera().getWorldPoint(pointer.x, pointer.y),
+        );
         return {
             x: Math.min(this.gameScene.Map.widthInPixels - 1, Math.max(0, worldPoint.x)),
             y: Math.min(this.gameScene.Map.heightInPixels - 1, Math.max(0, worldPoint.y)),

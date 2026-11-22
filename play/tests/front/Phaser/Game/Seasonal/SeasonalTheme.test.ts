@@ -37,6 +37,15 @@ describe("activeSeasonalTheme", () => {
         );
     });
 
+    it("shows the winter for who chose it, whatever the date, and never by itself", () => {
+        expect(activeSeasonalTheme(SeasonalThemeMode.Winter, new Date("2026-07-14T12:00:00Z"))).toBe(
+            SeasonalTheme.Christmas,
+        );
+        expect(activeSeasonalTheme(SeasonalThemeMode.Winter, undefined)).toBe(SeasonalTheme.Christmas);
+        // Auto has no winter: in January it shows nothing.
+        expect(activeSeasonalTheme(SeasonalThemeMode.Auto, new Date("2027-01-10T12:00:00Z"))).toBeUndefined();
+    });
+
     it("has no auto theme before server time", () => {
         expect(activeSeasonalTheme(SeasonalThemeMode.Auto, undefined)).toBeUndefined();
     });
@@ -50,8 +59,8 @@ describe("activeSeasonalTheme", () => {
 describe("forcedTreeSeason", () => {
     it("forces the tree season of the theme", () => {
         expect(forcedTreeSeason(SeasonalTheme.Autumn)).toBe(Season.Autumn);
-        // The snow decor of the map weather is no theme: it forces no season on the trees.
-        expect(forcedTreeSeason(SeasonalTheme.Christmas)).toBeUndefined();
+        // The winter theme: the trees of who chose it are those of the winter.
+        expect(forcedTreeSeason(SeasonalTheme.Christmas)).toBe(Season.Winter);
         expect(forcedTreeSeason(undefined)).toBeUndefined();
     });
 });

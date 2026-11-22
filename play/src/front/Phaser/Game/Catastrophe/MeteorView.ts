@@ -12,6 +12,7 @@ import type { MeteorShape } from "@workadventure/map-editor";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import { LAMP_MIN_FLASH_INTERVAL_MS } from "../Lamps/LampSignal";
 import { isEffectShown } from "../../../Stores/EffectsStore";
+import { drawLower } from "../Terrain/GroundDrop";
 import {
     fireballSparks,
     flashAllowed,
@@ -93,6 +94,11 @@ export class MeteorView {
         private readonly realWaves: () => boolean = () => false,
         /** Whether the water shader draws the waves of the comets (waterRings): no circles are drawn over it then. */
         private readonly shaderWaves: () => boolean = () => false,
+        /**
+         * How much lower what lies at a point is drawn, the relief seen in 3/4: the ground or the water over it
+         * (GameScene.surfaceDropAt).
+         */
+        private readonly dropAt: (x: number, y: number) => number = () => 0,
     ) {
         this.graphics = scene.add.graphics().setDepth(DEPTH_NIGHT_INDEX + 2);
     }
@@ -162,24 +168,28 @@ export class MeteorView {
                 this.meteors.splice(index, 1);
                 continue;
             }
-            if (!this.shaderWaves()) this.drawWave(meteor, circles);
-            this.drawSteam(meteor, steam);
-            this.drawSparks(meteor, sparks);
-            if (frame.done) continue;
-            this.drawShadow(meteor, frame.shadowScale);
-            if (frame.burst === undefined) {
-                this.drawMeteor(meteor, frame.offset);
-            } else {
-                if (meteor.flashes === undefined) {
-                    meteor.flashes = flashAllowed(now, this.lastFlashAt, LAMP_MIN_FLASH_INTERVAL_MS);
-                    if (meteor.flashes) this.lastFlashAt = now;
+            // Where the ground or the water it falls on is drawn: lower at the bottom of a hollow, higher on a mount.
+            drawLower([this.graphics], Math.round(this.dropAt(meteor.x, meteor.y)), () => {
+                if (!this.shaderWaves()) this.drawWave(meteor, circles);
+                this.drawSteam(meteor, steam);
+                this.drawSparks(meteor, sparks);
+                if (frame.done) return;
+                this.drawShadow(meteor, frame.shadowScale);
+                if (frame.burst === undefined) {
+                    this.drawMeteor(meteor, frame.offset);
+                } else {
+                    if (meteor.flashes === undefined) {
+                        meteor.flashes = flashAllowed(now, this.lastFlashAt, LAMP_MIN_FLASH_INTERVAL_MS);
+                        if (meteor.flashes) this.lastFlashAt = now;
+                    }
+                    this.drawBurst(
+                        meteor,
+                        frame.burst,
+                        meteor.burning ? FIRE_BURST_COLOR : meteor.wet ? WET_BURST_COLOR : DRY_BURST_COLOR,
+                    );
                 }
-                this.drawBurst(
-                    meteor,
-                    frame.burst,
-                    meteor.burning ? FIRE_BURST_COLOR : meteor.wet ? WET_BURST_COLOR : DRY_BURST_COLOR,
-                );
-            }
+            });
+            if (frame.done) continue;
             if (frame.flash > 0 && meteor.flashes && !flashed) {
                 this.drawFlash(frame.flash);
                 flashed = true;

@@ -116,6 +116,8 @@ describe("UserInputManager wheel and Nerf events", () => {
         camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(480, 640));
         cameraManager.getCamera.mockReturnValue(camera);
         scene.Map = mock<Phaser.Tilemaps.Tilemap>({ widthInPixels: 1504, heightInPixels: 1184 });
+        // The relief is not shown in 3/4 (never in the editor): what the pointer shows is the point under it.
+        scene.seenPointUnder.mockImplementation((point) => point);
         const take = vi.fn();
         armWaterLevelPipette(take);
         try {

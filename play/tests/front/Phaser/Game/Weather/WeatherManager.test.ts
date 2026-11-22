@@ -184,6 +184,31 @@ describe("weather rendering lifecycle", () => {
         expect(ground.destroy).toHaveBeenCalledOnce();
     });
 
+    it("snows for who chose the winter theme, under a clear sky too, and for nobody else", () => {
+        const flakesOf = (
+            theme: (typeof SeasonalTheme)[keyof typeof SeasonalTheme] | undefined,
+            settings: { weather: WeatherType; rainRate?: number } = { weather: WeatherType.Clear },
+        ) => {
+            const { scene, graphics, wam } = fixture();
+            wam.settings = settings;
+            manager?.destroy();
+            manager = new WeatherManager(scene, { seasonalTheme: () => theme });
+            manager.update(0, new Date(0));
+            // Each flake starts with its lit colour (drawFlake).
+            return graphics.fillStyle.mock.calls.filter(([color]) => color === FLAKE_LIGHT).length;
+        };
+        expect(flakesOf(undefined)).toBe(0);
+        expect(flakesOf(SeasonalTheme.Autumn)).toBe(0);
+        const dry = flakesOf(SeasonalTheme.Christmas);
+        expect(dry).toBeGreaterThan(0);
+        // All of it snow, for the sounds too.
+        expect(sounds.update.mock.lastCall?.[5]).toBe(1);
+        // A light snow under a dry sky, the same whether the map knows its rate of rain (0 mm/h) or not; as hard as
+        // its rain when it rains.
+        expect(flakesOf(SeasonalTheme.Christmas, { weather: WeatherType.Clear, rainRate: 0 })).toBe(dry);
+        expect(flakesOf(SeasonalTheme.Christmas, { weather: WeatherType.Rain })).toBeGreaterThan(dry);
+    });
+
     it("lets the rain fall as flakes in the cold of the room, as both in a sleet, and tells the sounds", () => {
         const drawn = (snow: number | undefined, weather = WeatherType.Rain) => {
             const { scene, graphics, wam } = fixture();
@@ -294,6 +319,20 @@ describe("weather rendering lifecycle", () => {
         const date = new Date("2026-01-12T07:00:00Z");
         manager.update(0, date);
         expect(sounds.update.mock.lastCall?.[0]).toBe(autoWeatherAt(date, auto));
+    });
+
+    it("leaves the grass of the map to the relief in 3/4 while it is shown: its blocks draw it", async () => {
+        const { tellPixelBlocksShown } = await import("../../../../../src/front/Phaser/Game/Terrain/PixelBlocksShown");
+        const { scene } = fixture();
+        manager = new WeatherManager(scene);
+        manager.update(0, new Date(0));
+        expect(ground.update.mock.lastCall?.[2]).toBe(true);
+        tellPixelBlocksShown(() => true);
+        manager.update(1, new Date(1));
+        expect(ground.update.mock.lastCall?.[2]).toBe(false);
+        tellPixelBlocksShown(undefined);
+        manager.update(2, new Date(2));
+        expect(ground.update.mock.lastCall?.[2]).toBe(true);
     });
 
     it("hides effects immediately for the personal preference and the editor, then restores them", () => {
