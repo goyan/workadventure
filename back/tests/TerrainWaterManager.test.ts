@@ -12,6 +12,7 @@ import {
     WeatherType,
     withHeights,
     withSoils,
+    threadWaterLoads,
 } from "@workadventure/map-editor";
 import type { TerrainData, WAMFileFormat } from "@workadventure/map-editor";
 import type { SubToPusherRoomMessage, TerrainWaterMessage } from "@workadventure/messages";
@@ -152,6 +153,8 @@ function depthsAfter(messages: readonly TerrainWaterMessage[]): {
 }
 
 afterEach(() => {
+    // The waters of a thread add up (WaterLoad): a test must not leave its own to the next one.
+    threadWaterLoads.clear();
     vi.useRealTimers();
     vi.restoreAllMocks();
 });
@@ -1290,5 +1293,51 @@ describe("the pools of the map in the water of the relief", () => {
         expect(quick?.easedPrecision ?? 8).toBeGreaterThan(slow?.easedPrecision ?? 8);
         expect(quick?.easedUpdates).toBeUndefined();
         // Seven hundred steps of a wide lake stirred at the finest: longer than the usual time of a test.
+    }, 30_000);
+
+    it("lowers the fineness of two rooms that saturate the thread together, and gives it back once one closes", () => {
+        // Each step of a room reads its clock twice: `cost` ms go by between the two.
+        const cost = { ms: 40 };
+        const room = () => {
+            const wam = wamWith(wideLake);
+            if (wam.settings?.water) Object.assign(wam.settings.water, { inertia: true, precision: 8, updates: 10 });
+            let time = 0;
+            let reads = 0;
+            const harness = createHarness({
+                wam,
+                clock: (): number => {
+                    if (reads++ % 2 === 1) time += cost.ms;
+                    return time;
+                },
+            });
+            harness.manager.mapChanged();
+            fillWideLake(harness.manager);
+            harness.manager.mapChanged();
+            return harness;
+        };
+        const eased = (harness: ReturnType<typeof room>): number => {
+            harness.manager.strike(15 * 16, 15 * 16, 2);
+            return harness.sent.at(-1)?.stats?.easedPrecision ?? 8;
+        };
+        // One room alone at 40 ms a step, under half the time between two steps: nothing is lowered.
+        const alone = room();
+        alone.steps(100);
+        expect(eased(alone)).toBe(8);
+        alone.manager.stop();
+        // Two such rooms hold the thread 80 % of the time: both are lowered, alike.
+        const rooms = [room(), room()];
+        for (let step = 0; step < 100; step++) for (const { steps } of rooms) steps(1);
+        const lowered = rooms.map(eased);
+        expect(lowered[0]).toBeLessThan(8);
+        expect(lowered[1]).toBe(lowered[0]);
+        // Quicker steps, 40 % of the thread together: over the quarter that gives a level back, they stay there.
+        cost.ms = 20;
+        for (let step = 0; step < 300; step++) for (const { steps } of rooms) steps(1);
+        expect(rooms.map(eased)).toEqual(lowered);
+        // One closes: the other one, alone at 20 %, gets its fineness back level by level.
+        rooms[1].manager.stop();
+        rooms[0].steps(300);
+        expect(eased(rooms[0])).toBeGreaterThan(lowered[0]);
+        rooms[0].manager.stop();
     }, 30_000);
 });
