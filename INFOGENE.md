@@ -5460,8 +5460,21 @@ dit à la salle, qui ouvre le même trou. Météo personnelle : trou local. Les 
 (`POOL_ICE_DEPTH_PX` 8 px au lieu de 32, qui attendait -8,25 °C). La glace du serveur épaissit deux fois plus vite que
 l'horloge de la neige (`ICE_GROWTH_TIMES` = 2). Sur l'horloge ×600 d'alors, elle portait le woka en 1 min 30 environ
 à -3 °C ; depuis le 2026-11-22, l'horloge est celle de l'eau de la carte, temps réel par défaut : 14 h à -3 °C
-(14 min à « Vitesse de l'eau » 60). Le trou ouvert sous un avatar se referme toujours en deux minutes
-(`HOLE_OPEN_MS`, horloge à part, non changée) : plus vite que la glace ne reprend en vrai.
+(14 min à « Vitesse de l'eau » 60). **Depuis le 2026-11-22, le trou de la glace du serveur n'a plus d'horloge à lui**
+(demande de l'utilisateur : « se referme en 2 minutes, c'est un peu rapide, on peut pas faire réaliste ? »).
+Quand la glace casse, le serveur remet à 0 la glace des tuiles du trou (`Meadow.breakIce`, déjà le cas avant). Le trou
+regèle ensuite par la loi de la glace de la carte, à la vitesse de son eau et selon son air. En temps réel à −10 °C,
+cela fait un voile en deux minutes, la glace où l'on glisse (5 mm) en une dizaine de minutes environ, et une glace qui
+porte un marcheur au bout de quelques heures. Le trou ne regèle jamais pendant un dégel.
+
+Côté navigateur, le trou rond reste de l'eau libre tant que le serveur ne garde pas de glace en son centre. Il se
+referme à mesure que cette glace revient, et disparaît à 5 mm (`ICE_SLIPS_MM`) : à partir de là, c'est le dessin de la
+glace mince du serveur qui prend le relais. On retombe dans un trou encore ouvert. Entre 5 et 50 mm, la glace fine
+craque de nouveau sous l'avatar ; elle porte de nouveau à 50 mm. Pendant les 10 premières secondes, le temps que la
+salle reçoive la glace cassée, le trou reste ouvert quoi que dise la glace qu'elle connaissait
+(`HOLE_CONFIRM_MS`). La scène ne se redessine que si les fissures ou les trous changent, pas à chaque image : un trou
+peut rester ouvert des heures. La comète passe par le même chemin, `shatter`. En météo personnelle ou en sol local, le
+trou garde son horloge de deux minutes (`HOLE_OPEN_MS`) : il n'y a pas de glace du serveur.
 
 **Herbe dès l'arrivée** (`back/src/Model/MeadowManager.ts`, `GameScene.groundStatesOfJoinApplied`). Le premier joueur
 d'une salle recréée recevait un sol nu : `snapshot()` ne rendait que l'état déjà diffusé, vide jusqu'au premier pas de

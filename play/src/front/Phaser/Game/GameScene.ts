@@ -3596,8 +3596,15 @@ export class GameScene extends DirtyScene {
     }
 
     /** Whether a point of the map (pixels) is in or near an open drain: the current carries no avatar there. */
-    /** The ice that cracks and gives way under the avatar, and the holes open in it (IceBreaks.ts). */
-    private readonly iceBreaks = new IceBreaks();
+    /**
+     * The ice that cracks and gives way under the avatar, and the holes open in it (IceBreaks.ts): on the ice of the
+     * server a hole stays open while the server keeps no ice there.
+     */
+    private readonly iceBreaks = new IceBreaks(() =>
+        followsServerGround() ? (x, y) => this.meadow.iceAtPoint(x, y) : undefined,
+    );
+    /** The cracks and holes last given to the water shader: drawn again only when they change. */
+    private shownIceBreaks = "";
 
     public getIceBreaks(): IceBreaks {
         return this.iceBreaks;
@@ -3618,8 +3625,15 @@ export class GameScene extends DirtyScene {
         }
         const active = this.iceBreaks.active();
         if (active || wasActive) {
-            this.terrainView?.setIceBreaks(this.iceBreaks.shown(now));
-            this.markDirty();
+            // A hole of the ice of the server may stay open for hours, still: the scene is drawn again only when the
+            // cracks or the holes change, not at every image.
+            const shown = this.iceBreaks.shown(now);
+            const key = shown.map((piece) => `${piece.x},${piece.y},${piece.phase.toFixed(3)}`).join(";");
+            if (key !== this.shownIceBreaks) {
+                this.shownIceBreaks = key;
+                this.terrainView?.setIceBreaks(shown);
+                this.markDirty();
+            }
         }
     }
 
