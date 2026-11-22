@@ -35,6 +35,11 @@ export class WaterSendLoad {
         return Math.max(1, this.ceiling === undefined ? asked : Math.min(asked, this.ceiling));
     }
 
+    /** Whether the room is told no more than one state a second though the map asks more: the network is short. */
+    public atFloor(asked: number): boolean {
+        return asked > 1 && this.updates(asked) <= 1;
+    }
+
     /** A state of `bytes` (all its parts zipped) was told at the step `step`, on a map that asks for `asked` a second. */
     public record(bytes: number, asked: number, step: number): void {
         if (!Number.isFinite(bytes) || bytes < 0) return;

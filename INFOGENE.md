@@ -3390,9 +3390,17 @@ le dit par le champ existant `easedUpdates` (« Serveur ou réseau chargé : env
 Mesures avec l'inertie : lac calme sur la carte d'entrée, environ 10 ko par état (47 ko/s à cinq par seconde, 72 sur
 mer agitée) : cinq par seconde tenus ; mer de 600² qui court (environ 37 ko) : deux ; carte entièrement inondée
 (130 ko et plus) : un, le minimum (encore 130 ko/s : le plafond ne peut pas descendre sous un état par seconde).
-Suite proposée, non codée : n'envoyer à 1 état par seconde que les blocs qui ont changé de plus d'un pixel, ou
-espacer au-delà d'une seconde (un état toutes les 2 s) sous le plafond. L'eau que le navigateur simule pour lui seul (#473) n'a pas de
-garde-fou : rien n'y voyage (`sendBudget` infini).
+**Au plancher, par blocs** (`WaterSendLoad.atFloor`, `holdStillBlocks`) : quand le garde-fou tient la salle à un état
+par seconde alors que la carte en demande plus, l'eau est dite par blocs de 8 × 8 cellules. Un bloc n'est dit que
+si l'une de ses cellules a bougé d'un pixel au moins, ou a séché, ou s'est mouillée. Il est alors dit en entier : pas
+de marche d'un pixel dans la surface d'un lac. Sinon, il garde ce que la salle a reçu. Chaque cellule reste donc à
+moins d'un pixel de la vérité, mouillée ou sèche comme elle l'est, et l'état entier, toutes les 30 s, remet tout
+d'aplomb. Hors du plancher, la règle d'avant ne change pas (un quart de pixel, cellule par cellule).
+Mesure sur une mer de 300² inondée, avec l'inertie et la pluie, à un état par seconde : les profondeurs passent de
+60 à 35 ko par état (−42 %), et les vitesses, environ 6 ko, ne changent pas. Non mesuré sur la carte de 600² ni
+dans un navigateur.
+Autre piste, non codée : espacer au-delà d'une seconde (un état toutes les 2 s) sous le plafond. L'eau que le
+navigateur simule pour lui seul (#473) n'a pas de garde-fou : rien n'y voyage (`sendBudget` infini).
 
 Coût de cinq états par seconde sans inertie (carte de 480 × 320, lac, à vitesse 1) : 3,6 → 9 ko/s par joueur
 (1,8 ko par état, surtout des changements nuls compressés), envoi 1,5 → 6 ms par seconde au serveur.
