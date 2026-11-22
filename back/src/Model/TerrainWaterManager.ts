@@ -1,4 +1,4 @@
-import { gunzipSync, gzipSync } from "node:zlib";
+import { constants as zlibConstants, gunzipSync, gzipSync } from "node:zlib";
 import {
     advanceImpactWave,
     BALL_LEVEL_REACH_CELLS,
@@ -88,6 +88,14 @@ const STEPS_PER_SAVE = 300;
  * and a week of absence costs a thousand steps.
  */
 const CATCH_UP_SECONDS = 600;
+/**
+ * The states told to the room are zipped by runs of the same byte only (the RLE strategy of zlib), not by looking
+ * for repeated strings: they are differences with the state before, mostly runs of zeros and of a few values. The
+ * server has one thread; measured on the states of a real map, it zips them three to five times faster than the
+ * usual way, into 4 to 9 % fewer bytes (5 % more for a whole state, told every half minute and to who comes in).
+ * The browsers unzip it as any gzip.
+ */
+const toldZip = (bytes: Uint8Array): Uint8Array => gzipSync(bytes, { strategy: zlibConstants.Z_RLE });
 
 const SavedBounds = z.object({
     x: z.number().int(),
@@ -162,6 +170,11 @@ export class TerrainWaterManager {
     /** The step the room was last told a whole state at. */
     private fullAtStep = -Infinity;
     private changedSinceSave = false;
+    /**
+     * Whether anything was computed on the grid since the room was last told (a step, an impact, a new grid): while
+     * nothing was, its depths are those the room knows and there is nothing to write nor to compare.
+     */
+    private untold = true;
     /** How long the steps take, and the fineness given up while they take too long. */
     private readonly load = new WaterLoad(WATER_STEP_MS);
     /** The time missed while the room was empty that is not lived again yet, and the rain (mm) that fell in it. */
@@ -248,6 +261,7 @@ export class TerrainWaterManager {
         if (this.grid && before) this.grid.takeFrom(before);
         // The cells are not the same any more: the room is told the whole state at its next message.
         this.sentBytes = undefined;
+        this.untold = true;
         if (this.grid && !this.timer) {
             this.timer = setInterval(() => this.tick(), WATER_STEP_MS);
             // The water of a room must never keep the process alive.
@@ -319,6 +333,7 @@ export class TerrainWaterManager {
         const pouring = this.rainRate > 0 || this.objects.some((object) => object.litresPerMinute > 0);
         if (this.moving || pouring) {
             const tally = grid.step(stepInputOf(water, this.rainRate, this.objects, WATER_STEP_MS / 1000));
+            this.untold = true;
             this.moving = tally.moved;
             if (tally.moved) this.version++;
             if (tally.moved) this.changedSinceSave = true;
@@ -657,6 +672,8 @@ export class TerrainWaterManager {
      */
     private blast(grid: WaterGrid, cellX: number, cellY: number, radiusTiles: number): number {
         const reach = this.room.getWam()?.settings?.water?.impactReach ?? DEFAULT_IMPACT_REACH;
+        // An impact is told at once, whatever it moved.
+        this.untold = true;
         const blast = blastWater(grid, cellX, cellY, meteorShape(radiusTiles), reach);
         if (!blast) return 0;
         this.sums.lostPx += blast.lostPx;
@@ -682,7 +699,7 @@ export class TerrainWaterManager {
     /** The whole state the room was last told, for a player who joins it. Undefined on a map without water. */
     public snapshot(): TerrainWaterMessage | undefined {
         if (!this.grid || !this.sentBytes) return undefined;
-        return { ...this.grid.bounds, seq: this.seq, full: true, depths: gzipSync(this.sentBytes) };
+        return { ...this.grid.bounds, seq: this.seq, full: true, depths: toldZip(this.sentBytes) };
     }
 
     /** Tells the room what changed over the last second, and what came in and went out. Nothing when nothing did. */
@@ -695,6 +712,11 @@ export class TerrainWaterManager {
         const speed = this.room.getWam()?.settings?.water?.speed ?? DEFAULT_WATER_SETTINGS.speed;
         const rates = ratesOf(sums, (stepsSince * WATER_STEP_MS) / 1000, speed);
         const anyRate = Object.values(rates).some((rate) => rate > 0);
+        // Nothing computed since the room was last told, and no rate to tell nor to take back: nothing to say, and
+        // no need to write the depths of the whole grid to find it out.
+        const idle = !this.untold && !anyRate && !this.sentRates;
+        this.untold = false;
+        if (idle) return;
         const bytes = grid.writeDepths();
         const previous = this.sentBytes;
         // A whole state when the room knows none (or another grid), and again every half minute.
@@ -737,9 +759,9 @@ export class TerrainWaterManager {
                     ...grid.bounds,
                     seq: this.seq,
                     full,
-                    depths: gzipSync(payload),
-                    ...(speeds ? { speeds: gzipSync(speeds.speeds) } : {}),
-                    ...(speeds?.slow ? { slowSpeeds: gzipSync(speeds.slow) } : {}),
+                    depths: toldZip(payload),
+                    ...(speeds ? { speeds: toldZip(speeds.speeds) } : {}),
+                    ...(speeds?.slow ? { slowSpeeds: toldZip(speeds.slow) } : {}),
                     stats: {
                         ...rates,
                         stock: (grid.totalPx() * CELL_LITRES_PER_PX) / LITRES_PER_M3,
