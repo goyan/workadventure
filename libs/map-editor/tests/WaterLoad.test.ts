@@ -150,3 +150,75 @@ describe("WaterLoad, several waters on one thread", () => {
         expect(threadWaterLoads.totalMs()).toBe(0);
     });
 });
+
+describe("WaterLoad, on a thread that computes nothing else", () => {
+    /** The waters of a thread of its own: they may take nine tenths of it. */
+    function ownThread(): WaterLoads {
+        const loads = new WaterLoads();
+        loads.mayTake(0.9);
+        return loads;
+    }
+    /** Steps of several waters, one after the other at each step, each costing its `msPerLevel` for each level. */
+    function together(waters: [WaterLoad, number][], count: number, asked: number): void {
+        for (let step = 0; step < count; step++) {
+            for (const [load, msPerLevel] of waters) load.record(msPerLevel * load.precision(asked), asked);
+        }
+    }
+
+    it("lets the waters take most of the thread: eight rooms at a tenth each keep their fineness", () => {
+        const loads = ownThread();
+        const waters = Array.from({ length: 8 }, (): [WaterLoad, number] => [new WaterLoad(100, loads), 10.5 / 3]);
+        together(waters, 400, 3);
+        // 84 % of the thread together: over the half of the thread of the rooms, under the nine tenths of this one.
+        for (const [load] of waters) expect(load.precision(3)).toBe(3);
+        // The same eight on the thread of the rooms ease.
+        const rooms = new WaterLoads();
+        const shared = Array.from({ length: 8 }, (): [WaterLoad, number] => [new WaterLoad(100, rooms), 10.5 / 3]);
+        together(shared, 400, 3);
+        for (const [load] of shared) expect(load.precision(3)).toBeLessThan(3);
+    });
+
+    it("eases them all once they take more than the thread may give", () => {
+        const loads = ownThread();
+        const waters = Array.from({ length: 12 }, (): [WaterLoad, number] => [new WaterLoad(100, loads), 10.5 / 3]);
+        together(waters, 400, 3);
+        // 126 % at the fineness 3: 2 brings them to 84 %.
+        for (const [load] of waters) expect(load.precision(3)).toBe(2);
+        expect(loads.totalMs()).toBeLessThan(90);
+    });
+
+    it("gives a level back as soon as the thread could bear it, not under half of what it may take", () => {
+        const loads = ownThread();
+        const waters = Array.from({ length: 8 }, (): [WaterLoad, number] => [new WaterLoad(100, loads), 10 / 3]);
+        together(waters, 200, 3);
+        // A peak (a room that starts): four heavy steps for each, and they all give a level up.
+        for (let step = 0; step < 30; step++) for (const [load] of waters) load.record(40, 3);
+        for (const [load] of waters) expect(load.precision(3)).toBeLessThan(3);
+        // Quiet again: 53 % at the fineness 2, and the fineness 3 would take 80 %, under what the thread may give.
+        // It comes back, where half of nine tenths would have kept it away for good.
+        together(waters, 600, 3);
+        for (const [load] of waters) expect(load.precision(3)).toBe(3);
+    });
+
+    it("keeps a level given up while giving it back would overload the thread", () => {
+        const loads = ownThread();
+        const waters = Array.from({ length: 10 }, (): [WaterLoad, number] => [new WaterLoad(100, loads), 10.5 / 3]);
+        // 105 % at the fineness 3, 70 % at 2: giving it back would bring them over again.
+        together(waters, 2000, 3);
+        for (const [load] of waters) expect(load.precision(3)).toBe(2);
+    });
+
+    it("leaves the thread of the rooms as it was: a level comes back under half the share only", () => {
+        const loads = new WaterLoads();
+        expect(loads.easeAt()).toBe(WATER_LOAD_EASE);
+        const load = new WaterLoad(100, loads);
+        costly(load, 200, 20, 3);
+        expect(load.precision(3)).toBe(2);
+        // 40 % at the fineness 2: over the quarter, it stays there, though 60 % at 3 would be over the half anyway.
+        costly(load, 600, 20, 3);
+        expect(load.precision(3)).toBe(2);
+        loads.mayTake(0);
+        loads.mayTake(Number.NaN);
+        expect(loads.easeAt()).toBe(WATER_LOAD_EASE);
+    });
+});

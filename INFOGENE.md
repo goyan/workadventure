@@ -2512,6 +2512,18 @@ ne l'est pas).
     l'instantané que la salle tient (l'eau cachée sous une boule est perdue), la prairie depuis la dernière
     sauvegarde. Trois pertes en cinq minutes : le sol de la salle repasse dans le fil des salles.
   - **Répartition** : une salle va au fil qui a le moins de salles et n'en change plus.
+  - **Allègement dans un fil de calcul** (`WaterLoads.mayTake`, `GroundWorker`). La somme des pas des eaux d'un fil
+    (#497) est comparée à 50 % de l'intervalle dans le fil des salles, où les joueurs attendent derrière l'eau :
+    inchangé. Dans un fil de calcul personne n'attend, l'eau doit seulement tenir sa cadence : le seuil y est de
+    90 % (`GROUND_THREAD_SHARE`). La finesse y revient dès que le fil pourrait la porter (ce que les eaux
+    prendraient avec un niveau de plus, le coût supposé suivre la finesse, reste sous 95 % du seuil), et non sous
+    la moitié du seuil, qui aurait laissé un tel fil aux deux tiers de ce qu'il tient. Mesuré sur un vrai fil,
+    salles comme la carte d'entrée inondée, Mac : à 50 %, 6 salles tombent à la finesse 2 et 8 à la finesse 1 ou
+    2 ; à 80 %, 8 salles cèdent un niveau ; à 90 %, 8 salles gardent la finesse 3 (86 % d'un cœur, 10 pas par
+    seconde), 10 salles passent à 2, 12 à 1 ou 2, toujours à 10 pas par seconde. Limite : le coût ne suit pas tout
+    à fait la finesse (de 2 à 3 il monte de 26 % sur cette carte, pas de 50 %), donc après un pic (une salle qui
+    démarre) la finesse 3 ne revient que si le fil est sous 57 % à la finesse 2 : 8 salles restent alors à 2
+    (68 % d'un cœur) alors que le fil tiendrait 3.
   - **Journaux** : au démarrage, `back` dit où le sol est calculé (« The ground of the rooms (water and meadow) is
     computed on N thread(s) of its own (GROUND_THREADS) », ou « … on the thread of the rooms (GROUND_THREADS is
     0) ») ; « Ground thread i of N starts for its first room » quand un fil démarre pour sa première salle ;
