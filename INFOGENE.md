@@ -5361,10 +5361,13 @@ la lampe, étiré vers le bas et ondulé. Rien n'est dessiné deux fois : l'eau 
 `GameScene` passe le reflet à chaque image (`TerrainView.setWaterReflection`, comme les ondes des comètes). Réglage
 « Reflets dans l'eau ».
 
-**Arcs-en-ciel** (`Weather/Rainbow.ts`). Un arc-en-ciel se voit à 42° du point opposé au soleil : seulement s'il pleut
-avec un soleil entre 0 et 42° (fondu de 0 à 3° et de 36 à 42°), plus pâle par orage (× 0,5) et sous un ciel couvert.
-Fixé à la carte (centre, rayon 0,35 × le petit côté, 50 tuiles au plus), ouvert à l'opposé du soleil (sens des
-ombres), sa demi-ouverture `90° × (42 - hauteur) / 42` : un demi-cercle au soleil couchant, un arc court près de 42°.
+**Arcs-en-ciel** (`Weather/Rainbow.ts`). Un vrai arc-en-ciel se voit à 42° du point opposé au soleil : seulement s'il
+pleut avec un soleil entre 0 et 42° (fondu de 0 à 3° et de 36 à 42°), plus pâle par orage (× 0,5) et sous un ciel
+couvert. Le jeu est plus généreux, pour le plaisir : toute pluie sous un soleil levé et visible a son arc, d'une force
+d'au moins 0,5 (au coucher, par orage, sous un soleil au-dessus de 42°). Aucun la nuit, sous la neige, ni sous un ciel
+couvert à 85 % ou plus (le soleil est caché). Fixé à la carte (centre, rayon 0,35 × le petit côté, 50 tuiles au plus),
+ouvert à l'opposé du soleil (sens des ombres), sa demi-ouverture `90° × (42 - hauteur) / 42`, la hauteur plafonnée à 30° :
+un demi-cercle au soleil couchant, un arc plus court quand il monte.
 Arc secondaire pâle aux couleurs inversées, ciel plus clair dedans. Bouton 🌈 à côté de l'horloge
 (`RainbowButton.svelte`, `rainbowSpotStore` = sommet de l'arc, publié seulement quand il change) : téléporte sur la case
 libre la plus proche (`teleportNextTo`). Réglage « Afficher les arcs-en-ciel ».

@@ -8,6 +8,7 @@ import type { AirNow } from "@wa/front/Phaser/Game/Weather/Frost";
 import { nightDateStore } from "@wa/front/Stores/NightStore";
 import type { GameScene } from "@wa/front/Phaser/Game/GameScene";
 import { classicPoolsShown } from "@wa/front/Phaser/Game/Terrain/ImagePools";
+import { OVER_WATER_DEPTH } from "@wa/front/Phaser/Game/Terrain/TerrainView";
 import { isPoolHot } from "./FrozenWater";
 
 /** The steam of a hot pool in the cold is drawn this often: each drawing draws the map again. */
@@ -83,10 +84,12 @@ export class FrozenPoolsView {
 
     /** Steam over the heated pools of the ground while it freezes outdoors: a few puffs rising and fading. */
     private drawSteam(now: number): void {
-        const date = get(nightDateStore);
+        // The clock of the night when it runs; the time of now under « Toujours jour » or « Toujours nuit », which leave
+        // it empty: the air of the place is the same.
+        const date = get(nightDateStore) ?? new Date();
         const settings = this.scene.getGameMap?.()?.getWamFile()?.getWam().settings;
-        const steam = date ? steamOver(frostAirNow(settings, date)) : 0;
-        const hot = steam > 0 ? getWaterRectangles(this.scene).filter((pool) => isPoolHot(pool)) : [];
+        const steam = steamOver(frostAirNow(settings, date));
+        const hot = steam > 0 ? steamingPools(getWaterRectangles(this.scene).filter((pool) => isPoolHot(pool))) : [];
         if (hot.length === 0) {
             if (this.steaming) {
                 this.steam.clear();
@@ -100,7 +103,8 @@ export class FrozenPoolsView {
         this.steaming = true;
         this.steam.clear();
         for (const pool of hot) {
-            this.steam.setDepth((pool.depth ?? 0) + 0.001);
+            // A painted pool is drawn with the water of the relief, over the ground: its steam over that water.
+            this.steam.setDepth(pool.depth === undefined ? OVER_WATER_DEPTH : pool.depth + 0.001);
             // A light steam rises from a few places, a dense one from all over the pool.
             const puffs = Math.max(2, Math.round((pool.width / 32) * PUFFS_PER_TILE * (0.5 + steam)));
             for (let index = 0; index < puffs; index++) {
@@ -116,6 +120,38 @@ export class FrozenPoolsView {
         }
         this.scene.markDirty();
     }
+}
+
+/**
+ * The pools the steam rises from: an image pool as it is, a painted one whole (it comes as a band of cells a row,
+ * WaterZones): the rows that touch are one pool, its puffs spread over all of it rather than a few a row.
+ */
+export function steamingPools<Pool extends { x: number; y: number; width: number; height: number; painted?: unknown }>(
+    pools: readonly Pool[],
+): Pool[] {
+    const whole: Pool[] = pools.filter((pool) => !pool.painted);
+    const rows = pools.filter((pool) => pool.painted).sort((a, b) => a.y - b.y || a.x - b.x);
+    const merged: Pool[] = [];
+    for (const row of rows) {
+        const index = merged.findIndex(
+            (pool) => row.y <= pool.y + pool.height && row.x < pool.x + pool.width && pool.x < row.x + row.width,
+        );
+        if (index < 0) {
+            merged.push({ ...row });
+            continue;
+        }
+        const pool = merged[index];
+        const x = Math.min(pool.x, row.x);
+        const y = Math.min(pool.y, row.y);
+        merged[index] = {
+            ...pool,
+            x,
+            y,
+            width: Math.max(pool.x + pool.width, row.x + row.width) - x,
+            height: Math.max(pool.y + pool.height, row.y + row.height) - y,
+        };
+    }
+    return [...whole, ...merged];
 }
 
 /**
