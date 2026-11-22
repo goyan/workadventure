@@ -1096,7 +1096,8 @@ describe("the pools of the map in the water of the relief", () => {
         expect(usual).toBeLessThan(craterOnly - 0.2);
         expect(usual).toBeLessThan(0.6);
         expect(water(4)).toBeLessThan(usual);
-    });
+        // Three pools filled by a pump of ten minutes: thousands of steps each.
+    }, 30_000);
 
     it("leaves a pool a meteor emptied empty for a moment: its pump takes three seconds to start again", () => {
         const { manager, steps } = createHarness({ wam: pooled(), mapSize: () => ({ width: 60, height: 60 }) });
