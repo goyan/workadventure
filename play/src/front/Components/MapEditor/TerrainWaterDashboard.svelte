@@ -2,14 +2,17 @@
     import { LL } from "../../../i18n/i18n-svelte";
     import { signedWaterFigure, waterFigure } from "../../Phaser/Game/Terrain/WaterFigures";
     import { terrainWaterStatsStore } from "../../Stores/TerrainEditorStore";
+    import type { DashboardRain } from "../../Phaser/Game/Terrain/DashboardRain";
 
     interface Props {
         /** The settings of the map, shown beside what they take (mm an hour). */
         evaporation: number;
         absorption: number;
+        /** The rain counted (that of the map) and the one this player may see on their screen instead. */
+        rain?: DashboardRain;
     }
 
-    let { evaporation, absorption }: Props = $props();
+    let { evaporation, absorption, rain }: Props = $props();
 
     let stats = $derived($terrainWaterStatsStore);
     // Every flow in cubic metres an hour of the time of the map: the only unit in which a rain compares with a source.
@@ -18,9 +21,13 @@
             ? [
                   {
                       name: "rain",
-                      label: $LL.mapEditor.terrain.dashboard.rain(),
+                      // The rain of the map, named by its place: the only one that brings water.
+                      label: rain?.place
+                          ? $LL.mapEditor.terrain.dashboard.rainAt({ place: rain.place })
+                          : $LL.mapEditor.terrain.dashboard.rain(),
                       value: stats.rain,
                       own: `${waterFigure(stats.rainRate)} mm/h`,
+                      ...(rain?.manual ? { note: $LL.mapEditor.terrain.dashboard.manualAir() } : {}),
                   },
                   { name: "sources", label: $LL.mapEditor.terrain.dashboard.sources(), value: stats.sources, own: "" },
               ]
@@ -60,11 +67,13 @@
     const share = (value: number): number => (largest > 0 ? Math.round((value / largest) * 100) : 0);
 </script>
 
-{#snippet flowRow(row: { name: string; label: string; value: number; own: string }, color: string)}
+{#snippet flowRow(row: { name: string; label: string; value: number; own: string; note?: string }, color: string)}
     <div class="flex flex-col gap-0.5" data-testid="water-row-{row.name}">
         <div class="flex items-baseline justify-between gap-2 text-xs">
             <span class="text-white"
-                >{row.label}{#if row.own}<span class="text-white/50"> · {row.own}</span>{/if}</span
+                >{row.label}{#if row.note}<span class="text-white/50" data-testid="water-{row.name}-note">
+                        · {row.note}</span
+                    >{/if}{#if row.own}<span class="text-white/50"> · {row.own}</span>{/if}</span
             >
             <span class="text-white tabular-nums whitespace-nowrap">{waterFigure(row.value)} m³/h</span>
         </div>
@@ -83,6 +92,21 @@
         {#each inflows as row (row.name)}
             {@render flowRow(row, "bg-sky-400")}
         {/each}
+        {#if rain && (rain.mapSnows || rain.own)}
+            <!-- What the rain row does not count: the snow lying on the map, the rain of the player's own city. -->
+            <div class="flex flex-col gap-0.5" data-testid="water-rain-notes">
+                {#if rain.mapSnows}
+                    <p class="retro-hint m-0">{$LL.mapEditor.terrain.dashboard.snowLies()}</p>
+                {/if}
+                {#if rain.own}
+                    <p class="retro-hint m-0">
+                        {rain.own.snow
+                            ? $LL.mapEditor.terrain.dashboard.ownSnow({ place: rain.own.city })
+                            : $LL.mapEditor.terrain.dashboard.ownRain({ place: rain.own.city })}
+                    </p>
+                {/if}
+            </div>
+        {/if}
         <span class="text-xs text-white/60">{$LL.mapEditor.terrain.dashboard.outflows()}</span>
         {#each outflows as row (row.name)}
             {@render flowRow(row, "bg-amber-400")}

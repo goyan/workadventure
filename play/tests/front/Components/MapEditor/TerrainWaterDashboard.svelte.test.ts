@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { flushSync, mount, unmount } from "svelte";
+import type { DashboardRain } from "../../../../src/front/Phaser/Game/Terrain/DashboardRain";
 
 vi.mock("../../../../src/i18n/i18n-svelte", async (importOriginal) => {
     const { readable } = await import("svelte/store");
@@ -19,9 +20,9 @@ const { terrainWaterStatsStore } = await import("../../../../src/front/Stores/Te
 
 const target = document.body.appendChild(document.createElement("div"));
 let component: ReturnType<typeof mount> | undefined;
-const render = (): void => {
+const render = (rain?: DashboardRain): void => {
     flushSync(() => {
-        component = mount(TerrainWaterDashboard, { target, props: { evaporation: 0.2, absorption: 5 } });
+        component = mount(TerrainWaterDashboard, { target, props: { evaporation: 0.2, absorption: 5, rain } });
     });
 };
 const row = (name: string): HTMLElement => {
@@ -120,5 +121,64 @@ describe("TerrainWaterDashboard", () => {
         expect(row("rain").textContent).toContain("0.059 m³/h");
         expect(row("evaporation").textContent).toContain("0.004 m³/h");
         expect(row("stock").textContent).toContain("0.25 m³");
+    });
+
+    describe("the rain of the map", () => {
+        const stats = {
+            rain: 0,
+            sources: 0,
+            sinks: 0,
+            evaporation: 0,
+            absorption: 0,
+            lost: 0,
+            stock: 0,
+            wetArea: 0,
+            rainRate: 0,
+        };
+        const notes = (): string =>
+            target.querySelector('[data-testid="water-rain-notes"]')?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+
+        it("names the place of the map whose rain it counts", () => {
+            render({ place: "Lille", manual: false, mapSnows: false });
+            terrainWaterStatsStore.set(stats);
+            flushSync();
+            expect(row("rain").textContent).toContain("mapEditor.terrain.dashboard.rainAt");
+            expect(notes()).toBe("");
+        });
+
+        it("says the map rain only, without a place", () => {
+            render({ manual: false, mapSnows: false });
+            terrainWaterStatsStore.set(stats);
+            flushSync();
+            expect(row("rain").textContent).toContain("mapEditor.terrain.dashboard.rain");
+            expect(row("rain").textContent).not.toContain("rainAt");
+        });
+
+        it("tells conditions set by hand", () => {
+            render({ place: "Lille", manual: true, mapSnows: false });
+            terrainWaterStatsStore.set(stats);
+            flushSync();
+            expect(row("rain").textContent).toContain("mapEditor.terrain.dashboard.rainAt");
+            expect(target.querySelector('[data-testid="water-rain-note"]')?.textContent).toContain(
+                "mapEditor.terrain.dashboard.manualAir",
+            );
+        });
+
+        it("tells the rain of the player's own city, which brings no water, and the snow lying on the map", () => {
+            render({ place: "Lille", manual: false, mapSnows: true, own: { city: "Hong Kong", snow: false } });
+            terrainWaterStatsStore.set(stats);
+            flushSync();
+            expect(notes()).toContain("mapEditor.terrain.dashboard.snowLies");
+            expect(notes()).toContain("mapEditor.terrain.dashboard.ownRain");
+            expect(notes()).not.toContain("ownSnow");
+        });
+
+        it("tells the snow of the player's own city", () => {
+            render({ manual: false, mapSnows: false, own: { city: "Oslo", snow: true } });
+            terrainWaterStatsStore.set(stats);
+            flushSync();
+            expect(notes()).toContain("mapEditor.terrain.dashboard.ownSnow");
+            expect(notes()).not.toContain("snowLies");
+        });
     });
 });

@@ -2644,7 +2644,15 @@ d'Open-Meteo vivent pour cela dans `libs/map-editor/src/Weather/` (les anciens c
 **Tableau de bord** (panneau Relief, « Bilan de l'eau ») : ce qui entre (pluie, sources) et ce qui sort (puits,
 évaporation, bu par le sol, perdu au bord) en m³/h du temps de la carte, avec l'unité propre du réglage à côté (mm/h),
 une barre par ligne à la même échelle, la tendance (entrées moins sorties), le stock en m³ et la surface sous l'eau.
-Mis à jour chaque seconde par `back` tant que l'eau bouge.
+Mis à jour chaque seconde par `back` tant que l'eau bouge. La ligne de pluie dit « Pluie de la carte (Lille) » : la
+pluie de l'air du serveur, la seule qui apporte de l'eau, avec le lieu de la carte quand sa météo est réelle (comme la
+pastille météo, Paris par défaut) et « conditions réglées à la main » quand la salle est en manuel
+(`Terrain/DashboardRain.ts`, relu chaque seconde). Dessous, deux notes au besoin : il neige sur la carte (la neige
+reste au sol, seule la part de pluie est comptée, comme `liquidRainRate` du serveur) ; il pleut ou neige sur l'écran du
+joueur qui suit une autre ville (`showsChosenPlaceWeather`), « pas sur la carte : cette pluie n'apporte pas d'eau ».
+Les multiplicateurs des vagues (frottement, déferlement, élan) et la vitesse d'écoulement s'affichent « × le réel » ;
+« En savoir plus » du frottement dit qu'il multiplie les rugosités des sols (lisibles sous le curseur, pastille des
+étages).
 
 **En jeu.** `Terrain/TerrainView.ts` dessine le relief (fond assombri avec la profondeur, pentes éclairées du
 nord-ouest) et l'eau (bleu clair, plus sombre avec la profondeur, liseré sur la rive) dans un canevas lissé d'un

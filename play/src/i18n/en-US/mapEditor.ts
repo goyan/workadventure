@@ -761,7 +761,13 @@ const mapEditor: BaseTranslation = {
             waiting: "Waiting for the server: no balance while the water does not move.",
             inflows: "What comes in",
             outflows: "What goes out",
-            rain: "Rain",
+            rain: "Rain of the map",
+            rainAt: "Rain of the map ({place})",
+            manualAir: "conditions set by hand",
+            snowLies:
+                "It is snowing on the map: the snow stays on the ground, only the share of rain brings water (it gives it back as it melts).",
+            ownRain: "It is raining on your screen ({place}), not on the map: this rain brings no water.",
+            ownSnow: "It is snowing on your screen ({place}), not on the map: this snow brings no water.",
             sources: "Sources",
             sinks: "Sinks",
             evaporation: "Evaporation",
@@ -787,6 +793,9 @@ const mapEditor: BaseTranslation = {
         updates: "Tellings of the water to the players",
         updatesHint: "Higher: waves are seen running instead of fading, for more network. 1 by default.",
         waves: {
+            timesReal: "× real",
+            roughnessMultiplies:
+                "This setting multiplies these roughnesses (1: as they are); they are not set here. The roughness of the ground under the pointer shows in the hint of the floors badge, next to the clock.",
             roughness: "Friction of the ground",
             roughnessHint:
                 "Holds back fast or shallow water, by the painted soil. Higher: waves run less far up. In reality: 1.",
