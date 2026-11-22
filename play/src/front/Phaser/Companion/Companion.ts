@@ -168,6 +168,12 @@ export class Companion extends Container {
      * The position is kept with its decimals, but the container is drawn on whole pixels: the sprite is blurry
      * otherwise (the player can have half pixels when running).
      */
+    private placeAt(x: number, y: number): void {
+        this.exactX = x;
+        this.exactY = y;
+        this.setPosition(Math.round(x), Math.round(y));
+    }
+
     /**
      * How much lower the companion is drawn, on a relief seen in 3/4 (higher on a mount): as much as the ground under
      * it, only while the image is drawn (CharacterDrops). Nothing while its player is on a raised floor: it is there too.
@@ -176,12 +182,6 @@ export class Companion extends Container {
         const floorZ = this.owner.isFlying?.() ? 0 : (this.owner.getFloorZ?.() ?? 0);
         if (floorZ >= ON_A_FLOOR) return 0;
         return Math.round((this.scene as Partial<Pick<GameScene, "groundDropAt">>).groundDropAt?.(this.x, this.y) ?? 0);
-    }
-
-    private placeAt(x: number, y: number): void {
-        this.exactX = x;
-        this.exactY = y;
-        this.setPosition(Math.round(x), Math.round(y));
     }
 
     private updateDirection(dx: number, dy: number): void {

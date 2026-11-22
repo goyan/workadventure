@@ -103,7 +103,7 @@ export class FireTorchView {
             }
             torch.x += (torch.targetX - torch.x) * follow;
             torch.y += (torch.targetY - torch.y) * follow;
-            // Where the ground under it is drawn.
+            // Where what lies under it is drawn: the ground, or the water over it.
             drawLower([this.graphics], Math.round(this.dropAt(torch.x, torch.y)), () =>
                 this.draw(now, torch, downpourAlpha(now - torch.beganAt, torch.until - now, torch.lasts), reduced),
             );

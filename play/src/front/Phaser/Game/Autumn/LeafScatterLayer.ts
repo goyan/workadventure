@@ -1,4 +1,5 @@
 import { DEPTH_TILE_INDEX } from "../DepthIndexes";
+import { MAX_DROP } from "../Terrain/Pixel/ColumnPainter";
 import { pixelBlocksShownNow } from "../Terrain/PixelBlocksShown";
 import type { WeatherView } from "../Weather/WeatherFrame";
 import { seenFromFar } from "../Weather/ScreenScale";
@@ -71,7 +72,8 @@ export class LeafScatterLayer {
         )
             return false;
         const marginX = view.width / 4;
-        const marginY = view.height / 4;
+        // A leaf on a relief seen in 3/4 is drawn up to MAX_DROP from its place: those lying that far of the view too.
+        const marginY = Math.max(view.height / 4, MAX_DROP);
         this.drawn = {
             x: view.x - marginX,
             y: view.y - marginY,

@@ -78,6 +78,30 @@ describe("LeafScatterLayer", () => {
         expect(graphics.fillRect.mock.calls.map((call) => (call as unknown as number[])[1])).toEqual(rows);
     });
 
+    it("lays the leaves of a mount just under a small view: drawn higher, they are in it", () => {
+        const graphics = {
+            setDepth: vi.fn(() => graphics),
+            clear: vi.fn(() => graphics),
+            fillStyle: vi.fn(() => graphics),
+            fillRect: vi.fn(() => graphics),
+        };
+        const scene = { add: { graphics: () => graphics }, cameras: { main: { zoom: 2 } } } as unknown as Phaser.Scene;
+        // Seen from close: 200 px of the map high. A tree 110 px under the view, on a mount drawn 128 px higher.
+        const view = { x: 0, y: 0, width: 300, height: 200 };
+        const sources = {
+            trees: [{ x: 150, y: 310, width: 64 }],
+            wind: quantizeWind(undefined, undefined),
+            progress: 1,
+        };
+        const layer = new LeafScatterLayer(scene, () => -128);
+        layer.update(view, () => true, sources, false);
+        const rows = graphics.fillRect.mock.calls.map((call) => (call as unknown as number[])[1]);
+        // Leaves lying more than a quarter of the view under it (50 px), drawn inside it.
+        const farUnder = rows.filter((row) => row + 128 > 250);
+        expect(farUnder.length).toBeGreaterThan(0);
+        expect(farUnder.some((row) => row < 200)).toBe(true);
+    });
+
     it("draws no leaf when the map is seen from far, and draws them again closer", () => {
         const graphics = {
             setDepth: vi.fn(() => graphics),

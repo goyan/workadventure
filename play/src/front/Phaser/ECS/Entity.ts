@@ -947,9 +947,11 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
     // Play text on the entity
     public playText(id: string, text: string, duration = 10000, callback = () => this.destroyText()) {
         const x = this.x + this.width / 2;
-        this.speechDomElement = new SpeechDomElement(id, text, this.scene, x, this.y - 10, callback);
+        // Over the object where it is drawn: lower in a hollow of a relief seen in 3/4, higher on a mount.
+        const y = this.y + this.groundDrop;
+        this.speechDomElement = new SpeechDomElement(id, text, this.scene, x, y - 10, callback);
         this.scene.add.existing(this.speechDomElement);
-        this.speechDomElement.play(x, this.y - 20, duration);
+        this.speechDomElement.play(x, y - 20, duration);
     }
 
     // Destroy text

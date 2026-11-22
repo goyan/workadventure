@@ -695,13 +695,13 @@ export class GameScene extends DirtyScene {
      * frost come with it). It draws unless the blocks do (pixelBlocksShown).
      */
     private terrainView: TerrainView | undefined;
-    /** The engine that draws the ground, and the image of the game it was worked out at (groundEngine). */
     /** The relief and the mode the drops of the things on the ground were last read with (reliefDrawVersion). */
     private reliefDrawn: { terrain: TerrainData | undefined; shown: boolean; version: number } = {
         terrain: undefined,
         shown: false,
         version: 0,
     };
+    /** The engine that draws the ground, and the image of the game it was worked out at (groundEngine). */
     private groundEngineNow: GroundEngine = "flat";
     private groundEngineAt = -1;
     /** The characters drawn lower in the hollows of the relief, while the image is drawn. */
@@ -2094,7 +2094,7 @@ export class GameScene extends DirtyScene {
     /** The animals that walk around, as their oval shadows need them. */
     private shadowAnimals(): MovingShadowSource[] {
         const animals: MovingShadowSource[] = [];
-        this.wanderingCharactersManager?.forEachShownCharacter((id, sprite) => {
+        this.wanderingCharactersManager?.forEachShownCharacter((id, sprite, raised) => {
             // The body of an animal fills about two thirds of its frame, in width as in height.
             animals.push({
                 id,
@@ -2104,7 +2104,8 @@ export class GameScene extends DirtyScene {
                 height: sprite.displayHeight * 0.6,
                 sprites: [sprite],
                 scale: sprite.scaleX,
-                drop: Math.round(this.groundDropAt(sprite.x, sprite.y)),
+                // As the animal itself (drawnLower): nothing on a raised floor.
+                drop: raised ? 0 : Math.round(this.groundDropAt(sprite.x, sprite.y)),
             });
         });
         // The antelopes, lions and tigers the server runs.

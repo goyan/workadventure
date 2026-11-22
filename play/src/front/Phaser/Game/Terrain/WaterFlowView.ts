@@ -18,6 +18,7 @@ import {
 
 import { pixelBlocksShownNow } from "./PixelBlocksShown";
 import { strokeRing, strokeStreak, streakLowered } from "./WaterFlowStrokes";
+import { MAX_DROP } from "./Pixel/ColumnPainter";
 
 export interface WaterFlowViewOptions {
     /** The water of the relief as this browser shows it. */
@@ -54,8 +55,11 @@ const WHIRL_MIN_DEPTH_PX = 2;
 /** The rings of a source reach this far from its foot, in map pixels, and further for one that pours over a disc. */
 const RINGS_RADIUS = 10;
 const RINGS_LARGEST = 40;
-/** A source or a sink a little outside the screen is still drawn. */
-const VIEW_MARGIN = 112;
+/**
+ * A source or a sink a little outside the screen is still drawn; and as far as the relief seen in 3/4 draws it from
+ * its place (MAX_DROP).
+ */
+const VIEW_MARGIN = 112 + MAX_DROP;
 const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 /**

@@ -137,7 +137,8 @@ export class DownpourView {
                 if (!veiled) this.drawWholeMap(now, alpha, reduced, snow);
                 veiled = true;
             } else {
-                // Where the ground under it is drawn: its disc, its drops and its cloud with it.
+                // Where what lies under it is drawn (the ground, or the water over it): its disc, its drops and its
+                // cloud with it.
                 drawLower([this.graphics], Math.round(this.dropAt(downpour.x, downpour.y)), () =>
                     this.drawDisc(now, downpour, alpha, reduced, snow),
                 );

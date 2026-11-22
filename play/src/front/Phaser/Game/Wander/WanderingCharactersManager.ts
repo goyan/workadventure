@@ -276,10 +276,15 @@ export class WanderingCharactersManager {
         }
     }
 
-    /** Calls the callback with each character shown now, by its id: its sprite stands on its feet. */
-    public forEachShownCharacter(callback: (id: string, sprite: Phaser.GameObjects.Sprite) => void): void {
+    /**
+     * Calls the callback with each character shown now, by its id: its sprite stands on its feet. `raised`: on a
+     * raised floor, over the relief (it is not drawn lower there, drawnLower: nor is its shadow).
+     */
+    public forEachShownCharacter(
+        callback: (id: string, sprite: Phaser.GameObjects.Sprite, raised: boolean) => void,
+    ): void {
         for (const [id, character] of this.characters) {
-            if (character.sprite?.visible) callback(id, character.sprite);
+            if (character.sprite?.visible) callback(id, character.sprite, character.z >= RAISED_FROM_PX);
         }
     }
 
