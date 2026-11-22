@@ -643,7 +643,8 @@
                         "key": {
                           "type": "string",
                           "enum": [
-                            "on"
+                            "on",
+                            "hot"
                           ],
                           "default": "on"
                         },
@@ -2160,6 +2161,51 @@
               },
               "additionalProperties": false
             },
+            "pools": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "water": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{6}$"
+                  },
+                  "coping": {
+                    "$ref": "#/definitions/WAMFileFormat/properties/settings/properties/pools/items/properties/water"
+                  },
+                  "depthPx": {
+                    "type": "number",
+                    "minimum": 8,
+                    "maximum": 160
+                  },
+                  "hot": {
+                    "type": "boolean"
+                  },
+                  "ladders": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2,
+                    "default": 2
+                  }
+                },
+                "required": [
+                  "water",
+                  "coping",
+                  "depthPx",
+                  "hot"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 8
+            },
+            "poolLadders": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^-?\\d+,-?\\d+$"
+              },
+              "maxItems": 200
+            },
             "lighting": {
               "type": "object",
               "properties": {
@@ -2322,7 +2368,7 @@
                 "items": {
                   "type": "integer",
                   "minimum": 0,
-                  "maximum": 6
+                  "maximum": 14
                 },
                 "minItems": 256,
                 "maxItems": 256
