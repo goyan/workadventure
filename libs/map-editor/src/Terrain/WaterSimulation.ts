@@ -40,7 +40,7 @@ import type { WaterDoor } from "./WaterDoors";
 import { WATER_PACE_SERVER_BUDGET_MS, WaterPace } from "./WaterPace";
 import { WATER_SEND_BUDGET_BYTES_PER_SECOND, WaterSendLoad } from "./WaterSendLoad";
 import { CELL_LITRES_PER_PX, gridBoundsOf, WaterGrid } from "./WaterGrid";
-import type { WaterGridBounds, WaterTally } from "./WaterGrid";
+import type { WaterGridBounds, WaterStepInput, WaterTally } from "./WaterGrid";
 import {
     PX_PER_MM,
     ratesOf,
@@ -102,6 +102,21 @@ const STEPS_PER_SAVE = 300;
  * and a week of absence costs a thousand steps.
  */
 const CATCH_UP_SECONDS = 600;
+/**
+ * Once the time missed is lived the water comes to rest by steps without inertia, this many at most (see
+ * WaterSimulation.settle): each levels a lake over long distances as well (two moves a step, see WaterGrid.step).
+ * Measured on a flooded map of 480 by 320 cells: 400 steps take 1.4 s of computing, and leave under a seventh of
+ * the foam the water made when a room opened again after a day (a twelfth after an hour).
+ */
+const SETTLE_MOST_STEPS = 400;
+const SETTLE_STEP: WaterStepInput = {
+    rainPx: 0,
+    evaporationPx: 0,
+    absorptionPx: 0,
+    indoorDrainPx: 0,
+    flows: [],
+    flowSteps: 2,
+};
 
 type Sums = Omit<WaterTally, "moved">;
 const noSums = (): Sums => ({ rainPx: 0, sourcesPx: 0, sinksPx: 0, evaporationPx: 0, absorptionPx: 0, lostPx: 0 });
@@ -195,6 +210,8 @@ export class WaterSimulation {
     private lived = { inflow: 1, flow: 1 };
     /** The time missed while the room was empty that is not lived again yet, and the rain (mm) that fell in it. */
     private missed = { seconds: 0, rainMm: 0 };
+    /** The steps left for the water to come to rest after the time missed (see settle); none: nothing to settle. */
+    private settling = 0;
 
     constructor(
         private readonly room: SimulationRoom,
@@ -513,15 +530,20 @@ export class WaterSimulation {
      * `seconds` of it under `rainMmPerHour` of rain (what falls as snow lies on the meadow, which pours its melt
      * here). Lived by steps of CATCH_UP_SECONDS, without inertia: the water ends where it rests, the lakes filled by the
      * rain of the past and lowered by its dry days, the pools pumped. `last` says the meadow caught up.
+     *
+     * Returns whether the water asks to be called again (with no seconds, and `last`): once the time missed is all
+     * lived it comes to rest, a step at each call (see settle), so that who calls keeps the time each turn takes.
      */
-    public liveAgain(seconds: number, rainMmPerHour: number, last: boolean): void {
+    public liveAgain(seconds: number, rainMmPerHour: number, last: boolean): boolean {
         const grid = this.grid;
-        if (!grid) return;
+        if (!grid) return false;
+        // The time missed is lived: what is left is to let the water come to rest, a step at each call.
+        if (seconds <= 0 && this.settling > 0) return this.settle(grid);
         if (seconds > 0) {
             this.missed.seconds += seconds;
             this.missed.rainMm += (Math.max(0, rainMmPerHour) * seconds) / 3600;
         }
-        if (this.missed.seconds <= 0 || (!last && this.missed.seconds < CATCH_UP_SECONDS)) return;
+        if (this.missed.seconds <= 0 || (!last && this.missed.seconds < CATCH_UP_SECONDS)) return false;
         const { seconds: lived, rainMm } = this.missed;
         this.missed = { seconds: 0, rainMm: 0 };
         const water = this.room.getWam()?.settings?.water;
@@ -538,6 +560,27 @@ export class WaterSimulation {
         this.moving = true;
         this.version++;
         this.changedSinceSave = true;
+        if (!last) return false;
+        this.settling = SETTLE_MOST_STEPS;
+        return true;
+    }
+
+    /**
+     * A step of the water coming to rest after the time missed: without inertia, and with nothing coming in nor
+     * going out (no rain, no source, no sink, nothing drunk nor dried: no time goes by), so that the water only
+     * levels in its lakes. The steps of the time missed are long and each moves the water once: they leave it piled
+     * where it came and dug where it went, and the water with inertia would start from there on waves nobody made.
+     * Returns whether there is more to settle.
+     */
+    private settle(grid: WaterGrid): boolean {
+        const tally = grid.step(SETTLE_STEP);
+        // What ran off the edge of the map, or over the highest level, is lost as at any step.
+        this.sums.lostPx += tally.lostPx;
+        this.settling = tally.moved ? this.settling - 1 : 0;
+        this.moving = true;
+        this.version++;
+        this.changedSinceSave = true;
+        return this.settling > 0;
     }
 
     /** The room says where its avatars standing on the ground are: they hold the doors open. */

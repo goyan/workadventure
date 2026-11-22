@@ -2399,6 +2399,25 @@ finesse réduite à 5 sur 8 »), par `easedPrecision` et `easedUpdates` de `Terr
 précise (vagues plus amorties, fronts moins nets) pendant les moments les plus lourds, un tsunami compris. Sans
 inertie, seuls les envois peuvent être réduits. Seuils posés par raisonnement, non calés sur une mesure en jeu.
 
+**L'eau se pose à la fin du rattrapage** (`WaterSimulation.liveAgain`, `settle`). Le rattrapage d'une salle vide fait
+vivre l'eau sans inertie par pas de 600 s, et chaque pas ne la déplace qu'une fois : il la laisse entassée là où
+elle est arrivée et creusée là où elle est partie. L'eau à inertie repartait de ces niveaux inégaux : de fausses
+vagues et une poussée d'écume à chaque retour dans une salle restée vide. Une fois le temps manqué vécu, l'eau fait
+maintenant jusqu'à 400 pas sans inertie et sans aucun apport (ni pluie, ni source, ni puits, ni évaporation : le
+temps ne passe pas), qui ne font que la niveler dans ses lacs ; elle s'arrête plus tôt si elle est au repos.
+
+- **Qui compte le temps** : la prairie. `liveAgain` rend `true` tant que l'eau veut d'autres tours ; le rattrapage
+  de la prairie les lui donne dans son budget de 8 ms par tour, et `catchingUp()` reste vrai jusqu'au bout. Le fil
+  des salles et le fil de calcul passent par le même câblage (`GroundSimulation`).
+- **Volume** : inchangé dans un lac fermé (test) ; ne part que ce qui sort par le bord de la carte ou dépasse le
+  plafond des crues, compté dans les pertes comme à tout pas.
+- **Mesuré sur la carte d'Antoine en crue**, cellules avec écume 30 s après la réouverture (régime permanent :
+  4 300) : 10 min d'absence 13 800 → 2 100 ; 1 h 24 400 → 2 000 ; 1 jour 44 300 → 5 500. Après un jour il reste
+  une houle : l'écume remonte à 14 700 cellules à 2 min (20 200 avant). Le réveil s'allonge de 1,5 à 3,5 s
+  (1,2 à 2,6 s de calcul, étalés).
+- **Limites** : les drains des pièces et les pompes des piscines ne tournent pas pendant ces pas (aucun temps ne
+  passe) ; rien vu à l'écran.
+
 **L'allègement compte toutes les salles du fil** (`WaterLoads`, `threadWaterLoads` dans `WaterLoad.ts`). Chaque
 salle ne regardait que ses propres pas : deux grandes salles à 48 % de l'intervalle chacune saturaient le fil sans
 qu'aucune ne s'allège. Les durées moyennes des pas de toutes les eaux du fil s'additionnent maintenant, et c'est la
