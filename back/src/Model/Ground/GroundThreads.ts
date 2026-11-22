@@ -23,7 +23,15 @@ class Lane implements GroundPort {
     private thread: GroundThread | undefined;
     private readonly rooms = new Map<number, { told: (told: GroundTold) => void; lost: () => void }>();
 
-    constructor(private readonly spawn: () => GroundThread) {}
+    /** How many times its thread was started: once, and once more after each loss. */
+    private starts = 0;
+
+    constructor(
+        private readonly spawn: () => GroundThread,
+        /** Its place among the threads of the server, from 1, and how many they are: for the logs. */
+        private readonly place: number,
+        private readonly of: number,
+    ) {}
 
     public get size(): number {
         return this.rooms.size;
@@ -54,6 +62,11 @@ class Lane implements GroundPort {
         if (this.thread) return this.thread;
         const thread = this.spawn();
         this.thread = thread;
+        this.starts++;
+        // Said once a thread: the server computes the ground of rooms away from the thread of the rooms from now on.
+        console.info(
+            `Ground thread ${this.place} of ${this.of} ${this.starts === 1 ? "starts for its first room" : `starts again after a loss (start ${this.starts})`}`,
+        );
         thread.on("message", (told) => this.rooms.get(told.room)?.told(told));
         const lost = (reason: unknown): void => {
             if (this.thread !== thread) return;
@@ -77,7 +90,8 @@ export class GroundThreads {
     private rooms = 0;
 
     constructor(count: number, spawn: () => GroundThread = spawnGroundWorker) {
-        this.lanes = Array.from({ length: Math.max(0, Math.floor(count)) }, () => new Lane(spawn));
+        const lanes = Math.max(0, Math.floor(count));
+        this.lanes = Array.from({ length: lanes }, (_, at) => new Lane(spawn, at + 1, lanes));
     }
 
     /** How many threads the grounds may use: none, they are computed on the thread of the rooms. */
@@ -99,3 +113,8 @@ export class GroundThreads {
 
 /** The threads of this server for the grounds of its rooms: as many as GROUND_THREADS says, none when it says nothing. */
 export const groundThreads = new GroundThreads(GROUND_THREADS);
+console.info(
+    groundThreads.count > 0
+        ? `The ground of the rooms (water and meadow) is computed on ${groundThreads.count} thread(s) of its own (GROUND_THREADS)`
+        : "The ground of the rooms (water and meadow) is computed on the thread of the rooms (GROUND_THREADS is 0)",
+);

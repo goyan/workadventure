@@ -2512,6 +2512,11 @@ ne l'est pas).
     l'instantané que la salle tient (l'eau cachée sous une boule est perdue), la prairie depuis la dernière
     sauvegarde. Trois pertes en cinq minutes : le sol de la salle repasse dans le fil des salles.
   - **Répartition** : une salle va au fil qui a le moins de salles et n'en change plus.
+  - **Journaux** : au démarrage, `back` dit où le sol est calculé (« The ground of the rooms (water and meadow) is
+    computed on N thread(s) of its own (GROUND_THREADS) », ou « … on the thread of the rooms (GROUND_THREADS is
+    0) ») ; « Ground thread i of N starts for its first room » quand un fil démarre pour sa première salle ;
+    « … starts again after a loss (start k) » quand il est relancé, après l'erreur « A thread that computes the
+    ground of rooms was lost ».
   - **Mesuré** (Mac M4 Max chargé, carte d'entrée de la beta inondée à 42 %, inertie, finesse 3, 5 envois/s, vraies
     classes, deux passes alternées) : retard d'un minuteur de 2 ms sur le fil des salles, 99e centile 12 ms →
     0,4 ms ; maximum 16 à 33 ms → 2,1 à 2,6 ms ; part des retards de plus de 10 ms 1,9 % → 0. Une édition de carte
