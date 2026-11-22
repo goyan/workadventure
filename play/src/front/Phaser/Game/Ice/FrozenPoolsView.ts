@@ -1,8 +1,11 @@
+import { get } from "svelte/store";
 import type * as Phaser from "phaser";
 import { GROUND_TEXTURES } from "@wa/front/Phaser/Game/Terrain/TexturedGround";
 import { getWaterRectangles, getFrozenPoolRectangles } from "@wa/front/Phaser/Game/Water/WaterZones";
 import type { WaterRectangle } from "@wa/front/Phaser/Game/Water/WaterZones";
-import { waterCycleNow } from "@wa/front/Phaser/Game/Weather/Frost";
+import { frostAirNow } from "@wa/front/Phaser/Game/Weather/Frost";
+import type { AirNow } from "@wa/front/Phaser/Game/Weather/Frost";
+import { nightDateStore } from "@wa/front/Stores/NightStore";
 import type { GameScene } from "@wa/front/Phaser/Game/GameScene";
 import { classicPoolsShown } from "@wa/front/Phaser/Game/Terrain/ImagePools";
 import { isPoolHot } from "./FrozenWater";
@@ -11,6 +14,17 @@ import { isPoolHot } from "./FrozenWater";
 const STEAM_FRAME_MS = 1000 / 12;
 /** Puffs of steam over a hot pool, for each 32 px of its width. */
 const PUFFS_PER_TILE = 2;
+/** The opacity of a puff of the densest steam, when it is born. */
+const STEAM_ALPHA = 0.45;
+/** The water of a heated pool, °C. */
+const HEATED_POOL_C = 28;
+/** The steam shows from this gap between the water and the air (°C): an air of 10 °C. */
+const STEAM_FROM_GAP_C = 18;
+/** The steam is the densest from this gap (°C): an air of -15 °C. */
+const STEAM_FULL_GAP_C = 43;
+/** A wind this strong (km/h) thins the steam the most, by this share. */
+const STEAM_SWEPT_KMH = 30;
+const STEAM_WIND_THINNING = 0.6;
 const STEAM_COLOR = 0xffffff;
 
 /**
@@ -69,8 +83,10 @@ export class FrozenPoolsView {
 
     /** Steam over the heated pools of the ground while it freezes outdoors: a few puffs rising and fading. */
     private drawSteam(now: number): void {
-        const cycle = waterCycleNow(this.scene.getGameMap?.()?.getWamFile()?.getWam().settings);
-        const hot = poolsSteamIn(cycle) ? getWaterRectangles(this.scene).filter((pool) => isPoolHot(pool)) : [];
+        const date = get(nightDateStore);
+        const settings = this.scene.getGameMap?.()?.getWamFile()?.getWam().settings;
+        const steam = date ? steamOver(frostAirNow(settings, date)) : 0;
+        const hot = steam > 0 ? getWaterRectangles(this.scene).filter((pool) => isPoolHot(pool)) : [];
         if (hot.length === 0) {
             if (this.steaming) {
                 this.steam.clear();
@@ -85,7 +101,8 @@ export class FrozenPoolsView {
         this.steam.clear();
         for (const pool of hot) {
             this.steam.setDepth((pool.depth ?? 0) + 0.001);
-            const puffs = Math.max(2, Math.round((pool.width / 32) * PUFFS_PER_TILE));
+            // A light steam rises from a few places, a dense one from all over the pool.
+            const puffs = Math.max(2, Math.round((pool.width / 32) * PUFFS_PER_TILE * (0.5 + steam)));
             for (let index = 0; index < puffs; index++) {
                 // Each puff rises over 3 s from its own place, at its own time; always the same for the same time.
                 const seed = Math.sin(index * 12.9898 + pool.x * 0.013 + pool.y * 0.007) * 43758.5453;
@@ -93,7 +110,7 @@ export class FrozenPoolsView {
                 const life = (((now / 3000 + share) % 1) + 1) % 1;
                 const x = pool.x + ((index + 0.5) / puffs) * pool.width + Math.sin(now / 700 + index) * 3;
                 const y = pool.y + pool.height * (0.3 + 0.6 * share) - life * 28;
-                this.steam.fillStyle(STEAM_COLOR, 0.35 * (1 - life) * Math.min(1, life * 4));
+                this.steam.fillStyle(STEAM_COLOR, STEAM_ALPHA * steam * (1 - life) * Math.min(1, life * 4));
                 this.steam.fillCircle(x, y, 3 + life * 6);
             }
         }
@@ -102,9 +119,15 @@ export class FrozenPoolsView {
 }
 
 /**
- * Whether the air is cold enough for a heated pool to steam: as soon as water freezes outdoors (`ice`), or hoar frost
- * whitens the ground. Not the hoar frost alone: a dry air of -30 °C lays none, and steams the most.
+ * How dense the steam over a heated pool is in that air, 0 (none) to 1: water vapour leaves the warm water and
+ * condenses at once in the colder air, the more the colder (the "sea smoke" over a lake on a cold morning). It shows
+ * from about 10 °C, thickens down to about -15 °C, rises in a dry air as in a damp one, and the wind thins it without
+ * blowing it all away. None while the air is not known.
  */
-export function poolsSteamIn(cycle: { frost: number; ice: number }): boolean {
-    return cycle.ice > 0 || cycle.frost > 0;
+export function steamOver(air: AirNow | undefined): number {
+    if (!air || !Number.isFinite(air.temperature)) return 0;
+    const gap = HEATED_POOL_C - air.temperature;
+    const density = Math.min(1, Math.max(0, (gap - STEAM_FROM_GAP_C) / (STEAM_FULL_GAP_C - STEAM_FROM_GAP_C)));
+    const wind = air.windSpeed !== undefined && Number.isFinite(air.windSpeed) ? Math.max(0, air.windSpeed) : 0;
+    return density * (1 - STEAM_WIND_THINNING * Math.min(1, wind / STEAM_SWEPT_KMH));
 }
