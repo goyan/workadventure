@@ -26,6 +26,18 @@ export const BALLS_PER_ROOM = 8;
  */
 export const BALL_SWEEP_MOST_STRIDES = 32;
 
+/**
+ * A ball that moved keeps its level while the water it now stands in is within this of it, in pixels: it does not
+ * bob on the swell it makes, it goes up or down when it comes onto another water, or onto the ground.
+ */
+export const BALL_LEVEL_SLACK_PX = 6;
+
+/**
+ * The water a ball stands in is looked for through the dry cells this near the point it is held at, in cells: a
+ * ball dragged fast sweeps the bed dry under itself and behind, as far as it is wide.
+ */
+export const BALL_LEVEL_REACH_CELLS = 20;
+
 /** The diameter of a ball of that size: one out of range is the nearest; a size that is none is the usual one. */
 export function ballTiles(diameterTiles: number): number {
     if (!Number.isFinite(diameterTiles) || diameterTiles === 0) return BALL_DEFAULT_TILES;
@@ -44,10 +56,11 @@ export interface Ball extends WaterBall {
 
 /**
  * The balls of a room between two steps of its water: where they were (`before`), where they are (`now`). A ball is
- * under the pointer of its player at once, so it may have gone several cells since the last step: it did not leap
- * there, it went along the way, and pushed the water of the whole way. Returns where the balls stand stride after
- * stride, the last one being `now`: a ball that moved goes a cell at a time along the straight way from where it
- * was; one that came is there at once, whole; one that went is gone at once.
+ * under the pointer of its player at once, so it may have gone several cells since the last step, and up or down
+ * to the level of another water: it did not leap there, it went along the way, and pushed the water of the whole
+ * way. Returns where the balls stand stride after stride, the last one being `now`: a ball that moved goes a cell
+ * at a time, of the map as of altitude, along the straight way from where it was; one that came is there at once,
+ * whole; one that went is gone at once.
  */
 export function sweepBalls(before: readonly Ball[], now: readonly Ball[]): Ball[][] {
     const from = new Map<number, Ball>();
@@ -56,7 +69,10 @@ export function sweepBalls(before: readonly Ball[], now: readonly Ball[]): Ball[
     for (const ball of now) {
         const was = from.get(ball.id);
         if (!was) continue;
-        const away = Math.hypot(ball.x - was.x, ball.y - was.y);
+        const away = Math.max(
+            Math.hypot(ball.x - was.x, ball.y - was.y),
+            Math.abs((ball.levelPx ?? 0) - (was.levelPx ?? 0)),
+        );
         if (Number.isFinite(away) && away > furthest) furthest = away;
     }
     const strides = Math.min(BALL_SWEEP_MOST_STRIDES, Math.max(1, Math.ceil(furthest / TERRAIN_CELL)));
@@ -69,7 +85,15 @@ export function sweepBalls(before: readonly Ball[], now: readonly Ball[]): Ball[
                 if (!was || stride === strides || !Number.isFinite(was.x) || !Number.isFinite(was.y)) {
                     return { ...ball };
                 }
-                return { ...ball, x: was.x + (ball.x - was.x) * share, y: was.y + (ball.y - was.y) * share };
+                const level = was.levelPx ?? 0;
+                return {
+                    ...ball,
+                    x: was.x + (ball.x - was.x) * share,
+                    y: was.y + (ball.y - was.y) * share,
+                    ...(ball.levelPx === undefined && was.levelPx === undefined
+                        ? {}
+                        : { levelPx: level + ((ball.levelPx ?? 0) - level) * share }),
+                };
             }),
         );
     }

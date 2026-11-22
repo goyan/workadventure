@@ -17,7 +17,7 @@ function graphics() {
         strokeCircle: vi.fn(),
         beginPath: vi.fn(),
         moveTo: vi.fn(),
-        lineTo: vi.fn(),
+        lineTo: vi.fn<(x: number, y: number) => void>(),
         closePath: vi.fn(),
         strokePath: vi.fn(),
         destroy: vi.fn(),
@@ -27,7 +27,7 @@ function graphics() {
 
 const ME = 7;
 
-function harness(water = 0) {
+function harness(water = 0, ground = water > 0 ? -100 : 0) {
     const made: ReturnType<typeof graphics>[] = [];
     const scene = {
         add: {
@@ -43,7 +43,7 @@ function harness(water = 0) {
     let held: WaterBall | undefined;
     const view = new BallView(
         scene as unknown as Phaser.Scene & { markDirty(): void },
-        () => ({ groundPx: water > 0 ? -100 : 0, waterPx: water }),
+        () => ({ groundPx: ground, waterPx: water }),
         () => version,
         () => ME,
         () => held,
@@ -150,6 +150,29 @@ describe("BallView", () => {
         view.update(1070);
         expect(made[1].destroy).toHaveBeenCalled();
         expect(made).toHaveLength(2);
+    });
+
+    it("holds one's own ball at the surface of the water under the pointer, then at the level the server says", () => {
+        // A flood 30 px deep on flat ground.
+        const { view, made, message, hold } = harness(30, 0);
+        hold({ x: 400, y: 200, radiusPx: 32 });
+        view.update(1000);
+        const farthest = (): number =>
+            Math.max(...made[1].lineTo.mock.calls.slice(-10).map(([x, y]) => Math.hypot(x - 400, y - 200)));
+        // Half in the water at once: the line of the water runs at its rim.
+        expect(farthest()).toBeCloseTo(32, 3);
+        // The server holds it lower (the water was lower than this browser knew): its line draws in.
+        view.report(message({ userId: ME, x: 400, y: 200, radiusTiles: 2, ballLevel: 10 }), 1050);
+        view.update(1060);
+        expect(farthest()).toBeCloseTo(Math.sqrt(32 ** 2 - 20 ** 2), 3);
+        expect(made).toHaveLength(2);
+        // Let go, and held again elsewhere: the level of before is forgotten.
+        hold(undefined);
+        view.update(1100);
+        hold({ x: 400, y: 200, radiusPx: 32 });
+        view.update(1200);
+        const again = made[2].lineTo.mock.calls.slice(-10).map(([x, y]) => Math.hypot(x - 400, y - 200));
+        expect(Math.max(...again)).toBeCloseTo(32, 3);
     });
 
     it("stands in the water: a line of foam where the water meets it, and no shade thrown on the lake", () => {

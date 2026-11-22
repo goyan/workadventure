@@ -65,6 +65,8 @@ export class CatastropheManager {
     private readonly raining = new Map<number, LiveDownpour>();
     /** The drain of each player, by the id of the player. */
     private readonly draining = new Map<number, LiveDrain>();
+    /** The level the water holds a ball at (see TerrainWaterManager.ballLevelAt): the altitude 0 until it is given. */
+    private levelOf: (id: number, x: number, y: number) => number = () => 0;
     private stopped = false;
     /** When each player set their last patches of fire, within the last second. */
     private readonly patches = new Map<number, number[]>();
@@ -228,6 +230,11 @@ export class CatastropheManager {
         return true;
     }
 
+    /** What says the level a ball is held at is made after the catastrophes of a room: it is given here. */
+    public levelWith(levelOf: (id: number, x: number, y: number) => number): void {
+        this.levelOf = levelOf;
+    }
+
     /** A player lets their ball go: it is gone at once, and the room is told. False when they held none. */
     public release(userId: number): boolean {
         const ball = this.holding.get(userId);
@@ -251,6 +258,7 @@ export class CatastropheManager {
                     radiusTiles: tiles,
                     wholeMap: false,
                     userId,
+                    ballLevel: this.levelOf(ball.id, ball.x, ball.y),
                 },
             },
         });

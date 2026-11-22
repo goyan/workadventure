@@ -306,7 +306,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         ball: "Boule",
         ballSizeLabel: "Taille de la boule : son diamètre, en cases",
         ballArmedHelp:
-            "Maintenez le clic : une boule solide est aussitôt là, son centre au niveau 0 de la carte ; elle suit le pointeur et chasse l'eau de sa partie immergée · Échap pour annuler",
+            "Maintenez le clic : une boule solide est aussitôt là, à moitié dans l'eau, à la surface sous le pointeur ; elle le suit et chasse l'eau de sa moitié immergée · Échap pour annuler",
         tabs: { catastrophes: "Catastrophes", weather: "Météo" },
         weather: {
             manual: "Manuel",
