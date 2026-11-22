@@ -149,7 +149,8 @@ export class TorchManager {
             bearers.push({
                 id,
                 x: character.x,
-                y: character.y,
+                // Its light is where its bearer is drawn: lower in a hollow of a relief seen in 3/4, higher on a mount.
+                y: character.y + (character.getGroundDrop?.() ?? 0),
                 direction: character.lastDirection,
                 seated: character.isSeated(),
                 floorZ: character.getFloorZ(),

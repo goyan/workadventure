@@ -41,6 +41,7 @@ vi.mock("../../../../../src/front/Phaser/Game/Night/NightHalos", () => ({
             return false;
         }
     },
+    halosWhereDrawn: (halos: unknown[]) => halos,
 }));
 const { NightMode, nightModeStore, nightDateStore } = await import("../../../../../src/front/Stores/NightStore");
 const { NightManager } = await import("../../../../../src/front/Phaser/Game/Night/NightManager");

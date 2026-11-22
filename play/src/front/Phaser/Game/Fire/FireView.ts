@@ -30,7 +30,8 @@ import { SmoulderingGround, smoulderPoints } from "./Smoulder";
 /** Flames are drawn on about this many tiles at most: beyond, on a share of them all over the view, bigger. */
 const MAX_FLAMES = 600;
 /** Tiles around the view whose flames are drawn too: a flame leans and rises over its neighbours. */
-const VIEW_MARGIN_TILES = 3;
+// (5 tiles: a flame on a relief seen in 3/4 is drawn up to 128 px from its tile.)
+const VIEW_MARGIN_TILES = 5;
 /** Where the foot of a flame stands in its tile, from its top: towards its bottom, as what stands on the ground. */
 const FOOT_IN_TILE = 0.8;
 /** The tongues of a flame, from its red mantle to its white heart: their size, colour and opacity. */
@@ -80,6 +81,8 @@ export class FireView {
         private readonly meadow: Pick<MeadowState, "fireAt" | "isBurning"> & Partial<Pick<MeadowState, "moistureAt">>,
         private readonly wind: () => { windFrom?: number; windSpeed?: number } | undefined,
         private readonly reducedMotion: () => boolean,
+        /** How much lower the ground at a point is drawn, the relief seen in 3/4 (GameScene.groundDropAt). */
+        private readonly dropAt: (x: number, y: number) => number = () => 0,
     ) {
         this.drawTextures();
     }
@@ -139,6 +142,8 @@ export class FireView {
             };
             const footX = (tile.x + 0.5) * TILE_PX;
             const footY = (tile.y + FOOT_IN_TILE) * TILE_PX;
+            // Drawn where its ground is (lower in a hollow, higher on a mount); sorted by its place, as an avatar.
+            const drawnY = footY + this.dropAt(footX, footY);
             const pose = flamePose(input, style.loop);
             const around = this.burningAround(tile.x, tile.y);
             // The flames of neighbouring tiles join into one fire: big in its heart, lower on its edges.
@@ -146,14 +151,14 @@ export class FireView {
             // At the depth of its foot: what stands lower on the map is drawn over it.
             const flame = this.flameAt(index)
                 .setTexture(style.texture, style.frameOf(pose.frame, input.seed))
-                .setPosition(footX, footY)
+                .setPosition(footX, drawnY)
                 .setScale(pose.scaleX * size, pose.scaleY * size)
                 .setRotation(pose.rotation)
                 .setVisible(true);
             placeAtDepth(flame, footY);
             const glow = GLOW_RADIUS_PX * (0.5 + 0.5 * input.intensity) * scale;
             this.glowAt(index)
-                .setPosition(footX, footY - FLAME_MAX_HEIGHT_PX * pose.scaleY * size * 0.4)
+                .setPosition(footX, drawnY - FLAME_MAX_HEIGHT_PX * pose.scaleY * size * 0.4)
                 .setDisplaySize(glow * 2, glow * 2)
                 .setAlpha(input.intensity * glowShare(around))
                 .setVisible(true);
@@ -161,7 +166,7 @@ export class FireView {
             for (const puff of smokeOf(input)) {
                 this.puffAt(puffs++)
                     .setTexture(SMOKE_TEXTURE)
-                    .setPosition(footX + puff.x * smokeScale, footY + puff.y * smokeScale)
+                    .setPosition(footX + puff.x * smokeScale, drawnY + puff.y * smokeScale)
                     .setDisplaySize(puff.radius * 2 * smokeScale, puff.radius * 2 * smokeScale)
                     .setAlpha(puff.alpha * share)
                     .setVisible(true);
@@ -172,6 +177,7 @@ export class FireView {
         for (const tile of left) {
             const footX = (tile.x + 0.5) * TILE_PX;
             const footY = (tile.y + FOOT_IN_TILE) * TILE_PX;
+            const drop = this.dropAt(footX, footY);
             const input = {
                 // It thins out as the ground cools.
                 intensity: 0.3 + 0.5 * tile.left,
@@ -186,7 +192,7 @@ export class FireView {
                 // From the ground itself: there is no flame to keep clear any more.
                 this.puffAt(puffs++)
                     .setTexture(tile.steam ? STEAM_TEXTURE : SMOKE_TEXTURE)
-                    .setPosition(footX + puff.x * farScale, footY + (puff.y + 40) * farScale)
+                    .setPosition(footX + puff.x * farScale, footY + drop + (puff.y + 40) * farScale)
                     .setDisplaySize(puff.radius * 2 * farScale, puff.radius * 2 * farScale)
                     .setAlpha(Math.min(1, puff.alpha * share * (tile.steam ? 1.1 : 1.5)))
                     .setVisible(true);
@@ -195,7 +201,7 @@ export class FireView {
             for (const ember of smoulderPoints(tile.x, tile.y, tile.left)) {
                 const pulse = reducedMotion ? 0.8 : 0.65 + 0.35 * Math.sin(seconds * 2.4 + ember.x * 0.37);
                 this.glowAt(glows++)
-                    .setPosition(ember.x, ember.y)
+                    .setPosition(ember.x, ember.y + drop)
                     .setDisplaySize(GROUND_EMBER_PX, GROUND_EMBER_PX)
                     .setAlpha(ember.alpha * pulse)
                     .setVisible(true);

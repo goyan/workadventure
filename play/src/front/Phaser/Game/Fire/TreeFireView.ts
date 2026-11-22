@@ -35,6 +35,8 @@ export interface BurningTreeObject {
     displayHeight: number;
     depth: number;
     visible: boolean;
+    /** How much lower the tree is drawn, on a relief seen in 3/4 (Entity.getGroundDrop): its fire goes with it. */
+    getGroundDrop?(): number;
 }
 
 /**
@@ -62,6 +64,8 @@ export class TreeFireView {
         private readonly wind: () => { windFrom?: number; windSpeed?: number } | undefined,
         private readonly reducedMotion: () => boolean,
         private readonly enabled: () => boolean = () => true,
+        /** How much lower the ground at a point is drawn (GameScene.groundDropAt): the embers fly over it. */
+        private readonly dropAt: (x: number, y: number) => number = () => 0,
     ) {}
 
     public update(now: number): void {
@@ -100,6 +104,8 @@ export class TreeFireView {
                 continue;
             }
             seen.add(id);
+            // Drawn where the tree is: lower in a hollow, higher on a mount.
+            const drop = tree.getGroundDrop?.() ?? 0;
             // Past the most flames the view carries, a tree keeps one, as seen from far.
             const single = far || flames >= MAX_TREE_FLAMES;
             const key = `${tree.x},${tree.y},${tree.displayWidth},${tree.displayHeight},${single}`;
@@ -124,7 +130,7 @@ export class TreeFireView {
                 const image = this.imageAt(this.flames, flames++, FLAMES_TEXTURE)
                     .setOrigin(0.5, 1)
                     .setTexture(style.texture, style.frameOf(pose.frame, flame.seed))
-                    .setPosition(flame.x, flame.y)
+                    .setPosition(flame.x, flame.y + drop)
                     .setScale(pose.scaleX * flame.scale, pose.scaleY * flame.scale)
                     .setRotation(pose.rotation)
                     .setVisible(true);
@@ -134,7 +140,7 @@ export class TreeFireView {
                 if (image.depth !== depth) image.setDepth(depth);
             }
             const middleX = tree.x + tree.displayWidth / 2;
-            const crownY = tree.y + tree.displayHeight * 0.35;
+            const crownY = tree.y + tree.displayHeight * 0.35 + drop;
             const glow = tree.displayWidth * TREE_GLOW_WIDTHS;
             // The glows add up: the trees of a forest on fire share theirs, as the flames of a thick front do.
             this.imageAt(this.glows, glows++, GLOW_TEXTURE)
@@ -184,8 +190,9 @@ export class TreeFireView {
             ) {
                 continue;
             }
+            const drop = tree.getGroundDrop?.() ?? 0;
             const middleX = tree.x + tree.displayWidth / 2;
-            const crownY = tree.y + tree.displayHeight * 0.35;
+            const crownY = tree.y + tree.displayHeight * 0.35 + drop;
             const smoke = smokeOf({
                 intensity: 0.4 + 0.6 * left,
                 windFrom: wind?.windFrom,
@@ -217,7 +224,7 @@ export class TreeFireView {
                     .setBlendMode(Phaser.BlendModes.ADD)
                     .setPosition(
                         tree.x + tree.displayWidth * (0.25 + 0.5 * seed),
-                        tree.y + tree.displayHeight * (0.15 + 0.4 * ((seed * 7) % 1)),
+                        tree.y + drop + tree.displayHeight * (0.15 + 0.4 * ((seed * 7) % 1)),
                     )
                     .setDisplaySize(SMOULDER_POINT_PX, SMOULDER_POINT_PX)
                     .setAlpha(Math.min(1, life * 3) * pulse)
@@ -237,8 +244,9 @@ export class TreeFireView {
         const embers = reducedMotion || !this.enabled() ? [] : this.state.embers(now);
         let shown = 0;
         for (const ember of embers) {
-            const point = emberPoint(ember, now);
-            if (!point) continue;
+            const flat = emberPoint(ember, now);
+            if (!flat) continue;
+            const point = { ...flat, y: flat.y + this.dropAt(flat.x, flat.y) };
             // Brighter as it leaves, fading as it falls.
             const alpha = 1 - 0.5 * point.along;
             this.imageAt(this.embers, shown++, GLOW_TEXTURE)

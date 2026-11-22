@@ -113,6 +113,8 @@ export class TerrainWater {
     /** How many of those changes were states of the water received. */
     private states = 0;
     private bridges: ReadonlySet<string> = new Set();
+    /** The deepest water shown, now or while it glides to its last state (px). */
+    private deepestDepth = 0;
 
     /** The relief of the map, as it is now (drawn with the water). */
     public setTerrain(terrain: TerrainData | undefined): void {
@@ -214,8 +216,16 @@ export class TerrainWater {
         this.bytes = bytes;
         this.seq = state.seq;
         this.wet = wet || this.from.some((depth) => depth > 0);
+        let deepest = 0;
+        for (let index = 0; index < cells; index++) deepest = Math.max(deepest, this.from[index], to[index]);
+        this.deepestDepth = deepest;
         this.changes++;
         this.states++;
+    }
+
+    /** The deepest water of the map (px), as shown or gliding: how much higher a lake on a mount draws its surface. */
+    public deepest(): number {
+        return this.deepestDepth;
     }
 
     /** Pixels of water over a point of the map (map pixels) at this time of the game: 0 where it is dry. */
@@ -345,6 +355,11 @@ export class TerrainWater {
         rows: number,
         now: number,
         levels: Uint8Array,
+        /**
+         * Truncated instead of rounded, for the relief in 3/4: water 15.7 px deep is drawn there as water one wades in,
+         * as the walk reads it (one swims from SWIM_DEPTH_PX on).
+         */
+        floored = false,
     ): boolean {
         levels.fill(0);
         const share = this.share(now);
@@ -361,7 +376,8 @@ export class TerrainWater {
                 const start = from[gridLine + column];
                 const depth = start + (to[gridLine + column] - start) * share;
                 if (depth < DRAWN_PX) continue;
-                levels[line + column] = depth < 1 ? 1 : depth > 255 ? 255 : Math.round(depth);
+                levels[line + column] =
+                    depth < 1 ? 1 : depth > 255 ? 255 : floored ? Math.floor(depth) : Math.round(depth);
                 any = true;
             }
         }
@@ -374,6 +390,36 @@ export class TerrainWater {
         // While it glides the water is drawn five times a second, however often the server tells it: a state
         // received does not ask for a drawing of its own.
         return gliding ? `${this.changes - this.states}:${Math.floor(now / GLIDE_DRAW_MS)}` : `${this.changes}`;
+    }
+
+    /**
+     * The depth of the water over the cells of an area (`columns` × `rows` cells from the cell `cellX`, `cellY`) at
+     * this time of the game, written into `depths`: its pixels as they are, however thin or deep; 0 where it is dry.
+     * For the surface of the water seen in 3/4 (the levels of `levelsOver` stop at 255 px).
+     */
+    public depthsOver(
+        cellX: number,
+        cellY: number,
+        columns: number,
+        rows: number,
+        now: number,
+        depths: Float32Array,
+    ): void {
+        depths.fill(0);
+        const share = this.share(now);
+        const { from, to, grid } = this;
+        const firstRow = Math.max(0, grid.y - cellY);
+        const lastRow = Math.min(rows, grid.y + grid.height - cellY);
+        const firstColumn = Math.max(0, grid.x - cellX);
+        const lastColumn = Math.min(columns, grid.x + grid.width - cellX);
+        for (let row = firstRow; row < lastRow; row++) {
+            const gridLine = (row + cellY - grid.y) * grid.width + (cellX - grid.x);
+            const line = row * columns;
+            for (let column = firstColumn; column < lastColumn; column++) {
+                const start = from[gridLine + column];
+                depths[line + column] = start + (to[gridLine + column] - start) * share;
+            }
+        }
     }
 
     /**
