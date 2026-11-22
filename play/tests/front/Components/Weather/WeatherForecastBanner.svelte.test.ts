@@ -27,7 +27,10 @@ const chosen = vi.hoisted(
     (): {
         place: {
             store:
-                | Writable<{ name: string; longName?: string; latitude: number; longitude: number } | undefined>
+                | Writable<
+                      | { name: string; longName?: string; where?: string; latitude: number; longitude: number }
+                      | undefined
+                  >
                 | undefined;
         };
         state: { store: Writable<{ place: unknown; state: unknown }> | undefined };
@@ -177,6 +180,7 @@ vi.mock("../../../../src/front/Phaser/Game/Night/PointWords", () => ({
         west: "W",
         far: (point: string, city: string, distance: string) => `${point} · ${city} ${distance} km away`,
         short: (city: string, distance: string) => `${city} ${distance} km`,
+        country: (code: string) => new Intl.DisplayNames("en-US", { type: "region" }).of(code) ?? code,
         kilometres: (km: number) => new Intl.NumberFormat("en-US").format(km),
     }),
 }));
@@ -657,6 +661,41 @@ describe("WeatherForecastBanner, apply to the map", () => {
         expect(target.querySelector('[data-testid="weather-card-server-city"]')?.textContent).toMatch(
             /^72° S 170° E · .+ [\d,]+ km away$/,
         );
+    });
+
+    it("says where the town of the map is on its card and in the tooltip of the chip, the chip short", () => {
+        wamSettings.value = {
+            weather: "real",
+            weatherLocation: { name: "Nice, Provence-Alpes-Côte d'Azur, France", latitude: 43.7, longitude: 7.27 },
+        };
+        render();
+        const chip = target.querySelector<HTMLElement>('[data-testid="weather-chip-server"]');
+        expect(chip?.textContent?.trim()).toBe("Nice");
+        expect(chip?.title).toBe("Nice, Provence-Alpes-Côte d'Azur, France");
+        expect(target.querySelector('[data-testid="weather-card-server-city"]')?.textContent).toBe("Nice");
+        expect(target.querySelector('[data-testid="weather-card-server-where"]')?.textContent).toBe(
+            "Provence-Alpes-Côte d'Azur, France",
+        );
+        expect(target.querySelector('[data-testid="weather-card-server"]')?.getAttribute("aria-label")).toBe(
+            "Nice, Provence-Alpes-Côte d'Azur, France",
+        );
+    });
+
+    it("shows no region nor country for a town of the map saved without them", () => {
+        wamSettings.value = { weather: "real", weatherLocation: { name: "Lille", latitude: 50.63, longitude: 3.06 } };
+        render();
+        expect(target.querySelector('[data-testid="weather-card-server-city"]')?.textContent).toBe("Lille");
+        expect(target.querySelector('[data-testid="weather-card-server-where"]')).toBeNull();
+        expect(target.querySelector<HTMLElement>('[data-testid="weather-chip-server"]')?.title).toBe("");
+    });
+
+    it("says where the place this player follows is on their card", () => {
+        chosen.cells = [{ at: NOW.getTime(), weather: "rain", temperature: 7 }];
+        render();
+        chosen.place.store?.set({ name: "Tokyo", where: "Japan", latitude: 35.68, longitude: 139.69 });
+        flushSync();
+        expect(target.querySelector('[data-testid="weather-card-local-where"]')?.textContent).toBe("Japan");
+        expect(target.querySelector<HTMLElement>('[data-testid="weather-chip-local"]')?.title).toBe("Tokyo, Japan");
     });
 
     it("lets the player who applied a place bring the map back from its card", () => {

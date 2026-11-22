@@ -36,6 +36,7 @@ vi.mock("../../../../src/front/Phaser/Game/Night/PointWords", () => ({
         west: "W",
         far: (point: string, city: string, distance: string) => `${point} · ${city} ${distance} km away`,
         short: (city: string, distance: string) => `${city} ${distance} km`,
+        country: (code: string) => new Intl.DisplayNames("en-US", { type: "region" }).of(code) ?? code,
         kilometres: (km: number) => new Intl.NumberFormat("en-US").format(km),
     }),
 }));
@@ -122,6 +123,22 @@ describe("MapLocationPicker", () => {
         await vi.advanceTimersByTimeAsync(300);
         flushSync();
         expect(target.querySelector('[data-testid="map-location-results"]')?.textContent).toContain("Brest, France");
+    });
+});
+
+describe("MapLocationPicker, towns of the same name", () => {
+    it("tells them apart by their region and country in the list", async () => {
+        searchPlaces.mockResolvedValue([
+            { name: "Nice, Provence-Alpes-Côte d'Azur, France", latitude: 43.7, longitude: 7.27 },
+            { name: "Nice, California, United States", latitude: 39.12, longitude: -122.85 },
+        ]);
+        render();
+        type("Nice");
+        await vi.advanceTimersByTimeAsync(400);
+        const found = [...target.querySelectorAll('[data-testid="map-location-results"] button')].map((button) =>
+            button.textContent?.trim(),
+        );
+        expect(found).toEqual(["Nice, Provence-Alpes-Côte d'Azur, France", "Nice, California, United States"]);
     });
 });
 

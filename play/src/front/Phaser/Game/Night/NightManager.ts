@@ -51,7 +51,7 @@ import type { SunPosition } from "./NightClock";
 import { roomAmbience, type AmbienceSettings } from "./AmbientLight";
 import { moonPhaseAt, moonPositionAt } from "./MoonClock";
 import { NightHalos } from "./NightHalos";
-import { placeOfPoint, worldCityOf } from "./WorldDaylight";
+import { cityPlace, placeOfPoint, worldCityOf } from "./WorldDaylight";
 import type { WorldPlace } from "./WorldDaylight";
 import { pointWords } from "./PointWords";
 import { coversMostly, isInLightableArea, lightableAreas, NightLights, roomsThatLightUp } from "./NightLights";
@@ -255,9 +255,17 @@ export class NightManager {
                     ? undefined
                     : point
                       ? placeOfPoint(point, pointWords())
-                      : fall
-                        ? fall.place
-                        : worldCityOf(date, get(worldMomentStore), get(worldCustomMinutesStore), this.worldCity);
+                      : cityPlace(
+                            fall
+                                ? fall.place
+                                : worldCityOf(
+                                      date,
+                                      get(worldMomentStore),
+                                      get(worldCustomMinutesStore),
+                                      this.worldCity,
+                                  ),
+                            pointWords(),
+                        );
             worldCityStore.set(this.worldCity);
             // The clock shown follows the time of the place of the map (of the city of the world).
             mapTimeZoneStore.set(this.worldCity?.timezone ?? mapPlace?.timezone);
