@@ -191,6 +191,114 @@ describe("the ball in a column", () => {
     });
 });
 
+describe("a ball at the surface of the water", () => {
+    it("fills the heights around its own level, wherever that is", () => {
+        // In a lake 40 px over the level 0, bed at -60: 36 px of room under a ball of 64 px held at +40.
+        expect(ballColumn(-60, 64, 40)).toEqual({ underPx: 36, topPx: 104 });
+        // In a lake 40 px under the level 0, bed at -100: it rests 4 px into the bed.
+        expect(ballColumn(-100, 64, -40)).toEqual({ underPx: 0, topPx: 24 });
+        // On the ground it is held at: the half over it stands out, the half under it is in the ground.
+        expect(ballColumn(20, 64, 20)).toEqual({ underPx: 0, topPx: 84 });
+        expect(ballColumn(30, 64, -40)).toBeUndefined();
+        // Half in the water at its own level: its lower half is what it pushes away.
+        expect(ballDisplaces(-200, 64, 40, 40)).toBe(64);
+        expect(ballDisplaces(-200, 64, -40, -40)).toBe(64);
+        expect(ballDisplaces(-60, 64, -40, -40)).toBe(20);
+    });
+
+    for (const level of [40, -40]) {
+        for (const [name, input] of MODES) {
+            it(`pushes away its lower half in a lake at ${level} px, in ${name}`, () => {
+                const grid = lake(level - 100, level);
+                const total = grid.totalPx();
+                const held = { x: MIDDLE, y: MIDDLE, radiusPx: 64, levelPx: level };
+                const { lostPx } = run(grid, input, 600, undefined, () => held);
+                expect(lostPx).toBe(0);
+                expect(grid.totalPx() / total).toBeCloseTo(1, 5);
+                const hemisphere = cellsOf(held, (half) => half);
+                const { gained } = openWater(grid, 100);
+                expect(gained).toBeGreaterThan(hemisphere * 0.98);
+                expect(gained).toBeLessThan(hemisphere * 1.05);
+            });
+        }
+    }
+
+    it("takes a ball that changes level along the way, as it takes one that moves", () => {
+        const from: Ball = { id: 7, x: 100, y: 0, radiusPx: 64, levelPx: 0 };
+        const to: Ball = { ...from, x: 132, levelPx: -40 };
+        const strides = sweepBalls([from], [to]);
+        expect(strides).toHaveLength(3);
+        strides.forEach(([ball], stride) => {
+            expect(ball.levelPx).toBeCloseTo((-40 * (stride + 1)) / 3, 9);
+            expect(ball.x).toBeCloseTo(100 + (32 * (stride + 1)) / 3, 9);
+        });
+        // A level that changes alone is swept too, never more than a cell of altitude at a time.
+        const down = sweepBalls([from], [{ ...from, levelPx: -40 }]);
+        expect(down).toHaveLength(3);
+        expect(down[down.length - 1][0].levelPx).toBe(-40);
+        // A ball of before, which says no level, is at the level 0.
+        const old = sweepBalls([{ id: 7, x: 100, y: 0, radiusPx: 64 }], [to]);
+        expect(old).toHaveLength(3);
+        expect(old[0][0].levelPx).toBeCloseTo(-40 / 3, 9);
+        expect(old[2][0].levelPx).toBe(-40);
+    });
+
+    it("keeps all the water when it goes down from the ground into a lake lower than it", () => {
+        const grid = lake(-100, -40);
+        const total = grid.totalPx();
+        let before: Ball[] = [{ id: 1, x: MIDDLE, y: MIDDLE, radiusPx: 64, levelPx: 60 }];
+        grid.setBalls(before);
+        // Held 60 px over the level 0: its underside is over the water, nothing is touched.
+        expect(grid.ballAt(SIDE / 2, SIDE / 2)).toBe(false);
+        expect(grid.totalPx()).toBe(total);
+        const now: Ball[] = [{ ...before[0], levelPx: -40 }];
+        for (const balls of sweepBalls(before, now)) {
+            grid.setBalls(balls);
+            expect(grid.totalPx() / total).toBeCloseTo(1, 6);
+        }
+        before = now;
+        expect(grid.ballAt(SIDE / 2, SIDE / 2)).toBe(true);
+        for (let step = 0; step < 50; step++) expect(grid.step(inertia).lostPx).toBe(0);
+        expect(grid.totalPx() / total).toBeCloseTo(1, 5);
+    });
+});
+
+describe("WaterGrid.restLevelAt", () => {
+    it("is the level of the lake under a point, whatever its altitude", () => {
+        expect(lake(-60, 40).restLevelAt(SIDE / 2, SIDE / 2)).toBeCloseTo(40, 3);
+        expect(lake(-100, -40).restLevelAt(SIDE / 2, SIDE / 2)).toBeCloseTo(-40, 3);
+    });
+
+    it("is the ground where there is no water, and nothing outside the grid", () => {
+        const grid = lake(-100, -40);
+        expect(grid.restLevelAt(1, 1)).toBe(250);
+        expect(grid.restLevelAt(-5, 3)).toBeUndefined();
+        const cells = new Map<string, number>();
+        for (let y = 0; y < 20; y++) for (let x = 0; x < 20; x++) cells.set(cellKey(x, y), x < 10 ? 0 : 24);
+        const land = new WaterGrid(withHeights(undefined, cells), { x: 0, y: 0, width: 20, height: 20 });
+        expect(land.restLevelAt(4, 4)).toBe(0);
+        expect(land.restLevelAt(14, 4)).toBe(24);
+    });
+
+    it("does not follow the wave a ball makes, nor the hole under the ball itself", () => {
+        const grid = lake(-100, -40);
+        const ball = { x: MIDDLE, y: MIDDLE, radiusPx: 64, levelPx: -40 };
+        grid.setBalls([ball]);
+        // The water of the ball was just pushed against it: the lake is, as a whole, hardly higher.
+        const rise = cellsOf(ball, (half) => half) / LAKE_CELLS;
+        expect(grid.depthAt(SIDE / 2 + 4, SIDE / 2) - 60).toBeGreaterThan(5);
+        const level = grid.restLevelAt(SIDE / 2, SIDE / 2);
+        expect(level).toBeGreaterThan(-40);
+        expect(level).toBeLessThan(-40 + 2 * rise + 0.5);
+        for (let step = 0; step < 30; step++) {
+            grid.setBalls([ball]);
+            grid.step(inertia);
+            const now = grid.restLevelAt(SIDE / 2, SIDE / 2) ?? Number.NaN;
+            expect(Math.abs(now - (level ?? 0))).toBeLessThan(1);
+        }
+    });
+});
+
 describe("WaterGrid.setBalls", () => {
     it("does not touch a water that stands lower than the underside of the ball", () => {
         const grid = lake(-100, -80);

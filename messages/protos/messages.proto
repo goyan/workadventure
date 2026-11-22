@@ -942,6 +942,9 @@ message CatastropheMessage {
   // stands `impactInMs` more when no other message comes: 0 when its player let it go.
   reserved 8, 9, 10;
   optional int32 userId = 11;
+  // A ball: the altitude of its centre, in pixels: the level of the water it stands in, where it is half in the
+  // water, or the ground under it where there is no water. The server alone decides it.
+  optional double ballLevel = 12;
 }
 
 // A player casts their fishing line: where the float lands, in map pixels. The server decides whether it does

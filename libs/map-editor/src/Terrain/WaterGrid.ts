@@ -127,6 +127,8 @@ const LEVEL_PX = 0.05;
 const BALL_TOUCH_PX = 0.01;
 /** The water a ball pushes away is laid within this many cells past the ball. */
 const PUSH_BEYOND_CELLS = 8;
+/** The level of the water a ball stands in is read over this many cells of that water at most. */
+const REST_LEVEL_CELLS = 4096;
 /** The most balls a grid takes. */
 const MOST_BALLS = 255;
 
@@ -509,12 +511,14 @@ export class WaterGrid {
      * for that column, so every move of the water reads it as a ground), and the water that fits under it is put
      * aside (`under`) until the ball goes. None of these arrays exists on a map where no ball ever stood.
      */
-    private balls: WaterBall[] = [];
+    private balls: Required<WaterBall>[] = [];
     /** The cells the balls reach, and how high each stands there over the altitude 0 (see ballHalfHeight). */
     private ballCells: number[] = [];
     private ballHalf: Float32Array = new Float32Array(0);
     /** For each of those cells, which ball stands the highest there: the one that pushes its water away. */
     private ballOwner: Uint8Array = new Uint8Array(0);
+    /** And the level that ball is held at. */
+    private ballLevel: Float32Array = new Float32Array(0);
     /** The cells a ball closed: 1 where the ground is raised to its top. */
     private ballClosed: Uint8Array = new Uint8Array(0);
     /** The water put aside under a ball, in each cell it closed. */
@@ -866,11 +870,13 @@ export class WaterGrid {
                 (ball, at) =>
                     ball.x === this.balls[at].x &&
                     ball.y === this.balls[at].y &&
-                    ball.radiusPx === this.balls[at].radiusPx,
+                    ball.radiusPx === this.balls[at].radiusPx &&
+                    (ball.levelPx ?? 0) === this.balls[at].levelPx,
             );
         if (this.ballHalf.length !== size) {
             this.ballHalf = new Float32Array(size);
             this.ballOwner = new Uint8Array(size);
+            this.ballLevel = new Float32Array(size);
             this.ballClosed = new Uint8Array(size);
             this.under = new Float32Array(size);
             this.bareGround = Float32Array.from(this.ground);
@@ -878,16 +884,24 @@ export class WaterGrid {
         }
         const half = this.ballHalf;
         const owner = this.ballOwner;
+        const levels = this.ballLevel;
         let cells = this.ballCells;
         if (!same) {
             // The cells the balls reached before are looked at again with those they reach now.
             const before = cells;
             cells = [];
             for (const index of before) half[index] = -1;
-            this.balls = balls.slice(0, MOST_BALLS).map((ball) => ({ x: ball.x, y: ball.y, radiusPx: ball.radiusPx }));
+            this.balls = balls.slice(0, MOST_BALLS).map((ball) => ({
+                x: ball.x,
+                y: ball.y,
+                radiusPx: ball.radiusPx,
+                levelPx: ball.levelPx ?? 0,
+            }));
             for (let at = 0; at < this.balls.length; at++) {
                 const ball = this.balls[at];
                 if (!Number.isFinite(ball.x) || !Number.isFinite(ball.y) || !(ball.radiusPx > 0)) continue;
+                if (!Number.isFinite(ball.levelPx)) continue;
+                const level = ball.levelPx;
                 const fromRow = Math.max(0, Math.floor((ball.y - ball.radiusPx) / TERRAIN_CELL) - y);
                 const toRow = Math.min(height - 1, Math.floor((ball.y + ball.radiusPx) / TERRAIN_CELL) - y);
                 const fromColumn = Math.max(0, Math.floor((ball.x - ball.radiusPx) / TERRAIN_CELL) - x);
@@ -898,10 +912,11 @@ export class WaterGrid {
                         if (this.blocked[index]) continue;
                         const stands = ballHalfHeight(ball, column + x, row + y);
                         if (stands <= 0) continue;
-                        // Where two balls meet, the larger one fills the column: both have their centre at 0.
+                        // Where two balls meet, the one whose top is the higher fills the column.
                         if (half[index] <= 0) cells.push(index);
-                        else if (stands <= half[index]) continue;
+                        else if (stands + level <= half[index] + levels[index]) continue;
                         half[index] = stands;
+                        levels[index] = level;
                         owner[index] = at;
                     }
                 }
@@ -920,7 +935,7 @@ export class WaterGrid {
         let kept = 0;
         for (const index of cells) {
             const bed = this.bareGround[index];
-            const column = ballColumn(bed, half[index]);
+            const column = ballColumn(bed, half[index], levels[index]);
             const was = closed[index] === 1;
             // A closed column whose ball did not move keeps its water as it is: nothing to share again.
             if (same && was) {
@@ -1017,6 +1032,55 @@ export class WaterGrid {
             left -= laid;
         }
         return left;
+    }
+
+    /**
+     * The level of the water a point of the map stands in, in pixels of altitude: the mean surface of the water
+     * joined to that cell (weighted by its depth, over the few thousand cells nearest to it), so that neither a
+     * wave nor the hole a ball makes changes it much; the ground of the cell where there is no water. The cells a
+     * ball closes are looked through: under a ball, it is the level of the water around it. Undefined outside the
+     * grid. It is where a ball held there is half in the water.
+     */
+    public restLevelAt(cellX: number, cellY: number): number | undefined {
+        const start = this.indexOf(cellX, cellY);
+        if (start === undefined) return undefined;
+        const { width, height } = this.bounds;
+        const closed = this.ballClosed.length > 0 ? this.ballClosed : undefined;
+        const bare = closed?.[start] ? this.bareGround[start] : this.ground[start];
+        if (!closed?.[start] && this.depth[start] < FAR_MIN_DEPTH_PX) return bare;
+        this.search++;
+        if (this.search === 0xffffffff) {
+            this.seen.fill(0);
+            this.search = 1;
+        }
+        const cells = [start];
+        this.seen[start] = this.search;
+        let held = 0;
+        let levels = 0;
+        let counted = 0;
+        for (let head = 0; head < cells.length && counted < REST_LEVEL_CELLS; head++) {
+            const index = cells[head];
+            if (!closed?.[index]) {
+                held += this.depth[index];
+                levels += (this.ground[index] + this.depth[index]) * this.depth[index];
+                counted++;
+            }
+            const column = index % width;
+            const row = (index - column) / width;
+            for (let side = 0; side < 4; side++) {
+                if (this.closed[index] & (1 << side)) continue;
+                const inside =
+                    side === 0 ? column + 1 < width : side === 1 ? column > 0 : side === 2 ? row + 1 < height : row > 0;
+                if (!inside) continue;
+                const next = index + (side === 0 ? 1 : side === 1 ? -1 : side === 2 ? width : -width);
+                if (this.seen[next] === this.search) continue;
+                // Through the cells of a ball, and through the water that is more than a film.
+                if (!closed?.[next] && this.depth[next] < FAR_MIN_DEPTH_PX) continue;
+                this.seen[next] = this.search;
+                cells.push(next);
+            }
+        }
+        return held > 0 ? levels / held : bare;
     }
 
     /** Whether a ball closes the column of a cell of the map: its water is on the ball, or held under it. */

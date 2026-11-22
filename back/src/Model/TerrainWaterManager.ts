@@ -1,6 +1,8 @@
 import { gunzipSync, gzipSync } from "node:zlib";
 import {
     advanceImpactWave,
+    BALL_LEVEL_SLACK_PX,
+    heightAt,
     blastWater,
     DEFAULT_IMPACT_REACH,
     closedDoorSides,
@@ -133,6 +135,8 @@ export class TerrainWaterManager {
     private balls: () => readonly Ball[] = () => [];
     /** Where the balls stood at the last step: a ball that moved since is taken along its way. */
     private ballsBefore: readonly Ball[] = [];
+    /** The level each ball is held at, and where it was when that was decided. */
+    private readonly ballLevels = new Map<number, { level: number; x: number; y: number }>();
     private sums: Sums = noSums();
     /** Whether the last step moved any water: a grid at rest with nothing coming in is not stepped. */
     private moving = true;
@@ -438,15 +442,45 @@ export class TerrainWaterManager {
     }
 
     /**
+     * The altitude of the centre of a ball of the room held at a point of the map (pixels): the level of the water
+     * it stands in there, where it is half in the water, or the ground where there is no water. A ball keeps its
+     * level while it is held still, whatever the wave it makes; once it moved, it takes the level of the water it
+     * came onto when that is not the one it had (BALL_LEVEL_SLACK_PX). The level is read over the water around the
+     * ball, not under it (WaterGrid.restLevelAt): the hole the ball makes does not pull it down.
+     */
+    public ballLevelAt(id: number, x: number, y: number): number {
+        const known = this.ballLevels.get(id);
+        if (known && known.x === x && known.y === y) return known.level;
+        const cellX = Math.floor(x / TERRAIN_CELL);
+        const cellY = Math.floor(y / TERRAIN_CELL);
+        const rest = Number.isFinite(x) && Number.isFinite(y) ? this.grid?.restLevelAt(cellX, cellY) : undefined;
+        // Off the grid of the water there is only ground: that of the relief.
+        const there =
+            rest ??
+            (Number.isFinite(x) && Number.isFinite(y) ? heightAt(this.room.getWam()?.terrain, cellX, cellY) : 0);
+        const level = known && Math.abs(there - known.level) <= BALL_LEVEL_SLACK_PX ? known.level : there;
+        this.ballLevels.set(id, { level, x, y });
+        return level;
+    }
+
+    /**
      * The balls take the place of the water where they stand (WaterGrid.setBalls): nothing comes in nor goes out,
      * the water is only pushed away, or let back. True while a ball stands on the map, so that the room sees the
      * water move as often as under a wave.
      */
     private placeBalls(grid: WaterGrid): boolean {
-        const standing = this.balls();
-        if (standing.length === 0 && this.ballsBefore.length === 0) return false;
-        // A ball is under the pointer of its player at once: it may have gone several cells since the last step.
-        // It pushed the water of the whole way, not only of where it is now.
+        const held = this.balls();
+        if (held.length === 0 && this.ballsBefore.length === 0) {
+            if (this.ballLevels.size > 0) this.ballLevels.clear();
+            return false;
+        }
+        // Each ball at the level of the water it stands in; the level of a ball that is gone is forgotten.
+        const standing = held.map((ball) => ({ ...ball, levelPx: this.ballLevelAt(ball.id, ball.x, ball.y) }));
+        for (const id of this.ballLevels.keys()) {
+            if (!standing.some((ball) => ball.id === id)) this.ballLevels.delete(id);
+        }
+        // A ball is under the pointer of its player at once: it may have gone several cells since the last step,
+        // and up or down to another water. It pushed the water of the whole way, not only of where it is now.
         let changed = false;
         for (const balls of sweepBalls(this.ballsBefore, standing)) {
             if (grid.setBalls(balls)) changed = true;

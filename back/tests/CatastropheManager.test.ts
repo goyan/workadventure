@@ -298,6 +298,20 @@ describe("CatastropheManager, balls", () => {
         expect(manager.balls()).toEqual([{ id: sent[0].id, x: 100, y: 80, radiusPx: 64 }]);
     });
 
+    it("tells the room the level the water holds it at", () => {
+        const { manager, sent } = harness();
+        const asked: [number, number, number][] = [];
+        manager.levelWith((id, x, y) => {
+            asked.push([id, x, y]);
+            return -40;
+        });
+        manager.ball(7, 100, 80, 4);
+        expect(sent[0].ballLevel).toBe(-40);
+        expect(asked).toEqual([[sent[0].id, 100, 80]]);
+        // The balls the water reads say no level: the water decides it.
+        expect(manager.balls()).toEqual([{ id: sent[0].id, x: 100, y: 80, radiusPx: 64 }]);
+    });
+
     it("is under the pointer of its player at each message, under the same id", () => {
         const { manager, sent } = harness();
         manager.ball(7, 100, 80, 4);
