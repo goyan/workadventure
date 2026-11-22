@@ -46,6 +46,15 @@ const STEPS_PER_SAVE = 30;
 const CATCH_UP_STEP_SECONDS = 120;
 const CATCH_UP_STEPS_A_TICK = 150;
 const CATCH_UP_MAX_MS = 7 * 24 * 3600 * 1000;
+/**
+ * The slices of the time missed stop for now once they took this long (ms), and go on this much later (ms): the
+ * server has one thread for all its rooms, a room that wakes up must not hold it. Half of the thread at most, a
+ * slice past the budget at worst.
+ */
+const CATCH_UP_BUDGET_MS = 8;
+const CATCH_UP_PAUSE_MS = 8;
+/** While its slices take their time, the room is told the time it lives again this often (ms), not at each tick. */
+const CATCH_UP_TELL_MS = 1000;
 /** How long the weather of the past is waited for before the meadow catches up without it (ms). */
 const HISTORY_WAIT_MS = 10_000;
 /** No luck while the time missed is lived again: no fire starts nor spreads by itself then. */
@@ -144,6 +153,16 @@ export class MeadowSimulation {
     private history: (place: MapPlace | undefined, since: number) => Promise<RealWeatherSlot[] | undefined> = () =>
         Promise.resolve(undefined);
     private weatherOfSlot: (slot: RealWeatherSlot) => ReplayedWeather | undefined = () => undefined;
+    /** A clock in ms, to time the slices of the time missed (timeCatchUpWith). */
+    private stopwatch: () => number = () => performance.now();
+    /** The next slices of the time missed, when they are due sooner than the next step of the meadow. */
+    private catchUpTimer: ReturnType<typeof setTimeout> | undefined;
+    /** When the room was last told the time it lives again (ms of the stopwatch). */
+    private catchUpToldAt = -Infinity;
+    /** Until when (ms of the stopwatch) no other slice is lived: the pause the other rooms pass in. */
+    private catchUpRestUntil = -Infinity;
+    /** Whether slices were lived that the room is not told yet. */
+    private catchUpUntold = false;
 
     constructor(
         private readonly room: SimulationRoom,
@@ -185,6 +204,8 @@ export class MeadowSimulation {
     }
 
     public stop(): void {
+        if (this.catchUpTimer) clearTimeout(this.catchUpTimer);
+        this.catchUpTimer = undefined;
         if (this.timer) clearInterval(this.timer);
         this.timer = undefined;
         // Saved with its time even unchanged: the next room catches up from now on.
@@ -275,12 +296,30 @@ export class MeadowSimulation {
     /** A step from the timer. An error there would take the whole server down: the meadow of this room stops instead. */
     private tick(): void {
         try {
+            // The step of the meadow that falls right after slices of the time missed leaves them their pause.
+            if (this.catchUp && this.stopwatch() < this.catchUpRestUntil) {
+                this.hurryCatchUp();
+                return;
+            }
             this.step();
+            if (this.catchUp) this.catchUpRestUntil = this.stopwatch() + CATCH_UP_PAUSE_MS / 2;
+            this.hurryCatchUp();
         } catch (error) {
             console.error("The meadow of the map stopped on an error", error);
             if (this.timer) clearInterval(this.timer);
             this.timer = undefined;
         }
+    }
+
+    /** While the time missed is lived again, its next slices come after a short pause, not at the next step. */
+    private hurryCatchUp(): void {
+        if (!this.catchUp || !this.timer || this.catchUpTimer) return;
+        this.catchUpTimer = setTimeout(() => {
+            this.catchUpTimer = undefined;
+            if (this.timer) this.tick();
+        }, CATCH_UP_PAUSE_MS);
+        // The meadow of a room must never keep the process alive.
+        this.catchUpTimer.unref?.();
     }
 
     /**
@@ -312,6 +351,11 @@ export class MeadowSimulation {
     ): void {
         this.history = history;
         this.weatherOfSlot = weatherOfSlot;
+    }
+
+    /** The clock (ms) the slices of the time missed are timed with: a tick stops once they took CATCH_UP_BUDGET_MS. */
+    public timeCatchUpWith(stopwatch: () => number): void {
+        this.stopwatch = stopwatch;
     }
 
     /** What lives the time the room missed along with the meadow (the water of the relief), a slice at a time. */
@@ -363,14 +407,27 @@ export class MeadowSimulation {
             catchUp.history = [];
         }
         const slots = catchUp.history && catchUp.history.length > 0 ? catchUp.history : undefined;
+        const started = this.stopwatch();
+        // Telling the room costs as much as a few slices: put off by slices that took their time, it has a tick of
+        // its own, once a second and when the time missed is all lived.
+        if (this.catchUpUntold && (catchUp.at >= catchUp.to || started - this.catchUpToldAt >= CATCH_UP_TELL_MS)) {
+            this.catchUpUntold = false;
+            this.catchUpToldAt = started;
+            this.tell(meadow);
+            return true;
+        }
+        let lived = 0;
         try {
             for (let step = 0; step < CATCH_UP_STEPS_A_TICK && catchUp.at < catchUp.to; step++) {
+                // Out of time for now: the same slices, in the same order, go on in a moment.
+                if (step > 0 && this.stopwatch() - started >= CATCH_UP_BUDGET_MS) break;
                 const at = catchUp.at;
                 const slot = slots?.find((candidate) => candidate.at <= at && at < candidate.at + REAL_WEATHER_SLOT_MS);
                 this.replay = { now: catchUp.at, slots, weather: slot ? this.weatherOfSlot(slot) : undefined };
                 const seconds = Math.min(CATCH_UP_STEP_SECONDS, (catchUp.to - catchUp.at) / 1000);
                 this.advance(seconds);
                 catchUp.at += seconds * 1000;
+                lived++;
                 try {
                     this.along?.(seconds, this.rainRate, catchUp.at >= catchUp.to);
                 } catch (error) {
@@ -380,9 +437,14 @@ export class MeadowSimulation {
         } finally {
             this.replay = undefined;
         }
-        // Seen living its missed time quickly: the room is told after each slice.
         this.changedSinceSave = true;
-        this.tell(meadow);
+        // The slices took their time: telling the room and saving wait for a next tick.
+        if (lived > 0 && this.stopwatch() - started >= CATCH_UP_BUDGET_MS / 2) {
+            this.catchUpUntold = true;
+            return true;
+        }
+        // Seen living its missed time quickly: the room is told after each tick of slices.
+        if (lived > 0 && !this.catchUpUntold) this.tell(meadow);
         if (catchUp.at >= catchUp.to) {
             this.catchUp = undefined;
             this.save();

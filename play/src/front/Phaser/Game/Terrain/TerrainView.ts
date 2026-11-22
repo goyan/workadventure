@@ -84,6 +84,8 @@ const WATER_DEPTH = TERRAIN_DEPTH + 0.01;
 /** Basique: the water of the relief under its pools (BasicPools, drawn at WATER_DEPTH). */
 const BASIC_WATER_DEPTH = TERRAIN_DEPTH + 0.005;
 const DEEP_WATER_DEPTH = TERRAIN_DEPTH + 0.02;
+/** What rises over the water of the relief and of its painted pools (the steam of a heated one): over all of it. */
+export const OVER_WATER_DEPTH = TERRAIN_DEPTH + 0.05;
 /** Each image of the twinkling water lasts this long (ms): the scene is drawn again for the next one. */
 const RIPPLE_MS = 170;
 /** The surface of the water drawn by its shader moves smoothly: the scene is drawn again this often for it. */

@@ -2399,6 +2399,47 @@ finesse réduite à 5 sur 8 »), par `easedPrecision` et `easedUpdates` de `Terr
 précise (vagues plus amorties, fronts moins nets) pendant les moments les plus lourds, un tsunami compris. Sans
 inertie, seuls les envois peuvent être réduits. Seuils posés par raisonnement, non calés sur une mesure en jeu.
 
+**Petits gains sur le fil du serveur, à modèle inchangé** (lot 1 de l'étude du serveur de l'eau, novembre 2026).
+Le processus des salles n'a qu'un fil ; cinq changements de plomberie, aucun de physique :
+
+- **Compression des états envoyés** (`toldZip` dans `TerrainWaterManager`) : gzip avec la stratégie RLE de zlib
+  (plages d'un même octet, sans recherche de chaînes répétées). Les états sont des différences avec l'état
+  précédent : des plages de zéros et de quelques valeurs. Mesuré sur 2 259 charges réelles de la carte d'entrée de
+  la beta : différences presque vides 2,0 → 0,46 ms et −9 % d'octets ; différences partielles 6,5 → 1,3 ms et
+  −4 % ; vitesses 0,27 → 0,07 ms et −4 % ; états entiers (un toutes les 30 s, et à l'arrivée d'un joueur)
+  8,6 → 2,5 ms et +6 %. Le niveau 1 de gzip sans RLE coûtait +7 à +20 % d'octets pour un gain moindre : écarté.
+  Les navigateurs décompressent comme avant. La sauvegarde (Redis) garde le gzip par défaut.
+- **Rien d'écrit quand rien n'a été calculé** (`untold` dans `WaterSimulation`) : la grille n'est réécrite en octets et comparée à l'état
+  connu de la salle que si un pas, un impact ou une nouvelle grille est passé depuis le dernier envoi. 600 × 600
+  sans eau : 0,57 → 0,02 ms par pas ; lac au repos : 0,89 → 0,001 ms. Un test qui modifie la grille dans le dos du
+  gestionnaire doit le dire (`manager["untold"] = true`).
+- **`WaterGrid.writeDepths`** arrondit sans `Math.round` (mêmes octets) : 0,46 → 0,12 ms pour 153 600 cellules.
+- **Sélections sans branchement** dans la boucle des flux de l'eau à inertie (`Math.max`, `Math.min`, `Math.abs`
+  au lieu de `a > b ? a : b`, mêmes valeurs au bit près) : `grid.step` 13,1 → 10,1 ms sur la carte d'entrée
+  mouillée à 70 %.
+- **Rattrapage d'une salle vide borné en temps** (`MeadowSimulation.stepCatchUp`, `hurryCatchUp`) : les tranches du
+  temps manqué étaient vécues par paquets de 150 toutes les 2 s, chaque paquet retenant le fil 0,3 à 0,5 s (34 fois
+  pour une semaine). Elles sont vécues 8 ms à la fois (`CATCH_UP_BUDGET_MS`), avec 8 ms de pause
+  (`CATCH_UP_PAUSE_MS`) : la moitié du fil au plus. Dire l'état à la salle (une fois par seconde) et le sauvegarder
+  ont leur propre tour. Mêmes tranches, même ordre, même état final (test de différence dans
+  `MeadowManager.test.ts`). Mesuré sur la carte d'entrée, 7 jours manqués : tour le plus long 422 → 15 ms ; avec
+  les minuteurs réels, retard maximal de la boucle d'événements 467 → 18 à 38 ms selon la charge de la machine de
+  mesure (99e centile 10,6 ms), rattrapage fini en 28 s d'horloge au lieu de 70 s. Le joueur qui entre pendant ce
+  temps voit la prairie et l'eau avancer d'un envoi par seconde, comme avant. Le même budget vaut dans un
+  navigateur qui fait tourner la simulation pour lui-même.
+
+Preuve d'identité : `libs/map-editor/tests/WaterFingerprints.test.ts` joue 19 scénarios de `WaterGrid` et finit
+chacun sur une empreinte (profondeurs, flux, vitesses, bilans, octets envoyés) enregistrée avec le code d'avant
+(`eb17d9b92`) ; un changement voulu de la physique les réenregistre par
+`RECORD_WATER_FINGERPRINTS=1 npx vitest run tests/WaterFingerprints.test.ts`. Côté serveur, 751 envois de la carte
+d'entrée (sources, rattrapage, pluie, météore, boule) donnent la même empreinte une fois décompressés.
+
+Bilan sur la carte d'entrée mouillée à 70 % (Mac M4 Max, Node 24, contre `infogene` à 9e5507971) : un envoi
+7,1 → 2,8 ms ; un pas entier sous la pluie 21,2 → 12,9 ms en moyenne ; octets envoyés −4 %. Non fait dans ce lot : `WaterLoad` nourri par la somme des pas
+de toutes les salles. Le retard de la boucle d'événements de `back` est déjà exposé par `prom-client`
+(`nodejs_eventloop_lag_p99_seconds` sur `/metrics`, `PrometheusController`) : rien à ajouter pour le lire sur le
+serveur, il suffit d'interroger ce point d'accès.
+
 **Écume des vagues et moutons du vent.** Trois écumes, chacune avec sa règle, toutes calculées par le navigateur à
 partir de ce qu'il reçoit déjà (profondeurs, vent) :
 
@@ -5412,10 +5453,13 @@ la lampe, étiré vers le bas et ondulé. Rien n'est dessiné deux fois : l'eau 
 `GameScene` passe le reflet à chaque image (`TerrainView.setWaterReflection`, comme les ondes des comètes). Réglage
 « Reflets dans l'eau ».
 
-**Arcs-en-ciel** (`Weather/Rainbow.ts`). Un arc-en-ciel se voit à 42° du point opposé au soleil : seulement s'il pleut
-avec un soleil entre 0 et 42° (fondu de 0 à 3° et de 36 à 42°), plus pâle par orage (× 0,5) et sous un ciel couvert.
-Fixé à la carte (centre, rayon 0,35 × le petit côté, 50 tuiles au plus), ouvert à l'opposé du soleil (sens des
-ombres), sa demi-ouverture `90° × (42 - hauteur) / 42` : un demi-cercle au soleil couchant, un arc court près de 42°.
+**Arcs-en-ciel** (`Weather/Rainbow.ts`). Un vrai arc-en-ciel se voit à 42° du point opposé au soleil : seulement s'il
+pleut avec un soleil entre 0 et 42° (fondu de 0 à 3° et de 36 à 42°), plus pâle par orage (× 0,5) et sous un ciel
+couvert. Le jeu est plus généreux, pour le plaisir : toute pluie sous un soleil levé et visible a son arc, d'une force
+d'au moins 0,5 (au coucher, par orage, sous un soleil au-dessus de 42°). Aucun la nuit, sous la neige, ni sous un ciel
+couvert à 85 % ou plus (le soleil est caché). Fixé à la carte (centre, rayon 0,35 × le petit côté, 50 tuiles au plus),
+ouvert à l'opposé du soleil (sens des ombres), sa demi-ouverture `90° × (42 - hauteur) / 42`, la hauteur plafonnée à 30° :
+un demi-cercle au soleil couchant, un arc plus court quand il monte.
 Arc secondaire pâle aux couleurs inversées, ciel plus clair dedans. Bouton 🌈 à côté de l'horloge
 (`RainbowButton.svelte`, `rainbowSpotStore` = sommet de l'arc, publié seulement quand il change) : téléporte sur la case
 libre la plus proche (`teleportNextTo`). Réglage « Afficher les arcs-en-ciel ».

@@ -683,6 +683,8 @@ describe("TerrainWaterManager", () => {
             const index = (20 * grid.bounds.width + 20) * 2;
             bytes[index] += eighths;
             grid.readDepths(bytes);
+            // The grid was changed behind the back of the manager: as after a step, there is something to tell.
+            manager["untold"] = true;
         };
         // The room is first told what moved, then that nothing comes in or goes out any more.
         manager["tell"](grid);
@@ -697,6 +699,40 @@ describe("TerrainWaterManager", () => {
         manager["tell"](grid);
         expect(sent).toHaveLength(told + 1);
         expect(depthsAfter(sent).at(grid.bounds.x + 20, grid.bounds.y + 20)).toBeCloseTo(before + 5 / 8, 5);
+    });
+
+    it("writes and compares nothing when nothing was computed since the room was last told", () => {
+        const { manager, sent, steps } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        const grid = manager.getGrid();
+        if (!grid) throw new Error("no grid");
+        const written = vi.spyOn(grid, "writeDepths");
+        const stepped = vi.spyOn(grid, "step");
+        // A dry map nothing pours on: looked at once, then left alone, and the room is told nothing.
+        steps(100);
+        expect(stepped).toHaveBeenCalledTimes(1);
+        expect(written).toHaveBeenCalledTimes(1);
+        expect(sent).toHaveLength(0);
+        // Water comes: it is told while it moves, and once it rests the grid is not written any more.
+        fillWideLake(manager);
+        // (Laid behind the back of the manager: the map says it has to look at its water again.)
+        manager.mapChanged();
+        steps(10);
+        expect(sent.length).toBeGreaterThan(0);
+        for (let step = 0; step < 3000 && manager["moving"]; step++) steps(1);
+        expect(manager["moving"]).toBe(false);
+        steps(20);
+        const told = sent.length;
+        written.mockClear();
+        stepped.mockClear();
+        steps(100);
+        expect(stepped).not.toHaveBeenCalled();
+        expect(written).not.toHaveBeenCalled();
+        expect(sent).toHaveLength(told);
+        // An impact wakes it: told at once.
+        manager.strike(15 * 16, 15 * 16, 2);
+        expect(written).toHaveBeenCalled();
+        expect(sent.length).toBeGreaterThan(told);
     });
 
     it("holds the water at a closed door, opens it for an avatar in its passage, and closes it a second after", () => {
