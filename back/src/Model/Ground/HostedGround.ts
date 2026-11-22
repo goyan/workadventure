@@ -224,7 +224,15 @@ export class HostedGround {
                       trees,
                   }
                 : undefined;
-        this.post({ kind: "meadow", room: this.room, snapshot: meadow.snapshot(), trees: meadow.treeSnapshot(), fire });
+        this.post({
+            kind: "meadow",
+            room: this.room,
+            snapshot: meadow.snapshot(),
+            trees: meadow.treeSnapshot(),
+            fire,
+            ice: meadow.iceTiles(),
+            catchingUp: meadow.catchingUp(),
+        });
     }
 
     /** The weather of the past is asked of the thread of the rooms, which alone talks to the outside. */

@@ -95,6 +95,9 @@ export type GroundTold =
           snapshot: MeadowMessage | undefined;
           trees: TreeFireMessage | undefined;
           fire: ToldFire | undefined;
+          /** The ice of each tile (mm) once the meadow is made, and whether it still lives the time the room missed. */
+          ice: { width: number; height: number; mm?: Float32Array } | undefined;
+          catchingUp: boolean;
       }
     | { kind: "save"; room: number; key: string; field: string; value: string }
     | { kind: "history"; room: number; request: number; place: MapPlace | undefined; since: number }

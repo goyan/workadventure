@@ -2444,8 +2444,8 @@ ne l'est pas).
 - **Façade du sol dans `back`** (`back/src/Model/Ground/RoomGround.ts`, `InlineRoomGround.ts`, PR 2). `GameRoom`
   ne tient plus `TerrainWaterManager` et `MeadowManager` : il parle à un `RoomGround` (démarrer l'eau, démarrer la
   prairie, arrêter, carte changée ; comète, boule de feu, glace brisée, averse qui mouille, feu posé ; niveau d'une
-  boule, grille de l'eau et sa version pour la vie aquatique, feu pour les animaux ; états entiers pour un joueur
-  qui entre). Ce que le sol lit de la salle est demandé à chaque fois par `RoomGroundInputs` (avatars, averses,
+  boule, grille de l'eau et sa version pour la vie aquatique, feu pour les animaux ; glace d'une tuile, prairie
+  faite ou non, rattrapage en cours pour les cabanes de pêche ; états entiers pour un joueur qui entre). Ce que le sol lit de la salle est demandé à chaque fois par `RoomGroundInputs` (avatars, averses,
   drains, boules, brouteurs, air, conditions et seuils du feu). La seule implémentation, `InlineRoomGround`, calcule
   dans le fil des salles avec les deux gestionnaires d'avant, câblés par `GroundSimulation` : même comportement.
   Deux ordres changent sans effet : à la fermeture d'une salle l'eau s'arrête juste avant la prairie (et non plus
@@ -2468,6 +2468,45 @@ ne l'est pas).
   rend la grille elle-même, comme avant ; l'instantané sert au fil de calcul (PR 4). `WaterView.test.ts` : la vue
   répond comme la grille, cellule par cellule et au-delà des bords, après des pas, une porte fermée, une boule
   posée, déplacée, retirée, en mémoire propre et partagée ; mêmes étendues d'eau pour la vie ; même niveau de boule.
+- **Le fil de calcul** (`back/src/Model/Ground/{GroundProtocol,GroundThreads,GroundWorker,HostedGround,
+  RemoteRoomGround}.ts`, PR 4). **Éteint par défaut** : `GROUND_THREADS` (variable d'environnement de `back`) dit
+  combien de fils le serveur consacre au sol de ses salles ; 0, valeur par défaut, garde le calcul dans le fil des
+  salles (`InlineRoomGround`), exactement comme avant. Au-delà, `GameRoom` reçoit un `RemoteRoomGround` :
+  - **Dans le fil** (`GroundWorker`, un `worker_threads` ; `back` tourne sous `tsx`, dont le fil hérite le chargeur,
+    donc pas de compilation ni de changement d'image) un `HostedGround` par salle fait tourner les mêmes
+    gestionnaires (`InlineRoomGround`), nourris par ce que la salle envoie au lieu de la lire.
+  - **Le fil des salles envoie** (`GroundCommand`) : l'état que le sol lit de la salle (taille de la carte, avatars,
+    averses, drains, boules, brouteurs, air, conditions et seuils du feu, météo réelle), comparé toutes les 100 ms
+    et envoyé seulement s'il a changé ; la carte à chaque édition, **sans son relief tant que c'est le même objet**
+    (le relief pèse la moitié d'une carte, et l'eau reconnaît une édition du relief à son objet : une copie du même
+    relief lui ferait refaire sa grille et perdre ses courants) ; les catastrophes (comète, boule de feu, glace
+    brisée, averse, feu posé), précédées de l'état du moment ; chaque position de boule demandée par la salle.
+  - **Le fil répond** (`GroundTold`) : les messages pour les joueurs, déjà compressés, relayés tels quels ; avec
+    chaque état de l'eau, l'état entier que la salle connaît (pour le joueur qui entre : compressé à ce moment-là,
+    comme avant) ; après chaque pas de prairie, la prairie et les arbres pour qui entre, le feu vu par les animaux,
+    la glace de chaque tuile (cabanes de pêche) ; les champs à sauvegarder, que le fil des salles écrit dans Redis
+    (mêmes clés, mêmes valeurs) ; les demandes de météo passée (le fil des salles seul parle à l'extérieur).
+  - **L'eau lue par la salle** (vie aquatique, cabanes, niveau d'une boule) est l'instantané partagé
+    (`WaterSnapshotView`), publié après chaque pas d'eau, chaque pas de prairie et chaque catastrophe : **au plus un
+    pas de retard (0,1 s)**. Le niveau d'une boule est décidé des deux côtés par la même règle (`BallLevels`).
+  - **Fil perdu** (plantage) : `GroundThreads` en relance un, et chaque salle y redémarre son sol, l'eau depuis
+    l'instantané que la salle tient (l'eau cachée sous une boule est perdue), la prairie depuis la dernière
+    sauvegarde. Trois pertes en cinq minutes : le sol de la salle repasse dans le fil des salles.
+  - **Répartition** : une salle va au fil qui a le moins de salles et n'en change plus.
+  - **Mesuré** (Mac M4 Max chargé, carte d'entrée de la beta inondée à 42 %, inertie, finesse 3, 5 envois/s, vraies
+    classes, deux passes alternées) : retard d'un minuteur de 2 ms sur le fil des salles, 99e centile 12 ms →
+    0,4 ms ; maximum 16 à 33 ms → 2,1 à 2,6 ms ; part des retards de plus de 10 ms 1,9 % → 0. Une édition de carte
+    retient le fil des salles 48 ms → 1,7 ms (la lecture des murs et des sols se fait dans le fil de calcul).
+    L'entrée d'un joueur coûte 1 ms des deux côtés.
+  - **Tests** (`back/tests/RemoteRoomGround.test.ts`) : conduit pas à pas (`pause` des simulations, horloge et
+    hasard donnés), le sol distant dit et sauvegarde **les mêmes octets** que le sol câblé à la main dans le fil
+    des salles, eau et prairie, sur 130 s (pluie, neige, source, drain de bâtiment, toutes les catastrophes,
+    carte changée, canicule et feu), par les messages seuls puis sur un vrai fil ; ce que la salle lit en chemin
+    (eau, version, feu, glace, états pour qui entre, niveaux de boule) est identique ; le rattrapage d'une salle
+    rouverte après trois heures aussi ; en temps réel sur un vrai fil : marche, arrêt avec sauvegarde, deux fils
+    perdus puis repli dans le fil des salles.
+  - **Reste à faire** (PR suivantes) : l'allègement de finesse (`WaterLoad`) ne regarde que sa salle, pas la somme
+    des salles d'un fil ; la carte éditée est encore copiée entière hors relief.
 
 Preuve d'identité : `libs/map-editor/tests/WaterFingerprints.test.ts` joue 19 scénarios de `WaterGrid` et finit
 chacun sur une empreinte (profondeurs, flux, vitesses, bilans, octets envoyés) enregistrée avec le code d'avant
@@ -4533,6 +4572,58 @@ reconnexion. Protocole : `StartFishingContestMessage {minutes}` (navigateur → 
 
 **Limites.** Un concours ne survit pas à un redémarrage du serveur. Après une reconnexion, sa propre ligne n'est plus
 mise en gras avant sa prise suivante. Pas d'annonce sonore ni de carte d'annonce à part : le panneau apparaît.
+
+### Cabane de pêche sur glace
+
+**Monter.** Debout sur la glace, la roue de l'avatar propose « Monter une cabane de pêche ». L'entrée est grisée, avec
+sa raison, quand la glace du serveur ne la porte pas : il faut **102 mm** de glace sous tout le plancher
+(`ICE_SHACK_MM`, `libs/map-editor/src/Terrain/Ice.ts`). C'est 4 pouces : selon l'affiche « Recommended Minimum Ice
+Thickness » du Minnesota DNR (glace neuve et claire), on reste hors de la glace sous 4 pouces, et 4 pouces suffisent
+pour pêcher à pied. Un abri léger tiré à la main avec une personne relève de cette catégorie (https://files.dnr.state.mn.us/education_safety/safety/ice/ice-tickness-guidelines-poster.pdf).
+Il faut aussi au moins 16 px d'eau sous le trou, là où l'on nage (une flaque gelée ne suffit pas). Pas de cabane sur
+une piscine (pas de poissons), depuis un étage, à moins de trois cases d'une autre, ni à moins d'une case de l'endroit
+où un objet de la carte est posé : le serveur ne connaît pas la taille des objets, seulement leur position. Chaque
+joueur a une seule cabane, et une carte en compte huit au plus. Le perçage à la tarière dure 2,5 s et laisse un trou
+rond entouré d'éclats ; la cabane se monte ensuite en 1,5 s, puis celui qui l'a montée s'assied sur le tabouret.
+
+**Utiliser.** La cabane reste où elle a été montée. N'importe qui peut s'asseoir sur son tabouret, par la roue
+(« S'asseoir dans la cabane de … ») ou par la touche d'interaction, comme sur un siège de la carte. Une seule
+personne à la fois : l'entrée est grisée tant que quelqu'un y est assis. Une fois assis, la canne passe en main et
+ESPACE descend la ligne droit dans le trou, sans jauge. La suite est la pêche ordinaire : la touche, le ferrage, puis
+la prise. Les prises sont les poissons de la vie de la carte qui nagent sous la glace. Elles vont dans le même carnet
+et comptent au concours. Quand quelqu'un est assis, le poêle est allumé : le tuyau fume, la fumée suit le vent de
+l'air de la carte (`groundWind`), et de nuit la lanterne et le poêle éclairent les alentours.
+
+**Partir, démonter.** Se lever (par la roue, ou en marchant) laisse la cabane en place. Seul le joueur qui l'a montée,
+reconnu par son `uuid`, peut la démonter, depuis l'intérieur ou à côté. Une cabane disparaît aussi si son propriétaire
+n'est pas revenu dans la salle depuis 24 h.
+
+**Dégel.** Toutes les 2 s, le serveur lit la glace la plus mince sous le plancher. Si elle passe sous 102 mm, la glace
+craque pendant 5 s : des fissures sont dessinées, l'occupant est averti et se lève, et personne ne peut plus s'asseoir.
+La cabane se replie ensuite et disparaît avec son trou. Si la glace fond complètement, la cabane disparaît aussitôt.
+Une glace qui s'épaissit de nouveau arrête les fissures. Tant que la salle rattrape le temps passé vide, le serveur ne
+juge pas la glace.
+
+**Météo personnelle.** La cabane est un objet de la salle : tout le monde la voit. Un joueur qui suit la météo d'un lieu
+à lui ne voit pas la glace du serveur. Pour lui, « Monter » et « S'asseoir » sont grisés avec la raison « suivez la
+météo de la carte ».
+
+**Technique.** La cabane n'est pas une modification de la carte : rien n'est écrit dans le WAM. `IceShackManager`
+(`back`) la tient en mémoire et l'enregistre dans Redis `ice-shacks:<salle>`. Les cabanes survivent donc à un
+redémarrage ; l'occupant n'est pas gardé. Règles pures : `libs/map-editor/src/Life/IceShack.ts`. Glace :
+`MeadowManager.iceAt`. Eau : grille du relief. Le tabouret est un siège de `Phaser/Player/Seat.ts` : un joueur assis
+se voit assis chez les autres, sans message dédié. Protocole :
+- `IceShackActionMessage {action, shackId}`, du client au serveur (81, et 65 du pusher à `back`) ;
+- `IceShacksMessage {shacks, events}`, du serveur à la salle (59 et 39) et à l'arrivée d'un joueur (`RoomJoinedMessage` 47).
+
+Il faut déployer `play` et `back` ensemble. Dessin en code : `Phaser/Game/IceShack/IceShackShapes.ts`, en trois
+couches triées avec les avatars. La façade et l'avant du toit sont retirés, comme dans une maison de poupée, pour voir
+le pêcheur. En relief 3/4, la cabane est dessinée au niveau de la surface de l'eau sous son trou
+(`GameScene.surfaceDropAt`), comme le bouchon et l'avatar posé sur la glace : seul le dessin se décale.
+
+**Limites de ce lot.** Le trou est décoratif : ce n'est pas un trou d'eau libre où l'on tombe. La pêche ordinaire
+n'est toujours pas refusée à travers la glace hors cabane. La cabane n'a pas de collision. Un seul siège, pas de
+concours propre à la glace, et le poêle ne réchauffe pas la glace.
 
 ## Feu de végétation : conditions et sécheresse (lot 1)
 

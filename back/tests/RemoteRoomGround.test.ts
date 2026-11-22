@@ -71,6 +71,13 @@ function waterOf(ground: RoomGround): number[] {
     return all;
 }
 
+/** What the ice fishing shacks read: the ice of each tile, whether the meadow is made, whether it catches up. */
+function iceOf(ground: RoomGround): unknown[] {
+    const ice: unknown[] = [ground.hasMeadow(), ground.catchingUp()];
+    for (let tile = 0; tile < 24 * 24; tile++) ice.push(ground.iceAt(tile % 24, Math.floor(tile / 24)));
+    return ice;
+}
+
 /** Where the animals see a fire, on a few points of the map. */
 function fireOf(ground: RoomGround): unknown[] {
     const fire = ground.lifeFire();
@@ -108,6 +115,7 @@ async function compare(threads: Pick<GroundThreads, "assign">, tenths: number): 
             expect(waterOf(ground), `water at ${tenth}`).toEqual(waterOf(reference));
             expect(ground.waterVersion(), `version at ${tenth}`).toBe(reference.waterVersion());
             expect(fireOf(ground), `fire at ${tenth}`).toEqual(fireOf(reference));
+            expect(iceOf(ground), `ice at ${tenth}`).toEqual(iceOf(reference));
             expect(plain(ground.waterSnapshot()), `water for who joins at ${tenth}`).toBe(
                 plain(reference.waterSnapshot()),
             );

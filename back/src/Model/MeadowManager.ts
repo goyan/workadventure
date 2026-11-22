@@ -38,6 +38,16 @@ export class MeadowManager extends MeadowSimulation {
         super(room, rain, water, gzipSync, clockNow, mapSize, grazers, fireWeather, random);
     }
 
+    /** The ice over the water of a tile (32 px), in mm: none before the meadow is made (the ice fishing shacks). */
+    public iceAt(tileX: number, tileY: number): number {
+        return this.current()?.iceAt(tileX, tileY) ?? 0;
+    }
+
+    /** Whether the meadow is made (the size of the map read): before, its ice is not known, not none. */
+    public hasMeadow(): boolean {
+        return this.current() !== undefined;
+    }
+
     /** Brings back the meadow saved before a restart. A store that does not answer must not keep the room closed. */
     public async restore(): Promise<void> {
         if (!this.store) return;
@@ -72,6 +82,23 @@ export class MeadowManager extends MeadowSimulation {
         } catch (error) {
             console.error("Could not restore the meadow of the map", error);
         }
+    }
+
+    /**
+     * The ice over the water of each tile (mm), row by row, with the size of the meadow: what the ice fishing shacks
+     * read, for who is not where the meadow is computed. Undefined before the meadow is made; no `mm` while no water
+     * is frozen.
+     */
+    public iceTiles(): { width: number; height: number; mm?: Float32Array } | undefined {
+        const meadow = this.current();
+        if (!meadow) return undefined;
+        const { width, height } = meadow;
+        if (!meadow.icy()) return { width, height };
+        const mm = new Float32Array(width * height);
+        for (let tileY = 0; tileY < height; tileY++) {
+            for (let tileX = 0; tileX < width; tileX++) mm[tileY * width + tileX] = meadow.iceAt(tileX, tileY);
+        }
+        return { width, height, mm };
     }
 
     /** Called after each step of the meadow: what follows it from elsewhere (the ground computed on another thread). */

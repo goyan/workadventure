@@ -298,6 +298,16 @@ export class PusherRoom {
                             }
                             break;
                         }
+                        case "iceShacksMessage": {
+                            // The ice fishing shacks are the same for every player of the room
+                            const iceShacksMessage = message.message.iceShacksMessage;
+                            for (const listener of this.listeners) {
+                                listener.emitInBatch({
+                                    message: { $case: "iceShacksMessage", iceShacksMessage },
+                                });
+                            }
+                            break;
+                        }
                         case "catastropheMessage": {
                             // A catastrophe on its way is the same for every player of the room
                             const catastropheMessage = message.message.catastropheMessage;

@@ -54,6 +54,9 @@ export class RemoteRoomGround implements RoomGround {
     private meadow: MeadowMessage | undefined;
     private trees: TreeFireMessage | undefined;
     private fire: ToldFire | undefined;
+    private ice: { width: number; height: number; mm?: Float32Array } | undefined;
+    /** Whether the meadow still lives the time the room missed, as it last said. */
+    private missed = false;
     private readonly ballLevels = new BallLevels();
     private readSlots: RealWeatherSlot[] | undefined;
     private slotsAt = -Infinity;
@@ -188,6 +191,23 @@ export class RemoteRoomGround implements RoomGround {
             },
             () => fire.trees,
         );
+    }
+
+    public iceAt(tileX: number, tileY: number): number {
+        if (this.fallback) return this.fallback.iceAt(tileX, tileY);
+        const ice = this.ice;
+        if (!ice?.mm || tileX < 0 || tileY < 0 || tileX >= ice.width || tileY >= ice.height) return 0;
+        return ice.mm[tileY * ice.width + tileX];
+    }
+
+    public hasMeadow(): boolean {
+        if (this.fallback) return this.fallback.hasMeadow();
+        return this.ice !== undefined;
+    }
+
+    public catchingUp(): boolean {
+        if (this.fallback) return this.fallback.catchingUp();
+        return this.missed;
     }
 
     public waterSnapshot(): TerrainWaterMessage | undefined {
@@ -346,6 +366,8 @@ export class RemoteRoomGround implements RoomGround {
                 this.meadow = told.snapshot;
                 this.trees = told.trees;
                 this.fire = told.fire;
+                this.ice = told.ice;
+                this.missed = told.catchingUp;
                 return;
             case "save":
                 (this.saved[told.key] ??= {})[told.field] = told.value;
