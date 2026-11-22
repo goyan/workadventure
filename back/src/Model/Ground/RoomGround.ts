@@ -6,7 +6,7 @@ import type {
     FireThresholds,
     LifeFire,
     PrecipitationAir,
-    WaterGrid,
+    WaterView,
 } from "@workadventure/map-editor";
 import type { MeadowMessage, TerrainWaterMessage, TreeFireMessage } from "@workadventure/messages";
 import type { VariablesRepositoryInterface } from "../../Services/Repository/VariablesRepositoryInterface";
@@ -68,8 +68,11 @@ export interface RoomGround {
 
     /** The altitude the water holds a ball at (see WaterSimulation.ballLevelAt). */
     ballLevelAt(id: number, x: number, y: number): number;
-    /** The grid of the water, for what lives in it. Undefined on a map without water. */
-    getGrid(): WaterGrid | undefined;
+    /**
+     * The water as what lives in it reads it (the life of the room, its ice huts): its grid where it is computed on
+     * this thread, a copy of it otherwise. Undefined on a map without water.
+     */
+    getGrid(): WaterView | undefined;
     /** A number that changes whenever the water does. */
     waterVersion(): number;
     /** The fire of the meadow and of its trees, for the animals that run from it. */

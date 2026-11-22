@@ -248,7 +248,7 @@ describe("the ground of a room behind its door (RoomGround)", () => {
         expect(levels).toEqual(handLevels);
         expect(inline.seen.told).toEqual(hand.seen.told);
         expect(inline.seen.saved).toEqual(hand.seen.saved);
-        expect(ground.getGrid()?.writeDepths(true)).toEqual(reference.getGrid()?.writeDepths(true));
+        expect(ground.waterSnapshot()).toEqual(reference.waterSnapshot());
         expect(ground.meadowSnapshot()).toEqual(reference.meadowSnapshot());
         expect(ground.treeSnapshot()).toEqual(reference.treeSnapshot());
         // What the ice fishing shacks read: the ice of each tile, and whether the meadow is made.

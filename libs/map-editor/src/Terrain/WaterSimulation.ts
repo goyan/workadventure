@@ -11,7 +11,7 @@ import {
 import type { TerrainData, WAMFileFormat, WaterSettings } from "../types";
 import { advanceImpactWave, blastWater, startImpactWave, strikeWater } from "../Catastrophe/ImpactWave";
 import type { ImpactWave } from "../Catastrophe/ImpactWave";
-import { BALL_LEVEL_REACH_CELLS, BALL_LEVEL_SLACK_PX, sweepBalls } from "../Catastrophe/Ball";
+import { sweepBalls } from "../Catastrophe/Ball";
 import type { Ball } from "../Catastrophe/Ball";
 import { DOWNPOUR_PX_PER_SECOND } from "../Catastrophe/Downpour";
 import type { Downpour } from "../Catastrophe/Downpour";
@@ -22,6 +22,7 @@ import { liquidRainRate, snowShareOf } from "../Weather/Precipitation";
 import type { PrecipitationAir } from "../Weather/Precipitation";
 import { rainRateAt } from "../Weather/RainRate";
 import type { MapPlace, RealWeatherSlot } from "../Weather/RealWeather";
+import { BallLevels } from "./BallLevels";
 import { landWallsOf } from "./LandWalls";
 import { pavedTilesOf } from "./Meadow";
 import {
@@ -34,7 +35,6 @@ import {
 } from "./Pools";
 import type { PoolCell } from "./Pools";
 import { CELL_AREA_M2, LITRES_PER_M3 } from "./Scale";
-import { heightAt } from "./TerrainGrid";
 import { closedDoorSides, holdsOpen, waterDoorsOf } from "./WaterDoors";
 import type { WaterDoor } from "./WaterDoors";
 import { WATER_SEND_BUDGET_BYTES_PER_SECOND, WaterSendLoad } from "./WaterSendLoad";
@@ -155,7 +155,7 @@ export class WaterSimulation {
     /** Where the balls stood at the last step: a ball that moved since is taken along its way. */
     private ballsBefore: readonly Ball[] = [];
     /** The level each ball is held at, and where it was when that was decided. */
-    private readonly ballLevels = new Map<number, { level: number; x: number; y: number }>();
+    private readonly ballLevels = new BallLevels();
     private sums: Sums = noSums();
     /** Whether the last step moved any water: a grid at rest with nothing coming in is not stepped. */
     private moving = true;
@@ -570,21 +570,7 @@ export class WaterSimulation {
      * swept dry on its way (BALL_LEVEL_REACH_CELLS).
      */
     public ballLevelAt(id: number, x: number, y: number): number {
-        const known = this.ballLevels.get(id);
-        if (known && known.x === x && known.y === y) return known.level;
-        const cellX = Math.floor(x / TERRAIN_CELL);
-        const cellY = Math.floor(y / TERRAIN_CELL);
-        const rest =
-            Number.isFinite(x) && Number.isFinite(y)
-                ? this.grid?.restLevelAt(cellX, cellY, BALL_LEVEL_REACH_CELLS)
-                : undefined;
-        // Off the grid of the water there is only ground: that of the relief.
-        const there =
-            rest ??
-            (Number.isFinite(x) && Number.isFinite(y) ? heightAt(this.room.getWam()?.terrain, cellX, cellY) : 0);
-        const level = known && Math.abs(there - known.level) <= BALL_LEVEL_SLACK_PX ? known.level : there;
-        this.ballLevels.set(id, { level, x, y });
-        return level;
+        return this.ballLevels.levelAt(id, x, y, this.grid, () => this.room.getWam()?.terrain);
     }
 
     /**
@@ -595,14 +581,12 @@ export class WaterSimulation {
     private placeBalls(grid: WaterGrid): boolean {
         const held = this.balls();
         if (held.length === 0 && this.ballsBefore.length === 0) {
-            if (this.ballLevels.size > 0) this.ballLevels.clear();
+            this.ballLevels.clear();
             return false;
         }
         // Each ball at the level of the water it stands in; the level of a ball that is gone is forgotten.
         const standing = held.map((ball) => ({ ...ball, levelPx: this.ballLevelAt(ball.id, ball.x, ball.y) }));
-        for (const id of this.ballLevels.keys()) {
-            if (!standing.some((ball) => ball.id === id)) this.ballLevels.delete(id);
-        }
+        this.ballLevels.keep(standing.map((ball) => ball.id));
         // A ball is under the pointer of its player at once: it may have gone several cells since the last step,
         // and up or down to another water. It pushed the water of the whole way, not only of where it is now.
         let changed = false;
