@@ -7,7 +7,7 @@ import { IceBreaks } from "@wa/front/Phaser/Game/Ice/IceBreaks";
 import type * as FrostModule from "@wa/front/Phaser/Game/Weather/Frost";
 
 // A player who follows a place of their own, at -5 °C.
-vi.mock("@wa/front/Phaser/Game/Weather/GroundSource", () => ({ followsServerGround: () => false }));
+vi.mock("@wa/front/Phaser/Game/Weather/GroundSource", () => ({ meadowHoldsSnow: () => false }));
 vi.mock("@wa/front/Phaser/Game/Weather/Frost", async (importOriginal) => {
     const original = await importOriginal<typeof FrostModule>();
     return { ...original, waterCycleNow: () => ({ frost: 0, ice: original.iceAt(-5), wet: 0, snowMm: 0 }) };

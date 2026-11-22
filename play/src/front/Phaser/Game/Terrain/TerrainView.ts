@@ -16,7 +16,7 @@ import { Season } from "@workadventure/map-editor";
 import type { PoolStyle, TerrainData } from "@workadventure/map-editor";
 import type { OutdoorGrid } from "@wa/front/Phaser/Game/Outdoor/OutdoorGrid";
 import { waterCycleNow } from "@wa/front/Phaser/Game/Weather/Frost";
-import { followsServerGround } from "@wa/front/Phaser/Game/Weather/GroundSource";
+import { meadowHoldsSnow } from "@wa/front/Phaser/Game/Weather/GroundSource";
 import type { WaterCycle } from "@wa/front/Phaser/Game/Weather/Frost";
 import type { WaterRing } from "@wa/front/Phaser/Game/Catastrophe/MeteorFall";
 import type { GameScene } from "../GameScene";
@@ -321,7 +321,7 @@ export class TerrainView {
             this.seenDrawn = seen;
             this.seenChanges++;
         }
-        const key = `${foamKey}:${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}:${this.imagePools.signature}:${this.poolSettingsVersion()}:${followsServerGround()}:${this.ownSnow()}:${oblique}:${this.snowEverywhere?.() === true}:${this.seenChanges}`;
+        const key = `${foamKey}:${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}:${this.imagePools.signature}:${this.poolSettingsVersion()}:${meadowHoldsSnow()}:${this.ownSnow()}:${oblique}:${this.snowEverywhere?.() === true}:${this.seenChanges}`;
         const inside = this.drawn !== undefined && stillCovers(this.drawn, screen, oblique, DRAW_MARGIN / 5);
         if (key === this.lastKey && inside) return;
         this.lastKey = key;
@@ -760,7 +760,7 @@ export class TerrainView {
         if (meadow.hasGrass() || meadow.hasMoisture()) return true;
         // The winter theme of this player: all white outdoors.
         if (this.snowEverywhere?.() === true) return true;
-        return followsServerGround() ? meadow.hasSnow() || meadow.hasIce() : this.ownSnow() > 0;
+        return meadowHoldsSnow() ? meadow.hasSnow() || meadow.hasIce() : this.ownSnow() > 0;
     }
 
     /**
@@ -768,7 +768,7 @@ export class TerrainView {
      * painted again when it moves by one, not at each image. 0 for a player who follows the server.
      */
     private ownSnow(): number {
-        if (followsServerGround()) return 0;
+        if (meadowHoldsSnow()) return 0;
         return Math.round((this.scene.getMapSnowCoverage?.() ?? 0) * OWN_SNOW_STEPS);
     }
 
@@ -779,7 +779,7 @@ export class TerrainView {
             return undefined;
         }
         // The snow of the server is for those who follow its weather (GroundSource).
-        const server = followsServerGround();
+        const server = meadowHoldsSnow();
         // The winter theme of this player: all white outdoors, whatever fell.
         const winter = this.snowEverywhere?.() === true;
         const own = this.ownSnow();
@@ -1013,7 +1013,7 @@ export class TerrainView {
             this.splat.setSnow(snow);
             this.scene.markDirty();
         }
-        const server = followsServerGround();
+        const server = meadowHoldsSnow();
         if (server !== this.serverIce) {
             this.serverIce = server;
             this.splat.setServerIce(server);
