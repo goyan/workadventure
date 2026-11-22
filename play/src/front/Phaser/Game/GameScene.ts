@@ -2083,10 +2083,10 @@ export class GameScene extends DirtyScene {
         // The body of an avatar, for its oval shadow: narrower than its frame.
         const body = { width: 24, height: 30 };
         const own = this.CurrentPlayer?.skyShadowSource();
-        if (own) yield { id: "me", ...body, ...own };
+        if (own) yield { id: "me", ...body, ...own, drop: this.CurrentPlayer.getGroundDrop() };
         for (const [userId, player] of this.MapPlayersByKey) {
             const source = player.skyShadowSource();
-            if (source) yield { id: userId, ...body, ...source };
+            if (source) yield { id: userId, ...body, ...source, drop: player.getGroundDrop() };
         }
     }
 
@@ -2103,14 +2103,17 @@ export class GameScene extends DirtyScene {
                 height: sprite.displayHeight * 0.6,
                 sprites: [sprite],
                 scale: sprite.scaleX,
+                drop: Math.round(this.groundDropAt(sprite.x, sprite.y)),
             });
         });
         // The antelopes, lions and tigers the server runs.
-        this.landLifeView?.forEachShown((id, sprite) => {
+        this.landLifeView?.forEachShown((id, sprite, { drop }) => {
             animals.push({
                 id: `land:${id}`,
                 x: sprite.x,
-                y: sprite.y,
+                // Its sprite is already where it is drawn: its place is that much higher.
+                y: sprite.y - drop,
+                drop,
                 width: sprite.displayWidth * 0.7,
                 height: sprite.displayHeight * 0.6,
                 sprites: [sprite],

@@ -50,6 +50,8 @@ interface Shown {
     atY: number;
     /** Since when it drinks, undefined while it does not. */
     drinkingSince: number | undefined;
+    /** How much lower than its place it is drawn (the relief seen in 3/4). */
+    drop: number;
 }
 
 type SceneOfView = Pick<Phaser.Scene, "add" | "cameras" | "textures" | "load"> & { markDirty(): void };
@@ -137,6 +139,7 @@ export class LandLifeView {
                     atX: animal.x,
                     atY: animal.y,
                     drinkingSince: undefined,
+                    drop,
                 };
                 this.shown.set(animal.id, entry);
                 changed ||= onScreen(x, y);
@@ -157,6 +160,7 @@ export class LandLifeView {
             if (moved || sprite.alpha !== animal.alpha) changed ||= onScreen(x, y) || onScreen(sprite.x, sprite.y);
             entry.moving = moving;
             entry.led = led !== undefined;
+            entry.drop = drop;
             sprite.setPosition(x, y);
             // Sorted by its place, whatever the row it is drawn at.
             placeAtDepth(sprite, lift > 0 ? floorDepth(lift, placeY) : placeY);
@@ -204,10 +208,12 @@ export class LandLifeView {
         callback: (
             id: number,
             sprite: Phaser.GameObjects.Sprite,
-            animal: { species: LandSpecies; moving: boolean; led: boolean },
+            animal: { species: LandSpecies; moving: boolean; led: boolean; drop: number },
         ) => void,
     ): void {
-        for (const [id, { sprite, species, moving, led }] of this.shown) callback(id, sprite, { species, moving, led });
+        for (const [id, { sprite, species, moving, led, drop }] of this.shown) {
+            callback(id, sprite, { species, moving, led, drop });
+        }
     }
 
     public destroy(): void {

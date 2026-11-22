@@ -321,8 +321,9 @@ describe("LandLifeView, what is drawn now", () => {
         const told: unknown[] = [];
         view.forEachShown((id, sprite, animal) => told.push({ id, x: sprite.x, ...animal }));
         expect(told).toEqual([
-            { id: 1, x: 300, species: "lion", moving: true, led: true },
-            { id: 2, x: 50, species: "antelope", moving: false, led: false },
+            // With how much lower each is drawn on a relief seen in 3/4 (none here): its shadow lies under it.
+            { id: 1, x: 300, species: "lion", moving: true, led: true, drop: 0 },
+            { id: 2, x: 50, species: "antelope", moving: false, led: false, drop: 0 },
         ]);
     });
 });

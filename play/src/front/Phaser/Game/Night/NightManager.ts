@@ -50,7 +50,7 @@ import {
 import type { SunPosition } from "./NightClock";
 import { roomAmbience, type AmbienceSettings } from "./AmbientLight";
 import { moonPhaseAt, moonPositionAt } from "./MoonClock";
-import { NightHalos } from "./NightHalos";
+import { halosWhereDrawn, NightHalos } from "./NightHalos";
 import { placeOfPoint, worldCityOf } from "./WorldDaylight";
 import type { PointWords, WorldPlace } from "./WorldDaylight";
 import { coversMostly, isInLightableArea, lightableAreas, NightLights, roomsThatLightUp } from "./NightLights";
@@ -303,9 +303,15 @@ export class NightManager {
         // No halo in a lit area: the area already lights the player. In a room put out for a party, the player
         // keeps their halo: they stay visible under the effects.
         const lightingAreas = rooms.filter((area) => !putOut(area));
-        const halos = this.halos.update(
-            now,
-            players.map((player) => ({ ...player, sheltered: isInLightableArea(player, lightingAreas) })),
+        // The rooms are lit by where the players are; their halos are drawn where they are drawn (lower in a hollow of
+        // a relief seen in 3/4, higher on a mount).
+        const drops = new Map(players.map((player) => [player.id, player.drop]));
+        const halos = halosWhereDrawn(
+            this.halos.update(
+                now,
+                players.map((player) => ({ ...player, sheltered: isInLightableArea(player, lightingAreas) })),
+            ),
+            (id) => drops.get(id) ?? 0,
         );
         const camera = this.scene.cameras.main;
         const frame: NightFrame = {
@@ -436,14 +442,22 @@ export class NightManager {
         this.areas = lightableAreas(areas, mapWidth, mapHeight);
     }
 
-    private players(): { id: string; x: number; y: number; z: number }[] {
+    private players(): { id: string; x: number; y: number; z: number; drop: number }[] {
         // Raw sprite positions, as given to GameMapFrontWrapper.setPosition: NightLights adds the feet offset, the
         // halos are centred on them (the body). Animals are not players: they carry no light.
         // With the floor each one stands on: an area is lit by the players of its floor.
         const local = this.scene.CurrentPlayer;
-        const players = [{ id: this.localId, x: local.x, y: local.y, z: local.getFloorZ() }];
+        const players = [
+            { id: this.localId, x: local.x, y: local.y, z: local.getFloorZ(), drop: local.getGroundDrop?.() ?? 0 },
+        ];
         for (const [key, player] of this.scene.MapPlayersByKey) {
-            players.push({ id: String(key), x: player.x, y: player.y, z: player.getFloorZ() });
+            players.push({
+                id: String(key),
+                x: player.x,
+                y: player.y,
+                z: player.getFloorZ(),
+                drop: player.getGroundDrop?.() ?? 0,
+            });
         }
         return players;
     }
