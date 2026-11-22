@@ -1,10 +1,15 @@
 <script lang="ts">
+    import { PARIS_LATITUDE, PARIS_LONGITUDE } from "@workadventure/map-editor";
     import type { WeatherLocation } from "@workadventure/map-editor";
-    import { onDestroy } from "svelte";
     import { LL } from "../../../i18n/i18n-svelte";
-    import { searchPlaces } from "../../Phaser/Game/Weather/RealWeatherClient";
     import { isPointName, mapPlaceNames } from "../../Phaser/Game/Weather/MapPlaceName";
+    import { mapLocationOf } from "../../Phaser/Game/Weather/PlaceToMap";
+    import { placeOfPoint } from "../../Phaser/Game/Night/WorldDaylight";
+    import type { WorldPoint } from "../../Phaser/Game/Night/WorldDaylight";
     import { pointWords } from "../../Phaser/Game/Night/PointWords";
+    import { nightDateStore } from "../../Stores/NightStore";
+    import WorldMapPicker from "../WorldMap/WorldMapPicker.svelte";
+    import PlaceSearch from "./PlaceSearch.svelte";
 
     interface Props {
         location: WeatherLocation | undefined;
@@ -12,63 +17,28 @@
 
     let { location = $bindable() }: Props = $props();
 
-    let query = $state("");
-    let results = $state<WeatherLocation[]>([]);
-    let status = $state<"idle" | "searching" | "empty" | "error">("idle");
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let controller: AbortController | undefined;
+    /** A town with its region and country; a point of the world named as a player's own point is. */
+    const current = $derived(
+        location
+            ? isPointName(location.name)
+                ? (mapPlaceNames(location, pointWords)?.long ?? location.name)
+                : location.name
+            : undefined,
+    );
+    /** In the search field: the town alone, or the point by its long name. */
+    const shown = $derived(location ? (mapPlaceNames(location, pointWords)?.long ?? location.name) : "");
 
-    /** Waits for a pause in the typing, then asks for the towns: one request per word typed, not per letter. */
-    function onInput(): void {
-        clearTimeout(timer);
-        controller?.abort();
-        const typed = query.trim();
-        if (typed.length < 2) {
-            results = [];
-            status = "idle";
-            return;
-        }
-        timer = setTimeout(() => {
-            const asking = new AbortController();
-            controller = asking;
-            status = "searching";
-            searchPlaces(typed, asking.signal)
-                .then((found) => {
-                    if (asking.signal.aborted) return;
-                    results = found;
-                    status = found.length === 0 ? "empty" : "idle";
-                })
-                .catch(() => {
-                    if (asking.signal.aborted) return;
-                    results = [];
-                    status = "error";
-                });
-        }, 300);
+    /** A point clicked on the map of the world: saved as the button "Apply to the map" saves a place. */
+    function pick(point: WorldPoint): void {
+        location = mapLocationOf(placeOfPoint(point, pointWords()));
     }
-
-    function choose(place: WeatherLocation): void {
-        location = place;
-        query = "";
-        results = [];
-        status = "idle";
-    }
-
-    onDestroy(() => {
-        clearTimeout(timer);
-        controller?.abort();
-    });
 </script>
 
 <div class="flex flex-col gap-2" data-testid="map-location">
     <span class="text-sm font-bold">{$LL.mapEditor.settings.weather.location.title()}</span>
     <div class="flex items-center justify-between gap-2">
         <span class="text-sm text-white/80" data-testid="map-location-current">
-            <!-- A town with its region and country; a point of the world named as a player's own point is. -->
-            {location
-                ? isPointName(location.name)
-                    ? (mapPlaceNames(location, pointWords)?.long ?? location.name)
-                    : location.name
-                : $LL.mapEditor.settings.weather.location.default()}
+            {current ?? $LL.mapEditor.settings.weather.location.default()}
         </span>
         {#if location}
             <button
@@ -79,34 +49,19 @@
             >
         {/if}
     </div>
-    <input
-        type="search"
-        class="rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/40"
-        placeholder={$LL.mapEditor.settings.weather.location.search()}
-        aria-label={$LL.mapEditor.settings.weather.location.search()}
-        maxlength="100"
-        bind:value={query}
-        oninput={onInput}
-        data-testid="map-location-search"
+    <PlaceSearch
+        {shown}
+        onchoose={(place) => (location = place)}
+        testid="map-location-search"
+        resultsTestid="map-location-results"
     />
-    {#if results.length > 0}
-        <ul class="flex flex-col gap-1" data-testid="map-location-results">
-            {#each results as place (`${place.latitude},${place.longitude},${place.name}`)}
-                <li>
-                    <button
-                        type="button"
-                        class="w-full rounded-lg bg-black/30 px-3 py-2 text-left text-sm text-white/80 hover:bg-white/10"
-                        onclick={() => choose(place)}>{place.name}</button
-                    >
-                </li>
-            {/each}
-        </ul>
-    {:else if status === "searching"}
-        <span class="text-xs text-white/50">{$LL.mapEditor.settings.weather.location.searching()}</span>
-    {:else if status === "empty"}
-        <span class="text-xs text-white/50">{$LL.mapEditor.settings.weather.location.noResult()}</span>
-    {:else if status === "error"}
-        <span class="text-xs text-white/50">{$LL.mapEditor.settings.weather.location.error()}</span>
-    {/if}
+    <!-- Or a point of the world, anywhere: the field and the map show the same place. -->
+    <WorldMapPicker
+        marker={location ?? { latitude: PARIS_LATITUDE, longitude: PARIS_LONGITUDE }}
+        date={$nightDateStore}
+        onpick={pick}
+        testid="map-location-map"
+        label={$LL.mapEditor.settings.weather.location.map()}
+    />
     <span class="text-xs text-white/50">{$LL.mapEditor.settings.weather.location.hint()}</span>
 </div>

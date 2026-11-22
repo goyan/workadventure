@@ -105,6 +105,20 @@ describe("placeOfPoint", () => {
         expect(shortCityName("Rio de Janeiro")).toBe("Rio de Janeiro");
     });
 
+    it("names a town chosen by its name after it, with its own time zone, even far from the cities of the list", () => {
+        // Lille is not in the list and about 200 km from Paris: chosen by its name, it is Lille.
+        const lille = placeOfPoint(
+            { latitude: 50.63, longitude: 3.06, name: "Lille, Hauts-de-France, France", timezone: "Europe/Paris" },
+            french,
+        );
+        expect(lille).toEqual({ name: "Lille", latitude: 50.63, longitude: 3.06, timezone: "Europe/Paris" });
+        // Without a zone told, the rule of the points gives one.
+        const far = placeOfPoint({ latitude: -54.8, longitude: -68.3, name: "Ushuaia" }, french);
+        expect(far.name).toBe("Ushuaia");
+        expect(far.longName).toBeUndefined();
+        expect(far.timezone).toBeDefined();
+    });
+
     it("gives no hemisphere to a rounded 0° nor to 180°", () => {
         expect(pointCoordinates({ latitude: 0.3, longitude: 179.8 }, french)).toBe("0° 180°");
         expect(pointCoordinates({ latitude: -0.4, longitude: -0.2 }, french)).toBe("0° 0°");

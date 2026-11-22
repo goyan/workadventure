@@ -132,6 +132,10 @@ function nearestCity(gap: (city: WeatherLocation) => number): WeatherLocation {
 export interface WorldPoint {
     latitude: number;
     longitude: number;
+    /** The town it is, when chosen by its name in the search ("Lille, Hauts-de-France, France"); absent: a point. */
+    name?: string;
+    /** The time zone of that town, as the search gave it. */
+    timezone?: string;
 }
 
 /**
@@ -237,13 +241,17 @@ export function pointTimeZone(
 }
 
 /**
- * The place of a point of the world: its own latitude and longitude for the sun and the weather. Within
+ * The place of a point of the world: its own latitude and longitude for the sun and the weather. A town chosen by its
+ * name keeps its name and its time zone. Within
  * NAMED_POINT_RADIUS_KM of a city of the list it is named after it; farther its short name is the nearest city and
  * how far ("Auckland 4 000 km"), its long name adds its coordinates ("72° S 170° E · Auckland à 4 000 km"). Its time zone: pointTimeZone.
  */
 export function placeOfPoint(point: WorldPoint, words: PointWords): WorldPlace {
     const nearest = nearestCityOf(point);
-    const timezone = pointTimeZone(point, nearest);
+    const timezone = point.timezone ?? pointTimeZone(point, nearest);
+    // A town chosen by its name is itself, wherever it is: its name without its region and country.
+    const town = point.name?.split(",")[0]?.trim();
+    if (town) return { name: town, latitude: point.latitude, longitude: point.longitude, timezone };
     if (nearest.distanceKm <= NAMED_POINT_RADIUS_KM) {
         return { name: nearest.city.name, latitude: point.latitude, longitude: point.longitude, timezone };
     }
