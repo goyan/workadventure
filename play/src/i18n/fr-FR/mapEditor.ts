@@ -929,6 +929,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             pointerNoWater: "Pas d’eau",
             pointerDepth: "Profondeur {depth}",
             pointerOff: "Curseur hors du jeu",
+            pointerUnpainted: "{soil} (non peint)",
+            pointerRoughness: "Rugosité (Manning) {n}",
             ground: "Sol",
             level: "Niveau {height}",
             built: "palier {rank}",

@@ -2,9 +2,12 @@
 
 import { render } from "svelte/server";
 import { beforeAll, describe, expect, it } from "vitest";
-import FloorLevelStack from "../../../../src/front/Components/Floors/FloorLevelStack.svelte";
 
-import { setLocale } from "../../../../src/i18n/i18n-svelte";
+import { get } from "svelte/store";
+import { SOILS } from "@workadventure/map-editor";
+import FloorLevelStack from "../../../../src/front/Components/Floors/FloorLevelStack.svelte";
+import { SOIL_NAME_CH } from "../../../../src/front/Phaser/Game/Floors/AvatarAltitude";
+import { LL, setLocale } from "../../../../src/i18n/i18n-svelte";
 import { loadLocale } from "../../../../src/i18n/i18n-util.sync";
 
 beforeAll(() => {
@@ -106,6 +109,51 @@ describe("FloorLevelStack", () => {
         expect(body).toContain("Water surface");
         expect(body).toContain("Depth 2.4 m");
         expect(body).toContain("-1.2 m");
+        loadLocale("fr-FR");
+        setLocale("fr-FR");
+    });
+
+    it("names the soil under the pointer, its roughness in the hint, and a pool as such", () => {
+        const sand = { ground: -3.6, soil: "sand" as const, roughness: 0.025 };
+        const { body } = render(FloorLevelStack, { props: { stack: { ...stack, altitude: 48, pointer: sand } } });
+        expect(body).toContain('data-testid="pointer-soil"');
+        expect(body).toContain(">Sable<");
+        expect(body).toContain("Rugosité (Manning) 0,025");
+        const pool = { ground: -1.5, soil: "pool" as const, roughness: 0.03 };
+        expect(render(FloorLevelStack, { props: { stack: { ...stack, altitude: 48, pointer: pool } } }).body).toContain(
+            ">Piscine<",
+        );
+    });
+
+    it("tells a cell not painted as the earth the water reads there", () => {
+        const pointer = { ground: 0, roughness: 0.03 };
+        const { body } = render(FloorLevelStack, { props: { stack: { ...stack, altitude: 48, pointer } } });
+        expect(body).toContain(">Terre<");
+        expect(body).toContain("Terre (non peint)");
+    });
+
+    it("reserves the room of the longest soil name, in French as in English", () => {
+        const names = ["fr-FR", "en-US"].flatMap((lang) => {
+            loadLocale(lang as "fr-FR" | "en-US");
+            setLocale(lang as "fr-FR" | "en-US");
+            const ll = get(LL);
+            return [...SOILS.map((soil) => ll.mapEditor.terrain.soils[soil]()), ll.mapEditor.terrain.pool()];
+        });
+        loadLocale("fr-FR");
+        setLocale("fr-FR");
+        expect(Math.max(...names.map((name) => name.length))).toBeLessThanOrEqual(SOIL_NAME_CH);
+        const pointer = { ground: 0, soil: "gravel" as const, roughness: 0.03 };
+        const { body } = render(FloorLevelStack, { props: { stack: { ...stack, altitude: 48, pointer } } });
+        expect(body).toContain(`min-width: ${SOIL_NAME_CH}ch`);
+    });
+
+    it("names the soil in English in en-US", () => {
+        loadLocale("en-US");
+        setLocale("en-US");
+        const pointer = { ground: 0, roughness: 0.03 };
+        const { body } = render(FloorLevelStack, { props: { stack: { ...stack, altitude: 48, pointer } } });
+        expect(body).toContain("Earth (unpainted)");
+        expect(body).toContain("Roughness (Manning) 0.03");
         loadLocale("fr-FR");
         setLocale("fr-FR");
     });

@@ -1,11 +1,13 @@
 <script lang="ts">
     import { tick } from "svelte";
     import { clickOutside } from "svelte-outside";
+    import { DEFAULT_POOL_STYLE } from "@workadventure/map-editor";
     import type { FloorLevelStack } from "../../Stores/FloorLevelsStore";
     import { LL, locale } from "../../../i18n/i18n-svelte";
-    import { altitudeLabel, metresLabel } from "../../Phaser/Game/Floors/AvatarAltitude";
+    import { altitudeLabel, metresLabel, SOIL_NAME_CH } from "../../Phaser/Game/Floors/AvatarAltitude";
+    import { SOIL_TINTS } from "../../Phaser/Game/Terrain/TerrainShading";
     import { floorLevelViewedStore, levelChangePulses } from "../../Stores/FloorLevelsStore";
-    import { IconCheck, IconChevronDown, IconDroplet, IconMountain, IconSnowflake } from "@wa-icons";
+    import { IconCheck, IconChevronDown, IconDroplet, IconSnowflake } from "@wa-icons";
 
     interface Props {
         /** The floors of the map and the one of the avatar; undefined: nothing to show. */
@@ -50,11 +52,41 @@
             ? $LL.mapEditor.mapLayer.floorLevel.pointerIce()
             : $LL.mapEditor.mapLayer.floorLevel.pointerWater(),
     );
+    // The soil under the pointer, named as in the relief tool; a cell not painted is the earth the water reads there.
+    let soilLabel = $derived(
+        pointer === undefined
+            ? ""
+            : pointer.soil === "pool"
+              ? $LL.mapEditor.terrain.pool()
+              : $LL.mapEditor.terrain.soils[pointer.soil ?? "earth"](),
+    );
+    let soilHint = $derived(
+        pointer !== undefined && pointer.soil === undefined
+            ? $LL.mapEditor.mapLayer.floorLevel.pointerUnpainted({ soil: soilLabel })
+            : soilLabel,
+    );
+    // The colour of the soil on the map (its tint in the relief tool), the water of a pool for a pool.
+    let soilColour = $derived(
+        pointer === undefined
+            ? "transparent"
+            : pointer.soil === "pool"
+              ? DEFAULT_POOL_STYLE.water
+              : `#${SOIL_TINTS[pointer.soil ?? "earth"].color.toString(16).padStart(6, "0")}`,
+    );
+    let roughnessFigure = $derived(
+        pointer?.roughness === undefined
+            ? undefined
+            : new Intl.NumberFormat($locale, { maximumFractionDigits: 3 }).format(pointer.roughness),
+    );
     let pointerHint = $derived(
         pointer === undefined
             ? `${$LL.mapEditor.mapLayer.floorLevel.pointerAltitude()} · ${$LL.mapEditor.mapLayer.floorLevel.pointerOff()}`
             : [
                   `${$LL.mapEditor.mapLayer.floorLevel.pointerGround()} ${groundFigure}`,
+                  soilHint,
+                  ...(roughnessFigure === undefined
+                      ? []
+                      : [$LL.mapEditor.mapLayer.floorLevel.pointerRoughness({ n: roughnessFigure })]),
                   pointer.surface === undefined
                       ? $LL.mapEditor.mapLayer.floorLevel.pointerNoWater()
                       : `${waterName} ${surfaceFigure}`,
@@ -133,6 +165,7 @@
     <div
         class="floor-level-stack relative z-10 rounded-lg bg-contrast/80 text-xs backdrop-blur"
         class:full-width={fullWidth}
+        class:relief={stack.altitude !== undefined && !fullWidth}
         class:pulse
         use:clickOutside={close}
     >
@@ -185,9 +218,18 @@
                     <path d="M12 2v6M12 16v6M2 12h6M16 12h6" />
                 </svg>
                 <span class="sr-only">{pointerHint}</span>
-                <span class="flex shrink-0 items-center gap-0.5 opacity-80" aria-hidden="true">
-                    <IconMountain class="h-3 w-3 shrink-0" />
-                    <span class="figure">{groundFigure}</span>
+                <!-- The mountain is filled with the colour of the soil; its name shows where the layout is wide. -->
+                <span class="flex shrink-0 items-center gap-0.5" aria-hidden="true">
+                    <svg class="h-3 w-3 shrink-0 opacity-90" viewBox="0 0 24 24" data-testid="pointer-soil-swatch">
+                        <path d="M3 20h18L14.079 5.388a2.3 2.3 0 0 0-4.158 0z" style:fill={soilColour} />
+                        <path d="m7.5 11l2 2.5L12 11l2 3l2.5-2" />
+                    </svg>
+                    <span
+                        class="soil-name truncate opacity-80"
+                        style:min-width={`${SOIL_NAME_CH}ch`}
+                        data-testid="pointer-soil">{soilLabel}</span
+                    >
+                    <span class="figure opacity-80">{groundFigure}</span>
                 </span>
                 <span
                     class="flex shrink-0 items-center gap-0.5 {pointer?.surface === undefined
@@ -273,6 +315,21 @@
     }
     .full-width {
         width: 100%;
+    }
+    /* The name of the soil under the pointer only where the layout is wide (from 1024 px, the "lg" of the main
+       layout): the stack then widens by the room of the longest name. Narrower, the colour of the mountain tells it,
+       and its name is in the hint. */
+    .soil-name {
+        display: none;
+        max-width: 8ch;
+    }
+    @container main-layout (min-width: 1024px) {
+        .relief {
+            width: 250px;
+        }
+        .soil-name {
+            display: inline-block;
+        }
     }
     svg {
         fill: none;
