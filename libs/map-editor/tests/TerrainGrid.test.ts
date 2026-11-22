@@ -97,7 +97,7 @@ describe("terrain grid", () => {
             speed: 1,
             absorption: 5,
             current: 1,
-            maxSurface: 18,
+            maxSurface: 256,
             indoorDrain: 300,
         });
         expect(WAMFileFormat.parse({ ...wam, settings: { water: { runoff: -4 } } }).settings?.water).toBeUndefined();

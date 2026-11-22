@@ -7,6 +7,7 @@ import {
     DEFAULT_WATER_PACE,
     DEFAULT_WATER_SETTINGS,
     DEFAULT_WAVE_SETTINGS,
+    waterHasInertia,
 } from "@workadventure/map-editor";
 import type { LifeSettings, MeadowSettings, PoolStyle, WaveSettings } from "@workadventure/map-editor";
 import { gameManager } from "../GameManager";
@@ -42,7 +43,7 @@ export function readTerrainMapSettings(): {
         current: wam?.settings?.water?.current ?? DEFAULT_WATER_SETTINGS.current,
         maxSurface: wam?.settings?.water?.maxSurface ?? DEFAULT_WATER_SETTINGS.maxSurface,
         indoorDrain: wam?.settings?.water?.indoorDrain ?? DEFAULT_WATER_SETTINGS.indoorDrain,
-        inertia: wam?.settings?.water?.inertia ?? false,
+        inertia: waterHasInertia(wam?.settings?.water),
         waves: { ...DEFAULT_WAVE_SETTINGS, ...wam?.settings?.water?.waves },
         precision: wam?.settings?.water?.precision ?? DEFAULT_WATER_PACE.precision,
         updates: wam?.settings?.water?.updates ?? DEFAULT_WATER_PACE.updates,

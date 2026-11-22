@@ -117,6 +117,8 @@ export class MeadowSimulation {
     /** How frozen the soil is now, from the same air as the rain (see soilFrost). */
     private frost = 0;
     /** The air the rain of the map falls through: the conditions of the room, once it gives them. */
+    /** The clock of the snow and the ice, as the water lives it (timesWith); undefined: the speed of the map. */
+    private livedTimes: (() => number) | undefined;
     private air: () => PrecipitationAir | undefined = () => undefined;
     /** The part of the rain of the map that falls as snow now, in mm of water an hour. */
     private snowRate = 0;
@@ -211,6 +213,17 @@ export class MeadowSimulation {
         // Saved with its time even unchanged: the next room catches up from now on.
         this.changedSinceSave = true;
         this.save();
+    }
+
+    /**
+     * Stops stepping by itself, without saving: the steps are then driven by hand (`step`), by what must know when
+     * each one happens (a test that compares two meadows step by step).
+     */
+    public pause(): void {
+        if (this.catchUpTimer) clearTimeout(this.catchUpTimer);
+        this.catchUpTimer = undefined;
+        if (this.timer) clearInterval(this.timer);
+        this.timer = undefined;
     }
 
     /** Keeps the meadow where it survives a restart: nothing here, the server saves it (MeadowManager). */
@@ -326,6 +339,14 @@ export class MeadowSimulation {
      * The temperature and the humidity the rain of the map falls through (the conditions of the room): in the cold it
      * falls as snow, which brings no water (see liquidRainRate).
      */
+    /**
+     * Where the clock of the snow and the ice is read: as many times reality as what comes in to the water goes
+     * (WaterSimulation.livedTimes). Absent: the speed of the water of the map.
+     */
+    public timesWith(times: () => number): void {
+        this.livedTimes = times;
+    }
+
     public fallThrough(air: () => PrecipitationAir | undefined): void {
         this.air = air;
     }
@@ -459,7 +480,7 @@ export class MeadowSimulation {
      * (its speed, waterTimesOf), so that a snow weighs what the same rain would have and nothing goes by another clock.
      */
     private snowInput(seconds: number): Pick<MeadowStepInput, "weather" | "snowfallMm" | "snowTimes"> {
-        const times = waterTimesOf(this.room.getWam()?.settings?.water);
+        const times = this.livedTimes?.() ?? waterTimesOf(this.room.getWam()?.settings?.water);
         return {
             weather: this.replay?.weather ? this.replay.weather.snow : this.snowWeather(),
             snowfallMm: (this.snowRate * seconds * times) / 3600,

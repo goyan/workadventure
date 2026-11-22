@@ -261,6 +261,19 @@ describe("TerrainEditor", () => {
         terrainWaterStatsStore.set(undefined);
     });
 
+    it("says how fast the water really goes when the server cannot compute it as fast as the map asks", () => {
+        render();
+        const stats = { rain: 0, sources: 0, sinks: 0, evaporation: 0, absorption: 0, lost: 0, stock: 0, wetArea: 0 };
+        // The map of these tests asks for 60 times reality.
+        terrainWaterStatsStore.set({ ...stats, rainRate: 0, reachedSpeed: 60 });
+        flushSync();
+        expect(target.querySelector('[data-testid="terrain-speed-reached"]')).toBeNull();
+        terrainWaterStatsStore.set({ ...stats, rainRate: 0, reachedSpeed: 8 });
+        flushSync();
+        expect(byTestId("terrain-speed-reached").textContent).toContain("speedReached");
+        terrainWaterStatsStore.set(undefined);
+    });
+
     it("sets how far the blast of a meteor drives the water away, with or without the water with inertia", () => {
         render();
         setRange("terrain-impact-reach", 4);

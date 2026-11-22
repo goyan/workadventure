@@ -39,7 +39,7 @@ import type {
     SpeciesId,
     SpeciesTallies,
     WaterBodies,
-    WaterGrid,
+    WaterView,
 } from "@workadventure/map-editor";
 import type {
     AquaticLifeMessage,
@@ -133,7 +133,7 @@ const sampleOnWire = (sample: LifeSample): AquaticLifeSampleMessage => ({
 
 /** What the life needs of the water of the room: its grid, and a number that changes whenever the water does. */
 export interface LifeWater {
-    getGrid(): WaterGrid | undefined;
+    getGrid(): WaterView | undefined;
     waterVersion(): number;
 }
 
@@ -176,7 +176,7 @@ export class AquaticLifeManager {
     private timer: ReturnType<typeof setInterval> | undefined;
     private steps = 0;
     private bodies: WaterBodies | undefined;
-    private bodiesGrid: WaterGrid | undefined;
+    private bodiesGrid: WaterView | undefined;
     private bodiesVersion = -1;
     /** The cells of the pools of the map, read again when the relief or the styles of the pools change. */
     private pools: { terrain: unknown; styles: unknown; cells: Set<string> } | undefined;
@@ -398,7 +398,7 @@ export class AquaticLifeManager {
             this.tell();
             this.save(true);
         }
-        let grid: WaterGrid | undefined;
+        let grid: WaterView | undefined;
         try {
             grid = this.water.getGrid();
         } catch (error) {
@@ -415,7 +415,7 @@ export class AquaticLifeManager {
     }
 
     /** The outdoor land as the walls, the size of the map and the water on it make it. */
-    private readLand(grid: WaterGrid | undefined): void {
+    private readLand(grid: WaterView | undefined): void {
         const size = this.mapSize();
         if (!size) {
             this.land = undefined;

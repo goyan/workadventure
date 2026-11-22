@@ -193,6 +193,8 @@ describe("stepInputOf", () => {
                 current: Number.NaN,
                 maxSurface: Number.NaN,
                 indoorDrain: Number.NaN,
+                // The water that creeps: the water with inertia has fields of its own (see WaterGridInertia).
+                inertia: false,
             },
             Number.NaN,
             [],

@@ -1,4 +1,4 @@
-import type { WaterGrid } from "../Terrain/WaterGrid";
+import type { WaterView } from "../Terrain/WaterView";
 import { TERRAIN_CELL } from "../types";
 import type { Animal } from "./Animal";
 import { SPECIES } from "./Species";
@@ -125,7 +125,7 @@ function findRoute(
 export function swim(
     animal: Animal,
     bodies: Places,
-    _grid: WaterGrid | undefined,
+    _grid: WaterView | undefined,
     maxSpeedPxPerS: number,
     dtMs: number,
     now: number,

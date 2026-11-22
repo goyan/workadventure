@@ -745,8 +745,8 @@ const mapEditor: BaseTranslation = {
         forceAuto: "Automatic force (an eighth of the diameter)",
         force: "Force (thickness taken off by a stroke)",
         mapSettings: "Map settings",
-        realistic: "Realistic",
-        realisticHint: "Sets every setting of the water back to its physical value.",
+        realistic: "Reset to the real settings",
+        realisticHint: "Sets every setting of the water back to its default, that of reality.",
         more: "Learn more",
         realisticDetail:
             "Speed 1, water with inertia, waves as the ground and the depth make them, pace of the flow 1, 5 tellings a second, water height not capped (256 px), runoff 10, evaporation 0.2 mm/h, absorption 5 mm/h, drainage 300 mm/h. Only the damping (0.02) is not physical.",
@@ -791,16 +791,19 @@ const mapEditor: BaseTranslation = {
         },
         current: "Strength of the current (0: avatars are not carried)",
         maxSurface: "Highest water over the ground",
-        inertia: "Water with inertia (on trial)",
+        inertia: "Water with inertia",
         flowPace: "Pace of the flow",
         flowPaceHint: "Slows down or speeds up all that flows: waves, floods, currents. In reality: 1.",
         precision: "Fineness of the computation of the water",
         precisionHint:
             "Higher: faster waves and torrents are possible, heavier computation for the server. 3 by default.",
         precisionEased: "Server busy: fineness lowered to {value} out of {asked} until the computation gets lighter.",
-        updatesEased: "Server busy: tellings lowered to {value} a second out of {asked}.",
+        speedReached:
+            "The water goes ×{value} out of ×{asked} asked: the server computes it no faster, and everything follows it (rain, sources, snow, ice).",
+        updatesEased: "Server or network busy: tellings lowered to {value} a second out of {asked}.",
         updates: "Tellings of the water to the players",
-        updatesHint: "Higher: waves are seen running instead of fading, for more network. 1 by default.",
+        updatesHint:
+            "Higher: waves are seen running instead of fading, for more network. 5 by default; the server sends fewer when it or the network is loaded.",
         waves: {
             timesReal: "× real",
             roughnessMultiplies:
@@ -826,7 +829,7 @@ const mapEditor: BaseTranslation = {
         },
         real: {
             inertia:
-                "The water keeps its momentum: waves run, break and flood the shores. Off: the water creeps from cell to cell. In reality: on.",
+                "The water keeps its momentum: waves run, break and flood the shores. Off: the water creeps from cell to cell. On by default, as in reality.",
             maxDepth: "In reality: a tile is about 1.10 m. Pond: 1 tile; large pond: 2 to 3; lake: 4 and more.",
             runoff: "In reality: the ground feeding a pond is 5 to 20 times its surface; 0 for a built basin.",
             evaporation: "In reality: 0.05 mm/h in winter, 0.1 to 0.3 mm/h in summer (3 to 6 mm a day).",
@@ -835,9 +838,9 @@ const mapEditor: BaseTranslation = {
                 "The floors of the rooms closed by walls (doors closed) drain the water that came in. 300 mm/h by default: a flooded room is dry in about two hours, as in reality (two minutes at a speed of the water of 60); floor drains take it faster; 0 keeps the water inside. A pool dug indoors keeps its water.",
             impactReach:
                 "How far the impact drives the water away around its crater: all of it next to the crater, less and less further out. 1: only the water of the crater moves. In reality: the ejecta of a crater cover 2 to 3 times its radius; 2.5 by default. A pool hit in its middle is almost emptied.",
-            speed: "1 by default, as in reality: a rain of 10 mm/h takes hours to fill a pond, a snow hours to melt, an ice most of a day to bear a walker at -3 °C. For a trial, 60: a minute for an hour.",
+            speed: "1 by default, as in reality: a rain of 10 mm/h takes hours to fill a pond, a snow hours to melt, an ice most of a day to bear a walker at -3 °C. For a trial, 60: a minute for an hour; the whole water then goes faster, its currents too, as fast as the server computes it.",
             maxSurface:
-                "18 px by default: enough to swim, under the upper floors (52 px). Higher, a flood drowns the ground deep. In reality: no cap (256 px).",
+                "256 px by default, as in reality: no flood is cut short. Lower, the water rises no higher: 18 px, enough to swim, under the upper floors (52 px).",
             current:
                 "How hard the water carries the avatars, never inside a building. With the water with inertia, one is carried at the speed of the water once one loses one's footing. A setting of the game: 1 by default.",
         },

@@ -756,8 +756,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         forceAuto: "Force automatique (un huitième du diamètre)",
         force: "Force (épaisseur enlevée par passage)",
         mapSettings: "Réglages de la carte",
-        realistic: "Réaliste",
-        realisticHint: "Remet tous les réglages de l'eau sur leurs valeurs physiques.",
+        realistic: "Remettre les réglages réels",
+        realisticHint: "Remet tous les réglages de l'eau sur leurs valeurs par défaut, celles du réel.",
         more: "En savoir plus",
         realisticDetail:
             "Vitesse 1, eau à inertie, vagues selon le sol et la profondeur, vitesse d'écoulement 1, 5 envois par seconde, hauteur d'eau non plafonnée (256 px), ruissellement 10, évaporation 0,2 mm/h, absorption 5 mm/h, vidange 300 mm/h. Seul l'amorti (0,02) n'est pas physique.",
@@ -802,16 +802,19 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         current: "Force du courant (0 : les avatars ne sont pas emportés)",
         maxSurface: "Hauteur maximale de l'eau au-dessus du sol",
-        inertia: "Eau à inertie (à l'essai)",
+        inertia: "Eau à inertie",
         flowPace: "Vitesse d'écoulement",
         flowPaceHint: "Ralentit ou accélère tout ce qui coule : vagues, crues, courants. En réel : 1.",
         precision: "Finesse du calcul de l'eau",
         precisionHint:
             "Plus haut : vagues et torrents plus rapides possibles, calcul plus lourd pour le serveur. 3 par défaut.",
         precisionEased: "Serveur chargé : finesse réduite à {value} sur {asked}, le temps que le calcul s'allège.",
-        updatesEased: "Serveur chargé : envois réduits à {value} par seconde sur {asked}.",
+        speedReached:
+            "L'eau va ×{value} sur ×{asked} demandé : le serveur ne la calcule pas plus vite, et tout la suit (pluie, sources, neige, glace).",
+        updatesEased: "Serveur ou réseau chargé : envois réduits à {value} par seconde sur {asked}.",
         updates: "Envois de l'eau aux joueurs",
-        updatesHint: "Plus haut : on voit les vagues courir au lieu de se fondre, au prix du réseau. 1 par défaut.",
+        updatesHint:
+            "Plus haut : on voit les vagues courir au lieu de se fondre, au prix du réseau. 5 par défaut ; le serveur en envoie moins quand il ou le réseau est chargé.",
         waves: {
             timesReal: "× le réel",
             roughnessMultiplies:
@@ -839,7 +842,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         real: {
             inertia:
-                "L'eau garde son élan : des vagues courent, cassent et noient les rives. Coupé : l'eau avance de proche en proche. En réel : activée.",
+                "L'eau garde son élan : des vagues courent, cassent et noient les rives. Coupé : l'eau avance de proche en proche. Activée par défaut, comme en vrai.",
             maxDepth: "En réel : une case fait environ 1,10 m. Mare : 1 case ; étang : 2 à 3 ; lac : 4 et plus.",
             runoff: "En réel : le terrain qui alimente une mare fait 5 à 20 fois sa surface ; 0 pour un bassin maçonné.",
             evaporation: "En réel : 0,05 mm/h en hiver, 0,1 à 0,3 mm/h en été (3 à 6 mm par jour).",
@@ -848,9 +851,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 "Les sols des pièces fermées par des murs (portes fermées) évacuent l'eau entrée. 300 mm/h par défaut : une pièce inondée sèche en deux heures environ, comme en vrai (deux minutes à « Vitesse de l'eau » 60) ; des grilles d'évacuation posées au sol vont plus vite ; 0 garde l'eau à l'intérieur. Un bassin creusé à l'intérieur garde son eau.",
             impactReach:
                 "Jusqu'où l'impact chasse l'eau autour de son cratère : tout près du cratère, de moins en moins ensuite. 1 : seule l'eau du cratère bouge. En réel : les projections d'un cratère couvrent 2 à 3 fois son rayon ; 2,5 par défaut. Une piscine touchée en plein milieu se vide presque entièrement.",
-            speed: "1 par défaut, comme en vrai : une pluie de 10 mm/h met des heures à remplir un étang, une neige des heures à fondre, une glace près d'un jour à porter un marcheur à -3 °C. Pour un essai, 60 : une minute pour une heure.",
+            speed: "1 par défaut, comme en vrai : une pluie de 10 mm/h met des heures à remplir un étang, une neige des heures à fondre, une glace près d'un jour à porter un marcheur à -3 °C. Pour un essai, 60 : une minute pour une heure ; toute l'eau va alors plus vite, ses courants compris, aussi vite que le serveur le calcule.",
             maxSurface:
-                "18 px par défaut : de quoi nager, sous les étages (52 px). Plus haut, une crue noie le sol en profondeur. En réel : aucun plafond (256 px).",
+                "256 px par défaut, comme en vrai : aucune crue n'est coupée. Plus bas, l'eau ne monte pas plus haut : 18 px, de quoi nager, sous les étages (52 px).",
             current:
                 "Force avec laquelle l'eau emporte les avatars, jamais dans un bâtiment. Avec l'eau à inertie, on est emporté à la vitesse de l'eau dès qu'on perd pied. Réglage de jeu : 1 par défaut.",
         },

@@ -2399,6 +2399,25 @@ finesse réduite à 5 sur 8 »), par `easedPrecision` et `easedUpdates` de `Terr
 précise (vagues plus amorties, fronts moins nets) pendant les moments les plus lourds, un tsunami compris. Sans
 inertie, seuls les envois peuvent être réduits. Seuils posés par raisonnement, non calés sur une mesure en jeu.
 
+**L'allègement compte toutes les salles du fil** (`WaterLoads`, `threadWaterLoads` dans `WaterLoad.ts`). Chaque
+salle ne regardait que ses propres pas : deux grandes salles à 48 % de l'intervalle chacune saturaient le fil sans
+qu'aucune ne s'allège. Les durées moyennes des pas de toutes les eaux du fil s'additionnent maintenant, et c'est la
+somme qui est comparée aux seuils de 50 % et 25 %.
+
+- **Partage** : quand la somme dépasse 50 %, toutes les eaux du fil s'allègent en même temps, du même rapport
+  (finesse × 50 % / part du fil, un cran au moins). La plus lourde rend donc le plus de millisecondes, aucune n'est
+  épargnée, et celle dont le pas est chronométré en premier ne paie pas pour les autres. Les envois ne sont réduits
+  que lorsque plus aucune eau du fil n'a de finesse à rendre. La restitution est commune aussi : les envois
+  d'abord, puis un cran de finesse pour chacune, après 10 s sous 25 %.
+- **Sortie** : une salle qui ferme, ou dont la carte n'a plus d'eau, se retire (`WaterLoad.release`) ; les autres
+  retrouvent leur finesse.
+- **Périmètre** : « le fil » est le module chargé. Les salles du serveur partagent celui du processus ; un fil de
+  calcul (#495) aura le sien, comme le navigateur qui simule son eau. Les pas de la prairie ne sont pas comptés.
+  Un test qui crée plusieurs eaux vide le registre entre deux cas (`threadWaterLoads.clear()`), ou donne à chaque
+  eau son registre (`new WaterLoad(100, new WaterLoads())`).
+- **Limite** : une salle légère est allégée du même rapport qu'une lourde, donc elle perd de la finesse pour un
+  gain faible. Non mesuré en jeu ni sur le VPS ; seuils inchangés.
+
 **Petits gains sur le fil du serveur, à modèle inchangé** (lot 1 de l'étude du serveur de l'eau, novembre 2026).
 Le processus des salles n'a qu'un fil ; cinq changements de plomberie, aucun de physique :
 
@@ -2425,8 +2444,8 @@ Le processus des salles n'a qu'un fil ; cinq changements de plomberie, aucun de 
   `MeadowManager.test.ts`). Mesuré sur la carte d'entrée, 7 jours manqués : tour le plus long 422 → 15 ms ; avec
   les minuteurs réels, retard maximal de la boucle d'événements 467 → 18 à 38 ms selon la charge de la machine de
   mesure (99e centile 10,6 ms), rattrapage fini en 28 s d'horloge au lieu de 70 s. Le joueur qui entre pendant ce
-  temps voit la prairie et l'eau avancer d'un envoi par seconde, comme avant. Le même budget vaut dans un
-  navigateur qui fait tourner la simulation pour lui-même.
+  temps voit la prairie et l'eau avancer d'un envoi par seconde, comme avant. Un navigateur qui fait tourner la
+  simulation pour lui-même ne rattrape jamais (il part d'un état donné, `seed`) : ce chemin n'y est pas atteint.
 
 **Fil de calcul par salle** (lot 3 de la même étude, livré en plusieurs PR ; rien n'est activé tant que la dernière
 ne l'est pas).
@@ -2441,6 +2460,95 @@ ne l'est pas).
   (`LocalTerrainSimulation`), sans changement de comportement : `GroundSimulation.test.ts` compare, sur 400 pas
   avec neige, comète et boule de feu, les états dits par un sol câblé à la main et par `GroundSimulation` (mêmes
   octets).
+- **Catastrophes dans le sol d'un joueur** (`LocalTerrainSimulation`, `LocalTerrainWorker`). Le sol d'un joueur
+  (météo d'un lieu choisi) ignorait les catastrophes de la salle : il les voyait sans que son eau en soit touchée.
+  Il sait maintenant les recevoir, par le sol commun : `setCatastrophes` (averses, drains, boules du moment, qui
+  agissent à chaque pas de son eau), `strike`, `burn`, `shatter`, `soak`, `ignite`, et les commandes du même nom
+  dans le protocole de son worker (`LocalTerrainCommand`). **Rien ne les lui envoie encore** : le contrôleur et la
+  scène (`LocalTerrainController`, `GameScene`) restent à brancher ; d'ici là son comportement est inchangé.
+- **Façade du sol dans `back`** (`back/src/Model/Ground/RoomGround.ts`, `InlineRoomGround.ts`, PR 2). `GameRoom`
+  ne tient plus `TerrainWaterManager` et `MeadowManager` : il parle à un `RoomGround` (démarrer l'eau, démarrer la
+  prairie, arrêter, carte changée ; comète, boule de feu, glace brisée, averse qui mouille, feu posé ; niveau d'une
+  boule, grille de l'eau et sa version pour la vie aquatique, feu pour les animaux ; glace d'une tuile, prairie
+  faite ou non, rattrapage en cours pour les cabanes de pêche ; états entiers pour un joueur qui entre). Ce que le sol lit de la salle est demandé à chaque fois par `RoomGroundInputs` (avatars, averses,
+  drains, boules, brouteurs, air, conditions et seuils du feu). La seule implémentation, `InlineRoomGround`, calcule
+  dans le fil des salles avec les deux gestionnaires d'avant, câblés par `GroundSimulation` : même comportement.
+  Deux ordres changent sans effet : à la fermeture d'une salle l'eau s'arrête juste avant la prairie (et non plus
+  avant la vie aquatique) ; à une édition de carte la prairie relit la carte avant la vie aquatique (aucune des
+  deux ne lit l'autre à ce moment-là). `back/tests/RoomGround.test.ts` compare, avec les vrais minuteurs simulés,
+  ce sol à un sol câblé à la main comme `GameRoom` le faisait : 90 s de pluie et de neige avec une source, le
+  drain d'un bâtiment (siphon sur un sol « Carte Sols »), averse, comète, boule traînée, drain, feu, boule de feu,
+  glace brisée, redoux, carte changée ; puis une salle rouverte après trois heures (rattrapage). Mêmes messages à
+  la salle, mêmes écritures Redis, mêmes niveaux de boule.
+- **Vue de l'eau et instantané** (`Terrain/WaterView.ts`, `Terrain/BallLevels.ts`, PR 3). Ce qui lit l'eau sans la
+  calculer (vie aquatique : `waterBodiesOf`, `stepPopulation`, `swim`, `AquaticLifeManager` ; niveau d'une boule)
+  ne demande plus un `WaterGrid` mais une `WaterView` : `bounds`, `depthAt`, `canCross`, `restLevelAt`. `WaterGrid`
+  en est une ; `WaterSnapshotView` en est une autre, sur une copie de la grille (`WaterSnapshot`) que
+  `WaterGrid.publish` écrit : les profondeurs à chaque publication, le sol sous les boules et les côtés fermés par
+  les portes seulement quand ils ont changé (compteur `shape`). La mémoire de l'instantané peut être partagée entre
+  fils ; un compteur d'écritures (impair pendant une écriture) garantit qu'un lecteur ne prend jamais un état à
+  moitié écrit, et `refresh` prend l'instantané en entier, pour qu'une boucle sur les cellules voie une seule eau.
+  Le niveau au repos (`restLevelOf`) et la mémoire du niveau des boules (`BallLevels`) sont sortis de `WaterGrid`
+  et de `WaterSimulation` sans changer de calcul. **Dans le fil des salles rien ne lit l'instantané** : la façade
+  rend la grille elle-même, comme avant ; l'instantané sert au fil de calcul (PR 4). `WaterView.test.ts` : la vue
+  répond comme la grille, cellule par cellule et au-delà des bords, après des pas, une porte fermée, une boule
+  posée, déplacée, retirée, en mémoire propre et partagée ; mêmes étendues d'eau pour la vie ; même niveau de boule.
+- **Le fil de calcul** (`back/src/Model/Ground/{GroundProtocol,GroundThreads,GroundWorker,HostedGround,
+  RemoteRoomGround}.ts`, PR 4). **Éteint par défaut** : `GROUND_THREADS` (variable d'environnement de `back`) dit
+  combien de fils le serveur consacre au sol de ses salles ; 0, valeur par défaut, garde le calcul dans le fil des
+  salles (`InlineRoomGround`), exactement comme avant. Au-delà, `GameRoom` reçoit un `RemoteRoomGround` :
+  - **Dans le fil** (`GroundWorker`, un `worker_threads` ; `back` tourne sous `tsx`, dont le fil hérite le chargeur,
+    donc pas de compilation ni de changement d'image) un `HostedGround` par salle fait tourner les mêmes
+    gestionnaires (`InlineRoomGround`), nourris par ce que la salle envoie au lieu de la lire.
+  - **Le fil des salles envoie** (`GroundCommand`) : l'état que le sol lit de la salle (taille de la carte, avatars,
+    averses, drains, boules, brouteurs, air, conditions et seuils du feu, météo réelle), comparé toutes les 100 ms
+    et envoyé seulement s'il a changé ; la carte à chaque édition, **sans son relief tant que c'est le même objet**
+    (le relief pèse la moitié d'une carte, et l'eau reconnaît une édition du relief à son objet : une copie du même
+    relief lui ferait refaire sa grille et perdre ses courants) ; les catastrophes (comète, boule de feu, glace
+    brisée, averse, feu posé), précédées de l'état du moment ; chaque position de boule demandée par la salle.
+  - **Le fil répond** (`GroundTold`) : les messages pour les joueurs, déjà compressés, relayés tels quels ; avec
+    chaque état de l'eau, l'état entier que la salle connaît (pour le joueur qui entre : compressé à ce moment-là,
+    comme avant) ; après chaque pas de prairie, la prairie et les arbres pour qui entre, le feu vu par les animaux,
+    la glace de chaque tuile (cabanes de pêche) ; les champs à sauvegarder, que le fil des salles écrit dans Redis
+    (mêmes clés, mêmes valeurs) ; les demandes de météo passée (le fil des salles seul parle à l'extérieur).
+  - **L'eau lue par la salle** (vie aquatique, cabanes, niveau d'une boule) est l'instantané partagé
+    (`WaterSnapshotView`), publié après chaque pas d'eau, chaque pas de prairie et chaque catastrophe : **au plus un
+    pas de retard (0,1 s)**. Le niveau d'une boule est décidé des deux côtés par la même règle (`BallLevels`).
+  - **Fil perdu** (plantage) : `GroundThreads` en relance un, et chaque salle y redémarre son sol, l'eau depuis
+    l'instantané que la salle tient (l'eau cachée sous une boule est perdue), la prairie depuis la dernière
+    sauvegarde. Trois pertes en cinq minutes : le sol de la salle repasse dans le fil des salles.
+  - **Répartition** : une salle va au fil qui a le moins de salles et n'en change plus.
+  - **Allègement dans un fil de calcul** (`WaterLoads.mayTake`, `GroundWorker`). La somme des pas des eaux d'un fil
+    (#497) est comparée à 50 % de l'intervalle dans le fil des salles, où les joueurs attendent derrière l'eau :
+    inchangé. Dans un fil de calcul personne n'attend, l'eau doit seulement tenir sa cadence : le seuil y est de
+    90 % (`GROUND_THREAD_SHARE`). La finesse y revient dès que le fil pourrait la porter (ce que les eaux
+    prendraient avec un niveau de plus, le coût supposé suivre la finesse, reste sous 95 % du seuil), et non sous
+    la moitié du seuil, qui aurait laissé un tel fil aux deux tiers de ce qu'il tient. Mesuré sur un vrai fil,
+    salles comme la carte d'entrée inondée, Mac : à 50 %, 6 salles tombent à la finesse 2 et 8 à la finesse 1 ou
+    2 ; à 80 %, 8 salles cèdent un niveau ; à 90 %, 8 salles gardent la finesse 3 (86 % d'un cœur, 10 pas par
+    seconde), 10 salles passent à 2, 12 à 1 ou 2, toujours à 10 pas par seconde. Limite : le coût ne suit pas tout
+    à fait la finesse (de 2 à 3 il monte de 26 % sur cette carte, pas de 50 %), donc après un pic (une salle qui
+    démarre) la finesse 3 ne revient que si le fil est sous 57 % à la finesse 2 : 8 salles restent alors à 2
+    (68 % d'un cœur) alors que le fil tiendrait 3.
+  - **Journaux** : au démarrage, `back` dit où le sol est calculé (« The ground of the rooms (water and meadow) is
+    computed on N thread(s) of its own (GROUND_THREADS) », ou « … on the thread of the rooms (GROUND_THREADS is
+    0) ») ; « Ground thread i of N starts for its first room » quand un fil démarre pour sa première salle ;
+    « … starts again after a loss (start k) » quand il est relancé, après l'erreur « A thread that computes the
+    ground of rooms was lost ».
+  - **Mesuré** (Mac M4 Max chargé, carte d'entrée de la beta inondée à 42 %, inertie, finesse 3, 5 envois/s, vraies
+    classes, deux passes alternées) : retard d'un minuteur de 2 ms sur le fil des salles, 99e centile 12 ms →
+    0,4 ms ; maximum 16 à 33 ms → 2,1 à 2,6 ms ; part des retards de plus de 10 ms 1,9 % → 0. Une édition de carte
+    retient le fil des salles 48 ms → 1,7 ms (la lecture des murs et des sols se fait dans le fil de calcul).
+    L'entrée d'un joueur coûte 1 ms des deux côtés.
+  - **Tests** (`back/tests/RemoteRoomGround.test.ts`) : conduit pas à pas (`pause` des simulations, horloge et
+    hasard donnés), le sol distant dit et sauvegarde **les mêmes octets** que le sol câblé à la main dans le fil
+    des salles, eau et prairie, sur 130 s (pluie, neige, source, drain de bâtiment, toutes les catastrophes,
+    carte changée, canicule et feu), par les messages seuls puis sur un vrai fil ; ce que la salle lit en chemin
+    (eau, version, feu, glace, états pour qui entre, niveaux de boule) est identique ; le rattrapage d'une salle
+    rouverte après trois heures aussi ; en temps réel sur un vrai fil : marche, arrêt avec sauvegarde, deux fils
+    perdus puis repli dans le fil des salles.
+  - **Reste à faire** (PR suivantes) : l'allègement de finesse (`WaterLoad`) ne regarde que sa salle, pas la somme
+    des salles d'un fil ; la carte éditée est encore copiée entière hors relief.
 
 Preuve d'identité : `libs/map-editor/tests/WaterFingerprints.test.ts` joue 19 scénarios de `WaterGrid` et finit
 chacun sur une empreinte (profondeurs, flux, vitesses, bilans, octets envoyés) enregistrée avec le code d'avant
@@ -2469,6 +2577,20 @@ partir de ce qu'il reçoit déjà (profondeurs, vent) :
   croît avec la hauteur jusqu'à 12 px (40 cm). S'y ajoute le **front de crue** : une cellule sèche à l'état
   précédent, mouillée maintenant, à côté d'une eau déjà là (pas la pluie qui remplit une mare). L'écume reste
   derrière la vague et s'efface de moitié toutes les 1,8 s.
+  Deux choses ne sont pas des vagues et ne font plus d'écume : la **pente du fond** (le creux n'est plus cherché
+  sous le lit de la cellule : une nappe qui descend un rivage n'a pas de « vague » de la hauteur de la pente) et
+  la **marche entre deux eaux qu'un mur sépare** (la recherche du creux s'arrête à un mur ou à une porte, prise
+  fermée ; murs lus par `landWallsOf`, dans `TerrainView.closedSides`). L'**eau vive** garde la sienne : une eau
+  qui tombe d'au moins 3 px et court plus vite que ses propres vagues (vitesse transmise par le serveur divisée
+  par `waveSpeed(profondeur)`, le nombre de Froude : rien sous 1, tout à 2) : torrent sur une berge raide,
+  cascade. Sans vitesse transmise (eau sans inertie), la vitesse est lue sur la pente de la surface. Mesuré sur la
+  carte d'Antoine en crue (64 % sous l'eau) : cellules qui écument en permanence 1 405 → 692, écume visible
+  5 480 → 4 710 cellules, intensité totale −34 %. Le reste est fait de vraies vagues.
+  L'écume d'un état **monte pendant que l'eau y glisse** (sur le temps écoulé depuis l'état précédent, 1 s au
+  plus), au lieu d'apparaître d'un coup à sa réception : à un état par seconde (eau locale, garde-fou réseau,
+  cartes réglées à 1 envoi), elle venait par bouffées. Vague qui déferle en continu, lue toutes les 50 ms :
+  à 1 état par seconde, écume moyenne 4,64 → 5,51 (5,52 → 5,68 à 5 états), écart creux à crête 41 % → 12 %, plus
+  grand saut entre deux dessins 40 % → 1 %.
 - **Moutons** (`Terrain/Whitecaps.ts`) : le vent lève des vagues courtes qui cassent à leur crête, sans rapport
   avec la houle. Part de l'eau blanchie selon la loi usuelle (Monahan et O'Muircheartaigh, 1980 :
   3,84 × 10⁻⁶ × vent^3,41, vent en m/s) : rien sous 3 m/s, environ 0,03 % à force 3, 0,3 % à force 4, 1 % à
@@ -3163,6 +3285,71 @@ ancré sous la pastille (`ClockLine/ChipPopover.svelte`). Rien d'ouvert : barre 
   `actionbar.visualisation.{chipShown, chipHint, infoLabel}`, en `fr-FR` et `en-US`.
 - **Non vérifié** : rien vu en jeu par un agent (aperçus hors jeu : vrais composants, pastille météo et horloge
   recopiées, onglet Météo et tableau remplacés par des substituts) ; écran tactile ; lecteur d'écran.
+
+## Accélération vraie de l'eau (« Vitesse de l'eau » > 1)
+
+Avant, une carte réglée à ×S faisait aller ses apports (pluie, sources, puits, évaporation, absorption, vidange,
+neige, glace) S fois plus vite, mais son écoulement à inertie restait au temps réel : l'eau arrivait plus vite
+qu'elle ne pouvait couler, et le modèle était faussé (crues trop hautes, flots qui ne suivaient pas). Désormais
+(`WaterSimulation.step`), chaque pas réel de 0,1 s fait vivre à l'eau k pas de 0,1 s de temps de carte
+(`grid.step` k fois), à la finesse 1 dès que k > 1 :
+
+- **k** = min(S, ce que le budget tient) (`WaterPace`) : moyenne du coût d'un pas de temps de carte, et k pas doivent
+  tenir dans le budget d'accélération, un paramètre du constructeur de `WaterSimulation` : **15 ms par pas réel sur
+  le serveur** (`WATER_PACE_SERVER_BUDGET_MS`), sous un sixième d'un pas et loin des 50 ms où `WaterLoad` allège :
+  le serveur n'a qu'un fil pour toutes les salles, une carte accélérée ne doit jamais ralentir les autres ; une salle
+  dont le pas au temps réel prend déjà ce budget reste au temps réel (la carte d'entrée en eau, environ 13 ms sur le
+  VPS). À relever quand chaque salle aura son fil (`GROUND_THREADS`). Dans le worker de la météo locale : 50 ms
+  (`WATER_PACE_WORKER_BUDGET_MS`, la moitié d'un cœur). k part de 1, monte jusqu'à ce que le budget tient (au plus ×4
+  tous les deux pas calmes, sous la moitié du budget), baisse aussitôt quand les pas coûtent ; jamais au-dessus de S. La finesse adaptative (`WaterLoad`) ne
+  voit plus que le coût d'un pas de temps de carte.
+- **Règle des apports** (`inflowAt`) : « effective » pour l'eau d'une salle (serveur, la vitesse de la carte en mode
+  édition) : les apports vont au facteur atteint k, jamais plus vite que l'écoulement ; « asked » pour l'eau d'un
+  joueur pour lui seul (lot « Eau rapide » à venir) : les apports vont au facteur demandé, l'écoulement à k.
+- **Un seul facteur lu partout** (`livedTimes`) : les débits du bilan (`ratesOf`, en temps de carte), la neige et la
+  glace (`MeadowSimulation.timesWith`, câblé par `GroundSimulation`), et le panneau : `reachedSpeed` (champ 12 de
+  `TerrainWaterStatsMessage`) donne le facteur atteint ; sous le facteur demandé, le panneau dit « L'eau va ×k sur ×S
+  demandé : le serveur ne la calcule pas plus vite ».
+- **Échanges lointains et ruée vers les siphons** (`flowFar`, `flowSteps`) : sous inertie, ils sont coupés à chaque
+  pas de temps de carte (`flowSteps` = 1), dans les deux règles : ils rattrapaient des apports trop rapides et
+  fausseraient maintenant l'écoulement (constat de l'étude `etude-eau-serveur`). Ils restent pour l'eau sans inertie.
+- **Preuve** (`back/tests/WaterAcceleration.test.ts`) : les trois scénarios de l'étude (rapport A de
+  `etude-eau-serveur`), vécus au temps réel puis à ×6 et ×20, sondes comparées minute après minute en temps de carte
+  (tolérance de l'étude : 1,5 px en transitoire, 0,5 px à la fin) : bassin 30 × 30 de 40 px qui déborde (écart le
+  plus grand 0,06 px), vidange par un seuil (0,10 px), rivière de 200 cellules en pente de 0,1 px (0,12 px) ; en
+  635 à 3 019 pas réels au lieu de 12 000 à 18 000. Les 19 empreintes de `WaterFingerprints.test.ts` sont
+  inchangées (k = 1 au temps réel).
+- Le rattrapage d'une salle vide garde la vitesse de la carte en un bloc sans inertie, comme avant.
+
+## Défauts de l'eau d'une carte (2026-11-22) et garde-fou réseau
+
+Une carte qui ne règle pas son eau a désormais : vitesse 1 (temps réel, #478), neige et glace à la même horloge
+(#480), hauteur des crues jusqu'à 256 px (8,7 m au-dessus du niveau de débordement : aucune crue coupée ; réglable
+de 18, `MIN_WATER_MAX_SURFACE`, à 256), cinq envois par seconde (`DEFAULT_WATER_PACE.updates`) et l'eau à inertie
+(`DEFAULT_WATER_SETTINGS.inertia`, lue par `waterHasInertia` : un `inertia: false` enregistré est gardé, et le
+panneau l'écrit désormais). Le défaut est donc le réel : `REALISTIC_WATER_SETTINGS` en est dérivé (une seule liste),
+et le bouton « Réaliste » s'appelle « Remettre les réglages réels ». Une carte qui a enregistré ses réglages les
+garde. La météo locale (#473) prend le même défaut : sa carte locale est celle du serveur, sans réglage d'eau elle a
+l'inertie aussi (calcul dans son worker, hors du fil d'affichage). Le rattrapage d'une salle vide reste sans inertie.
+Coût serveur de l'inertie (carte d'entrée, synthétique) : pas de 2,7 → 6,3 à 7 ms, environ 8 à 9 % du fil par salle
+avec l'envoi ; 600² : 15 à 17 ms, environ 20 %.
+
+**Garde-fou réseau** (`Terrain/WaterSendLoad.ts`, par salle, dans `WaterSimulation.tell`) : chaque état envoyé est
+pesé (profondeurs, `speeds` et `slowSpeeds` compressés, moyenne sur 5 états). Au-delà de 100 ko par seconde et par
+joueur (`WATER_SEND_BUDGET_BYTES_PER_SECOND`, moins d'un mégabit par seconde, de quoi laisser la place à la voix et
+à la vidéo sur un réseau lent), la cadence descend aussitôt à ce qui tient sous ce plafond, jusqu'à un état par
+seconde au moins (la règle des vagues, cinq par seconde, cède aussi) ; elle remonte d'un cran après 10 s d'états
+assez petits pour tenir sous la moitié du plafond au cran suivant. Le réglage de la carte ne change pas ; le panneau
+le dit par le champ existant `easedUpdates` (« Serveur ou réseau chargé : envois réduits à N par seconde sur M »).
+Mesures avec l'inertie : lac calme sur la carte d'entrée, environ 10 ko par état (47 ko/s à cinq par seconde, 72 sur
+mer agitée) : cinq par seconde tenus ; mer de 600² qui court (environ 37 ko) : deux ; carte entièrement inondée
+(130 ko et plus) : un, le minimum (encore 130 ko/s : le plafond ne peut pas descendre sous un état par seconde).
+Suite proposée, non codée : n'envoyer à 1 état par seconde que les blocs qui ont changé de plus d'un pixel, ou
+espacer au-delà d'une seconde (un état toutes les 2 s) sous le plafond. L'eau que le navigateur simule pour lui seul (#473) n'a pas de
+garde-fou : rien n'y voyage (`sendBudget` infini).
+
+Coût de cinq états par seconde sans inertie (carte de 480 × 320, lac, à vitesse 1) : 3,6 → 9 ko/s par joueur
+(1,8 ko par état, surtout des changements nuls compressés), envoi 1,5 → 6 ms par seconde au serveur.
 
 ## Visualisation des flux d'eau
 

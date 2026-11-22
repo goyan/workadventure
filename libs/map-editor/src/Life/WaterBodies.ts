@@ -1,4 +1,4 @@
-import type { WaterGrid } from "../Terrain/WaterGrid";
+import type { WaterView } from "../Terrain/WaterView";
 
 /** The least water a fish swims in, in pixels of water. */
 export const FISH_DEPTH_PX = 8;
@@ -65,7 +65,7 @@ const SIDES = [
 ] as const;
 
 /** Whether what swims can go from a cell to the next one on that side (-1, 0 or 1 on one axis only). */
-export function canSwimAcross(grid: WaterGrid, cellX: number, cellY: number, dx: number, dy: number): boolean {
+export function canSwimAcross(grid: WaterView, cellX: number, cellY: number, dx: number, dy: number): boolean {
     const side = SIDES.find((candidate) => candidate.dx === dx && candidate.dy === dy);
     return side !== undefined && grid.canCross(cellX, cellY, side.side);
 }
@@ -74,7 +74,7 @@ export function canSwimAcross(grid: WaterGrid, cellX: number, cellY: number, dx:
  * `excluded`: cells whose water is no home for an animal, whatever its depth (the pools: treated water, no fish in
  * it). They belong to no body and nothing swims into them.
  */
-export function waterBodiesOf(grid: WaterGrid, excluded?: (cellX: number, cellY: number) => boolean): WaterBodies {
+export function waterBodiesOf(grid: WaterView, excluded?: (cellX: number, cellY: number) => boolean): WaterBodies {
     const { x: left, y: top, width, height } = grid.bounds;
     const depthAt = (cellX: number, cellY: number): number =>
         excluded?.(cellX, cellY) ? 0 : grid.depthAt(cellX, cellY);
