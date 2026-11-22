@@ -1,5 +1,6 @@
 import type { WeatherLocation } from "@workadventure/map-editor";
 import { WORLD_CITIES } from "../../../../common/WorldCities";
+import type { WorldCity } from "../../../../common/WorldCities";
 import { NIGHT_MAX_OPACITY, nightOpacityAt, sunPositionAt, trueSolarMinutes } from "./NightClock";
 
 /** The moment of the day chosen for the sky of somewhere in the world. */
@@ -109,8 +110,8 @@ export function worldCityOf(
     const choices = [suns.filter(({ sun }) => sun.inPhase), suns.filter(({ sun }) => sun.climbsRightWay), suns].find(
         (cities) => cities.length > 0,
     );
-    const allowed = new Set(choices?.map(({ city }) => city));
-    const gaps = new Map(suns.map(({ city, sun }) => [city, sun.gap]));
+    const allowed = new Set<WeatherLocation>(choices?.map(({ city }) => city));
+    const gaps = new Map<WeatherLocation, number>(suns.map(({ city, sun }) => [city, sun.gap]));
     return nearestCity((city) => (allowed.has(city) ? (gaps.get(city) ?? Infinity) : Infinity));
 }
 
@@ -128,10 +129,25 @@ function nearestCity(gap: (city: WeatherLocation) => number): WeatherLocation {
     return best ?? WORLD_CITIES[0] ?? { name: "Paris", latitude: 48.86, longitude: 2.35 };
 }
 
+/** A city of the list with where it is (its country, in the language of the player); another place as it is. */
+export function cityPlace(city: WeatherLocation, words: PointWords): WorldPlace {
+    const listed = WORLD_CITIES.find(
+        (candidate) =>
+            candidate.name === city.name &&
+            candidate.latitude === city.latitude &&
+            candidate.longitude === city.longitude,
+    );
+    return listed ? { ...city, where: words.country(listed.country) } : city;
+}
+
 /** A point chosen on the map of the world. */
 export interface WorldPoint {
     latitude: number;
     longitude: number;
+    /** The town it is, when chosen by its name in the search ("Lille, Hauts-de-France, France"); absent: a point. */
+    name?: string;
+    /** The time zone of that town, as the search gave it. */
+    timezone?: string;
 }
 
 /**
@@ -158,6 +174,11 @@ export interface WorldPlace extends WeatherLocation {
      * map follows it, shared by every player (no distance in one player's language, no comma, short).
      */
     coordinates?: string;
+    /**
+     * Where it is, in the language of the player: "Provence-Alpes-Côte d'Azur, France" for a town found by its name,
+     * "France" for a city of the list; absent for a point far from any city (its long name says where).
+     */
+    where?: string;
 }
 
 /** The words a point far from any city is named with, in the language of the player. */
@@ -170,6 +191,8 @@ export interface PointWords {
     far: (point: string, city: string, distance: string) => string;
     /** The short name: the city it is told against and how far, "Auckland 4 000 km" (chip, clock). */
     short: (city: string, distance: string) => string;
+    /** A country by its ISO 3166-1 code, named for the player ("FR": "France"). */
+    country: (code: string) => string;
     /** A number of kilometres written for the player ("4 000"). */
     kilometres: (km: number) => string;
 }
@@ -191,8 +214,8 @@ export function shortCityName(name: string): string {
 }
 
 /** The nearest city of the list to a point, the great-circle way, and how far it is (km). */
-export function nearestCityOf(point: WorldPoint): { city: WeatherLocation; distanceKm: number } {
-    let city: WeatherLocation = WORLD_CITIES[0] ?? { name: "Paris", latitude: 48.86, longitude: 2.35 };
+export function nearestCityOf(point: WorldPoint): { city: WorldCity; distanceKm: number } {
+    let city: WorldCity = WORLD_CITIES[0] ?? { name: "Paris", latitude: 48.86, longitude: 2.35, country: "FR" };
     let distanceKm = Infinity;
     for (const candidate of WORLD_CITIES) {
         const distance = greatCircleKm(candidate, point);
@@ -237,15 +260,38 @@ export function pointTimeZone(
 }
 
 /**
- * The place of a point of the world: its own latitude and longitude for the sun and the weather. Within
+ * The place of a point of the world: its own latitude and longitude for the sun and the weather. A town chosen by its
+ * name keeps its name and its time zone. Within
  * NAMED_POINT_RADIUS_KM of a city of the list it is named after it; farther its short name is the nearest city and
  * how far ("Auckland 4 000 km"), its long name adds its coordinates ("72° S 170° E · Auckland à 4 000 km"). Its time zone: pointTimeZone.
  */
 export function placeOfPoint(point: WorldPoint, words: PointWords): WorldPlace {
     const nearest = nearestCityOf(point);
-    const timezone = pointTimeZone(point, nearest);
+    const timezone = point.timezone ?? pointTimeZone(point, nearest);
+    // A town chosen by its name is itself, wherever it is: its name without its region and country.
+    const [first, ...rest] = point.name?.split(",") ?? [];
+    const town = first?.trim();
+    if (town) {
+        const where = rest
+            .map((part) => part.trim())
+            .filter(Boolean)
+            .join(", ");
+        return {
+            name: town,
+            latitude: point.latitude,
+            longitude: point.longitude,
+            timezone,
+            ...(where ? { where } : {}),
+        };
+    }
     if (nearest.distanceKm <= NAMED_POINT_RADIUS_KM) {
-        return { name: nearest.city.name, latitude: point.latitude, longitude: point.longitude, timezone };
+        return {
+            name: nearest.city.name,
+            latitude: point.latitude,
+            longitude: point.longitude,
+            timezone,
+            where: words.country(nearest.city.country),
+        };
     }
     const coordinates = pointCoordinates(point, words);
     const distance = words.kilometres(roundedDistanceKm(nearest.distanceKm));

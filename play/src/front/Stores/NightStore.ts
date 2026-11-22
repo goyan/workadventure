@@ -1,4 +1,5 @@
 import { derived, get, writable, type Readable, type Writable } from "svelte/store";
+import { isTimeZone } from "@workadventure/map-editor";
 import { WorldMoment, type WorldPlace, type WorldPoint } from "@wa/front/Phaser/Game/Night/WorldDaylight";
 import { localUserStore } from "../Connection/LocalUserStore";
 import { NIGHT_DARKNESS_MAX, NIGHT_DARKNESS_MIN, NIGHT_MAX_OPACITY } from "../Phaser/Game/Night/NightClock";
@@ -49,6 +50,13 @@ function createWorldPointStore(): Writable<WorldPoint | undefined> {
             Math.abs(value.longitude) <= 180
         ) {
             initial = { latitude: value.latitude, longitude: value.longitude };
+            // A town chosen by its name keeps its name and its time zone; anything else in them is dropped.
+            if ("name" in value && typeof value.name === "string" && value.name.trim() !== "") {
+                initial.name = value.name.slice(0, 200);
+            }
+            if ("timezone" in value && typeof value.timezone === "string" && isTimeZone(value.timezone)) {
+                initial.timezone = value.timezone;
+            }
         }
     } catch {
         // Storage refused or broken: no point.

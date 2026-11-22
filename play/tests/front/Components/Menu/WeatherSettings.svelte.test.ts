@@ -51,6 +51,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                         title: label("Place"),
                         default: label("Paris (default)"),
                         search: label("Search"),
+                        map: label("Map of the world"),
                         searching: label("Searching"),
                         noResult: label("No town"),
                         error: label("Search error"),

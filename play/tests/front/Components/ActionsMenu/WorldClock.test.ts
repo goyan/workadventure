@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { get } from "svelte/store";
 import { flushSync, mount, unmount } from "svelte";
 import WorldClock from "../../../../src/front/Components/ActionsMenu/WorldClock.svelte";
 import { basicModeStore } from "../../../../src/front/Stores/BasicModeStore";
@@ -13,6 +14,10 @@ import {
 import { WorldMoment } from "../../../../src/front/Phaser/Game/Night/WorldDaylight";
 import { WorldFall } from "../../../../src/front/Phaser/Game/Night/WorldWeatherPick";
 import { chooseWorldFall, worldFallNoticeStore, worldFallStore } from "../../../../src/front/Stores/WorldFallStore";
+import { enableUserInputsStore } from "../../../../src/front/Stores/UserInputStore";
+
+const searchPlaces = vi.hoisted(() => vi.fn());
+vi.mock("../../../../src/front/Phaser/Game/Weather/RealWeatherClient", () => ({ searchPlaces }));
 
 // Every label reads as its own key, with its parameters: what is shown is told apart without the real translations.
 vi.mock("../../../../src/i18n/i18n-svelte", async () => {
@@ -207,5 +212,130 @@ describe("WorldClock", () => {
         let value: unknown = "unset";
         worldFallStore.subscribe((choice) => (value = choice))();
         expect(value).toBeUndefined();
+    });
+});
+
+describe("WorldClock, a place by its name", () => {
+    const target = document.createElement("div");
+    let component: ReturnType<typeof mount> | undefined;
+    const HONG_KONG = {
+        name: "Hong Kong, Hong Kong",
+        latitude: 22.28,
+        longitude: 114.16,
+        timezone: "Asia/Hong_Kong",
+    };
+
+    beforeEach(() => {
+        nightDateStore.set(new Date("2026-11-21T00:44:00Z"));
+        nightModeStore.set(NightMode.World);
+        basicModeStore.set(false);
+        searchPlaces.mockReset();
+    });
+
+    afterEach(async () => {
+        const mounted = component;
+        component = undefined;
+        if (mounted) await unmount(mounted, { outro: false });
+        target.replaceChildren();
+        worldPointStore.set(undefined);
+        worldCityStore.set(undefined);
+    });
+
+    function openMenu(): void {
+        component = mount(WorldClock, { target, intro: false });
+        flushSync();
+        target.querySelector<HTMLButtonElement>("[data-testid='world-clock-button']")?.click();
+        flushSync();
+    }
+    const field = (): HTMLInputElement | null =>
+        target.querySelector<HTMLInputElement>("[data-testid='world-clock-search']");
+
+    it("puts the search field above the help and the map of the world", () => {
+        openMenu();
+        const input = field();
+        const map = target.querySelector("[data-testid='world-clock-map']");
+        expect(input).not.toBeNull();
+        expect(map).not.toBeNull();
+        if (!input || !map) return;
+        expect(input.compareDocumentPosition(map) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(input.placeholder).toBe("LL.mapEditor.settings.weather.location.search");
+    });
+
+    it("follows a town chosen by its name, named after it at its own time zone, with Enter", async () => {
+        searchPlaces.mockResolvedValue([HONG_KONG]);
+        openMenu();
+        const input = field();
+        if (!input) throw new Error("no field");
+        input.value = "Hong";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        await vi.waitFor(() =>
+            expect(target.querySelector("[data-testid='world-clock-search-results'] button")).not.toBeNull(),
+        );
+        // Only the text typed is asked for.
+        expect(searchPlaces).toHaveBeenCalledWith("Hong", expect.any(AbortSignal));
+        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        flushSync();
+        expect(get(worldPointStore)).toEqual({
+            latitude: 22.28,
+            longitude: 114.16,
+            name: "Hong Kong, Hong Kong",
+            timezone: "Asia/Hong_Kong",
+        });
+        // Named after the town, not "a point chosen on the map".
+        worldCityStore.set({ name: "Hong Kong", latitude: 22.28, longitude: 114.16, timezone: "Asia/Hong_Kong" });
+        flushSync();
+        expect(target.querySelector("[data-testid='world-clock-city']")?.textContent).toContain(
+            "LL.menu.settings.night.worldCity(Hong Kong)",
+        );
+    });
+
+    it("shows the place of a click on the map in the field", () => {
+        openMenu();
+        const map = target.querySelector<HTMLCanvasElement>("[data-testid='world-clock-map']");
+        if (!map) throw new Error("no map");
+        vi.spyOn(map, "getBoundingClientRect").mockReturnValue({
+            left: 0,
+            top: 0,
+            width: 240,
+            height: 120,
+            right: 240,
+            bottom: 120,
+            x: 0,
+            y: 0,
+            toJSON: () => ({}),
+        });
+        map.dispatchEvent(new MouseEvent("click", { clientX: 200, clientY: 40, bubbles: true }));
+        flushSync();
+        expect(get(worldPointStore)).toEqual({ latitude: 30, longitude: 120 });
+        // The night manager names the point; the field shows that name.
+        worldCityStore.set({
+            name: "Shanghai 300 km",
+            longName: "30° N 120° E · Shanghai à 300 km",
+            latitude: 30,
+            longitude: 120,
+        });
+        flushSync();
+        expect(field()?.value).toBe("30° N 120° E · Shanghai à 300 km");
+    });
+
+    it("keeps the keys of the game still while the player types, and closes only the list with Escape", async () => {
+        searchPlaces.mockResolvedValue([HONG_KONG]);
+        openMenu();
+        const input = field();
+        if (!input) throw new Error("no field");
+        input.dispatchEvent(new FocusEvent("focus"));
+        expect(get(enableUserInputsStore)).toBe(false);
+        input.value = "Hong";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        await vi.waitFor(() =>
+            expect(target.querySelector("[data-testid='world-clock-search-results']")).not.toBeNull(),
+        );
+        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        flushSync();
+        expect(target.querySelector("[data-testid='world-clock-search-results']")).toBeNull();
+        // The menu stays open: Escape closed the list only.
+        expect(target.querySelector("[data-testid='world-clock-menu']")).not.toBeNull();
+        input.dispatchEvent(new FocusEvent("blur"));
+        expect(get(enableUserInputsStore)).toBe(true);
     });
 });

@@ -5002,6 +5002,31 @@ nuit, les saisons et le fuseau de la carte suivent ce lieu : la confirmation le 
   Lille » tant que la carte suit encore le lieu appliqué ; il remet la météo et le lieu d'avant (le lieu par défaut
   s'il n'y en avait pas), par la même fonction. Sinon : les réglages de la météo de la carte.
 
+**Choisir un lieu par son nom ou sur la carte du monde** (2026-11-22). Deux composants partagés : le champ de
+recherche de ville (`Components/Menu/PlaceSearch.svelte`, recherche de l'Open-Meteo par le pusher, seul le texte
+tapé est envoyé, après 300 ms de pause ; Entrée prend la première ville, Échap ferme la liste seulement ; les
+touches ne vont pas au jeu pendant la frappe, `inputFormFocusStore`) et la carte du monde cliquable
+(`Components/WorldMap/WorldMapPicker.svelte`, marqueur du lieu courant, jour et nuit du jeu, image préchargée).
+- **Menu de l'horloge**, « Jour dans le monde » : le champ au-dessus du texte d'aide et de la carte. Une ville choisie
+  devient le lieu suivi, nommée par elle-même (« Hong Kong », pas « point choisi sur la carte ») à son fuseau, même
+  loin des villes de la liste : `WorldPoint.name` et `.timezone`, gardés dans le navigateur ; un clic sur la carte
+  remplit le champ avec le nom du point. Le menu défile s'il dépasse la fenêtre (`max-h`).
+- **Réglages de la météo de la carte** (Paramètres → Ambiance, `MapLocationPicker`) : la carte sous le champ. Un clic
+  choisit un point comme lieu de la carte, enregistré comme le bouton « Appliquer à la carte » l'enregistre
+  (`mapLocationOf(placeOfPoint(…))` : une ville de la liste à 150 km au plus, sinon les coordonnées), avec le bouton
+  « Enregistrer » existant ; le champ et la carte montrent le même lieu.
+
+**Pays et région d'un lieu** (2026-11-22, « il y a plusieurs Nice dans le monde »). La fiche météo dépliée (carte et
+personnelle) dit où est le lieu, sur une ligne discrète sous son nom (coupée si trop longue) : la région et le pays
+d'une ville trouvée par la recherche (le géocodage les donnait déjà, gardés dans le nom enregistré « Nice,
+Provence-Alpes-Côte d'Azur, France » que la pastille coupait à la virgule : ils ne sont plus jetés), le pays d'une
+ville de la liste `WORLD_CITIES` (code ISO ajouté à chacune dans `common/WorldCities.ts`, nommé dans la langue du
+joueur par `Intl.DisplayNames`, `PointWords.country`), rien pour un lieu enregistré sans eux (anciennes cartes : rien
+n'est inventé) ni pour un point loin de toute ville (son nom long dit déjà où il est). `WorldPlace.where`,
+`mapPlaceNames(…).where`, `cityPlace`. Pastille et horloge : nom court inchangé, le lieu complet dans leur infobulle.
+Propositions de la recherche : déjà « Nice, Provence-Alpes-Côte d'Azur, France » et « Nice, California, United
+States ». Tableau « Météo expliquée », bilan de l'eau et confirmation « Appliquer à la carte » : nom court inchangé.
+
 **Gel.** À partir de l'air du lieu affiché (`Weather/Frost.ts`), pour ce joueur seul, rien n'est envoyé :
 givre au sol d'après la vapeur de l'air (voir « Givre » ci-dessous) ; l'eau gèle des hauts-fonds vers le fond entre 0 et -15 °C (toute gelée au-delà), en glace de
 patinoire ; le sol se mouille sous la pluie et sèche en cinq minutes ; tout avance en deux minutes environ, rien ne

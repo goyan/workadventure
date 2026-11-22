@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isTimeZone } from "@workadventure/map-editor";
 import {
+    cityPlace,
     nearestCityOf,
     placeOfPoint,
     pointCoordinates,
@@ -34,6 +35,7 @@ describe("placeOfPoint", () => {
         west: "O",
         far: (point, city, distance) => `${point} · ${city} à ${distance} km`,
         short: (city, distance) => `${city} ${distance} km`,
+        country: (code: string) => new Intl.DisplayNames("fr-FR", { type: "region" }).of(code) ?? code,
         kilometres: (km) => new Intl.NumberFormat("fr-FR").format(km),
     };
     const english: PointWords = {
@@ -43,6 +45,7 @@ describe("placeOfPoint", () => {
         west: "W",
         far: (point, city, distance) => `${point} · ${city} ${distance} km away`,
         short: (city, distance) => `${city} ${distance} km`,
+        country: (code: string) => new Intl.DisplayNames("en-US", { type: "region" }).of(code) ?? code,
         kilometres: (km) => new Intl.NumberFormat("en-US").format(km),
     };
 
@@ -103,6 +106,67 @@ describe("placeOfPoint", () => {
         expect(place.longName).toContain("Petropavlovsk-Kamtchatski");
         // Names of the list up to the limit are kept whole.
         expect(shortCityName("Rio de Janeiro")).toBe("Rio de Janeiro");
+    });
+
+    it("names a town chosen by its name after it, with its own time zone, even far from the cities of the list", () => {
+        // Lille is not in the list and about 200 km from Paris: chosen by its name, it is Lille.
+        const lille = placeOfPoint(
+            { latitude: 50.63, longitude: 3.06, name: "Lille, Hauts-de-France, France", timezone: "Europe/Paris" },
+            french,
+        );
+        expect(lille).toEqual({
+            name: "Lille",
+            latitude: 50.63,
+            longitude: 3.06,
+            timezone: "Europe/Paris",
+            where: "Hauts-de-France, France",
+        });
+        // Without a zone told, the rule of the points gives one.
+        const far = placeOfPoint({ latitude: -54.8, longitude: -68.3, name: "Ushuaia" }, french);
+        expect(far.name).toBe("Ushuaia");
+        expect(far.longName).toBeUndefined();
+        expect(far.timezone).toBeDefined();
+    });
+
+    it("says where a place is: region and country of a town found by its name, the country of a city of the list", () => {
+        const nice = placeOfPoint(
+            {
+                latitude: 43.7,
+                longitude: 7.27,
+                name: "Nice, Provence-Alpes-Côte d'Azur, France",
+                timezone: "Europe/Paris",
+            },
+            french,
+        );
+        expect(nice).toMatchObject({ name: "Nice", where: "Provence-Alpes-Côte d'Azur, France" });
+        // Near Paris: the city of the list, in France, named in the language of the player.
+        expect(placeOfPoint({ latitude: 48.9, longitude: 2.4 }, french)).toMatchObject({
+            name: "Paris",
+            where: "France",
+        });
+        expect(placeOfPoint({ latitude: 48.9, longitude: 2.4 }, english).where).toBe("France");
+        expect(placeOfPoint({ latitude: 35.7, longitude: 139.7 }, english)).toMatchObject({
+            name: "Tokyo",
+            where: "Japan",
+        });
+        // Far from any city: the long name says where; no country is made up.
+        expect(placeOfPoint({ latitude: -72.4, longitude: 170.2 }, french).where).toBeUndefined();
+        // A town found by a name without its country: nothing more.
+        expect(placeOfPoint({ latitude: 50.63, longitude: 3.06, name: "Lille" }, french).where).toBeUndefined();
+    });
+
+    it("says where a city of a moment is, and leaves another place as it is", () => {
+        const tokyo = WORLD_CITIES.find((city) => city.name === "Tokyo");
+        expect(tokyo).toBeDefined();
+        if (!tokyo) return;
+        expect(cityPlace(tokyo, french).where).toBe("Japon");
+        const elsewhere = { name: "Lisbonne", latitude: 1, longitude: 2 };
+        expect(cityPlace(elsewhere, french)).toEqual(elsewhere);
+    });
+
+    it("knows the country of every city of the list", () => {
+        const names = new Intl.DisplayNames("fr-FR", { type: "region", fallback: "none" });
+        for (const city of WORLD_CITIES) expect(names.of(city.country), city.name).toBeTruthy();
     });
 
     it("gives no hemisphere to a rounded 0° nor to 180°", () => {
