@@ -39,6 +39,8 @@ import {
     WATER_MESSAGE_MS,
     WATER_STEP_MS,
     WaterGrid,
+    WaterLoad,
+    DEFAULT_WATER_PACE,
     waterObjectsOf,
     waterWallsOf,
     WeatherType,
@@ -54,6 +56,7 @@ import type {
     WaterGridBounds,
     WaterObject,
     WaterDoor,
+    WaterSettings,
     WaterTally,
 } from "@workadventure/map-editor";
 import type { TerrainWaterMessage } from "@workadventure/messages";
@@ -159,6 +162,8 @@ export class TerrainWaterManager {
     /** The step the room was last told a whole state at. */
     private fullAtStep = -Infinity;
     private changedSinceSave = false;
+    /** How long the steps take, and the fineness given up while they take too long. */
+    private readonly load = new WaterLoad(WATER_STEP_MS);
     /** The time missed while the room was empty that is not lived again yet, and the rain (mm) that fell in it. */
     private missed = { seconds: 0, rainMm: 0 };
 
@@ -169,6 +174,8 @@ export class TerrainWaterManager {
         private readonly now: () => number = Date.now,
         /** The size of the map in cells of the relief, once read: the water stays inside the map. */
         private readonly mapSize: () => { width: number; height: number } | undefined = () => undefined,
+        /** A clock in ms, to time the steps. */
+        private readonly clock: () => number = () => performance.now(),
     ) {}
 
     /**
@@ -281,7 +288,13 @@ export class TerrainWaterManager {
             this.waves = [];
             return;
         }
+        const started = this.clock();
         const settings = this.room.getWam()?.settings;
+        // The fineness and the tellings the map asks for are ceilings: less while the steps take too long.
+        const asked = settings?.water?.inertia ? (settings.water.precision ?? DEFAULT_WATER_PACE.precision) : 1;
+        const water = settings?.water?.inertia
+            ? { ...settings.water, precision: this.load.precision(asked) }
+            : settings?.water;
         // The map says how high its water may stand; lowered, what stands over it goes at this step.
         const highest = grid.maxSurface();
         grid.setMaxSurface(settings?.water?.maxSurface ?? DEFAULT_WATER_SETTINGS.maxSurface);
@@ -305,7 +318,7 @@ export class TerrainWaterManager {
         if (this.waves.length > 0) this.advanceWaves(grid);
         const pouring = this.rainRate > 0 || this.objects.some((object) => object.litresPerMinute > 0);
         if (this.moving || pouring) {
-            const tally = grid.step(stepInputOf(settings?.water, this.rainRate, this.objects, WATER_STEP_MS / 1000));
+            const tally = grid.step(stepInputOf(water, this.rainRate, this.objects, WATER_STEP_MS / 1000));
             this.moving = tally.moved;
             if (tally.moved) this.version++;
             if (tally.moved) this.changedSinceSave = true;
@@ -317,11 +330,12 @@ export class TerrainWaterManager {
             this.sums.lostPx += tally.lostPx;
         }
         // As often as the map asks while the water moves, and at least five times a second under a wave.
-        const between = stepsBetweenUpdates(settings?.water?.updates);
+        const between = stepsBetweenUpdates(this.load.updates(settings?.water?.updates ?? DEFAULT_WATER_PACE.updates));
         if (this.steps % between === 0 || (waving && this.steps % Math.min(between, WAVE_STEPS_PER_MESSAGE) === 0)) {
             this.tell(grid);
         }
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
+        this.load.record(this.clock() - started, asked);
     }
 
     /**
@@ -730,10 +744,21 @@ export class TerrainWaterManager {
                         stock: (grid.totalPx() * CELL_LITRES_PER_PX) / LITRES_PER_M3,
                         wetArea: grid.wetCells() * CELL_AREA_M2,
                         rainRate: this.rainRate,
+                        ...this.eased(water),
                     },
                 },
             },
         });
+    }
+
+    /** What the server lowered under what the map asks, for the relief tool to say so; nothing when nothing is. */
+    private eased(water: WaterSettings | undefined): { easedPrecision?: number; easedUpdates?: number } {
+        const precision = water?.inertia ? (water.precision ?? DEFAULT_WATER_PACE.precision) : 1;
+        const updates = water?.updates ?? DEFAULT_WATER_PACE.updates;
+        return {
+            ...(this.load.precision(precision) < precision ? { easedPrecision: this.load.precision(precision) } : {}),
+            ...(this.load.updates(updates) < updates ? { easedUpdates: this.load.updates(updates) } : {}),
+        };
     }
 
     private save(): void {

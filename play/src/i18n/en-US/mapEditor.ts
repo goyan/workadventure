@@ -782,6 +782,8 @@ const mapEditor: BaseTranslation = {
         precision: "Fineness of the computation of the water",
         precisionHint:
             "Higher: faster waves and torrents are possible, heavier computation for the server. 3 by default.",
+        precisionEased: "Server busy: fineness lowered to {value} out of {asked} until the computation gets lighter.",
+        updatesEased: "Server busy: tellings lowered to {value} a second out of {asked}.",
         updates: "Tellings of the water to the players",
         updatesHint: "Higher: waves are seen running instead of fading, for more network. 1 by default.",
         waves: {

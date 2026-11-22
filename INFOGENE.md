@@ -2347,6 +2347,23 @@ son seuil `shallowest`), un tourbillon sur chaque puits qui a de l'eau autour de
 tour par seconde selon le débit réglé) et des ronds qui s'élargissent sur chaque source. Dessiné 15 fois par seconde ;
 chaque navigateur a ses propres traits (un décor, rien n'est partagé). Rien pour qui a demandé moins de mouvement.
 
+**Finesse qui s'allège quand le serveur sature** (`Terrain/WaterLoad.ts`, `TerrainWaterManager`). Le serveur des
+salles n'a qu'un fil : un pas de l'eau qui dure autant que l'intervalle entre deux pas (100 ms) retient tout le
+reste (déplacements, chat, autres salles). Chaque pas est chronométré ; la durée est une moyenne glissante sur
+environ 2 s (un pas lent isolé ne change rien). La finesse et les envois demandés par la carte deviennent des
+**plafonds** :
+
+- au-delà de **50 %** de l'intervalle : la finesse baisse, d'un coup jusqu'à ce qui devrait suffire (le coût suit
+  la finesse), d'un cran au moins ; à la finesse 1, les envois aux joueurs passent à 1 par seconde ;
+- sous **25 %** pendant 10 s : un cran est rendu (les envois d'abord), jamais au-dessus du réglage de la carte ;
+- entre les deux : rien ne bouge, pour que la finesse n'oscille pas.
+
+Par salle : une carte lourde ne dégrade pas les autres. L'outil Relief le dit sous le curseur (« Serveur chargé :
+finesse réduite à 5 sur 8 »), par `easedPrecision` et `easedUpdates` de `TerrainWaterStatsMessage` (champs 10 et
+11, absents quand rien n'est réduit). Le réglage enregistré de la carte ne change pas. Effet : une eau moins
+précise (vagues plus amorties, fronts moins nets) pendant les moments les plus lourds, un tsunami compris. Sans
+inertie, seuls les envois peuvent être réduits. Seuils posés par raisonnement, non calés sur une mesure en jeu.
+
 **Écume des vagues et moutons du vent.** Trois écumes, chacune avec sa règle, toutes calculées par le navigateur à
 partir de ce qu'il reçoit déjà (profondeurs, vent) :
 

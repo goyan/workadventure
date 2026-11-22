@@ -35,6 +35,7 @@
         terrainHoverMeadowStore,
         terrainHoverSoilStore,
         selectedPoolStore,
+        terrainWaterStatsStore,
     } from "../../Stores/TerrainEditorStore";
     import { SOIL_TINTS } from "../../Phaser/Game/Terrain/TerrainShading";
     import InputSwitch from "../Input/InputSwitch.svelte";
@@ -742,6 +743,14 @@
                 onchange={saveWater}
                 buttonShape="square"
             />
+            {#if $terrainWaterStatsStore?.easedPrecision}
+                <p class="retro-hint m-0 text-warning" data-testid="terrain-precision-eased">
+                    {$LL.mapEditor.terrain.precisionEased({
+                        value: $terrainWaterStatsStore.easedPrecision,
+                        asked: precision,
+                    })}
+                </p>
+            {/if}
             <p class="retro-hint m-0">{$LL.mapEditor.terrain.precisionHint()}</p>
             {@render more($LL.mapEditor.terrain.precisionDetail())}
         </div>
@@ -758,6 +767,11 @@
             onchange={saveWater}
             buttonShape="square"
         />
+        {#if $terrainWaterStatsStore?.easedUpdates}
+            <p class="retro-hint m-0 text-warning" data-testid="terrain-updates-eased">
+                {$LL.mapEditor.terrain.updatesEased({ value: $terrainWaterStatsStore.easedUpdates, asked: updates })}
+            </p>
+        {/if}
         <p class="retro-hint m-0">{$LL.mapEditor.terrain.updatesHint()}</p>
         {@render more($LL.mapEditor.terrain.updatesDetail())}
     </div>
