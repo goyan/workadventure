@@ -2559,6 +2559,20 @@ partir de ce qu'il reçoit déjà (profondeurs, vent) :
   croît avec la hauteur jusqu'à 12 px (40 cm). S'y ajoute le **front de crue** : une cellule sèche à l'état
   précédent, mouillée maintenant, à côté d'une eau déjà là (pas la pluie qui remplit une mare). L'écume reste
   derrière la vague et s'efface de moitié toutes les 1,8 s.
+  Deux choses ne sont pas des vagues et ne font plus d'écume : la **pente du fond** (le creux n'est plus cherché
+  sous le lit de la cellule : une nappe qui descend un rivage n'a pas de « vague » de la hauteur de la pente) et
+  la **marche entre deux eaux qu'un mur sépare** (la recherche du creux s'arrête à un mur ou à une porte, prise
+  fermée ; murs lus par `landWallsOf`, dans `TerrainView.closedSides`). L'**eau vive** garde la sienne : une eau
+  qui tombe d'au moins 3 px et court plus vite que ses propres vagues (vitesse transmise par le serveur divisée
+  par `waveSpeed(profondeur)`, le nombre de Froude : rien sous 1, tout à 2) : torrent sur une berge raide,
+  cascade. Sans vitesse transmise (eau sans inertie), la vitesse est lue sur la pente de la surface. Mesuré sur la
+  carte d'Antoine en crue (64 % sous l'eau) : cellules qui écument en permanence 1 405 → 692, écume visible
+  5 480 → 4 710 cellules, intensité totale −34 %. Le reste est fait de vraies vagues.
+  L'écume d'un état **monte pendant que l'eau y glisse** (sur le temps écoulé depuis l'état précédent, 1 s au
+  plus), au lieu d'apparaître d'un coup à sa réception : à un état par seconde (eau locale, garde-fou réseau,
+  cartes réglées à 1 envoi), elle venait par bouffées. Vague qui déferle en continu, lue toutes les 50 ms :
+  à 1 état par seconde, écume moyenne 4,64 → 5,51 (5,52 → 5,68 à 5 états), écart creux à crête 41 % → 12 %, plus
+  grand saut entre deux dessins 40 % → 1 %.
 - **Moutons** (`Terrain/Whitecaps.ts`) : le vent lève des vagues courtes qui cassent à leur crête, sans rapport
   avec la houle. Part de l'eau blanchie selon la loi usuelle (Monahan et O'Muircheartaigh, 1980 :
   3,84 × 10⁻⁶ × vent^3,41, vent en m/s) : rien sous 3 m/s, environ 0,03 % à force 3, 0,3 % à force 4, 1 % à
