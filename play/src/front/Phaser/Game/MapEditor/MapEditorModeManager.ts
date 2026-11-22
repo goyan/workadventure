@@ -117,6 +117,9 @@ export class MapEditorModeManager {
 
     private isReverting: Promise<void> = Promise.resolve();
 
+    /** Waiting for the commands sent by this player to be acknowledged (true) or refused (false) by the server. */
+    private settledListeners: ((accepted: boolean) => void)[] = [];
+
     private isHandlingIncomingCommand = false;
 
     constructor(
@@ -584,6 +587,24 @@ export class MapEditorModeManager {
         });
     }
 
+    /**
+     * Resolves once every command this player sent is acknowledged by the server (true), or as soon as one is refused
+     * (false): for an action that must wait for the server before doing more (a weather card that makes the map
+     * follow a place, then takes its player back to the weather of the map).
+     */
+    public whenCommandsSettled(): Promise<boolean> {
+        if (this.pendingCommands.length === 0) return Promise.resolve(true);
+        return new Promise((resolve) => {
+            this.settledListeners.push(resolve);
+        });
+    }
+
+    private notifySettled(accepted: boolean): void {
+        const listeners = this.settledListeners;
+        this.settledListeners = [];
+        for (const listener of listeners) listener(accepted);
+    }
+
     private async handleIncomingCommandMessage(editMapCommandMessage: EditMapCommandMessage): Promise<void> {
         if (editMapCommandMessage.editMapMessage?.message?.$case === "errorCommandMessage") {
             const reason = editMapCommandMessage.editMapMessage.message.errorCommandMessage.reason;
@@ -598,6 +619,7 @@ export class MapEditorModeManager {
                 // The server refused the command, so the optimistic local state is now wrong. Nothing is
                 // reported to Sentry: map-storage already logged the cause, and a refusal is also the expected
                 // answer to a command the user was not allowed to run.
+                this.notifySettled(false);
                 await this.revertPendingCommands();
                 warningMessageStore.addWarningMessage(get(LL).mapEditor.map.editionFailed());
             }
@@ -612,6 +634,7 @@ export class MapEditorModeManager {
                 logger("removing command of pendingList : ", editMapCommandMessage.id);
                 const command = this.pendingCommands.shift();
                 const historyGroup = this.pendingCommandHistoryGroups.shift();
+                if (this.pendingCommands.length === 0) this.notifySettled(true);
                 if (historyGroup) {
                     historyGroup.group.everAcknowledgedCommandIndexes.add(historyGroup.commandIndex);
                     if (historyGroup.direction === "apply") {

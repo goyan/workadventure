@@ -481,6 +481,36 @@ describe("MapEditorModeManager command groups", () => {
         expect(state.value).toBe(0);
     });
 
+    it("tells when every command sent is acknowledged by the server", async () => {
+        const fixture = createManagerFixture();
+        manager = fixture.manager;
+        const state: CommandTestState = { value: 0, emittedCommandIds: [] };
+        await expect(manager.whenCommandsSettled()).resolves.toBe(true);
+        const command = new StateCommand(state, 1, "weather-of-the-map");
+        await manager.executeCommand(command);
+        let settled: boolean | undefined;
+        const settling = manager.whenCommandsSettled().then((accepted) => {
+            settled = accepted;
+        });
+        await Promise.resolve();
+        expect(settled).toBeUndefined();
+        fixture.commandStream.next(createCommandMessage(command.commandId));
+        await settling;
+        expect(settled).toBe(true);
+    });
+
+    it("tells as soon as the server refuses a command", async () => {
+        const fixture = createManagerFixture();
+        manager = fixture.manager;
+        const state: CommandTestState = { value: 0, emittedCommandIds: [] };
+        const command = new StateCommand(state, 1, "refused");
+        await manager.executeCommand(command);
+        const settled = manager.whenCommandsSettled();
+        fixture.commandStream.next(createErrorCommandMessage(command.commandId));
+        await expect(settled).resolves.toBe(false);
+        await vi.waitFor(() => expect(state.value).toBe(0));
+    });
+
     it("compensates completed leaves after batch failure and accepts later commands", async () => {
         const fixture = createManagerFixture();
         manager = fixture.manager;

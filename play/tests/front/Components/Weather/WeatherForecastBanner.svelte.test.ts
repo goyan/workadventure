@@ -169,6 +169,17 @@ vi.mock("../../../../src/front/Stores/MenuStore", async () => {
     const { writable: makeWritable } = await import("svelte/store");
     return { mapEditorActivated: makeWritable(true) };
 });
+vi.mock("../../../../src/front/Phaser/Game/Night/PointWords", () => ({
+    pointWords: () => ({
+        north: "N",
+        south: "S",
+        east: "E",
+        west: "W",
+        far: (point: string, city: string, distance: string) => `${point} · ${city} ${distance} km away`,
+        short: (city: string, distance: string) => `${city} ${distance} km`,
+        kilometres: (km: number) => new Intl.NumberFormat("en-US").format(km),
+    }),
+}));
 vi.mock("@wa-modals", () => ({ modals: { open: toMap.open, close: vi.fn() } }));
 // The confirmation has its own test: here, only what the banner asks it.
 vi.mock("../../../../src/front/Components/Weather/PlaceToMapModal.svelte", () => ({ default: "PlaceToMapModal" }));
@@ -631,6 +642,21 @@ describe("WeatherForecastBanner, apply to the map", () => {
         follow();
         expect(button()?.dataset.state).toBe("already");
         expect(button()?.textContent?.trim()).toBe("The map already follows this place");
+    });
+
+    it("names a point of the world chosen as the place of the map short on the chip, long on its card", () => {
+        // Far from any city of the list: named after the nearest one and how far, as a player's own point.
+        wamSettings.value = {
+            weather: "real",
+            weatherLocation: { name: "72° S 170° E", latitude: -72.4, longitude: 170.2 },
+        };
+        render();
+        const chipName = target.querySelector('[data-testid="weather-chip-server"]')?.textContent?.trim() ?? "";
+        expect(chipName).toMatch(/^\S.* [\d,]+ km$/);
+        expect(chipName).not.toContain("°");
+        expect(target.querySelector('[data-testid="weather-card-server-city"]')?.textContent).toMatch(
+            /^72° S 170° E · .+ [\d,]+ km away$/,
+        );
     });
 
     it("lets the player who applied a place bring the map back from its card", () => {

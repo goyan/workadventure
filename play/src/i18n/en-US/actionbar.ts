@@ -601,9 +601,9 @@ const actionbar = {
         goesReal: "The map switches to real weather (it was on “{weather}”).",
         leaveManual:
             "Back to the real conditions: they are set by hand (Disaster, Weather) and would come before this place.",
-        followMap: "Then see the weather of the map, as everyone does (your sky leaves “Daytime somewhere”).",
+        serverTime: "You will go back to the server time: the same sky, time and weather as everyone.",
         action: "Apply",
-        error: "The weather of the map could not be changed.",
+        error: "The weather of the map could not be changed (refused, or no answer from the server).",
         revert: "Back to {place}",
         revertHint: "Put the map back on its place and weather of before",
     },

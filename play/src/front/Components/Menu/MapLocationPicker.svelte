@@ -3,6 +3,8 @@
     import { onDestroy } from "svelte";
     import { LL } from "../../../i18n/i18n-svelte";
     import { searchPlaces } from "../../Phaser/Game/Weather/RealWeatherClient";
+    import { isPointName, mapPlaceNames } from "../../Phaser/Game/Weather/MapPlaceName";
+    import { pointWords } from "../../Phaser/Game/Night/PointWords";
 
     interface Props {
         location: WeatherLocation | undefined;
@@ -61,7 +63,12 @@
     <span class="text-sm font-bold">{$LL.mapEditor.settings.weather.location.title()}</span>
     <div class="flex items-center justify-between gap-2">
         <span class="text-sm text-white/80" data-testid="map-location-current">
-            {location?.name ?? $LL.mapEditor.settings.weather.location.default()}
+            <!-- A town with its region and country; a point of the world named as a player's own point is. -->
+            {location
+                ? isPointName(location.name)
+                    ? (mapPlaceNames(location, pointWords)?.long ?? location.name)
+                    : location.name
+                : $LL.mapEditor.settings.weather.location.default()}
         </span>
         {#if location}
             <button

@@ -11,8 +11,7 @@
     import { onDestroy } from "svelte";
     import { LL } from "../../../i18n/i18n-svelte";
     import { gameManager } from "../../Phaser/Game/GameManager";
-    import { executeUpdateWAMSettings } from "../../Phaser/Game/MapEditor/Commands/Facades";
-    import { canEditMapWeather } from "../../Phaser/Game/Weather/MapWeatherRights";
+    import { saveMapWeather } from "../../Phaser/Game/Weather/MapWeatherSave";
     import { autoWeatherAt, autoWeatherChanges } from "../../Phaser/Game/Weather/WeatherSchedule";
     import { seasonAt } from "../../Phaser/Game/Nature/SeasonClock";
     import ButtonState from "../Input/ButtonState.svelte";
@@ -154,22 +153,16 @@
     });
 
     async function save(): Promise<string> {
-        const scene = gameManager.getCurrentGameScene();
-        if (!canEditMapWeather(scene)) {
-            throw new Error($LL.mapEditor.settings.weather.error());
-        }
         try {
-            // The Auto choices are always sent, so switching back to Auto keeps the last ones.
-            await executeUpdateWAMSettings({
-                $case: "updateWeatherSettingMessage",
-                updateWeatherSettingMessage: {
-                    weather: Weather.parse(weather),
-                    autoFrequency: frequency,
-                    autoInclude,
-                    autoClouds: clouds,
-                    // Place removed: back to the default one (Paris), which an absent place alone would not do.
-                    ...(location ? { location } : placeRemoved ? { clearLocation: true } : {}),
-                },
+            // The Auto choices are always sent, so switching back to Auto keeps the last ones. The same saving as the
+            // button "Apply to the map" of the weather cards (saveMapWeather).
+            await saveMapWeather({
+                weather: Weather.parse(weather),
+                autoFrequency: frequency,
+                autoInclude,
+                autoClouds: clouds,
+                // Place removed: back to the default one (Paris), which an absent place alone would not do.
+                ...(location ? { location } : placeRemoved ? { clearLocation: true } : {}),
             });
             saved = { weather, frequency, include: autoInclude.join(), clouds, location };
             return $LL.mapEditor.settings.weather.success();

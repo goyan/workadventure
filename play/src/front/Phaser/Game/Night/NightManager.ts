@@ -1,6 +1,5 @@
 import { derived, get, type Unsubscriber } from "svelte/store";
 import type { AreaData } from "@workadventure/map-editor";
-import LL, { locale } from "../../../../i18n/i18n-svelte";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import {
@@ -52,7 +51,8 @@ import { roomAmbience, type AmbienceSettings } from "./AmbientLight";
 import { moonPhaseAt, moonPositionAt } from "./MoonClock";
 import { NightHalos } from "./NightHalos";
 import { placeOfPoint, worldCityOf } from "./WorldDaylight";
-import type { PointWords, WorldPlace } from "./WorldDaylight";
+import type { WorldPlace } from "./WorldDaylight";
+import { pointWords } from "./PointWords";
 import { coversMostly, isInLightableArea, lightableAreas, NightLights, roomsThatLightUp } from "./NightLights";
 import type { LitArea, NightRect } from "./NightLights";
 import { NightOverlay } from "./NightOverlay";
@@ -447,19 +447,4 @@ export class NightManager {
         }
         return players;
     }
-}
-
-/** The words a point of the map of the world far from any city is named with, in the language of the player. */
-function pointWords(): PointWords {
-    const words = get(LL).menu.settings.night;
-    const kilometres = new Intl.NumberFormat(get(locale) || undefined, { maximumFractionDigits: 0 });
-    return {
-        north: words.pointNorth(),
-        south: words.pointSouth(),
-        east: words.pointEast(),
-        west: words.pointWest(),
-        far: (point, city, distance) => words.pointFar({ point, city, distance }),
-        short: (city, distance) => words.pointShort({ city, distance }),
-        kilometres: (km) => kilometres.format(km),
-    };
 }

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { WeatherType } from "@workadventure/map-editor";
 import {
-    followPlaceMessage,
+    followPlaceUpdate,
     mapLocationOf,
     placeToMapState,
     realConditionsMessage,
-    revertMessage,
+    revertUpdate,
     sameWeatherPlace,
 } from "../../../../../src/front/Phaser/Game/Weather/PlaceToMap";
 import type { WorldPlace } from "../../../../../src/front/Phaser/Game/Night/WorldDaylight";
@@ -70,24 +70,25 @@ describe("mapLocationOf", () => {
     });
 });
 
-describe("messages", () => {
+describe("updates", () => {
     it("makes the map follow the place in real weather, keeping its automatic settings", () => {
-        const message = followPlaceMessage(POINT);
-        expect(message.$case).toBe("updateWeatherSettingMessage");
-        expect(message.updateWeatherSettingMessage).toMatchObject({
+        const update = followPlaceUpdate(POINT);
+        expect(update).toMatchObject({
             weather: WeatherType.Real,
             location: { name: "24° N 122° E", latitude: 24.2, longitude: 121.9, timezone: "Asia/Taipei" },
         });
-        expect(message.updateWeatherSettingMessage).not.toHaveProperty("autoFrequency");
+        expect(update).not.toHaveProperty("autoFrequency");
     });
 
     it("brings back the weather and the place of before, or the default place", () => {
-        expect(
-            revertMessage({ weather: WeatherType.Automatic, location: LILLE }).updateWeatherSettingMessage,
-        ).toMatchObject({ weather: WeatherType.Automatic, location: LILLE });
-        expect(
-            revertMessage({ weather: WeatherType.Clear, location: undefined }).updateWeatherSettingMessage,
-        ).toMatchObject({ weather: WeatherType.Clear, clearLocation: true });
+        expect(revertUpdate({ weather: WeatherType.Automatic, location: LILLE })).toMatchObject({
+            weather: WeatherType.Automatic,
+            location: LILLE,
+        });
+        expect(revertUpdate({ weather: WeatherType.Clear, location: undefined })).toMatchObject({
+            weather: WeatherType.Clear,
+            clearLocation: true,
+        });
     });
 
     it("goes back to the real conditions, the thresholds of the room kept", () => {
