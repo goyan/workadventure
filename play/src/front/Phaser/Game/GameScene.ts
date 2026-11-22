@@ -330,6 +330,7 @@ import { weatherAtTime } from "./Weather/WeatherFrame";
 import { setRoomConditions, showsChosenPlaceWeather, shownWeatherSettings } from "./Weather/RealWeatherClient";
 import { chosenWeatherNow } from "./Weather/ChosenPlaceWeather";
 import { LocalTerrainController, openModuleWorker } from "./Terrain/LocalTerrainController";
+import { SubmergedDrains } from "./Terrain/SubmergedDrains";
 import { isSwayingTree, TreeSway } from "./Nature/TreeSway";
 import { TreePoseTextures } from "./Nature/TreePoses";
 import { TreeSeasonEffects } from "./Nature/TreeSeasonEffects";
@@ -641,6 +642,11 @@ export class GameScene extends DirtyScene {
      * The own ground of this player while they follow the weather of a place they chose (Jour dans le monde, a point
      * of the world map): their lakes, rivers and meadow live under it, the server's are kept aside until they leave it.
      */
+    /** The drains seen under the water that covers them, until they drained it. */
+    private readonly submergedDrains = new SubmergedDrains(
+        () => this.gameMapFrontWrapper?.getEntitiesManager().getEntities().values() ?? [],
+        (x, y) => this.terrainWater.depthAt(x, y, this.time.now),
+    );
     private readonly localTerrain = new LocalTerrainController(
         {
             chosenPlace: () => {
@@ -2485,6 +2491,7 @@ export class GameScene extends DirtyScene {
             // Their own ground, for a player who follows the weather of a place they chose.
             this.localTerrain.update();
             this.terrainView?.update(time);
+            this.submergedDrains.update(time);
             this.waterFlowView?.update(time);
             this.waterFlowOverlay?.update(time);
             this.aquaticLifeView?.update(time);

@@ -2556,6 +2556,11 @@ ou une crue amène bien plus que la somme des débits réglés. L'eau prise comp
 L'interrupteur « Adaptatif » de l'éditeur de puits (`adaptive: false`) lui rend son débit et son disque. Absent,
 il est adaptatif. Hors d'un sol, un puits garde toujours son débit.
 
+**Puits sous l'eau, puits tournés.** Un puits que l'eau recouvre d'au moins 1 px à son point d'eau se dessine teinté du
+bleu de l'eau et à moitié transparent, vu à travers elle, jusqu'à ce que l'eau soit descendue
+(`SubmergedDrains`, `Entity.setSubmerged`, revu quatre fois par seconde). La grille d'évacuation et le caniveau du
+catalogue `Infogène Eau` existent dans les quatre directions (bouton ⟳ de l'éditeur). Tourné, un puits reprend le point
+d'eau de sa nouvelle image (`rotatedWaterProperties`) et garde son débit, son rayon, son niveau et son réglage adaptatif.
 
 **Eau plus vive autour des puits.** L'eau n'avance que d'une cellule par pas ; sur une carte accélérée, un puits
 puissant vidait son disque puis attendait une eau qui arrivait trop lentement. Autour d'un puits qui demande encore
