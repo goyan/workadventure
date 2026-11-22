@@ -13,6 +13,8 @@ import { cellInMap, cellKey, cellOf, heightAt, reliefCells, soilAt } from "./Ter
 import type { MapCells } from "./TerrainGrid";
 import { ballColumn, ballHalfHeight } from "./WaterBall";
 import type { WaterBall } from "./WaterBall";
+import { restLevelOf, WATER_FILM_PX } from "./WaterView";
+import type { RestLevelFields, RestLevelSearch, WaterSnapshot, WaterView } from "./WaterView";
 
 /** Litres over one cell of the relief under one pixel of water. */
 export const CELL_LITRES_PER_PX = CELL_AREA_M2 * -metresOf(-1) * LITRES_PER_M3;
@@ -130,8 +132,6 @@ const LEVEL_PX = 0.05;
 const BALL_TOUCH_PX = 0.01;
 /** The water a ball pushes away is laid within this many cells past the ball. */
 const PUSH_BEYOND_CELLS = 8;
-/** The level of the water a ball stands in is read over this many cells of that water at most. */
-const REST_LEVEL_CELLS = 4096;
 /** The most balls a grid takes. */
 const MOST_BALLS = 255;
 
@@ -200,7 +200,7 @@ export const MAX_FLOW_STEPS = 16;
 /** How far a cell exchanges water with another of its stretch, in cells, over long distances. */
 const FAR_STRIDES = [4, 16];
 /** A cell with less water than this breaks a stretch: a film over a sill does not join two lakes. */
-const FAR_MIN_DEPTH_PX = 2;
+const FAR_MIN_DEPTH_PX = WATER_FILM_PX;
 /**
  * A cell with this much water joins the basin of a sink: half the film the sink leaves in each cell, so that the
  * water it left, which goes on running to it, still joins it to the rest of the lake at its next step.
@@ -476,7 +476,7 @@ export interface WaterTally {
  * The same code runs on the server, which alone decides, and can run in a browser: only sums, products and
  * comparisons, so the same inputs give the same water everywhere.
  */
-export class WaterGrid {
+export class WaterGrid implements WaterView {
     public readonly bounds: WaterGridBounds;
     private readonly ground: Float32Array;
     /** The level the water of each cell spills at (see spillLevels): a cell under it is in a hollow. */
@@ -503,6 +503,10 @@ export class WaterGrid {
     private readonly basin: Int32Array;
     private readonly seen: Uint32Array;
     private search = 0;
+    /** For the search of the level a water rests at (restLevelAt): sized when first asked. */
+    private restSearch: RestLevelSearch = { seen: new Uint32Array(0), search: 0 };
+    /** Counts the changes of what a snapshot copies seldom: the ground under the balls, the sides the doors close. */
+    private shape = 0;
     /** For each cell of the basin of a sink: the water it holds over the foot of the sink, and its weight. */
     private readonly basinAbove: Float32Array;
     private readonly basinWeights: Float32Array;
@@ -656,6 +660,7 @@ export class WaterGrid {
      */
     public setClosedDoors(doors: WaterWallSides | undefined): void {
         const { x, y, width, height } = this.bounds;
+        this.shape++;
         this.closed.set(this.wallClosed);
         if (!doors) return;
         for (const key of doors.east) {
@@ -1037,6 +1042,7 @@ export class WaterGrid {
         }
         cells.length = kept;
         this.ballCells = cells;
+        if (changed) this.shape++;
         return changed;
     }
 
@@ -1106,54 +1112,32 @@ export class WaterGrid {
      * the ground. Undefined outside the grid. It is where a ball held there is half in the water.
      */
     public restLevelAt(cellX: number, cellY: number, reachCells = 0): number | undefined {
-        const start = this.indexOf(cellX, cellY);
-        if (start === undefined) return undefined;
-        const { width, height } = this.bounds;
-        const closed = this.ballClosed.length > 0 ? this.ballClosed : undefined;
-        const bare = closed?.[start] ? this.bareGround[start] : this.ground[start];
-        const reach = Number.isFinite(reachCells) && reachCells > 0 ? reachCells : 0;
-        if (reach === 0 && !closed?.[start] && this.depth[start] < FAR_MIN_DEPTH_PX) return bare;
-        const startColumn = start % width;
-        const startRow = (start - startColumn) / width;
-        this.search++;
-        if (this.search === 0xffffffff) {
-            this.seen.fill(0);
-            this.search = 1;
+        if (this.restSearch.seen.length !== this.depth.length) {
+            this.restSearch = { seen: new Uint32Array(this.depth.length), search: 0 };
         }
-        const cells = [start];
-        this.seen[start] = this.search;
-        const surfaces: number[] = [];
-        for (let head = 0; head < cells.length && surfaces.length < REST_LEVEL_CELLS; head++) {
-            const index = cells[head];
-            if (!closed?.[index] && this.depth[index] >= FAR_MIN_DEPTH_PX) {
-                surfaces.push(this.ground[index] + this.depth[index]);
-            }
-            const column = index % width;
-            const row = (index - column) / width;
-            for (let side = 0; side < 4; side++) {
-                if (this.closed[index] & (1 << side)) continue;
-                const inside =
-                    side === 0 ? column + 1 < width : side === 1 ? column > 0 : side === 2 ? row + 1 < height : row > 0;
-                if (!inside) continue;
-                const next = index + (side === 0 ? 1 : side === 1 ? -1 : side === 2 ? width : -width);
-                if (this.seen[next] === this.search) continue;
-                // Through the cells of a ball, through the water that is more than a film, and through the dry
-                // cells near the point.
-                if (!closed?.[next] && this.depth[next] < FAR_MIN_DEPTH_PX) {
-                    const nextColumn = next % width;
-                    const away = Math.hypot(nextColumn - startColumn, (next - nextColumn) / width - startRow);
-                    if (away > reach) continue;
-                }
-                this.seen[next] = this.search;
-                cells.push(next);
-            }
-        }
-        if (surfaces.length === 0) return bare;
-        // The middle one: the water a ball piles up in front of itself, and the hollow behind, are a few cells.
-        surfaces.sort((a, b) => a - b);
-        const middle = surfaces.length >> 1;
-        const level = surfaces.length % 2 === 1 ? surfaces[middle] : (surfaces[middle - 1] + surfaces[middle]) / 2;
-        return level > bare ? level : bare;
+        return restLevelOf(this.restFields(), this.restSearch, cellX, cellY, reachCells);
+    }
+
+    /** What the level of a water at rest is read from, in this grid. */
+    private restFields(): RestLevelFields {
+        const balls = this.ballClosed.length > 0;
+        return {
+            bounds: this.bounds,
+            depth: this.depth,
+            ground: this.ground,
+            bareGround: balls ? this.bareGround : undefined,
+            ballClosed: balls ? this.ballClosed : undefined,
+            closed: this.closed,
+        };
+    }
+
+    /**
+     * Copies the water of this grid into a snapshot, for readers that are not where it is computed (WaterSnapshotView):
+     * its depths each time, its ground and its closed sides when a ball or a door changed them. `version` is the
+     * number that changes whenever the water does.
+     */
+    public publish(snapshot: WaterSnapshot, version: number): void {
+        snapshot.write(this.restFields(), this.shape, version);
     }
 
     /** Whether a ball closes the column of a cell of the map: its water is on the ball, or held under it. */

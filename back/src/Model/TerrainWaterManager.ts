@@ -36,7 +36,65 @@ export class TerrainWaterManager extends WaterSimulation {
         /** A clock in ms, to time the steps. */
         clock: () => number = () => performance.now(),
     ) {
-        super(room, rain, toldZip, now, mapSize, clock);
+        // The state last told can also be asked as it is, unzipped (lastTold): the zip steps aside meanwhile.
+        const asIs = { on: false };
+        super(room, rain, (bytes) => (asIs.on ? bytes : toldZip(bytes)), now, mapSize, clock);
+        this.asIs = asIs;
+    }
+
+    private readonly asIs: { on: boolean };
+    /** Called after each step of the water: what follows it from elsewhere (the ground computed on another thread). */
+    public stepped: () => void = () => undefined;
+
+    public override step(): void {
+        super.step();
+        this.stepped();
+    }
+
+    /**
+     * The whole state the room was last told, unzipped, with its number and its bounds: what a snapshot zips for a
+     * player who joins. Undefined on a map without water, or while the room was told nothing. The bytes are those the
+     * water keeps: copied by who holds on to them.
+     */
+    public lastTold():
+        | { x: number; y: number; width: number; height: number; seq: number; bytes: Uint8Array }
+        | undefined {
+        this.asIs.on = true;
+        try {
+            const told = this.snapshot();
+            return (
+                told && {
+                    x: told.x,
+                    y: told.y,
+                    width: told.width,
+                    height: told.height,
+                    seq: told.seq,
+                    bytes: told.depths,
+                }
+            );
+        } finally {
+            this.asIs.on = false;
+        }
+    }
+
+    /** A whole state for a player who joins, from a state told (lastTold): zipped as the water zips its own. */
+    public static snapshotOf(told: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        seq: number;
+        bytes: Uint8Array;
+    }) {
+        return {
+            x: told.x,
+            y: told.y,
+            width: told.width,
+            height: told.height,
+            seq: told.seq,
+            full: true,
+            depths: toldZip(told.bytes),
+        };
     }
 
     /**

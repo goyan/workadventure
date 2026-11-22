@@ -60,6 +60,11 @@ export const EnvironmentVariables = z.object({
     ENABLE_MAP_EDITOR: BoolAsString.optional()
         .transform((val) => toBool(val, false))
         .describe("Enable the built-in map editor. Defaults to false"),
+    GROUND_THREADS: PositiveIntAsString.optional()
+        .transform((val) => toNumber(val, 0))
+        .describe(
+            "Number of threads that compute the ground of the rooms (the water of their relief and their meadow) away from the thread of the rooms. 0 computes it on the thread of the rooms. Defaults to 0",
+        ),
     HTTP_PORT: PositiveIntAsString.optional()
         .transform((val) => toNumber(val, 8080))
         .describe("HTTP port for the back service. Defaults to 8080"),

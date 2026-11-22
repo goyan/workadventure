@@ -38,6 +38,8 @@ export * from "./Terrain/WaterLoad";
 export * from "./Terrain/WaterPace";
 export * from "./Terrain/WaterSendLoad";
 export * from "./Terrain/WaterSimulation";
+export * from "./Terrain/WaterView";
+export * from "./Terrain/BallLevels";
 export * from "./Terrain/WaterWalls";
 export * from "./Terrain/LandWalls";
 export * from "./Catastrophe/Meteor";

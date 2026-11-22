@@ -2441,6 +2441,72 @@ ne l'est pas).
   (`LocalTerrainSimulation`), sans changement de comportement : `GroundSimulation.test.ts` compare, sur 400 pas
   avec neige, comète et boule de feu, les états dits par un sol câblé à la main et par `GroundSimulation` (mêmes
   octets).
+- **Façade du sol dans `back`** (`back/src/Model/Ground/RoomGround.ts`, `InlineRoomGround.ts`, PR 2). `GameRoom`
+  ne tient plus `TerrainWaterManager` et `MeadowManager` : il parle à un `RoomGround` (démarrer l'eau, démarrer la
+  prairie, arrêter, carte changée ; comète, boule de feu, glace brisée, averse qui mouille, feu posé ; niveau d'une
+  boule, grille de l'eau et sa version pour la vie aquatique, feu pour les animaux ; glace d'une tuile, prairie
+  faite ou non, rattrapage en cours pour les cabanes de pêche ; états entiers pour un joueur qui entre). Ce que le sol lit de la salle est demandé à chaque fois par `RoomGroundInputs` (avatars, averses,
+  drains, boules, brouteurs, air, conditions et seuils du feu). La seule implémentation, `InlineRoomGround`, calcule
+  dans le fil des salles avec les deux gestionnaires d'avant, câblés par `GroundSimulation` : même comportement.
+  Deux ordres changent sans effet : à la fermeture d'une salle l'eau s'arrête juste avant la prairie (et non plus
+  avant la vie aquatique) ; à une édition de carte la prairie relit la carte avant la vie aquatique (aucune des
+  deux ne lit l'autre à ce moment-là). `back/tests/RoomGround.test.ts` compare, avec les vrais minuteurs simulés,
+  ce sol à un sol câblé à la main comme `GameRoom` le faisait : 90 s de pluie et de neige avec une source, le
+  drain d'un bâtiment (siphon sur un sol « Carte Sols »), averse, comète, boule traînée, drain, feu, boule de feu,
+  glace brisée, redoux, carte changée ; puis une salle rouverte après trois heures (rattrapage). Mêmes messages à
+  la salle, mêmes écritures Redis, mêmes niveaux de boule.
+- **Vue de l'eau et instantané** (`Terrain/WaterView.ts`, `Terrain/BallLevels.ts`, PR 3). Ce qui lit l'eau sans la
+  calculer (vie aquatique : `waterBodiesOf`, `stepPopulation`, `swim`, `AquaticLifeManager` ; niveau d'une boule)
+  ne demande plus un `WaterGrid` mais une `WaterView` : `bounds`, `depthAt`, `canCross`, `restLevelAt`. `WaterGrid`
+  en est une ; `WaterSnapshotView` en est une autre, sur une copie de la grille (`WaterSnapshot`) que
+  `WaterGrid.publish` écrit : les profondeurs à chaque publication, le sol sous les boules et les côtés fermés par
+  les portes seulement quand ils ont changé (compteur `shape`). La mémoire de l'instantané peut être partagée entre
+  fils ; un compteur d'écritures (impair pendant une écriture) garantit qu'un lecteur ne prend jamais un état à
+  moitié écrit, et `refresh` prend l'instantané en entier, pour qu'une boucle sur les cellules voie une seule eau.
+  Le niveau au repos (`restLevelOf`) et la mémoire du niveau des boules (`BallLevels`) sont sortis de `WaterGrid`
+  et de `WaterSimulation` sans changer de calcul. **Dans le fil des salles rien ne lit l'instantané** : la façade
+  rend la grille elle-même, comme avant ; l'instantané sert au fil de calcul (PR 4). `WaterView.test.ts` : la vue
+  répond comme la grille, cellule par cellule et au-delà des bords, après des pas, une porte fermée, une boule
+  posée, déplacée, retirée, en mémoire propre et partagée ; mêmes étendues d'eau pour la vie ; même niveau de boule.
+- **Le fil de calcul** (`back/src/Model/Ground/{GroundProtocol,GroundThreads,GroundWorker,HostedGround,
+  RemoteRoomGround}.ts`, PR 4). **Éteint par défaut** : `GROUND_THREADS` (variable d'environnement de `back`) dit
+  combien de fils le serveur consacre au sol de ses salles ; 0, valeur par défaut, garde le calcul dans le fil des
+  salles (`InlineRoomGround`), exactement comme avant. Au-delà, `GameRoom` reçoit un `RemoteRoomGround` :
+  - **Dans le fil** (`GroundWorker`, un `worker_threads` ; `back` tourne sous `tsx`, dont le fil hérite le chargeur,
+    donc pas de compilation ni de changement d'image) un `HostedGround` par salle fait tourner les mêmes
+    gestionnaires (`InlineRoomGround`), nourris par ce que la salle envoie au lieu de la lire.
+  - **Le fil des salles envoie** (`GroundCommand`) : l'état que le sol lit de la salle (taille de la carte, avatars,
+    averses, drains, boules, brouteurs, air, conditions et seuils du feu, météo réelle), comparé toutes les 100 ms
+    et envoyé seulement s'il a changé ; la carte à chaque édition, **sans son relief tant que c'est le même objet**
+    (le relief pèse la moitié d'une carte, et l'eau reconnaît une édition du relief à son objet : une copie du même
+    relief lui ferait refaire sa grille et perdre ses courants) ; les catastrophes (comète, boule de feu, glace
+    brisée, averse, feu posé), précédées de l'état du moment ; chaque position de boule demandée par la salle.
+  - **Le fil répond** (`GroundTold`) : les messages pour les joueurs, déjà compressés, relayés tels quels ; avec
+    chaque état de l'eau, l'état entier que la salle connaît (pour le joueur qui entre : compressé à ce moment-là,
+    comme avant) ; après chaque pas de prairie, la prairie et les arbres pour qui entre, le feu vu par les animaux,
+    la glace de chaque tuile (cabanes de pêche) ; les champs à sauvegarder, que le fil des salles écrit dans Redis
+    (mêmes clés, mêmes valeurs) ; les demandes de météo passée (le fil des salles seul parle à l'extérieur).
+  - **L'eau lue par la salle** (vie aquatique, cabanes, niveau d'une boule) est l'instantané partagé
+    (`WaterSnapshotView`), publié après chaque pas d'eau, chaque pas de prairie et chaque catastrophe : **au plus un
+    pas de retard (0,1 s)**. Le niveau d'une boule est décidé des deux côtés par la même règle (`BallLevels`).
+  - **Fil perdu** (plantage) : `GroundThreads` en relance un, et chaque salle y redémarre son sol, l'eau depuis
+    l'instantané que la salle tient (l'eau cachée sous une boule est perdue), la prairie depuis la dernière
+    sauvegarde. Trois pertes en cinq minutes : le sol de la salle repasse dans le fil des salles.
+  - **Répartition** : une salle va au fil qui a le moins de salles et n'en change plus.
+  - **Mesuré** (Mac M4 Max chargé, carte d'entrée de la beta inondée à 42 %, inertie, finesse 3, 5 envois/s, vraies
+    classes, deux passes alternées) : retard d'un minuteur de 2 ms sur le fil des salles, 99e centile 12 ms →
+    0,4 ms ; maximum 16 à 33 ms → 2,1 à 2,6 ms ; part des retards de plus de 10 ms 1,9 % → 0. Une édition de carte
+    retient le fil des salles 48 ms → 1,7 ms (la lecture des murs et des sols se fait dans le fil de calcul).
+    L'entrée d'un joueur coûte 1 ms des deux côtés.
+  - **Tests** (`back/tests/RemoteRoomGround.test.ts`) : conduit pas à pas (`pause` des simulations, horloge et
+    hasard donnés), le sol distant dit et sauvegarde **les mêmes octets** que le sol câblé à la main dans le fil
+    des salles, eau et prairie, sur 130 s (pluie, neige, source, drain de bâtiment, toutes les catastrophes,
+    carte changée, canicule et feu), par les messages seuls puis sur un vrai fil ; ce que la salle lit en chemin
+    (eau, version, feu, glace, états pour qui entre, niveaux de boule) est identique ; le rattrapage d'une salle
+    rouverte après trois heures aussi ; en temps réel sur un vrai fil : marche, arrêt avec sauvegarde, deux fils
+    perdus puis repli dans le fil des salles.
+  - **Reste à faire** (PR suivantes) : l'allègement de finesse (`WaterLoad`) ne regarde que sa salle, pas la somme
+    des salles d'un fil ; la carte éditée est encore copiée entière hors relief.
 
 Preuve d'identité : `libs/map-editor/tests/WaterFingerprints.test.ts` joue 19 scénarios de `WaterGrid` et finit
 chacun sur une empreinte (profondeurs, flux, vitesses, bilans, octets envoyés) enregistrée avec le code d'avant
