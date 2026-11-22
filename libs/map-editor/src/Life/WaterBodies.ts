@@ -1,9 +1,10 @@
+import { LIFE_DEPTHS_PX } from "../Terrain/WaterView";
 import type { WaterView } from "../Terrain/WaterView";
 
 /** The least water a fish swims in, in pixels of water. */
-export const FISH_DEPTH_PX = 8;
+export const FISH_DEPTH_PX = LIFE_DEPTHS_PX.fish;
 /** The least water a dolphin swims in: where an avatar swims. */
-export const DOLPHIN_DEPTH_PX = 16;
+export const DOLPHIN_DEPTH_PX = LIFE_DEPTHS_PX.deep;
 
 export interface WaterCell {
     cellX: number;

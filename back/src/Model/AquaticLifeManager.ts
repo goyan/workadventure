@@ -178,6 +178,12 @@ export class AquaticLifeManager {
     private steps = 0;
     private bodies: WaterBodies | undefined;
     private bodiesGrid: WaterView | undefined;
+    /** What the bodies were read by: the crossings of the water (WaterCrossings.swim) and the cells of the pools. */
+    private bodiesSwim: number | undefined;
+    private bodiesPools: ((cellX: number, cellY: number) => boolean) | undefined;
+    /** What the land was read by: the water and its crossings (WaterCrossings.land). */
+    private landGrid: WaterView | undefined;
+    private landCrossed: number | undefined;
     private bodiesVersion = -1;
     /** The cells of the pools of the map, read again when the relief or the styles of the pools change. */
     private pools: { terrain: unknown; styles: unknown; inPool: (cellX: number, cellY: number) => boolean } | undefined;
@@ -450,6 +456,16 @@ export class AquaticLifeManager {
         const version = grid ? this.water.waterVersion() : -1;
         const stale = version !== this.landVersion && this.steps - this.landStep >= STEPS_PER_LAND;
         if (this.land && key === this.landKey && !stale) return;
+        // The water moved, but the land and its shores are read again only when a cell crossed a depth they are read
+        // by (the film one drinks at, the depth one wades in): else the same land would be read.
+        const crossed = grid?.crossings().land;
+        if (this.land && key === this.landKey && grid === this.landGrid && crossed === this.landCrossed) {
+            this.landVersion = version;
+            this.landStep = this.steps;
+            return;
+        }
+        this.landGrid = grid;
+        this.landCrossed = crossed;
         this.land = landPlacesOf({
             width: size.width,
             height: size.height,
@@ -504,7 +520,20 @@ export class AquaticLifeManager {
                 grid !== this.bodiesGrid ||
                 (stale && this.steps - this.bodiesStep >= STEPS_PER_BODIES)
             ) {
-                this.bodies = waterBodiesOf(grid, this.poolCellsNow());
+                // Read again only when what they are read by changed: a cell that crossed the depth a fish or a
+                // dolphin needs, a door, the pools. Else the same bodies would be read: those it has are kept.
+                const inPool = this.poolCellsNow();
+                const swim = grid.crossings().swim;
+                if (
+                    !this.bodies ||
+                    grid !== this.bodiesGrid ||
+                    swim !== this.bodiesSwim ||
+                    inPool !== this.bodiesPools
+                ) {
+                    this.bodies = waterBodiesOf(grid, inPool);
+                    this.bodiesSwim = swim;
+                    this.bodiesPools = inPool;
+                }
                 this.bodiesGrid = grid;
                 this.bodiesVersion = version;
                 this.bodiesStep = this.steps;
