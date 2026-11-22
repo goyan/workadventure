@@ -1,14 +1,15 @@
 import { cellOf } from "../Terrain/TerrainGrid";
 import { TERRAIN_CELL } from "../types";
 import type { WaterWallSides } from "../Terrain/WaterGrid";
+import { LIFE_DEPTHS_PX } from "../Terrain/WaterView";
 import type { Places, WaterCell } from "./WaterBodies";
 
 /** A land predator goes into less water than this: where an avatar does not swim yet. */
-export const WADE_DEPTH_PX = 16;
+export const WADE_DEPTH_PX = LIFE_DEPTHS_PX.deep;
 /** An antelope goes into less water than this: it keeps its feet dry. */
-export const DRY_LAND_PX = 2;
+export const DRY_LAND_PX = LIFE_DEPTHS_PX.film;
 /** An animal drinks from a cell that holds this much water at least, in pixels. */
-export const DRINK_DEPTH_PX = 2;
+export const DRINK_DEPTH_PX = LIFE_DEPTHS_PX.film;
 
 /** What the land of a map is made of: its size in cells of the relief, its walls, and the water on it. */
 export interface LandInput {

@@ -2475,6 +2475,23 @@ ne l'est pas).
   cellule par cellule, mêmes tirages, mêmes poissons (population comparée à chaque état) le long d'une crue qui
   monte et redescend avec lac, étang, chenal, piscine, mur et porte qui se ferme et s'ouvre, sur la grille et sur
   un instantané ; mêmes terres avec murs et pont.
+- **La vie ne relit ses lieux que quand un seuil est franchi** (`WaterView.crossings`, `WaterGrid.crossings`,
+  `AquaticLifeManager`). La vie relisait ses étendues d'eau (au plus une fois par seconde) et ses terres (toutes les
+  5 s) dès que l'eau avait bougé, donc toujours. Or ce qu'elle lit ne dépend que de trois profondeurs
+  (`LIFE_DEPTHS_PX` : le film de 2 px où l'on boit et où le sol est sec, les 8 px d'un poisson, les 16 px d'un
+  dauphin et du gué) et des portes. L'eau tient deux compteurs qui ne montent que lorsqu'une cellule franchit l'une
+  de ces profondeurs (`swim` : 8 ou 16 px, ou une porte ; `land` : 2 ou 16 px), comparés quand on les demande
+  (dans le fil des salles) ou publiés avec l'instantané (fil de calcul). La vie garde ses lieux tant que le
+  compteur qui les concerne n'a pas bougé : elle aurait relu les mêmes. **Résultat identique**, vérifié par
+  `AquaticLifeManagerCrossings.test.ts` : trois vies sur la même eau (relecture à chaque changement comme avant,
+  compteurs sur la grille, compteurs sur un instantané) disent et sauvegardent la même chose et tiennent les
+  mêmes lieux à chaque pas, le long d'une crue, puis d'une nappe qui franchit un seuil à la fois, puis d'une
+  porte qui coupe le lac sans qu'aucune profondeur bouge ; cinq mutations (un seuil ou la porte oubliés) font
+  chacune échouer le test. **Gain mesuré** : sur une eau immobile, plus aucune relecture. **Sur la carte d'entrée
+  inondée, aucun** : tant que l'eau coule, des nappes minces franchissent un seuil quelque part à chaque seconde,
+  même 60 s après l'arrêt des sources (30 relectures d'étendues et 6 de terres en 30 s, comme avant) ; les pas
+  de 10 à 15 ms toutes les 5 s restent. Pour une eau qui coule, la suite est de calculer ces lieux dans le fil de
+  calcul et de les publier.
 - **Catastrophes dans le sol d'un joueur** (`LocalTerrainSimulation`, `LocalTerrainWorker`). Le sol d'un joueur
   (météo d'un lieu choisi) ignorait les catastrophes de la salle : il les voyait sans que son eau en soit touchée.
   Il sait maintenant les recevoir, par le sol commun : `setCatastrophes` (averses, drains, boules du moment, qui

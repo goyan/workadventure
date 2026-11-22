@@ -2,6 +2,36 @@ import type { WaterGridBounds } from "./WaterGrid";
 
 /** A cell with less water than this is a film: it joins no water to another (FAR_MIN_DEPTH_PX of WaterGrid). */
 export const WATER_FILM_PX = 2;
+/**
+ * The depths the life of a map reads its places by, in pixels of water: a cell is beside water or dry under a film
+ * (`film`), a fish swims from `fish`, a dolphin swims and a land animal stops wading from `deep`. The life reads its
+ * places again only when a cell crossed one of them (WaterView.crossings).
+ */
+export const LIFE_DEPTHS_PX = { film: 2, fish: 8, deep: 16 } as const;
+
+/**
+ * What changed of a water for what lives in it, as two numbers that go up: `swim` when the bodies of water may have
+ * changed (a cell crossed the depth a fish or a dolphin needs, a door closed or opened), `land` when the land and
+ * its shores may have (a cell crossed the depth one drinks at or the depth one wades in). While a number stays the
+ * same, what was read of that water is still what would be read.
+ */
+export interface WaterCrossings {
+    swim: number;
+    land: number;
+}
+
+/** The depths of a cell that count for the life, as bits: over the film, deep enough for a fish, for a dolphin. */
+export function lifeDepthClass(depth: number): number {
+    return (
+        (depth >= LIFE_DEPTHS_PX.film ? 1 : 0) |
+        (depth >= LIFE_DEPTHS_PX.fish ? 2 : 0) |
+        (depth >= LIFE_DEPTHS_PX.deep ? 4 : 0)
+    );
+}
+/** The bits of lifeDepthClass the bodies of water are read by, and those the land is read by. */
+export const SWIM_DEPTH_BITS = 2 | 4;
+export const LAND_DEPTH_BITS = 1 | 4;
+
 /** How many cells the level of a water at rest is read over, at most. */
 export const REST_LEVEL_CELLS = 4096;
 
@@ -18,6 +48,8 @@ export interface WaterView {
      * east, west, south, north). Read at once and not kept: the water moves on.
      */
     cells(): WaterCells;
+    /** What changed of this water for what lives in it since it was made: see WaterCrossings. */
+    crossings(): WaterCrossings;
     depthAt(cellX: number, cellY: number): number;
     canCross(cellX: number, cellY: number, side: "east" | "west" | "south" | "north"): boolean;
     restLevelAt(cellX: number, cellY: number, reachCells?: number): number | undefined;
@@ -119,7 +151,9 @@ const WRITES = 0;
 const SHAPE = 1;
 const VERSION = 2;
 const HAS_BALLS = 3;
-const HEADER = 4;
+const SWIM = 4;
+const LAND = 5;
+const HEADER = 6;
 
 /**
  * A copy of the water of a grid, for readers that are not where it is computed: its depths at each publication, and
@@ -170,7 +204,7 @@ export class WaterSnapshot {
      * Writes the water of a grid: `shape` counts the changes of what changes seldom (they are copied only when it
      * moved), `version` is the number that changes whenever the water does (WaterSimulation.waterVersion).
      */
-    public write(fields: RestLevelFields, shape: number, version: number): void {
+    public write(fields: RestLevelFields, shape: number, version: number, crossings: WaterCrossings): void {
         const header = this.header;
         Atomics.add(header, WRITES, 1);
         this.depth.set(fields.depth);
@@ -185,6 +219,8 @@ export class WaterSnapshot {
             header[SHAPE] = shape;
         }
         header[VERSION] = version;
+        header[SWIM] = crossings.swim;
+        header[LAND] = crossings.land;
         Atomics.add(header, WRITES, 1);
     }
 
@@ -203,6 +239,10 @@ export class WaterSnapshot {
 
     public hasBalls(): boolean {
         return this.header[HAS_BALLS] === 1;
+    }
+
+    public crossings(): WaterCrossings {
+        return { swim: this.header[SWIM], land: this.header[LAND] };
     }
 }
 
@@ -231,6 +271,7 @@ export class WaterSnapshotView implements WaterView {
     private readWrites = 0;
     private readShape = -1;
     private readVersion = 0;
+    private readCrossings: WaterCrossings = { swim: 0, land: 0 };
     private readonly scratch: RestLevelSearch;
 
     constructor(private readonly snapshot: WaterSnapshot) {
@@ -268,10 +309,12 @@ export class WaterSnapshotView implements WaterView {
                 }
             }
             const version = snapshot.version();
+            const crossings = snapshot.crossings();
             if (snapshot.writes() !== writes) continue;
             this.readWrites = writes;
             this.readShape = shape;
             this.readVersion = version;
+            this.readCrossings = crossings;
             return true;
         }
     }
@@ -283,6 +326,11 @@ export class WaterSnapshotView implements WaterView {
 
     public cells(): WaterCells {
         return { depth: this.depth, closed: this.closed };
+    }
+
+    /** As of the last refresh. */
+    public crossings(): WaterCrossings {
+        return this.readCrossings;
     }
 
     public depthAt(cellX: number, cellY: number): number {
