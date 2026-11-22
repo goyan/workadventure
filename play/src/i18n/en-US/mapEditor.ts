@@ -418,6 +418,12 @@ const mapEditor: BaseTranslation = {
             levelHint:
                 "The sink takes only the water over this altitude, in its disc: an overflow, which does not empty the lake. 0 m: the ground of the map; negative in a hollow, positive on a mount.",
         },
+        waterLevelPipette: {
+            title: "Take the level of a point of the map",
+            aiming: "Click the map: the water surface, or the ground where there is no water. Alt + click: the ground under the water. Dragging moves the view; Escape cancels.",
+            previewWater: "Under the pointer: water {level} (ground {ground})",
+            previewGround: "Under the pointer: ground {level}",
+        },
         lamp: {
             label: "Light zone",
             description:
