@@ -3074,7 +3074,8 @@ export class GameScene extends DirtyScene {
             .then(async () => {
                 const depths = await gunzip(message.depths);
                 const speeds = message.speeds ? await gunzip(message.speeds) : undefined;
-                this.terrainWater.receive({ ...message, depths, speeds }, this.time.now);
+                const slowSpeeds = message.slowSpeeds ? await gunzip(message.slowSpeeds) : undefined;
+                this.terrainWater.receive({ ...message, depths, speeds, slowSpeeds }, this.time.now);
                 if (message.stats) terrainWaterStatsStore.set(message.stats);
             })
             .catch((error: unknown) => console.warn("A state of the water of the relief could not be read", error));

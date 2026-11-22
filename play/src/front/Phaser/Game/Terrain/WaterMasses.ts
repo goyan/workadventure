@@ -17,6 +17,8 @@ export interface WaterMass {
      * seconds (the trend of its cells), so that its waves do not make it jump.
      */
     trendM3PerMinute: number;
+    /** Whether its trend is still being measured (the view of the flows just opened): it is not told yet. */
+    measuring: boolean;
     /** A point of the body to hang its label on, in map pixels: its cell nearest to its middle. */
     x: number;
     y: number;
@@ -97,6 +99,7 @@ export function waterMassesOf(
             volumeM3: px * m3,
             areaM2: tail * CELL_AREA_M2,
             meanDepthM: -metresOf(-px / tail),
+            measuring: trend !== undefined && water.trendReady === false,
             trendM3PerMinute: trend ? risingPx * m3 * 60 : timed ? (((px - earlierPx) * m3) / water.seconds) * 60 : 0,
             x: (water.x + column + 0.5) * TERRAIN_CELL,
             y: (water.y + (nearest - column) / width + 0.5) * TERRAIN_CELL,

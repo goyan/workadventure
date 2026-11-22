@@ -727,7 +727,7 @@ export class TerrainWaterManager {
         this.sentRates = anyRate;
         // The speed of a water with inertia, so that the browsers carry what floats as the water really runs.
         const water = this.room.getWam()?.settings?.water;
-        const speeds = water?.inertia === true ? grid.writeSpeeds(water.flowPace) : undefined;
+        const speeds = water?.inertia === true ? grid.writeSpeedBytes(water.flowPace) : undefined;
         if (full) this.fullAtStep = this.steps;
         this.seq++;
         this.room.sendSubMessageToRoom({
@@ -738,7 +738,8 @@ export class TerrainWaterManager {
                     seq: this.seq,
                     full,
                     depths: gzipSync(payload),
-                    ...(speeds ? { speeds: gzipSync(speeds) } : {}),
+                    ...(speeds ? { speeds: gzipSync(speeds.speeds) } : {}),
+                    ...(speeds?.slow ? { slowSpeeds: gzipSync(speeds.slow) } : {}),
                     stats: {
                         ...rates,
                         stock: (grid.totalPx() * CELL_LITRES_PER_PX) / LITRES_PER_M3,

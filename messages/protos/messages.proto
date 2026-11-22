@@ -1113,6 +1113,9 @@ message TerrainWaterMessage {
   // The speed of the water, on a map whose water has inertia: two signed bytes a block of 4 x 4 cells (towards
   // the east, towards the south, in quarters of a cell a second), row by row, gzipped. Absent: none is known.
   optional bytes speeds = 9;
+  // The slow speeds apart, in the same layout: where `speeds` says 0, in 250ths of a cell a second (a water slower
+  // than about a centimetre a second is still). Absent: no slow speed is known.
+  optional bytes slowSpeeds = 10;
 }
 
 // The animals living in the water of the relief of a room (fish, dolphins), told by the server once a second: all

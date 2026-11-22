@@ -86,7 +86,7 @@ const actionbar = {
         rising: "Rising level",
         falling: "Falling level",
         trend: "The tint follows the trend of the level over a few seconds: water that only ripples has none.",
-        masses: "On each body of water: volume, surface, mean depth, then what it gains or loses a minute.",
+        masses: 'On each body of water: volume, surface, mean depth, then what it gains or loses a minute ("…": being measured, a few seconds after opening).',
         realTime: 'Flows in real time: at "Speed of the water" 4, a source of 100 m³/h pours 6.7 m³/min.',
         totals: "On the whole map: {stock} m³ of water, {area} m² under water",
         noWater: "The server has said nothing yet of the water of this map.",
