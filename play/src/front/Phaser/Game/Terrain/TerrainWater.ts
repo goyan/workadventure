@@ -151,8 +151,11 @@ export class TerrainWater {
         return this.dug || this.wet;
     }
 
-    /** A state from the server, at this time of the game: the water glides to it. */
-    public receive(state: WaterState, now: number): void {
+    /**
+     * A state from the server, at this time of the game: the water glides to it, for as long as the server took
+     * between its two last states, or for `glideMs` (back from the water of this player to the server's).
+     */
+    public receive(state: WaterState, now: number, glideMs?: number): void {
         const cells = state.width * state.height;
         if (state.depths.length !== cells * 2) return;
         const sameGrid =
@@ -189,7 +192,7 @@ export class TerrainWater {
             this.at = now;
             // Only then the pace of the new glide: the time the server took between the two states.
             this.before = this.to;
-            this.betweenMs = Math.max(100, now - this.receivedAt);
+            this.betweenMs = glideMs ?? Math.max(100, now - this.receivedAt);
             if (this.trend && now - this.trendReadAt > TREND_UNREAD_MS) this.trend = undefined;
             this.trend?.add(this.to, to, now);
         } else {

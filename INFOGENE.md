@@ -99,7 +99,9 @@ Un petit symbole flotte au-dessus du nom d'un joueur qui ne perçoit pas le mond
 sort :
 
 - **œil barré violet** : il est en **mode Basique** (ni nuit, ni météo, ni effets) ;
-- **œil dans une boule de cristal cyan** : il suit la **météo d'une autre ville** (« Jour dans le monde »).
+- **œil dans une boule de cristal cyan** : il suit la **météo d'une autre ville** (« Jour dans le monde ») ;
+- **goutte d'eau bleue** : son **eau rapide** est active (son eau du relief va 60 fois plus vite, pour lui seul).
+  Une ville suivie l'emporte sur l'eau rapide, le Basique sur les deux.
 
 Les deux portent la même étoile qui scintille ; leurs formes diffèrent (œil plat et barre, anneau), pour être distingués
 sans les couleurs. Au survol du symbole, une infobulle le dit (« Mode Basique : ne voit ni la nuit ni la météo », « Suit
@@ -109,7 +111,7 @@ sol, `TerrainView`).
 
 - **Qui le voit** : seulement un joueur qui perçoit lui-même le monde partagé (ni Basique, ni ville suivie), jamais
   au-dessus de son propre avatar (`shownPerceptionMark`, `Perception/PerceptionProtocol.ts`).
-- **Partage** : variable de joueur publique `_perception`, non sauvegardée (`none`, `basic`, `place` ; toute autre
+- **Partage** : variable de joueur publique `_perception`, non sauvegardée (`none`, `basic`, `place`, `water` ; toute autre
   valeur lue `none`), publiée à l'entrée dans la salle et à chaque changement (`PerceptionManager`). Aucun changement
   du protocole ni de `back` ; un ancien client n'affiche rien. Le Basique compte tel qu'il est choisi, même dans
   l'éditeur (le symbole ne clignote pas à chaque édition) ; un essai de météo dans le panneau de la carte n'est pas
@@ -3264,6 +3266,31 @@ qu'elle ne pouvait couler, et le modèle était faussé (crues trop hautes, flot
   635 à 3 019 pas réels au lieu de 12 000 à 18 000. Les 19 empreintes de `WaterFingerprints.test.ts` sont
   inchangées (k = 1 au temps réel).
 - Le rattrapage d'une salle vide garde la vitesse de la carte en un bloc sans inertie, comme avant.
+
+## Eau rapide, pour soi seul (« Réglages → Ambiance »)
+
+Un interrupteur personnel, mémorisé dans le navigateur comme Basique (`fastWaterStore`, clé `fastWater`) : l'eau du
+relief de ce joueur va 60 fois plus vite, sous la météo de la carte, ou sous celle de la ville qu'il suit.
+
+- **Calcul** : le sol local de la météo personnelle (`LocalTerrainController`, worker `LocalTerrainSimulation`)
+  démarre aussi pour l'eau rapide seule, sans ville choisie. Il garde alors la météo de la carte, avec l'air du lieu
+  de la carte (Paris par défaut, comme le serveur). Les apports (pluie, sources, neige, et le pré qu'ils mouillent)
+  vont ×60 (règle « demandée », `FAST_WATER_SPEED`). L'écoulement va k fois plus vite, k mesuré par `WaterPace` dans
+  50 ms par pas (la moitié d'un cœur).
+- **Retrait de `LOCAL_MIN_SPEED`** : sans eau rapide, la météo d'une ville suivie fait vivre l'eau au temps de la
+  carte. Le tableau « Météo expliquée » propose alors l'eau rapide (« Pour voir l'effet de cette météo en quelques
+  minutes, activez l'eau rapide »).
+- **Indicateur** dans la barre d'actions : « Eau ×60 », ou « Eau ×60, courants ×k » quand les courants plafonnent
+  (`reachedSpeed`). Les réglages disent alors de combien l'eau qui coule est plus haute que dans la réalité :
+  (60/k)^0,6, d'après Manning.
+- **Rien n'est enregistré** : l'eau locale repart de l'eau du serveur à chaque connexion, au retour d'un onglet caché
+  (le worker est arrêté tant qu'il est caché) et avec « Resynchroniser ».
+- **Coupure** : l'eau glisse en 1 s vers l'eau du serveur, et la barre affiche « Retour à l'eau partagée ».
+  Avec une ville suivie, le sol local continue, au temps de la carte.
+- **Serveur** : rien ne lui est envoyé, sauf le symbole de perception (`water`). Les catastrophes de la salle
+  n'atteignent pas cette eau, ce que l'aide dit. Les conditions réglées à la main dans la salle (Catastrophe → Météo)
+  ne sont pas suivies par l'air local.
+- **Non vérifié** : aucun rendu vu, aucune mesure dans un navigateur.
 
 ## Défauts de l'eau d'une carte (2026-11-22) et garde-fou réseau
 

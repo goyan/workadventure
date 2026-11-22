@@ -38,6 +38,7 @@ const woka: DeepPartial<Translation["woka"]> = {
     perception: {
         basic: "Mode Basique : ne voit ni la nuit ni la météo",
         place: "Suit la météo d’une autre ville",
+        water: "Voit son eau du relief couler 60 fois plus vite (eau rapide)",
     },
     customWoka: {
         color: "Couleur",

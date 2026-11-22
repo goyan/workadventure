@@ -28,6 +28,7 @@
     import CloseChatMenuItem from "./MenuIcons/CloseChatMenuItem.svelte";
     import PerfCounter from "./PerfCounter.svelte";
     import BasicModeButton from "./BasicModeButton.svelte";
+    import FastWaterBadge from "./FastWaterBadge.svelte";
     import PictureInPictureMenuItem from "./MenuIcons/PictureInPictureMenuItem.svelte";
 
     let rightDiv: HTMLDivElement | undefined = $state();
@@ -71,6 +72,7 @@
                         class="flex justify-center relative gap-1 @md/actions:gap-2 @xl/actions:gap-4 z-[1] mx-1 @md/actions:mx-2 @xl/actions:mx-4"
                     >
                         <div class="flex items-center"><BasicModeButton /></div>
+                        <div class="hidden @md/actions:flex items-center"><FastWaterBadge /></div>
                         {#if $perfShownStore}
                             <div class="hidden @md/actions:flex items-center"><PerfCounter /></div>
                         {/if}

@@ -4,7 +4,6 @@ import {
     DEFAULT_FIRE_THRESHOLDS,
     fireDanger,
     GroundSimulation,
-    MAX_WATER_SPEED,
     MeadowSimulation,
     NEUTRAL_FIRE_CONDITIONS,
     REAL_WEATHER_SLOT_MS,
@@ -22,6 +21,7 @@ import type {
     WeatherLocation,
 } from "@workadventure/map-editor";
 import type { MeadowMessage, SubToPusherRoomMessage, TerrainWaterMessage } from "@workadventure/messages";
+import { FAST_WATER_SPEED } from "./FastWaterSpeed";
 
 /**
  * The local ground shares the computer with the game: a step of its water may take this long (ms) before its fineness
@@ -32,19 +32,18 @@ const LOCAL_STEP_BUDGET_MS = 20;
 const LOCAL_UPDATES_A_SECOND = 1;
 /** The finest the local water is computed, whatever the map asks of the server. */
 const LOCAL_MAX_PRECISION = 2;
-/**
- * What comes in and goes out of the local water (rain, sources, evaporation) goes at least this many times faster
- * than in reality (WaterSettings.speed, a minute a second): the rain of the chosen place is seen filling a lake within
- * minutes, where the server, in real time, takes hours. Its flows keep their pace.
- */
-const LOCAL_MIN_SPEED = 60;
 
-/** Where the local ground of a player starts: the map, the place they chose, and the ground of the server now. */
+/**
+ * Where the local ground of a player starts: the map, the place they chose (none: the weather of the map, for fast
+ * water alone) and its weather timeline (the map's own place then), whether the water is fast, and the ground of the
+ * server now.
+ */
 export interface LocalTerrainStart {
     wam: WAMFileFormat;
     mapCells: { width: number; height: number };
-    place: WeatherLocation;
+    place: WeatherLocation | undefined;
     slots: readonly RealWeatherSlot[];
+    fast: boolean;
     water?: { depths: Uint8Array; bounds: WaterGridBounds };
     meadow?: SeededMeadow;
 }
@@ -53,7 +52,8 @@ export interface LocalTerrainStart {
 export type LocalTerrainCommand =
     | { kind: "start"; start: LocalTerrainStart }
     | { kind: "wam"; wam: WAMFileFormat }
-    | { kind: "place"; place: WeatherLocation; slots: readonly RealWeatherSlot[] }
+    | { kind: "place"; place: WeatherLocation | undefined; slots: readonly RealWeatherSlot[] }
+    | { kind: "fast"; fast: boolean }
     | { kind: "walkers"; walkers: readonly { x: number; y: number }[] };
 
 /** What the local ground tells its player: a state of its water or of its meadow, its bytes as they are (unzipped). */
@@ -72,9 +72,10 @@ export type LocalTerrainTold =
  */
 export class LocalTerrainSimulation {
     private wam: WAMFileFormat;
-    private shownWam: { of: WAMFileFormat; place: WeatherLocation; wam: WAMFileFormat } | undefined;
-    private place: WeatherLocation;
+    private shownWam: { of: WAMFileFormat; place: WeatherLocation | undefined; wam: WAMFileFormat } | undefined;
+    private place: WeatherLocation | undefined;
     private slots: readonly RealWeatherSlot[];
+    private fast: boolean;
     private readonly mapCells: { width: number; height: number };
     private walkers: readonly { x: number; y: number }[] = [];
     /** The water and the meadow, wired as the server wires its own (GroundSimulation). */
@@ -89,6 +90,7 @@ export class LocalTerrainSimulation {
         this.wam = start.wam;
         this.place = start.place;
         this.slots = start.slots;
+        this.fast = start.fast;
         this.mapCells = start.mapCells;
         const room = {
             getWam: (): WAMFileFormat => this.localWam(),
@@ -122,6 +124,7 @@ export class LocalTerrainSimulation {
                 // What comes in (rain, sources, snow) at the speed the player's weather asks, as before; its flow as
                 // fast as this worker holds.
                 water.inflowAt("asked");
+                water.askWith(() => (this.fast ? FAST_WATER_SPEED : undefined));
                 return water;
             },
             makeMeadow: (water) =>
@@ -185,9 +188,14 @@ export class LocalTerrainSimulation {
     }
 
     /** The player chose another place, or its weather is known again: the ground lives on under it. */
-    public setPlace(place: WeatherLocation, slots: readonly RealWeatherSlot[]): void {
+    public setPlace(place: WeatherLocation | undefined, slots: readonly RealWeatherSlot[]): void {
         this.place = place;
         this.slots = slots;
+    }
+
+    /** Fast water on or off: the water goes on from where it is, at the other pace. */
+    public setFast(fast: boolean): void {
+        this.fast = fast;
     }
 
     /** Where the avatar of this player stands on the ground (map pixels): none while it is on a raised floor. */
@@ -195,7 +203,10 @@ export class LocalTerrainSimulation {
         this.walkers = walkers;
     }
 
-    /** The map as this ground reads it: in the real weather of the chosen place, whatever weather the map shows. */
+    /**
+     * The map as this ground reads it: in the real weather of the chosen place, whatever weather the map shows; in the
+     * weather of the map itself when none is chosen (fast water alone).
+     */
     private localWam(): WAMFileFormat {
         const shown = this.shownWam;
         if (shown && shown.of === this.wam && shown.place === this.place) return shown.wam;
@@ -204,8 +215,7 @@ export class LocalTerrainSimulation {
             ...this.wam,
             settings: {
                 ...this.wam.settings,
-                weather: WeatherType.Real,
-                weatherLocation: this.place,
+                ...(this.place && { weather: WeatherType.Real, weatherLocation: this.place }),
                 ...(water && { water: localWaterSettings(water) }),
             },
         };
@@ -246,13 +256,12 @@ export class LocalTerrainSimulation {
 
 /**
  * The water settings of the map as the local ground runs them: lighter than the server's (told once a second, at most
- * as fine as LOCAL_MAX_PRECISION) and quicker (at least LOCAL_MIN_SPEED times reality).
+ * as fine as LOCAL_MAX_PRECISION), at the speed the map sets (fast water asks more, see FAST_WATER_SPEED).
  */
 export function localWaterSettings(water: WaterSettings): WaterSettings {
     return {
         ...water,
         updates: LOCAL_UPDATES_A_SECOND,
-        speed: Math.min(MAX_WATER_SPEED, Math.max(water.speed, LOCAL_MIN_SPEED)),
         precision: Math.min(water.precision ?? LOCAL_MAX_PRECISION, LOCAL_MAX_PRECISION),
     };
 }

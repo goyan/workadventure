@@ -37,6 +37,7 @@ const woka: BaseTranslation = {
     perception: {
         basic: "Basic mode: sees neither the night nor the weather",
         place: "Follows the weather of another city",
+        water: "Sees the water of the relief run 60 times faster (fast water)",
     },
     customWoka: {
         color: "Color",

@@ -55,15 +55,24 @@ function lastWater(
     slots: RealWeatherSlot[],
     steps: number,
     water?: { depths: Uint8Array; bounds: { x: number; y: number; width: number; height: number } },
+    options: { fast?: boolean; place?: WeatherLocation | undefined; map?: WAMFileFormat } = { place: RIO },
 ): TerrainWaterMessage | undefined {
     const told: LocalTerrainTold[] = [];
+    const map = options.map ?? wam;
     const simulation = new LocalTerrainSimulation(
-        { wam, mapCells: MAP_CELLS, place: RIO, slots, ...(water ? { water } : {}) },
+        {
+            wam: map,
+            mapCells: MAP_CELLS,
+            place: "place" in options ? options.place : RIO,
+            slots,
+            fast: options.fast ?? false,
+            ...(water ? { water } : {}),
+        },
         (message) => told.push(message),
         () => NOW,
         () => 1,
     );
-    simulation.setWam(wam);
+    simulation.setWam(map);
     for (let step = 0; step < steps; step++) simulation.step();
     const last = told.filter((message) => message.kind === "water").at(-1);
     return last?.kind === "water" ? last.message : undefined;
@@ -100,16 +109,38 @@ describe("LocalTerrainSimulation", () => {
         expect(depthsOf(water?.depths ?? new Uint8Array(0)).reduce((sum, depth) => sum + depth, 0)).toBeGreaterThan(0);
         expect(lastWater([slotAt(25, 0)], 10)).toBeUndefined();
     });
+
+    it("lives at the pace of reality, as the map sets it, without fast water", () => {
+        const water = lastWater([slotAt(25, 50)], 30);
+        expect(water?.stats?.reachedSpeed).toBeUndefined();
+    });
+
+    it("pours sixty times faster with fast water, and says how fast its currents go", () => {
+        const slow = lastWater([slotAt(25, 50)], 10);
+        const fast = lastWater([slotAt(25, 50)], 10, undefined, { fast: true, place: RIO });
+        expect(fast?.stats?.reachedSpeed).toBeGreaterThanOrEqual(1);
+        expect(fast?.stats?.reachedSpeed).toBeLessThanOrEqual(60);
+        // The water held after a second: a minute of the rain of the place against a second (some of it already
+        // runs off this small map, whose currents go as fast).
+        expect(fast?.stats?.stock ?? 0).toBeGreaterThan((slow?.stats?.stock ?? 0) * 5);
+    });
+
+    it("keeps the weather of the map when no place is chosen: its rain, not the rain of a city", () => {
+        const rainy: WAMFileFormat = { ...wam, settings: { ...wam.settings, weather: WeatherType.Rain } };
+        const clear = lastWater([], 30, undefined, { fast: true, place: undefined });
+        const raining = lastWater([], 30, undefined, { fast: true, place: undefined, map: rainy });
+        expect(clear?.stats?.rainRate ?? 0).toBe(0);
+        expect(raining?.stats?.rainRate ?? 0).toBeGreaterThan(0);
+    });
 });
 
 describe("localWaterSettings", () => {
     const water = wam.settings?.water;
     if (!water) throw new Error("the test map has water settings");
 
-    it("lets what comes in and goes out go sixty times faster than real time, never past the bound", () => {
-        expect(localWaterSettings({ ...water, speed: 1 }).speed).toBe(60);
+    it("keeps the speed of the map: fast water is the player's own choice", () => {
+        expect(localWaterSettings({ ...water, speed: 1 }).speed).toBe(1);
         expect(localWaterSettings({ ...water, speed: 300 }).speed).toBe(300);
-        expect(localWaterSettings({ ...water, speed: 1000 }).speed).toBe(1000);
     });
 
     it("tells the water once a second, at most as fine as 2, whatever the map asks of the server", () => {

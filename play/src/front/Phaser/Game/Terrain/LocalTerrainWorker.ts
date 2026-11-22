@@ -28,5 +28,6 @@ workerScope.onmessage = (event: MessageEvent<LocalTerrainCommand>): void => {
     if (!simulation) return;
     if (command.kind === "wam") simulation.setWam(command.wam);
     else if (command.kind === "place") simulation.setPlace(command.place, command.slots);
+    else if (command.kind === "fast") simulation.setFast(command.fast);
     else simulation.setWalkers(command.walkers);
 };
