@@ -2455,6 +2455,19 @@ ne l'est pas).
   drain d'un bâtiment (siphon sur un sol « Carte Sols »), averse, comète, boule traînée, drain, feu, boule de feu,
   glace brisée, redoux, carte changée ; puis une salle rouverte après trois heures (rattrapage). Mêmes messages à
   la salle, mêmes écritures Redis, mêmes niveaux de boule.
+- **Vue de l'eau et instantané** (`Terrain/WaterView.ts`, `Terrain/BallLevels.ts`, PR 3). Ce qui lit l'eau sans la
+  calculer (vie aquatique : `waterBodiesOf`, `stepPopulation`, `swim`, `AquaticLifeManager` ; niveau d'une boule)
+  ne demande plus un `WaterGrid` mais une `WaterView` : `bounds`, `depthAt`, `canCross`, `restLevelAt`. `WaterGrid`
+  en est une ; `WaterSnapshotView` en est une autre, sur une copie de la grille (`WaterSnapshot`) que
+  `WaterGrid.publish` écrit : les profondeurs à chaque publication, le sol sous les boules et les côtés fermés par
+  les portes seulement quand ils ont changé (compteur `shape`). La mémoire de l'instantané peut être partagée entre
+  fils ; un compteur d'écritures (impair pendant une écriture) garantit qu'un lecteur ne prend jamais un état à
+  moitié écrit, et `refresh` prend l'instantané en entier, pour qu'une boucle sur les cellules voie une seule eau.
+  Le niveau au repos (`restLevelOf`) et la mémoire du niveau des boules (`BallLevels`) sont sortis de `WaterGrid`
+  et de `WaterSimulation` sans changer de calcul. **Dans le fil des salles rien ne lit l'instantané** : la façade
+  rend la grille elle-même, comme avant ; l'instantané sert au fil de calcul (PR 4). `WaterView.test.ts` : la vue
+  répond comme la grille, cellule par cellule et au-delà des bords, après des pas, une porte fermée, une boule
+  posée, déplacée, retirée, en mémoire propre et partagée ; mêmes étendues d'eau pour la vie ; même niveau de boule.
 
 Preuve d'identité : `libs/map-editor/tests/WaterFingerprints.test.ts` joue 19 scénarios de `WaterGrid` et finit
 chacun sur une empreinte (profondeurs, flux, vitesses, bilans, octets envoyés) enregistrée avec le code d'avant

@@ -4,7 +4,7 @@ import {
     GroundSimulation,
     NEUTRAL_FIRE_CONDITIONS,
 } from "@workadventure/map-editor";
-import type { Downpour, LifeFire, RealWeatherSlot, ReplayedWeather, WaterGrid } from "@workadventure/map-editor";
+import type { Downpour, LifeFire, RealWeatherSlot, ReplayedWeather, WaterView } from "@workadventure/map-editor";
 import type { MeadowMessage, TerrainWaterMessage, TreeFireMessage } from "@workadventure/messages";
 import { MeadowManager } from "../MeadowManager";
 import { TerrainWaterManager } from "../TerrainWaterManager";
@@ -147,7 +147,7 @@ export class InlineRoomGround implements RoomGround {
         return this.ground.water.ballLevelAt(id, x, y);
     }
 
-    public getGrid(): WaterGrid | undefined {
+    public getGrid(): WaterView | undefined {
         return this.ground.water.getGrid();
     }
 
