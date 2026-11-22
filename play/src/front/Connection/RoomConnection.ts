@@ -59,6 +59,8 @@ import type {
     CatastropheKind,
     CatastropheMessage,
     FishingMessage,
+    IceShackAction,
+    IceShacksMessage,
     UploadEntityMessage,
     UserJoinedMessage as UserJoinedMessageTsProto,
     UserLeftMessage as UserLeftMessageTsProto,
@@ -265,6 +267,9 @@ export class RoomConnection implements RoomConnection {
     /** The fishing lines of the room, whenever one changes. */
     private readonly _fishingMessageStream = new Subject<FishingMessage>();
     public readonly fishingMessageStream = this._fishingMessageStream.asObservable();
+    /** The ice fishing shacks of the room, whenever one changes. */
+    private readonly _iceShacksMessageStream = new Subject<IceShacksMessage>();
+    public readonly iceShacksMessageStream = this._iceShacksMessageStream.asObservable();
     private readonly _entityMessageStream = new Subject<EntityMessageTsProto>();
     public readonly entityMessageStream = this._entityMessageStream.asObservable();
     private readonly _editMapCommandMessageStream = new Subject<EditMapCommandMessage>();
@@ -517,6 +522,10 @@ export class RoomConnection implements RoomConnection {
                                     this._fishingMessageStream.next(subMessage.fishingMessage);
                                     break;
                                 }
+                                case "iceShacksMessage": {
+                                    this._iceShacksMessageStream.next(subMessage.iceShacksMessage);
+                                    break;
+                                }
                                 case "entityMessage": {
                                     this._entityMessageStream.next(subMessage.entityMessage);
                                     break;
@@ -727,6 +736,7 @@ export class RoomConnection implements RoomConnection {
                         treeFire: roomJoinedMessage.treeFire,
                         fireConditions: roomJoinedMessage.fireConditions,
                         fishing: roomJoinedMessage.fishing,
+                        iceShacks: roomJoinedMessage.iceShacks,
                         applications: applications,
                     } as RoomJoinedMessageInterface);
                     this.isRoomJoined = true;
@@ -1271,6 +1281,11 @@ export class RoomConnection implements RoomConnection {
                 launchCatastropheMessage: { kind, x: Math.round(x), y: Math.round(y), radiusTiles, wholeMap, release },
             },
         });
+    }
+
+    /** Puts up, enters, leaves or takes down an ice fishing shack. The server decides. */
+    emitIceShackAction(action: IceShackAction, shackId = 0): void {
+        this.send({ message: { $case: "iceShackActionMessage", iceShackActionMessage: { action, shackId } } });
     }
 
     /** Starts a fishing contest in the room: 3, 5 or 10 minutes. The server refuses it while one runs. */
@@ -2510,6 +2525,7 @@ export class RoomConnection implements RoomConnection {
         this._fireConditionsMessageStream.complete();
         this._aquaticLifeMessageStream.complete();
         this._fishingMessageStream.complete();
+        this._iceShacksMessageStream.complete();
         this._catastropheMessageStream.complete();
         this._entityMessageStream.complete();
         this._editMapCommandMessageStream.complete();

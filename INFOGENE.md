@@ -4452,6 +4452,57 @@ reconnexion. Protocole : `StartFishingContestMessage {minutes}` (navigateur → 
 **Limites.** Un concours ne survit pas à un redémarrage du serveur. Après une reconnexion, sa propre ligne n'est plus
 mise en gras avant sa prise suivante. Pas d'annonce sonore ni de carte d'annonce à part : le panneau apparaît.
 
+### Cabane de pêche sur glace
+
+**Monter.** Debout sur la glace, la roue de l'avatar propose « Monter une cabane de pêche ». L'entrée est grisée, avec
+sa raison, quand la glace du serveur ne la porte pas : il faut **102 mm** de glace sous tout le plancher
+(`ICE_SHACK_MM`, `libs/map-editor/src/Terrain/Ice.ts`). C'est 4 pouces : selon l'affiche « Recommended Minimum Ice
+Thickness » du Minnesota DNR (glace neuve et claire), on reste hors de la glace sous 4 pouces, et 4 pouces suffisent
+pour pêcher à pied. Un abri léger tiré à la main avec une personne relève de cette catégorie (https://files.dnr.state.mn.us/education_safety/safety/ice/ice-tickness-guidelines-poster.pdf).
+Il faut aussi au moins 16 px d'eau sous le trou, là où l'on nage (une flaque gelée ne suffit pas). Pas de cabane sur
+une piscine (pas de poissons), depuis un étage, à moins de trois cases d'une autre, ni à moins d'une case de l'endroit
+où un objet de la carte est posé : le serveur ne connaît pas la taille des objets, seulement leur position. Chaque
+joueur a une seule cabane, et une carte en compte huit au plus. Le perçage à la tarière dure 2,5 s et laisse un trou
+rond entouré d'éclats ; la cabane se monte ensuite en 1,5 s, puis celui qui l'a montée s'assied sur le tabouret.
+
+**Utiliser.** La cabane reste où elle a été montée. N'importe qui peut s'asseoir sur son tabouret, par la roue
+(« S'asseoir dans la cabane de … ») ou par la touche d'interaction, comme sur un siège de la carte. Une seule
+personne à la fois : l'entrée est grisée tant que quelqu'un y est assis. Une fois assis, la canne passe en main et
+ESPACE descend la ligne droit dans le trou, sans jauge. La suite est la pêche ordinaire : la touche, le ferrage, puis
+la prise. Les prises sont les poissons de la vie de la carte qui nagent sous la glace. Elles vont dans le même carnet
+et comptent au concours. Quand quelqu'un est assis, le poêle est allumé : le tuyau fume, la fumée suit le vent de
+l'air de la carte (`groundWind`), et de nuit la lanterne et le poêle éclairent les alentours.
+
+**Partir, démonter.** Se lever (par la roue, ou en marchant) laisse la cabane en place. Seul le joueur qui l'a montée,
+reconnu par son `uuid`, peut la démonter, depuis l'intérieur ou à côté. Une cabane disparaît aussi si son propriétaire
+n'est pas revenu dans la salle depuis 24 h.
+
+**Dégel.** Toutes les 2 s, le serveur lit la glace la plus mince sous le plancher. Si elle passe sous 102 mm, la glace
+craque pendant 5 s : des fissures sont dessinées, l'occupant est averti et se lève, et personne ne peut plus s'asseoir.
+La cabane se replie ensuite et disparaît avec son trou. Si la glace fond complètement, la cabane disparaît aussitôt.
+Une glace qui s'épaissit de nouveau arrête les fissures. Tant que la salle rattrape le temps passé vide, le serveur ne
+juge pas la glace.
+
+**Météo personnelle.** La cabane est un objet de la salle : tout le monde la voit. Un joueur qui suit la météo d'un lieu
+à lui ne voit pas la glace du serveur. Pour lui, « Monter » et « S'asseoir » sont grisés avec la raison « suivez la
+météo de la carte ».
+
+**Technique.** La cabane n'est pas une modification de la carte : rien n'est écrit dans le WAM. `IceShackManager`
+(`back`) la tient en mémoire et l'enregistre dans Redis `ice-shacks:<salle>`. Les cabanes survivent donc à un
+redémarrage ; l'occupant n'est pas gardé. Règles pures : `libs/map-editor/src/Life/IceShack.ts`. Glace :
+`MeadowManager.iceAt`. Eau : grille du relief. Le tabouret est un siège de `Phaser/Player/Seat.ts` : un joueur assis
+se voit assis chez les autres, sans message dédié. Protocole :
+- `IceShackActionMessage {action, shackId}`, du client au serveur (81, et 65 du pusher à `back`) ;
+- `IceShacksMessage {shacks, events}`, du serveur à la salle (59 et 39) et à l'arrivée d'un joueur (`RoomJoinedMessage` 47).
+
+Il faut déployer `play` et `back` ensemble. Dessin en code : `Phaser/Game/IceShack/IceShackShapes.ts`, en trois
+couches triées avec les avatars. La façade et l'avant du toit sont retirés, comme dans une maison de poupée, pour voir
+le pêcheur.
+
+**Limites de ce lot.** Le trou est décoratif : ce n'est pas un trou d'eau libre où l'on tombe. La pêche ordinaire
+n'est toujours pas refusée à travers la glace hors cabane. La cabane n'a pas de collision. Un seul siège, pas de
+concours propre à la glace, et le poêle ne réchauffe pas la glace.
+
 ## Feu de végétation : conditions et sécheresse (lot 1)
 
 Premier lot du feu de végétation : la salle a des **conditions de feu**, réelles ou réglées à la main, et l'herbe du
