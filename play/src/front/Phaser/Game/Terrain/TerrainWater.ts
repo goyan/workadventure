@@ -51,14 +51,13 @@ export interface SettledWater {
     trendShown?: Int8Array;
 }
 
-/** A film of water thinner than this is not drawn: what a flood leaves behind would speckle the ground. */
+/** Water thinner than this is a film the feet stand in: what stands or walks reads the ground under it. */
 export const WATER_SHOWN_PX = 0.5;
-const SHOWN_PX = WATER_SHOWN_PX;
 /**
- * A sheet of water that runs is drawn down to this (the step of the depths the server tells, 4 mm): spread over a
- * slope, a stream runs a centimetre deep and fast, and the ground it runs over is wet (the flows of the water show it).
+ * Water is drawn down to this, the step of the depths the server tells (4 mm), running or still: a sheet that runs
+ * over a slope a few millimetres thin carries real water from a pool to the next (the flows of the water show it).
  */
-const RUNNING_SHOWN_PX = 1 / 8;
+const DRAWN_PX = 1 / 8;
 /**
  * How often a gliding water asks to be drawn again: a level that creeps between two states of the server (a second
  * apart) shows as well at five drawings a second as at ten, and each drawing paints the whole view.
@@ -315,7 +314,7 @@ export class TerrainWater {
 
     /**
      * The water over the cells of a canvas (one pixel a cell of the relief, its corner at the cell `cellX`, `cellY`)
-     * at this time of the game, written into `levels`: 0 where it is dry or under a film too thin to be seen, else
+     * at this time of the game, written into `levels`: 0 where it is dry or under the thinnest water told (DRAWN_PX), else
      * its depth in pixels (1 to 255).
      * Returns whether there is any. One pass over the part of the grid the canvas shows, for a drawing made ten
      * times a second.
@@ -335,22 +334,14 @@ export class TerrainWater {
         const lastRow = Math.min(rows, grid.y + grid.height - cellY);
         const firstColumn = Math.max(0, grid.x - cellX);
         const lastColumn = Math.min(columns, grid.x + grid.width - cellX);
-        const speeds = this.speeds;
-        const blocks = Math.ceil(grid.width / SPEED_BLOCK_CELLS);
         let any = false;
         for (let row = firstRow; row < lastRow; row++) {
-            const gridRow = row + cellY - grid.y;
-            const gridLine = gridRow * grid.width + (cellX - grid.x);
-            const blockLine = Math.floor(gridRow / SPEED_BLOCK_CELLS) * blocks;
+            const gridLine = (row + cellY - grid.y) * grid.width + (cellX - grid.x);
             const line = row * columns;
             for (let column = firstColumn; column < lastColumn; column++) {
                 const start = from[gridLine + column];
                 const depth = start + (to[gridLine + column] - start) * share;
-                if (depth < SHOWN_PX) {
-                    if (depth < RUNNING_SHOWN_PX || !speeds) continue;
-                    const at = (blockLine + Math.floor((column + cellX - grid.x) / SPEED_BLOCK_CELLS)) * 2;
-                    if (speeds[at] === 0 && speeds[at + 1] === 0) continue;
-                }
+                if (depth < DRAWN_PX) continue;
                 levels[line + column] = depth < 1 ? 1 : depth > 255 ? 255 : Math.round(depth);
                 any = true;
             }

@@ -45,6 +45,17 @@ const PACKS_DOWN = PACKS / PACKS_ACROSS;
 const WATER_SCALE_PX = 128;
 /** The depth (0 to 1 of WATER_SCALE_PX) times this is how far a deep water reaches over the cells around it. */
 const SHORE_GAIN = 12;
+/** The pack that holds the current of the water of each cell: towards the east (red) and the south (green). */
+export const FLOW_PACK = 10;
+/** Bytes a cell a second of current, around 128 (still): to four cells (2.2 m) a second. */
+export const FLOW_UNITS = 32;
+/** A film reaches the colour of the water at this depth (map pixels, SHORE_PX): thinner, it is clearer. */
+export const SHORE_FILM_PX = SHORE_PX;
+/** A current this fast (cells a second, 0.27 m/s) reads in full on a thin film: its ripples and its tint. */
+const RUNNING_FULL_CELLS = 0.5;
+/** How much of the colour of the water a film shows (see filmCover): lying still, and running. */
+const STILL_FILM = 0.05;
+const RUNNING_FILM = 0.35;
 /**
  * The reflectance of a ground soaked, against the same ground dry (linear, visible light). Porous soils lose about
  * half of it: 0.4 to 0.6 for soils (Lobell & Asner 2002, Soil Sci. Soc. Am. J. 66:722), a loam's albedo from about
@@ -675,8 +686,14 @@ void main() {
         // A film thinner than the shore of the water (SHORE_PX) is clear: a few centimetres of water have no colour,
         // the wet ground shows through it, deepened by the ground shader, under the glints of its surface. The colour
         // of the water comes with its depth.
-        float film = smoothstep(1.0, ${SHORE_PX}.0, depthPx);
-        float alpha = mix(0.5, 0.92, deep) * mix(0.05, 1.0, film);
+        // A film that runs reads as water (filmCover): a light tint, and ripples drawn out along the current that
+        // slide with it, at its own speed (FLOW_PACK: cells a second).
+        float film = smoothstep(1.0, ${glsl(SHORE_FILM_PX)}, depthPx);
+        vec2 current = (pack(${FLOW_PACK}.0, world).rg * 255.0 - 128.0) / ${FLOW_UNITS}.0;
+        float pace = length(current);
+        float running = clamp(pace / ${glsl(RUNNING_FULL_CELLS)}, 0.0, 1.0);
+        float alpha = mix(0.5, 0.92, deep)
+            * mix(mix(${glsl(STILL_FILM)}, ${glsl(RUNNING_FILM)}, running), 1.0, film);
 
         // The waves of the comets: a bright crest running to the shores, a dark trough behind, the surface pushed.
         float shock = ringsAt(world);
@@ -696,6 +713,16 @@ void main() {
         water = mix(water, FOAM, glint * 0.8);
         water = withShards(water, world, broken.y);
         alpha = max(alpha, glint * 0.8);
+        if (running > 0.01 && film < 0.99) {
+            vec2 along = current / max(pace, 0.0001);
+            float down = dot(world, along) - t * pace * cellPx;
+            float across = dot(world, vec2(-along.y, along.x));
+            float ripple = smoothstep(0.6, 0.78, vnoise(vec2(down / 12.0, across / 2.5)) * 0.65
+                + vnoise(vec2(down / 5.0, across / 1.5) + 7.0) * 0.35);
+            float shown = ripple * running * (1.0 - film) * 0.7;
+            water = mix(water, FOAM, shown);
+            alpha = max(alpha, shown);
+        }
 
         // The foam where the water meets the shore: a band that comes and goes, broken by a fine noise.
         float band = step(0.5, edge) * (1.0 - step(0.66, edge));
@@ -944,7 +971,11 @@ export class GroundSplat {
      * The depth of the water over the area (map pixels a cell, as the area of `setGround`); undefined: dry. With the
      * foam of its waves, cell by cell (0 to 255); undefined: none.
      */
-    public setWater(wet: Uint8Array | undefined, strength: number, foam?: Uint8Array): void {
+    /**
+     * The depth of the water over the area, its foam, and its current (cells a second, east then south, two a cell;
+     * undefined: still).
+     */
+    public setWater(wet: Uint8Array | undefined, strength: number, foam?: Uint8Array, flow?: Float32Array): void {
         const area = this.area;
         const pixels = this.pixels;
         if (!area || !pixels) return;
@@ -953,6 +984,7 @@ export class GroundSplat {
         const any = writeWater(pixels.data, wet, columns, rows);
         // The foam of the waves, in the red of pack 9.
         writeFoam(pixels.data, wet, foam, columns, rows);
+        writeFlow(pixels.data, flow, columns, rows);
         if (!any && !this.anyWater) return;
         this.anyWater = any;
         this.upload();
@@ -1282,6 +1314,38 @@ export function writeFoam(
     for (let cell = 0; cell < columns * rows; cell++) {
         data[texel(9, cell, columns, rows)] = (wet?.[cell] ?? 0) > 0 ? (foam?.[cell] ?? 0) : 0;
     }
+}
+
+/** The current of each cell (cells a second, east then south, two a cell), into FLOW_PACK; undefined: still. */
+export function writeFlow(
+    data: Uint8ClampedArray,
+    flow: Float32Array | undefined,
+    columns: number,
+    rows: number,
+): void {
+    const byte = (speed: number): number =>
+        128 + Math.max(-127, Math.min(127, Math.round((Number.isFinite(speed) ? speed : 0) * FLOW_UNITS)));
+    for (let cell = 0; cell < columns * rows; cell++) {
+        const at = texel(FLOW_PACK, cell, columns, rows);
+        data[at] = byte(flow?.[cell * 2] ?? 0);
+        data[at + 1] = byte(flow?.[cell * 2 + 1] ?? 0);
+    }
+}
+
+/**
+ * How much of the colour of the water a sheet this deep (map pixels) shows, running this fast (cells a second): from
+ * SHORE_FILM_PX on, all of it, as a lake; thinner, a film is clear, the wet ground shows through it, and the more it
+ * runs, the more it reads as water (a tint and ripples that slide with it). The twin of the rule of WATER_FRAG.
+ */
+export function filmCover(depthPx: number, speed: number): number {
+    const smooth = (from: number, to: number, value: number): number => {
+        const share = Math.max(0, Math.min(1, (value - from) / (to - from)));
+        return share * share * (3 - 2 * share);
+    };
+    const film = smooth(1, SHORE_FILM_PX, depthPx);
+    const running = Math.max(0, Math.min(1, speed / RUNNING_FULL_CELLS));
+    const thin = STILL_FILM + (RUNNING_FILM - STILL_FILM) * running;
+    return thin + (1 - thin) * film;
 }
 
 export function texel(pack: number, cell: number, columns: number, rows: number): number {
