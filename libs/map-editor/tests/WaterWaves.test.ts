@@ -404,7 +404,19 @@ describe("the slow currents of a pond a source feeds", () => {
         // The floor: 3 cm a second, the slowest arrow of the view of the flows.
         expect(SLOWEST_TOLD_METRES).toBe(0.01);
         expect(SLOWEST_TOLD_CELLS * CELL_METRES).toBeCloseTo(0.01, 10);
-        for (const speed of [0.055, 0.07, 0.1, 0.124, -0.06, -0.12]) {
+        // From 1 cm a second up to just under what the quarters tell (half a quarter of a cell a second).
+        for (const speed of [
+            SLOWEST_TOLD_CELLS,
+            0.03,
+            0.055,
+            0.07,
+            0.1,
+            0.124,
+            0.1249,
+            -SLOWEST_TOLD_CELLS,
+            -0.06,
+            -0.1249,
+        ]) {
             const told = slowSpeedOf(slowSpeedByte(speed));
             expect(Math.abs(told - speed)).toBeLessThanOrEqual(1 / SLOW_SPEED_UNITS / 2 + 1e-9);
             expect(Math.sign(told)).toBe(Math.sign(speed));
@@ -412,6 +424,10 @@ describe("the slow currents of a pond a source feeds", () => {
         // Slower than 3 cm a second: still. As fast as half a quarter of a cell a second: the speeds tell it.
         expect(slowSpeedByte(SLOWEST_TOLD_CELLS * 0.99)).toBe(0);
         expect(slowSpeedByte(-SLOWEST_TOLD_CELLS * 0.99)).toBe(0);
+        // The byte never overflows: at most 31 units, well within a signed byte.
+        expect(slowSpeedByte(0.1249)).toBe(31);
+        expect(slowSpeedByte(-0.1249)).toBe(256 - 31);
+        expect(slowSpeedByte(SLOWEST_TOLD_CELLS)).toBe(5);
         expect(slowSpeedByte(0.125)).toBe(0);
         expect(slowSpeedByte(1)).toBe(0);
         expect(slowSpeedByte(Number.NaN)).toBe(0);
