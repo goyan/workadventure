@@ -7,7 +7,12 @@ import {
     shadowPolygons,
     SHADOW_MAX_LENGTH,
 } from "../../../../../src/front/Phaser/Game/SkyShadows/SkyShadowGeometry";
-import type { Point, ShadowBox } from "../../../../../src/front/Phaser/Game/SkyShadows/SkyShadowGeometry";
+import type {
+    Point,
+    ShadowBox,
+    ShadowPlate,
+    ShadowSlope,
+} from "../../../../../src/front/Phaser/Game/SkyShadows/SkyShadowGeometry";
 
 /** Whether a point is inside a polygon (ray casting). */
 function inside(polygon: readonly Point[], x: number, y: number): boolean {
@@ -145,6 +150,70 @@ describe("shadowPolygons", () => {
 
     it("casts nothing without a light high enough", () => {
         expect(shadowPolygons({ boxes: [wall], trees: [] }, { azimuth: 180, elevation: -1 })).toEqual([]);
+    });
+});
+
+describe("shadowPolygons: the raised floors", () => {
+    /** The deck of a low bridge: one tile at 20 px above the ground, 8 px thick, over the tile (100, 200). */
+    const deck: ShadowPlate = { x: 100, y: 200, width: 32, height: 32, rise: 20, thickness: 8 };
+    /** A sun in the east at 45°: the shadows go west, as long as what throws them is high. */
+    const east = { azimuth: 90, elevation: 45 };
+
+    it("throws the shadow of a deck as far from its footprint as the deck is high, the light passing under it", () => {
+        const polygons = shadowPolygons({ boxes: [], trees: [], plates: [deck] }, east);
+        // Its top falls 20 px west, its underside 12 px: the shadow spans x = 80 to 120 under a 32 px wide deck.
+        expect(inAny(polygons, 82, 216)).toBe(true);
+        expect(inAny(polygons, 110, 216)).toBe(true);
+        expect(inAny(polygons, 118, 216)).toBe(true);
+        // The ground under the eastern edge of the deck is lit: the sun comes in under it.
+        expect(inAny(polygons, 125, 216)).toBe(false);
+        expect(inAny(polygons, 78, 216)).toBe(false);
+        // Not beyond its sides along the light.
+        expect(inAny(polygons, 110, 196)).toBe(false);
+        expect(inAny(polygons, 110, 236)).toBe(false);
+    });
+
+    it("moves the shadow of a deck twice as far for a deck twice as high", () => {
+        const high = { ...deck, rise: 40 };
+        const xs = (plate: ShadowPlate): number[] =>
+            shadowPolygons({ boxes: [], trees: [], plates: [plate] }, east).flatMap((polygon) =>
+                polygon.map((point) => point.x),
+            );
+        expect(Math.min(...xs(deck))).toBeCloseTo(100 - 20, 5);
+        expect(Math.min(...xs(high))).toBeCloseTo(100 - 40, 5);
+        // A lower sun: 20 / tan(30°) = 34.6 px.
+        const low = shadowPolygons({ boxes: [], trees: [], plates: [deck] }, { azimuth: 90, elevation: 30 });
+        expect(Math.min(...low.flatMap((polygon) => polygon.map((point) => point.x)))).toBeCloseTo(
+            100 - 20 / Math.tan(Math.PI / 6),
+            5,
+        );
+    });
+
+    it("casts no shadow of a deck with the light at or under the horizon", () => {
+        expect(shadowPolygons({ boxes: [], trees: [], plates: [deck] }, { azimuth: 90, elevation: 0 })).toEqual([]);
+        expect(shadowPolygons({ boxes: [], trees: [], plates: [deck] }, { azimuth: 90, elevation: -4 })).toEqual([]);
+    });
+
+    it("throws the shadow of a ramp from its foot on the ground to where its top falls", () => {
+        // A ramp going up east from the ground to 20 px, over x = 0 to 64, y = 0 to 32; a sun in the north at 45°.
+        const ramp: ShadowSlope = {
+            low: [
+                { x: 0, y: 0 },
+                { x: 0, y: 32 },
+            ],
+            base: 0,
+            high: [
+                { x: 64, y: 0 },
+                { x: 64, y: 32 },
+            ],
+            top: 20,
+        };
+        const polygons = shadowPolygons({ boxes: [], trees: [], slopes: [ramp] }, { azimuth: 0, elevation: 45 });
+        // Its top edge falls 20 px south; its foot stays where it is.
+        expect(inAny(polygons, 60, 48)).toBe(true);
+        expect(inAny(polygons, 4, 16)).toBe(true);
+        expect(inAny(polygons, 4, 40)).toBe(false);
+        expect(inAny(polygons, 60, 56)).toBe(false);
     });
 });
 
