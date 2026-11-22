@@ -14,6 +14,8 @@ export interface SnowEntity {
     texture: { key: string };
     frame: { name: string | number; width: number; height: number };
     getPrefab(): { collectionName: string; id: string; seasonal?: unknown };
+    /** How much lower than its place it is drawn, on a relief seen in 3/4 (Entity.getGroundDrop): its snow with it. */
+    getGroundDrop?(): number;
 }
 
 /** One byte of alpha per pixel of an entity's frame. */
@@ -77,7 +79,7 @@ export class SnowCaps {
             }
             const key = this.capTexture(entity);
             if (!key) continue;
-            const cap = this.scene.add.image(entity.x, entity.y, key);
+            const cap = this.scene.add.image(entity.x, entity.y + (entity.getGroundDrop?.() ?? 0), key);
             cap.setOrigin(0);
             cap.setScale(entity.displayWidth / entity.frame.width, entity.displayHeight / entity.frame.height);
             cap.setDepth(entity.depth + 0.1);

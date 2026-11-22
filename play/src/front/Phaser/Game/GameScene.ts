@@ -2069,7 +2069,8 @@ export class GameScene extends DirtyScene {
                           }
                         : undefined,
                 x: entity.x,
-                y: entity.y,
+                // Where it is drawn: a tree on a relief seen in 3/4 throws its shadow from where its trunk is seen.
+                y: entity.y + entity.getGroundDrop(),
                 displayWidth: entity.displayWidth,
                 displayHeight: entity.displayHeight,
                 elevation: entity.getElevation(),
@@ -4319,6 +4320,7 @@ export class GameScene extends DirtyScene {
                     wam: () => this.getGameMap().getWamFile()?.getWam(),
                     view: () => this.cameras.main.worldView,
                     isFrozenAt: (x, y) => isOnFrozenWater(this, { x, y }),
+                    dropAt: (x, y) => this.surfaceDropAt(x, y),
                 });
                 this.frozenPoolsView?.destroy();
                 this.frozenPoolsView = new FrozenPoolsView(this);
@@ -4536,6 +4538,8 @@ export class GameScene extends DirtyScene {
                     // Frozen water takes the leaves and the footprints as the ground does.
                     isWet: (x, y) => isGroundUnderWater(this, this.terrainWater, x, y) && !this.isFrozenWaterAt(x, y),
                     waterVersion: () => this.terrainWater.version(),
+                    dropAt: (x, y) => this.groundDropAt(x, y),
+                    dropVersion: () => this.reliefDrawVersion(),
                     // No frost is drawn on the blocks of the relief: no footprint on it either (they have their own).
                     frost: () =>
                         this.pixelBlocksShown()

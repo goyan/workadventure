@@ -17,7 +17,7 @@ import {
 } from "./WaterFoam";
 
 import { pixelBlocksShownNow } from "./PixelBlocksShown";
-import { strokeRing, strokeStreak } from "./WaterFlowStrokes";
+import { strokeRing, strokeStreak, streakLowered } from "./WaterFlowStrokes";
 
 export interface WaterFlowViewOptions {
     /** The water of the relief as this browser shows it. */
@@ -29,6 +29,11 @@ export interface WaterFlowViewOptions {
     reducedMotion?: boolean;
     /** Whether the water is frozen there for this player (Frost.ts): no foam runs on it, no whirl turns in it. */
     isFrozenAt?: (x: number, y: number) => boolean;
+    /**
+     * How much lower what lies at a point is drawn, the relief seen in 3/4: the ground or the water over it
+     * (GameScene.surfaceDropAt). The foam, the whirls and the rings lie on the water as it is drawn.
+     */
+    dropAt?: (x: number, y: number) => number;
 }
 
 /** Over the water of the relief (0.65), under the puddles (0.7), the objects and the avatars. */
@@ -128,7 +133,11 @@ export class WaterFlowView {
         for (const fleck of this.foam.flecks()) {
             const streak = foamStreak(fleck);
             if (streak.alpha <= 0) continue;
-            strokeStreak(this.foamGraphics, streak, pixelArt);
+            strokeStreak(
+                this.foamGraphics,
+                streakLowered(streak, Math.round(this.options.dropAt?.(fleck.x, fleck.y) ?? 0)),
+                pixelArt,
+            );
             drawn = true;
         }
         const seconds = now / 1000;
@@ -145,6 +154,8 @@ export class WaterFlowView {
             // Under the ice a source or a sink still runs, unseen.
             if (this.options.isFrozenAt?.(x, y)) continue;
             const disc = object.radiusCells * TERRAIN_CELL;
+            // Drawn where its water is: lower at the bottom of a hollow.
+            const drawnY = y + Math.round(this.options.dropAt?.(x, y) ?? 0);
             if (object.litresPerMinute < 0) {
                 // A sink keeps its own disc dry: the water it takes shows just beyond it.
                 const around = wetAround(this.options.water, x, y, disc + 2 * TERRAIN_CELL, now);
@@ -153,12 +164,12 @@ export class WaterFlowView {
                 const radius = Math.max(WHIRL_SMALLEST, Math.min(WHIRL_LARGEST, disc * WHIRL_DISC_SHARE));
                 for (const dot of whirlDots(seconds, whirlTurnsPerSecond(-object.litresPerMinute), radius)) {
                     this.marksGraphics.fillStyle(WHIRL_COLOR, dot.alpha * strength);
-                    this.marksGraphics.fillRect(Math.round(x + dot.x), Math.round(y + dot.y), dot.size, dot.size);
+                    this.marksGraphics.fillRect(Math.round(x + dot.x), Math.round(drawnY + dot.y), dot.size, dot.size);
                 }
             } else {
                 const radius = Math.min(RINGS_LARGEST, RINGS_RADIUS + disc / 2);
                 for (const ring of sourceRings(seconds, radius)) {
-                    strokeRing(this.marksGraphics, x, y, ring, pixelArt);
+                    strokeRing(this.marksGraphics, x, drawnY, ring, pixelArt);
                 }
             }
             drawn = true;

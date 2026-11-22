@@ -37,6 +37,47 @@ describe("LeafScatterLayer", () => {
         expect(depths[depths.length - 1]).toBeCloseTo(DEPTH_TILE_INDEX + 0.65);
     });
 
+    it("lays its leaves where the ground is drawn on a relief seen in 3/4, and again when that changes", () => {
+        const graphics = {
+            setDepth: vi.fn(() => graphics),
+            clear: vi.fn(() => graphics),
+            fillStyle: vi.fn(() => graphics),
+            fillRect: vi.fn(() => graphics),
+        };
+        const scene = { add: { graphics: () => graphics }, cameras: { main: { zoom: 1 } } } as unknown as Phaser.Scene;
+        const view = { x: 0, y: 0, width: 480, height: 480 };
+        const sources = {
+            trees: [{ x: 240, y: 240, width: 64 }],
+            wind: quantizeWind(undefined, undefined),
+            progress: 1,
+        };
+        const flat = new LeafScatterLayer(scene);
+        flat.update(view, () => true, sources, false);
+        const rows = graphics.fillRect.mock.calls.map((call) => (call as unknown as number[])[1]);
+        expect(rows.length).toBeGreaterThan(0);
+        graphics.fillRect.mockClear();
+        // The same leaves on a hollow drawn 40 px lower.
+        let drop = 40;
+        let version = 1;
+        const lower = new LeafScatterLayer(
+            scene,
+            () => drop,
+            () => version,
+        );
+        lower.update(view, () => true, sources, false);
+        expect(graphics.fillRect.mock.calls.map((call) => (call as unknown as number[])[1])).toEqual(
+            rows.map((row) => row + 40),
+        );
+        // Nothing moved: not drawn again.
+        expect(lower.update(view, () => true, sources, false)).toBe(false);
+        // The relief is seen flat again.
+        drop = 0;
+        version = 2;
+        graphics.fillRect.mockClear();
+        expect(lower.update(view, () => true, sources, false)).toBe(true);
+        expect(graphics.fillRect.mock.calls.map((call) => (call as unknown as number[])[1])).toEqual(rows);
+    });
+
     it("draws no leaf when the map is seen from far, and draws them again closer", () => {
         const graphics = {
             setDepth: vi.fn(() => graphics),

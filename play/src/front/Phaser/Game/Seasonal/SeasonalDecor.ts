@@ -35,4 +35,7 @@ export interface SeasonalDecorDeps {
     isWet?: (x: number, y: number) => boolean;
     /** Changes when the water does. */
     waterVersion?: () => number;
+    /** How much lower the ground at a point is drawn, the relief seen in 3/4; `dropVersion` changes when it does. */
+    dropAt?: (x: number, y: number) => number;
+    dropVersion?: () => number;
 }

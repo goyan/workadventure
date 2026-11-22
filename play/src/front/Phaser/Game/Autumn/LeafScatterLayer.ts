@@ -22,7 +22,18 @@ export class LeafScatterLayer {
     private lying: boolean[] = [];
     private depth = LEAF_SCATTER_DEPTH;
 
-    constructor(private readonly scene: Phaser.Scene) {
+    /** The drops the leaves were last drawn with (dropVersion). */
+    private dropsDrawn: number | undefined;
+
+    /**
+     * `dropAt`: how much lower the ground at a point is drawn, the relief seen in 3/4 (GameScene.groundDropAt): a leaf
+     * lies where its ground is drawn. `dropVersion` changes when those drops do: the leaves are laid again.
+     */
+    constructor(
+        private readonly scene: Phaser.Scene,
+        private readonly dropAt: (x: number, y: number) => number = () => 0,
+        private readonly dropVersion: () => number = () => 0,
+    ) {
         this.graphics = scene.add.graphics().setDepth(this.depth);
     }
 
@@ -48,8 +59,10 @@ export class LeafScatterLayer {
             return true;
         }
         const drawn = this.drawn;
+        const drops = this.dropVersion();
         if (
             !force &&
+            drops === this.dropsDrawn &&
             drawn &&
             view.x >= drawn.x &&
             view.y >= drawn.y &&
@@ -65,6 +78,7 @@ export class LeafScatterLayer {
             width: view.width + 2 * marginX,
             height: view.height + 2 * marginY,
         };
+        this.dropsDrawn = drops;
         this.candidates = leafCandidatesInView(this.drawn, sources);
         this.lying = this.candidates.map((leaf) => liesOn(leaf, isGround));
         this.draw();
@@ -89,7 +103,12 @@ export class LeafScatterLayer {
         this.candidates.forEach((leaf, index) => {
             if (!this.lying[index]) return;
             this.graphics.fillStyle(leaf.color, 1);
-            this.graphics.fillRect(leaf.x, leaf.y, leaf.vertical ? 3 : 4, leaf.vertical ? 4 : 3);
+            this.graphics.fillRect(
+                leaf.x,
+                leaf.y + Math.round(this.dropAt(leaf.x, leaf.y)),
+                leaf.vertical ? 3 : 4,
+                leaf.vertical ? 4 : 3,
+            );
         });
     }
 

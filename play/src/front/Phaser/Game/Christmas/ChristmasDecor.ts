@@ -19,7 +19,7 @@ export class ChristmasDecor implements SeasonalDecor {
     constructor(scene: Phaser.Scene, deps: SeasonalDecorDeps) {
         this.ground = new SnowGround(scene);
         this.caps = new SnowCaps(scene, deps.readPixels);
-        this.prints = new FootprintLayer(scene);
+        this.prints = new FootprintLayer(scene, undefined, deps.dropAt);
         this.trail = new FootprintTrail(deps.isOutdoor);
     }
 

@@ -32,10 +32,14 @@ export class FootprintLayer {
     private readonly stepTexture: string;
     private readonly trailTexture: string;
 
-    /** `color`: the colour of the prints, blue grey in the snow by default. */
+    /**
+     * `color`: the colour of the prints, blue grey in the snow by default. `dropAt`: how much lower the ground at a
+     * point is drawn, the relief seen in 3/4 (GameScene.groundDropAt): a print lies where its ground is drawn.
+     */
     constructor(
         private readonly scene: Phaser.Scene,
         private readonly color = PRINT_COLOR,
+        private readonly dropAt: (x: number, y: number) => number = () => 0,
     ) {
         const suffix = color === PRINT_COLOR ? "" : `-${color}`;
         this.stepTexture = `${STEP_TEXTURE}${suffix}`;
@@ -61,7 +65,7 @@ export class FootprintLayer {
             const at = mark.kind === "step" ? { x: mark.x, y: mark.y } : { x: mark.x1, y: mark.y1 };
             // Without a style, the print has the colour of its layer, laid where it falls.
             const style = styleAt?.(at.x, at.y);
-            const drop = style?.drop ?? 0;
+            const drop = style?.drop ?? Math.round(this.dropAt(at.x, at.y));
             const strength = style?.alpha ?? START_ALPHA;
             const image =
                 mark.kind === "step"
@@ -75,7 +79,9 @@ export class FootprintLayer {
                           )
                           .setRotation(Math.atan2(mark.y2 - mark.y1, mark.x2 - mark.x1));
             const feetY = mark.kind === "step" ? mark.y : Math.max(mark.y1, mark.y2);
-            image.setDepth(feetY + drop - DEPTH_BELOW_FEET);
+            // Sorted by its place, as the avatar that left it (whose depth is its place, wherever it is drawn): a
+            // print drawn lower in a hollow must not pass over the feet on it.
+            image.setDepth(feetY - DEPTH_BELOW_FEET);
             if (style) image.setTint(style.tint);
             this.strength.set(image, strength);
             image.setAlpha(strength * this.alpha);

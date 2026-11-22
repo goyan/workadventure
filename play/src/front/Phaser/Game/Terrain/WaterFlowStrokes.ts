@@ -53,3 +53,11 @@ export function strokeRing(
     graphics.fillStyle(ring.alpha > 0.5 ? WHIRL_COLOR : FOAM_FADING, 1);
     for (const pixel of ringPixels(x, y, ring.radius)) graphics.fillRect(pixel.x, pixel.y, 1, 1);
 }
+
+/**
+ * A streak as it is drawn on a water drawn lower than its place (a stream at the bottom of a hollow, the relief seen
+ * in 3/4): both its ends as much lower. Itself where there is no drop.
+ */
+export function streakLowered<S extends { fromY: number; toY: number }>(streak: S, drop: number): S {
+    return drop === 0 ? streak : { ...streak, fromY: streak.fromY + drop, toY: streak.toY + drop };
+}
