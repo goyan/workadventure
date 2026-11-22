@@ -579,6 +579,23 @@ describe("TerrainWaterManager", () => {
         expect(depthsAfter(sent).at(40, 40)).toBe(0);
     });
 
+    it("pours sixty times faster while the fast water of the room is on, the map left as it is", () => {
+        const { manager, wam, sent, steps } = createHarness();
+        wam.entities.spring = sourceAt(1, 1, 600);
+        let fast: number | undefined = 60;
+        manager.fastWith(() => fast);
+        manager.mapChanged();
+        steps(10);
+        // One second of 600 litres a minute, sixty times faster: 600 litres on the map, its rate the one set.
+        expect(sent[0].stats?.stock).toBeCloseTo(0.6, 3);
+        expect(sent[0].stats?.sources).toBeCloseTo(36, 3);
+        expect(wam.settings?.water?.speed).toBe(1);
+        // Off again: back to the pace of the map.
+        fast = undefined;
+        steps(10);
+        expect((sent.at(-1)?.stats?.stock ?? 0) - (sent[0].stats?.stock ?? 0)).toBeCloseTo(0.01, 3);
+    });
+
     it("then sends only what changed, in order, and a browser that applies it has the water of the server", () => {
         const { manager, wam, sent, steps } = createHarness();
         wam.entities.spring = sourceAt(1, 1, 6000);

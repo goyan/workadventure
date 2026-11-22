@@ -255,6 +255,7 @@ import { startKaraokeStage } from "@wa/front/Karaoke/KaraokeStage";
 import { startJamLinkRequests } from "@wa/front/ListeningZone/JamLinkRequest";
 import { notifySystem } from "@wa/front/Notification/SystemNotifier";
 import type { UserProviderInterface } from "@wa/front/Chat/UserProvider/UserProviderInterface";
+import { fastWaterRightsStore, setFastWaterSender } from "@wa/front/Stores/FastWaterStore";
 import { registerAdditionalMenuItem, unregisterAdditionalMenuItem } from "@wa/front/Stores/AdditionalItemsMenuStore";
 import { popupStore } from "@wa/front/Stores/PopupStore";
 import PopUpRoomAccessDenied from "@wa/front/Components/PopUp/PopUpRoomAccessDenied.svelte";
@@ -316,6 +317,8 @@ import { isEffectShown } from "../../Stores/EffectsStore";
 import { fireConditionsStore } from "../../Stores/FireConditionsStore";
 import { isBasicActive } from "../../Stores/BasicModeStore";
 import { waterFlowMeasuredStore, waterFlowOverlayStore } from "../../Stores/VisualisationStore";
+import { canEditMapWeather } from "./Weather/MapWeatherRights";
+import { fastWaterRightsOf } from "./Terrain/FastWater";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -638,6 +641,7 @@ export class GameScene extends DirtyScene {
     private readonly treeFire = new TreeFireState();
     private treeFireSubscription: Subscription | undefined;
     private fireConditionsSubscription: Subscription | undefined;
+    private fastWaterRightsUnsubscribe: (() => void) | undefined;
     private meadowQueue: Promise<void> = Promise.resolve();
     private terrainWaterSubscription: Subscription | undefined;
     private meteorView: MeteorView | undefined;
@@ -1689,6 +1693,9 @@ export class GameScene extends DirtyScene {
         this.treeFireSubscription = undefined;
         this.fireConditionsSubscription?.unsubscribe();
         this.fireConditionsSubscription = undefined;
+        this.fastWaterRightsUnsubscribe?.();
+        this.fastWaterRightsUnsubscribe = undefined;
+        setFastWaterSender(undefined);
         this.receiveFireConditions(undefined);
         this.aquaticLifeSubscription?.unsubscribe();
         this.aquaticLifeSubscription = undefined;
@@ -3085,6 +3092,13 @@ export class GameScene extends DirtyScene {
     private receiveFireConditions(conditions: FireConditionsMessage | undefined): void {
         fireConditionsStore.set(conditions);
         setRoomConditions(conditions);
+        this.updateFastWaterRights();
+    }
+
+    /** Whether this player may turn the fast water of the room, and whether the map goes fast already. */
+    private updateFastWaterRights(): void {
+        const water = this.getGameMap()?.getWamFile()?.getWam().settings?.water;
+        fastWaterRightsStore.set(fastWaterRightsOf(canEditMapWeather(this), water));
     }
 
     private receiveMeadow(message: MeadowMessage): void {
@@ -4399,6 +4413,11 @@ export class GameScene extends DirtyScene {
         this.fireConditionsSubscription = this.connection.fireConditionsMessageStream.subscribe((message) => {
             this.receiveFireConditions(message);
         });
+        // The fast water of the room (the button next to the basic mode): asked of the room, for everyone in it; the
+        // right to edit the map comes and goes.
+        setFastWaterSender((on) => this.connection?.emitSetFastWater(on));
+        this.fastWaterRightsUnsubscribe?.();
+        this.fastWaterRightsUnsubscribe = mapEditorActivated.subscribe(() => this.updateFastWaterRights());
         // The meadow of the map: what the room holds now, then every change.
         if (room.meadow) this.receiveMeadow(room.meadow);
         this.meadowSubscription?.unsubscribe();

@@ -4,6 +4,8 @@
     import { visualisationPanelStore } from "../../Stores/VisualisationStore";
     import CatastrophePanel from "../Catastrophe/CatastrophePanel.svelte";
     import VisualisationChip from "../Visualisation/VisualisationChip.svelte";
+    import { fastWaterStore } from "../../Stores/FastWaterStore";
+    import FastWaterChip from "./FastWaterChip.svelte";
     import { chipsFold, type ChipsFold } from "./ClockLineFold";
 
     /** The margins of the dock in the main layout (`right-2`, and as much on its left), px. */
@@ -79,10 +81,11 @@
 <div
     bind:this={row}
     class="flex items-center gap-2 {fold === 'own-row' ? 'basis-full justify-end' : ''}"
-    class:hidden={!($catastrophePanelStore || $visualisationPanelStore)}
+    class:hidden={!($catastrophePanelStore || $visualisationPanelStore || $fastWaterStore !== undefined)}
     data-testid="clock-line-chips"
     data-fold={fold}
 >
     <CatastrophePanel compact={fold === "icons"} />
     <VisualisationChip compact={fold === "icons"} />
+    <FastWaterChip compact={fold === "icons"} />
 </div>

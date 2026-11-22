@@ -261,6 +261,10 @@ const roomManager = {
                             room.setFireConditions(user, message.message.setFireConditionsMessage);
                             break;
                         }
+                        case "setFastWaterMessage": {
+                            room.setFastWater(user, message.message.setFastWaterMessage.on);
+                            break;
+                        }
                         case "launchCatastropheMessage": {
                             const { kind, x, y, radiusTiles, wholeMap, release } =
                                 message.message.launchCatastropheMessage;

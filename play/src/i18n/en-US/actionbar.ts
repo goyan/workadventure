@@ -70,6 +70,18 @@ const actionbar = {
     calendar: "Calendar",
     todoList: "Todo list",
     weather: "Weather",
+    fastWater: {
+        label: "Fast water (×{times})",
+        off: "Fast water: the water, the snow and the ice of the room go {times} times faster than reality, for everyone, until it is turned off or the room empties. The settings of the map are not changed.",
+        on: "Fast water on (×{times}) for the whole room. Click to go back to the pace of the map.",
+        forbidden: "Fast water (×{times}): for whoever may edit the map. It acts for the whole room.",
+        mapFaster: "The map already goes {times} times faster than reality: the fast water would change nothing.",
+        chip: "Water ×{times}",
+        explain:
+            "The water, the snow and the ice of this map go {times} times faster than reality, for everyone: the flows shown are not those set.",
+        stop: "Back to the pace of the map",
+        onlyEditors: "Only whoever may edit the map can turn it off. It also stops when the room empties.",
+    },
     basicMode: {
         label: "Basic",
         switch: "Basic mode: no effect at all",

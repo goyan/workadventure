@@ -23,6 +23,7 @@ import {
     TERRAIN_CELL,
     TILE_PX,
     TreeFire,
+    roomWaterOf,
     waterTimesOf,
     WeatherType,
     REAL_WEATHER_SLOT_MS,
@@ -116,6 +117,8 @@ export class MeadowManager {
     private frost = 0;
     /** The air the rain of the map falls through: the conditions of the room, once it gives them. */
     private air: () => PrecipitationAir | undefined = () => undefined;
+    /** The fast water of the room: its snow and its ice go as fast as its water while it is on. */
+    private fast: () => number | undefined = () => undefined;
     /** The part of the rain of the map that falls as snow now, in mm of water an hour. */
     private snowRate = 0;
     /** The air over the snow lying on the ground (temperature, humidity, wind): unknown until the room gives it. */
@@ -306,6 +309,11 @@ export class MeadowManager {
      * The temperature and the humidity the rain of the map falls through (the conditions of the room): in the cold it
      * falls as snow, which brings no water (see liquidRainRate).
      */
+    /** Where the fast water of the room is read (FireConditionsManager.fastWater). */
+    public fastWith(fast: () => number | undefined): void {
+        this.fast = fast;
+    }
+
     public fallThrough(air: () => PrecipitationAir | undefined): void {
         this.air = air;
     }
@@ -416,7 +424,7 @@ export class MeadowManager {
      * (its speed, waterTimesOf), so that a snow weighs what the same rain would have and nothing goes by another clock.
      */
     private snowInput(seconds: number): Pick<MeadowStepInput, "weather" | "snowfallMm" | "snowTimes"> {
-        const times = waterTimesOf(this.room.getWam()?.settings?.water);
+        const times = waterTimesOf(roomWaterOf(this.room.getWam()?.settings?.water, this.fast()));
         return {
             weather: this.replay?.weather ? this.replay.weather.snow : this.snowWeather(),
             snowfallMm: (this.snowRate * seconds * times) / 3600,

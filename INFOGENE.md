@@ -2888,6 +2888,32 @@ ancré sous la pastille (`ClockLine/ChipPopover.svelte`). Rien d'ouvert : barre 
 - **Non vérifié** : rien vu en jeu par un agent (aperçus hors jeu : vrais composants, pastille météo et horloge
   recopiées, onglet Météo et tableau remplacés par des substituts) ; écran tactile ; lecteur d'écran.
 
+## Eau rapide (×60), près du mode Basique
+
+L'eau, la neige et la glace d'une carte vont par défaut au rythme du réel : un étang met des heures à se remplir, une
+glace près d'un jour à porter un marcheur. Pour un essai, le bouton « Eau rapide » (avance rapide, à côté de
+« Basique » dans la barre d'actions, `FastWaterButton.svelte`) les fait aller 60 fois plus vite (`FAST_WATER_TIMES`)
+**pour toute la salle**, sans changer la carte :
+
+- **Nature différente du Basique** : le Basique est personnel ; l'eau rapide est un état du serveur de la salle
+  (`FireConditionsManager.setFastWater`, comme les conditions météo réglées à la main), diffusé à tous dans
+  `FireConditionsMessage.fastWater` (champ 9, facultatif), donné à qui arrive, jamais écrit dans la carte et perdu
+  quand la salle se vide ou que le serveur redémarre : une carte ne reste jamais accélérée par oubli. Le réglage
+  « Vitesse de l'eau » du panneau Relief n'est pas modifié.
+- **Droit** : celui de modifier la carte, comme pour sa météo (`canEditMapWeather`). Sans lui, le bouton est grisé
+  et dit pourquoi. Message `SetFastWaterMessage` (navigateur → serveur, champ 71, et pusher → back, champ 55), cinq
+  changements par seconde et par joueur au plus.
+- **Ce qui accélère** : tout ce que la vitesse de l'eau règle (`roomWaterOf`, `roomWaterTimesOf`) : pluie,
+  sources, puits, évaporation, absorption, vidange des pièces, et la neige et la glace (`MeadowManager`), ainsi
+  que la neige de la ville suivie et les durées de « Météo expliquée » dans le navigateur (`roomWaterTimes`). Une
+  carte déjà réglée à 60 ou plus garde sa vitesse : le bouton le dit et ne fait rien.
+- **Témoin pour tous** : tant qu'elle est active, une pastille « Eau ×60 » sur la ligne de l'heure
+  (`FastWaterChip.svelte`, après Catastrophes et Visualisation) : « L'eau, la neige et la glace de cette carte vont
+  60 fois plus vite que le réel, pour tout le monde : les débits affichés ne sont pas ceux réglés. » Qui a le droit
+  peut la couper depuis la pastille.
+- Les bilans de l'eau restent en temps de la carte (`ratesOf`), donc égaux aux réglages ; les étiquettes de « Flux
+  d'eau » sont en temps réel, donc 60 fois plus fortes.
+
 ## Visualisation des flux d'eau
 
 Entrée « Visualisation » du menu des applications (sous « Catastrophe ») : une pastille sur la ligne de l'horloge

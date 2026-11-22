@@ -198,6 +198,7 @@ export { default as IconBed } from "~icons/tabler/bed";
 export { default as IconToiletPaper } from "~icons/tabler/toilet-paper";
 export { default as IconCoffee } from "~icons/tabler/coffee";
 export { default as IconRun } from "~icons/tabler/run";
+export { default as IconPlayerTrackNext } from "~icons/tabler/player-track-next";
 export { default as IconBulb } from "~icons/tabler/bulb";
 export { default as IconPlant } from "~icons/tabler/plant";
 export { default as IconBox } from "~icons/tabler/box";

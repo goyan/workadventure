@@ -1255,6 +1255,11 @@ export class RoomConnection implements RoomConnection {
         this.send({ message: { $case: "setFireConditionsMessage", setFireConditionsMessage: conditions } });
     }
 
+    /** Turns the fast water of the room on or off, for everyone in it, for a while. The server decides. */
+    emitSetFastWater(on: boolean): void {
+        this.send({ message: { $case: "setFastWaterMessage", setFastWaterMessage: { on } } });
+    }
+
     /** Launches a catastrophe at a point of the map, in map pixels. The server decides. */
     emitLaunchCatastrophe(
         kind: CatastropheKind,

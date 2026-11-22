@@ -7,12 +7,12 @@ import {
     snowMeltMmPerHour,
     snowShare,
     snowSublimationMmPerHour,
-    waterTimesOf,
     WeatherType,
 } from "@workadventure/map-editor";
 import { realWeatherAt } from "@wa/common/RealWeather";
 import { nightDateStore } from "@wa/front/Stores/NightStore";
 import { fireConditionsStore } from "@wa/front/Stores/FireConditionsStore";
+import { roomWaterTimes } from "../Terrain/FastWater";
 import { chosenWeatherNow } from "./ChosenPlaceWeather";
 import type { RealForecastState } from "./RealWeather";
 import { shownPlaceTimeline, shownWeatherSettings } from "./RealWeatherClient";
@@ -187,8 +187,9 @@ export function waterCycleNow(settings: MapSnowSettings | undefined): WaterCycle
     const elapsed = lastSecond === undefined ? Number.POSITIVE_INFINITY : Math.min(60, second - lastSecond);
     lastSecond = second;
     const air = frostAirNow(settings, date);
-    // The clock of the snow of the map, that of its water: the snow of the city of the player goes by it too.
-    const times = waterTimesOf(settings?.water);
+    // The clock of the snow of the map, that of its water (the fast water of the room comprised): the snow of the
+    // city of the player goes by it too.
+    const times = roomWaterTimes(settings?.water);
     const celsius = air?.temperature;
     const weather = shownWeatherSettings(settings, date)?.weather;
     const raining = weather === WeatherType.Rain || weather === WeatherType.Storm;

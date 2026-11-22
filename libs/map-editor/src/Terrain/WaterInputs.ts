@@ -86,6 +86,27 @@ export function waterTimesOf(water: { speed?: number } | undefined): number {
     return Number.isFinite(speed) && speed > 0 ? speed : 1;
 }
 
+/** How many times faster than reality the fast water of a room goes (the button near the basic mode). */
+export const FAST_WATER_TIMES = 60;
+
+/**
+ * The water of a room: that of its map, going at `fastWater` times reality while a player turned the fast water on
+ * (never slower than the map says). The settings of the map are left as they are.
+ */
+export function roomWaterOf(
+    water: WaterSettings | undefined,
+    fastWater: number | undefined,
+): WaterSettings | undefined {
+    const times = roomWaterTimesOf(water, fastWater);
+    return times === waterTimesOf(water) ? water : { ...(water ?? DEFAULT_WATER_SETTINGS), speed: times };
+}
+
+/** How many times faster than reality the water, the snow and the ice of a room go (see roomWaterOf). */
+export function roomWaterTimesOf(water: { speed?: number } | undefined, fastWater: number | undefined): number {
+    const map = waterTimesOf(water);
+    return fastWater !== undefined && Number.isFinite(fastWater) && fastWater > map ? fastWater : map;
+}
+
 /**
  * What one step of `seconds` does to the water of a map, from its settings, how hard it rains (mm an hour) and its
  * sources and sinks: the rain on the hollows (with the runoff of the ground around), the evaporation in dry weather

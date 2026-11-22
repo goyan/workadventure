@@ -430,6 +430,8 @@ export class GameRoom implements BrothersFinder {
         gameRoom.destroyRoomStream.subscribe(() => fireConditions.stop());
         // In the cold of the room the rain of the map falls as snow: it brings no water to the relief.
         terrainWater.fallThrough(() => fireConditions.air());
+        // The fast water of the room: a state of the room, not of the map, gone with it.
+        terrainWater.fastWith(() => fireConditions.fastWater());
         // The moisture of the soil and the grass that grows by itself, over the whole map: saved across restarts.
         const meadow = new MeadowManager(
             gameRoom,
@@ -452,6 +454,7 @@ export class GameRoom implements BrothersFinder {
         );
         // Nor does a snow soak the soil of the meadow.
         meadow.fallThrough(() => fireConditions.air());
+        meadow.fastWith(() => fireConditions.fastWater());
         // The snow that fell lies on the ground: it melts by the heat, the wind and the humidity of the room, and its
         // water runs to the water of the relief.
         meadow.snowUnder(() => {
@@ -1325,6 +1328,11 @@ export class GameRoom implements BrothersFinder {
     /** A player sets the conditions the fire of the room goes by, or goes back to the real ones. */
     public setFireConditions(user: Pick<User, "id">, sent: SetFireConditionsMessage): void {
         this.fireConditions?.set(user.id, sent);
+    }
+
+    /** A player turns the fast water of the room on or off (FireConditionsManager.setFastWater). */
+    public setFastWater(user: Pick<User, "id">, on: boolean): void {
+        this.fireConditions?.setFastWater(user.id, on);
     }
 
     /** The size of the map in cells of the relief (16 px), for the life of its land; undefined until it is read. */

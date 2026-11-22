@@ -797,6 +797,7 @@ message ClientToServerMessage {
     StartFishingContestMessage startFishingContestMessage = 64;
     LaunchCatastropheMessage launchCatastropheMessage = 65;
     SetFireConditionsMessage setFireConditionsMessage = 70;
+    SetFastWaterMessage setFastWaterMessage = 71;
     VideoQualityReportMessage videoQualityReportMessage = 50;
     AnalyticsEventReportMessage analyticsEventReportMessage = 52;
     EntityMessage entityMessage = 53;
@@ -913,6 +914,14 @@ message FireConditionsMessage {
   double thresholdTemperature = 6;
   double thresholdHumidity = 7;
   double thresholdWindSpeed = 8;
+  // How many times faster than its map says the water of the room goes, its snow and its ice with it, while a player
+  // turned the fast water on (FAST_WATER_TIMES): not saved, gone when the room empties. Absent or 0: as the map says.
+  optional uint32 fastWater = 9;
+}
+
+// Browser to server: a player turns the fast water of the room on or off, for everyone in it, for a while.
+message SetFastWaterMessage {
+  bool on = 1;
 }
 
 // Browser to server: a player launches a catastrophe at a point of the map, in map pixels. The server decides.
@@ -2513,6 +2522,7 @@ message PusherToBackMessage {
     StartFishingContestMessage startFishingContestMessage = 48;
     LaunchCatastropheMessage launchCatastropheMessage = 49;
     SetFireConditionsMessage setFireConditionsMessage = 54;
+    SetFastWaterMessage setFastWaterMessage = 55;
   }
 }
 

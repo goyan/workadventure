@@ -41,7 +41,9 @@ import {
     WaterGrid,
     WaterLoad,
     DEFAULT_WATER_PACE,
+    roomWaterOf,
     waterObjectsOf,
+    waterTimesOf,
     waterWallsOf,
     WeatherType,
 } from "@workadventure/map-editor";
@@ -153,6 +155,8 @@ export class TerrainWaterManager {
     private rainRate = 0;
     /** The air the rain of the map falls through: the conditions of the room, once it gives them. */
     private air: () => PrecipitationAir | undefined = () => undefined;
+    /** The fast water of the room (FireConditionsManager.fastWater): its water goes that fast while it is on. */
+    private fast: () => number | undefined = () => undefined;
     /** What the room was last told, to send only what changed since. */
     private sentBytes: Uint8Array | undefined;
     private sentRates = false;
@@ -276,6 +280,11 @@ export class TerrainWaterManager {
      * The temperature and the humidity the rain of the map falls through (the conditions of the room): in the cold it
      * falls as snow, which brings no water (see liquidRainRate).
      */
+    /** Where the fast water of the room is read: the water, its sources and its rain go that fast while it is on. */
+    public fastWith(fast: () => number | undefined): void {
+        this.fast = fast;
+    }
+
     public fallThrough(air: () => PrecipitationAir | undefined): void {
         this.air = air;
     }
@@ -292,9 +301,11 @@ export class TerrainWaterManager {
         const settings = this.room.getWam()?.settings;
         // The fineness and the tellings the map asks for are ceilings: less while the steps take too long.
         const asked = settings?.water?.inertia ? (settings.water.precision ?? DEFAULT_WATER_PACE.precision) : 1;
+        // The water of the room: that of the map, faster while the fast water is on.
+        const roomWater = roomWaterOf(settings?.water, this.fast());
         const water = settings?.water?.inertia
-            ? { ...settings.water, precision: this.load.precision(asked) }
-            : settings?.water;
+            ? { ...settings.water, ...roomWater, precision: this.load.precision(asked) }
+            : roomWater;
         // The map says how high its water may stand; lowered, what stands over it goes at this step.
         const highest = grid.maxSurface();
         grid.setMaxSurface(settings?.water?.maxSurface ?? DEFAULT_WATER_SETTINGS.maxSurface);
@@ -692,7 +703,7 @@ export class TerrainWaterManager {
         // Usually a second, less when an impact or its wave has the room told sooner.
         const stepsSince = Math.max(1, this.steps - this.toldAtStep);
         this.toldAtStep = this.steps;
-        const speed = this.room.getWam()?.settings?.water?.speed ?? DEFAULT_WATER_SETTINGS.speed;
+        const speed = waterTimesOf(roomWaterOf(this.room.getWam()?.settings?.water, this.fast()));
         const rates = ratesOf(sums, (stepsSince * WATER_STEP_MS) / 1000, speed);
         const anyRate = Object.values(rates).some((rate) => rate > 0);
         const bytes = grid.writeDepths();

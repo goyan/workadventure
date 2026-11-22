@@ -2,6 +2,7 @@ import {
     boundedFireConditions,
     boundedFireThresholds,
     DEFAULT_FIRE_THRESHOLDS,
+    FAST_WATER_TIMES,
     NEUTRAL_FIRE_CONDITIONS,
     REAL_WEATHER_SLOT_MS,
     WeatherType,
@@ -23,6 +24,8 @@ const CHANGES_PER_SECOND = 5;
  */
 export class FireConditionsManager {
     private manual: FireConditions | undefined;
+    /** The fast water of the room while a player turned it on (FAST_WATER_TIMES): never saved. */
+    private fast: number | undefined;
     private limits: FireThresholds = DEFAULT_FIRE_THRESHOLDS;
     private told: string | undefined;
     private timer: ReturnType<typeof setInterval> | undefined;
@@ -58,14 +61,7 @@ export class FireConditionsManager {
      * thresholds either way. The room is told. False when refused: too many changes within a second.
      */
     public set(userId: number, sent: SetFireConditionsMessage): boolean {
-        const now = this.now();
-        const recent = (this.changes.get(userId) ?? []).filter((at) => now - at < 1000);
-        if (recent.length >= CHANGES_PER_SECOND) {
-            this.changes.set(userId, recent);
-            return false;
-        }
-        recent.push(now);
-        this.changes.set(userId, recent);
+        if (!this.allowed(userId)) return false;
         this.manual = sent.manual ? boundedFireConditions(sent, this.conditions()) : undefined;
         this.limits = boundedFireThresholds(
             {
@@ -80,6 +76,35 @@ export class FireConditionsManager {
     }
 
     /** The conditions now: set by hand, else the real ones of a map in real weather, else mild ones. */
+    /**
+     * A player turns the fast water of the room on or off: for everyone in it, the water, the snow and the ice of the
+     * room go FAST_WATER_TIMES times faster than reality, until it is turned off or the room empties.
+     */
+    public setFastWater(userId: number, on: boolean): boolean {
+        if (!this.allowed(userId)) return false;
+        this.fast = on ? FAST_WATER_TIMES : undefined;
+        this.tell();
+        return true;
+    }
+
+    /** How many times faster than reality the fast water goes while it is on; undefined when it is off. */
+    public fastWater(): number | undefined {
+        return this.fast;
+    }
+
+    /** Whether this player may change something now: no more than CHANGES_PER_SECOND a second. */
+    private allowed(userId: number): boolean {
+        const now = this.now();
+        const recent = (this.changes.get(userId) ?? []).filter((at) => now - at < 1000);
+        if (recent.length >= CHANGES_PER_SECOND) {
+            this.changes.set(userId, recent);
+            return false;
+        }
+        recent.push(now);
+        this.changes.set(userId, recent);
+        return true;
+    }
+
     public conditions(): FireConditions {
         return this.manual ?? this.real();
     }
@@ -95,6 +120,7 @@ export class FireConditionsManager {
             thresholdTemperature: this.limits.temperature,
             thresholdHumidity: this.limits.humidity,
             thresholdWindSpeed: this.limits.windSpeed,
+            ...(this.fast ? { fastWater: this.fast } : {}),
         };
     }
 

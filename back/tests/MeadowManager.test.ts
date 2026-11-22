@@ -592,6 +592,19 @@ describe("the snow of the MeadowManager", () => {
         expect(real.melted).toBe(0);
     });
 
+    it("melts its snow as fast as the water while the fast water of the room is on", () => {
+        const { manager, sent, steps, air } = snowHarness({ waterSpeed: 1 });
+        manager.fastWith(() => 600);
+        manager.mapChanged();
+        manager.soak(downpour);
+        steps(5);
+        const before = snowOf(sent.at(-1))[centre];
+        air.now = warm;
+        steps(5);
+        expect(snowOf(sent.at(-1))[centre]).toBeLessThan(before);
+        manager.stop();
+    });
+
     it("keeps the snow falling and melting on a map that turned its grass off", () => {
         const { manager, sent, steps, air, pour } = snowHarness({
             meadow: { enabled: false, growMinutes: 10, thirstMinutes: 20, moistureHold: 1 },

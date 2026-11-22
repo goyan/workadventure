@@ -75,6 +75,18 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
     calendar: "Calendrier",
     todoList: "Liste de tâches",
     weather: "Météo",
+    fastWater: {
+        label: "Eau rapide (×{times})",
+        off: "Eau rapide : l'eau, la neige et la glace de la salle vont {times} fois plus vite que le réel, pour tout le monde, jusqu'à ce qu'on la coupe ou que la salle se vide. Le réglage de la carte n'est pas changé.",
+        on: "Eau rapide active (×{times}) pour toute la salle. Cliquez pour revenir au rythme de la carte.",
+        forbidden: "Eau rapide (×{times}) : réservée à qui peut modifier la carte. Elle agit pour toute la salle.",
+        mapFaster: "La carte va déjà {times} fois plus vite que le réel : l'eau rapide n'y changerait rien.",
+        chip: "Eau ×{times}",
+        explain:
+            "L'eau, la neige et la glace de cette carte vont {times} fois plus vite que le réel, pour tout le monde : les débits affichés ne sont pas ceux réglés.",
+        stop: "Revenir au rythme de la carte",
+        onlyEditors: "Seul qui peut modifier la carte peut la couper. Elle s'arrête aussi quand la salle se vide.",
+    },
     basicMode: {
         label: "Basique",
         switch: "Mode basique : aucun effet",
