@@ -25,7 +25,8 @@ import { cloudsShownStore, cloudsHeightStore, weatherEffectsEnabledStore } from 
 import { migrateChristmasMode, SeasonalThemeMode } from "../../Phaser/Game/Seasonal/SeasonalTheme";
 import { seasonalThemeModeStore } from "../../Stores/SeasonalThemeStore";
 import { gameSceneStore } from "../../Stores/GameSceneStore";
-import { handleOpenMenuEvent, mapEditorActivated, SubMenusInterface } from "../../Stores/MenuStore";
+import { handleOpenMenuEvent, SubMenusInterface } from "../../Stores/MenuStore";
+import { canEditMapWeather } from "../../Phaser/Game/Weather/MapWeatherRights";
 import {
     DesktopAppearanceSetting,
     DesktopLightSetting,
@@ -169,12 +170,7 @@ export function readDesktopEnvironment(busy = false, error = ""): DesktopEnviron
             mapSoundsVolume: get(mapSoundsVolumeStore.setting),
             notificationSoundVolume: get(notificationSoundVolumeStore.setting),
         },
-        canEditWeather: Boolean(
-            get(mapEditorActivated) &&
-            scene.connection &&
-            scene.getMapEditorModeManager() &&
-            scene.getGameMap().getWamFile(),
-        ),
+        canEditWeather: canEditMapWeather(scene),
         lightControls: readDesktopLightControls(),
         busy,
         error,

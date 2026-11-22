@@ -588,5 +588,24 @@ const actionbar = {
         errorMoving: "Unable to reach your personal desk",
         errorUnclaiming: "Unable to unclaim your personal desk",
     },
+    placeToMap: {
+        apply: "Apply to the map",
+        hint: "Make the weather of the map follow this place, for everyone",
+        already: "The map already follows this place",
+        noRight: "Only those who can edit the map can change its weather.",
+        pending: "Reading the weather of this place…",
+        noData: "No real weather for this place: the map cannot follow it.",
+        title: "Apply this weather to the map?",
+        confirm:
+            "The map will follow the real weather of {place} instead of {mapPlace}, for everyone. The day, the night and the seasons of the map will follow this place too; the water, the snow, the ice, the fire and the grass will change from its air.",
+        goesReal: "The map switches to real weather (it was on “{weather}”).",
+        leaveManual:
+            "Back to the real conditions: they are set by hand (Disaster, Weather) and would come before this place.",
+        followMap: "Then see the weather of the map, as everyone does (your sky leaves “Daytime somewhere”).",
+        action: "Apply",
+        error: "The weather of the map could not be changed.",
+        revert: "Back to {place}",
+        revertHint: "Put the map back on its place and weather of before",
+    },
 } satisfies BaseTranslation & Translation["actionbar"];
 export default actionbar;

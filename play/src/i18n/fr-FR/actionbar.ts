@@ -592,6 +592,25 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         errorMoving: "Impossible d'atteindre votre bureau personnel",
         errorUnclaiming: "Impossible de libérer votre bureau personnel",
     },
+    placeToMap: {
+        apply: "Appliquer à la carte",
+        hint: "Faire suivre ce lieu à la météo de la carte, pour tout le monde",
+        already: "La carte suit déjà ce lieu",
+        noRight: "Seuls ceux qui peuvent modifier la carte peuvent changer sa météo.",
+        pending: "Lecture de la météo de ce lieu…",
+        noData: "Pas de météo réelle pour ce lieu : la carte ne peut pas le suivre.",
+        title: "Appliquer cette météo à la carte ?",
+        confirm:
+            "La carte suivra la météo réelle de {place} au lieu de {mapPlace}, pour tout le monde. Le jour, la nuit et les saisons de la carte suivront aussi ce lieu ; l'eau, la neige, la glace, le feu et l'herbe évolueront à partir de son air.",
+        goesReal: "La carte passe en météo réelle (elle était en « {weather} »).",
+        leaveManual:
+            "Revenir aux conditions réelles : elles sont réglées à la main (Catastrophe, Météo) et resteraient prioritaires sur ce lieu.",
+        followMap: "Voir ensuite la météo de la carte, comme tout le monde (ton ciel quitte « Jour dans le monde »).",
+        action: "Appliquer",
+        error: "La météo de la carte n'a pas pu être changée.",
+        revert: "Revenir à {place}",
+        revertHint: "Remettre la carte sur son lieu et sa météo d'avant",
+    },
 };
 
 export default actionbar;
