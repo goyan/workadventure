@@ -34,6 +34,7 @@ export * from "./Terrain/WaterBall";
 export * from "./Terrain/WaterGrid";
 export * from "./Terrain/WaterInputs";
 export * from "./Terrain/WaterLoad";
+export * from "./Terrain/WaterSendLoad";
 export * from "./Terrain/WaterSimulation";
 export * from "./Terrain/WaterWalls";
 export * from "./Terrain/LandWalls";

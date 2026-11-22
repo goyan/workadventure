@@ -23,6 +23,7 @@ import {
     MAX_WATER_MAX_SURFACE,
     MAX_WATER_SPEED,
     MEADOW_BOUNDS,
+    MIN_WATER_MAX_SURFACE,
     POOL_LADDER_CELL,
     MegaphoneSettings,
     precipitationWeather,
@@ -210,7 +211,7 @@ export class UpdateWAMSettingCommand extends Command {
                             ? keptMaxSurface
                             : within(
                                   maxSurface,
-                                  DEFAULT_WATER_SETTINGS.maxSurface,
+                                  MIN_WATER_MAX_SURFACE,
                                   MAX_WATER_MAX_SURFACE,
                                   keptMaxSurface,
                               ),

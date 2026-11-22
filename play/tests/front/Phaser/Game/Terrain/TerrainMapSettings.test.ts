@@ -21,4 +21,12 @@ describe("readTerrainMapSettings", () => {
         wam.current = { settings: { water: { speed: 60 } } };
         expect(readTerrainMapSettings().speed).toBe(60);
     });
+
+    it("reads no flood cut short and five states a second on a map that says nothing, its inertia off", () => {
+        wam.current = { settings: {} };
+        const settings = readTerrainMapSettings();
+        expect(settings.maxSurface).toBe(256);
+        expect(settings.updates).toBe(5);
+        expect(settings.inertia).toBe(false);
+    });
 });

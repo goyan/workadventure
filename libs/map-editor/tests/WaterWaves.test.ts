@@ -301,12 +301,13 @@ describe("the precision of the water with inertia", () => {
     });
 
     it("tells the room every so many steps", () => {
-        expect(stepsBetweenUpdates(undefined)).toBe(10);
+        // A map that says nothing: five times a second.
+        expect(stepsBetweenUpdates(undefined)).toBe(2);
         expect(stepsBetweenUpdates(1)).toBe(10);
         expect(stepsBetweenUpdates(5)).toBe(2);
         expect(stepsBetweenUpdates(10)).toBe(1);
         expect(stepsBetweenUpdates(1000)).toBe(1);
-        expect(stepsBetweenUpdates(Number.NaN)).toBe(10);
+        expect(stepsBetweenUpdates(Number.NaN)).toBe(2);
     });
 });
 

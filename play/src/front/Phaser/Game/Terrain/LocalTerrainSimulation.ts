@@ -110,6 +110,8 @@ export class LocalTerrainSimulation {
             mapCells,
             () => performance.now(),
             LOCAL_STEP_BUDGET_MS,
+            // Nothing travels: the states stay in this browser, as big as they are.
+            Number.POSITIVE_INFINITY,
         );
         this.water.fallThrough(() => this.air());
         // A door opens for the avatar of this player, as the server opens it for every avatar standing in it.

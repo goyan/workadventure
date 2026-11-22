@@ -36,6 +36,7 @@ import { CELL_AREA_M2, LITRES_PER_M3 } from "./Scale";
 import { heightAt } from "./TerrainGrid";
 import { closedDoorSides, holdsOpen, waterDoorsOf } from "./WaterDoors";
 import type { WaterDoor } from "./WaterDoors";
+import { WATER_SEND_BUDGET_BYTES_PER_SECOND, WaterSendLoad } from "./WaterSendLoad";
 import { CELL_LITRES_PER_PX, gridBoundsOf, WaterGrid } from "./WaterGrid";
 import type { WaterGridBounds, WaterTally } from "./WaterGrid";
 import {
@@ -190,9 +191,18 @@ export class WaterSimulation {
          * the server, which has a thread of its own; less in a browser, where the game is drawn alongside.
          */
         budgetMs: number = WATER_STEP_MS,
+        /**
+         * The bytes a second a player may be sent of the water (see WaterSendLoad): Infinity where nothing travels,
+         * in a browser that simulates its own water.
+         */
+        sendBudget: number = WATER_SEND_BUDGET_BYTES_PER_SECOND,
     ) {
         this.load = new WaterLoad(budgetMs);
+        this.sendLoad = new WaterSendLoad(sendBudget);
     }
+
+    /** The network the states of the water take for each player: fewer states a second while they are big. */
+    private readonly sendLoad: WaterSendLoad;
 
     /**
      * The water to start from: the depths of a whole state (WaterGrid.writeDepths) over `bounds`, taken by the first
@@ -354,9 +364,13 @@ export class WaterSimulation {
             this.sums.absorptionPx += tally.absorptionPx;
             this.sums.lostPx += tally.lostPx;
         }
-        // As often as the map asks while the water moves, and at least five times a second under a wave.
-        const between = stepsBetweenUpdates(this.load.updates(settings?.water?.updates ?? DEFAULT_WATER_PACE.updates));
-        if (this.steps % between === 0 || (waving && this.steps % Math.min(between, WAVE_STEPS_PER_MESSAGE) === 0)) {
+        // As often as the map asks while the water moves, less while the server or the network is loaded, and at least
+        // five times a second under a wave unless the states are too big for the network.
+        const askedUpdates = settings?.water?.updates ?? DEFAULT_WATER_PACE.updates;
+        const sendable = this.sendLoad.updates(askedUpdates);
+        const between = stepsBetweenUpdates(Math.min(this.load.updates(askedUpdates), sendable));
+        const wave = waving && sendable >= askedUpdates;
+        if (this.steps % between === 0 || (wave && this.steps % Math.min(between, WAVE_STEPS_PER_MESSAGE) === 0)) {
             this.tell(grid);
         }
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
@@ -772,6 +786,15 @@ export class WaterSimulation {
         const speeds = water?.inertia === true ? grid.writeSpeedBytes(water.flowPace) : undefined;
         if (full) this.fullAtStep = this.steps;
         this.seq++;
+        const depths = this.zip(payload);
+        const zippedSpeeds = speeds ? this.zip(speeds.speeds) : undefined;
+        const zippedSlow = speeds?.slow ? this.zip(speeds.slow) : undefined;
+        // What each player receives of this state: the network it takes decides how many a second are told.
+        this.sendLoad.record(
+            depths.length + (zippedSpeeds?.length ?? 0) + (zippedSlow?.length ?? 0),
+            water?.updates ?? DEFAULT_WATER_PACE.updates,
+            this.steps,
+        );
         this.room.sendSubMessageToRoom({
             message: {
                 $case: "terrainWaterMessage",
@@ -779,9 +802,9 @@ export class WaterSimulation {
                     ...grid.bounds,
                     seq: this.seq,
                     full,
-                    depths: this.zip(payload),
-                    ...(speeds ? { speeds: this.zip(speeds.speeds) } : {}),
-                    ...(speeds?.slow ? { slowSpeeds: this.zip(speeds.slow) } : {}),
+                    depths,
+                    ...(zippedSpeeds ? { speeds: zippedSpeeds } : {}),
+                    ...(zippedSlow ? { slowSpeeds: zippedSlow } : {}),
                     stats: {
                         ...rates,
                         stock: (grid.totalPx() * CELL_LITRES_PER_PX) / LITRES_PER_M3,
@@ -800,7 +823,9 @@ export class WaterSimulation {
         const updates = water?.updates ?? DEFAULT_WATER_PACE.updates;
         return {
             ...(this.load.precision(precision) < precision ? { easedPrecision: this.load.precision(precision) } : {}),
-            ...(this.load.updates(updates) < updates ? { easedUpdates: this.load.updates(updates) } : {}),
+            ...(Math.min(this.load.updates(updates), this.sendLoad.updates(updates)) < updates
+                ? { easedUpdates: Math.min(this.load.updates(updates), this.sendLoad.updates(updates)) }
+                : {}),
         };
     }
 }

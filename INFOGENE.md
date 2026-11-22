@@ -3109,6 +3109,30 @@ ancré sous la pastille (`ClockLine/ChipPopover.svelte`). Rien d'ouvert : barre 
 - **Non vérifié** : rien vu en jeu par un agent (aperçus hors jeu : vrais composants, pastille météo et horloge
   recopiées, onglet Météo et tableau remplacés par des substituts) ; écran tactile ; lecteur d'écran.
 
+## Défauts de l'eau d'une carte (2026-11-22) et garde-fou réseau
+
+Une carte qui ne règle pas son eau a désormais : vitesse 1 (temps réel, #478), neige et glace à la même horloge
+(#480), hauteur des crues jusqu'à 256 px (8,7 m au-dessus du niveau de débordement : aucune crue coupée ; réglable
+de 18, `MIN_WATER_MAX_SURFACE`, à 256), cinq envois par seconde (`DEFAULT_WATER_PACE.updates`). L'inertie reste
+coupée par défaut : elle attend un fil de calcul par salle (elle charge le fil unique du serveur). Le bouton
+« Réaliste » donne les défauts plus l'inertie (`REALISTIC_WATER_SETTINGS`, dérivé de `DEFAULT_*`, une seule liste).
+Une carte qui a enregistré ses réglages les garde.
+
+**Garde-fou réseau** (`Terrain/WaterSendLoad.ts`, par salle, dans `WaterSimulation.tell`) : chaque état envoyé est
+pesé (profondeurs, `speeds` et `slowSpeeds` compressés, moyenne sur 5 états). Au-delà de 100 ko par seconde et par
+joueur (`WATER_SEND_BUDGET_BYTES_PER_SECOND`, moins d'un mégabit par seconde, de quoi laisser la place à la voix et
+à la vidéo sur un réseau lent), la cadence descend aussitôt à ce qui tient sous ce plafond, jusqu'à un état par
+seconde au moins (la règle des vagues, cinq par seconde, cède aussi) ; elle remonte d'un cran après 10 s d'états
+assez petits pour tenir sous la moitié du plafond au cran suivant. Le réglage de la carte ne change pas ; le panneau
+le dit par le champ existant `easedUpdates` (« Serveur ou réseau chargé : envois réduits à N par seconde sur M »).
+Mesures : lac calme sur la carte d'entrée, 10 à 15 ko par état : cinq par seconde tenus ; mer de 600² qui court
+(environ 40 ko) : deux ; carte entièrement inondée (130 ko et plus) : un, le minimum (encore 130 ko/s : le plafond
+ne peut pas descendre sous un état par seconde). L'eau que le navigateur simule pour lui seul (#473) n'a pas de
+garde-fou : rien n'y voyage (`sendBudget` infini).
+
+Coût de cinq états par seconde sans inertie (carte de 480 × 320, lac, à vitesse 1) : 3,6 → 9 ko/s par joueur
+(1,8 ko par état, surtout des changements nuls compressés), envoi 1,5 → 6 ms par seconde au serveur.
+
 ## Visualisation des flux d'eau
 
 Entrée « Visualisation » du menu des applications (sous « Catastrophe ») : une pastille sur la ligne de l'horloge

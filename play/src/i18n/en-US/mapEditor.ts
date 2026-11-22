@@ -798,9 +798,10 @@ const mapEditor: BaseTranslation = {
         precisionHint:
             "Higher: faster waves and torrents are possible, heavier computation for the server. 3 by default.",
         precisionEased: "Server busy: fineness lowered to {value} out of {asked} until the computation gets lighter.",
-        updatesEased: "Server busy: tellings lowered to {value} a second out of {asked}.",
+        updatesEased: "Server or network busy: tellings lowered to {value} a second out of {asked}.",
         updates: "Tellings of the water to the players",
-        updatesHint: "Higher: waves are seen running instead of fading, for more network. 1 by default.",
+        updatesHint:
+            "Higher: waves are seen running instead of fading, for more network. 5 by default; the server sends fewer when it or the network is loaded.",
         waves: {
             timesReal: "× real",
             roughnessMultiplies:
@@ -837,7 +838,7 @@ const mapEditor: BaseTranslation = {
                 "How far the impact drives the water away around its crater: all of it next to the crater, less and less further out. 1: only the water of the crater moves. In reality: the ejecta of a crater cover 2 to 3 times its radius; 2.5 by default. A pool hit in its middle is almost emptied.",
             speed: "1 by default, as in reality: a rain of 10 mm/h takes hours to fill a pond, a snow hours to melt, an ice most of a day to bear a walker at -3 °C. For a trial, 60: a minute for an hour.",
             maxSurface:
-                "18 px by default: enough to swim, under the upper floors (52 px). Higher, a flood drowns the ground deep. In reality: no cap (256 px).",
+                "256 px by default, as in reality: no flood is cut short. Lower, the water rises no higher: 18 px, enough to swim, under the upper floors (52 px).",
             current:
                 "How hard the water carries the avatars, never inside a building. With the water with inertia, one is carried at the speed of the water once one loses one's footing. A setting of the game: 1 by default.",
         },
