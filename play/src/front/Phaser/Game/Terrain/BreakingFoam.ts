@@ -32,6 +32,8 @@ const RAPID_FULL = 2;
 export const FOAM_HALF_LIFE_MS = 1800;
 /** Foam fainter than this is gone. */
 const GONE = 0.04;
+/** The foam of a state comes in no longer than this, in ms: the longest the water takes to glide to a state. */
+const LONGEST_RISE_MS = 1000;
 
 /** Whether the water cannot go from a cell of the map to its neighbour on a side: 0 east, 1 west, 2 south, 3 north. */
 export type ClosedSide = (cellX: number, cellY: number, side: number) => boolean;
@@ -130,11 +132,19 @@ export function foamOfCell(
  * The foam of the waves of the water of the relief, as this browser draws it: born where a wave breaks or a flood
  * advances, it stays a moment behind the wave and fades. Read from the depths the server already sends; each
  * browser makes its own, a decor.
+ *
+ * The foam of a state does not come at once: the water is shown gliding from the state before to this one, and its
+ * foam rises along with it, over the time between the two states. So a wave that breaks all along makes the same
+ * foam, steadily, whether the water is told once or five times a second; told at once, it came in puffs.
  */
 export class BreakingFoam {
-    private strength = new Float32Array(0);
+    /** The foam shown when the last state came, and the foam that state makes: the one glides to the other. */
+    private from = new Float32Array(0);
+    private to = new Float32Array(0);
     private grid = { x: 0, y: 0, width: 0, height: 0 };
+    /** When the last state came (ms), and how long its foam takes to come in (ms): the time since the one before. */
     private at = 0;
+    private riseMs = 0;
     private strongest = 0;
 
     /** A new state of the water at this time (ms): what broke since leaves its foam, the old one having faded. */
@@ -145,36 +155,44 @@ export class BreakingFoam {
             water.y === this.grid.y &&
             water.width === this.grid.width &&
             water.height === this.grid.height &&
-            this.strength.length === size;
+            this.from.length === size;
         if (!same) {
-            this.strength = new Float32Array(size);
+            this.from = new Float32Array(size);
+            this.to = new Float32Array(size);
             this.grid = { x: water.x, y: water.y, width: water.width, height: water.height };
             this.strongest = 0;
         }
-        const faded = this.fade(now);
-        const strength = this.strength;
+        // The first state of a grid is shown at once, as its water is; the next ones are glided to.
+        const rise = same && Number.isFinite(water.seconds) ? Math.min(LONGEST_RISE_MS, water.seconds * 1000) : 0;
+        const elapsed = Math.max(0, now - this.at);
+        const from = this.from;
+        const to = this.to;
         let strongest = 0;
         for (let row = 0; row < water.height; row++) {
             for (let column = 0; column < water.width; column++) {
                 const index = row * water.width + column;
-                let held = strength[index] * faded;
-                // Dry cells are most of a map: nothing to look at there but the foam left, which fades.
-                if (water.depths[index] >= WET_PX) {
-                    const made = foamOfCell(water, terrain, column, row, closed);
-                    if (made > held) held = made;
-                } else held = 0;
-                if (held < GONE) held = 0;
-                strength[index] = held;
-                if (held > strongest) strongest = held;
+                // Dry cells are most of a map: nothing to look at there, and no foam is left on dry ground.
+                if (water.depths[index] < WET_PX) {
+                    from[index] = 0;
+                    to[index] = 0;
+                    continue;
+                }
+                const shown = this.shown(from[index], to[index], elapsed);
+                const made = foamOfCell(water, terrain, column, row, closed);
+                from[index] = rise > 0 ? shown : Math.max(shown, made);
+                to[index] = made < GONE ? 0 : made;
+                if (from[index] > strongest) strongest = from[index];
+                if (to[index] > strongest) strongest = to[index];
             }
         }
         this.strongest = strongest;
         this.at = now;
+        this.riseMs = rise;
     }
 
     /** Whether any foam is left to draw at this time. */
     public active(now: number): boolean {
-        return this.strongest * this.fade(now) >= GONE;
+        return this.strongest * this.fade(Math.max(0, now - this.at - this.riseMs)) >= GONE;
     }
 
     /** The foam over a cell of the map at this time, from 0 to 1. */
@@ -182,18 +200,33 @@ export class BreakingFoam {
         const column = cellX - this.grid.x;
         const row = cellY - this.grid.y;
         if (column < 0 || row < 0 || column >= this.grid.width || row >= this.grid.height) return 0;
-        const held = this.strength[row * this.grid.width + column] * this.fade(now);
-        return held < GONE ? 0 : held;
+        const index = row * this.grid.width + column;
+        return this.shown(this.from[index], this.to[index], Math.max(0, now - this.at));
     }
 
     public clear(): void {
-        this.strength.fill(0);
+        this.from.fill(0);
+        this.to.fill(0);
         this.strongest = 0;
     }
 
-    /** What is left of a foam since the last state: half of it every FOAM_HALF_LIFE_MS. */
-    private fade(now: number): number {
-        const elapsed = Math.max(0, now - this.at);
+    /**
+     * The foam of a cell `elapsed` ms after the last state came: what was there fades, and what that state makes
+     * comes in as the water glides to it, then fades in its turn. The stronger of the two.
+     */
+    private shown(from: number, to: number, elapsed: number): number {
+        if (from <= 0 && to <= 0) return 0;
+        const left = from * this.fade(elapsed);
+        const come =
+            elapsed >= this.riseMs
+                ? to * this.fade(elapsed - this.riseMs)
+                : from + ((to - from) * elapsed) / this.riseMs;
+        const held = left > come ? left : come;
+        return held < GONE ? 0 : held;
+    }
+
+    /** What is left of a foam after this long: half of it every FOAM_HALF_LIFE_MS. */
+    private fade(elapsed: number): number {
         return Math.pow(0.5, elapsed / FOAM_HALF_LIFE_MS);
     }
 }

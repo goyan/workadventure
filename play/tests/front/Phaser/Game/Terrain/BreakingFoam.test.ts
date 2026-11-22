@@ -212,3 +212,74 @@ describe("BreakingFoam", () => {
         expect(foam.active(200)).toBe(false);
     });
 });
+
+describe("BreakingFoam, whatever how often the water is told", () => {
+    /** A crest of 12 px over 5 px of water that runs east at a cell and a half a second: it breaks all the way. */
+    const crestAt = (seconds: number, between: number): SettledWater => ({
+        ...state(70, 3, (x) => 5 + 12 * Math.exp(-(((x - 10 - 1.5 * seconds) / 3) ** 2))),
+        seconds: between,
+    });
+    /** All the foam of the grid at a time, the states of the crest being told `rate` times a second. */
+    function foamOver(rate: number): { mean: number; swing: number; jump: number } {
+        const foam = new BreakingFoam();
+        const between = 1 / rate;
+        const totals: number[] = [];
+        let told = -1;
+        // Read every 50 ms, as a browser draws it, over 24 s; the first 4 s let it settle.
+        for (let tick = 0; tick <= 480; tick++) {
+            const now = tick * 50;
+            const due = Math.floor(now / 1000 / between + 1e-9);
+            if (due > told) {
+                told = due;
+                foam.absorb(crestAt(due * between, between), undefined, due * between * 1000);
+            }
+            if (now < 4000) continue;
+            let total = 0;
+            for (let x = 0; x < 70; x++) total += foam.foamAt(x, 1, now);
+            totals.push(total);
+        }
+        const mean = totals.reduce((sum, total) => sum + total, 0) / totals.length;
+        let jump = 0;
+        for (let at = 1; at < totals.length; at++) jump = Math.max(jump, Math.abs(totals[at] - totals[at - 1]));
+        return { mean, swing: (Math.max(...totals) - Math.min(...totals)) / mean, jump: jump / mean };
+    }
+
+    it("makes as much foam of a wave that breaks all along at one, two and five states a second", () => {
+        const [one, two, five] = [1, 2, 5].map(foamOver);
+        expect(one.mean).toBeGreaterThan(five.mean * 0.9);
+        expect(one.mean).toBeLessThan(five.mean * 1.1);
+        expect(two.mean).toBeGreaterThan(five.mean * 0.9);
+        expect(two.mean).toBeLessThan(five.mean * 1.1);
+    });
+
+    it("makes it steadily, not in puffs: the foam of a state comes as the water glides to it", () => {
+        for (const rate of [1, 2, 5]) {
+            const { swing, jump } = foamOver(rate);
+            // From its faintest to its strongest, and from a drawing to the next (50 ms).
+            expect(swing, `swing at ${rate} a second`).toBeLessThan(0.25);
+            expect(jump, `jump at ${rate} a second`).toBeLessThan(0.08);
+        }
+    });
+
+    it("lets the front of a flood come in, not blink: it rises while the water gets there, then fades", () => {
+        // The water comes from the west, a cell a second, told once a second.
+        const frontAt = (second: number): SettledWater =>
+            state(
+                20,
+                3,
+                (x) => (x <= 5 + second ? 4 : 0),
+                (x) => (x <= 4 + second ? 4 : 0),
+            );
+        const foam = new BreakingFoam();
+        const seen: number[] = [];
+        for (let tick = 0; tick <= 100; tick++) {
+            const now = tick * 50;
+            if (now % 1000 === 0) foam.absorb(frontAt(now / 1000), undefined, now);
+            // The cell the front reaches at the third second.
+            if (now >= 3000) seen.push(foam.foamAt(8, 1, now));
+        }
+        expect(seen[0]).toBe(0);
+        expect(Math.max(...seen)).toBeGreaterThanOrEqual(0.6);
+        for (let at = 1; at < seen.length; at++) expect(Math.abs(seen[at] - seen[at - 1])).toBeLessThan(0.1);
+    });
+});
