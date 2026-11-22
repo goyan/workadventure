@@ -95,7 +95,7 @@ describe("waterObjectsOf", () => {
 describe("stepInputOf", () => {
     it("drains the floors of the rooms at the pace of the map, the usual pace for a map that says nothing", () => {
         const pace = stepInputOf({ ...DEFAULT_WATER_SETTINGS, indoorDrain: 3600 }, 0, [], 1).indoorDrainPx ?? 0;
-        // 3600 mm an hour, 60 times faster than reality: 60 mm in a second of real time.
+        // 3600 mm an hour at the speed of the map (by default as in reality): 1 mm in a second of real time.
         expect(pace).toBeCloseTo(stepInputOf(undefined, 3600, [], 1).rainPx / (1 + DEFAULT_WATER_SETTINGS.runoff), 6);
         expect(stepInputOf({ ...DEFAULT_WATER_SETTINGS, indoorDrain: 0 }, 0, [], 1).indoorDrainPx).toBe(0);
         expect(stepInputOf(undefined, 0, [], 1).indoorDrainPx).toBeCloseTo(
@@ -148,7 +148,8 @@ describe("stepInputOf", () => {
         expect(moves(20)).toBe(5);
         expect(moves(60)).toBe(15);
         expect(moves(1000)).toBe(16);
-        expect(stepInputOf(undefined, 0, [], 0.1).flowSteps).toBe(15);
+        // A map that says nothing goes as in reality.
+        expect(stepInputOf(undefined, 0, [], 0.1).flowSteps).toBe(1);
     });
 
     it("goes as many times faster as the map says, and survives broken settings", () => {
