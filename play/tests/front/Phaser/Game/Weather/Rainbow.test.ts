@@ -2,27 +2,37 @@ import { describe, expect, it } from "vitest";
 import { rainbowPlacement, rainbowStrength } from "../../../../../src/front/Phaser/Game/Weather/Rainbow";
 
 describe("rainbowStrength", () => {
-    it("shows a rainbow only with rain under a sun lower than 42°", () => {
+    it("shows a rainbow with rain under the sun, never at night", () => {
         expect(rainbowStrength(true, false, 20, 0)).toBe(1);
         expect(rainbowStrength(false, false, 20, 0)).toBe(0);
         expect(rainbowStrength(true, false, undefined, 0)).toBe(0);
         expect(rainbowStrength(true, false, -2, 0)).toBe(0);
-        expect(rainbowStrength(true, false, 45, 0)).toBe(0);
+        expect(rainbowStrength(true, false, 0, 0)).toBe(0);
     });
 
-    it("fades in over the horizon and out near 42°", () => {
-        expect(rainbowStrength(true, false, 1.5, 0)).toBeCloseTo(0.5);
-        expect(rainbowStrength(true, false, 39, 0)).toBeCloseTo(0.5);
+    it("keeps it visible where a true one would fade: near sunset, under a sun over 42°", () => {
+        expect(rainbowStrength(true, false, 0.5, 0)).toBe(0.5);
+        expect(rainbowStrength(true, false, 1.5, 0)).toBe(0.5);
+        expect(rainbowStrength(true, false, 45, 0)).toBe(0.5);
+        expect(rainbowStrength(true, false, 2.4, 0)).toBeCloseTo(0.8);
     });
 
     it("needs drops of water: none in a snowfall, fainter in a sleet", () => {
         expect(rainbowStrength(true, false, 20, 0, 1)).toBe(0);
         expect(rainbowStrength(true, false, 20, 0, 0.5)).toBeCloseTo(0.5);
+        expect(rainbowStrength(true, false, 0.5, 0, 0.5)).toBeCloseTo(0.25);
     });
 
-    it("is fainter in a storm and under a covered sky", () => {
+    it("is fainter in a storm and under a covered sky, never under half", () => {
         expect(rainbowStrength(true, true, 20, 0)).toBeCloseTo(0.5);
-        expect(rainbowStrength(true, false, 20, 1)).toBeCloseTo(0.4);
+        expect(rainbowStrength(true, false, 20, 0.8)).toBeCloseTo(0.52);
+        expect(rainbowStrength(true, false, 20, 0.5)).toBeCloseTo(0.7);
+        expect(rainbowStrength(true, false, 0.5, 0.5)).toBe(0.5);
+    });
+
+    it("needs the sun to show: none under an overcast sky", () => {
+        expect(rainbowStrength(true, false, 20, 0.85)).toBe(0);
+        expect(rainbowStrength(true, false, 20, 1)).toBe(0);
     });
 });
 
@@ -42,7 +52,11 @@ describe("rainbowPlacement", () => {
     it("is half a circle with the sun on the horizon, and a shorter arc as the sun rises", () => {
         expect(rainbowPlacement(map, { azimuth: 180, elevation: 0 }).span).toBeCloseTo(0);
         expect(rainbowPlacement(map, { azimuth: 180, elevation: 21 }).span).toBeCloseTo(Math.SQRT1_2);
-        expect(rainbowPlacement(map, { azimuth: 180, elevation: 35 }).span).toBeGreaterThan(0.95);
+        expect(rainbowPlacement(map, { azimuth: 180, elevation: 30 }).span).toBeGreaterThan(0.9);
+        // Higher, the arc stays as it is at 30°: a true one would shrink to a dot near 42°.
+        expect(rainbowPlacement(map, { azimuth: 180, elevation: 40 }).span).toBe(
+            rainbowPlacement(map, { azimuth: 180, elevation: 30 }).span,
+        );
     });
 
     it("is never wider than 50 tiles of radius", () => {
