@@ -76,7 +76,14 @@ describe("the arrows of the view of the flows", () => {
     it("draws the slow currents the server tells apart: 0.06 m/s, under a quarter of a cell a second", () => {
         // 27 250ths of a cell a second: about 6 cm a second, the current of a pond a source feeds.
         expect(arrowsOver(lake(0, 27))).toBeGreaterThan(30);
-        // 5 250ths: about a centimetre a second, still shown.
-        expect(arrowsOver(lake(0, 5))).toBeGreaterThan(30);
+        // 14 250ths: about 3 cm a second, the slowest told, still shown.
+        expect(arrowsOver(lake(0, 14))).toBeGreaterThan(30);
+        // Slower than that: no arrow (the server tells none of it anyway).
+        expect(arrowsOver(lake(0, 5))).toBe(0);
+    });
+
+    it("falls back on the speeds alone from a server that tells no slow speed", () => {
+        expect(arrowsOver(lake(0))).toBe(0);
+        expect(arrowsOver(lake(4))).toBe(arrowsOver(lake(4, 0)));
     });
 });

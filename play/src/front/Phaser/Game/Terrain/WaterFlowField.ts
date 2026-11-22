@@ -2,6 +2,7 @@ import {
     CELL_METRES,
     heightAt,
     SLOWEST_TOLD_CELLS,
+    SLOWEST_TOLD_METRES,
     soilAt,
     soilRoughness,
     steadyFlowSpeed,
@@ -15,10 +16,10 @@ export const FLOW_MIN_DEPTH_PX = 0.5;
 /** A surface that slopes less than this, in pixels a cell, is at rest. */
 export const FLOW_REST_SLOPE = 0.02;
 /**
- * The slowest water the server tells the speed of, in metres a second (its slow speeds, about a centimetre a
- * second). Slower water with inertia is told still: it has no arrow.
+ * The slowest water the server tells the speed of, in metres a second (its slow speeds, 3 cm a second): slower
+ * water with inertia is told still, and has no arrow. The same figure for the server and the view.
  */
-export const SLOWEST_TOLD_SPEED = SLOWEST_TOLD_CELLS * CELL_METRES;
+export const SLOWEST_TOLD_SPEED = SLOWEST_TOLD_METRES;
 /** A water the server tells slower than this, in cells a second, is at rest: what it tells still. */
 export const FLOW_REST_SPEED = SLOWEST_TOLD_CELLS;
 /** Ground this much lower than the surface of the water next to it is a drop: the water runs down there. */

@@ -107,8 +107,8 @@ describe("VisualisationPanel", () => {
         waterFlowMeasuredStore.set(true);
         flushSync();
         expect(find("visualisation-water-speeds")?.textContent).toContain("Measured");
-        // The server tells the speed of the water from about a centimetre a second: slower, no arrow.
-        expect(find("visualisation-water-speeds")?.textContent).toMatch(/told from 0[.,]01 m\/s/);
+        // The server tells the speed of the water from 3 cm a second: slower, no arrow.
+        expect(find("visualisation-water-speeds")?.textContent).toMatch(/told from 0[.,]03 m\/s/);
         waterFlowMeasuredStore.set(false);
     });
 

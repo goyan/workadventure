@@ -247,19 +247,34 @@ export const SPEED_UNITS = 4;
 /**
  * The water slower than half of one of those units (told 0) is told apart, block by block, in this many units a
  * cell a second (two signed bytes a block, 0 where the speeds above say more): the slow currents of a pond a source
- * feeds, to about 2 mm a second.
+ * feeds, to about 2 mm a second. Linear: the range is that of half a quarter of a cell a second (from 14 to 31
+ * units), a law that spreads it would gain nothing; few values, so that it zips well.
  */
 export const SLOW_SPEED_UNITS = 250;
-/**
- * A water slower than this, in cells a second (about a centimetre a second), is told still: it costs no byte.
- * Measured on a sea of 600 by 600 cells calming down after a storm: 4 kB gzipped a message ten seconds after, 2 kB
- * after a minute, next to nothing once calm (1.5 kB ten seconds after at 2 cm a second, but a pond a source of
- * 100 m³ an hour feeds then shows a single arrow instead of four).
- */
-export const SLOWEST_TOLD_CELLS = 0.018;
 
 /** How wide a cell of the relief is, in metres. */
 export const CELL_METRES = Math.sqrt(CELL_AREA_M2);
+
+/**
+ * The slowest water whose speed is told, in metres a second: slower, it is told still (it costs no byte), and the
+ * view of the flows draws no arrow there.
+ */
+export const SLOWEST_TOLD_METRES = 0.03;
+/** The same, in cells a second. */
+export const SLOWEST_TOLD_CELLS = SLOWEST_TOLD_METRES / CELL_METRES;
+
+/** The byte of a slow speed (cells a second, as seen): 0 under SLOWEST_TOLD_CELLS, or where the speeds tell it. */
+export function slowSpeedByte(speed: number): number {
+    if (!Number.isFinite(speed) || Math.abs(speed) < SLOWEST_TOLD_CELLS) return 0;
+    if (Math.round(speed * SPEED_UNITS) !== 0) return 0;
+    const units = Math.round(speed * SLOW_SPEED_UNITS);
+    return (units > 127 ? 127 : units < -127 ? -127 : units) & 255;
+}
+
+/** The speed, in cells a second, a byte of the slow speeds tells. */
+export function slowSpeedOf(byte: number): number {
+    return ((byte << 24) >> 24) / SLOW_SPEED_UNITS;
+}
 
 /** How fast a wave runs in water that deep (pixels), in cells a second. */
 export function waveSpeed(depthPx: number): number {
@@ -1251,9 +1266,10 @@ export class WaterGrid {
 
     /**
      * The speeds of writeSpeeds, and the slow ones apart (`slow`, in SLOW_SPEED_UNITS, for the blocks those speeds
-     * tell still): the two are read together, the second by the browsers that know it.
+     * tell still): the two are read together, the second by the browsers that know it. No `slow` when no water is
+     * slow enough and fast enough for it: none is sent.
      */
-    public writeSpeedBytes(pace = 1): { speeds: Uint8Array; slow: Uint8Array } | undefined {
+    public writeSpeedBytes(pace = 1): { speeds: Uint8Array; slow?: Uint8Array } | undefined {
         const { width, height } = this.bounds;
         const size = width * height;
         if (this.flowEast.length !== size || size === 0) return undefined;
@@ -1270,12 +1286,7 @@ export class WaterGrid {
             return (units > 127 ? 127 : units < -127 ? -127 : units) & 255;
         };
         // Told only where `byte` says 0 (under half a unit): within 32 units, a signed byte.
-        const slowByte = (speed: number): number => {
-            const seenSpeed = speed * seen;
-            if (Math.abs(seenSpeed) < SLOWEST_TOLD_CELLS || Math.round(seenSpeed * SPEED_UNITS) !== 0) return 0;
-            const units = Math.round(seenSpeed * SLOW_SPEED_UNITS);
-            return (units > 127 ? 127 : units < -127 ? -127 : units) & 255;
-        };
+        const slowByte = (speed: number): number => slowSpeedByte(speed * seen);
         for (let blockRow = 0; blockRow < rows; blockRow++) {
             for (let blockColumn = 0; blockColumn < columns; blockColumn++) {
                 let held = 0;
@@ -1304,7 +1315,8 @@ export class WaterGrid {
                 }
             }
         }
-        return { speeds: bytes, slow };
+        // No slow current: nothing to tell (a browser reads the speeds alone, as from a server that tells none).
+        return slow.some((value) => value !== 0) ? { speeds: bytes, slow } : { speeds: bytes };
     }
 
     /**

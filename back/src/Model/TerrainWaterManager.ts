@@ -738,7 +738,8 @@ export class TerrainWaterManager {
                     seq: this.seq,
                     full,
                     depths: gzipSync(payload),
-                    ...(speeds ? { speeds: gzipSync(speeds.speeds), slowSpeeds: gzipSync(speeds.slow) } : {}),
+                    ...(speeds ? { speeds: gzipSync(speeds.speeds) } : {}),
+                    ...(speeds?.slow ? { slowSpeeds: gzipSync(speeds.slow) } : {}),
                     stats: {
                         ...rates,
                         stock: (grid.totalPx() * CELL_LITRES_PER_PX) / LITRES_PER_M3,

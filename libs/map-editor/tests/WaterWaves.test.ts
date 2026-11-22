@@ -1,3 +1,4 @@
+import { gzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { advanceImpactWave, startImpactWave, strikeWater } from "../src/Catastrophe/ImpactWave";
 import type { ImpactWave } from "../src/Catastrophe/ImpactWave";
@@ -6,7 +7,17 @@ import { UpdateWAMSettingCommand } from "../src/Commands/WAM/UpdateWAMSettingCom
 import { soilCode } from "../src/Terrain/Soils";
 import type { SoilName } from "../src/Terrain/Soils";
 import { cellKey, withHeights, withSoils } from "../src/Terrain/TerrainGrid";
-import { CELL_LITRES_PER_PX, steadyFlowSpeed, WaterGrid } from "../src/Terrain/WaterGrid";
+import {
+    CELL_LITRES_PER_PX,
+    CELL_METRES,
+    SLOW_SPEED_UNITS,
+    SLOWEST_TOLD_CELLS,
+    SLOWEST_TOLD_METRES,
+    slowSpeedByte,
+    slowSpeedOf,
+    steadyFlowSpeed,
+    WaterGrid,
+} from "../src/Terrain/WaterGrid";
 import type { WaterStepInput } from "../src/Terrain/WaterGrid";
 import { stepInputOf, stepsBetweenUpdates } from "../src/Terrain/WaterInputs";
 import { DEFAULT_WATER_SETTINGS, DEFAULT_WAVE_SETTINGS } from "../src/types";
@@ -340,6 +351,23 @@ describe("the speed of the water told to the browsers", () => {
         const slow = grid.writeSpeeds(0.5);
         expect(signed(slow?.[at] ?? 0)).toBeCloseTo(signed(speeds[at]) / 2, 0);
     });
+
+    it("tells them byte for byte as before the slow speeds were told apart", () => {
+        const grid = river();
+        for (let step = 0; step < 600; step++) {
+            grid.rainOn(5, 4, 2.9, 0.3);
+            grid.step(withWaves());
+        }
+        // The bytes the server sent for this river before it told the slow speeds (infogene at 5bb258985).
+        const before = [
+            0, 0, 3, 0, 5, 0, 5, 0, 5, 0, 5, 0, 5, 0, 5, 0, 5, 0, 6, 0, 6, 0, 6, 0, 6, 0, 6, 0, 6, 0, 6, 0, 7, 0, 7, 0,
+            7, 0, 7, 0, 0, 0, 3, 0, 5, 0, 5, 0, 5, 0, 5, 0, 5, 0, 5, 0, 5, 0, 6, 0, 6, 0, 6, 0, 6, 0, 6, 0, 6, 0, 6, 0,
+            7, 0, 7, 0, 7, 0, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        expect(Array.from(grid.writeSpeeds() ?? [])).toEqual(before);
+        expect(Array.from(grid.writeSpeedBytes()?.speeds ?? [])).toEqual(before);
+    });
 });
 
 describe("the slow currents of a pond a source feeds", () => {
@@ -372,33 +400,84 @@ describe("the slow currents of a pond a source feeds", () => {
         expect(full.grid.depthAt(24, 9)).toBeGreaterThan(0.25);
     });
 
+    it("codes a slow speed to about 2 mm a second, from 3 cm a second on, and nothing the quarters tell", () => {
+        // The floor: 3 cm a second, the slowest arrow of the view of the flows.
+        expect(SLOWEST_TOLD_METRES).toBe(0.03);
+        expect(SLOWEST_TOLD_CELLS * CELL_METRES).toBeCloseTo(0.03, 10);
+        for (const speed of [0.055, 0.07, 0.1, 0.124, -0.06, -0.12]) {
+            const told = slowSpeedOf(slowSpeedByte(speed));
+            expect(Math.abs(told - speed)).toBeLessThanOrEqual(1 / SLOW_SPEED_UNITS / 2 + 1e-9);
+            expect(Math.sign(told)).toBe(Math.sign(speed));
+        }
+        // Slower than 3 cm a second: still. As fast as half a quarter of a cell a second: the speeds tell it.
+        expect(slowSpeedByte(SLOWEST_TOLD_CELLS * 0.99)).toBe(0);
+        expect(slowSpeedByte(-SLOWEST_TOLD_CELLS * 0.99)).toBe(0);
+        expect(slowSpeedByte(0.125)).toBe(0);
+        expect(slowSpeedByte(1)).toBe(0);
+        expect(slowSpeedByte(Number.NaN)).toBe(0);
+        expect(slowSpeedOf(0)).toBe(0);
+    });
+
     it("tells the slow currents apart, where the speeds in quarters of a cell say nothing", () => {
-        const { grid } = pond(100, 600);
+        // 100 m³ an hour at « Vitesse de l'eau » 4: the source pours 400 m³ an hour of real time.
+        const { grid } = pond(400, 600);
         const told = grid.writeSpeedBytes();
-        expect(told).toBeDefined();
-        if (!told) return;
+        const slowBytes = told?.slow;
+        expect(slowBytes).toBeDefined();
+        if (!told || !slowBytes) return;
         const signed = (byte: number): number => (byte << 24) >> 24;
         const columns = Math.ceil(30 / 4);
         // The 9 blocks of the pond (columns and rows 1 to 3): still in quarters of a cell, not all still in thousandths.
         let slow = 0;
+        let fast = 0;
         for (let row = 1; row <= 3; row++)
             for (let column = 1; column <= 3; column++) {
                 const at = (row * columns + column) * 2;
-                expect(told.speeds[at]).toBe(0);
-                expect(told.speeds[at + 1]).toBe(0);
-                if (told.slow[at] !== 0 || told.slow[at + 1] !== 0) slow++;
+                if (told.speeds[at] !== 0 || told.speeds[at + 1] !== 0) {
+                    fast++;
+                    // Where the quarters tell the speed, the slow speeds say nothing.
+                    expect(slowBytes[at]).toBe(0);
+                    expect(slowBytes[at + 1]).toBe(0);
+                } else if (slowBytes[at] !== 0 || slowBytes[at + 1] !== 0) slow++;
                 // Never more than what the quarters would have told: under half a quarter of a cell a second.
-                expect(Math.abs(signed(told.slow[at]))).toBeLessThanOrEqual(32);
+                expect(Math.abs(signed(slowBytes[at]))).toBeLessThanOrEqual(32);
             }
-        expect(slow).toBeGreaterThanOrEqual(3);
+        // Measured: one block told in quarters, three more told slowly (one arrow, then four).
+        expect(fast).toBe(1);
+        expect(slow).toBeGreaterThanOrEqual(2);
         // The speeds told by writeSpeeds are the same.
         expect(grid.writeSpeeds()).toEqual(told.speeds);
+    });
+
+    it("costs a few hundred bytes zipped on a rough sea, next to nothing on a calm one", () => {
+        const cells = new Map<string, number>();
+        for (let y = 0; y < 80; y++)
+            for (let x = 0; x < 80; x++) cells.set(cellKey(x, y), x >= 2 && y >= 2 && x < 78 && y < 78 ? -40 : 250);
+        const grid = new WaterGrid(withHeights(undefined, cells), { x: 0, y: 0, width: 80, height: 80 });
+        const bytes = new Uint8Array(80 * 80 * 2);
+        for (let y = 2; y < 78; y++)
+            for (let x = 2; x < 78; x++) {
+                let depth = 40;
+                for (let bump = 0; bump < 4; bump++)
+                    depth += 3 * Math.exp(-(((x - ((bump * 37) % 80)) ** 2 + (y - ((bump * 53) % 80)) ** 2) / 30));
+                const eighths = Math.round(depth * 8);
+                bytes[(y * 80 + x) * 2] = eighths & 255;
+                bytes[(y * 80 + x) * 2 + 1] = eighths >> 8;
+            }
+        expect(grid.readDepths(bytes)).toBe(true);
+        for (let step = 0; step < 50; step++) grid.step(withWaves());
+        // Measured: 122 bytes five seconds after, 31 a minute after.
+        expect(gzipSync(grid.writeSpeedBytes()?.slow ?? new Uint8Array()).length).toBeLessThan(250);
+        for (let step = 0; step < 550; step++) grid.step(withWaves());
+        expect(gzipSync(grid.writeSpeedBytes()?.slow ?? new Uint8Array()).length).toBeLessThan(80);
     });
 
     it("tells nothing of a still water, not even slowly", () => {
         const { grid } = pond(0, 60);
         const told = grid.writeSpeedBytes();
-        expect(told?.slow.every((byte) => byte === 0)).toBe(true);
+        // Nothing slow to tell: no slow speeds at all, as from a server that tells none.
+        expect(told?.speeds).toBeDefined();
+        expect(told?.slow).toBeUndefined();
     });
 });
 

@@ -2848,24 +2848,32 @@ comprise. Sur mer modérée, cette vitesse reste sous son pas d'envoi (un quart 
 flèche. Sur mer forte, une flèche s'inverse d'une seconde à l'autre 15 à 35 % du temps, ce qui est le mouvement réel
 de l'eau sous la vague.
 
-**Courants lents** (dès 1 cm/s sur une carte à inertie). Le serveur transmet la vitesse par bloc de 4 × 4 cellules,
+**Courants lents** (dès 3 cm/s sur une carte à inertie). Le serveur transmet la vitesse par bloc de 4 × 4 cellules,
 par pas d'un quart de cellule par seconde (`speeds`, `SPEED_UNITS`, 0,137 m/s) : plus lente, elle valait zéro et
-l'overlay ne traçait rien. Mesuré sur le modèle (étang de 11 × 11 cellules, 30 cm d'eau, source de 100 m³/h au
-milieu, trop-plein par un chenal) : à « Vitesse de l'eau » 1, courants de 6 cm/s au plus et aucun bloc transmis dans
-l'étang ; à 4, 82 cellules sur 121 au-dessus de 3 cm/s mais un seul bloc transmis. Depuis, un champ facultatif
-`slowSpeeds` (champ 10 de `TerrainWaterMessage`, même disposition) donne, là où `speeds` dit zéro, la vitesse en
-250ᵉ de cellule par seconde (2 mm/s), dès 1 cm/s (`SLOW_SPEED_UNITS`, `SLOWEST_TOLD_CELLS`,
-`WaterGrid.writeSpeedBytes`). Le navigateur le lit dans `TerrainWater.speedAt` ; l'overlay trace dès 1 cm/s
-(`FLOW_REST_SPEED`, `SLOWEST_TOLD_SPEED`) et la légende le dit (« transmises à partir de 0,01 m/s »). Sur l'étang
-à « Vitesse de l'eau » 1 : 4 blocs sur 9 ont une flèche (pâle, courte).
-Compatibilité : un `play` ancien ignore le champ, un `back` ancien ne l'envoie pas (le `play` neuf trace alors dès
-0,14 m/s, comme avant). Le courant qui porte les avatars ne change pas : il ne compte qu'à partir de 0,2 cellule/s
-(`CURRENT_REST_SPEED`). Coût : un seul passage sur la grille, le même qu'avant (0,9 ms par message sur 600 × 600) ;
-en octets gzip par message, rien d'utile sur une eau calme ou rapide (des zéros), 0,3 à 0,5 ko sur une mer de
-80 × 80 qui se calme, 4 ko sur une mer de 600 × 600 dix secondes après une tempête, 2 ko une minute après (1,5 ko
-avec un plancher de 2 cm/s, mais l'étang n'aurait plus qu'une flèche). Écartée : deviner la vitesse d'après la pente
-quand le serveur dit zéro, car 3 à 6 cm/s sous 30 cm d'eau demandent une pente de 0,001 à 0,002 px par cellule,
-trente fois sous le bruit des profondeurs reçues (0,06 px par cellule, qui donnerait 0,8 m/s sur un étang immobile).
+l'overlay ne traçait rien. Un champ facultatif `slowSpeeds` (champ 10 de `TerrainWaterMessage`, même disposition)
+donne, là où `speeds` dit zéro, la vitesse en 250ᵉ de cellule par seconde (2 mm/s), dès 3 cm/s : `SLOW_SPEED_UNITS`,
+`SLOWEST_TOLD_METRES` (une seule constante pour le serveur, le plancher de l'overlay et la légende), codage linéaire
+(`slowSpeedByte`, `slowSpeedOf` : la plage ne va que de 14 à 31 unités, une loi plus fine n'apporterait rien et peu de
+valeurs se compressent bien). Le serveur l'écrit dans le même passage que `speeds` (`WaterGrid.writeSpeedBytes`) et
+ne l'envoie pas quand aucun bloc n'est lent ; `speeds` reste identique octet pour octet (test sur une rivière).
+
+- **Compatibilité** : un `play` ancien ignore le champ ; un `back` ancien ne l'envoie pas et le `play` neuf trace
+  alors dès 0,14 m/s, comme avant. Déployer `play` et `back` ensemble reste la règle (même commit, protobuf partagé).
+- **Courant des avatars et des canoës inchangé** : `speedAt` lit les vitesses lentes, mais `currentPush` et
+  `waterCurrentAt` ne comptent qu'à partir de 0,2 cellule/s (`CURRENT_REST_SPEED`), au-dessus de toute vitesse lente
+  (0,124 au plus) : test.
+- **Coût mesuré** (gzip par message, `speeds` puis `slowSpeeds`) : mer de 80 × 80 agitée 28 + 122 octets, qui se
+  calme 28 + 31 ; mer de 600 × 600 agitée 78 + 333 à 413, qui se calme 78 + 78 ; étang 28 à 47 + 28 à 34, rien d'envoyé
+  pour une eau sans courant lent. En octets par seconde, × 1, 5 ou 10 états par seconde : sur la mer de 600 × 600
+  agitée, 78 → 411 à 1 état/s, 390 → 2 415 à 5, 780 → 4 912 à 10 ; la finesse adaptative (#446), qui réduit la cadence
+  sous charge, réduit d'autant. Temps d'écriture du serveur inchangé (0,9 ms par message sur 600 × 600, un passage),
+  le calcul de l'eau n'est pas touché ; `FLOW_REST_SPEED` (navigateur seulement) suit le plancher.
+- **Ce que montre l'étang de la capture** (simulation : 11 × 11 cellules, 30 cm d'eau, source de 100 m³/h, trop-plein
+  par un chenal ; blocs de l'étang ayant une flèche, sur 9) : à « Vitesse de l'eau » 1, 1 au lieu de 0 ; à 4, 4 au lieu
+  de 1 ; à 60, 8 au lieu de 7. Les flèches lentes sont courtes et pâles (échelle existante). La légende dit
+  « transmises à partir de 0,03 m/s ».
+- Écartée : deviner la vitesse d'après la pente quand le serveur dit zéro (3 à 6 cm/s sous 30 cm d'eau demandent une
+  pente de 0,001 à 0,002 px par cellule, trente fois sous le bruit des profondeurs reçues).
 
 **La glace ne retient pas l'eau.** La glace du serveur (`Meadow.stepIce`) est une épaisseur à part, posée sur l'eau :
 le pré ne lit l'eau que par `depthAt` (`MeadowManager`, `water: () => Pick<WaterGrid, "depthAt">`) et n'y verse que
