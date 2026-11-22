@@ -166,7 +166,7 @@ describe("the wheel on the ice", () => {
 describe("the stool of a shack", () => {
     it("is a seat of the map once the shack is up, its avatar facing the hole", () => {
         const { manager, send } = harness();
-        send([{ ageMs: ICE_SHACK_READY_MS - 1 }]);
+        send([{ ageMs: 0 }]);
         expect(manager.seats()).toEqual([]);
         send([{}]);
         const [stool] = manager.seats();
