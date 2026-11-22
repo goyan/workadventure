@@ -2,15 +2,27 @@ import type { EntityPrefab } from "@workadventure/map-editor";
 import { isJungleTree } from "../Jungle/JunglePlan";
 import { shadowRectangles } from "../Lamps/RgbLampObstacles";
 import {
+    MAP_LAYER_FLOOR_SLAB_COLLECTION,
     MAP_LAYER_TILE_SIZE,
     MAP_LAYER_WALL_LIKE_COLLECTIONS,
     WALL_FOOTPRINT,
     WALL_HALF,
 } from "../MapEditor/MapLayer/MapLayerCatalog";
+import { FloorModel } from "../MapEditor/MapLayer/FloorModel";
+import type { PlacedFloorPiece, PlacedStair } from "../MapEditor/MapLayer/FloorModel";
+import { SLAB_THICKNESS } from "../MapEditor/MapLayer/MapLayerFloors";
 import type { MapLayerModel } from "../MapEditor/MapLayer/MapLayerModel";
 import { modelFromPlacedPrefabs, type PlacedPrefabLike } from "../MapEditor/MapLayer/MapLayerOperations";
 import { mergeShadowBoxes } from "./SkyShadowGeometry";
-import type { ShadowBox, ShadowCasters, ShadowPictureCaster, ShadowTree } from "./SkyShadowGeometry";
+import type {
+    Point,
+    ShadowBox,
+    ShadowCasters,
+    ShadowPictureCaster,
+    ShadowPlate,
+    ShadowSlope,
+    ShadowTree,
+} from "./SkyShadowGeometry";
 import type { ShadowPicture, ShadowShape } from "./SkyShadowPicture";
 
 /** How high a tall object (`castsShadow`) stands, in map pixels: a tile and a half (a cupboard, a shelf). */
@@ -87,6 +99,56 @@ export function wallShadowBoxes(model: MapLayerModel): ShadowBox[] {
     return mergeShadowBoxes(boxes);
 }
 
+/**
+ * The raised floors as plates and slopes: the slabs of each altitude joined (a deck, a terrace, a storey), a plate
+ * as high as its floor and as thick as a slab; each stair or ramp a slope from its foot to its top.
+ */
+export function floorShadowCasters(pieces: Iterable<PlacedFloorPiece>): {
+    plates: ShadowPlate[];
+    slopes: ShadowSlope[];
+} {
+    const model = FloorModel.fromPlaced(pieces);
+    const size = MAP_LAYER_TILE_SIZE;
+    const plates = mergeShadowBoxes(
+        model
+            .getSlabs()
+            .map((slab) => ({ x: slab.x * size, y: slab.y * size, width: size, height: size, rise: slab.elevation })),
+    ).map((box) => ({ ...box, thickness: SLAB_THICKNESS }));
+    return { plates, slopes: model.getStairs().map(stairSlope) };
+}
+
+/** A stair as a slope: its edge at its foot and its edge at its top, across what it covers on the ground. */
+function stairSlope(stair: PlacedStair): ShadowSlope {
+    const { x, y, width, height } = stair.ground;
+    const north: [Point, Point] = [
+        { x, y },
+        { x: x + width, y },
+    ];
+    const south: [Point, Point] = [
+        { x, y: y + height },
+        { x: x + width, y: y + height },
+    ];
+    const west: [Point, Point] = [
+        { x, y },
+        { x, y: y + height },
+    ];
+    const east: [Point, Point] = [
+        { x: x + width, y },
+        { x: x + width, y: y + height },
+    ];
+    // It goes up towards its direction: its top on that side, its foot on the other.
+    const [low, high] =
+        stair.shape.direction === "n"
+            ? [south, north]
+            : stair.shape.direction === "s"
+              ? [north, south]
+              : stair.shape.direction === "e"
+                ? [west, east]
+                : [east, west];
+    const slope: ShadowSlope = { low, base: stair.base, high, top: stair.top };
+    return stair.shape.open ? slope : { ...slope, footprint: { ...stair.ground } };
+}
+
 /** A placed object as the shadows need it (an `Entity` fits through its getters). */
 export interface ShadowSourceEntity {
     /** Its id on the map: the trees that sway are found again by it. */
@@ -130,8 +192,9 @@ function detailOf(entity: ShadowSourceEntity): ShadowTree {
 
 /**
  * What throws a shadow of the sky on the ground: the walls of the map layer, the tall objects (`castsShadow`, by their
- * collision), the trees of the nature catalogue and its low details, each kind unless turned off (`categories`). What stands on a raised floor is left out: the shadows are cast on
- * the ground only. `signature` changes only when one of them changes.
+ * collision), the trees of the nature catalogue and its low details, each kind unless turned off (`categories`), and
+ * the slabs, stairs and ramps of the raised floors (with the walls: what the map tool builds). What stands on a raised
+ * floor is left out: the shadows are cast on the ground only. `signature` changes only when one of them changes.
  */
 export function readShadowCasters(
     entities: Iterable<ShadowSourceEntity>,
@@ -147,6 +210,7 @@ export function readShadowCasters(
     const trees: ShadowTree[] = [];
     const details: ShadowTree[] = [];
     const pictures: ShadowPictureCaster[] = [];
+    const floorPieces: PlacedFloorPiece[] = [];
     const realisticTrees = categories.treeShape === "realistic";
     const realisticDetails = categories.detailShape === "realistic";
     const laidPicture = (entity: ShadowSourceEntity, picture: ShadowPicture): ShadowPictureCaster => ({
@@ -160,6 +224,19 @@ export function readShadowCasters(
     let signature = `c${on(categories.walls)}${on(categories.objects)}${on(categories.trees)}${on(categories.details)}${on(realisticTrees)}${on(realisticDetails)};`;
     for (const entity of entities) {
         const { prefab } = entity;
+        // The pieces of the raised floors stand at their altitude: read before what stands on them is left out.
+        if (prefab.collectionName === MAP_LAYER_FLOOR_SLAB_COLLECTION) {
+            if (!categories.walls) continue;
+            floorPieces.push({
+                x: entity.x,
+                y: entity.y,
+                collectionName: prefab.collectionName,
+                prefabId: prefab.id,
+                elevation: entity.elevation,
+            });
+            signature += `f${prefab.id}@${entity.x},${entity.y},${entity.elevation};`;
+            continue;
+        }
         if (entity.elevation >= RAISED) continue;
         if (MAP_LAYER_WALL_LIKE_COLLECTIONS.includes(prefab.collectionName)) {
             if (!categories.walls) continue;
@@ -196,5 +273,6 @@ export function readShadowCasters(
     }
     if (signature === unchangedSince) return { casters: undefined, signature };
     const boxes = pieces.length > 0 ? [...wallShadowBoxes(modelFromPlacedPrefabs(pieces)), ...objects] : objects;
-    return { casters: { boxes, trees, details, pictures }, signature };
+    const { plates, slopes } = floorPieces.length > 0 ? floorShadowCasters(floorPieces) : { plates: [], slopes: [] };
+    return { casters: { boxes, trees, details, pictures, plates, slopes }, signature };
 }

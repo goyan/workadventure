@@ -26,6 +26,7 @@ import { paddedView, wellInside } from "../Weather/WeatherFrame";
 import type { WeatherView } from "../Weather/WeatherFrame";
 import { isBasicActive } from "../../../Stores/BasicModeStore";
 import { isEffectShown } from "../../../Stores/EffectsStore";
+import type { IceBreak } from "../Ice/IceBreaks";
 import {
     DEEP_WATER_COLOR,
     deepWaterAlpha,
@@ -55,6 +56,8 @@ import {
 import type { MeadowState } from "./MeadowState";
 import type { TerrainWater } from "./TerrainWater";
 import { GROUND_TEXTURES, TexturedGround, WATER_FRAMES } from "./TexturedGround";
+import type { WaterReflection } from "./WaterReflection";
+import { BasicPools } from "./BasicPools";
 import type { GroundArea } from "./TexturedGround";
 import { GroundSplat } from "./GroundSplat";
 import { BreakingFoam } from "./BreakingFoam";
@@ -72,6 +75,8 @@ const NO_SHIFT = { columns: 0, rows: 0 };
 const SOIL_GROUND_DEPTH = TERRAIN_DEPTH - 0.04;
 const GRASS_GROUND_DEPTH = TERRAIN_DEPTH - 0.03;
 const SNOW_GROUND_DEPTH = TERRAIN_DEPTH - 0.02;
+/** The snow of a player's own city is drawn in this many steps from none to a full cover. */
+const OWN_SNOW_STEPS = 20;
 /** The water over the relief canvas (its slopes show under it), under the puddles (0.7). */
 const WATER_DEPTH = TERRAIN_DEPTH + 0.01;
 const DEEP_WATER_DEPTH = TERRAIN_DEPTH + 0.02;
@@ -139,6 +144,8 @@ interface MeadowLayers extends BlockCanvasArea {
     moisture: Uint8Array | undefined;
     /** Whether these layers show the snow of the server (GroundSource): read again when the player changes of weather. */
     server: boolean;
+    /** The snow of their own city these layers show to a player who follows one, in twentieths (0 for the server's). */
+    own: number;
 }
 
 /**
@@ -166,6 +173,8 @@ export class TerrainView {
         version: 0,
     };
     private readonly hiddenPools = new Map<string, PlacedPool>();
+    /** The pools painted in the editor as Basique shows them: still water and a coping (BasicPools.ts). */
+    private basicPools: BasicPools | undefined;
     /** The ladders of the pools drawn by the shaders. */
     private readonly ladders: PoolLadders | undefined;
     private everywhere = new Uint8Array(0);
@@ -215,8 +224,19 @@ export class TerrainView {
     }
 
     public update(now: number): void {
+        // Basique shows the ground of the map as it is, but its pools: still water, no waves, no ice (BasicPools).
+        const basic = isBasicActive();
+        if (basic) {
+            // The pools placed as images too, hidden as in the shaders: every pool has the same look.
+            this.readImagePools();
+            const settings = this.scene.getGameMap?.()?.getWamFile()?.getWam().settings;
+            this.basicPools ??= new BasicPools(this.scene, WATER_DEPTH);
+            if (this.basicPools.show(this.water.relief(), settings?.pools, this.imagePools)) this.scene.markDirty();
+        } else if (this.basicPools?.hide()) {
+            this.scene.markDirty();
+        }
         // Basique shows the ground of the map as it is: no water, relief, soils nor grass drawn over it.
-        if (isBasicActive() || (!this.water.hasAnything() && !this.meadowShows() && !this.hasPools())) {
+        if (basic || (!this.water.hasAnything() && !this.meadowShows() && !this.hasPools())) {
             if (this.visible) {
                 this.surface.hide();
                 this.hideGrounds();
@@ -235,7 +255,7 @@ export class TerrainView {
         this.readImagePools();
         // The foam left behind a wave fades: drawn again five times a second while any is left.
         const foamKey = this.breaking.active(now) ? Math.floor(now / 200) : 0;
-        const key = `${foamKey}:${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}:${this.imagePools.signature}:${this.poolSettingsVersion()}:${followsServerGround()}`;
+        const key = `${foamKey}:${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}:${this.imagePools.signature}:${this.poolSettingsVersion()}:${followsServerGround()}:${this.ownSnow()}`;
         const inside = this.drawn !== undefined && wellInside(this.drawn, screen, DRAW_MARGIN / 5);
         if (key === this.lastKey && inside) return;
         this.lastKey = key;
@@ -590,12 +610,18 @@ export class TerrainView {
     /** Whether the meadow has anything to draw for this player: grass, a dry ground, or the snow of the server. */
     private meadowShows(): boolean {
         const meadow = this.meadow;
-        return (
-            meadow !== undefined &&
-            (meadow.hasGrass() ||
-                meadow.hasMoisture() ||
-                (followsServerGround() && (meadow.hasSnow() || meadow.hasIce())))
-        );
+        if (meadow === undefined) return false;
+        if (meadow.hasGrass() || meadow.hasMoisture()) return true;
+        return followsServerGround() ? meadow.hasSnow() || meadow.hasIce() : this.ownSnow() > 0;
+    }
+
+    /**
+     * The snow of their own city on the ground of a player who follows one, in steps of a twentieth: the ground is
+     * painted again when it moves by one, not at each image. 0 for a player who follows the server.
+     */
+    private ownSnow(): number {
+        if (followsServerGround()) return 0;
+        return Math.round((this.scene.getMapSnowCoverage?.() ?? 0) * OWN_SNOW_STEPS);
     }
 
     private meadowOver(canvas: BlockCanvasArea): MeadowLayers | undefined {
@@ -606,11 +632,13 @@ export class TerrainView {
         }
         // The snow of the server is for those who follow its weather (GroundSource).
         const server = followsServerGround();
+        const own = this.ownSnow();
         const kept = this.meadowLayers;
         if (
             kept &&
             kept.version === meadow.version() &&
             kept.server === server &&
+            kept.own === own &&
             kept.x === canvas.x &&
             kept.y === canvas.y &&
             kept.columns === canvas.columns &&
@@ -633,6 +661,7 @@ export class TerrainView {
             ice: undefined,
             moisture: undefined,
             server,
+            own,
         };
         const outdoor = this.scene.getOutdoorGrid?.();
         const cellsATile = TILE_PX / TERRAIN_CELL;
@@ -646,7 +675,10 @@ export class TerrainView {
                 const dryness = meadow.drynessAt(tileX, tileY);
                 const ashes = meadow.ashAt(tileX, tileY);
                 const flames = meadow.fireAt(tileX, tileY);
-                const white = server ? Math.round(snowCoverOf(meadow.snowAt(tileX, tileY)) * 255) : 0;
+                // The snow of the server tile by tile, or the snow of their own city, the same everywhere outdoors.
+                const white = server
+                    ? Math.round(snowCoverOf(meadow.snowAt(tileX, tileY)) * 255)
+                    : Math.round((own / OWN_SNOW_STEPS) * 255);
                 const frozen = server ? meadow.iceByteAt(tileX, tileY) : 0;
                 const moist = meadow.moistureByteAt(tileX, tileY);
                 if (
@@ -850,6 +882,16 @@ export class TerrainView {
         return this.splat !== undefined;
     }
 
+    /** The cracks and the holes of the ice (IceBreaks.ts): read by the water shader at its next drawing. */
+    public setIceBreaks(breaks: readonly IceBreak[]): void {
+        this.splat?.setBreaks(breaks);
+    }
+
+    /** What the water reflects (sky, clouds, sun, lamps): read by the water shader at its next drawing. */
+    public setWaterReflection(reflection: WaterReflection): void {
+        this.splat?.setReflection(reflection);
+    }
+
     public setWaterRings(rings: readonly WaterRing[]): boolean {
         if (!this.splat) return false;
         if (rings.length > 0 || this.splat.hasRings()) this.scene.markDirty();
@@ -881,6 +923,7 @@ export class TerrainView {
     }
 
     public destroy(): void {
+        this.basicPools?.destroy();
         this.surface.destroy();
         this.splat?.destroy();
         this.ladders?.destroy();

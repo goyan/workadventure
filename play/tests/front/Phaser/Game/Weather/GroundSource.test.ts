@@ -41,6 +41,18 @@ describe("GroundSource", () => {
         expect(snowCoverOfMap(undefined)).toBe(0);
     });
 
+    it("gives a player who follows their own weather the snow of their own city, outdoors only", () => {
+        chosen.place = { latitude: 69, longitude: 18 };
+        const meadow = snowy();
+        expect(snowCoverHere(meadow, 40, 10, { cover: 0.6, outdoors: true })).toBe(0.6);
+        expect(snowCoverHere(meadow, 10, 10, { cover: 0.6, outdoors: false })).toBe(0);
+        expect(snowCoverOfMap(meadow, 0.6)).toBe(0.6);
+        // A player who follows the server is shown nothing of it.
+        chosen.place = undefined;
+        expect(snowCoverHere(meadow, 40, 10, { cover: 0.6, outdoors: true })).toBe(0);
+        expect(snowCoverOfMap(meadow, 0.6)).toBeCloseTo(0.5, 1);
+    });
+
     it("shows none of the snow of the server to a player who follows their own weather", () => {
         chosen.place = { latitude: 69, longitude: 18 };
         const meadow = snowy();

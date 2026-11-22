@@ -1,3 +1,4 @@
+import type * as Phaser from "phaser";
 import { TERRAIN_CELL } from "@workadventure/map-editor";
 import type { TerrainData, WaveSettings } from "@workadventure/map-editor";
 import { DEPTH_INGAME_TEXT_INDEX } from "../DepthIndexes";
@@ -9,7 +10,10 @@ import type { WaterMass } from "./WaterMasses";
 export interface WaterFlowOverlayOptions {
     /** The water of the relief: its last state, and a number that changes with it. */
     water: {
-        settled(): SettledWater;
+        /** With `now` (ms of the game), the trend of the level too: kept while it is read so. */
+        settled(now?: number): SettledWater;
+        /** The view is closed: the trend is let go. */
+        dropTrend?(): void;
         relief(): TerrainData | undefined;
         basin?(): TerrainData | undefined;
         version(): number;
@@ -39,9 +43,11 @@ const MOST_ARROWS = 3000;
 const SLOWEST_SHOWN = 0.03;
 /** An arrow is as long as its block allows from this speed on, in metres a second. */
 const FULL_ARROW_SPEED = 2;
-/** A level that changes slower than this, in pixels a second, has no tint; the tint is full from the second on. */
-const SLOWEST_RATE = 0.02;
-const FULL_RATE = 2;
+/**
+ * The tint of a level that rises or falls (its trend over a few seconds, WaterTrend: under its threshold, none) is
+ * full from this trend on, in pixels a second: 0.5 px a second is 1.7 cm a second, a metre a minute.
+ */
+const FULL_TREND = 0.5;
 export const RISING_COLOR = 0x3b82f6;
 export const FALLING_COLOR = 0xd946ef;
 /** The labels of the largest bodies of water in view, no more than this many. */
@@ -64,9 +70,10 @@ export function massLabel(mass: WaterMass): string {
 
 /**
  * Draws the flows of the water over the map, for whoever asked: an arrow where the water runs (which way, and how
- * fast by its length and its colour), with a dot that runs along it; a tint where the level rises or falls; and a
- * label on each body of water (volume, surface, mean depth, trend). Read from the depths this browser already has:
- * nothing is asked of the server, and the speeds are those the slope of the surface gives.
+ * fast by its length and its colour), with a dot that runs along it; a tint where the level rises or falls over a
+ * few seconds (its trend, the ripple of the waves left out); and a label on each body of water (volume, surface,
+ * mean depth, trend). Read from the depths this browser already has: nothing is asked of the server, and the speeds
+ * are those the slope of the surface gives.
  */
 export class WaterFlowOverlay {
     private readonly graphics: Phaser.GameObjects.Graphics;
@@ -92,7 +99,7 @@ export class WaterFlowOverlay {
         }
         if (now - this.lastFrameAt < FRAME_MS) return;
         this.lastFrameAt = now;
-        const water = this.options.water.settled();
+        const water = this.options.water.settled(now);
         this.options.measured?.(water.speedAt !== undefined);
         const terrain = this.options.water.basin ? this.options.water.basin() : this.options.water.relief();
         const inertia = this.options.inertia();
@@ -124,11 +131,11 @@ export class WaterFlowOverlay {
                 if (!water.speedAt) flow.speed *= pace;
                 const left = cellX * TERRAIN_CELL;
                 const top = cellY * TERRAIN_CELL;
-                const rate = Math.abs(flow.rate);
-                if (rate >= SLOWEST_RATE) {
+                // The trend of the level, not the ripple of its waves: paler when it rises slowly.
+                if (flow.tint !== 0) {
                     graphics.fillStyle(
-                        flow.rate > 0 ? RISING_COLOR : FALLING_COLOR,
-                        0.12 + 0.33 * Math.min(1, rate / FULL_RATE),
+                        flow.tint > 0 ? RISING_COLOR : FALLING_COLOR,
+                        0.12 + 0.33 * Math.min(1, Math.abs(flow.trend) / FULL_TREND),
                     );
                     graphics.fillRect(left, top, block, block);
                 }
@@ -172,7 +179,9 @@ export class WaterFlowOverlay {
     /** The labels of the largest bodies of water in view, always the same size on the screen. */
     private placeLabels(water: SettledWater, now: number, view: Phaser.Geom.Rectangle, zoom: number): void {
         const version = this.options.water.version();
-        if (version !== this.massesVersion && now - this.massesReadAt >= MASSES_MS) {
+        // Read again when the water changed, and while a trend is still dying down after the server fell silent.
+        const settling = this.masses.some((mass) => Math.abs(mass.trendM3PerMinute) >= 0.01);
+        if ((version !== this.massesVersion || settling) && now - this.massesReadAt >= MASSES_MS) {
             this.masses = waterMassesOf(water);
             this.massesVersion = version;
             this.massesReadAt = now;
@@ -205,6 +214,8 @@ export class WaterFlowOverlay {
 
     private clear(): void {
         if (!this.drawn) return;
+        this.options.water.dropTrend?.();
+        this.masses = [];
         this.graphics.clear();
         for (const label of this.labels) label.setVisible(false);
         this.drawn = false;

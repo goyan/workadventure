@@ -1,4 +1,6 @@
 import {
+    historySlotsFromOpenMeteo,
+    openMeteoHistoryUrl,
     openMeteoTimelineUrl,
     PARIS_LATITUDE,
     PARIS_LONGITUDE,
@@ -14,6 +16,7 @@ const REFRESH_MS = 30 * 60 * 1000;
 /** After a failure the next try comes sooner. */
 const RETRY_MS = 2 * 60 * 1000;
 const TIMEOUT_MS = 5000;
+const HOUR_MS = 3600 * 1000;
 /** Places followed at once (one for each map in real weather with a relief): the one asked least recently goes. */
 const MAX_PLACES = 50;
 
@@ -57,6 +60,26 @@ export class RainTimelineService {
             this.refresh(entry, latitude, longitude);
         }
         return entry.slots;
+    }
+
+    /**
+     * The weather of the past at a place, hour by hour as quarter hours, from `since` (epoch ms) on: what a room left
+     * empty lived through (MeadowManager catches up with it). Undefined when Open-Meteo does not answer.
+     */
+    public async history(place: MapPlace | undefined, since: number): Promise<RealWeatherSlot[] | undefined> {
+        const latitude = roundedCoordinate(place?.latitude ?? PARIS_LATITUDE);
+        const longitude = roundedCoordinate(place?.longitude ?? PARIS_LONGITUDE);
+        const days = (this.now() - since) / (24 * 3600 * 1000) + 1;
+        try {
+            const response = await this.fetchFn(openMeteoHistoryUrl(latitude, longitude, days), {
+                signal: AbortSignal.timeout(TIMEOUT_MS),
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return historySlotsFromOpenMeteo(await response.json())?.filter((slot) => slot.at + HOUR_MS > since);
+        } catch (error) {
+            console.error("Open-Meteo history failed (the meadow catches up without it)", asError(error));
+            return undefined;
+        }
     }
 
     /** How many places are followed (bounded). */

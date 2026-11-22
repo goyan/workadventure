@@ -85,7 +85,9 @@ const actionbar = {
         speed: "Speed of the water (m/s): colour and length of the arrows",
         rising: "Rising level",
         falling: "Falling level",
+        trend: "The tint follows the trend of the level over a few seconds: water that only ripples has none.",
         masses: "On each body of water: volume, surface, mean depth, then what it gains or loses a minute.",
+        realTime: 'Flows in real time: at "Speed of the water" 4, a source of 100 m³/h pours 6.7 m³/min.',
         totals: "On the whole map: {stock} m³ of water, {area} m² under water",
         noWater: "The server has said nothing yet of the water of this map.",
         estimated: "Speeds estimated from the slope of the surface of the water.",
@@ -298,6 +300,10 @@ const actionbar = {
         downpourArmedHelp: "Hold the click on the map · Esc to cancel",
         drain: "Drain",
         drainSizeLabel: "Size of the drain: radius of the disc it empties, in tiles",
+        ball: "Ball",
+        ballSizeLabel: "Size of the ball: its diameter, in tiles",
+        ballArmedHelp:
+            "Hold the click: a solid ball is there at once, its centre at level 0 of the map; it follows the pointer and pushes away the water of its part under water · Esc to cancel",
         tabs: { catastrophes: "Disasters", weather: "Weather" },
         weather: {
             manual: "Manual",

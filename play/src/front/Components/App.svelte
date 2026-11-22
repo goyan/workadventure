@@ -36,6 +36,8 @@
     import { gameSceneIsLoadedStore } from "../Stores/GameSceneStore";
     import { installGameKeyFocusGuard } from "../Utils/GameKeyFocusGuard";
     import { gameManager } from "../Phaser/Game/GameManager";
+    import { SharpUpscale } from "../Phaser/Services/SharpUpscale";
+    import { pixelSmoothingStore } from "../Stores/GraphicsSettingsStore";
     import GameOverlay from "./GameOverlay.svelte";
     import CoWebsitesContainer from "./EmbedScreens/CoWebsitesContainer.svelte";
     import BrowserNotSupported from "./BrowserNotSupported/BrowserNotSupported.svelte";
@@ -218,6 +220,7 @@
         stopBootPump = startBackgroundBootPump(game);
 
         waScaleManager.setGame(game);
+        sharpUpscale = SharpUpscale.start(game, pixelSmoothingStore);
 
         canvas = HtmlUtils.querySelectorOrFail<HTMLCanvasElement>("#game canvas");
 
@@ -261,6 +264,7 @@
     let canvasSizeUnsubscriber: Unsubscriber;
     let stopBootPump: (() => void) | undefined;
     let uninstallGameKeyFocusGuard: (() => void) | undefined;
+    let sharpUpscale: SharpUpscale | undefined;
 
     /** False before the game scene exists, and while a menu or a text field takes the keyboard. */
     function gameListensToKeyboard(): boolean {
@@ -287,6 +291,7 @@
     onDestroy(() => {
         canvasSizeUnsubscriber?.();
         stopBootPump?.();
+        sharpUpscale?.destroy();
         uninstallGameKeyFocusGuard?.();
         if (canvas && handleCanvasClick) {
             canvas.removeEventListener("click", handleCanvasClick);

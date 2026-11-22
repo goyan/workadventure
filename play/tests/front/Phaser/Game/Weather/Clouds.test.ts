@@ -21,6 +21,7 @@ import {
     overcastVeil,
     shadowPatches,
     SkyDrift,
+    cumulonimbusPalette,
 } from "../../../../../src/front/Phaser/Game/Weather/Clouds";
 import { FOG_LEVELS, fieldLevels, fogBlocks } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
 import { sunForClouds } from "../../../../../src/front/Phaser/Game/Night/NightClock";
@@ -430,5 +431,17 @@ describe("cloudsOverRoofs", () => {
 
     it("keeps them off the buildings when the zoom is not known", () => {
         expect(cloudsOverRoofs(Number.NaN)).toBe(0);
+    });
+});
+
+describe("cumulonimbusPalette", () => {
+    it("lights the tops of a storm cloud far more than rainPalette, and darkens its base", () => {
+        const storm = 0x2b3240;
+        const light = (color: number): number => ((color >> 16) & 0xff) + ((color >> 8) & 0xff) + (color & 0xff);
+        const tower = cumulonimbusPalette(storm);
+        const flat = rainPalette(storm);
+        expect(light(tower.lit)).toBeGreaterThan(light(flat.lit) + 150);
+        expect(light(tower.shade)).toBeLessThanOrEqual(light(flat.shade));
+        expect(light(tower.mid)).toBeGreaterThan(light(storm));
     });
 });

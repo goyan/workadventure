@@ -30,6 +30,7 @@ import {
     ratesOf,
     stepInputOf,
     stepsBetweenUpdates,
+    sweepBalls,
     TERRAIN_CELL,
     TILE_PX,
     WATER_MESSAGE_MS,
@@ -42,6 +43,7 @@ import {
     WeatherType,
 } from "@workadventure/map-editor";
 import type {
+    Ball,
     Downpour,
     PrecipitationAir,
     Drain,
@@ -78,6 +80,11 @@ const IMPACT_STIRRED_STEPS = 300;
 const DOOR_OPEN_STEPS = 10;
 /** The water is saved every half minute while it changes. */
 const STEPS_PER_SAVE = 300;
+/**
+ * The time a room missed is lived again by steps this long (s): the water flows to where it rests in a few of them,
+ * and a week of absence costs a thousand steps.
+ */
+const CATCH_UP_SECONDS = 600;
 
 const SavedBounds = z.object({
     x: z.number().int(),
@@ -130,6 +137,10 @@ export class TerrainWaterManager {
     private walkers: () => readonly { x: number; y: number }[] = () => [];
     /** The drains open on the map now, asked at each step: none until the catastrophes of the room say. */
     private drains: () => readonly Drain[] = () => [];
+    /** The balls standing on the map now, asked at each step: none until the catastrophes of the room say. */
+    private balls: () => readonly Ball[] = () => [];
+    /** Where the balls stood at the last step: a ball that moved since is taken along its way. */
+    private ballsBefore: readonly Ball[] = [];
     private sums: Sums = noSums();
     /** Whether the last step moved any water: a grid at rest with nothing coming in is not stepped. */
     private moving = true;
@@ -148,6 +159,8 @@ export class TerrainWaterManager {
     private changedSinceSave = false;
     /** How long the steps take, and the fineness given up while they take too long. */
     private readonly load = new WaterLoad(WATER_STEP_MS);
+    /** The time missed while the room was empty that is not lived again yet, and the rain (mm) that fell in it. */
+    private missed = { seconds: 0, rainMm: 0 };
 
     constructor(
         private readonly room: Pick<GameRoom, "getWam" | "sendSubMessageToRoom">,
@@ -290,11 +303,13 @@ export class TerrainWaterManager {
         }
         this.steps++;
         this.swingDoors(grid);
+        // Before anything is poured or flows: the balls are where they are for the whole step.
+        const displacing = this.placeBalls(grid);
         // Both each step: a downpour goes on raining while the wave of a meteor runs.
         const raining = this.pourDownpours(grid);
-        this.pumpPools(grid);
+        this.pumpPools(grid, WATER_STEP_MS / 1000);
         const draining = this.takeDrains(grid);
-        const waving = this.waves.length > 0 || raining || draining || this.steps < this.stirredUntilStep;
+        const waving = this.waves.length > 0 || raining || draining || displacing || this.steps < this.stirredUntilStep;
         if (this.waves.length > 0) this.advanceWaves(grid);
         const pouring = this.rainRate > 0 || this.objects.some((object) => object.litresPerMinute > 0);
         if (this.moving || pouring) {
@@ -324,13 +339,15 @@ export class TerrainWaterManager {
      * over its level (a snow that melted in the pool, a rain) loses as much through the overflow of the pool, counted
      * with the sinks: a flood that brings more than that still runs over the rim.
      */
-    private pumpPools(grid: WaterGrid): void {
+    private pumpPools(grid: WaterGrid, seconds: number): void {
         if (this.pools.length === 0) return;
         let laid = 0;
         let taken = 0;
         for (const { cellX, cellY, depthPx, fullPx } of this.pools) {
+            // A ball stands in the place of the water of this cell: nothing to fill.
+            if (grid.ballAt(cellX, cellY)) continue;
             const missing = fullPx - grid.depthAt(cellX, cellY);
-            const pumped = (depthPx * WATER_STEP_MS) / 1000 / POOL_FILL_SECONDS;
+            const pumped = (depthPx * seconds) / POOL_FILL_SECONDS;
             if (missing > 0) {
                 if (this.steps < this.pumpsFromStep) continue;
                 laid += grid.rainOn(cellX, cellY, 0, Math.min(missing, pumped));
@@ -342,6 +359,30 @@ export class TerrainWaterManager {
         if (laid <= 0 && taken <= 0) return;
         this.sums.sourcesPx += laid;
         this.sums.sinksPx += taken;
+        this.moving = true;
+        this.version++;
+        this.changedSinceSave = true;
+    }
+
+    /**
+     * The time the room missed while it was empty, lived again as the meadow catches up (MeadowManager.catchUpWith):
+     * `seconds` of it under `rainMmPerHour` of rain (what falls as snow lies on the meadow, which pours its melt
+     * here). Lived by steps of CATCH_UP_SECONDS, without inertia: the water ends where it rests, the lakes filled by the
+     * rain of the past and lowered by its dry days, the pools pumped. `last` says the meadow caught up.
+     */
+    public liveAgain(seconds: number, rainMmPerHour: number, last: boolean): void {
+        const grid = this.grid;
+        if (!grid) return;
+        if (seconds > 0) {
+            this.missed.seconds += seconds;
+            this.missed.rainMm += (Math.max(0, rainMmPerHour) * seconds) / 3600;
+        }
+        if (this.missed.seconds <= 0 || (!last && this.missed.seconds < CATCH_UP_SECONDS)) return;
+        const { seconds: lived, rainMm } = this.missed;
+        this.missed = { seconds: 0, rainMm: 0 };
+        const water = this.room.getWam()?.settings?.water;
+        grid.step(stepInputOf(water && { ...water, inertia: false }, (rainMm * 3600) / lived, this.objects, lived));
+        this.pumpPools(grid, lived);
         this.moving = true;
         this.version++;
         this.changedSinceSave = true;
@@ -434,6 +475,34 @@ export class TerrainWaterManager {
         this.version++;
         this.changedSinceSave = true;
         return laid / (cells * cells * PX_PER_MM);
+    }
+
+    /** The catastrophes of the room say which balls stand on the map. */
+    public setBalls(balls: () => readonly Ball[]): void {
+        this.balls = balls;
+    }
+
+    /**
+     * The balls take the place of the water where they stand (WaterGrid.setBalls): nothing comes in nor goes out,
+     * the water is only pushed away, or let back. True while a ball stands on the map, so that the room sees the
+     * water move as often as under a wave.
+     */
+    private placeBalls(grid: WaterGrid): boolean {
+        const standing = this.balls();
+        if (standing.length === 0 && this.ballsBefore.length === 0) return false;
+        // A ball is under the pointer of its player at once: it may have gone several cells since the last step.
+        // It pushed the water of the whole way, not only of where it is now.
+        let changed = false;
+        for (const balls of sweepBalls(this.ballsBefore, standing)) {
+            if (grid.setBalls(balls)) changed = true;
+        }
+        this.ballsBefore = standing;
+        if (changed) {
+            this.moving = true;
+            this.version++;
+            this.changedSinceSave = true;
+        }
+        return standing.length > 0;
     }
 
     /** The catastrophes of the room say which drains are open. */
@@ -657,7 +726,8 @@ export class TerrainWaterManager {
         if (!this.store || !this.grid || !this.changedSinceSave) return;
         this.changedSinceSave = false;
         const fields: [string, string][] = [
-            ["grid", Buffer.from(gzipSync(this.grid.writeDepths())).toString("base64")],
+            // All the water, what a ball holds under itself included.
+            ["grid", Buffer.from(gzipSync(this.grid.writeDepths(true))).toString("base64")],
             ["bounds", JSON.stringify(this.grid.bounds)],
         ];
         for (const [field, value] of fields) {

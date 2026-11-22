@@ -25,6 +25,8 @@ import type { WaterRing } from "./MeteorFall";
 
 /** The meteor of the usual size is drawn this wide; the others in proportion to their crater. */
 const METEOR_RADIUS_PX = 10;
+/** The smallest a meteor is drawn, in pixels: the one of a crater of one tile is still seen falling. */
+const METEOR_SMALLEST_PX = 4;
 /** A comet is ice: pale blue. A fireball is fire: orange, with a yellow heart and a tail that turns red. */
 const COMET_COLOR = 0xbfe6ff;
 const FIREBALL_COLOR = 0xffb347;
@@ -192,7 +194,7 @@ export class MeteorView {
     }
 
     private drawMeteor(meteor: Meteor, offset: { x: number; y: number }): void {
-        const size = METEOR_RADIUS_PX * meteor.scale;
+        const size = Math.max(METEOR_SMALLEST_PX, METEOR_RADIUS_PX * meteor.scale);
         const length = Math.hypot(offset.x, offset.y);
         // The trail goes back along the way the meteor came from.
         const back = length > 0 ? { x: offset.x / length, y: offset.y / length } : { x: 0, y: 0 };

@@ -2,14 +2,27 @@ import type { CatastropheMessage } from "@workadventure/messages";
 import { downpourTiles, TILE_PX } from "@workadventure/map-editor";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import { isEffectShown } from "../../../Stores/EffectsStore";
-import { DOWNPOUR_FALL_PX, downpourAlpha, downpourDrops, downpourFlakes, SPLASH_FROM } from "./DownpourFall";
+import { drawFlake, flakeFadeIn, snowTones } from "../Weather/Snowfall";
+import {
+    DOWNPOUR_FALL_PX,
+    downpourAlpha,
+    downpourDrops,
+    downpourFlakes,
+    FLAKE_FALL_MS,
+    SPLASH_FROM,
+} from "./DownpourFall";
 
 const CLOUD_COLOR = 0x4a5568;
 const CLOUD_LIGHT = 0x718096;
 const DROP_COLOR = 0xbfe3ff;
 const WET_COLOR = 0x1a365d;
-/** In the cold a downpour falls as snow: its flakes, the white it lays under it, and its paler cloud. */
-const FLAKE_COLOR = 0xf2f5ff;
+/**
+ * In the cold a downpour falls as snow: its flakes (those of the weather, Snowfall.ts), the white it lays under it,
+ * and its paler cloud.
+ */
+const FLAKE_TONES = snowTones(0);
+/** A middle flake of the weather: 3 px, lit and shaded. */
+const FLAKE_SIZE = 3;
 const SNOW_GROUND_COLOR = 0xffffff;
 const SNOW_CLOUD_COLOR = 0x8d97a8;
 const SNOW_CLOUD_LIGHT = 0xc3cad6;
@@ -188,8 +201,8 @@ export class DownpourView {
         if (snow > 0) {
             // A flake fades in as it leaves the cloud, and stays whole down to the ground.
             for (const flake of downpourFlakes(now, centre, radiusPx, snow, reduced)) {
-                graphics.fillStyle(FLAKE_COLOR, 0.9 * alpha * Math.min(1, flake.fall * 6));
-                graphics.fillRect(Math.round(flake.x) - 1, Math.round(flake.y) - 1, 3, 3);
+                const shown = 0.9 * alpha * flakeFadeIn((flake.fall * FLAKE_FALL_MS) / 1000);
+                drawFlake(graphics, flake.x, flake.y, FLAKE_SIZE, shown, FLAKE_TONES);
             }
         }
         for (const drop of downpourDrops(now, centre, radiusPx, reduced, snow)) {

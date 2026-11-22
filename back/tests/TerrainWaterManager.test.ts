@@ -35,6 +35,16 @@ const fillWithWater = (manager: TerrainWaterManager): void => {
     for (let index = 0; index < bytes.length; index += 2) bytes[index] = 64;
     grid.readDepths(bytes);
 };
+/** Fills the wide hollow alone with 8 px of water: none on the ground around, so none runs off the map. */
+const fillWideLake = (manager: TerrainWaterManager): void => {
+    const grid = manager.getGrid();
+    if (!grid) throw new Error("no grid");
+    const bytes = new Uint8Array(grid.writeDepths().length);
+    for (let y = 0; y < 30; y++) {
+        for (let x = 0; x < 30; x++) bytes[((y - grid.bounds.y) * grid.bounds.width + (x - grid.bounds.x)) * 2] = 64;
+    }
+    grid.readDepths(bytes);
+};
 const prefabRef = { collectionName: "eau", id: "x" };
 const sourceAt = (x: number, y: number, flow: number) => ({
     x: x * 16 + 8,
@@ -245,6 +255,100 @@ describe("TerrainWaterManager", () => {
         expect(manager.getGrid()?.depthAt(15, 15)).toBeLessThan(1);
         expect(sent.length).toBeGreaterThanOrEqual(5);
         expect(sent.at(-1)?.stats?.sinks).toBeGreaterThan(0);
+    });
+
+    it("a ball takes the place of the water under it, and the map keeps all its water", () => {
+        const { manager, sent, steps, repository } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        fillWideLake(manager);
+        const grid = manager.getGrid();
+        const before = grid?.totalPx() ?? 0;
+        // The point is the cell (15, 15); a radius of 64 px is 4 cells. The lake is 32 px deep.
+        manager.setBalls(() => [{ id: 1, x: 240, y: 240, radiusPx: 64 }]);
+        sent.length = 0;
+        steps(10);
+        expect(grid?.ballAt(15, 15)).toBe(true);
+        expect(grid?.depthAt(15, 15)).toBeLessThan(1);
+        expect(grid?.totalPx()).toBeCloseTo(before, 1);
+        // The room sees the water move as often as under a wave, and is told a stock that did not change.
+        expect(sent.length).toBeGreaterThanOrEqual(5);
+        const stock = sent.at(-1)?.stats?.stock ?? 0;
+        expect(stock).toBeCloseTo((before * CELL_LITRES_PER_PX) / 1000, 1);
+        expect(sent.every((message) => (message.stats?.lost ?? 0) === 0)).toBe(true);
+        // The ball goes: the water comes back where it stood.
+        manager.setBalls(() => []);
+        steps(300);
+        expect(grid?.ballAt(15, 15)).toBe(false);
+        expect(grid?.depthAt(15, 15)).toBeGreaterThan(7);
+        expect(grid?.totalPx()).toBeCloseTo(before, 1);
+        expect(repository.saveVariable).toHaveBeenCalled();
+    });
+
+    it("takes a ball that moved since the last step along its way: it pushed the water of the whole way", () => {
+        const { manager, steps } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        fillWideLake(manager);
+        const grid = manager.getGrid();
+        if (!grid) throw new Error("no grid");
+        const before = grid.totalPx();
+        let ball = { id: 1, x: 100, y: 240, radiusPx: 32 };
+        manager.setBalls(() => [ball]);
+        steps(1);
+        const placed = vi.spyOn(grid, "setBalls");
+        // Under the pointer at once: 200 px further at the next step.
+        ball = { ...ball, x: 300 };
+        steps(1);
+        // 200 px: thirteen strides of a cell at most, the last one where the ball is.
+        expect(placed).toHaveBeenCalledTimes(13);
+        expect(placed.mock.calls.at(-1)?.[0]).toEqual([ball]);
+        const first = placed.mock.calls[0][0][0];
+        expect(first.x).toBeGreaterThan(100);
+        expect(first.x).toBeLessThanOrEqual(116);
+        expect(grid.totalPx()).toBeCloseTo(before, 1);
+        // Gone at once: one go, no way to sweep.
+        placed.mockClear();
+        manager.setBalls(() => []);
+        steps(1);
+        expect(placed).toHaveBeenCalledTimes(1);
+        expect(grid.ballAt(18, 15)).toBe(false);
+    });
+
+    it("saves the water a ball holds under itself", () => {
+        // A hollow 96 px deep: a ball of 32 px of radius leaves 64 px of room under its middle.
+        const deep: [number, number, number][] = [];
+        for (let y = 0; y < 30; y++) for (let x = 0; x < 30; x++) deep.push([x, y, -96]);
+        const { manager, repository } = createHarness({ wam: wamWith(terrainOf(deep)) });
+        manager.mapChanged();
+        const grid = manager.getGrid();
+        if (!grid) throw new Error("no grid");
+        const bytes = new Uint8Array(grid.writeDepths().length);
+        // 96 px of water in each cell: 768 eighths.
+        for (let index = 0; index < bytes.length; index += 2) bytes[index + 1] = 3;
+        grid.readDepths(bytes);
+        manager.setBalls(() => [{ id: 1, x: 240, y: 240, radiusPx: 32 }]);
+        manager.step();
+        expect(grid.ballAt(15, 15)).toBe(true);
+        manager.stop();
+        const saved = repository.saveVariable.mock.calls.find(([, key]) => key === "grid")?.[2];
+        if (!saved) throw new Error("nothing saved");
+        const depths = new Uint8Array(gunzipSync(Buffer.from(saved, "base64")));
+        const at = ((15 - grid.bounds.y) * grid.bounds.width + (15 - grid.bounds.x)) * 2;
+        expect((depths[at] | (depths[at + 1] << 8)) / 8).toBeGreaterThan(60);
+    });
+
+    it("a ball on a map without water does nothing, and one that is no number neither", () => {
+        const dry = createHarness({ wam: wamWith(undefined) });
+        dry.manager.mapChanged();
+        dry.manager.setBalls(() => [{ id: 1, x: 240, y: 240, radiusPx: 64 }]);
+        expect(() => dry.steps(3)).not.toThrow();
+        const { manager, steps } = createHarness({ wam: wamWith(wideLake) });
+        manager.mapChanged();
+        fillWideLake(manager);
+        const before = manager.getGrid()?.totalPx();
+        manager.setBalls(() => [{ id: 1, x: Number.NaN, y: 240, radiusPx: 64 }]);
+        steps(3);
+        expect(manager.getGrid()?.totalPx()).toBe(before);
+        expect(manager.getGrid()?.ballAt(15, 15)).toBe(false);
     });
 
     it("a drain on a map without water does nothing", () => {
@@ -526,6 +630,22 @@ describe("TerrainWaterManager", () => {
         expect(sent[0].stats?.rain).toBeCloseTo(0.0594, 4);
         expect(depthsAfter(sent).at(1, 1)).toBeGreaterThanOrEqual(0);
         expect(sent[0].stats?.stock).toBeGreaterThan(0);
+    });
+
+    it("lives again the time the room missed: the rain of the past fills its hollows, its dry days lower them", () => {
+        const { manager, wam } = createHarness();
+        manager.mapChanged();
+        const grid = manager.getGrid();
+        if (!grid) throw new Error("no grid");
+        // Less than ten minutes missed waits for what comes after it, unless the meadow caught up.
+        manager.liveAgain(120, 2, false);
+        expect(grid.totalPx()).toBe(0);
+        for (let slice = 0; slice < 30; slice++) manager.liveAgain(120, 2, slice === 29);
+        const rained = grid.totalPx();
+        expect(rained).toBeGreaterThan(0);
+        if (wam.settings?.water) wam.settings.water.evaporation = 1;
+        for (let slice = 0; slice < 30; slice++) manager.liveAgain(120, 0, slice === 29);
+        expect(grid.totalPx()).toBeLessThan(rained);
     });
 
     it("fills nothing with a rain that falls as snow in the cold of the room, and half as much with a mix", () => {
@@ -812,6 +932,23 @@ describe("the pools of the map in the water of the relief", () => {
         expect(grid?.depthAt(22, 22)).toBeCloseTo(full, 0);
         // What the pump brought is counted with the sources.
         expect(sent.some((message) => (message.stats?.sources ?? 0) > 0)).toBe(true);
+        manager.stop();
+    });
+
+    it("stops the pump of a pool where a ball stands: the ball is in the place of the water", () => {
+        const { manager, sent, steps } = createHarness({ wam: pooled(), mapSize: () => ({ width: 60, height: 60 }) });
+        manager.mapChanged();
+        steps(120);
+        const grid = manager.getGrid();
+        const before = grid?.totalPx() ?? 0;
+        // A ball as wide as the pool is long, in its middle: the cell (23, 22).
+        manager.setBalls(() => [{ id: 1, x: 23 * 16, y: 22 * 16, radiusPx: 64 }]);
+        sent.length = 0;
+        steps(200);
+        expect(grid?.ballAt(22, 22)).toBe(true);
+        // The pump brought nothing more: the water the ball pushed out of the pool went over its rim instead.
+        expect(sent.every((message) => (message.stats?.sources ?? 0) === 0)).toBe(true);
+        expect(grid?.totalPx() ?? 0).toBeLessThanOrEqual(before + 0.01);
         manager.stop();
     });
 

@@ -12,7 +12,10 @@ export interface WaterMass {
     volumeM3: number;
     areaM2: number;
     meanDepthM: number;
-    /** How fast its volume changes, in cubic metres a minute of real time: positive when it fills. */
+    /**
+     * How fast its volume changes, in cubic metres a minute of real time: positive when it fills. Over a few
+     * seconds (the trend of its cells), so that its waves do not make it jump.
+     */
     trendM3PerMinute: number;
     /** A point of the body to hang its label on, in map pixels: its cell nearest to its middle. */
     x: number;
@@ -36,6 +39,8 @@ export function waterMassesOf(
     const masses: WaterMass[] = [];
     const m3 = CELL_LITRES_PER_PX / LITRES_PER_M3;
     const timed = Number.isFinite(water.seconds) && water.seconds > 0 && before.length === size;
+    // The trend of each cell over a few seconds when the water keeps it: the waves that only ripple leave it alone.
+    const trend = water.trend && water.trend.length === size ? water.trend : undefined;
     for (let start = 0; start < size; start++) {
         if (seen[start] || depths[start] < minDepthPx) continue;
         let tail = 0;
@@ -43,13 +48,15 @@ export function waterMassesOf(
         seen[start] = 1;
         let px = 0;
         let earlierPx = 0;
+        let risingPx = 0;
         let sumX = 0;
         let sumY = 0;
         for (let head = 0; head < tail; head++) {
             const index = queue[head];
             const column = index % width;
             px += depths[index];
-            if (timed) earlierPx += before[index];
+            if (trend) risingPx += trend[index];
+            else if (timed) earlierPx += before[index];
             sumX += column;
             sumY += (index - column) / width;
             if (column + 1 < width && !seen[index + 1] && depths[index + 1] >= minDepthPx) {
@@ -90,7 +97,7 @@ export function waterMassesOf(
             volumeM3: px * m3,
             areaM2: tail * CELL_AREA_M2,
             meanDepthM: -metresOf(-px / tail),
-            trendM3PerMinute: timed ? (((px - earlierPx) * m3) / water.seconds) * 60 : 0,
+            trendM3PerMinute: trend ? risingPx * m3 * 60 : timed ? (((px - earlierPx) * m3) / water.seconds) * 60 : 0,
             x: (water.x + column + 0.5) * TERRAIN_CELL,
             y: (water.y + (nearest - column) / width + 0.5) * TERRAIN_CELL,
         });

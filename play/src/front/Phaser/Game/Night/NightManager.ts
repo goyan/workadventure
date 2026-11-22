@@ -335,6 +335,11 @@ export class NightManager {
         this.previous = frame;
     }
 
+    /** The night veil for the water that reflects the light of the lamps (NightOverlay); undefined by day. */
+    public lampReflection(): ReturnType<NightOverlay["reflected"]> {
+        return this.overlay.reflected();
+    }
+
     public isNight(): boolean {
         return this.opacity > 0 && !this.disabled;
     }

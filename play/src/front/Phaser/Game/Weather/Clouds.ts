@@ -180,6 +180,19 @@ export function shownRainCover(cover: number): number {
     return RAIN_SHOWN_FROM + (RAIN_SHOWN_TO - RAIN_SHOWN_FROM) * share;
 }
 
+/**
+ * The tones of rain or storm clouds drawn by the graphics card (CloudLayer), which lights their billows: a cumulonimbus
+ * towers high, its tops in the sun are much lighter than its dark base. The flat tones of rainPalette would leave a
+ * storm cloud a dark blot with no relief.
+ */
+export function cumulonimbusPalette(color: number): CloudPalette {
+    return {
+        lit: mixColor(color, 0xffffff, 0.55),
+        mid: mixColor(color, 0xffffff, 0.12),
+        shade: mixColor(color, 0x000000, 0.3),
+    };
+}
+
 /** The tones of rain or storm clouds of a colour: that colour in the middle, lighter towards the light, darker away. */
 export function rainPalette(color: number): CloudPalette {
     return { lit: mixColor(color, 0xffffff, 0.2), mid: color, shade: mixColor(color, 0x000000, 0.25) };

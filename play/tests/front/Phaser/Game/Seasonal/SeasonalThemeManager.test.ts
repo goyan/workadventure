@@ -3,11 +3,20 @@ import { writable } from "svelte/store";
 import { mockDeep } from "vitest-mock-extended";
 
 vi.mock("../../../../../src/front/Stores/MapEditorStore", () => ({ mapEditorModeStore: writable(false) }));
-const frostPrints = vi.hoisted(() => ({ created: 0, destroyed: 0, frost: [] as number[] }));
+const frostPrints = vi.hoisted(() => ({
+    created: 0,
+    destroyed: 0,
+    frost: [] as number[],
+    takes: undefined as ((x: number, y: number) => boolean) | undefined,
+    color: undefined as string | undefined,
+}));
 vi.mock("@wa/front/Phaser/Game/Weather/FrostPrints", () => ({
+    FROST_PRINT_COLOR: "#5f6a63",
     FrostPrints: class {
-        constructor() {
+        constructor(_scene: unknown, takes: (x: number, y: number) => boolean, color?: string) {
             frostPrints.created++;
+            frostPrints.takes = takes;
+            frostPrints.color = color;
         }
         update(_time: number, _walkers: unknown[], frost: number) {
             frostPrints.frost.push(frost);
@@ -54,6 +63,8 @@ function setup(
         entities?: () => { visible: boolean; texture?: { key: string }; getPrefab?: () => { seasonal?: unknown } }[];
         mapSnowCoverage?: () => number;
         frost?: () => number;
+        snowCover?: () => number;
+        snowAt?: (x: number, y: number) => number;
     } = {},
 ) {
     markDirty = vi.fn();
@@ -65,6 +76,8 @@ function setup(
         serverDate: options.serverDate ?? (() => new Date("2026-07-14T12:00:00Z")),
         mapSnowCoverage: options.mapSnowCoverage,
         frost: options.frost,
+        snowCover: options.snowCover,
+        snowAt: options.snowAt,
         createDecor: (theme) => {
             events.push(`${theme}:create`);
             const decor = fakeDecor(theme);
@@ -85,7 +98,7 @@ function decorOf(theme: Theme): ReturnType<typeof fakeDecor> {
 
 beforeEach(() => {
     events.length = 0;
-    Object.assign(frostPrints, { created: 0, destroyed: 0, frost: [] });
+    Object.assign(frostPrints, { created: 0, destroyed: 0, frost: [], takes: undefined, color: undefined });
     decors = [];
     mapEditorModeStore.set(false);
     seasonalThemeModeStore.set(SeasonalThemeMode.Auto);
@@ -326,6 +339,22 @@ describe("SeasonalThemeManager", () => {
             frost = 0;
             manager?.update(16, walking);
             expect(frostPrints.destroyed).toBe(1);
+        });
+
+        it("leaves footprints in the snow lying on the ground, where it lies, in the colour of the snow ones", () => {
+            let snow = 0.5;
+            setup({ frost: () => 0.2, snowCover: () => snow, snowAt: (x) => (x < 100 ? 1 : 0) }).update(0, walking);
+            expect(frostPrints.created).toBe(1);
+            expect(frostPrints.frost).toEqual([0.5]);
+            expect(frostPrints.color).toBeUndefined();
+            expect(frostPrints.takes?.(10, 10)).toBe(true);
+            expect(frostPrints.takes?.(200, 10)).toBe(false);
+            // The snow gone, the frost left: footprints of the frost, in their own colour.
+            snow = 0;
+            manager?.update(16, walking);
+            expect(frostPrints.destroyed).toBe(1);
+            expect(frostPrints.created).toBe(2);
+            expect(frostPrints.color).toBe("#5f6a63");
         });
 
         it("leaves none of its own under the snow, which leaves its footprints", () => {

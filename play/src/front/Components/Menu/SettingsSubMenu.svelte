@@ -21,6 +21,9 @@
         aquaticLifeShownStore,
         cloudsHeightStore,
         cloudsShownStore,
+        smoothCloudsStore,
+        rainbowShownStore,
+        waterReflectionsStore,
         weatherEffectsEnabledStore,
     } from "../../Stores/WeatherStore";
     import { lampDemoEnabledStore } from "../../Stores/LampDemoStore";
@@ -71,7 +74,11 @@
     import Select from "../Input/Select.svelte";
     import Chip from "../UI/Chip.svelte";
     import { perfShownStore } from "../../Stores/PerfStore";
-    import { setTileAnimationsDisabled, tileAnimationsDisabledStore } from "../../Stores/GraphicsSettingsStore";
+    import {
+        pixelSmoothingStore,
+        setTileAnimationsDisabled,
+        tileAnimationsDisabledStore,
+    } from "../../Stores/GraphicsSettingsStore";
     import SoundEffectsSettings from "./SoundEffectsSettings.svelte";
     import SpotifySettings from "./SpotifySettings.svelte";
     import SegmentedControl from "./SegmentedControl.svelte";
@@ -580,6 +587,12 @@
         <EffectsSettings />
         <SettingsSection title={$LL.menu.settings.graphics.renderQuality()} dataTestId="graphics-sky-settings">
             <InputSwitch
+                id="pixel-smoothing"
+                bind:value={$pixelSmoothingStore}
+                label={$LL.menu.settings.pixelSmoothing()}
+                labelPosition="right"
+            />
+            <InputSwitch
                 id="weather-effects-enabled"
                 bind:value={$weatherEffectsEnabledStore}
                 label={$LL.menu.settings.weatherEffects()}
@@ -597,6 +610,26 @@
                 label={$LL.menu.settings.clouds()}
                 labelPosition="right"
             />
+            <InputSwitch
+                id="water-reflections"
+                bind:value={$waterReflectionsStore}
+                label={$LL.menu.settings.waterReflections()}
+                labelPosition="right"
+            />
+            <InputSwitch
+                id="weather-rainbow-shown"
+                bind:value={$rainbowShownStore}
+                label={$LL.menu.settings.rainbows()}
+                labelPosition="right"
+            />
+            {#if $cloudsShownStore}
+                <InputSwitch
+                    id="weather-smooth-clouds"
+                    bind:value={$smoothCloudsStore}
+                    label={$LL.menu.settings.smoothClouds()}
+                    labelPosition="right"
+                />
+            {/if}
             {#if $cloudsShownStore}
                 <div class="flex flex-col gap-1" data-testid="weather-clouds-height">
                     <span class="text-sm text-white">{$LL.menu.settings.cloudsHeight.label()}</span>

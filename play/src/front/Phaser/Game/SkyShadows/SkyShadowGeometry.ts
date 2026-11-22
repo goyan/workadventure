@@ -59,9 +59,34 @@ export interface ShadowPictureCaster {
     id?: string;
 }
 
+/**
+ * A raised slab, or slabs of one floor joined: a plate over its footprint on the ground (map pixels), its top `rise`
+ * above the ground and `thickness` thick. The light passes under it: its shadow leaves its footprint.
+ */
+export interface ShadowPlate extends ShadowBox {
+    thickness: number;
+}
+
+/**
+ * A stair or a ramp of the raised floors: a slope from its edge at its foot (`base` above the ground: the floor it
+ * starts from) to its edge at its top (`top`), both given on the ground (map pixels). A full stair is solid under its
+ * steps: its `footprint` stands on the floor it starts from.
+ */
+export interface ShadowSlope {
+    low: readonly [Point, Point];
+    base: number;
+    high: readonly [Point, Point];
+    top: number;
+    footprint?: { x: number; y: number; width: number; height: number };
+}
+
 export interface ShadowCasters {
     boxes: readonly ShadowBox[];
     trees: readonly ShadowTree[];
+    /** The slabs of the raised floors (the deck of a bridge, a terrace, a storey). */
+    plates?: readonly ShadowPlate[];
+    /** The stairs and the ramps of the raised floors. */
+    slopes?: readonly ShadowSlope[];
     /** The low things of the nature catalogue (rocks, grass, flowers, stumps): a small crown without a trunk. */
     details?: readonly ShadowTree[];
     /** The trees set to a realistic shadow: not polygons, their picture laid away from the light (fallenShadowPose). */
@@ -120,6 +145,46 @@ function boxShadow(box: ShadowBox, offset: Point): Point[] {
 }
 
 /**
+ * Where the shadow of a point `height` above the ground falls from its foot, as shadowOffset; a point on the ground
+ * (0 or less) throws it at its foot, whatever the shortest shadow of the light.
+ */
+function liftedOffset(height: number, light: ShadowLight): Point | undefined {
+    return height <= 0 ? { x: 0, y: 0 } : shadowOffset(height, light);
+}
+
+const moved = (points: readonly Point[], offset: Point): Point[] =>
+    points.map((point) => ({ x: point.x + offset.x, y: point.y + offset.y }));
+
+const cornersOf = (box: { x: number; y: number; width: number; height: number }): Point[] => [
+    { x: box.x, y: box.y },
+    { x: box.x + box.width, y: box.y },
+    { x: box.x, y: box.y + box.height },
+    { x: box.x + box.width, y: box.y + box.height },
+];
+
+/** The shadow of a plate: its footprint swept along the light from where its underside falls to where its top falls. */
+function plateShadow(plate: ShadowPlate, light: ShadowLight): Point[] | undefined {
+    const top = liftedOffset(plate.rise, light);
+    const under = liftedOffset(plate.rise - plate.thickness, light);
+    if (!top || !under) return undefined;
+    const corners = cornersOf(plate);
+    return convexHull([...moved(corners, under), ...moved(corners, top)]);
+}
+
+/**
+ * The shadow of a slope: from where its edge at its foot falls to where its edge at its top falls; a full stair's
+ * covers its footprint too.
+ */
+function slopeShadow(slope: ShadowSlope, light: ShadowLight): Point[] | undefined {
+    const low = liftedOffset(slope.base, light);
+    const high = liftedOffset(slope.top, light);
+    if (!low || !high) return undefined;
+    const points = [...moved(slope.low, low), ...moved(slope.high, high)];
+    if (slope.footprint) points.push(...moved(cornersOf(slope.footprint), low));
+    return convexHull(points);
+}
+
+/**
  * The shadow of a tree: its trunk, a band from its foot to where the centre of its crown falls, and its crown, a disc
  * around that point stretched along the light (a sphere seen slanting), twice as long at most.
  */
@@ -164,7 +229,8 @@ function treeShadow(tree: ShadowTree, light: ShadowLight): Point[][] {
 
 /**
  * The shadows the sky casts on the ground, as polygons in map pixels, to be filled all with the same colour (they may
- * overlap). None with the light at or under the horizon.
+ * overlap). None with the light at or under the horizon. The shadows of the raised floors fall on the ground under
+ * them: drawn under the floors (SkyShadowLayer), never on their own top.
  */
 export function shadowPolygons(casters: ShadowCasters, light: ShadowLight): Point[][] {
     if (light.elevation <= 0) return [];
@@ -175,6 +241,14 @@ export function shadowPolygons(casters: ShadowCasters, light: ShadowLight): Poin
     }
     for (const tree of casters.trees) polygons.push(...treeShadow(tree, light));
     for (const detail of casters.details ?? []) polygons.push(...treeShadow(detail, light));
+    for (const plate of casters.plates ?? []) {
+        const shadow = plateShadow(plate, light);
+        if (shadow) polygons.push(shadow);
+    }
+    for (const slope of casters.slopes ?? []) {
+        const shadow = slopeShadow(slope, light);
+        if (shadow) polygons.push(shadow);
+    }
     return polygons;
 }
 

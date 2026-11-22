@@ -1,6 +1,7 @@
 import {
     Animal,
     DEFAULT_LIFE_SETTINGS,
+    delayAnimal,
     emptyLifeTally,
     emptyPopulation,
     isPredator,
@@ -23,6 +24,7 @@ import {
     stepPopulation,
     tameAnimal,
     waterBodiesOf,
+    poolCells,
     WaterGrid as LifeWaterGrid,
     wireKindOf,
 } from "@workadventure/map-editor";
@@ -48,6 +50,16 @@ import type {
 import { z } from "zod";
 import type { VariablesRepositoryInterface } from "../Services/Repository/VariablesRepositoryInterface";
 import type { GameRoom } from "./GameRoom";
+
+/**
+ * The time a room missed while it was empty that its life lives again, step by step (ms): two lives of a fish. What it
+ * missed beyond is not lived: its animals are delayed by it (delayAnimal), not killed by an age they did not live.
+ */
+const CATCH_UP_MAX_MS = 30 * 60 * 1000;
+/** The steps of the missed time lived at each step of the timer: about 90 ms of a full room (0.76 ms a step). */
+const CATCH_UP_STEPS_A_TICK = 120;
+/** A room empty for less than this lives no missed time (ms). */
+const CATCH_UP_FROM_MS = 60_000;
 
 /** The room is told its animals once a second (every second step). */
 const STEPS_PER_MESSAGE = 2;
@@ -82,6 +94,8 @@ const SavedLife = z.object({
     nextId: z.number().int().min(1),
     // Absent from a state saved before the totals were kept.
     since: z.number().finite().optional(),
+    // When it was saved; absent from a state saved before the life caught up with the time the room was empty.
+    at: z.number().finite().optional(),
     history: z.unknown().optional(),
     ranges: z.unknown().optional(),
     totals: z
@@ -164,6 +178,8 @@ export class AquaticLifeManager {
     private bodies: WaterBodies | undefined;
     private bodiesGrid: WaterGrid | undefined;
     private bodiesVersion = -1;
+    /** The cells of the pools of the map, read again when the relief or the styles of the pools change. */
+    private pools: { terrain: unknown; styles: unknown; cells: Set<string> } | undefined;
     private bodiesStep = -Infinity;
     /** The outdoor land of the map, for the animals that walk; undefined while the land is off or its size unknown. */
     private land: Places | undefined;
@@ -184,6 +200,10 @@ export class AquaticLifeManager {
     private census: LifeCensus = { habitableBodies: 0, populatedBodies: 0, capacity: 0 };
     /** Whether the room was last told some animals: it is told once more when none is left. */
     private toldSome = false;
+    /** The time missed while the room was empty, being lived again: from `at` to `to`. */
+    private catchUp: { at: number; to: number } | undefined;
+    /** The moment being lived again, while it catches up. */
+    private replayAt: number | undefined;
 
     constructor(
         private readonly room: Pick<GameRoom, "getWam" | "sendSubMessageToRoom">,
@@ -275,6 +295,7 @@ export class AquaticLifeManager {
             this.since = saved.since;
             this.history = LifeHistory.from(saved.history);
             this.ranges = LifeRanges.from(saved.ranges);
+            this.catchUpFrom(saved.at);
         } catch (error) {
             console.error("Could not restore the life of the water of the map", error);
         }
@@ -282,6 +303,47 @@ export class AquaticLifeManager {
 
     public start(): void {
         this.mapChanged();
+    }
+
+    /** Whether the life is still living the time the room missed. */
+    public catchingUp(): boolean {
+        return this.catchUp !== undefined;
+    }
+
+    /**
+     * The room was empty since `savedAt`: its life lives the last CATCH_UP_MAX_MS of that time again, its animals
+     * delayed by what came before. The populations stay what the rules make them (the caps of the species), however
+     * long the absence.
+     */
+    private catchUpFrom(savedAt: number | undefined): void {
+        const now = this.now();
+        if (savedAt === undefined || now - savedAt < CATCH_UP_FROM_MS) return;
+        const skipped = Math.max(0, now - savedAt - CATCH_UP_MAX_MS);
+        if (skipped > 0) for (const animal of this.population.animals) delayAnimal(animal, skipped);
+        this.catchUp = { at: savedAt + skipped, to: now };
+    }
+
+    /**
+     * A slice of the missed time, lived step by step: nobody on the map (no avatar to fear, no fisher, no master), no
+     * fire, nothing told nor saved until it is done.
+     */
+    private stepCatchUp(): void {
+        const catchUp = this.catchUp;
+        if (!catchUp) return;
+        try {
+            for (let step = 0; step < CATCH_UP_STEPS_A_TICK && catchUp.at < catchUp.to; step++) {
+                this.replayAt = catchUp.at;
+                this.step();
+                catchUp.at += LIFE_STEP_MS;
+            }
+        } finally {
+            this.replayAt = undefined;
+        }
+        if (catchUp.at < catchUp.to) return;
+        this.catchUp = undefined;
+        this.census = lifeCensus(this.population, this.bodies ?? NO_BODIES);
+        this.tell();
+        this.save();
     }
 
     public stop(): void {
@@ -383,11 +445,25 @@ export class AquaticLifeManager {
     /** A step from the timer: a failure stops the life of the room until its map changes, never the server. */
     private tick(): void {
         try {
-            this.step();
+            if (this.catchUp) this.stepCatchUp();
+            else this.step();
         } catch (error) {
             console.error("The life of the water of the map stopped", error);
             this.clearTimer();
         }
+    }
+
+    /** Whether a cell is in a pool: treated water, no fish in it (waterBodiesOf). */
+    private poolCellsNow(): (cellX: number, cellY: number) => boolean {
+        const wam = this.room.getWam();
+        const terrain = wam?.terrain;
+        const styles = wam?.settings?.pools;
+        if (!this.pools || this.pools.terrain !== terrain || this.pools.styles !== styles) {
+            const cells = new Set(poolCells(terrain, styles).map((cell) => `${cell.cellX},${cell.cellY}`));
+            this.pools = { terrain, styles, cells };
+        }
+        const { cells } = this.pools;
+        return (cellX, cellY) => cells.has(`${cellX},${cellY}`);
     }
 
     /** One step of the life (two a second), and once a second the room is told. */
@@ -408,7 +484,7 @@ export class AquaticLifeManager {
                 grid !== this.bodiesGrid ||
                 (stale && this.steps - this.bodiesStep >= STEPS_PER_BODIES)
             ) {
-                this.bodies = waterBodiesOf(grid);
+                this.bodies = waterBodiesOf(grid, this.poolCellsNow());
                 this.bodiesGrid = grid;
                 this.bodiesVersion = version;
                 this.bodiesStep = this.steps;
@@ -418,18 +494,20 @@ export class AquaticLifeManager {
         const gulls = water && settings?.gullsEnabled === true;
         if (onLand || gulls) this.readLand(grid);
         else this.land = undefined;
-        const now = this.now();
+        const replaying = this.replayAt !== undefined;
+        const now = this.replayAt ?? this.now();
         this.since ??= now;
         // The tamed animals go with their masters; those whose master left are free again.
-        leadTamed(this.population, this.masterAt, this.land);
+        if (!replaying) leadTamed(this.population, this.masterAt, this.land);
         const lifeSettings = { ...DEFAULT_LIFE_SETTINGS, ...settings, enabled: water };
         try {
-            this.hooks.beforeStep?.({
-                animals: this.population.animals,
-                bodies: this.bodies,
-                maxSpeedPxPerS: lifeSettings.maxSpeed * TILE_PX,
-                now,
-            });
+            if (!replaying)
+                this.hooks.beforeStep?.({
+                    animals: this.population.animals,
+                    bodies: this.bodies,
+                    maxSpeedPxPerS: lifeSettings.maxSpeed * TILE_PX,
+                    now,
+                });
         } catch (error) {
             console.error("What follows the life of the water of the map failed", error);
         }
@@ -441,10 +519,10 @@ export class AquaticLifeManager {
             LIFE_STEP_MS,
             now,
             this.random,
-            this.avatars(),
+            replaying ? [] : this.avatars(),
             this.bySpecies,
             this.land,
-            this.fire?.(),
+            replaying ? undefined : this.fire?.(),
         );
         this.totals.arrivals += tally.arrivals;
         this.totals.births += tally.births;
@@ -462,6 +540,7 @@ export class AquaticLifeManager {
         this.history.add(sample);
         this.ranges.add(sample);
         this.steps++;
+        if (replaying) return;
         // Once a second, with the message: the waters as the life sees them.
         if (this.steps % STEPS_PER_MESSAGE === 0) {
             this.census = lifeCensus(this.population, this.bodies);
@@ -584,6 +663,7 @@ export class AquaticLifeManager {
             animals: this.population.animals,
             nextId: this.population.nextId,
             since: this.since,
+            at: this.catchUp ? this.catchUp.at : this.now(),
             totals: this.totals,
             bySpecies: this.bySpecies,
             history: this.history.save(),

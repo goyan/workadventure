@@ -47,3 +47,29 @@ export const Animal = z.object({
     tamedBy: z.number().int().optional(),
 });
 export type Animal = z.infer<typeof Animal>;
+
+/** The times an animal keeps, each a moment of the clock of the room. */
+const CLOCKS = [
+    "bornAt",
+    "readyAt",
+    "dryAt",
+    "huntSince",
+    "mateAt",
+    "ateAt",
+    "wanderUntil",
+    "drinkAt",
+    "drinkUntil",
+    "thirstySince",
+    "perchedAt",
+] as const satisfies readonly (keyof Animal)[];
+
+/**
+ * The animal as if `ms` of the clock had not passed for it: its age, its hunger, its next calf, all that long later.
+ * The time a room missed beyond what it lives again (AquaticLifeManager) leaves its animals as they were.
+ */
+export function delayAnimal(animal: Animal, ms: number): void {
+    for (const clock of CLOCKS) {
+        const at = animal[clock];
+        if (at !== undefined) animal[clock] = at + ms;
+    }
+}

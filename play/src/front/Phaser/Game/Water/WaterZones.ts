@@ -1,5 +1,5 @@
 import type * as Phaser from "phaser";
-import { poolStyleAt, poolStyleOf, TERRAIN_CELL, TERRAIN_CHUNK } from "@workadventure/map-editor";
+import { poolStyleAt, poolStyleOf, soilAt, TERRAIN_CELL, TERRAIN_CHUNK } from "@workadventure/map-editor";
 import type { InteractionTrigger, PoolStyle, TerrainData } from "@workadventure/map-editor";
 import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRectangles";
 import { getObjectInteraction } from "../../../Utils/ObjectCategories";
@@ -126,6 +126,18 @@ export function isDeepTerrainWater(
 ): boolean {
     if (water === undefined) return false;
     return water.depthAt(point.x, point.y, now) >= SWIM_DEPTH_PX;
+}
+
+/**
+ * Whether a point is in a pool painted with the relief tool (its cell kept as the soil of a pool style): water of the
+ * relief, but no water for a canoe.
+ */
+export function isPoolAt(terrain: TerrainData | undefined, point: Point): boolean {
+    if (!terrain) return false;
+    return (
+        poolStyleOf(soilAt(terrain, Math.floor(point.x / TERRAIN_CELL), Math.floor(point.y / TERRAIN_CELL))) !==
+        undefined
+    );
 }
 
 export function isPointInWater(rectangles: WaterRectangle[], point: Point): boolean {

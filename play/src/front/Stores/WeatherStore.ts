@@ -24,6 +24,18 @@ export const weatherEffectsEnabledStore = createWeatherEffectsStore();
  */
 export const cloudsShownStore = createPersistedSwitchStore("weatherCloudsShown", true);
 
+/** Whether the clouds of a clear sky are drawn by the graphics card, gliding (Weather/CloudLayer), or in blocks. */
+/** Whether this player sees the rainbows (rain under a low sun). Personal, kept in the browser. */
+export const rainbowShownStore = createPersistedSwitchStore("weatherRainbowShown", true);
+
+/** Whether the water reflects the sky, the clouds, the sun and the lamps. Personal, kept in the browser. */
+export const waterReflectionsStore = createPersistedSwitchStore("waterReflections", true);
+
+/** Where the rainbow shown on the map stands (the top of its arc, map pixels); undefined when there is none. */
+export const rainbowSpotStore = writable<{ x: number; y: number } | undefined>(undefined);
+
+export const smoothCloudsStore = createPersistedSwitchStore("weatherSmoothClouds", true);
+
 /** Whether this player sees the animals of the water of the relief (fish, dolphins). Personal, kept in the browser. */
 export const aquaticLifeShownStore = createPersistedSwitchStore("aquaticLifeShown", true);
 

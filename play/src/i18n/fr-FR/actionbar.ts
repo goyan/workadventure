@@ -90,7 +90,9 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         speed: "Vitesse de l'eau (m/s) : couleur et longueur des flèches",
         rising: "Niveau qui monte",
         falling: "Niveau qui baisse",
+        trend: "La teinte suit la tendance du niveau sur quelques secondes : une eau qui ne fait que clapoter n'en a pas.",
         masses: "Sur chaque masse d'eau : volume, surface, profondeur moyenne, puis ce qu'elle gagne ou perd par minute.",
+        realTime: "Débits en temps réel : à « Vitesse de l'eau » 4, une source de 100 m³/h verse 6,7 m³/min.",
         totals: "Sur toute la carte : {stock} m³ d'eau, {area} m² sous l'eau",
         noWater: "Le serveur n'a encore rien dit de l'eau de cette carte.",
         estimated: "Vitesses estimées d'après la pente de la surface de l'eau.",
@@ -301,6 +303,10 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         downpourArmedHelp: "Maintenez le clic sur la carte · Échap pour annuler",
         drain: "Drain",
         drainSizeLabel: "Taille du drain : rayon du disque vidé, en cases",
+        ball: "Boule",
+        ballSizeLabel: "Taille de la boule : son diamètre, en cases",
+        ballArmedHelp:
+            "Maintenez le clic : une boule solide est aussitôt là, son centre au niveau 0 de la carte ; elle suit le pointeur et chasse l'eau de sa partie immergée · Échap pour annuler",
         tabs: { catastrophes: "Catastrophes", weather: "Météo" },
         weather: {
             manual: "Manuel",

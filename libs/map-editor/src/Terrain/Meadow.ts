@@ -11,7 +11,15 @@ import {
     THAW_SPEED,
 } from "./Snow";
 import type { SnowWeather } from "./Snow";
-import { ICE_MAX_MM, ICE_SLIPS_MM, iceByte, iceGrowthMmPerDay, iceMmOfByte, iceThawMmPerHour } from "./Ice";
+import {
+    ICE_GROWTH_TIMES,
+    ICE_MAX_MM,
+    ICE_SLIPS_MM,
+    iceByte,
+    iceGrowthMmPerDay,
+    iceMmOfByte,
+    iceThawMmPerHour,
+} from "./Ice";
 import { poolStyleAt, poolStyleOf } from "./Pools";
 import { PX_PER_MM } from "./WaterInputs";
 import { snowCover } from "./SnowLine";
@@ -112,14 +120,19 @@ export const BANK_MOISTURE: readonly number[] = [0.8, 0.5, 0.17];
 /** No grass grows this high over the ground of the map, in pixels of altitude; it grows slower on the way up. */
 export const GRASS_LINE_PX = 192;
 
-/** How a soil holds the moisture and grows grass. A cell not painted is earth. */
-const SOIL_LIFE: Record<SoilName, { holdSeconds: number; fertility: number }> = {
-    earth: { holdSeconds: 600, fertility: 1 },
-    meadow: { holdSeconds: 900, fertility: 1.5 },
-    clay: { holdSeconds: 1800, fertility: 0.5 },
-    sand: { holdSeconds: 120, fertility: 0 },
-    rock: { holdSeconds: 0, fertility: 0 },
-    gravel: { holdSeconds: 60, fertility: 0 },
+/**
+ * How a soil holds the moisture and grows grass; how many tiles from open water its capillary fringe reaches
+ * (BANK_MOISTURE): metres in a loam or a clay, a few decimetres in a sand or a gravel, so the tile at the water only;
+ * and how much of the usual moisture it draws sideways from a wetter neighbour (MOISTURE_SPREAD), weak in their wide
+ * pores for the same reason. A cell not painted is earth.
+ */
+const SOIL_LIFE: Record<SoilName, { holdSeconds: number; fertility: number; fringeTiles: number; wicking: number }> = {
+    earth: { holdSeconds: 600, fertility: 1, fringeTiles: 3, wicking: 1 },
+    meadow: { holdSeconds: 900, fertility: 1.5, fringeTiles: 3, wicking: 1 },
+    clay: { holdSeconds: 1800, fertility: 0.5, fringeTiles: 3, wicking: 1 },
+    sand: { holdSeconds: 120, fertility: 0, fringeTiles: 1, wicking: 0.15 },
+    rock: { holdSeconds: 0, fertility: 0, fringeTiles: 0, wicking: 0 },
+    gravel: { holdSeconds: 60, fertility: 0, fringeTiles: 1, wicking: 0.15 },
 };
 
 /** How fast grass grows in a season, as a share of its fastest: not at all in winter. */
@@ -227,6 +240,12 @@ export class Meadow {
      * freezes as a lake does, unless it is hot.
      */
     private readonly hotPool: Uint8Array;
+    /** 1 on a tile any cell of which is painted as a pool: its water is held in a watertight basin. */
+    private readonly poolTile: Uint8Array;
+    /** How many tiles from open water the capillary fringe of the soil of each tile reaches (see SOIL_LIFE). */
+    private readonly fringe: Uint8Array;
+    /** How much each tile draws moisture sideways, against an earth (see SOIL_LIFE). */
+    private readonly wicking: Float32Array;
     /** The snow the heat of a fire melts on each tile at the next step, in mm of water (see warm): spent there. */
     private readonly heat: Float32Array;
     /** Seconds the ash of a tile that went out still stays whole before it goes; not saved. */
@@ -266,6 +285,9 @@ export class Meadow {
         this.heat = new Float32Array(tiles);
         this.ice = new Float32Array(tiles);
         this.hotPool = new Uint8Array(tiles);
+        this.poolTile = new Uint8Array(tiles);
+        this.fringe = new Uint8Array(tiles);
+        this.wicking = new Float32Array(tiles);
         this.smoulder = new Float32Array(tiles);
         this.fuel = new Float32Array(tiles);
         this.water = new Float32Array(tiles);
@@ -286,12 +308,16 @@ export class Meadow {
                         height += heightAt(terrain, cellX + x, cellY + y);
                         // A tile any cell of which is painted as a heated pool never freezes.
                         const style = poolStyleOf(soilAt(terrain, cellX + x, cellY + y));
+                        if (style !== undefined) this.poolTile[index] = 1;
                         if (style !== undefined && poolStyleAt(pools, style).hot) this.hotPool[index] = 1;
                     }
                 }
                 this.ground[index] = height / (CELLS_A_TILE * CELLS_A_TILE);
                 const soil = SOIL_LIFE[soilName(soilAt(terrain, cellX, cellY)) ?? "earth"];
-                this.hold[index] = soil.holdSeconds;
+                // A pool's basin is watertight: no moisture of a soil there, none spread to the ground around it.
+                this.hold[index] = this.poolTile[index] ? 0 : soil.holdSeconds;
+                this.fringe[index] = soil.fringeTiles;
+                this.wicking[index] = soil.wicking;
                 const grows = this.outdoor[index] === 1 && !paved?.has(`${tileX},${tileY}`);
                 this.fertility[index] = grows ? soil.fertility : 0;
             }
@@ -600,7 +626,8 @@ export class Meadow {
         bankReach.fill(0);
         let tail = 0;
         for (let index = 0; index < water.length; index++) {
-            if (outdoor[index] && water[index] >= SOAKED_WATER_PX) {
+            // The water of a pool is held in a watertight basin: it wets no ground around its coping.
+            if (outdoor[index] && water[index] >= SOAKED_WATER_PX && this.poolTile[index] === 0) {
                 bankReach[index] = 1;
                 bankQueue[tail++] = index;
             }
@@ -620,7 +647,9 @@ export class Meadow {
                 if (other < 0 || other >= moisture.length || bankReach[other] !== 0 || !outdoor[other]) continue;
                 bankReach[other] = distance + 1;
                 bankQueue[tail++] = other;
-                if (hold[other] > 0) moisture[other] = Math.max(moisture[other], BANK_MOISTURE[distance - 1]);
+                if (hold[other] > 0 && distance <= this.fringe[other]) {
+                    moisture[other] = Math.max(moisture[other], BANK_MOISTURE[distance - 1]);
+                }
             }
         }
     }
@@ -686,7 +715,8 @@ export class Meadow {
                 if (other < 0 || other >= moisture.length) continue;
                 if ((side === 1 && tileX === width - 1) || (side === -1 && tileX === 0)) continue;
                 if (!outdoor[other] || hold[other] <= 0) continue;
-                change += (MOISTURE_SPREAD / 4) * (moisture[other] - moisture[index]);
+                const wicks = Math.min(this.wicking[index], this.wicking[other]);
+                change += (MOISTURE_SPREAD / 4) * wicks * (moisture[other] - moisture[index]);
                 const slope = Math.min(1, Math.abs(ground[other] - ground[index]) / TILE_PX);
                 if (ground[other] > ground[index]) change += (MOISTURE_RUNOFF / 4) * slope * moisture[other];
                 else if (ground[other] < ground[index]) change -= (MOISTURE_RUNOFF / 4) * slope * moisture[index];
@@ -872,7 +902,7 @@ export class Meadow {
             if (lying < SOAKED_WATER_PX) {
                 thick = 0;
             } else {
-                if (weather) thick += (iceGrowthMmPerDay(thick, weather, snow[index]) * hours) / 24;
+                if (weather) thick += (iceGrowthMmPerDay(thick, weather, snow[index]) * hours * ICE_GROWTH_TIMES) / 24;
                 thick = Math.max(0, thick - thawing - heat[index]);
                 thick = Math.min(thick, lying / PX_PER_MM, ICE_MAX_MM);
             }

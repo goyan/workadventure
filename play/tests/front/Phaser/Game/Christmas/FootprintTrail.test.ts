@@ -87,4 +87,23 @@ describe("FootprintTrail", () => {
         }
         expect(marks.length).toBeGreaterThan(0);
     });
+
+    it("leaves one track behind an electric unicycle and two close ones behind a skateboard, no steps", () => {
+        const ride = (wheels: 1 | 2): FootprintMark[] => {
+            const trail = new FootprintTrail(outdoors);
+            const marks: FootprintMark[] = [];
+            for (let x = 0; x <= 32; x += 4)
+                marks.push(...trail.update([{ id: "a", x, y: 0, running: false, wheels }]));
+            return marks;
+        };
+        const unicycle = ride(1);
+        expect(unicycle.length).toBeGreaterThan(0);
+        expect(unicycle.every((mark) => mark.kind === "trail" && mark.y1 === 0 && mark.y2 === 0)).toBe(true);
+        const skateboard = ride(2);
+        expect(skateboard).toHaveLength(unicycle.length * 2);
+        expect(skateboard.every((mark) => mark.kind === "trail" && mark.width === 1.5)).toBe(true);
+        expect(new Set(skateboard.map((mark) => (mark.kind === "trail" ? mark.y1 : NaN)))).toEqual(
+            new Set([-2.5, 2.5]),
+        );
+    });
 });

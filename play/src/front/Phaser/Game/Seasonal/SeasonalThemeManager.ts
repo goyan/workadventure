@@ -1,6 +1,6 @@
 import { get, type Unsubscriber, derived } from "svelte/store";
 import type { SeasonPlace } from "@workadventure/map-editor";
-import { FrostPrints } from "@wa/front/Phaser/Game/Weather/FrostPrints";
+import { FROST_PRINT_COLOR, FrostPrints } from "@wa/front/Phaser/Game/Weather/FrostPrints";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { seasonalThemeModeStore } from "../../../Stores/SeasonalThemeStore";
 import { AutumnDecor } from "../Autumn/AutumnDecor";
@@ -51,7 +51,13 @@ export interface SeasonalThemeDeps {
     waterVersion?: () => number;
     /** How frosted the ground is for this player, 0 to 1 (Weather/Frost.ts): footprints show on it. */
     frost?: () => number;
+    /** How much snow lies on the map for this player, 0 to 1, and at a point: footprints show in it. */
+    snowCover?: () => number;
+    snowAt?: (x: number, y: number) => number;
 }
+
+/** A point under this much snow (0 to 1) takes footprints. */
+const SNOW_PRINTS_FROM = 0.3;
 
 interface ActiveDecor {
     theme: SeasonalTheme;
@@ -80,8 +86,10 @@ export class SeasonalThemeManager {
     private active: ActiveDecor | undefined;
     /** The snow decor of the map snow, while it lies. */
     private snow: ActiveDecor | undefined;
-    /** The footprints on the frosted ground, while it is frosted and neither the snow nor Christmas leaves its own. */
+    /** The footprints on the frosted or snowy ground, while there is some and Christmas does not leave its own. */
     private frostPrints: FrostPrints | undefined;
+    /** Whether they are left in the snow (else on the frost): their colour and where they are taken. */
+    private printsInSnow = false;
 
     constructor(
         private readonly scene: Phaser.Scene,
@@ -137,21 +145,29 @@ export class SeasonalThemeManager {
     }
 
     private driveFrostPrints(time: number, visible: boolean, snowPrints: boolean, walkers: () => WalkerSample[]): void {
-        const frost = snowPrints ? 0 : Math.round((this.deps.frost?.() ?? 0) * FROST_ALPHA_STEPS) / FROST_ALPHA_STEPS;
-        if (frost <= 0) {
+        const stepped = (level: number): number => Math.round(level * FROST_ALPHA_STEPS) / FROST_ALPHA_STEPS;
+        const frostLevel = snowPrints ? 0 : stepped(this.deps.frost?.() ?? 0);
+        const snowLevel = snowPrints ? 0 : stepped(Math.min(1, this.deps.snowCover?.() ?? 0));
+        const inSnow = snowLevel > 0 && snowLevel >= frostLevel;
+        const frost = Math.max(frostLevel, snowLevel);
+        if (frost <= 0 || (this.frostPrints && this.printsInSnow !== inSnow)) {
             if (this.frostPrints) {
                 this.frostPrints.destroy();
                 this.frostPrints = undefined;
                 this.deps.markDirty();
             }
-            return;
+            if (frost <= 0) return;
         }
+        this.printsInSnow = inSnow;
         const prints =
             this.frostPrints ??
             (this.frostPrints = new FrostPrints(
                 this.scene,
-                (x, y) => this.deps.outdoorGrid()?.isOutdoorAt(x, y) ?? false,
-                (x, y) => this.deps.isWet?.(x, y) ?? false,
+                (x, y) =>
+                    (this.deps.outdoorGrid()?.isOutdoorAt(x, y) ?? false) &&
+                    !(this.deps.isWet?.(x, y) ?? false) &&
+                    (!inSnow || (this.deps.snowAt?.(x, y) ?? 0) >= SNOW_PRINTS_FROM),
+                inSnow ? undefined : FROST_PRINT_COLOR,
             ));
         prints.setVisible(visible);
         if (prints.update(time, walkers(), frost)) this.deps.markDirty();

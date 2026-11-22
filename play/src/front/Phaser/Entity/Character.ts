@@ -27,6 +27,7 @@ import {
     getWaterRectangles,
     isDeepTerrainWater,
     isPointInWater,
+    isPoolAt,
     isWithinOneTileOfWater,
 } from "@wa/front/Phaser/Game/Water/WaterZones";
 import { getIceRectangles, isOnIce } from "@wa/front/Phaser/Game/Ice/IceZones";
@@ -124,6 +125,9 @@ export type PathFollowResult = {
      */
     blocked?: boolean;
 };
+
+/** From this snow cover (0 to 1) on frozen water, one walks on it rather than skates. */
+const SNOW_WALKED_ON = 0.5;
 
 export abstract class Character extends Container implements OutlineableInterface, Movable {
     private readonly movedSubject = new Subject<PositionInterface>();
@@ -469,6 +473,12 @@ export abstract class Character extends Container implements OutlineableInterfac
         return !isCanoeAfloat(this.vehicleState) && this.isOverDeepTerrainWater();
     }
 
+    /** Whether the body of the character is in a pool painted with the relief tool: one swims there, no canoe. */
+    protected isInPool(): boolean {
+        const terrain = this.scene.getGameMap?.()?.getWamFile()?.getWam().terrain;
+        return isPoolAt(terrain, { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y });
+    }
+
     /** Whether the body of the character is over water of the relief deep enough to swim, on the ground. */
     protected isOverDeepTerrainWater(): boolean {
         // Basique hides the water of the relief: here nobody swims nor floats in it (the pools of the map remain).
@@ -509,11 +519,13 @@ export abstract class Character extends Container implements OutlineableInterfac
         // The ice is on the ground too.
         if (!this.scene || this.floorZ > 0) return false;
         const body = { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y };
-        // A rink of the map, or the water of the relief frozen by the cold.
+        // A rink of the map, or the water of the relief frozen by the cold: under a snow that covers it, the frozen
+        // water is walked on, leaving footprints, not skated on.
         return (
             (isOnIce(getIceRectangles(this.scene), body) ||
                 isPointInWater(getFrozenPoolRectangles(this.scene), body) ||
-                this.scene.isFrozenWaterAt?.(body.x, body.y) === true) &&
+                (this.scene.isFrozenWaterAt?.(body.x, body.y) === true &&
+                    (this.scene.getSnowCoverAt?.(body.x, body.y) ?? 0) < SNOW_WALKED_ON)) &&
             !this.isSwimmingHere()
         );
     }
