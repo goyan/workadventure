@@ -774,6 +774,38 @@ describe("WanderingCharactersManager", () => {
             expect([...manager.floorOccupants()][0]).toBe(occupants[0]);
         });
 
+        it("on the ground it is drawn where the ground is on a relief seen in 3/4, and not on a raised floor", () => {
+            const scene = makeScene();
+            manager = scene.manager;
+            walk.pose = standing(100, 200, 0);
+            scene.reconcile();
+            scene.update();
+            // A hollow drawn 40 px lower from the row 150 on.
+            const dropAt = (_x: number, y: number): number => (y >= 150 ? 40 : 0);
+            const lower = [...manager.drawnLower(dropAt)];
+            expect(lower).toHaveLength(1);
+            expect(lower[0].getGroundDrop()).toBe(40);
+            // Its place itself never moves: only the image, while it is drawn (CharacterDrops).
+            expect(scene.sprite.y).toBe(200);
+            lower[0].y += 40;
+            expect(scene.sprite.y).toBe(240);
+            lower[0].y -= 40;
+            // The same one at each call.
+            expect([...manager.drawnLower(dropAt)][0]).toBe(lower[0]);
+            // Its shadow lies under it: told on the ground, for it to follow the relief too.
+            const told: boolean[] = [];
+            manager.forEachShownCharacter((_id, _sprite, raised) => told.push(raised));
+            expect(told).toEqual([false]);
+            // On a raised floor it passes over the relief.
+            walk.pose = standing(100, 200, 52);
+            scene.update();
+            expect([...manager.drawnLower(dropAt)][0].getGroundDrop()).toBe(0);
+            // And its shadow with it.
+            told.length = 0;
+            manager.forEachShownCharacter((_id, _sprite, raised) => told.push(raised));
+            expect(told).toEqual([true]);
+        });
+
         it("the nest of an animal put on a raised floor is on that floor, under its image", () => {
             const scene = makeScene([], undefined, { duckElevation: 52 });
             manager = scene.manager;

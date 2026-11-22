@@ -227,6 +227,124 @@ describe("WaterGrid", () => {
         });
     });
 
+    describe("the drains of a building", () => {
+        // Flat ground 20 × 20 cells; a floor of the "Map" tool over the tiles 0..9 × 0..9 (all of it).
+        const flat = terrainOf([[100, 100, -1]]);
+        const bounds = { x: 0, y: 0, width: 20, height: 20 };
+        const allFloor = new Set<string>();
+        for (let y = 0; y < 10; y++) for (let x = 0; x < 10; x++) allFloor.add(cellKey(x, y));
+        /** Every cell under `px` of water. */
+        const flood = (grid: WaterGrid, px: number): void => {
+            const bytes = new Uint8Array(grid.writeDepths().length);
+            for (let index = 0; index < bytes.length; index += 2) bytes[index] = px * 8;
+            grid.readDepths(bytes);
+        };
+        const sideOf = (grid: WaterGrid, fromX: number, toX: number): number => {
+            let total = 0;
+            for (let y = 0; y < 20; y++) for (let x = fromX; x < toX; x++) total += grid.depthAt(x, y);
+            return total;
+        };
+
+        it("dries the whole floor it stands on, far past its disc, whatever its flow", () => {
+            const grid = new WaterGrid(flat, bounds);
+            grid.setFloors(allFloor);
+            flood(grid, 8);
+            const before = grid.totalPx();
+            // A drain asking a mere pixel a step, in a corner.
+            const tally = grid.step({ ...nothing, flows: [{ cellX: 1, cellY: 1, px: -1 }] });
+
+            expect(grid.depthAt(18, 18)).toBe(0);
+            expect(grid.totalPx()).toBe(0);
+            // What the drain took, and what ran off the edge of the grid during the step before it.
+            expect(tally.sinksPx + tally.lostPx).toBeCloseTo(before, 1);
+            expect(tally.sinksPx).toBeGreaterThan(before * 0.9);
+        });
+
+        it("takes all that comes in, so that the floor stays dry under a strong source", () => {
+            const grid = new WaterGrid(flat, bounds);
+            grid.setFloors(allFloor);
+            for (let step = 0; step < 20; step++) {
+                const tally = grid.step({
+                    ...nothing,
+                    flows: [
+                        { cellX: 10, cellY: 10, px: 500 },
+                        { cellX: 2, cellY: 2, px: -1 },
+                    ],
+                });
+                expect(tally.sinksPx).toBeCloseTo(500, 1);
+                expect(grid.totalPx()).toBeLessThan(0.01);
+            }
+        });
+
+        it("stops at a wall, goes through a doorway: a door is of the building", () => {
+            const wallAt = (doorway: boolean): { east: Set<string>; south: Set<string> } => {
+                const east = new Set<string>();
+                for (let y = 0; y < 20; y++) if (!doorway || y !== 10) east.add(cellKey(9, y));
+                return { east, south: new Set<string>() };
+            };
+            const walled = new WaterGrid(flat, bounds, undefined, wallAt(false));
+            walled.setFloors(allFloor);
+            flood(walled, 8);
+            walled.step({ ...nothing, flows: [{ cellX: 2, cellY: 10, px: -1 }] });
+            expect(sideOf(walled, 0, 10)).toBe(0);
+            expect(sideOf(walled, 10, 20)).toBeGreaterThan(0);
+
+            const door = new WaterGrid(flat, bounds, undefined, wallAt(true));
+            door.setFloors(allFloor);
+            flood(door, 8);
+            door.step({ ...nothing, flows: [{ cellX: 2, cellY: 10, px: -1 }] });
+            expect(door.totalPx()).toBe(0);
+        });
+
+        it("keeps its flow and its disc where it stands on no floor, and leaves the ground around the floor wet", () => {
+            const halfFloor = new Set<string>();
+            for (let y = 0; y < 10; y++) for (let x = 0; x < 5; x++) halfFloor.add(cellKey(x, y));
+            const grid = new WaterGrid(flat, bounds);
+            grid.setFloors(halfFloor);
+            flood(grid, 8);
+            // On the ground: takes its pixel a step, as before.
+            const ground = grid.step({ ...nothing, flows: [{ cellX: 15, cellY: 10, px: -1 }] });
+            expect(ground.sinksPx).toBeCloseTo(1, 3);
+            // On the floor: dries the floor, never the ground past it.
+            grid.step({ ...nothing, flows: [{ cellX: 2, cellY: 10, px: -1 }] });
+            expect(sideOf(grid, 0, 10)).toBe(0);
+            expect(sideOf(grid, 10, 20)).toBeGreaterThan(0);
+        });
+
+        it("dries a floor laid in a hollow of the relief, and goes round a pool dug in it", () => {
+            // The whole floor 2 px under the ground of the map, as a building in a hollow; a pool at the cell 10,10.
+            const sunken: [number, number, number][] = [];
+            for (let y = 0; y < 20; y++) for (let x = 0; x < 20; x++) sunken.push([x, y, -2]);
+            const grid = new WaterGrid(terrainOf(sunken), bounds);
+            grid.setFloors(allFloor);
+            grid.seal([{ cellX: 10, cellY: 10 }]);
+            flood(grid, 8);
+            grid.step({ ...nothing, flows: [{ cellX: 2, cellY: 2, px: -1 }] });
+
+            expect(grid.depthAt(18, 18)).toBe(0);
+            expect(grid.depthAt(10, 10)).toBeGreaterThan(0);
+        });
+
+        it("keeps its flow and its disc on a floor too when it is not adaptive", () => {
+            const grid = new WaterGrid(flat, bounds);
+            grid.setFloors(allFloor);
+            flood(grid, 8);
+            const tally = grid.step({ ...nothing, flows: [{ cellX: 2, cellY: 2, px: -1, adaptive: false }] });
+
+            expect(tally.sinksPx).toBeCloseTo(1, 3);
+            expect(grid.depthAt(18, 18)).toBeGreaterThan(0);
+        });
+
+        it("keeps the water up to the level it holds", () => {
+            const grid = new WaterGrid(flat, bounds);
+            grid.setFloors(allFloor);
+            flood(grid, 8);
+            grid.step({ ...nothing, flows: [{ cellX: 2, cellY: 2, px: -1, level: 2 }] });
+            // The ground stands at 0 away from the mound: 2 px kept on each cell.
+            expect(grid.depthAt(10, 10)).toBeCloseTo(2, 1);
+        });
+    });
+
     it("takes water at a sink, never more than is there", () => {
         const pit = terrainOf([
             [0, 0, -32],

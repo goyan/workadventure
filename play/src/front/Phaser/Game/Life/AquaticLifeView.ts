@@ -1,15 +1,26 @@
 import type * as Phaser from "phaser";
+import { MAX_DROP, MAX_RISE } from "../Terrain/Pixel/ColumnPainter";
 import { distinguishable } from "../Weather/ScreenScale";
 import { isAquaticKind } from "./AquaticLife";
 import type { AquaticLife } from "./AquaticLife";
 import { ensureAquaticTexture } from "./AquaticSprites";
 
 /** Just above the relief and its water (TERRAIN_DEPTH in TerrainView), under the objects and the avatars. */
-const AQUATIC_DEPTH = 0.66;
+export const AQUATIC_DEPTH = 0.66;
 /** An animal this close to the screen counts as on it: its image is wider than its point. */
 const MARGIN_PX = 32;
 /** Seen through the water. */
 const AQUATIC_ALPHA = 0.7;
+/**
+ * An animal further than this from the view cannot be drawn in it, however much lower or higher the surface of its
+ * water is drawn (a hollow, a mount, in 3/4): the water under it is not looked at.
+ */
+const NEAR_PX = Math.max(MAX_DROP, MAX_RISE) + MARGIN_PX;
+/**
+ * Whether the rim of its hollow hides an animal is asked again this often at most (ms): the answer costs a look at the
+ * relief all the way south of it, and an animal swims a few pixels in that time.
+ */
+const HIDDEN_CHECK_MS = 100;
 /** Caught in the ice: paler, blue, still. */
 const FROZEN_ALPHA = 0.45;
 const FROZEN_TINT = 0xbfe0f0;
@@ -24,6 +35,8 @@ const DOLPHIN_PX = 24;
 
 export class AquaticLifeView {
     private readonly images = new Map<number, Phaser.GameObjects.Image>();
+    /** Whether the rim of its hollow hides each animal near the view, and when that was last asked. */
+    private readonly hidden = new Map<number, { value: boolean; at: number }>();
 
     constructor(
         private readonly scene: Pick<Phaser.Scene, "add" | "cameras" | "textures"> & { markDirty(): void },
@@ -32,6 +45,10 @@ export class AquaticLifeView {
         private readonly reducedMotion: () => boolean,
         /** Whether the water is frozen there for this player (Frost.ts): the animal stops under the ice. */
         private readonly isFrozenAt: (x: number, y: number) => boolean = () => false,
+        /** How much lower the surface of the water is drawn at a point: a lake at the bottom of a hollow, in 3/4. */
+        private readonly dropAt: (x: number, y: number) => number = () => 0,
+        /** Whether a point of the water is hidden by the south rim of its hollow (3/4): its animals are not drawn. */
+        private readonly hiddenAt: (x: number, y: number) => boolean = () => false,
     ) {}
 
     public update(now: number): void {
@@ -50,6 +67,11 @@ export class AquaticLifeView {
             x <= view.x + view.width + MARGIN_PX &&
             y >= view.y - MARGIN_PX &&
             y <= view.y + view.height + MARGIN_PX;
+        const near = (x: number, y: number): boolean =>
+            x >= view.x - NEAR_PX &&
+            x <= view.x + view.width + NEAR_PX &&
+            y >= view.y - NEAR_PX &&
+            y <= view.y + view.height + NEAR_PX;
         // The scene is drawn again only when something the player can see changed.
         let changed = false;
         for (const animal of this.life.shown(now, this.reducedMotion())) {
@@ -60,8 +82,10 @@ export class AquaticLifeView {
             let image = this.images.get(animal.id);
             // Under the ice everything at sea stops where it was: it moves on again once the water thaws.
             const frozen = this.isFrozenAt(image?.x ?? animal.x, image?.y ?? animal.y);
+            // Far from the view (most of the animals of a map): left where it swims, nothing asked of the relief.
+            const isNear = near(animal.x, animal.y);
             const x = frozen && image ? image.x : Math.round(animal.x);
-            const y = frozen && image ? image.y : Math.round(animal.y);
+            const y = frozen && image ? image.y : Math.round(animal.y + (isNear ? this.dropAt(animal.x, animal.y) : 0));
             const alpha = animal.alpha * (frozen ? FROZEN_ALPHA : AQUATIC_ALPHA);
             if (!image) {
                 image = this.scene.add.image(x, y, ensureAquaticTexture(this.scene, animal.kind));
@@ -72,6 +96,7 @@ export class AquaticLifeView {
                 changed ||= onScreen(x, y) || onScreen(image.x, image.y);
             }
             image.setPosition(x, y);
+            image.setVisible(!isNear || !this.isHidden(animal.id, animal.x, animal.y, now));
             image.setAlpha(alpha);
             if (frozen) image.setTint(FROZEN_TINT);
             else image.clearTint();
@@ -82,8 +107,18 @@ export class AquaticLifeView {
             changed ||= onScreen(image.x, image.y);
             image.destroy();
             this.images.delete(id);
+            this.hidden.delete(id);
         }
         if (changed) this.scene.markDirty();
+    }
+
+    private isHidden(id: number, x: number, y: number, now: number): boolean {
+        const known = this.hidden.get(id);
+        // A clock that went back (a new scene): asked again.
+        if (known && now >= known.at && now - known.at < HIDDEN_CHECK_MS) return known.value;
+        const value = this.hiddenAt(x, y);
+        this.hidden.set(id, { value, at: now });
+        return value;
     }
 
     public destroy(): void {
@@ -93,5 +128,6 @@ export class AquaticLifeView {
     private clear(): void {
         for (const image of this.images.values()) image.destroy();
         this.images.clear();
+        this.hidden.clear();
     }
 }

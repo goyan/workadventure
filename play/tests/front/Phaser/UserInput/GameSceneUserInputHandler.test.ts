@@ -150,6 +150,9 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
         Object.defineProperty(scene, "input", { configurable: true, value: { setDefaultCursor } });
         scene.Map = mock<Phaser.Tilemaps.Tilemap>({ widthInPixels: 1504, heightInPixels: 1184 });
         scene.getCameraManager.mockReturnValue(cameraManager);
+        // The relief is not shown in 3/4: the ground is drawn where it is.
+        scene.groundPointUnder.mockImplementation((point) => point);
+        scene.seenPointUnder.mockImplementation((point) => point);
         scene.getActivatablesManager.mockReturnValue(activatablesManager);
         scene.getGameMapFrontWrapper.mockReturnValue(
             mock<GameMapFrontWrapper>({ getTileDimensions: () => ({ width: 32, height: 32 }) }),
@@ -184,6 +187,14 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
 
         expect(scene.moveTo.mock.calls).toEqual([[{ x: 496, y: 656 }, true, WOKA_SPEED * 2.5]]);
         expect(camera.getWorldPoint.mock.calls).toEqual([[120, 160]]);
+    });
+
+    it("walks to the ground drawn under the click, down in a hollow of the relief seen in 3/4", () => {
+        // The click lands on the floor of a hollow drawn 64 px lower than its place.
+        scene.groundPointUnder.mockImplementation((point) => ({ x: point.x, y: point.y - 64 }));
+        handler.handlePointerUpEvent(pointer(2, 1), []);
+
+        expect(scene.moveTo.mock.calls).toEqual([[{ x: 480, y: 576 }, true, undefined]]);
     });
 
     it("keeps the exact point for right-click navigation even when tile snapping is enabled", () => {
@@ -896,6 +907,15 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             expect(scene.moveTo.mock.calls).toEqual([]);
         });
 
+        it("falls on what the pointer shows where the relief is seen in 3/4: the ground or the water drawn there", () => {
+            // A lake at the bottom of a hollow, drawn 64 px lower: the point shown is 64 px further north on the map.
+            scene.seenPointUnder.mockImplementation((point) => ({ x: point.x, y: point.y - 64 }));
+            arm();
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+
+            expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_METEOR, 480, 576, 4]]);
+        });
+
         it("an armed fireball takes the left click, with the size chosen in the panel", () => {
             catastrophePanelStore.set(true);
             toggleArmedCatastrophe("fireball");
@@ -1005,6 +1025,13 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 expect(launch.mock.calls[1]).toEqual([CatastropheKind.CATASTROPHE_DOWNPOUR, 500, 700, 3, false]);
             });
 
+            it("rains on what the pointer shows where the relief is seen in 3/4", () => {
+                scene.seenPointUnder.mockImplementation((point) => ({ x: point.x, y: point.y - 64 }));
+                armDownpour();
+                handler.handlePointerDownEvent(held(), []);
+                expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_DOWNPOUR, 480, 576, 3, false]]);
+            });
+
             it("sets fire under the pointer as soon as the click is pressed, and paints it while the click is held", () => {
                 catastrophePanelStore.set(true);
                 toggleArmedCatastrophe("fire");
@@ -1047,6 +1074,16 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 expect(launch).toHaveBeenCalledTimes(2);
                 expect(scene.moveTo.mock.calls).toEqual([]);
                 drainRadiusTilesStore.set(3);
+            });
+
+            it("a ball is held on what the pointer shows where the relief is seen in 3/4: it floats at the surface of that water", () => {
+                scene.seenPointUnder.mockImplementation((point) => ({ x: point.x, y: point.y - 64 }));
+                catastrophePanelStore.set(true);
+                toggleArmedCatastrophe("ball");
+                ballDiameterTilesStore.set(6);
+                handler.handlePointerDownEvent(held(), []);
+                expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_BALL, 480, 576, 6]]);
+                expect(get(heldBallStore)).toEqual({ x: 480, y: 576, radiusPx: 96 });
             });
 
             it("holds a ball under the pointer at once, tells it as it moves, and lets it go at the release", () => {

@@ -9,7 +9,7 @@ import {
     withSoils,
 } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
-import { groundPace } from "../../../../../src/front/Phaser/Game/Terrain/GroundPace";
+import { groundPace, groundSnowAt, snowLinePeak } from "../../../../../src/front/Phaser/Game/Terrain/GroundPace";
 
 const terrain = withSoils(
     undefined,
@@ -60,5 +60,28 @@ describe("groundPace", () => {
         expect(
             groundPace({ relief: () => undefined, depthAt: () => 0 }, 50, 600, 0, undefined, undefined, snowAt),
         ).toBeCloseTo(SNOW_PACE);
+    });
+});
+
+describe("the snow the footprints are laid in", () => {
+    // A top at 200 px (cell 10, 5 = map pixels 160 to 168, 80 to 88): white in winter, bare in summer.
+    const top = withHeights(undefined, new Map([[cellKey(10, 5), 200]]));
+
+    it("is the snow of the heights outdoors, or the snow that fell, whichever is deeper", () => {
+        const winter = { fallen: 0, season: Season.Winter, outdoors: true };
+        expect(groundSnowAt(top, 164, 84, winter)).toBe(1);
+        expect(groundSnowAt(top, 24, 24, winter)).toBe(0);
+        expect(groundSnowAt(top, 164, 84, { ...winter, season: Season.Summer })).toBe(0);
+        // Under a roof the heights hold none; what fell still counts where it lies.
+        expect(groundSnowAt(top, 164, 84, { ...winter, outdoors: false })).toBe(0);
+        expect(groundSnowAt(top, 24, 24, { ...winter, fallen: 0.4 })).toBe(0.4);
+        expect(groundSnowAt(undefined, 164, 84, { ...winter, fallen: 0.4 })).toBe(0.4);
+    });
+
+    it("lies somewhere on the map as soon as its highest top is over the snow line of the season", () => {
+        expect(snowLinePeak(top, Season.Winter)).toBe(1);
+        expect(snowLinePeak(top, Season.Summer)).toBe(0);
+        expect(snowLinePeak(top, undefined)).toBe(0);
+        expect(snowLinePeak(undefined, Season.Winter)).toBe(0);
     });
 });

@@ -5,14 +5,23 @@ import type { CatastropheMessage } from "@workadventure/messages";
 import { describe, expect, it, vi } from "vitest";
 import { BallView } from "@wa/front/Phaser/Game/Catastrophe/BallView";
 
+const basic = vi.hoisted(() => ({ active: false }));
+vi.mock("@wa/front/Stores/BasicModeStore", () => ({ isBasicActive: () => basic.active }));
+
 function graphics() {
     const made = {
+        visible: true,
+        setVisible: vi.fn((visible: boolean) => {
+            made.visible = visible;
+            return made;
+        }),
         setDepth: vi.fn(() => made),
         clear: vi.fn(),
         fillStyle: vi.fn(),
         fillRect: vi.fn(),
         fillEllipse: vi.fn(),
         fillCircle: vi.fn(),
+        setY: vi.fn((_y: number) => made),
         lineStyle: vi.fn(),
         strokeCircle: vi.fn(),
         beginPath: vi.fn(),
@@ -27,7 +36,11 @@ function graphics() {
 
 const ME = 7;
 
-function harness(water = 0, ground = water > 0 ? -100 : 0) {
+function harness(
+    water = 0,
+    ground = water > 0 ? -100 : 0,
+    dropOf?: (ball: { x: number; y: number; levelPx: number }) => number,
+) {
     const made: ReturnType<typeof graphics>[] = [];
     const scene = {
         add: {
@@ -47,6 +60,7 @@ function harness(water = 0, ground = water > 0 ? -100 : 0) {
         () => version,
         () => ME,
         () => held,
+        dropOf,
     );
     const message = (over: Partial<CatastropheMessage> = {}): CatastropheMessage => ({
         id: 4,
@@ -83,6 +97,20 @@ describe("BallView", () => {
         expect(body.setDepth).toHaveBeenLastCalledWith(320);
         expect(ring.strokeCircle).toHaveBeenCalledWith(320, 320, 32);
         expect(scene.markDirty).toHaveBeenCalledTimes(1);
+    });
+
+    it("is drawn where the water it floats on is drawn, the relief seen in 3/4: its body and its ring as much lower", () => {
+        // A lake at the bottom of a hollow, its surface 60 px under the ground: drawn 30 px lower.
+        const dropOf = vi.fn((ball: { levelPx: number }) => -ball.levelPx / 2);
+        const { view, made, message } = harness(40, -100, dropOf);
+        view.report(message({ ballLevel: -60 }), 0);
+        view.update(16);
+        const [ring, body] = made;
+        expect(dropOf).toHaveBeenCalledWith(expect.objectContaining({ x: 320, y: 320, levelPx: -60 }));
+        // Its body is moved as a whole; its place, its blocks and its depth are those of the map.
+        expect(body.setY).toHaveBeenLastCalledWith(30);
+        expect(body.setDepth).toHaveBeenLastCalledWith(320);
+        expect(ring.strokeCircle).toHaveBeenCalledWith(320, 350, expect.any(Number));
     });
 
     it("does not draw again a ball that did not move, until the water changes", () => {
@@ -186,6 +214,31 @@ describe("BallView", () => {
         ashore.view.update(1000);
         expect(ashore.made[1].strokePath).not.toHaveBeenCalled();
         expect(ashore.made[1].fillEllipse).toHaveBeenCalled();
+    });
+
+    it("hides the balls of the others in Basique, without drawing them again, and keeps one's own", () => {
+        const { view, scene, made, message, hold } = harness();
+        view.report(message(), 1000);
+        view.update(1000);
+        const body = made[1];
+        const drawn = body.fillRect.mock.calls.length;
+        basic.active = true;
+        try {
+            view.report(message({ x: 600 }), 1100);
+            view.update(1100);
+            expect(body.visible).toBe(false);
+            const dirty = scene.markDirty.mock.calls.length;
+            view.update(1116);
+            expect(body.fillRect.mock.calls.length).toBe(drawn);
+            expect(scene.markDirty).toHaveBeenCalledTimes(dirty);
+            hold({ x: 400, y: 200, radiusPx: 32 });
+            view.update(1132);
+            expect(made[2].fillRect).toHaveBeenCalled();
+        } finally {
+            basic.active = false;
+        }
+        view.update(1148);
+        expect(body.visible).toBe(true);
     });
 
     it("costs nothing while no ball stands on the map", () => {

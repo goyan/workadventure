@@ -5,6 +5,7 @@ import {
     NIGHT_HALO_MOVING_WINDOW_MS,
     NIGHT_HALO_TRANSITION_MS,
     NightHalos,
+    halosWhereDrawn,
 } from "../../../../../src/front/Phaser/Game/Night/NightHalos";
 
 const FRAME_MS = 50;
@@ -114,5 +115,29 @@ describe("NightHalos", () => {
         halos.reset();
         expect(halos.update(60_000, [{ id: "p", x: 999, y: 0 }])).toEqual([{ id: "p", x: 999, y: 0, radius: 48 }]);
         expect(halos.isAnimating()).toBe(false);
+    });
+});
+
+describe("the halos of the players on a relief seen in 3/4", () => {
+    it("are drawn where each player is drawn: lower in a hollow, higher on a mount", () => {
+        const halos = [
+            { id: "me", x: 100, y: 200, radius: 48 },
+            { id: "7", x: 300, y: 400, radius: 96 },
+            { id: "8", x: 500, y: 600, radius: 48 },
+        ];
+        const drops = new Map([
+            ["me", -128],
+            ["7", 40],
+        ]);
+        expect(halosWhereDrawn(halos, (id) => drops.get(id) ?? 0)).toEqual([
+            { id: "me", x: 100, y: 72, radius: 48 },
+            { id: "7", x: 300, y: 440, radius: 96 },
+            { id: "8", x: 500, y: 600, radius: 48 },
+        ]);
+    });
+
+    it("are the very same on flat ground: nothing is drawn again for it", () => {
+        const halos = [{ id: "me", x: 100, y: 200, radius: 48 }];
+        expect(halosWhereDrawn(halos, () => 0)).toBe(halos);
     });
 });

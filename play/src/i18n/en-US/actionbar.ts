@@ -73,9 +73,9 @@ const actionbar = {
     basicMode: {
         label: "Basic",
         switch: "Basic mode: no effect at all",
-        on: "Basic mode on: no weather, night, light, water nor catastrophe. Click to see the effects again.",
-        off: "Basic mode: hide every effect (weather, night, light, water, catastrophes), for you only.",
-        hint: "For you only, and your detailed settings are kept: turned off, everything comes back as before. The water of the relief no longer makes you swim nor drift. The map editor still shows everything.",
+        on: "Basic mode on: no weather, night, light nor catastrophe, and plain flat water. Click to see the effects again.",
+        off: "Basic mode: hide every effect (weather, night, light, catastrophes) and simplify the water, for you only.",
+        hint: "For you only, and your detailed settings are kept: turned off, everything comes back as before. The water of the relief stays visible, flat blue without waves, but no longer makes you swim nor drift. The map editor still shows everything.",
     },
     visualisation: {
         label: "Visualisation",

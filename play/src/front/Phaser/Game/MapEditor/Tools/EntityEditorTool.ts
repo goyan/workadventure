@@ -321,14 +321,6 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
         }
         // TODO: add shadow when moving into the area
         // .setDropShadow(4, 4, 0x000000);
-        if (
-            !this.entityPrefabPreview &&
-            gameObjects.length === 0 &&
-            openPoolAt(this.mapEditorModeManager, this.scene, { x: pointer.worldX, y: pointer.worldY })
-        ) {
-            return;
-        }
-
         if (!this.entityPrefabPreview || !this.entityPrefab) {
             return;
         }
@@ -371,6 +363,15 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
         if (get(mapLayerPickLevelStore)) {
             mapLayerPickLevelStore.set(false);
             mapEditorPlacementLevelStore.set(this.entitiesManager.levelDrawnAt(pointer.worldX, pointer.worldY));
+            return;
+        }
+
+        // A click on a pool, nothing being placed, opens it in the relief tool. Passing over it changes nothing.
+        if (
+            !this.entityPrefabPreview &&
+            gameObjects.length === 0 &&
+            openPoolAt(this.mapEditorModeManager, this.scene, { x: pointer.worldX, y: pointer.worldY })
+        ) {
             return;
         }
 

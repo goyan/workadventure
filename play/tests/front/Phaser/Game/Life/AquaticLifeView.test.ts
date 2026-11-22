@@ -8,7 +8,7 @@ vi.mock("../../../../../src/front/Phaser/Game/Life/AquaticSprites", () => ({
 
 /** A scene that keeps the images it is asked for, and whose camera sees the map from 0 to 200 on both axes. */
 function createScene() {
-    const images: { x: number; y: number; alpha: number; flipX: boolean; destroyed: boolean }[] = [];
+    const images: { x: number; y: number; alpha: number; flipX: boolean; destroyed: boolean; visible: boolean }[] = [];
     const markDirty = vi.fn();
     const scene = {
         markDirty,
@@ -19,6 +19,7 @@ function createScene() {
                     x,
                     y,
                     alpha: 1,
+                    visible: true,
                     flipX: false,
                     tint: undefined as number | undefined,
                     destroyed: false,
@@ -26,6 +27,10 @@ function createScene() {
                     setPosition: (nextX: number, nextY: number) => {
                         image.x = nextX;
                         image.y = nextY;
+                        return image;
+                    },
+                    setVisible: (visible: boolean) => {
+                        image.visible = visible;
                         return image;
                     },
                     setAlpha: (alpha: number) => {
@@ -57,7 +62,12 @@ function createScene() {
 }
 type SceneOfView = ConstructorParameters<typeof AquaticLifeView>[0];
 
-function createView(shown = { value: true }, frozen = { value: false }) {
+function createView(
+    shown = { value: true },
+    frozen = { value: false },
+    dropAt?: (x: number, y: number) => number,
+    hiddenAt?: (x: number, y: number) => boolean,
+) {
     const { scene, images, markDirty } = createScene();
     const life = new AquaticLife();
     // The fake scene has only what the view uses.
@@ -67,6 +77,8 @@ function createView(shown = { value: true }, frozen = { value: false }) {
         () => shown.value,
         () => false,
         () => frozen.value,
+        dropAt,
+        hiddenAt,
     );
     return { view, life, images, markDirty, shown, frozen };
 }
@@ -95,6 +107,72 @@ describe("AquaticLifeView", () => {
         expect(images).toHaveLength(1);
         expect(images[0]).toMatchObject({ x: 80, y: 50, flipX: true });
         expect(images[0].alpha).toBeCloseTo(0.7);
+    });
+
+    it("draws a fish of a lake at the bottom of a hollow on the water drawn lower", () => {
+        const { view, life, images } = createView({ value: true }, { value: false }, () => 30);
+        life.receive([{ id: 1, kind: 0, x: 100, y: 50 }], 0);
+        view.update(0);
+        expect(images[0]).toMatchObject({ x: 100, y: 80 });
+    });
+
+    it("does not draw a fish of the part of a lake that the south rim of its hollow hides", () => {
+        const { view, life, images } = createView(
+            { value: true },
+            { value: false },
+            () => 30,
+            (_x, y) => y > 100,
+        );
+        life.receive(
+            [
+                { id: 1, kind: 0, x: 100, y: 50 },
+                { id: 2, kind: 0, x: 100, y: 150 },
+            ],
+            0,
+        );
+        view.update(0);
+        expect(images.map((image) => image.visible)).toEqual([true, false]);
+    });
+
+    it("does not look at the water under an animal far out of the screen", () => {
+        const dropAt = vi.fn(() => 30);
+        const hiddenAt = vi.fn(() => false);
+        const { view, life, images } = createView({ value: true }, { value: false }, dropAt, hiddenAt);
+        life.receive(
+            [
+                { id: 1, kind: 0, x: 900, y: 900 },
+                { id: 2, kind: 0, x: 100, y: 50 },
+            ],
+            0,
+        );
+        view.update(0);
+        expect(images).toHaveLength(2);
+        // The one on screen only.
+        expect(dropAt.mock.calls).toEqual([[100, 50]]);
+        expect(hiddenAt.mock.calls).toEqual([[100, 50]]);
+    });
+
+    it("still places an animal out of the screen whose water is drawn in it (a lake on a mount, south of the view)", () => {
+        const dropAt = vi.fn(() => -120);
+        const { view, life, images } = createView({ value: true }, { value: false }, dropAt);
+        life.receive([{ id: 1, kind: 0, x: 100, y: 300 }], 0);
+        view.update(0);
+        expect(images[0]).toMatchObject({ x: 100, y: 180 });
+    });
+
+    it("asks ten times a second at most whether the rim of its hollow hides an animal", () => {
+        const hidden = { value: false };
+        const hiddenAt = vi.fn(() => hidden.value);
+        const { view, life, images } = createView({ value: true }, { value: false }, () => 0, hiddenAt);
+        life.receive([{ id: 1, kind: 0, x: 100, y: 50 }], 0);
+        for (const now of [0, 16, 33, 50, 66, 83]) view.update(now);
+        expect(hiddenAt).toHaveBeenCalledTimes(1);
+        hidden.value = true;
+        view.update(99);
+        expect(images[0].visible).toBe(true);
+        view.update(100);
+        expect(hiddenAt).toHaveBeenCalledTimes(2);
+        expect(images[0].visible).toBe(false);
     });
 
     it("asks for the scene to be drawn again only while an animal on screen moves or fades", () => {

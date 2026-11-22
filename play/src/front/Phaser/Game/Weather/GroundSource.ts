@@ -14,6 +14,21 @@ export function followsServerGround(): boolean {
     return chosenWeatherNow().place === undefined;
 }
 
+let localGroundShown: () => boolean = () => false;
+
+/** The scene tells whether the own ground of this player (LocalTerrainController) is shown in place of the server's. */
+export function setLocalGroundShown(shown: () => boolean): void {
+    localGroundShown = shown;
+}
+
+/**
+ * Whether the meadow shown holds the snow and the ice of this player, tile by tile: the server's, or their own local
+ * ground's (it computes them under the weather of their place). Else only the even snow of their city is theirs.
+ */
+export function meadowHoldsSnow(): boolean {
+    return followsServerGround() || localGroundShown();
+}
+
 /**
  * How much the snow whitens the ground at a point of the map (map pixels) for this player, 0 to 1: the snow of the
  * server there, or for a player who follows their own weather the snow of their city (`own`), outdoors only.
@@ -24,7 +39,7 @@ export function snowCoverHere(
     y: number,
     own?: { cover: number; outdoors: boolean },
 ): number {
-    if (followsServerGround()) return meadow?.snowCoverAt(x, y) ?? 0;
+    if (meadowHoldsSnow()) return meadow?.snowCoverAt(x, y) ?? 0;
     return own?.outdoors ? own.cover : 0;
 }
 
@@ -33,6 +48,15 @@ export function snowCoverHere(
  * or for a player who follows their own weather the snow of their city (`ownCover`).
  */
 export function snowCoverOfMap(meadow: MeadowState | undefined, ownCover = 0): number {
-    if (followsServerGround()) return meadow?.meanSnowCover() ?? 0;
+    if (meadowHoldsSnow()) return meadow?.meanSnowCover() ?? 0;
+    return ownCover;
+}
+
+/**
+ * The deepest snow cover of the map for this player, 0 to 1: the snow of the heights alone lets the footprints be
+ * laid there, where the mean over the whole map would round to nothing.
+ */
+export function snowPeakOfMap(meadow: MeadowState | undefined, ownCover = 0): number {
+    if (meadowHoldsSnow()) return meadow?.peakSnowCover() ?? 0;
     return ownCover;
 }

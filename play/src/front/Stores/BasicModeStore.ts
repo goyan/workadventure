@@ -4,7 +4,8 @@ import { createPersistedSwitchStore } from "./PersistedSwitchStore";
 
 /**
  * « Basique » : WorkAdventure as it was, for this person only. On, it hides every effect at once (weather, light and
- * night, catastrophes, the water and the relief, the life of the water, the trees that move) and the water no longer
+ * night, catastrophes, the relief, the life of the water, the trees that move), draws the water flat and still
+ * (BasicWater, BasicPools) and the water no longer
  * acts on the avatar here (no swimming, no current, no slow ground). It writes no other setting: off, each one finds
  * their detailed settings as they were. The map editor ignores it, so that the relief and the water can be edited.
  * Nothing goes through the server: the others still see where the avatar really is.

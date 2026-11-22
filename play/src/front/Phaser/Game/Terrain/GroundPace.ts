@@ -35,3 +35,33 @@ export function groundPace(
     if (soil === 0) return snow;
     return snow * soilPace(soil, water.depthAt(feetX, feetY, now), moistureAt?.(feetX, feetY) ?? 0);
 }
+
+/**
+ * How white the ground is at a point of the map (map pixels), 0 to 1: the snow that fell there (`fallen`), or the
+ * snow of the heights in the season of the map, outdoors only. What the footprints are laid in.
+ */
+export function groundSnowAt(
+    terrain: TerrainData | undefined,
+    x: number,
+    y: number,
+    ground: { fallen: number; season: Season | undefined; outdoors: boolean },
+): number {
+    if (!terrain || !ground.season || !ground.outdoors) return ground.fallen;
+    const height = heightAt(terrain, Math.floor(x / TERRAIN_CELL), Math.floor(y / TERRAIN_CELL));
+    return Math.max(ground.fallen, snowCover(height, ground.season));
+}
+
+const highestOf = new WeakMap<TerrainData, number>();
+
+/** The snow of the highest point of the relief in that season, 0 to 1: 0 on a map whose heights hold none. */
+export function snowLinePeak(terrain: TerrainData | undefined, season: Season | undefined): number {
+    if (!terrain || !season) return 0;
+    let highest = highestOf.get(terrain);
+    if (highest === undefined) {
+        highest = 0;
+        for (const chunk of Object.values(terrain.chunks))
+            for (const height of chunk) highest = Math.max(highest, height);
+        highestOf.set(terrain, highest);
+    }
+    return snowCover(highest, season);
+}

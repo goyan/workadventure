@@ -54,6 +54,12 @@ export interface SeasonalThemeDeps {
     /** How much snow lies on the map for this player, 0 to 1, and at a point: footprints show in it. */
     snowCover?: () => number;
     snowAt?: (x: number, y: number) => number;
+    /**
+     * How much lower the ground at a point is drawn, the relief seen in 3/4 (GameScene.groundDropAt): the leaves and
+     * the footprints lie where it is drawn. `dropVersion` changes when those drops do.
+     */
+    dropAt?: (x: number, y: number) => number;
+    dropVersion?: () => number;
 }
 
 /** A point under this much snow (0 to 1) takes footprints. */
@@ -168,6 +174,7 @@ export class SeasonalThemeManager {
                     !(this.deps.isWet?.(x, y) ?? false) &&
                     (!inSnow || (this.deps.snowAt?.(x, y) ?? 0) >= SNOW_PRINTS_FROM),
                 inSnow ? undefined : FROST_PRINT_COLOR,
+                this.deps.dropAt,
             ));
         prints.setVisible(visible);
         if (prints.update(time, walkers(), frost)) this.deps.markDirty();
@@ -241,7 +248,8 @@ export class SeasonalThemeManager {
             if (!entity.visible) continue;
             const textureKey = entity.texture?.key ?? "";
             const key = entity.getPrefab().seasonal ? textureKey : textureKey === MISSING_TEXTURE ? "" : "loaded";
-            let hash = 17;
+            // Drawn lower or higher on a relief seen in 3/4: what the decor hangs on it goes with it.
+            let hash = 17 + (entity.getGroundDrop?.() ?? 0);
             for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) | 0;
             signature = (signature * 33 + hash) | 0;
         }
@@ -269,6 +277,8 @@ export class SeasonalThemeManager {
             leafConditions: this.deps.leafConditions,
             isWet: this.deps.isWet,
             waterVersion: this.deps.waterVersion,
+            dropAt: this.deps.dropAt,
+            dropVersion: this.deps.dropVersion,
         };
         return theme === SeasonalTheme.Christmas
             ? new ChristmasDecor(this.scene, deps)

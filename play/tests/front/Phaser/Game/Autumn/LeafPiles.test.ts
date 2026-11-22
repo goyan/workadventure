@@ -49,6 +49,12 @@ describe("LeafPiles", () => {
         expect(scene.add.image.mock.calls[0].slice(0, 2)).toEqual([5, 30]);
     });
 
+    it("piles an object where it is drawn on a relief seen in 3/4: lower in a hollow", () => {
+        const { scene, piles } = setup();
+        piles.rebuild([{ ...entity(0, 0), getGroundDrop: () => 40 }], grid);
+        expect(scene.add.image.mock.calls[0].slice(0, 2)).toEqual([5, 70]);
+    });
+
     it("skips walls, doors, floors and indoor objects", () => {
         const { scene, piles } = setup();
         piles.rebuild(

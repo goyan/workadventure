@@ -47,9 +47,9 @@ export class AutumnDecor implements SeasonalDecor {
         private readonly scene: Phaser.Scene,
         private readonly deps: SeasonalDecorDeps,
     ) {
-        this.scatter = new LeafScatterLayer(scene);
+        this.scatter = new LeafScatterLayer(scene, deps.dropAt, deps.dropVersion);
         this.piles = new LeafPiles(scene, deps.readPixels);
-        this.kicked = new KickedLeafLayer(scene);
+        this.kicked = new KickedLeafLayer(scene, deps.dropAt);
         this.trail = new KickedLeafTrail((x, y) => this.hasLeavesAt(x, y, LEAF_KICK_MIN_DENSITY));
         this.refreshSources();
     }

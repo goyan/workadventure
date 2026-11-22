@@ -44,3 +44,21 @@ export function newWaterProperties(prefab: Pick<EntityPrefab, "waterFlow">, newI
         },
     ];
 }
+
+/**
+ * The properties of an object turned to another direction of its catalog entry (the rotation of the editor): its
+ * water comes out or goes where the new image says (a channel lying across turned upright), its flow, radius, level
+ * and the rest kept. A catalog entry that gives no point leaves them as they are.
+ */
+export function rotatedWaterProperties(
+    properties: EntityDataProperties | undefined,
+    prefab: Pick<EntityPrefab, "waterFlow">,
+): EntityDataProperties | undefined {
+    const anchor = prefab.waterFlow?.anchor;
+    if (!properties || !anchor) return properties;
+    return properties.map((property) =>
+        property.type === "waterSourcePropertyData" || property.type === "waterSinkPropertyData"
+            ? { ...property, anchorX: Math.round(anchor.x), anchorY: Math.round(anchor.y) }
+            : property,
+    );
+}

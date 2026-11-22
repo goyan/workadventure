@@ -85,6 +85,7 @@ export class MeadowState {
     /** The snow lying on each tile (snowByte); empty when none lies on the map. */
     private snow: Uint8Array = new Uint8Array(0);
     private meanSnow = 0;
+    private peakSnow = 0;
     /** The ice over the water of each tile (iceByte); empty when no water of the map is frozen. */
     private ice: Uint8Array = new Uint8Array(0);
     private anyIce = false;
@@ -126,8 +127,14 @@ export class MeadowState {
         this.anyIce = this.ice.some((byte) => byte > 0);
         this.anyMoisture = state.moisture.some((byte) => byte > 0);
         let covered = 0;
-        for (const byte of this.snow) covered += snowCoverOf(snowMmOfByte(byte));
+        let peak = 0;
+        for (const byte of this.snow) {
+            const cover = snowCoverOf(snowMmOfByte(byte));
+            covered += cover;
+            peak = Math.max(peak, cover);
+        }
         this.meanSnow = tiles > 0 ? covered / tiles : 0;
+        this.peakSnow = peak;
         this.anyFire = this.fire.some((fire) => fire > 0);
         this.any = state.grass.some((cover) => cover > 0);
         // A ground gone dry, burning or burnt is drawn even where no grass is left.
@@ -188,6 +195,11 @@ export class MeadowState {
     /** How much of the map the snow whitens, 0 to 1: the mean over its tiles. */
     public meanSnowCover(): number {
         return this.meanSnow;
+    }
+
+    /** The cover of the snowiest tile, 0 to 1. */
+    public peakSnowCover(): number {
+        return this.peakSnow;
     }
 
     /** The ice over the water of a tile, as the server tells it (iceByte): 0 without ice. */

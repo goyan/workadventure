@@ -33,6 +33,12 @@ describe("seasonalThemeModeStore", () => {
         expect(get(seasonalThemeModeStore)).toBe("auto");
     });
 
+    it("keeps the winter theme a player chose", async () => {
+        localStorage.setItem("seasonalTheme", "winter");
+        const { seasonalThemeModeStore } = await load();
+        expect(get(seasonalThemeModeStore)).toBe("winter");
+    });
+
     it("defaults to auto", async () => {
         const { seasonalThemeModeStore } = await load();
         expect(get(seasonalThemeModeStore)).toBe("auto");

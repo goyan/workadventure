@@ -16,6 +16,10 @@ import {
     whirlTurnsPerSecond,
 } from "./WaterFoam";
 
+import { pixelBlocksShownNow } from "./PixelBlocksShown";
+import { strokeRing, strokeStreak, streakLowered } from "./WaterFlowStrokes";
+import { MAX_DROP } from "./Pixel/ColumnPainter";
+
 export interface WaterFlowViewOptions {
     /** The water of the relief as this browser shows it. */
     water: CurrentWater & { hasAnything(): boolean };
@@ -26,17 +30,21 @@ export interface WaterFlowViewOptions {
     reducedMotion?: boolean;
     /** Whether the water is frozen there for this player (Frost.ts): no foam runs on it, no whirl turns in it. */
     isFrozenAt?: (x: number, y: number) => boolean;
+    /**
+     * How much lower what lies at a point is drawn, the relief seen in 3/4: the ground or the water over it
+     * (GameScene.surfaceDropAt). The foam, the whirls and the rings lie on the water as it is drawn.
+     */
+    dropAt?: (x: number, y: number) => number;
 }
 
 /** Over the water of the relief (0.65), under the puddles (0.7), the objects and the avatars. */
-const FOAM_DEPTH = 0.66;
+export const FOAM_DEPTH = 0.66;
 /** The whirls and the rings: over the floors and the floor objects (a sink may be one), under every character. */
 const MARKS_DEPTH = FLOOR_OBJECT_DEPTH + 0.44;
 /** The moving water is drawn 15 times a second, as the leaves of the trees: each drawing draws the map again. */
 const FRAME_MS = 1000 / 15;
 /** The sources and the sinks of the map are read again this often: reading them goes through every object. */
 const OBJECTS_MS = 2000;
-const FOAM_COLOR = 0xffffff;
 const WHIRL_COLOR = 0xe8f6ff;
 /** A whirl is this wide, in a share of the disc of its sink, within these bounds (map pixels). */
 const WHIRL_DISC_SHARE = 0.6;
@@ -47,8 +55,11 @@ const WHIRL_MIN_DEPTH_PX = 2;
 /** The rings of a source reach this far from its foot, in map pixels, and further for one that pours over a disc. */
 const RINGS_RADIUS = 10;
 const RINGS_LARGEST = 40;
-/** A source or a sink a little outside the screen is still drawn. */
-const VIEW_MARGIN = 112;
+/**
+ * A source or a sink a little outside the screen is still drawn; and as far as the relief seen in 3/4 draws it from
+ * its place (MAX_DROP).
+ */
+const VIEW_MARGIN = 112 + MAX_DROP;
 const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 /**
@@ -121,11 +132,16 @@ export class WaterFlowView {
         this.foamGraphics.clear();
         this.marksGraphics.clear();
         let drawn = false;
+        // Smooth lines over the ground drawn flat; whole pixels over the relief in pixel art.
+        const pixelArt = pixelBlocksShownNow();
         for (const fleck of this.foam.flecks()) {
             const streak = foamStreak(fleck);
             if (streak.alpha <= 0) continue;
-            this.foamGraphics.lineStyle(1.5, FOAM_COLOR, streak.alpha);
-            this.foamGraphics.lineBetween(streak.fromX, streak.fromY, streak.toX, streak.toY);
+            strokeStreak(
+                this.foamGraphics,
+                streakLowered(streak, Math.round(this.options.dropAt?.(fleck.x, fleck.y) ?? 0)),
+                pixelArt,
+            );
             drawn = true;
         }
         const seconds = now / 1000;
@@ -142,6 +158,8 @@ export class WaterFlowView {
             // Under the ice a source or a sink still runs, unseen.
             if (this.options.isFrozenAt?.(x, y)) continue;
             const disc = object.radiusCells * TERRAIN_CELL;
+            // Drawn where its water is: lower at the bottom of a hollow.
+            const drawnY = y + Math.round(this.options.dropAt?.(x, y) ?? 0);
             if (object.litresPerMinute < 0) {
                 // A sink keeps its own disc dry: the water it takes shows just beyond it.
                 const around = wetAround(this.options.water, x, y, disc + 2 * TERRAIN_CELL, now);
@@ -150,13 +168,12 @@ export class WaterFlowView {
                 const radius = Math.max(WHIRL_SMALLEST, Math.min(WHIRL_LARGEST, disc * WHIRL_DISC_SHARE));
                 for (const dot of whirlDots(seconds, whirlTurnsPerSecond(-object.litresPerMinute), radius)) {
                     this.marksGraphics.fillStyle(WHIRL_COLOR, dot.alpha * strength);
-                    this.marksGraphics.fillRect(Math.round(x + dot.x), Math.round(y + dot.y), dot.size, dot.size);
+                    this.marksGraphics.fillRect(Math.round(x + dot.x), Math.round(drawnY + dot.y), dot.size, dot.size);
                 }
             } else {
                 const radius = Math.min(RINGS_LARGEST, RINGS_RADIUS + disc / 2);
                 for (const ring of sourceRings(seconds, radius)) {
-                    this.marksGraphics.lineStyle(1.5, WHIRL_COLOR, ring.alpha);
-                    this.marksGraphics.strokeCircle(x, y, ring.radius);
+                    strokeRing(this.marksGraphics, x, drawnY, ring, pixelArt);
                 }
             }
             drawn = true;

@@ -47,7 +47,7 @@ export class FishingManager {
         private readonly scene: GameScene,
         joined: FishingMessage | undefined,
     ) {
-        this.view = new FishingView(scene, REDUCED_MOTION);
+        this.view = new FishingView(scene, REDUCED_MOTION, (x, y) => scene.surfaceDropAt(x, y));
         this.equipmentUnsubscribe = rodEquippedStore.subscribe((equipped) => {
             scene.CurrentPlayer.setRodEquipped(equipped);
             scene.getPlayerVariablesManager()?.setVariableFromApp(ROD_EQUIPPED_VARIABLE, equipped, {

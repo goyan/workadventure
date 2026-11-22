@@ -110,6 +110,39 @@ describe("TerrainWater", () => {
         expect([...levels]).toEqual([12, 1, 0, 0, 0, 255]);
     });
 
+    it("rounds the water it shows, and truncates it for the relief in 3/4 (drawn as the walk reads it)", () => {
+        const water = new TerrainWater();
+        water.setTerrain(pit);
+        water.receive(full(1, { "0,0": 15.75 }), 0);
+        const levels = new Uint8Array(1);
+        // The flat engine: as it always showed it.
+        water.levelsOver(0, 0, 1, 1, 5000, levels);
+        expect(levels[0]).toBe(16);
+        // The relief in 3/4: 15.75 px is water one wades in (one swims from 16 on), drawn so.
+        water.levelsOver(0, 0, 1, 1, 5000, levels, true);
+        expect(levels[0]).toBe(15);
+    });
+
+    it("gives the depth of the water over the cells of an area as it is, however deep, gliding between two states", () => {
+        const water = new TerrainWater();
+        water.setTerrain(pit);
+        water.receive(full(1, { "0,0": 300, "1,0": 0.125 }), 0);
+        // An area of 3 × 2 cells whose corner is the cell (0, 0); the cell (2, 1) is out of the grid of the water.
+        const depths = new Float32Array(6).fill(9);
+        water.depthsOver(0, 0, 3, 2, 5000, depths);
+        expect([...depths]).toEqual([300, 0.125, 0, 0, 0, 0]);
+        // Where the levels drawn flat stop at 255.
+        const levels = new Uint8Array(6);
+        water.levelsOver(0, 0, 3, 2, 5000, levels);
+        expect(levels[0]).toBe(255);
+        // Gliding to the next state.
+        water.receive(full(2, { "0,0": 100, "1,0": 0.125 }), 10_000);
+        water.depthsOver(0, 0, 3, 2, 10_000, depths);
+        expect(depths[0]).toBe(300);
+        water.depthsOver(0, 0, 3, 2, 20_000, depths);
+        expect(depths[0]).toBe(100);
+    });
+
     it("shows a sheet of water a few millimetres thin, running or still", () => {
         // A sheet of 0.25 px (9 mm) over a slope of meadow, as the server tells it with its speed: the flows of the
         // water show an arrow there. Whether its block runs or not, the water is drawn.
@@ -158,6 +191,19 @@ describe("swimming in the water of the relief", () => {
         expect(isDeepTerrainWater(depth(15.9), { x: 0, y: 0 }, 0)).toBe(false);
         expect(isDeepTerrainWater(depth(0), { x: 0, y: 0 }, 0)).toBe(false);
         expect(isDeepTerrainWater(undefined, { x: 0, y: 0 }, 0)).toBe(false);
+    });
+
+    it("reads the water as it is drawn, between the centres of the cells, not by squares of 16 px", () => {
+        // 20 px of water on the cell 0,0, none east of it: at x 15 the water drawn is about 11 px deep, one wades.
+        const water = { depthAt: (x: number) => (Math.floor(x / 16) === 0 ? 20 : 0) };
+        expect(isDeepTerrainWater(water, { x: 8, y: 8 }, 0)).toBe(true);
+        expect(isDeepTerrainWater(water, { x: 15, y: 8 }, 0)).toBe(false);
+    });
+
+    it("reads the water of the cell under the point where the water is not drawn smooth (the other engine)", () => {
+        const water = { depthAt: (x: number) => (Math.floor(x / 16) === 0 ? 20 : 0) };
+        expect(isDeepTerrainWater(water, { x: 15, y: 8 }, 0, false)).toBe(true);
+        expect(isDeepTerrainWater(water, { x: 17, y: 8 }, 0, false)).toBe(false);
     });
 });
 

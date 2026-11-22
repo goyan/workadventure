@@ -2,8 +2,15 @@ import { describe, expect, it } from "vitest";
 import { LampSteadiness, MOVING_DRAWINGS } from "../../../../../src/front/Phaser/Game/Night/NightLampMask";
 import type { RgbLampLight } from "../../../../../src/front/Stores/RgbLampStore";
 
-const lamp = (id: string, revision = 1, extra: Partial<RgbLampLight> = {}): RgbLampLight =>
-    ({ id, revision, x: 100, y: 100, size: 64, textureKey: `rgb-lamp:${id}`, ...extra });
+const lamp = (id: string, revision = 1, extra: Partial<RgbLampLight> = {}): RgbLampLight => ({
+    id,
+    revision,
+    x: 100,
+    y: 100,
+    size: 64,
+    textureKey: `rgb-lamp:${id}`,
+    ...extra,
+});
 
 describe("LampSteadiness", () => {
     it("takes every lamp as steady when it first sees them, and keeps them so while nothing changes", () => {

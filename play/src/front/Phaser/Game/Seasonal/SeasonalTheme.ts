@@ -2,20 +2,23 @@ import { Season, seasonAt } from "@workadventure/map-editor";
 import type { SeasonPlace } from "@workadventure/map-editor";
 
 /**
- * Personal choice: follow the calendar, force autumn, or none. The Christmas theme is gone (2026-11-20): it spread a
- * scripted snow over the whole outside; snow now only comes from the weather of the map. A saved "christmas" reads as
- * auto (SeasonalThemeStore).
+ * Personal choice: follow the calendar, force autumn, force winter, or none. The winter is never shown by itself (auto
+ * has none): only for who chose it, and for as long as they keep it. It is back since 2026-11-22: the Christmas theme
+ * had been taken away (2026-11-20) because its snowy ground was a plain white hiding the textures of the map; the
+ * ground now has a texture of snow. A "christmas" saved before still reads as auto (SeasonalThemeStore): nobody gets
+ * the winter back without choosing it.
  */
 export enum SeasonalThemeMode {
     Auto = "auto",
     Autumn = "autumn",
+    Winter = "winter",
     None = "none",
 }
 
 /**
- * What the seasonal manager draws outdoors. Autumn is the only theme; the snow decor (still named Christmas, as its
- * code in Christmas/) is no longer drawn: the snow is a precipitation falling in cold air, and nothing lies yet (see
- * mapSnowCoverage). Its code waits for the snow that really holds on the ground.
+ * What the seasonal manager draws outdoors: the autumn, or the winter (still named Christmas, as its code in
+ * Christmas/): snow caps on what stands outside, footprints, a snowy ground. The winter decor is drawn for who chose
+ * the winter theme, all of it; and, fading in as it builds up, under the snow of the map where the manager is told of it.
  */
 export enum SeasonalTheme {
     Autumn = "autumn",
@@ -33,13 +36,16 @@ export function activeSeasonalTheme(
     place?: SeasonPlace,
 ): SeasonalTheme | undefined {
     if (mode === SeasonalThemeMode.Autumn) return SeasonalTheme.Autumn;
+    if (mode === SeasonalThemeMode.Winter) return SeasonalTheme.Christmas;
     if (mode === SeasonalThemeMode.None || !serverDate || !Number.isFinite(serverDate.getTime())) return undefined;
     return seasonAt(serverDate, place) === Season.Autumn ? SeasonalTheme.Autumn : undefined;
 }
 
 /** The theme shows its season on the seasonal trees, for this person only. */
 export function forcedTreeSeason(theme: SeasonalTheme | undefined): Season | undefined {
-    return theme === SeasonalTheme.Autumn ? Season.Autumn : undefined;
+    if (theme === SeasonalTheme.Autumn) return Season.Autumn;
+    if (theme === SeasonalTheme.Christmas) return Season.Winter;
+    return undefined;
 }
 
 /**

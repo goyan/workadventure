@@ -126,9 +126,12 @@ const menu: DeepPartial<Translation["menu"]> = {
             label: "Thème saisonnier",
             auto: "Auto",
             autumn: "Automne",
+            winter: "Hiver",
             none: "Aucun",
             hintAuto: "Automne de septembre à novembre.",
             hintAutumn: "Feuilles qui tombent des arbres et feuilles à leur pied, dehors.",
+            hintWinter:
+                "Pour toi seul, tant que tu le gardes : il neige, le sol, les arbres et les objets dehors sont enneigés.",
             hintNone: "Aucun décor saisonnier.",
         },
         perfCounter: "Afficher le compteur de performances (images par seconde) près de la barre d'actions",
@@ -330,6 +333,8 @@ const menu: DeepPartial<Translation["menu"]> = {
             detailedFlames: "Flammes détaillées",
             detailedFlamesHint:
                 "Un feu plus beau, dessiné plus souvent. Coupé : des flammes plus simples, plus légères à afficher.",
+            pixelRelief: "Relief en 3/4",
+            pixelReliefHint: "Trous et monts vus de trois quarts. Jamais dans l'éditeur ni en mode Basique.",
             treeSway: "Arbres qui bougent au vent",
             windowLight: "Lumière des fenêtres",
             waterFlow: "Écume et remous sur l'eau",
