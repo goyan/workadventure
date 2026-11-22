@@ -2,6 +2,7 @@ import {
     boundedFireConditions,
     DEFAULT_FIRE_THRESHOLDS,
     fireDanger,
+    MAX_WATER_SPEED,
     MeadowSimulation,
     NEUTRAL_FIRE_CONDITIONS,
     REAL_WEATHER_SLOT_MS,
@@ -15,6 +16,7 @@ import type {
     SeededMeadow,
     WAMFileFormat,
     WaterGridBounds,
+    WaterSettings,
     WeatherLocation,
 } from "@workadventure/map-editor";
 import type { MeadowMessage, SubToPusherRoomMessage, TerrainWaterMessage } from "@workadventure/messages";
@@ -28,6 +30,12 @@ const LOCAL_STEP_BUDGET_MS = 20;
 const LOCAL_UPDATES_A_SECOND = 1;
 /** The finest the local water is computed, whatever the map asks of the server. */
 const LOCAL_MAX_PRECISION = 2;
+/**
+ * What comes in and goes out of the local water (rain, sources, evaporation) goes at least this many times faster
+ * than in reality (WaterSettings.speed, a minute a second): the rain of the chosen place is seen filling a lake within
+ * minutes, where the server, in real time, takes hours. Its flows keep their pace.
+ */
+const LOCAL_MIN_SPEED = 60;
 
 /** Where the local ground of a player starts: the map, the place they chose, and the ground of the server now. */
 export interface LocalTerrainStart {
@@ -180,14 +188,7 @@ export class LocalTerrainSimulation {
                 ...this.wam.settings,
                 weather: WeatherType.Real,
                 weatherLocation: this.place,
-                // Lighter than the server's: drawn once a second, and at most as fine as LOCAL_MAX_PRECISION.
-                ...(water && {
-                    water: {
-                        ...water,
-                        updates: LOCAL_UPDATES_A_SECOND,
-                        precision: Math.min(water.precision ?? LOCAL_MAX_PRECISION, LOCAL_MAX_PRECISION),
-                    },
-                }),
+                ...(water && { water: localWaterSettings(water) }),
             },
         };
         this.shownWam = { of: this.wam, place: this.place, wam };
@@ -223,4 +224,17 @@ export class LocalTerrainSimulation {
             NEUTRAL_FIRE_CONDITIONS,
         );
     }
+}
+
+/**
+ * The water settings of the map as the local ground runs them: lighter than the server's (told once a second, at most
+ * as fine as LOCAL_MAX_PRECISION) and quicker (at least LOCAL_MIN_SPEED times reality).
+ */
+export function localWaterSettings(water: WaterSettings): WaterSettings {
+    return {
+        ...water,
+        updates: LOCAL_UPDATES_A_SECOND,
+        speed: Math.min(MAX_WATER_SPEED, Math.max(water.speed, LOCAL_MIN_SPEED)),
+        precision: Math.min(water.precision ?? LOCAL_MAX_PRECISION, LOCAL_MAX_PRECISION),
+    };
 }

@@ -2,7 +2,7 @@ import { cellKey, WeatherType, withHeights } from "@workadventure/map-editor";
 import type { RealWeatherSlot, TerrainData, WAMFileFormat, WeatherLocation } from "@workadventure/map-editor";
 import type { TerrainWaterMessage } from "@workadventure/messages";
 import { describe, expect, it } from "vitest";
-import { LocalTerrainSimulation } from "@wa/front/Phaser/Game/Terrain/LocalTerrainSimulation";
+import { LocalTerrainSimulation, localWaterSettings } from "@wa/front/Phaser/Game/Terrain/LocalTerrainSimulation";
 import type { LocalTerrainTold } from "@wa/front/Phaser/Game/Terrain/LocalTerrainSimulation";
 
 const NOW = Date.UTC(2026, 10, 22, 12, 0);
@@ -99,5 +99,24 @@ describe("LocalTerrainSimulation", () => {
         expect(water?.full).toBe(true);
         expect(depthsOf(water?.depths ?? new Uint8Array(0)).reduce((sum, depth) => sum + depth, 0)).toBeGreaterThan(0);
         expect(lastWater([slotAt(25, 0)], 10)).toBeUndefined();
+    });
+});
+
+describe("localWaterSettings", () => {
+    const water = wam.settings?.water;
+    if (!water) throw new Error("the test map has water settings");
+
+    it("lets what comes in and goes out go sixty times faster than real time, never past the bound", () => {
+        expect(localWaterSettings({ ...water, speed: 1 }).speed).toBe(60);
+        expect(localWaterSettings({ ...water, speed: 300 }).speed).toBe(300);
+        expect(localWaterSettings({ ...water, speed: 1000 }).speed).toBe(1000);
+    });
+
+    it("tells the water once a second, at most as fine as 2, whatever the map asks of the server", () => {
+        const local = localWaterSettings({ ...water, updates: 5, precision: 8 });
+
+        expect(local.updates).toBe(1);
+        expect(local.precision).toBe(2);
+        expect(localWaterSettings({ ...water, precision: undefined }).precision).toBe(2);
     });
 });
