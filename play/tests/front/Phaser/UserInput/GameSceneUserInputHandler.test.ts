@@ -48,6 +48,11 @@ import type { RoomConnection } from "../../../../src/front/Connection/RoomConnec
 import { torchEquippedStore } from "../../../../src/front/Stores/TorchStore";
 import type { TorchManager } from "../../../../src/front/Phaser/Game/Torch/TorchManager";
 import { findSeatAtPoint } from "../../../../src/front/Phaser/Player/Seat";
+import {
+    armWaterLevelPipette,
+    disarmWaterLevelPipette,
+    waterLevelPipetteStore,
+} from "../../../../src/front/Stores/WaterLevelPipetteStore";
 import type { Seat } from "../../../../src/front/Phaser/Player/Seat";
 
 const setDefaultCursor = vi.fn();
@@ -791,6 +796,71 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             expect(handler.isAltitudeKeysActive()).toBe(false);
             const ground = handler.handleKeyDownEvent(key("keydown", { code: "KeyS", key: "s", ctrlKey: true }));
             expect(ground.defaultPrevented).toBe(false);
+        });
+    });
+
+    describe("an armed pipette of the level of the water", () => {
+        const take = vi.fn();
+
+        afterEach(() => {
+            disarmWaterLevelPipette();
+        });
+
+        it("shows a crosshair while armed, and the usual cursor after", () => {
+            armWaterLevelPipette(take);
+            expect(setDefaultCursor).toHaveBeenLastCalledWith("crosshair");
+            disarmWaterLevelPipette();
+            expect(setDefaultCursor).toHaveBeenLastCalledWith("auto");
+        });
+
+        it("takes the left click on the map, in the map editor, and nothing else answers it", () => {
+            mapEditorModeStore.set(true);
+            armWaterLevelPipette(take);
+            vi.mocked(isActivatable).mockReturnValue(true);
+            handler.handlePointerUpEvent(pointer(0, 1), [mock<Phaser.GameObjects.GameObject>()]);
+
+            expect(take.mock.calls).toEqual([[{ x: 480, y: 640 }, false]]);
+            expect(get(waterLevelPipetteStore)).toBeUndefined();
+            expect(scene.moveTo.mock.calls).toEqual([]);
+            expect(activatablesManager.handlePointerDownEvent.mock.calls).toEqual([]);
+        });
+
+        it("takes the ground with Alt held at the release", () => {
+            armWaterLevelPipette(take);
+            const click = pointer(0, 1);
+            click.event = new MouseEvent("mouseup", { button: 0, detail: 1, altKey: true });
+            handler.handlePointerUpEvent(click, []);
+
+            expect(take.mock.calls).toEqual([[{ x: 480, y: 640 }, true]]);
+        });
+
+        it("a double click does not walk, a right click takes nothing (in the map editor, where it aims)", () => {
+            mapEditorModeStore.set(true);
+            armWaterLevelPipette(take);
+            handler.handlePointerUpEvent(pointer(2, 1), []);
+            expect(take).not.toHaveBeenCalled();
+            handler.handlePointerUpEvent(pointer(0, 2), []);
+            expect(take).toHaveBeenCalledTimes(1);
+            expect(scene.moveTo.mock.calls).toEqual([]);
+        });
+
+        it("a drag of the map takes nothing and keeps the pipette armed, in the map editor too", () => {
+            mapEditorModeStore.set(true);
+            armWaterLevelPipette(take);
+            const down = pointer();
+            down.x = 100;
+            down.y = 100;
+            handler.handlePointerDownEvent(down, []);
+            const moved = pointer();
+            Object.defineProperty(moved, "id", { value: down.id });
+            moved.x = 160;
+            moved.y = 100;
+            handler.handlePointerMoveEvent(moved, []);
+            handler.handlePointerUpEvent(moved, []);
+
+            expect(cameraManager.panBy.mock.calls.length).toBeGreaterThan(0);
+            expect(take).not.toHaveBeenCalled();
+            expect(get(waterLevelPipetteStore)).toBeDefined();
         });
     });
 

@@ -87,19 +87,32 @@ export function pointerGroundAt(
     frozenAt: (point: { x: number; y: number }) => boolean,
 ): PointerGround | undefined {
     if (!pointer || !terrain || Object.keys(terrain.chunks).length === 0) return undefined;
+    return groundReadingAt(terrain, pointer, water, frozenAt);
+}
+
+/**
+ * The ground and the water at a point of the map (map pixels), on any map: what pointerGroundAt tells under the
+ * pointer, and what the pipette of a source takes (WaterLevelPipette). The one rule for both.
+ */
+export function groundReadingAt(
+    terrain: TerrainData | undefined,
+    point: { x: number; y: number },
+    water: PointerWater,
+    frozenAt: (point: { x: number; y: number }) => boolean,
+): PointerGround {
     // The ground the water stands on: the floor of a pool where its basin is dug.
     const groundPx = heightAt(
         water.basin() ?? terrain,
-        Math.floor(pointer.x / TERRAIN_CELL),
-        Math.floor(pointer.y / TERRAIN_CELL),
+        Math.floor(point.x / TERRAIN_CELL),
+        Math.floor(point.y / TERRAIN_CELL),
     );
-    const depthPx = water.settledDepthAt(pointer.x, pointer.y);
+    const depthPx = water.settledDepthAt(point.x, point.y);
     // The soil of the map, as the water reads it (WaterGrid): a cell not painted runs as bare earth.
-    const code = soilAt(terrain, Math.floor(pointer.x / TERRAIN_CELL), Math.floor(pointer.y / TERRAIN_CELL));
+    const code = soilAt(terrain, Math.floor(point.x / TERRAIN_CELL), Math.floor(point.y / TERRAIN_CELL));
     const soil = poolStyleOf(code) === undefined ? soilName(code) : "pool";
     // The ice is read only over water: it goes by the meadow and the walls of the map.
     return {
-        ...pointerGround(groundPx, depthPx, depthPx >= WATER_SHOWN_PX && frozenAt(pointer)),
+        ...pointerGround(groundPx, depthPx, depthPx >= WATER_SHOWN_PX && frozenAt(point)),
         ...(soil ? { soil } : {}),
         roughness: soilRoughness(code),
     };

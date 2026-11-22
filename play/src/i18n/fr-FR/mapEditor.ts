@@ -430,6 +430,12 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             levelHint:
                 "Le puits ne prend que l'eau au-dessus de cette altitude, dans son disque : un trop-plein, qui ne vide pas le lac. 0 m : le niveau du sol de la carte ; négatif dans un creux, positif sur un mont.",
         },
+        waterLevelPipette: {
+            title: "Prendre le niveau d'un point de la carte",
+            aiming: "Cliquez sur la carte : la surface de l'eau, ou le sol s'il n'y a pas d'eau. Alt + clic : le sol sous l'eau. Glisser déplace la vue ; Échap annule.",
+            previewWater: "Sous le curseur : eau {level} (sol {ground})",
+            previewGround: "Sous le curseur : sol {level}",
+        },
         lamp: {
             label: "Zone de lumière",
             description:
