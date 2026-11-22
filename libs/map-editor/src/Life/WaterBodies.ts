@@ -82,9 +82,14 @@ export function waterBodiesOf(grid: WaterView, excluded?: (cellX: number, cellY:
     const sizes: { cells: number; deep: number }[] = [{ cells: 0, deep: 0 }];
     // A queue instead of recursion: a lake may hold hundreds of thousands of cells.
     const queue = new Int32Array(width * height);
+    // The whole water is gone over: its cells are read as they are kept, not asked one by one. A cell is home to a
+    // fish when it is deep enough and not excluded (the depth first: most cells are not, and are not asked more).
+    const { depth, closed } = grid.cells();
+    const home = (index: number): boolean =>
+        depth[index] >= FISH_DEPTH_PX &&
+        !(excluded !== undefined && excluded(left + (index % width), top + Math.floor(index / width)));
     for (let start = 0; start < labels.length; start++) {
-        if (labels[start] !== 0) continue;
-        if (depthAt(left + (start % width), top + Math.floor(start / width)) < FISH_DEPTH_PX) continue;
+        if (labels[start] !== 0 || !home(start)) continue;
         const body = sizes.length;
         const size = { cells: 0, deep: 0 };
         sizes.push(size);
@@ -94,14 +99,19 @@ export function waterBodiesOf(grid: WaterView, excluded?: (cellX: number, cellY:
         labels[start] = body;
         while (head < tail) {
             const index = queue[head++];
-            const cellX = left + (index % width);
-            const cellY = top + Math.floor(index / width);
+            const column = index % width;
+            const row = (index - column) / width;
             size.cells++;
-            if (depthAt(cellX, cellY) >= DOLPHIN_DEPTH_PX) size.deep++;
-            for (const { side, dx, dy } of SIDES) {
-                if (!grid.canCross(cellX, cellY, side)) continue;
-                const next = index + dx + dy * width;
-                if (labels[next] !== 0 || depthAt(cellX + dx, cellY + dy) < FISH_DEPTH_PX) continue;
+            if (depth[index] >= DOLPHIN_DEPTH_PX) size.deep++;
+            const sides = closed[index];
+            // The four sides in the order east, west, south, north (WaterView.canCross): open, and inside the grid.
+            for (let side = 0; side < 4; side++) {
+                if (sides & (1 << side)) continue;
+                const inside =
+                    side === 0 ? column + 1 < width : side === 1 ? column > 0 : side === 2 ? row + 1 < height : row > 0;
+                if (!inside) continue;
+                const next = index + (side === 0 ? 1 : side === 1 ? -1 : side === 2 ? width : -width);
+                if (labels[next] !== 0 || !home(next)) continue;
                 labels[next] = body;
                 queue[tail++] = next;
             }

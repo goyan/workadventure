@@ -7,8 +7,8 @@ import {
 import { NERF_HEART_HEIGHT } from "../../../../../src/front/Phaser/Game/Nerf/NerfHeartShape";
 
 describe("PerceptionMarkShape", () => {
-    it("draws two small symbols, readable at 12 to 16 pixels", () => {
-        for (const mark of ["basic", "place"] as const) {
+    it("draws three small symbols, readable at 12 to 16 pixels", () => {
+        for (const mark of ["basic", "place", "water"] as const) {
             const { width, height } = perceptionMarkSize(mark);
             expect(Math.max(width, height)).toBeGreaterThanOrEqual(10);
             expect(Math.max(width, height)).toBeLessThanOrEqual(16);
@@ -35,6 +35,23 @@ describe("PerceptionMarkShape", () => {
             [...pixels].filter((key) => key.startsWith(`${column},`)).length;
         expect(rows(place, 4)).toBeGreaterThanOrEqual(10);
         expect(rows(basic, 6)).toBeLessThanOrEqual(7);
+    });
+
+    it("draws fast water as a drop: pointed at its top, round at its foot, unlike the ball and the eye", () => {
+        const body = new Set(
+            perceptionMarkPixels("water")
+                .filter((pixel) => !pixel.sparkle)
+                .map((pixel) => `${pixel.x},${pixel.y}`),
+        );
+        const width = (row: number): number => [...body].filter((key) => key.endsWith(`,${row}`)).length;
+        const rows = [...body].map((key) => Number(key.split(",")[1]));
+        const top = Math.min(...rows);
+        const bottom = Math.max(...rows);
+        expect(width(top)).toBe(1);
+        expect(
+            Math.max(...Array.from({ length: bottom - top + 1 }, (_, at) => width(top + at))),
+        ).toBeGreaterThanOrEqual(7);
+        for (const corner of ["0,0", "11,11"]) expect(body.has(corner)).toBe(false);
     });
 
     it("floats over the name tag, higher when the Nerf hearts sit on it", () => {

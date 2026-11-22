@@ -7,6 +7,7 @@
         WeatherBoard,
     } from "@wa/front/Phaser/Game/Weather/WeatherExplained";
     import { LL, locale } from "../../../i18n/i18n-svelte";
+    import { fastWaterStore } from "../../Stores/FastWaterStore";
     import { IconMap, IconUser, IconUsers } from "@wa-icons";
 
     /**
@@ -569,6 +570,10 @@
             {t.airs.followsTrial({ city: board.city })}
         {/if}
     </p>
+    {#if board.follows === "city" && board.city !== undefined && !$fastWaterStore}
+        <!-- The water of a city followed goes at the pace of reality: hours before a lake fills. -->
+        <p class="m-0 opacity-80" data-testid="weather-board-fast-water">{$LL.actionbar.fastWater.fromCity()}</p>
+    {/if}
 
     {#if summary.length > 0}
         <div class="flex flex-col gap-0.5 rounded-lg bg-white/10 p-2" data-testid="weather-board-summary">

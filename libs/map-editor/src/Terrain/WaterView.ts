@@ -12,9 +12,21 @@ export const REST_LEVEL_CELLS = 4096;
  */
 export interface WaterView {
     readonly bounds: WaterGridBounds;
+    /**
+     * The cells themselves, row by row over `bounds`, for a reader that goes over the whole water (the bodies of
+     * water the life reads): the depth of each, and the sides the water cannot cross (a bit for each, in the order
+     * east, west, south, north). Read at once and not kept: the water moves on.
+     */
+    cells(): WaterCells;
     depthAt(cellX: number, cellY: number): number;
     canCross(cellX: number, cellY: number, side: "east" | "west" | "south" | "north"): boolean;
     restLevelAt(cellX: number, cellY: number, reachCells?: number): number | undefined;
+}
+
+/** The cells of a water as they are kept: see WaterView.cells. */
+export interface WaterCells {
+    depth: Float32Array;
+    closed: Uint8Array;
 }
 
 /** What the level of a water at rest is read from: the cells of a grid, row by row. */
@@ -267,6 +279,10 @@ export class WaterSnapshotView implements WaterView {
     /** The number that changes whenever the water does, as of the last refresh. */
     public version(): number {
         return this.readVersion;
+    }
+
+    public cells(): WaterCells {
+        return { depth: this.depth, closed: this.closed };
     }
 
     public depthAt(cellX: number, cellY: number): number {
