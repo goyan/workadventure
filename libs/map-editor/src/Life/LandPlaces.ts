@@ -1,14 +1,15 @@
 import { cellOf } from "../Terrain/TerrainGrid";
 import { TERRAIN_CELL } from "../types";
 import type { WaterWallSides } from "../Terrain/WaterGrid";
+import { LIFE_DEPTHS_PX } from "../Terrain/WaterView";
 import type { Places, WaterCell } from "./WaterBodies";
 
 /** A land predator goes into less water than this: where an avatar does not swim yet. */
-export const WADE_DEPTH_PX = 16;
+export const WADE_DEPTH_PX = LIFE_DEPTHS_PX.deep;
 /** An antelope goes into less water than this: it keeps its feet dry. */
-export const DRY_LAND_PX = 2;
+export const DRY_LAND_PX = LIFE_DEPTHS_PX.film;
 /** An animal drinks from a cell that holds this much water at least, in pixels. */
-export const DRINK_DEPTH_PX = 2;
+export const DRINK_DEPTH_PX = LIFE_DEPTHS_PX.film;
 
 /** What the land of a map is made of: its size in cells of the relief, its walls, and the water on it. */
 export interface LandInput {
@@ -58,10 +59,19 @@ export function landPlacesOf(input: LandInput): Places {
         if (dx === 0 && dy === -1) return (closed[index - width] & 2) === 0;
         return false;
     };
-    const walkable = (index: number): boolean => depthAt(index % width, Math.floor(index / width)) < WADE_DEPTH_PX;
     const labels = new Int32Array(width * height);
     const sizes: { cells: number; deep: number }[] = [{ cells: 0, deep: 0 }];
     const queue = new Int32Array(width * height);
+    // Whether one walks in each cell, asked once: the flood below looks at each cell from its four neighbours.
+    const WALKS = 1;
+    const DROWNED = 2;
+    const walks = new Uint8Array(width * height);
+    const walkable = (index: number): boolean => {
+        if (walks[index] === 0) {
+            walks[index] = depthAt(index % width, Math.floor(index / width)) < WADE_DEPTH_PX ? WALKS : DROWNED;
+        }
+        return walks[index] === WALKS;
+    };
     // A body starts from the edge of the map only: what is not reached from there is indoors.
     const flood = (start: number): void => {
         if (labels[start] !== 0 || !walkable(start)) return;
@@ -75,11 +85,24 @@ export function landPlacesOf(input: LandInput): Places {
         while (head < tail) {
             const index = queue[head++];
             const cellX = index % width;
-            const cellY = Math.floor(index / width);
+            const cellY = (index - cellX) / width;
             size.cells++;
-            for (const [dx, dy] of SIDES) {
-                if (!canCross(cellX, cellY, dx, dy)) continue;
-                const next = index + dx + dy * width;
+            // The four sides in the order of SIDES (east, west, south, north), as canCross answers them.
+            for (let side = 0; side < 4; side++) {
+                let next: number;
+                if (side === 0) {
+                    if (cellX + 1 >= width || closed[index] & 1) continue;
+                    next = index + 1;
+                } else if (side === 1) {
+                    if (cellX === 0 || closed[index - 1] & 1) continue;
+                    next = index - 1;
+                } else if (side === 2) {
+                    if (cellY + 1 >= height || closed[index] & 2) continue;
+                    next = index + width;
+                } else {
+                    if (cellY === 0 || closed[index - width] & 2) continue;
+                    next = index - width;
+                }
                 if (labels[next] !== 0 || !walkable(next)) continue;
                 labels[next] = body;
                 queue[tail++] = next;

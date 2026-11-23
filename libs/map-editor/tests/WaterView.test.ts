@@ -134,3 +134,66 @@ describe("WaterSnapshotView", () => {
         }
     });
 });
+
+describe("WaterGrid.crossings", () => {
+    /** A flat grid of 6 × 1 cells, each under `px` of water. */
+    function flat(px: number[]): WaterGrid {
+        const grid = new WaterGrid(undefined, { x: 0, y: 0, width: px.length, height: 1 });
+        const bytes = new Uint8Array(px.length * 2);
+        px.forEach((depth, cell) => {
+            const eighths = Math.round(depth * 8);
+            bytes[cell * 2] = eighths & 255;
+            bytes[cell * 2 + 1] = eighths >> 8;
+        });
+        grid.readDepths(bytes);
+        return grid;
+    }
+
+    it("goes up only when a cell crossed a depth the life reads its places by", () => {
+        const grid = flat([0, 1, 5, 10, 20, 30]);
+        const start = grid.crossings();
+        // More water, no depth crossed: 1 → 1.5, 5 → 7, 10 → 15, 20 → 40.
+        grid.rainOn(1, 0, 0, 0.5);
+        grid.rainOn(2, 0, 0, 2);
+        grid.rainOn(3, 0, 0, 5);
+        grid.rainOn(4, 0, 0, 20);
+        expect(grid.crossings()).toEqual(start);
+        // Over the film (2 px): the land and its shores, not the bodies of water.
+        grid.rainOn(1, 0, 0, 1);
+        expect(grid.crossings()).toEqual({ swim: start.swim, land: start.land + 1 });
+        // Deep enough for a fish (8 px): the bodies of water, not the land.
+        grid.rainOn(2, 0, 0, 2);
+        expect(grid.crossings()).toEqual({ swim: start.swim + 1, land: start.land + 1 });
+        // Deep enough for a dolphin, too deep to wade (16 px): both.
+        grid.rainOn(3, 0, 0, 2);
+        expect(grid.crossings()).toEqual({ swim: start.swim + 2, land: start.land + 2 });
+        // Asked again without any change: the same numbers.
+        expect(grid.crossings()).toEqual({ swim: start.swim + 2, land: start.land + 2 });
+    });
+
+    it("goes up for the bodies of water when a door closes or opens", () => {
+        const grid = flat([20, 20, 20, 20]);
+        const start = grid.crossings();
+        grid.setClosedDoors({ east: new Set([cellKey(1, 0)]), south: new Set() });
+        expect(grid.crossings()).toEqual({ swim: start.swim + 1, land: start.land });
+        grid.setClosedDoors(undefined);
+        expect(grid.crossings()).toEqual({ swim: start.swim + 2, land: start.land });
+    });
+
+    it("is told with the copy of the water, as of the copy", () => {
+        const grid = flat([0, 5, 20]);
+        const snapshot = WaterSnapshot.allocate(grid.bounds);
+        const view = new WaterSnapshotView(snapshot);
+        grid.publish(snapshot, 1);
+        view.refresh();
+        const start = view.crossings();
+        grid.rainOn(1, 0, 0, 4);
+        // Not published yet: the copy still says what it held.
+        expect(view.crossings()).toEqual(start);
+        grid.publish(snapshot, 2);
+        expect(view.crossings()).toEqual(start);
+        view.refresh();
+        expect(view.crossings()).toEqual({ swim: start.swim + 1, land: start.land });
+        expect(view.depthAt(1, 0)).toBe(9);
+    });
+});

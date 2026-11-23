@@ -16,8 +16,15 @@ import type { WaterBall } from "./WaterBall";
 import { affordPass, depthsPass, DRY_PX, fluxPass, scalePass } from "./WaterKernel";
 import type { InertiaMove } from "./WaterKernel";
 import { WasmWaterKernel } from "./WaterKernelWasm";
-import { restLevelOf, WATER_FILM_PX } from "./WaterView";
-import type { RestLevelFields, RestLevelSearch, WaterSnapshot, WaterView } from "./WaterView";
+import { LAND_DEPTH_BITS, lifeDepthClass, restLevelOf, SWIM_DEPTH_BITS, WATER_FILM_PX } from "./WaterView";
+import type {
+    RestLevelFields,
+    RestLevelSearch,
+    WaterCells,
+    WaterCrossings,
+    WaterSnapshot,
+    WaterView,
+} from "./WaterView";
 
 /** Litres over one cell of the relief under one pixel of water. */
 export const CELL_LITRES_PER_PX = CELL_AREA_M2 * -metresOf(-1) * LITRES_PER_M3;
@@ -524,6 +531,10 @@ export class WaterGrid implements WaterView {
     private restSearch: RestLevelSearch = { seen: new Uint32Array(0), search: 0 };
     /** Counts the changes of what a snapshot copies seldom: the ground under the balls, the sides the doors close. */
     private shape = 0;
+    /** For `crossings`: the depths of each cell that count for the life as last looked at, and the two numbers. */
+    private lifeClass = new Uint8Array(0);
+    private swimCrossings = 0;
+    private landCrossings = 0;
     /** For each cell of the basin of a sink: the water it holds over the foot of the sink, and its weight. */
     private readonly basinAbove: Float32Array;
     private readonly basinWeights: Float32Array;
@@ -685,6 +696,8 @@ export class WaterGrid implements WaterView {
     public setClosedDoors(doors: WaterWallSides | undefined): void {
         const { x, y, width, height } = this.bounds;
         this.shape++;
+        // A door that closes or opens joins or cuts bodies of water.
+        this.swimCrossings++;
         this.closed.set(this.wallClosed);
         if (!doors) return;
         for (const key of doors.east) {
@@ -736,6 +749,35 @@ export class WaterGrid implements WaterView {
     public depthAt(cellX: number, cellY: number): number {
         const index = this.indexOf(cellX, cellY);
         return index === undefined ? 0 : this.depth[index];
+    }
+
+    public cells(): WaterCells {
+        return { depth: this.depth, closed: this.closed };
+    }
+
+    /**
+     * What changed of this water for what lives in it (WaterCrossings), looked at when asked: each cell is compared
+     * with what it was the last time, by the depths that count for the life.
+     */
+    public crossings(): WaterCrossings {
+        const depth = this.depth;
+        if (this.lifeClass.length !== depth.length) {
+            // The first look: nothing to compare with, the numbers stay where they are.
+            this.lifeClass = new Uint8Array(depth.length);
+            for (let index = 0; index < depth.length; index++) this.lifeClass[index] = lifeDepthClass(depth[index]);
+            return { swim: this.swimCrossings, land: this.landCrossings };
+        }
+        const classes = this.lifeClass;
+        let changed = 0;
+        for (let index = 0; index < depth.length; index++) {
+            const now = lifeDepthClass(depth[index]);
+            if (now === classes[index]) continue;
+            changed |= now ^ classes[index];
+            classes[index] = now;
+        }
+        if (changed & SWIM_DEPTH_BITS) this.swimCrossings++;
+        if (changed & LAND_DEPTH_BITS) this.landCrossings++;
+        return { swim: this.swimCrossings, land: this.landCrossings };
     }
 
     /**
@@ -1171,7 +1213,7 @@ export class WaterGrid implements WaterView {
      * number that changes whenever the water does.
      */
     public publish(snapshot: WaterSnapshot, version: number): void {
-        snapshot.write(this.restFields(), this.shape, version);
+        snapshot.write(this.restFields(), this.shape, version, this.crossings());
     }
 
     /** Whether a ball closes the column of a cell of the map: its water is on the ball, or held under it. */

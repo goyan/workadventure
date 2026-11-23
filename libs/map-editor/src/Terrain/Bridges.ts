@@ -1,5 +1,7 @@
 import { TERRAIN_CELL, TILE_PX } from "../types";
 import type { WAMFileFormat } from "../types";
+import { cellMaskOf } from "./CellMask";
+import { cellOf } from "./TerrainGrid";
 
 /**
  * A bridge is a raised floor one walks up to from the ground: the slabs of the "Map" tool (`Carte Paliers`) reached
@@ -173,8 +175,8 @@ export function dryOnBridges(
 ): (cellX: number, cellY: number) => number {
     if (bridges.size === 0) return depthAt;
     const cellsPerTile = TILE_PX / TERRAIN_CELL;
+    // Asked for every cell of the map each time the land is read: a mask of the tiles, not a key of text a cell.
+    const underBridge = cellMaskOf([...bridges].map((key) => cellOf(key)));
     return (cellX, cellY) =>
-        bridges.has(`${Math.floor(cellX / cellsPerTile)},${Math.floor(cellY / cellsPerTile)}`)
-            ? 0
-            : depthAt(cellX, cellY);
+        underBridge(Math.floor(cellX / cellsPerTile), Math.floor(cellY / cellsPerTile)) ? 0 : depthAt(cellX, cellY);
 }
