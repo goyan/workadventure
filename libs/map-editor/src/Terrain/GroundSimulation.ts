@@ -63,6 +63,8 @@ export class GroundSimulation<
         const meadow = setup.makeMeadow(() => water.getGrid());
         this.meadow = meadow;
         meadow.fallThrough(() => setup.air());
+        // The snow and the ice go as fast as what comes in to the water: one clock for all of them.
+        meadow.timesWith(() => water.livedTimes().inflow);
         meadow.snowUnder(() => setup.snow());
         meadow.pourWith(water.pour.bind(water));
         const catchUp = setup.catchUp;

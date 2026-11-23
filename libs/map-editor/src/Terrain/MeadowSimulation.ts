@@ -117,6 +117,8 @@ export class MeadowSimulation {
     /** How frozen the soil is now, from the same air as the rain (see soilFrost). */
     private frost = 0;
     /** The air the rain of the map falls through: the conditions of the room, once it gives them. */
+    /** The clock of the snow and the ice, as the water lives it (timesWith); undefined: the speed of the map. */
+    private livedTimes: (() => number) | undefined;
     private air: () => PrecipitationAir | undefined = () => undefined;
     /** The part of the rain of the map that falls as snow now, in mm of water an hour. */
     private snowRate = 0;
@@ -145,7 +147,9 @@ export class MeadowSimulation {
         | { at: number; to: number; history: readonly RealWeatherSlot[] | undefined; askedAt: number | undefined }
         | undefined;
     /** The time being lived again and its weather, while the meadow catches up; undefined: the time of now. */
-    private along: ((seconds: number, rainMmPerHour: number, last: boolean) => void) | undefined;
+    private along: ((seconds: number, rainMmPerHour: number, last: boolean) => unknown) | undefined;
+    /** Whether what lives the time missed along asked for more turns once it was all lived (its water settles). */
+    private alongSettles = false;
     private replay:
         | { now: number; slots: readonly RealWeatherSlot[] | undefined; weather: ReplayedWeather | undefined }
         | undefined;
@@ -337,6 +341,14 @@ export class MeadowSimulation {
      * The temperature and the humidity the rain of the map falls through (the conditions of the room): in the cold it
      * falls as snow, which brings no water (see liquidRainRate).
      */
+    /**
+     * Where the clock of the snow and the ice is read: as many times reality as what comes in to the water goes
+     * (WaterSimulation.livedTimes). Absent: the speed of the water of the map.
+     */
+    public timesWith(times: () => number): void {
+        this.livedTimes = times;
+    }
+
     public fallThrough(air: () => PrecipitationAir | undefined): void {
         this.air = air;
     }
@@ -369,8 +381,12 @@ export class MeadowSimulation {
         this.stopwatch = stopwatch;
     }
 
-    /** What lives the time the room missed along with the meadow (the water of the relief), a slice at a time. */
-    public liveAlong(live: (seconds: number, rainMmPerHour: number, last: boolean) => void): void {
+    /**
+     * What lives the time the room missed along with the meadow (the water of the relief), a slice at a time. It
+     * may answer `true` to the last slice: it is then called again, with no seconds, until it answers otherwise
+     * (the water comes to rest), and the room is not done catching up before.
+     */
+    public liveAlong(live: (seconds: number, rainMmPerHour: number, last: boolean) => unknown): void {
         this.along = live;
     }
 
@@ -428,6 +444,7 @@ export class MeadowSimulation {
             return true;
         }
         let lived = 0;
+        let settled = 0;
         try {
             for (let step = 0; step < CATCH_UP_STEPS_A_TICK && catchUp.at < catchUp.to; step++) {
                 // Out of time for now: the same slices, in the same order, go on in a moment.
@@ -440,23 +457,37 @@ export class MeadowSimulation {
                 catchUp.at += seconds * 1000;
                 lived++;
                 try {
-                    this.along?.(seconds, this.rainRate, catchUp.at >= catchUp.to);
+                    const more = this.along?.(seconds, this.rainRate, catchUp.at >= catchUp.to);
+                    if (catchUp.at >= catchUp.to) this.alongSettles = more === true;
                 } catch (error) {
                     console.error("What lives the missed time along with the meadow failed", error);
                 }
+            }
+            // The time missed is all lived: what lives it along may ask for more turns (the water comes to rest),
+            // a few steps at a time, within the same time a turn.
+            while (this.alongSettles && catchUp.at >= catchUp.to) {
+                if (this.stopwatch() - started >= CATCH_UP_BUDGET_MS) break;
+                try {
+                    this.alongSettles = this.along?.(0, 0, true) === true;
+                } catch (error) {
+                    this.alongSettles = false;
+                    console.error("What lives the missed time along with the meadow failed", error);
+                }
+                settled++;
             }
         } finally {
             this.replay = undefined;
         }
         this.changedSinceSave = true;
         // The slices took their time: telling the room and saving wait for a next tick.
-        if (lived > 0 && this.stopwatch() - started >= CATCH_UP_BUDGET_MS / 2) {
+        if (lived + settled > 0 && this.stopwatch() - started >= CATCH_UP_BUDGET_MS / 2) {
             this.catchUpUntold = true;
             return true;
         }
         // Seen living its missed time quickly: the room is told after each tick of slices.
         if (lived > 0 && !this.catchUpUntold) this.tell(meadow);
-        if (catchUp.at >= catchUp.to) {
+        // Its water is still coming to rest: the meadow has caught up, the room is not given back yet.
+        if (catchUp.at >= catchUp.to && !this.alongSettles) {
             this.catchUp = undefined;
             this.save();
             return false;
@@ -470,7 +501,7 @@ export class MeadowSimulation {
      * (its speed, waterTimesOf), so that a snow weighs what the same rain would have and nothing goes by another clock.
      */
     private snowInput(seconds: number): Pick<MeadowStepInput, "weather" | "snowfallMm" | "snowTimes"> {
-        const times = waterTimesOf(this.room.getWam()?.settings?.water);
+        const times = this.livedTimes?.() ?? waterTimesOf(this.room.getWam()?.settings?.water);
         return {
             weather: this.replay?.weather ? this.replay.weather.snow : this.snowWeather(),
             snowfallMm: (this.snowRate * seconds * times) / 3600,

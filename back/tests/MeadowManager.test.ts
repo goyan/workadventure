@@ -554,6 +554,44 @@ describe("MeadowManager", () => {
         }
     });
 
+    it("is not done with the time missed while the water that lives it along comes to rest, a few steps a turn", async () => {
+        const first = createHarness();
+        first.manager.mapChanged();
+        first.steps(30);
+        first.manager.stop();
+        const room = createHarness({ saved: first.store, now: Date.UTC(2026, 6, 15, 10) });
+        // The water lives the day along, then asks for twenty more calls to settle (no seconds, the last one).
+        const calls: { seconds: number; last: boolean }[] = [];
+        let settling = 20;
+        room.manager.liveAlong((seconds, _rain, last) => {
+            calls.push({ seconds, last });
+            if (seconds > 0) return last;
+            return --settling > 0;
+        });
+        // A clock on which each slice and each step of the water takes 2 ms: a turn stops at its budget of 8 ms.
+        let clock = 0;
+        room.manager.timeCatchUpWith(() => (clock += 2));
+        await room.manager.restore();
+        room.manager.mapChanged();
+        let turns = 0;
+        let longest = 0;
+        while (room.manager.catchingUp() && turns < 10_000) {
+            const before = calls.length;
+            room.steps(1);
+            longest = Math.max(longest, calls.length - before);
+            turns++;
+        }
+        expect(room.manager.catchingUp()).toBe(false);
+        const settles = calls.filter((call) => call.seconds === 0);
+        expect(calls.filter((call) => call.seconds > 0)).toHaveLength(720);
+        expect(settles).toHaveLength(20);
+        expect(settles.every((call) => call.last)).toBe(true);
+        // The settling comes after all the slices, and no turn makes more calls than its budget allows.
+        expect(calls.findIndex((call) => call.seconds === 0)).toBe(720);
+        expect(longest).toBeLessThanOrEqual(4);
+        room.manager.stop();
+    });
+
     it("does not catch up a meadow saved without its time", async () => {
         const first = createHarness();
         first.manager.mapChanged();

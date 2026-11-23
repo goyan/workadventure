@@ -121,7 +121,9 @@ function createHarness({
         { repository, roomUrl: "room" },
         () => Date.UTC(2026, 6, 14, 12),
         mapSize,
-        clock,
+        // A clock that does not move unless a test says: the pace and the fineness of the water then do not depend on
+        // how fast the machine that runs the tests is.
+        clock ?? (() => 0),
     );
     const steps = (count: number): void => {
         for (let step = 0; step < count; step++) manager.step();
@@ -815,6 +817,46 @@ describe("TerrainWaterManager", () => {
         expect(grid.totalPx()).toBeLessThan(rained);
     });
 
+    it("ends the time the room missed on a water at rest: no wave left for the water with inertia to start on", () => {
+        // A source pours an hour of water at one end of a closed lake: lived by steps of ten minutes, it piles up.
+        const wam = wamWith(wideLake);
+        wam.entities = { source: sourceAt(4, 15, 1200) };
+        if (wam.settings?.water) Object.assign(wam.settings.water, { inertia: true, maxSurface: 256 });
+        const { manager } = createHarness({ wam });
+        manager.mapChanged();
+        const grid = manager.getGrid();
+        if (!grid) throw new Error("no grid");
+        /** How far the highest water of the lake stands over its lowest (the lake is flat: 30 by 30 cells). */
+        const swell = (): number => {
+            let low = Infinity;
+            let high = -Infinity;
+            for (let y = 0; y < 30; y++) {
+                for (let x = 0; x < 30; x++) {
+                    low = Math.min(low, grid.depthAt(x, y));
+                    high = Math.max(high, grid.depthAt(x, y));
+                }
+            }
+            return high - low;
+        };
+        let more: boolean | void = false;
+        for (let slice = 0; slice < 30; slice++) more = manager.liveAgain(120, 0, slice === 29);
+        const lived = grid.totalPx();
+        expect(lived).toBeGreaterThan(1000);
+        const piled = swell();
+        expect(piled).toBeGreaterThan(3);
+        // The water asks for more turns while it settles, a few steps each, and says when it is at rest.
+        expect(more).toBe(true);
+        let turns = 0;
+        while (manager.liveAgain(0, 0, true) === true && turns < 10_000) turns++;
+        expect(turns).toBeGreaterThan(0);
+        expect(turns).toBeLessThan(10_000);
+        expect(swell()).toBeLessThan(0.5);
+        // Not a drop made nor lost: the lake is closed, the water only moved.
+        expect(Math.abs(grid.totalPx() - lived)).toBeLessThan(lived * 1e-5);
+        // And nothing more to settle once it is done.
+        expect(manager.liveAgain(0, 0, true)).not.toBe(true);
+    });
+
     it("fills nothing with a rain that falls as snow in the cold of the room, and half as much with a mix", () => {
         const rainOf = (air: { temperature: number; humidity: number } | undefined): number => {
             const { manager, sent, steps } = createHarness({ wam: wamWith(lake, WeatherType.Rain) });
@@ -933,6 +975,7 @@ describe("TerrainWaterManager", () => {
                 current: 1,
                 maxSurface: 18,
                 indoorDrain: 0,
+                inertia: false,
                 updates: 1,
             },
         };
@@ -966,7 +1009,8 @@ describe("TerrainWaterManager", () => {
         expect(held.at(4, 8)).toBe(0);
         expect(held.at(4, 12)).toBe(0);
         walled.manager.stop();
-    });
+        // Sixty steps of the time of the map in each step: its steps cost nothing on the clock of the harness.
+    }, 60_000);
 
     it("drains the floor of a room closed by walls, at the pace the map sets", () => {
         // A room of the map tool over the tiles 2 to 5 (cells 4 to 11), a source in its middle.
@@ -992,6 +1036,7 @@ describe("TerrainWaterManager", () => {
                     current: 1,
                     maxSurface: 18,
                     indoorDrain,
+                    inertia: false,
                     updates: 1,
                 },
             };
@@ -1019,7 +1064,8 @@ describe("TerrainWaterManager", () => {
         const kept = waterInRoom(0);
         expect(kept).toBeGreaterThan(50);
         expect(waterInRoom(3000)).toBeLessThan(kept / 20);
-    });
+        // Sixty steps of the time of the map in each step: its steps cost nothing on the clock of the harness.
+    }, 60_000);
 
     // A step runs in a timer: an error there would otherwise take the whole server down, with every room.
     it("stops the water of the room, without throwing, when a step fails", () => {

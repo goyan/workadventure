@@ -26,7 +26,40 @@ workerScope.onmessage = (event: MessageEvent<LocalTerrainCommand>): void => {
         return;
     }
     if (!simulation) return;
-    if (command.kind === "wam") simulation.setWam(command.wam);
-    else if (command.kind === "place") simulation.setPlace(command.place, command.slots);
-    else simulation.setWalkers(command.walkers);
+    switch (command.kind) {
+        case "wam":
+            simulation.setWam(command.wam);
+            return;
+        case "place":
+            simulation.setPlace(command.place, command.slots);
+            return;
+        case "fast":
+            simulation.setFast(command.fast);
+            return;
+        case "walkers":
+            simulation.setWalkers(command.walkers);
+            return;
+        case "catastrophes":
+            simulation.setCatastrophes({
+                downpours: command.downpours,
+                drains: command.drains,
+                balls: command.balls,
+            });
+            return;
+        case "strike":
+            simulation.strike(command.x, command.y, command.radiusTiles);
+            return;
+        case "shatter":
+            simulation.shatter(command.x, command.y, command.radiusTiles);
+            return;
+        case "ignite":
+            simulation.ignite(command.x, command.y, command.radiusTiles);
+            return;
+        case "burn":
+            simulation.burn(command.x, command.y, command.radiusTiles, command.id);
+            return;
+        case "soak":
+            simulation.soak(command.downpour);
+            return;
+    }
 };

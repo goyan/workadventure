@@ -8,13 +8,15 @@
 /** Over this share of the time between two steps, the fineness is lowered. */
 export const WATER_LOAD_EASE = 0.5;
 /** Under this share for a while, it is given back: half the other, so that the two never chase each other. */
-export const WATER_LOAD_RESTORE = 0.25;
+export const WATER_LOAD_RESTORE = WATER_LOAD_EASE / 2;
 /** The time of a step is a mean over about these many steps (2 s): one slow step alone changes nothing. */
 const MEAN_STEPS = 20;
 /** After a change, these many steps go by before another: the mean must follow first. */
 const STEPS_BETWEEN_CHANGES = 20;
 /** These many quick steps in a row (10 s) give a level of fineness back. */
 const CALM_STEPS = 100;
+/** On a thread of its own, a level is given back when the waters would then take under this share of what they may. */
+const RESTORE_MARGIN = 0.95;
 
 /**
  * The waters that share a thread: the time their steps take adds up, and it is the sum that holds the thread. Two
@@ -22,6 +24,45 @@ const CALM_STEPS = 100;
  */
 export class WaterLoads {
     private readonly members = new Set<WaterLoad>();
+    private easeShare = WATER_LOAD_EASE;
+    /** Whether the fineness is given back as soon as the thread could bear it (mayTake), not under half the share. */
+    private foresees = false;
+
+    /**
+     * The share of the time between two steps these waters may take together before they ease (WATER_LOAD_EASE when
+     * never said): half of it on the thread of the rooms, where the players wait behind the water; more on a thread
+     * that computes nothing else, where the water only has to keep its own pace. Given back under half of it.
+     */
+    public mayTake(share: number): void {
+        if (!Number.isFinite(share) || share <= 0 || share > 1) return;
+        this.easeShare = share;
+        this.foresees = true;
+    }
+
+    /** Over this share of the time between two steps, the fineness is lowered. */
+    public easeAt(): number {
+        return this.easeShare;
+    }
+
+    /**
+     * Whether the thread is quiet enough for the fineness to be given back, its waters taking `share` of the time
+     * between two steps (`budgetMs`). On the thread of the rooms: under half the share they ease at, so that the two
+     * never chase each other. On a thread of its own (mayTake): when what the waters would take once each has a
+     * level back (the cost follows the fineness) still leaves a margin under that share. Half would leave such a
+     * thread at two thirds of what it bears: a level given up at a peak (a room that starts) would never come back.
+     */
+    public quiet(share: number, budgetMs: number): boolean {
+        if (!this.foresees) return share < this.easeShare / 2;
+        let restored = 0;
+        let updates = false;
+        for (const load of this.members) {
+            if (load.toldLess()) updates = true;
+            restored += load.meanMs() * load.restoredRatio();
+        }
+        // The tellings come back first: they cost the computation next to nothing.
+        const after = updates ? share : Math.max(share, restored / budgetMs);
+        return after < this.easeShare * RESTORE_MARGIN;
+    }
 
     public join(load: WaterLoad): void {
         this.members.add(load);
@@ -102,6 +143,19 @@ export class WaterLoad {
         return Math.max(this.mean, this.loads.totalMs()) / this.budgetMs;
     }
 
+    /** The time the other waters of the thread take at each step, together, as a mean (ms). */
+    public othersMs(): number {
+        return Math.max(0, this.loads.totalMs() - this.mean);
+    }
+
+    /**
+     * The time all the waters of the thread may take together at a step without anything easing, nor a level of
+     * fineness held back (ms): half the share from which they ease.
+     */
+    public quietMs(): number {
+        return (this.loads.easeAt() / 2) * this.budgetMs;
+    }
+
     /** The time a step of this water takes, as a mean (ms). */
     public meanMs(): number {
         return this.mean;
@@ -131,13 +185,13 @@ export class WaterLoad {
         this.mean += (ms - this.mean) / MEAN_STEPS;
         this.sinceChange++;
         const share = this.threadShare();
-        if (share > WATER_LOAD_EASE) {
+        if (share > this.loads.easeAt()) {
             this.calm = 0;
             if (this.sinceChange < STEPS_BETWEEN_CHANGES) return;
             // All the waters of the thread ease at once, by the same ratio: the one whose step happens to be
             // timed first does not pay for the others.
             this.loads.ease(share);
-        } else if (share < WATER_LOAD_RESTORE) {
+        } else if (this.loads.quiet(share, this.budgetMs)) {
             this.calm++;
             if (this.calm < CALM_STEPS || this.sinceChange < STEPS_BETWEEN_CHANGES) return;
             this.loads.restore();
@@ -164,7 +218,7 @@ export class WaterLoad {
             if (current <= 1) return false;
             // The cost follows the fineness: straight to what should bring the steps back under the share, a
             // level at least.
-            const aimed = Math.floor((current * WATER_LOAD_EASE) / share);
+            const aimed = Math.floor((current * this.loads.easeAt()) / share);
             this.ceiling = Math.max(1, Math.min(current - 1, aimed));
             // The mean still holds the cost of the fineness just left: brought to what the new one should
             // cost, or it would lower the fineness once too often.
@@ -173,6 +227,11 @@ export class WaterLoad {
         this.sinceChange = 0;
         this.calm = 0;
         return true;
+    }
+
+    /** How many times its cost a level of fineness given back would make the step of this water: 1 when it gave none up. */
+    public restoredRatio(): number {
+        return this.ceiling === undefined ? 1 : (this.ceiling + 1) / this.ceiling;
     }
 
     /** Whether this water told its players less often than its map asks. */

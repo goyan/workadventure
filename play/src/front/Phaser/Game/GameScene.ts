@@ -319,6 +319,7 @@ import { isEffectShown, pixelReliefStore } from "../../Stores/EffectsStore";
 import { fireConditionsStore } from "../../Stores/FireConditionsStore";
 import { isBasicActive } from "../../Stores/BasicModeStore";
 import { waterFlowMeasuredStore, waterFlowOverlayStore } from "../../Stores/VisualisationStore";
+import { fastWaterActiveNow, setFastWaterResynchronize, sharedWaterBackStore } from "../../Stores/FastWaterStore";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -329,7 +330,12 @@ import { levelUnderPoint } from "./MapEditor/MapLayer/FloorOperations";
 import { levelItems } from "./MapEditor/MapLayer/MapLayerLevels";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
 import { weatherAtTime } from "./Weather/WeatherFrame";
-import { setRoomConditions, showsChosenPlaceWeather, shownWeatherSettings } from "./Weather/RealWeatherClient";
+import {
+    mapPlaceSlotsNow,
+    setRoomConditions,
+    showsChosenPlaceWeather,
+    shownWeatherSettings,
+} from "./Weather/RealWeatherClient";
 import { chosenWeatherNow } from "./Weather/ChosenPlaceWeather";
 import { groundSnowAt, snowLinePeak } from "./Terrain/GroundPace";
 import { LocalTerrainController, openModuleWorker } from "./Terrain/LocalTerrainController";
@@ -687,6 +693,12 @@ export class GameScene extends DirtyScene {
                 const { place, state } = chosenWeatherNow();
                 return place && { place, slots: state.status === "known" ? state.slots : undefined };
             },
+            fastWater: () => {
+                if (!fastWaterActiveNow()) return undefined;
+                const file = this.gameMapFrontWrapper ? this.getGameMap().getWamFile() : undefined;
+                return { slots: mapPlaceSlotsNow(file?.getWam().settings?.weatherLocation) };
+            },
+            backToSharedWater: () => sharedWaterBackStore.set(performance.now()),
             map: () => {
                 const file = this.gameMapFrontWrapper ? this.getGameMap().getWamFile() : undefined;
                 if (!file) return undefined;
@@ -710,6 +722,8 @@ export class GameScene extends DirtyScene {
         },
         () => this.time.now,
     );
+    /** The local ground stops while the tab is hidden, and starts again from the server's when it comes back. */
+    private readonly tabVisibilityChanged = (): void => this.localTerrain.hidden(document.hidden);
     private meadowSubscription: Subscription | undefined;
     private readonly treeFire = new TreeFireState();
     private treeFireSubscription: Subscription | undefined;
@@ -1119,6 +1133,8 @@ export class GameScene extends DirtyScene {
         this.cleanupDone = false;
         // Its own ground, once shown, holds the snow and the ice of this player (GroundSource.meadowHoldsSnow).
         setLocalGroundShown(() => this.localTerrain.isLocal());
+        setFastWaterResynchronize(() => this.localTerrain.resynchronize());
+        document.addEventListener("visibilitychange", this.tabVisibilityChanged);
 
         this.bindSceneEventHandlers();
 
@@ -1789,6 +1805,8 @@ export class GameScene extends DirtyScene {
         this.meadowSubscription = undefined;
         this.localTerrain.destroy();
         setLocalGroundShown(() => false);
+        setFastWaterResynchronize(() => undefined);
+        document.removeEventListener("visibilitychange", this.tabVisibilityChanged);
         this.treeFireSubscription?.unsubscribe();
         this.treeFireSubscription = undefined;
         this.fireConditionsSubscription?.unsubscribe();
@@ -3603,8 +3621,15 @@ export class GameScene extends DirtyScene {
     }
 
     /** Whether a point of the map (pixels) is in or near an open drain: the current carries no avatar there. */
-    /** The ice that cracks and gives way under the avatar, and the holes open in it (IceBreaks.ts). */
-    private readonly iceBreaks = new IceBreaks();
+    /**
+     * The ice that cracks and gives way under the avatar, and the holes open in it (IceBreaks.ts): on the ice of the
+     * server a hole stays open while the server keeps no ice there.
+     */
+    private readonly iceBreaks = new IceBreaks(() =>
+        followsServerGround() ? (x, y) => this.meadow.iceAtPoint(x, y) : undefined,
+    );
+    /** The cracks and holes last given to the water shader: drawn again only when they change. */
+    private shownIceBreaks = "";
 
     public getIceBreaks(): IceBreaks {
         return this.iceBreaks;
@@ -3625,8 +3650,15 @@ export class GameScene extends DirtyScene {
         }
         const active = this.iceBreaks.active();
         if (active || wasActive) {
-            this.terrainView?.setIceBreaks(this.iceBreaks.shown(now));
-            this.markDirty();
+            // A hole of the ice of the server may stay open for hours, still: the scene is drawn again only when the
+            // cracks or the holes change, not at every image.
+            const shown = this.iceBreaks.shown(now);
+            const key = shown.map((piece) => `${piece.x},${piece.y},${piece.phase.toFixed(3)}`).join(";");
+            if (key !== this.shownIceBreaks) {
+                this.shownIceBreaks = key;
+                this.terrainView?.setIceBreaks(shown);
+                this.markDirty();
+            }
         }
     }
 
@@ -5078,6 +5110,8 @@ export class GameScene extends DirtyScene {
         );
         this.fireTorchView = fireTorchView;
         this.catastropheSubscription = this.connection?.catastropheMessageStream.subscribe((message) => {
+            // The water of this player, when it is their own, lives the catastrophes of the room too.
+            this.localTerrain.fromCatastrophe(message);
             if (message.kind === CatastropheKind.CATASTROPHE_DOWNPOUR) downpourView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_DRAIN) drainView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_BALL) ballView.report(message, this.time.now);

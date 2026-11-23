@@ -104,6 +104,7 @@ describe("GroundSimulation", () => {
         water.setWalkers(() => [{ x: 100, y: 100 }]);
         const meadow = made.meadow(water);
         meadow.fallThrough(() => air);
+        meadow.timesWith(() => water.livedTimes().inflow);
         meadow.snowUnder(() => ({ ...air, windSpeed: 20 }));
         meadow.pourWith(water.pour.bind(water));
         water.start();

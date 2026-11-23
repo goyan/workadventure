@@ -99,7 +99,9 @@ Un petit symbole flotte au-dessus du nom d'un joueur qui ne perçoit pas le mond
 sort :
 
 - **œil barré violet** : il est en **mode Basique** (ni nuit, ni météo, ni effets) ;
-- **œil dans une boule de cristal cyan** : il suit la **météo d'une autre ville** (« Jour dans le monde »).
+- **œil dans une boule de cristal cyan** : il suit la **météo d'une autre ville** (« Jour dans le monde ») ;
+- **goutte d'eau bleue** : son **eau rapide** est active (son eau du relief va 60 fois plus vite, pour lui seul).
+  Une ville suivie l'emporte sur l'eau rapide, le Basique sur les deux.
 
 Les deux portent la même étoile qui scintille ; leurs formes diffèrent (œil plat et barre, anneau), pour être distingués
 sans les couleurs. Au survol du symbole, une infobulle le dit (« Mode Basique : ne voit ni la nuit ni la météo », « Suit
@@ -109,7 +111,7 @@ sol, `TerrainView`).
 
 - **Qui le voit** : seulement un joueur qui perçoit lui-même le monde partagé (ni Basique, ni ville suivie), jamais
   au-dessus de son propre avatar (`shownPerceptionMark`, `Perception/PerceptionProtocol.ts`).
-- **Partage** : variable de joueur publique `_perception`, non sauvegardée (`none`, `basic`, `place` ; toute autre
+- **Partage** : variable de joueur publique `_perception`, non sauvegardée (`none`, `basic`, `place`, `water` ; toute autre
   valeur lue `none`), publiée à l'entrée dans la salle et à chaque changement (`PerceptionManager`). Aucun changement
   du protocole ni de `back` ; un ancien client n'affiche rien. Le Basique compte tel qu'il est choisi, même dans
   l'éditeur (le symbole ne clignote pas à chaque édition) ; un essai de météo dans le panneau de la carte n'est pas
@@ -2399,6 +2401,25 @@ finesse réduite à 5 sur 8 »), par `easedPrecision` et `easedUpdates` de `Terr
 précise (vagues plus amorties, fronts moins nets) pendant les moments les plus lourds, un tsunami compris. Sans
 inertie, seuls les envois peuvent être réduits. Seuils posés par raisonnement, non calés sur une mesure en jeu.
 
+**L'eau se pose à la fin du rattrapage** (`WaterSimulation.liveAgain`, `settle`). Le rattrapage d'une salle vide fait
+vivre l'eau sans inertie par pas de 600 s, et chaque pas ne la déplace qu'une fois : il la laisse entassée là où
+elle est arrivée et creusée là où elle est partie. L'eau à inertie repartait de ces niveaux inégaux : de fausses
+vagues et une poussée d'écume à chaque retour dans une salle restée vide. Une fois le temps manqué vécu, l'eau fait
+maintenant jusqu'à 400 pas sans inertie et sans aucun apport (ni pluie, ni source, ni puits, ni évaporation : le
+temps ne passe pas), qui ne font que la niveler dans ses lacs ; elle s'arrête plus tôt si elle est au repos.
+
+- **Qui compte le temps** : la prairie. `liveAgain` rend `true` tant que l'eau veut d'autres tours ; le rattrapage
+  de la prairie les lui donne dans son budget de 8 ms par tour, et `catchingUp()` reste vrai jusqu'au bout. Le fil
+  des salles et le fil de calcul passent par le même câblage (`GroundSimulation`).
+- **Volume** : inchangé dans un lac fermé (test) ; ne part que ce qui sort par le bord de la carte ou dépasse le
+  plafond des crues, compté dans les pertes comme à tout pas.
+- **Mesuré sur la carte d'Antoine en crue**, cellules avec écume 30 s après la réouverture (régime permanent :
+  4 300) : 10 min d'absence 13 800 → 2 100 ; 1 h 24 400 → 2 000 ; 1 jour 44 300 → 5 500. Après un jour il reste
+  une houle : l'écume remonte à 14 700 cellules à 2 min (20 200 avant). Le réveil s'allonge de 1,5 à 3,5 s
+  (1,2 à 2,6 s de calcul, étalés).
+- **Limites** : les drains des pièces et les pompes des piscines ne tournent pas pendant ces pas (aucun temps ne
+  passe) ; rien vu à l'écran.
+
 **L'allègement compte toutes les salles du fil** (`WaterLoads`, `threadWaterLoads` dans `WaterLoad.ts`). Chaque
 salle ne regardait que ses propres pas : deux grandes salles à 48 % de l'intervalle chacune saturaient le fil sans
 qu'aucune ne s'allège. Les durées moyennes des pas de toutes les eaux du fil s'additionnent maintenant, et c'est la
@@ -2460,6 +2481,44 @@ ne l'est pas).
   (`LocalTerrainSimulation`), sans changement de comportement : `GroundSimulation.test.ts` compare, sur 400 pas
   avec neige, comète et boule de feu, les états dits par un sol câblé à la main et par `GroundSimulation` (mêmes
   octets).
+- **La vie aquatique relit l'eau moins cher** (`Life/WaterBodies.ts`, `Life/LandPlaces.ts`, `Terrain/CellMask.ts`,
+  `AquaticLifeManager`). Fil de calcul allumé, ce qui tenait encore le fil des salles était la vie aquatique : deux
+  fois par seconde elle relisait toute l'eau (étendues d'eau un pas sur deux, terres toutes les 5 s), 14 ms en
+  moyenne et jusqu'à 57 ms par pas sur la carte d'entrée inondée, assez pour faire à elle seule le 99e centile du
+  retard de la boucle. Quatre changements, à résultat identique : les cellules des piscines et les tuiles sous les
+  ponts se demandent à un masque d'octets (`cellMaskOf`) au lieu d'une clé de texte fabriquée par cellule ;
+  `waterBodiesOf` lit les cellules telles qu'elles sont tenues (`WaterView.cells`) au lieu de demander chaque
+  voisine ; `landPlacesOf` demande chaque cellule une fois ; les murs, les arbres et les ponts de la carte ne sont
+  relus qu'à un changement de carte (`mapChanged`), plus à chaque pas (ils parcouraient tous les objets de la carte :
+  3 ms par pas). Mesuré sur la carte d'entrée inondée (Mac très chargé) : pas de vie 14,8 → 3,2 ms en moyenne,
+  maximum 57 → 15 ms ; un pas ordinaire dure 1 à 2 ms, il reste un pas de 7 à 16 ms toutes les 5 s (relecture des
+  terres). `WaterBodiesIdentity.test.ts` garde l'ancienne lecture comme référence : mêmes étendues, mêmes réponses
+  cellule par cellule, mêmes tirages, mêmes poissons (population comparée à chaque état) le long d'une crue qui
+  monte et redescend avec lac, étang, chenal, piscine, mur et porte qui se ferme et s'ouvre, sur la grille et sur
+  un instantané ; mêmes terres avec murs et pont.
+- **La vie ne relit ses lieux que quand un seuil est franchi** (`WaterView.crossings`, `WaterGrid.crossings`,
+  `AquaticLifeManager`). La vie relisait ses étendues d'eau (au plus une fois par seconde) et ses terres (toutes les
+  5 s) dès que l'eau avait bougé, donc toujours. Or ce qu'elle lit ne dépend que de trois profondeurs
+  (`LIFE_DEPTHS_PX` : le film de 2 px où l'on boit et où le sol est sec, les 8 px d'un poisson, les 16 px d'un
+  dauphin et du gué) et des portes. L'eau tient deux compteurs qui ne montent que lorsqu'une cellule franchit l'une
+  de ces profondeurs (`swim` : 8 ou 16 px, ou une porte ; `land` : 2 ou 16 px), comparés quand on les demande
+  (dans le fil des salles) ou publiés avec l'instantané (fil de calcul). La vie garde ses lieux tant que le
+  compteur qui les concerne n'a pas bougé : elle aurait relu les mêmes. **Résultat identique**, vérifié par
+  `AquaticLifeManagerCrossings.test.ts` : trois vies sur la même eau (relecture à chaque changement comme avant,
+  compteurs sur la grille, compteurs sur un instantané) disent et sauvegardent la même chose et tiennent les
+  mêmes lieux à chaque pas, le long d'une crue, puis d'une nappe qui franchit un seuil à la fois, puis d'une
+  porte qui coupe le lac sans qu'aucune profondeur bouge ; cinq mutations (un seuil ou la porte oubliés) font
+  chacune échouer le test. **Gain mesuré** : sur une eau immobile, plus aucune relecture. **Sur la carte d'entrée
+  inondée, aucun** : tant que l'eau coule, des nappes minces franchissent un seuil quelque part à chaque seconde,
+  même 60 s après l'arrêt des sources (30 relectures d'étendues et 6 de terres en 30 s, comme avant) ; les pas
+  de 10 à 15 ms toutes les 5 s restent. Pour une eau qui coule, la suite est de calculer ces lieux dans le fil de
+  calcul et de les publier.
+- **Catastrophes dans le sol d'un joueur** (`LocalTerrainSimulation`, `LocalTerrainWorker`). Le sol d'un joueur
+  (météo d'un lieu choisi) ignorait les catastrophes de la salle : il les voyait sans que son eau en soit touchée.
+  Il sait maintenant les recevoir, par le sol commun : `setCatastrophes` (averses, drains, boules du moment, qui
+  agissent à chaque pas de son eau), `strike`, `burn`, `shatter`, `soak`, `ignite`, et les commandes du même nom
+  dans le protocole de son worker (`LocalTerrainCommand`). Le contrôleur les lui envoie depuis la PR suivante
+  (`LocalCatastropheRelay`, voir « Eau rapide »).
 - **Façade du sol dans `back`** (`back/src/Model/Ground/RoomGround.ts`, `InlineRoomGround.ts`, PR 2). `GameRoom`
   ne tient plus `TerrainWaterManager` et `MeadowManager` : il parle à un `RoomGround` (démarrer l'eau, démarrer la
   prairie, arrêter, carte changée ; comète, boule de feu, glace brisée, averse qui mouille, feu posé ; niveau d'une
@@ -2512,6 +2571,18 @@ ne l'est pas).
     l'instantané que la salle tient (l'eau cachée sous une boule est perdue), la prairie depuis la dernière
     sauvegarde. Trois pertes en cinq minutes : le sol de la salle repasse dans le fil des salles.
   - **Répartition** : une salle va au fil qui a le moins de salles et n'en change plus.
+  - **Allègement dans un fil de calcul** (`WaterLoads.mayTake`, `GroundWorker`). La somme des pas des eaux d'un fil
+    (#497) est comparée à 50 % de l'intervalle dans le fil des salles, où les joueurs attendent derrière l'eau :
+    inchangé. Dans un fil de calcul personne n'attend, l'eau doit seulement tenir sa cadence : le seuil y est de
+    90 % (`GROUND_THREAD_SHARE`). La finesse y revient dès que le fil pourrait la porter (ce que les eaux
+    prendraient avec un niveau de plus, le coût supposé suivre la finesse, reste sous 95 % du seuil), et non sous
+    la moitié du seuil, qui aurait laissé un tel fil aux deux tiers de ce qu'il tient. Mesuré sur un vrai fil,
+    salles comme la carte d'entrée inondée, Mac : à 50 %, 6 salles tombent à la finesse 2 et 8 à la finesse 1 ou
+    2 ; à 80 %, 8 salles cèdent un niveau ; à 90 %, 8 salles gardent la finesse 3 (86 % d'un cœur, 10 pas par
+    seconde), 10 salles passent à 2, 12 à 1 ou 2, toujours à 10 pas par seconde. Limite : le coût ne suit pas tout
+    à fait la finesse (de 2 à 3 il monte de 26 % sur cette carte, pas de 50 %), donc après un pic (une salle qui
+    démarre) la finesse 3 ne revient que si le fil est sous 57 % à la finesse 2 : 8 salles restent alors à 2
+    (68 % d'un cœur) alors que le fil tiendrait 3.
   - **Journaux** : au démarrage, `back` dit où le sol est calculé (« The ground of the rooms (water and meadow) is
     computed on N thread(s) of its own (GROUND_THREADS) », ou « … on the thread of the rooms (GROUND_THREADS is
     0) ») ; « Ground thread i of N starts for its first room » quand un fil démarre pour sa première salle ;
@@ -3268,6 +3339,76 @@ ancré sous la pastille (`ClockLine/ChipPopover.svelte`). Rien d'ouvert : barre 
 - **Non vérifié** : rien vu en jeu par un agent (aperçus hors jeu : vrais composants, pastille météo et horloge
   recopiées, onglet Météo et tableau remplacés par des substituts) ; écran tactile ; lecteur d'écran.
 
+## Accélération vraie de l'eau (« Vitesse de l'eau » > 1)
+
+Avant, une carte réglée à ×S faisait aller ses apports (pluie, sources, puits, évaporation, absorption, vidange,
+neige, glace) S fois plus vite, mais son écoulement à inertie restait au temps réel : l'eau arrivait plus vite
+qu'elle ne pouvait couler, et le modèle était faussé (crues trop hautes, flots qui ne suivaient pas). Désormais
+(`WaterSimulation.step`), chaque pas réel de 0,1 s fait vivre à l'eau k pas de 0,1 s de temps de carte
+(`grid.step` k fois), à la finesse 1 dès que k > 1 :
+
+- **k** = min(S, ce que le budget tient) (`WaterPace`) : moyenne du coût d'un pas de temps de carte, et k pas doivent
+  tenir dans le budget d'accélération, un paramètre du constructeur de `WaterSimulation` : **15 ms par pas réel sur
+  le serveur** (`WATER_PACE_SERVER_BUDGET_MS`), sous un sixième d'un pas et loin des 50 ms où `WaterLoad` allège :
+  le serveur n'a qu'un fil pour toutes les salles, une carte accélérée ne doit jamais ralentir les autres ; une salle
+  dont le pas au temps réel prend déjà ce budget reste au temps réel (la carte d'entrée en eau, environ 13 ms sur le
+  VPS). À relever quand chaque salle aura son fil (`GROUND_THREADS`). Dans le worker de la météo locale : 50 ms
+  (`WATER_PACE_WORKER_BUDGET_MS`, la moitié d'un cœur). k part de 1, monte jusqu'à ce que le budget tient (au plus ×4
+  tous les deux pas calmes, sous la moitié du budget), baisse aussitôt quand les pas coûtent ; jamais au-dessus de S. La finesse adaptative (`WaterLoad`) ne
+  voit plus que le coût d'un pas de temps de carte.
+- **Règle des apports** (`inflowAt`) : « effective » pour l'eau d'une salle (serveur, la vitesse de la carte en mode
+  édition) : les apports vont au facteur atteint k, jamais plus vite que l'écoulement ; « asked » pour l'eau d'un
+  joueur pour lui seul (lot « Eau rapide » à venir) : les apports vont au facteur demandé, l'écoulement à k.
+- **Un seul facteur lu partout** (`livedTimes`) : les débits du bilan (`ratesOf`, en temps de carte), la neige et la
+  glace (`MeadowSimulation.timesWith`, câblé par `GroundSimulation`), et le panneau : `reachedSpeed` (champ 12 de
+  `TerrainWaterStatsMessage`) donne le facteur atteint ; sous le facteur demandé, le panneau dit « L'eau va ×k sur ×S
+  demandé : le serveur ne la calcule pas plus vite ».
+- **Échanges lointains et ruée vers les siphons** (`flowFar`, `flowSteps`) : sous inertie, ils sont coupés à chaque
+  pas de temps de carte (`flowSteps` = 1), dans les deux règles : ils rattrapaient des apports trop rapides et
+  fausseraient maintenant l'écoulement (constat de l'étude `etude-eau-serveur`). Ils restent pour l'eau sans inertie.
+- **Preuve** (`back/tests/WaterAcceleration.test.ts`) : les trois scénarios de l'étude (rapport A de
+  `etude-eau-serveur`), vécus au temps réel puis à ×6 et ×20, sondes comparées minute après minute en temps de carte
+  (tolérance de l'étude : 1,5 px en transitoire, 0,5 px à la fin) : bassin 30 × 30 de 40 px qui déborde (écart le
+  plus grand 0,06 px), vidange par un seuil (0,10 px), rivière de 200 cellules en pente de 0,1 px (0,12 px) ; en
+  635 à 3 019 pas réels au lieu de 12 000 à 18 000. Les 19 empreintes de `WaterFingerprints.test.ts` sont
+  inchangées (k = 1 au temps réel).
+- Le rattrapage d'une salle vide garde la vitesse de la carte en un bloc sans inertie, comme avant.
+
+
+**Partage du fil** (après #497, `WaterLoads`) : à côté d'autres eaux sur son fil, une salle accélérée compte son pas
+réel entier dans la somme du fil. Elle n'accélère que dans ce que les autres lui laissent sous le seuil de retour de
+la finesse, soit la moitié du seuil d'allègement (25 ms sur le fil des salles) : `WaterLoad.quietMs() - othersMs()`.
+Si les autres tiennent déjà le fil, elle reste au temps réel, et elle ne fait jamais alléger les autres. Seule sur
+son fil (une salle seule, le worker du navigateur), elle garde son budget, et sa finesse suit un pas de temps de
+carte comme avant. Preuve : `libs/map-editor/tests/WaterPaceThread.test.ts`. Une salle à 20 ms par pas ne laisse
+que deux pas de 2 ms à la salle accélérée, et une salle à 40 ms ne lui en laisse aucun ; la première n'est jamais
+allégée.
+## Eau rapide, pour soi seul (« Réglages → Ambiance »)
+
+Un interrupteur personnel, mémorisé dans le navigateur comme Basique (`fastWaterStore`, clé `fastWater`) : l'eau du
+relief de ce joueur va 60 fois plus vite, sous la météo de la carte, ou sous celle de la ville qu'il suit.
+
+- **Calcul** : le sol local de la météo personnelle (`LocalTerrainController`, worker `LocalTerrainSimulation`)
+  démarre aussi pour l'eau rapide seule, sans ville choisie. Il garde alors la météo de la carte, avec l'air du lieu
+  de la carte (Paris par défaut, comme le serveur). Les apports (pluie, sources, neige, et le pré qu'ils mouillent)
+  vont ×60 (règle « demandée », `FAST_WATER_SPEED`). L'écoulement va k fois plus vite, k mesuré par `WaterPace` dans
+  50 ms par pas (la moitié d'un cœur).
+- **Retrait de `LOCAL_MIN_SPEED`** : sans eau rapide, la météo d'une ville suivie fait vivre l'eau au temps de la
+  carte. Le tableau « Météo expliquée » propose alors l'eau rapide (« Pour voir l'effet de cette météo en quelques
+  minutes, activez l'eau rapide »).
+- **Indicateur** dans la barre d'actions : « Eau ×60 », ou « Eau ×60, courants ×k » quand les courants plafonnent
+  (`reachedSpeed`). Les réglages disent alors de combien l'eau qui coule est plus haute que dans la réalité :
+  (60/k)^0,6, d'après Manning.
+- **Rien n'est enregistré** : l'eau locale repart de l'eau du serveur à chaque connexion, au retour d'un onglet caché
+  (le worker est arrêté tant qu'il est caché) et avec « Resynchroniser ».
+- **Coupure** : l'eau glisse en 1 s vers l'eau du serveur, et la barre affiche « Retour à l'eau partagée ».
+  Avec une ville suivie, le sol local continue, au temps de la carte.
+- **Serveur** : rien ne lui est envoyé, sauf le symbole de perception (`water`). Les catastrophes de la salle
+  agissent aussi sur cette eau (`LocalCatastropheRelay` : la comète frappe et la boule de feu brûle à l'impact, la glace
+  se brise et le feu prend aussitôt, averses, siphons et boules tant que le serveur les dit). Les conditions réglées à la main dans la salle (Catastrophe → Météo)
+  ne sont pas suivies par l'air local.
+- **Non vérifié** : aucun rendu vu, aucune mesure dans un navigateur.
+
 ## Défauts de l'eau d'une carte (2026-11-22) et garde-fou réseau
 
 Une carte qui ne règle pas son eau a désormais : vitesse 1 (temps réel, #478), neige et glace à la même horloge
@@ -3291,9 +3432,17 @@ le dit par le champ existant `easedUpdates` (« Serveur ou réseau chargé : env
 Mesures avec l'inertie : lac calme sur la carte d'entrée, environ 10 ko par état (47 ko/s à cinq par seconde, 72 sur
 mer agitée) : cinq par seconde tenus ; mer de 600² qui court (environ 37 ko) : deux ; carte entièrement inondée
 (130 ko et plus) : un, le minimum (encore 130 ko/s : le plafond ne peut pas descendre sous un état par seconde).
-Suite proposée, non codée : n'envoyer à 1 état par seconde que les blocs qui ont changé de plus d'un pixel, ou
-espacer au-delà d'une seconde (un état toutes les 2 s) sous le plafond. L'eau que le navigateur simule pour lui seul (#473) n'a pas de
-garde-fou : rien n'y voyage (`sendBudget` infini).
+**Au plancher, par blocs** (`WaterSendLoad.atFloor`, `holdStillBlocks`) : quand le garde-fou tient la salle à un état
+par seconde alors que la carte en demande plus, l'eau est dite par blocs de 8 × 8 cellules. Un bloc n'est dit que
+si l'une de ses cellules a bougé d'un pixel au moins, ou a séché, ou s'est mouillée. Il est alors dit en entier : pas
+de marche d'un pixel dans la surface d'un lac. Sinon, il garde ce que la salle a reçu. Chaque cellule reste donc à
+moins d'un pixel de la vérité, mouillée ou sèche comme elle l'est, et l'état entier, toutes les 30 s, remet tout
+d'aplomb. Hors du plancher, la règle d'avant ne change pas (un quart de pixel, cellule par cellule).
+Mesure sur une mer de 300² inondée, avec l'inertie et la pluie, à un état par seconde : les profondeurs passent de
+60 à 35 ko par état (−42 %), et les vitesses, environ 6 ko, ne changent pas. Non mesuré sur la carte de 600² ni
+dans un navigateur.
+Autre piste, non codée : espacer au-delà d'une seconde (un état toutes les 2 s) sous le plafond. L'eau que le
+navigateur simule pour lui seul (#473) n'a pas de garde-fou : rien n'y voyage (`sendBudget` infini).
 
 Coût de cinq états par seconde sans inertie (carte de 480 × 320, lac, à vitesse 1) : 3,6 → 9 ko/s par joueur
 (1,8 ko par état, surtout des changements nuls compressés), envoi 1,5 → 6 ms par seconde au serveur.
@@ -5646,8 +5795,21 @@ dit à la salle, qui ouvre le même trou. Météo personnelle : trou local. Les 
 (`POOL_ICE_DEPTH_PX` 8 px au lieu de 32, qui attendait -8,25 °C). La glace du serveur épaissit deux fois plus vite que
 l'horloge de la neige (`ICE_GROWTH_TIMES` = 2). Sur l'horloge ×600 d'alors, elle portait le woka en 1 min 30 environ
 à -3 °C ; depuis le 2026-11-22, l'horloge est celle de l'eau de la carte, temps réel par défaut : 14 h à -3 °C
-(14 min à « Vitesse de l'eau » 60). Le trou ouvert sous un avatar se referme toujours en deux minutes
-(`HOLE_OPEN_MS`, horloge à part, non changée) : plus vite que la glace ne reprend en vrai.
+(14 min à « Vitesse de l'eau » 60). **Depuis le 2026-11-22, le trou de la glace du serveur n'a plus d'horloge à lui**
+(demande de l'utilisateur : « se referme en 2 minutes, c'est un peu rapide, on peut pas faire réaliste ? »).
+Quand la glace casse, le serveur remet à 0 la glace des tuiles du trou (`Meadow.breakIce`, déjà le cas avant). Le trou
+regèle ensuite par la loi de la glace de la carte, à la vitesse de son eau et selon son air. En temps réel à −10 °C,
+cela fait un voile en deux minutes, la glace où l'on glisse (5 mm) en une dizaine de minutes environ, et une glace qui
+porte un marcheur au bout de quelques heures. Le trou ne regèle jamais pendant un dégel.
+
+Côté navigateur, le trou rond reste de l'eau libre tant que le serveur ne garde pas de glace en son centre. Il se
+referme à mesure que cette glace revient, et disparaît à 5 mm (`ICE_SLIPS_MM`) : à partir de là, c'est le dessin de la
+glace mince du serveur qui prend le relais. On retombe dans un trou encore ouvert. Entre 5 et 50 mm, la glace fine
+craque de nouveau sous l'avatar ; elle porte de nouveau à 50 mm. Pendant les 10 premières secondes, le temps que la
+salle reçoive la glace cassée, le trou reste ouvert quoi que dise la glace qu'elle connaissait
+(`HOLE_CONFIRM_MS`). La scène ne se redessine que si les fissures ou les trous changent, pas à chaque image : un trou
+peut rester ouvert des heures. La comète passe par le même chemin, `shatter`. En météo personnelle ou en sol local, le
+trou garde son horloge de deux minutes (`HOLE_OPEN_MS`) : il n'y a pas de glace du serveur.
 
 **Herbe dès l'arrivée** (`back/src/Model/MeadowManager.ts`, `GameScene.groundStatesOfJoinApplied`). Le premier joueur
 d'une salle recréée recevait un sol nu : `snapshot()` ne rendait que l'état déjà diffusé, vide jusqu'au premier pas de

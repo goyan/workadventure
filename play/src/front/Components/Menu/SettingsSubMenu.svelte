@@ -46,6 +46,8 @@
     import { lampEffectsEnabledStore } from "../../Stores/LampEffectsStore";
     import { jungleEnabledStore } from "../../Stores/JungleStore";
     import { basicModeStore } from "../../Stores/BasicModeStore";
+    import { fastWaterPace, fastWaterStore, resynchronizeFastWater } from "../../Stores/FastWaterStore";
+    import { terrainWaterStatsStore } from "../../Stores/TerrainEditorStore";
     import { videoQualityStore } from "../../Stores/MediaStore";
     import { avatarVideosEnabledStore } from "../../Stores/AvatarVideoStore";
     import { browserNotificationStore } from "../../Stores/BrowserNotificationStore";
@@ -485,6 +487,32 @@
                 labelPosition="right"
             />
             <p class="m-0 text-xs text-white/60">{$LL.actionbar.basicMode.hint()}</p>
+        </SettingsSection>
+        <SettingsSection title={$LL.actionbar.fastWater.label()} dataTestId="fast-water-settings">
+            <InputSwitch
+                id="fast-water"
+                bind:value={$fastWaterStore}
+                label={$LL.actionbar.fastWater.switch()}
+                labelPosition="right"
+            />
+            <p class="m-0 text-xs text-white/60">{$LL.actionbar.fastWater.hint()}</p>
+            {#if $fastWaterStore}
+                {@const higher = fastWaterPace($terrainWaterStatsStore?.reachedSpeed).higher}
+                {#if higher !== undefined}
+                    <p class="m-0 text-xs text-white/60" data-testid="fast-water-capped">
+                        {$LL.actionbar.fastWater.capped({ factor: higher.toFixed(1) })}
+                    </p>
+                {/if}
+                <button
+                    type="button"
+                    class="btn btn-sm btn-light btn-ghost self-start"
+                    title={$LL.actionbar.fastWater.resyncHint()}
+                    onclick={() => resynchronizeFastWater()}
+                    data-testid="fast-water-resync"
+                >
+                    {$LL.actionbar.fastWater.resync()}
+                </button>
+            {/if}
         </SettingsSection>
         <SettingsSection title={$LL.menu.settings.graphics.nature()} dataTestId="graphics-nature-settings">
             <div class="flex flex-col gap-2">

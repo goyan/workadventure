@@ -1,5 +1,6 @@
 import type { RealWeatherSlot, SeededMeadow, WAMFileFormat, WeatherLocation } from "@workadventure/map-editor";
-import type { TerrainWaterStatsMessage } from "@workadventure/messages";
+import type { CatastropheMessage, TerrainWaterStatsMessage } from "@workadventure/messages";
+import { LocalCatastropheRelay } from "./LocalCatastropheRelay";
 import type { LocalTerrainCommand, LocalTerrainTold } from "./LocalTerrainSimulation";
 import { TerrainWater } from "./TerrainWater";
 import type { WaterState } from "./TerrainWater";
@@ -18,6 +19,13 @@ export interface LocalTerrainScene {
      * Basique nor while the map is edited), with its weather once known; undefined: the ground of the server.
      */
     chosenPlace(): { place: WeatherLocation; slots: readonly RealWeatherSlot[] | undefined } | undefined;
+    /**
+     * Fast water (FastWaterStore), when it applies (neither Basique nor the map editor), with the weather timeline of
+     * the place of the map once known: the air of the map, for the ground of this player when no place is chosen.
+     */
+    fastWater(): { slots: readonly RealWeatherSlot[] | undefined } | undefined;
+    /** The local water has gone back to the water of the server (« retour à l'eau partagée »). */
+    backToSharedWater(): void;
     /** The map and a key that changes with each of its edits; undefined until it is read. */
     map(): { wam: WAMFileFormat; key: string; mapCells: { width: number; height: number } } | undefined;
     /** Where the avatar of this player stands on the ground (map pixels): none while on a raised floor. */
@@ -31,14 +39,18 @@ export interface LocalTerrainScene {
 
 /** The avatar is told to the local ground this often (ms): the doors it holds open. */
 const WALKERS_EVERY_MS = 1000;
+/** Back to the ground of the server, its water glides from the local one this long (ms). */
+const BACK_TO_SERVER_GLIDE_MS = 1000;
 
 type MeadowState = SeededMeadow & { fire?: Uint8Array };
 
 /**
- * Runs the ground of this player while they follow the weather of a place they chose (LocalTerrainSimulation, in a
- * worker): their own lakes, rivers, meadow and snow, started from the ground of the server at that moment. Meanwhile
- * the states the server tells are kept aside, not shown; back to the ground of the server (another day and night
- * mode, Basique, the map editor), the local ground is let go and the game shows the last state of the server at once.
+ * Runs the ground of this player while they follow the weather of a place they chose, or while their water is fast
+ * (LocalTerrainSimulation, in a worker): their own lakes, rivers, meadow and snow, started from the ground of the
+ * server at that moment. Meanwhile the states the server tells are kept aside, not shown; back to the ground of the
+ * server (another day and night mode, fast water off, Basique, the map editor), the local ground is let go and the
+ * water of the server shown again, gliding to it in a second. Nothing is saved: the local ground starts again from
+ * the ground of the server each time, when the tab comes back too (its worker stops while it is hidden).
  */
 export class LocalTerrainController {
     private port: LocalTerrainPort | undefined;
@@ -49,11 +61,16 @@ export class LocalTerrainController {
     private serverWater: TerrainWater | undefined;
     /** The last meadow of the server, always: where a local ground starts, and what the game goes back to. */
     private serverMeadow: MeadowState | undefined;
-    private sentPlace: { place: WeatherLocation; slots: readonly RealWeatherSlot[] } | undefined;
+    private sentPlace: { place: WeatherLocation | undefined; slots: readonly RealWeatherSlot[] } | undefined;
+    private sentFast = false;
+    /** The tab is hidden: no local ground until it comes back. */
+    private tabHidden = false;
     private sentMap: { key: string; wam: WAMFileFormat } | undefined;
     private walkersAt = -Infinity;
-    /** The place whose local ground could not start: not tried again until another place is chosen. */
-    private failedPlace: WeatherLocation | undefined;
+    /** The catastrophes of the room, as the server tells them: the local ground lives them too. */
+    private readonly catastrophes = new LocalCatastropheRelay();
+    /** The ground that could not start (a place, or the map's): not tried again until another is asked. */
+    private failedKey: string | undefined;
 
     constructor(
         private readonly scene: LocalTerrainScene,
@@ -79,29 +96,43 @@ export class LocalTerrainController {
         return this.running;
     }
 
+    /** A catastrophe the server tells the room: the local ground, if any, takes it too (now, or when it lands). */
+    public fromCatastrophe(message: CatastropheMessage): void {
+        const commands = this.catastrophes.receive(message, this.now());
+        if (this.port) for (const command of commands) this.port.postMessage(command);
+    }
+
     /** At each image: starts or lets go the local ground, and tells it what changed around it. */
     public update(): void {
-        const chosen = this.scene.chosenPlace();
-        if (!chosen) {
-            this.failedPlace = undefined;
-            if (this.running) this.letGo();
+        // What lands or ends is followed whether a local ground runs or not: one that starts later is told the rest.
+        const landed = this.catastrophes.due(this.now());
+        if (this.port) for (const command of landed) this.port.postMessage(command);
+        const asked = this.tabHidden ? undefined : this.asked();
+        if (!asked) {
+            this.failedKey = undefined;
+            if (this.running) this.letGo(true);
             return;
         }
         // A start that failed is not tried again at each image: the whole ground would be drawn again each time.
-        if (!this.running && samePlace(chosen.place, this.failedPlace)) return;
+        if (!this.running && asked.key === this.failedKey) return;
         // The weather of the place may be fetched again: the last one known goes on meanwhile.
-        const slots = chosen.slots ?? this.sentPlace?.slots;
+        const slots =
+            asked.slots ?? (samePlaceOrMap(this.sentPlace?.place, asked.place) ? this.sentPlace?.slots : undefined);
         if (!this.running) {
-            if (slots) this.start(chosen.place, slots);
+            if (slots) this.start(asked.place, slots, asked.fast, asked.key);
             return;
         }
         const port = this.port;
         if (!port) return;
-        if (!samePlace(this.sentPlace?.place, chosen.place) || this.sentPlace?.slots !== slots) {
+        if (!samePlaceOrMap(this.sentPlace?.place, asked.place) || this.sentPlace?.slots !== slots) {
             if (slots) {
-                this.sentPlace = { place: chosen.place, slots };
-                port.postMessage({ kind: "place", place: chosen.place, slots });
+                this.sentPlace = { place: asked.place, slots };
+                port.postMessage({ kind: "place", place: asked.place, slots });
             }
+        }
+        if (asked.fast !== this.sentFast) {
+            this.sentFast = asked.fast;
+            port.postMessage({ kind: "fast", fast: asked.fast });
         }
         const map = this.scene.map();
         if (map && (map.key !== this.sentMap?.key || map.wam.terrain !== this.sentMap.wam.terrain)) {
@@ -115,6 +146,42 @@ export class LocalTerrainController {
         }
     }
 
+    /**
+     * The tab is hidden, or back: hidden, the worker stops (nothing would be seen of it) and the water of the server
+     * is shown; back, the next image starts the local ground again from the water of the server.
+     */
+    public hidden(hidden: boolean): void {
+        this.tabHidden = hidden;
+        if (hidden && this.running) this.letGo(false);
+    }
+
+    /** « Resynchroniser »: the local ground starts again from the ground of the server, at the next image. */
+    public resynchronize(): void {
+        if (this.running) this.letGo(false);
+    }
+
+    /** The ground this player asks for now: a place followed, or fast water alone under the weather of the map. */
+    private asked():
+        | {
+              place: WeatherLocation | undefined;
+              slots: readonly RealWeatherSlot[] | undefined;
+              fast: boolean;
+              key: string;
+          }
+        | undefined {
+        const fast = this.scene.fastWater();
+        const chosen = this.scene.chosenPlace();
+        if (chosen) {
+            return {
+                place: chosen.place,
+                slots: chosen.slots,
+                fast: fast !== undefined,
+                key: `${chosen.place.latitude},${chosen.place.longitude}`,
+            };
+        }
+        return fast && { place: undefined, slots: fast.slots, fast: true, key: "map" };
+    }
+
     /** The scene is closed: the local ground goes with it, and nothing is shown again. */
     public destroy(): void {
         this.generation++;
@@ -124,7 +191,12 @@ export class LocalTerrainController {
         this.serverWater = undefined;
     }
 
-    private start(place: WeatherLocation, slots: readonly RealWeatherSlot[]): void {
+    private start(
+        place: WeatherLocation | undefined,
+        slots: readonly RealWeatherSlot[],
+        fast: boolean,
+        key: string,
+    ): void {
         const map = this.scene.map();
         if (!map) return;
         this.running = true;
@@ -134,6 +206,7 @@ export class LocalTerrainController {
         this.serverWater = new TerrainWater();
         if (shown) this.serverWater.receive(shown, this.now());
         this.sentPlace = { place, slots };
+        this.sentFast = fast;
         this.sentMap = { key: map.key, wam: map.wam };
         this.walkersAt = this.now();
         const meadow = this.serverMeadow;
@@ -152,6 +225,7 @@ export class LocalTerrainController {
                         mapCells: map.mapCells,
                         place,
                         slots,
+                        fast,
                         ...(shown
                             ? {
                                   water: {
@@ -164,14 +238,15 @@ export class LocalTerrainController {
                     },
                 });
                 port.postMessage({ kind: "walkers", walkers: this.scene.walkers() });
+                port.postMessage(this.catastrophes.state());
             })
             .catch((error: unknown) => {
                 // Without its worker the player keeps the ground of the server: the weather of their place still
                 // shows, only their lakes do not follow it.
                 console.warn("The local ground could not start: the ground of the server is shown", error);
                 if (generation !== this.generation) return;
-                this.failedPlace = place;
-                this.letGo();
+                this.failedKey = key;
+                this.letGo(false);
             });
     }
 
@@ -185,14 +260,18 @@ export class LocalTerrainController {
         this.scene.showMeadow(told.message);
     }
 
-    /** Back to the ground of the server: the local one is let go, and the last state of the server is shown at once. */
-    private letGo(): void {
+    /**
+     * Back to the ground of the server: the local one is let go, and the last state of the server shown, its water
+     * gliding to it in a second; `said`: the player let their own ground go, and is told so.
+     */
+    private letGo(said: boolean): void {
         const server = this.serverWater?.wholeState();
         this.destroy();
         this.sentPlace = undefined;
         this.sentMap = undefined;
-        if (server) this.scene.water.receive(server, this.now());
+        if (server) this.scene.water.receive(server, this.now(), BACK_TO_SERVER_GLIDE_MS);
         if (this.serverMeadow) this.scene.showMeadow(this.serverMeadow);
+        if (said) this.scene.backToSharedWater();
     }
 }
 
@@ -210,9 +289,10 @@ export function openModuleWorker(url: string): Worker {
     return worker;
 }
 
-/** Whether two places are the same point of the world, whichever objects hold them. */
-function samePlace(a: WeatherLocation | undefined, b: WeatherLocation | undefined): boolean {
-    return a !== undefined && b !== undefined && a.latitude === b.latitude && a.longitude === b.longitude;
+/** Whether two places are the same point of the world, whichever objects hold them; none and none: the map's. */
+function samePlaceOrMap(a: WeatherLocation | undefined, b: WeatherLocation | undefined): boolean {
+    if (a === undefined || b === undefined) return a === b;
+    return a.latitude === b.latitude && a.longitude === b.longitude;
 }
 
 /**
