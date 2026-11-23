@@ -352,7 +352,7 @@ export function fetchGrid(
 }
 
 /** The directions (degrees off the wind) and weights the effective fetch averages: cos² over ±45°. */
-const EFFECTIVE_FETCH_RAYS: readonly (readonly [number, number])[] = [-40, -20, 0, 20, 40].map((degrees) => [
+export const EFFECTIVE_FETCH_RAYS: readonly (readonly [number, number])[] = [-40, -20, 0, 20, 40].map((degrees) => [
     degrees,
     Math.cos((degrees * Math.PI) / 180) ** 2,
 ]);
@@ -404,23 +404,37 @@ export interface FetchWater {
     depths: Float32Array;
 }
 
+/** One fetch being made, a ray at each image: the shores it is made for, the wind, and the rays done. */
+interface FetchJob {
+    grid: { x: number; y: number; width: number; height: number };
+    open: Uint8Array;
+    heading: { x: number; y: number };
+    sum: Float32Array;
+    ray: Float32Array;
+    done: number;
+    weights: number;
+}
+
 /**
- * The fetch of the wind over the water of the map, made again when the wind turns or, now and then, when the water
- * changes; read cell by cell for what is drawn. `version` changes each time it is made again.
+ * The fetch of the wind over the water of the map: made again when the wind turns, or when the shores moved (the
+ * water changed, at most every FETCH_REFRESH_MS, and the cells of open water are no longer the same). Made a ray of
+ * the effective fetch at each image (advance), not all at once: up to a tenth of a second on a large map, it held an
+ * image. Read cell by cell for what is drawn; `version` changes when a new fetch is ready.
  */
 export class SeaFetch {
     public version = 0;
     private grid: { x: number; y: number; width: number; height: number } | undefined;
     private bytes = new Uint8Array(0);
-    private open = new Uint8Array(0);
-    private metres = new Float32Array(0);
+    private open: Uint8Array = new Uint8Array(0);
     private heading: { x: number; y: number } | undefined;
-    private madeAt = Number.NEGATIVE_INFINITY;
+    private checkedAt = Number.NEGATIVE_INFINITY;
     private waterVersion = -1;
+    private job: FetchJob | undefined;
 
-    /** Makes the fetch again if the wind turned, the grid changed, or the water changed a while ago. */
+    /** Starts a new fetch if the wind turned, the grid changed, or the shores moved. Whether one was started. */
     public update(water: FetchWater, waterVersion: number, heading: { x: number; y: number }, now: number): boolean {
-        const grid = this.grid;
+        const wanted = this.job?.heading ?? this.heading;
+        const grid = this.job?.grid ?? this.grid;
         const resized =
             !grid ||
             grid.x !== water.x ||
@@ -428,29 +442,58 @@ export class SeaFetch {
             grid.width !== water.width ||
             grid.height !== water.height;
         const turned =
-            !this.heading ||
+            !wanted ||
             Math.abs(
-                Math.atan2(
-                    this.heading.x * heading.y - this.heading.y * heading.x,
-                    this.heading.x * heading.x + this.heading.y * heading.y,
-                ),
+                Math.atan2(wanted.x * heading.y - wanted.y * heading.x, wanted.x * heading.x + wanted.y * heading.y),
             ) >
                 (FETCH_TURN_DEGREES * Math.PI) / 180;
-        const changed = waterVersion !== this.waterVersion && now - this.madeAt >= FETCH_REFRESH_MS;
+        const changed = waterVersion !== this.waterVersion && now - this.checkedAt >= FETCH_REFRESH_MS;
         if (!resized && !turned && !changed) return false;
-        const size = water.width * water.height;
-        if (this.open.length !== size) {
-            this.open = new Uint8Array(size);
-            this.metres = new Float32Array(size);
-            this.bytes = new Uint8Array(size);
-        }
-        for (let cell = 0; cell < size; cell++) this.open[cell] = water.depths[cell] >= FETCH_WATER_PX ? 1 : 0;
-        effectiveFetchGrid(this.open, water.width, water.height, heading, undefined, this.metres);
-        for (let cell = 0; cell < size; cell++) this.bytes[cell] = fetchByte(this.metres[cell]);
-        this.grid = { x: water.x, y: water.y, width: water.width, height: water.height };
-        this.heading = { ...heading };
-        this.madeAt = now;
         this.waterVersion = waterVersion;
+        this.checkedAt = now;
+        const size = water.width * water.height;
+        const open = new Uint8Array(size);
+        for (let cell = 0; cell < size; cell++) open[cell] = water.depths[cell] >= FETCH_WATER_PX ? 1 : 0;
+        // The water moved but not its shores: the fetch is the same.
+        const shores = this.job?.open ?? this.open;
+        if (
+            !resized &&
+            !turned &&
+            open.length === shores.length &&
+            open.every((value, cell) => value === shores[cell])
+        ) {
+            return false;
+        }
+        this.job = {
+            grid: { x: water.x, y: water.y, width: water.width, height: water.height },
+            open,
+            heading: { ...heading },
+            sum: new Float32Array(size),
+            ray: new Float32Array(size),
+            done: 0,
+            weights: 0,
+        };
+        return true;
+    }
+
+    /** Makes one more ray of the fetch under way; true when a new fetch is ready (read it from now on). */
+    public advance(): boolean {
+        const job = this.job;
+        if (!job) return false;
+        const [degrees, weight] = EFFECTIVE_FETCH_RAYS[job.done];
+        const angle = Math.atan2(job.heading.y, job.heading.x) + (degrees * Math.PI) / 180;
+        const { width, height } = job.grid;
+        fetchGrid(job.open, width, height, { x: Math.cos(angle), y: Math.sin(angle) }, undefined, job.ray);
+        for (let cell = 0; cell < job.sum.length; cell++) job.sum[cell] += weight * job.ray[cell];
+        job.weights += weight;
+        job.done++;
+        if (job.done < EFFECTIVE_FETCH_RAYS.length) return false;
+        if (this.bytes.length !== job.sum.length) this.bytes = new Uint8Array(job.sum.length);
+        for (let cell = 0; cell < job.sum.length; cell++) this.bytes[cell] = fetchByte(job.sum[cell] / job.weights);
+        this.grid = job.grid;
+        this.open = job.open;
+        this.heading = job.heading;
+        this.job = undefined;
         this.version++;
         return true;
     }

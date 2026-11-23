@@ -100,14 +100,26 @@ export interface SeaDrawing {
     breakingSlope: number;
 }
 
+/**
+ * The waves are chosen for the wind rounded to this (km/h) and its direction to this (degrees): a wind that wavers
+ * by a little keeps the same waves, their phases go on without a jump (their amplitudes follow the exact wind, in the
+ * shader). They are drawn anew, once, only when the wind leaves its step.
+ */
+export const SEA_SPEED_STEP_KMH = 5;
+export const SEA_DIRECTION_STEP_DEGREES = 10;
+
 /** The sea of a wind of `windKmh` blowing towards `heading`; undefined under WIND_SEA_FROM_KMH. */
 export function seaDrawing(windKmh: number | undefined, heading: { x: number; y: number }): SeaDrawing | undefined {
-    const components = seaComponents(windKmh, heading);
-    if (windKmh === undefined || components.length === 0) return undefined;
+    if (windKmh === undefined || !Number.isFinite(windKmh) || windKmh < WIND_SEA_FROM_KMH) return undefined;
+    const stepKmh = Math.max(WIND_SEA_FROM_KMH, Math.round(windKmh / SEA_SPEED_STEP_KMH) * SEA_SPEED_STEP_KMH);
+    const step = (SEA_DIRECTION_STEP_DEGREES * Math.PI) / 180;
+    const angle = Math.round(Math.atan2(heading.y, heading.x) / step) * step;
+    const stepped = { x: Math.cos(angle), y: Math.sin(angle) };
+    const components = seaComponents(stepKmh, stepped);
     const white = whitecapWhite(whitecapShare(windKmh));
     return {
         windMs: windKmh / 3.6,
-        heading,
+        heading: stepped,
         components,
         breakingSlope: white > 0 ? BREAKING_SLOPE * breakingFactorFor(windKmh) : Number.POSITIVE_INFINITY,
     };

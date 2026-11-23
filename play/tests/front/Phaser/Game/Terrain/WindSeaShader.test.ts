@@ -72,6 +72,17 @@ describe("the white of the wind sea against the law of the whitecaps", () => {
     }, 60_000);
 });
 
+describe("a wind that wavers", () => {
+    it("keeps the same waves, so that they go on without a jump; only their height follows it", () => {
+        const sea = seaDrawing(40, EAST);
+        const wavering = seaDrawing(40.3, { x: Math.cos(0.03), y: Math.sin(0.03) });
+        expect(wavering?.components).toEqual(sea?.components);
+        expect(wavering?.windMs).toBeCloseTo(40.3 / 3.6, 9);
+        // Past its step (5 km/h, 10°), the waves are drawn anew, once.
+        expect(seaDrawing(46, EAST)?.components).not.toEqual(sea?.components);
+    });
+});
+
 describe("the uniforms of the wind sea", () => {
     it("tell the shader no sea under 10 km/h, and every wave over it", () => {
         const none = new Map(windSeaUniforms(undefined, 10));
@@ -133,34 +144,62 @@ describe("the GLSL of the wind sea", () => {
 });
 
 describe("SeaFetch: the fetch of the map, made again when it should", () => {
-    const water = (depth: number) => ({ x: 2, y: 3, width: 20, height: 4, depths: new Float32Array(80).fill(depth) });
+    const water = (depth: number, width = 20) => ({
+        x: 2,
+        y: 3,
+        width,
+        height: 4,
+        depths: new Float32Array(width * 4).fill(depth),
+    });
+    const finish = (fetch: SeaFetch): number => {
+        let images = 0;
+        while (!fetch.advance()) images++;
+        return images + 1;
+    };
 
-    it("is made once, again when the wind turns over 5°, and when the water changed only every few seconds", () => {
+    it("is made a ray at each image, never all at once", () => {
         const fetch = new SeaFetch();
         expect(fetch.update(water(10), 1, EAST, 0)).toBe(true);
+        expect(fetch.version).toBe(0);
+        expect(finish(fetch)).toBe(5);
+        expect(fetch.version).toBe(1);
+        expect(fetch.advance()).toBe(false);
+    });
+
+    it("again when the wind turns over 5°, or when the shores moved; not when only the water moved", () => {
+        const fetch = new SeaFetch();
+        fetch.update(water(10), 1, EAST, 0);
+        finish(fetch);
         expect(fetch.update(water(10), 1, EAST, 100)).toBe(false);
         const slightly = { x: Math.cos(0.05), y: Math.sin(0.05) };
         expect(fetch.update(water(10), 1, slightly, 200)).toBe(false);
         const turned = { x: Math.cos(0.2), y: Math.sin(0.2) };
         expect(fetch.update(water(10), 1, turned, 300)).toBe(true);
-        expect(fetch.update(water(10), 2, turned, 400)).toBe(false);
-        expect(fetch.update(water(10), 2, turned, 300 + FETCH_REFRESH_MS)).toBe(true);
+        finish(fetch);
+        // The water rose a little: the same open water, the same shores, no fetch to make again.
+        expect(fetch.update(water(12), 2, turned, 300 + FETCH_REFRESH_MS)).toBe(false);
+        // Half of it dried: the shores moved, but only every few seconds.
+        const dried = water(10);
+        dried.depths.fill(1, 0, 40);
+        expect(fetch.update(dried, 3, turned, 400 + FETCH_REFRESH_MS)).toBe(false);
+        expect(fetch.update(dried, 3, turned, 300 + 2 * FETCH_REFRESH_MS)).toBe(true);
     });
 
     it("reads the fetch of the cells of the map, nothing off the water or under 4 px", () => {
         const fetch = new SeaFetch();
         fetch.update(water(10), 1, EAST, 0);
+        finish(fetch);
         const out = fetch.over(0, 3, 30, 1, new Uint8Array(30));
         expect(out[0]).toBe(0);
         expect(out[1]).toBe(0);
         // The cells of the grid where they are on the map: its last cell, 2 + 20 - 1, holds its fetch.
         const lake = new Uint8Array(80).fill(1);
-        const expected = effectiveFetchGrid(lake, 20, 4, EAST)[19];
-        expect(out[21]).toBe(fetchByte(expected));
+        expect(out[21]).toBe(fetchByte(effectiveFetchGrid(lake, 20, 4, EAST)[19]));
         expect(out[21]).toBeGreaterThan(0);
         expect(out[25]).toBe(0);
         const shallow = new SeaFetch();
         shallow.update(water(3), 1, EAST, 0);
+        finish(shallow);
         expect(shallow.over(2, 3, 20, 1, new Uint8Array(20)).every((byte) => byte === 0)).toBe(true);
     });
 });

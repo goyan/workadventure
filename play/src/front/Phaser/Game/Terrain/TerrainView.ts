@@ -402,8 +402,10 @@ export class TerrainView {
             this.sea = seaDrawing(wind?.speed, windHeading(wind?.from) ?? { x: 0, y: 1 });
         }
         // The fetch of that wind over the water: the shader is told it when the water is drawn.
-        if (this.sea && this.seaFetch.update(this.water.settled(), version, this.sea.heading, now)) {
-            this.lastKey = undefined;
+        if (this.sea) {
+            this.seaFetch.update(this.water.settled(), version, this.sea.heading, now);
+            // A ray of the fetch at each image; drawn again with it once it is all made.
+            if (this.seaFetch.advance()) this.lastKey = undefined;
         }
         this.splat.setSea(this.sea);
     }
