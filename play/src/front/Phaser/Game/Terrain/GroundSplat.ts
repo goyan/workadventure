@@ -830,13 +830,19 @@ void main() {
 #ifdef WIND_SEA
         if (uSea.z > 0.5 && open > 0.5) {
             seaWindHere(world);
+            gSeaDepthPx = depthPx;
             seaAmplitudes(pack(${FETCH_PACK}.0, world).r * ${FETCH_GLSL_METRES}, depthPx * ${glsl(MAP_PX_METRES)});
             seaWhite = seaFoam(world);
             // In a hurricane the spray hides the waves: less light and shade, less of what the water reflects.
-            float spray = seaSpray();
-            water *= 1.0 + ${glsl(SEA_SHADE)} * (1.0 - spray) * seaLight(gSeaLight);
-            water = mix(water, vec3(0.86, 0.89, 0.91), spray);
-            seaRipple = gSeaLight * ${glsl(SEA_RIPPLE_PX)} * (1.0 - spray);
+            float spray = seaSpray(world);
+            if (spray > 0.0) {
+                water *= 1.0 + ${glsl(SEA_SHADE)} * (1.0 - spray) * seaLight(gSeaLight);
+                water = mix(water, vec3(0.86, 0.89, 0.91), spray);
+                seaRipple = gSeaLight * ${glsl(SEA_RIPPLE_PX)} * (1.0 - spray);
+            } else {
+                water *= 1.0 + ${glsl(SEA_SHADE)} * seaLight(gSeaLight);
+                seaRipple = gSeaLight * ${glsl(SEA_RIPPLE_PX)};
+            }
         }
 #endif
         water = reflected(

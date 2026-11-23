@@ -146,9 +146,18 @@ const FOAM_LINE_ALONG_PX = 60;
  */
 const SPUME_ACROSS_PX = 8;
 const SPUME_ALONG_PX = 360;
-const SPUME_SHEET = 0.78;
-const SPRAY_MOST = 0.45;
+/** The milky film between the streaks once the sheet is whole, its most, and where it starts to rise (map px deep). */
+const SPUME_FILM = 0.3;
+const SPUME_MOST = 0.72;
+const SPUME_SHALLOW_PX = [12, 45] as const;
+/** The patches of the sheet, map px across. */
+const SPUME_PATCH_PX = 90;
+const SPRAY_MOST = 0.3;
 const SPRAY_WHOLE_MS = 55;
+/** The drifts of spray: across and along the wind (map px), and how fast they race downwind (map px a second). */
+const SPRAY_ACROSS_PX = 40;
+const SPRAY_ALONG_PX = 260;
+const SPRAY_RUN_PX_S = 420;
 /**
  * The pace of the eye of a hurricane (m/s) under which the foam it leaves lasts as long as any (a crossing of the map
  * in 5 min goes at about 0.9 m/s); faster (the widget of the speed of the map), it lasts the less.
@@ -562,24 +571,38 @@ export const WIND_SEA_WATER_GLSL = `
 uniform sampler2D uSeaFoam;
 uniform vec4 uSeaFoamArea;
 
-// The white sheet of a hurricane (spumeShare): long streaks of foam and spray along the wind, laid over the waves,
-// which join into a milky white as the wind passes 40 m/s, still streaked. They drift with the foam left.
+// The white sheet of a very strong wind (spumeShare): streaks of foam along the wind, white over the water, of
+// varying width, length and whiteness, in patches; between them a milky film through which the water is still seen.
+// Under a hurricane, along its flow round the eye. Never on shallow water: a formed sea does not rise on a few
+// centimetres of water (gSeaDepthPx). At most SPUME_MOST: the water stays seen under it.
+float gSeaDepthPx = 1000.0;
+
 float seaSpume(vec2 world) {
-    float share = smoothstep(${glsl(SPUME_FROM_MS)}, ${glsl(SPUME_WHOLE_MS)}, gSeaWind.z);
+    float share = smoothstep(${glsl(SPUME_FROM_MS)}, ${glsl(SPUME_WHOLE_MS)}, gSeaWind.z)
+        * smoothstep(${glsl(SPUME_SHALLOW_PX[0])}, ${glsl(SPUME_SHALLOW_PX[1])}, gSeaDepthPx);
     if (share <= 0.0) return 0.0;
     vec2 heading = gSeaWind.xy;
     float down = dot(world, heading) - uSeaDir.w * ${glsl(FOAM_LINE_ALONG_PX)};
     float side = dot(world, vec2(-heading.y, heading.x));
-    float streaks = uHurEye.w != 0.0
-        // Under a hurricane, along its flow round the eye.
+    bool flowing = uHurEye.w != 0.0;
+    // Streaks: thin and long, their width wavering along them.
+    float streaks = flowing
         ? 0.6 * seaFlowNoise(${glsl(SPUME_ACROSS_PX)}, ${glsl(SPUME_ALONG_PX)}, vec2(0.0))
             + 0.4 * seaFlowNoise(${glsl(SPUME_ACROSS_PX / 2)}, ${glsl(SPUME_ALONG_PX / 3)}, vec2(5.0, 11.0))
         : 0.6 * seaNoise(vec2(side / ${glsl(SPUME_ACROSS_PX)}, down / ${glsl(SPUME_ALONG_PX)}))
             + 0.4 * seaNoise(vec2(side / ${glsl(SPUME_ACROSS_PX / 2)} + 5.0, down / ${glsl(SPUME_ALONG_PX / 3)} + 11.0));
-    // Few streaks at first, then most of the water: between them the white of the sheet itself.
-    float cut = mix(0.8, 0.25, share);
-    float streak = smoothstep(cut, cut + 0.2, streaks);
-    return share * max(streak, share * ${glsl(SPUME_SHEET)});
+    // Patches: some reaches whiter than others, and each streak its own whiteness.
+    float patches = flowing
+        ? seaFlowNoise(${glsl(SPUME_PATCH_PX)}, ${glsl(SPUME_PATCH_PX * 3)}, vec2(37.0, 23.0))
+        : seaNoise(vec2(side / ${glsl(SPUME_PATCH_PX)} + 37.0, down / ${glsl(SPUME_PATCH_PX * 3)} + 23.0));
+    float own = flowing
+        ? seaFlowNoise(${glsl(SPUME_ACROSS_PX * 3)}, ${glsl(SPUME_ALONG_PX * 2)}, vec2(71.0, 3.0))
+        : seaNoise(vec2(side / ${glsl(SPUME_ACROSS_PX * 3)} + 71.0, down / ${glsl(SPUME_ALONG_PX * 2)} + 3.0));
+    // Few streaks at first, then most of the water.
+    float cut = mix(0.78, 0.4, share) + (patches - 0.5) * 0.25;
+    float streak = smoothstep(cut, cut + 0.12, streaks) * mix(0.55, 1.0, own);
+    float film = share * ${glsl(SPUME_FILM)} * mix(0.5, 1.0, patches);
+    return min(${glsl(SPUME_MOST)}, share * max(streak, film));
 }
 
 float seaFoam(vec2 world) {
@@ -589,10 +612,25 @@ float seaFoam(vec2 world) {
     return max(max(breaking, left * uSea.w), seaSpume(world));
 }
 
-// The spray the wind tears off the sea: a haze over the water that hides its waves, from 30 m/s on (Beaufort 12:
-// "the air is filled with foam and spray"). 0 to SPRAY_MOST.
-float seaSpray() {
-    return ${glsl(SPRAY_MOST)} * smoothstep(${glsl(SPUME_FROM_MS)}, ${glsl(SPRAY_WHOLE_MS)}, gSeaWind.z);
+// The spray the wind tears off the sea: a haze over the water, from 30 m/s on (Beaufort 12: "the air is filled with
+// foam and spray"), in drifts that race down the wind, thinner in between: 0 to SPRAY_MOST. Never over shallow water.
+float seaSpray(vec2 world) {
+    float amount = ${glsl(SPRAY_MOST)} * smoothstep(${glsl(SPUME_FROM_MS)}, ${glsl(SPRAY_WHOLE_MS)}, gSeaWind.z)
+        * smoothstep(${glsl(SPUME_SHALLOW_PX[0])}, ${glsl(SPUME_SHALLOW_PX[1])}, gSeaDepthPx);
+    if (amount <= 0.0) return 0.0;
+    // Downwind at a pace of the wind, brought into one period of the noise (no loss of precision over a day).
+    float run = mod(uTime, ${glsl((4096 * SPRAY_ALONG_PX) / SPRAY_RUN_PX_S)}) * ${glsl(SPRAY_RUN_PX_S)};
+    float drift;
+    if (uHurEye.w != 0.0) {
+        float a = seaNoise(vec2(gFlowA.y / ${glsl(SPRAY_ACROSS_PX)}, (gFlowA.x - run) / ${glsl(SPRAY_ALONG_PX)}) + 7.0);
+        float b = seaNoise(vec2(gFlowB.y / ${glsl(SPRAY_ACROSS_PX)}, (gFlowB.x - run) / ${glsl(SPRAY_ALONG_PX)}) + 7.0);
+        drift = mix(a, b, gFlowMix);
+    } else {
+        vec2 heading = gSeaWind.xy;
+        drift = seaNoise(vec2(dot(world, vec2(-heading.y, heading.x)) / ${glsl(SPRAY_ACROSS_PX)},
+            (dot(world, heading) - run) / ${glsl(SPRAY_ALONG_PX)}) + 7.0);
+    }
+    return amount * mix(0.35, 1.0, smoothstep(0.3, 0.75, drift));
 }
 `;
 
