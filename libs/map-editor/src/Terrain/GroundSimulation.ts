@@ -3,9 +3,8 @@ import type { Downpour } from "../Catastrophe/Downpour";
 import type { Drain } from "../Catastrophe/Drain";
 import type { PrecipitationAir } from "../Weather/Precipitation";
 import type { MapPlace, RealWeatherSlot } from "../Weather/RealWeather";
-import type { MeadowSimulation, ReplayedWeather } from "./MeadowSimulation";
+import type { MeadowSimulation, MeadowWater, ReplayedWeather } from "./MeadowSimulation";
 import type { SnowWeather } from "./Snow";
-import type { WaterGrid } from "./WaterGrid";
 import type { WaterSimulation } from "./WaterSimulation";
 
 /** What a ground is made of and what it lives under: the same for the server of a room and for a browser. */
@@ -13,7 +12,7 @@ export interface GroundSetup<W extends WaterSimulation, M extends MeadowSimulati
     /** The water of the relief (the server gives the one that saves itself). */
     makeWater(): W;
     /** The meadow, over the water just made: its soil is soaked under it, its grass drowns. */
-    makeMeadow(water: () => Pick<WaterGrid, "depthAt"> | undefined): M;
+    makeMeadow(water: () => MeadowWater | undefined): M;
     /** The air the precipitation falls through: rain, or snow in the cold. Undefined while it is not known. */
     air(): PrecipitationAir | undefined;
     /** The air over the snow that lies: it melts by its heat, its wind and its humidity. */

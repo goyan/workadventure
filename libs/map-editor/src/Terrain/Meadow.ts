@@ -15,6 +15,7 @@ import {
     ICE_MAX_MM,
     ICE_SLIPS_MM,
     iceByte,
+    iceCurrentShare,
     iceGrowthMmPerDay,
     iceMmOfByte,
     iceThawMmPerHour,
@@ -167,6 +168,11 @@ export interface MeadowStepInput {
     season: Season;
     /** The water lying on a tile, in pixels: the deepest of its cells. */
     waterAt: (tileX: number, tileY: number) => number;
+    /**
+     * How fast the water runs over a tile, in metres a second (WaterGrid.tileSpeedAt): the ice takes less on running
+     * water (iceCurrentShare). Still water when absent: a water without inertia keeps no speed.
+     */
+    currentAt?: (tileX: number, tileY: number) => number;
     /** What the map sets of its meadow; the usual paces when absent. */
     growSeconds?: number;
     thirstSeconds?: number;
@@ -904,7 +910,15 @@ export class Meadow {
             if (lying < SOAKED_WATER_PX) {
                 thick = 0;
             } else {
-                if (weather) thick += (iceGrowthMmPerDay(thick, weather, snow[index]) * hours * ICE_GROWTH_TIMES) / 24;
+                if (weather) {
+                    const growth = (iceGrowthMmPerDay(thick, weather, snow[index]) * hours * ICE_GROWTH_TIMES) / 24;
+                    // On running water the cold makes frazil, not a sheet: less or no ice takes (iceCurrentShare).
+                    const share =
+                        growth > 0 && input.currentAt
+                            ? iceCurrentShare(input.currentAt(index % this.width, Math.floor(index / this.width)))
+                            : 1;
+                    thick += share === 1 ? growth : growth * share;
+                }
                 thick = Math.max(0, thick - thawing - heat[index]);
                 thick = Math.min(thick, lying / PX_PER_MM, ICE_MAX_MM);
             }
