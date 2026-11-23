@@ -1,5 +1,6 @@
-import { parentPort } from "node:worker_threads";
-import { threadWaterLoads } from "@workadventure/map-editor";
+import { parentPort, workerData } from "node:worker_threads";
+import { setWaterArrays, setWaterPassRunner, sharedWaterArrays, threadWaterLoads } from "@workadventure/map-editor";
+import { GroundBands } from "./GroundBands";
 import type { GroundCommand, GroundTold } from "./GroundProtocol";
 import { HostedGround } from "./HostedGround";
 
@@ -22,6 +23,29 @@ threadWaterLoads.mayTake(GROUND_THREAD_SHARE);
 
 const port = parentPort;
 if (!port) throw new Error("GroundWorker runs in a worker thread only");
+
+// The bands of the water: threads that share with this one the passes of each move of its waters, when asked for.
+const bands = Math.floor(Number((workerData as { bands?: number } | null)?.bands ?? 1));
+if (bands > 1) {
+    const group = new GroundBands(
+        bands - 1,
+        (reason, remaining) => {
+            console.error(
+                `A thread of the bands of the water was lost (${reason}): the water goes on with ${remaining + 1} band(s)`,
+            );
+            port.postMessage({ kind: "band", room: 0, reason, remaining } satisfies GroundTold);
+        },
+        (error) => {
+            // A step half computed: this thread ends, and its rooms start again from the last copy of their water.
+            console.error("A step of the water was lost to its bands: this thread of the grounds ends", error);
+            setImmediate(() => {
+                throw error;
+            });
+        },
+    );
+    setWaterArrays(sharedWaterArrays);
+    setWaterPassRunner(group);
+}
 
 const grounds = new Map<number, { ground: HostedGround; last: Promise<void> }>();
 

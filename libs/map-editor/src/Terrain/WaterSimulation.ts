@@ -22,6 +22,7 @@ import { liquidRainRate, snowShareOf } from "../Weather/Precipitation";
 import type { PrecipitationAir } from "../Weather/Precipitation";
 import { rainRateAt } from "../Weather/RainRate";
 import type { MapPlace, RealWeatherSlot } from "../Weather/RealWeather";
+import { waterPassRunner } from "./WaterBands";
 import { BallLevels } from "./BallLevels";
 import { landWallsOf } from "./LandWalls";
 import { pavedTilesOf } from "./Meadow";
@@ -273,6 +274,7 @@ export class WaterSimulation {
     public stop(): void {
         if (this.timer) clearInterval(this.timer);
         this.timer = undefined;
+        if (this.grid) waterPassRunner()?.forget(this.grid);
         this.load.release();
         this.save();
     }
@@ -331,6 +333,7 @@ export class WaterSimulation {
         this.readWalls = wallsSignature;
         const before = this.grid ?? this.saved;
         this.saved = undefined;
+        if (this.grid) waterPassRunner()?.forget(this.grid);
         this.grid = bounds ? new WaterGrid(terrain, bounds, undefined, walls, rooms) : undefined;
         this.grid?.setFloors(floors);
         this.readFloors = floorsSignature;

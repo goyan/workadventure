@@ -2422,6 +2422,35 @@ encore : aucun comportement ne change. `WaterFingerprints.test.ts` rejoue ses 19
 mêmes empreintes. Mesuré (banc commun, carte d'entrée inondée) : un pas coûte autant sur tableaux partagés que
 sur tableaux ordinaires (9,14 contre 9,16 ms).
 
+**Un pas de l'eau partagé entre plusieurs cœurs** (`Terrain/WaterBands.ts`, `back/src/Model/Ground/GroundBands.ts`,
+`GroundBandWorker.ts`). **Éteint par défaut** : `GROUND_BANDS` (variable d'environnement de `back`, lue par
+`Ground/ServerGroundThreads.ts`) dit sur combien de bandes chaque fil de calcul partage les pas de ses eaux : 1,
+le fil seul, comme avant. À N, le fil de calcul démarre N − 1 fils d'appoint. Sans effet si `GROUND_THREADS` vaut 0
+(le journal le dit au démarrage).
+  - **Découpage** : chaque passe d'un mouvement est coupée en tranches de lignes, quatre par fil. Chaque fil
+    **réclame** une tranche (une opération atomique sur un tableau partagé), la calcule, réclame la suivante ; le fil
+    de calcul fait de même, puis n'attend que les tranches réclamées par d'autres. Un fil d'appoint lent à se
+    réveiller ou privé de cœur ne retarde donc pas le pas : ses tranches sont prises par les autres.
+  - **Identité au bit près** : une passe n'écrit, pour une ligne, que les cellules de cette ligne, et ne lit dans les
+    autres lignes que des tableaux qu'elle n'écrit pas ; l'eau perdue est cumulée ligne par ligne par le fil de
+    calcul. L'ordre et la taille des tranches n'ont aucun effet. Vérifié sur les 19 empreintes
+    (`WaterFingerprints.test.ts`, tranches prises dans un ordre tiré au sort), sur de vrais fils à 2, 3 et 4 bandes
+    (`back/tests/GroundBands.test.ts`) et sur le test d'identité du sol dans un vrai fil de calcul à 3 bandes
+    (`RemoteRoomGround.test.ts`).
+  - **Aucune attente active** : les fils d'appoint dorment (`Atomics.wait`) entre deux passes et entre deux pas, le
+    fil de calcul dort en attendant une tranche. Ils apprennent les tableaux d'une grille par un message lu au
+    réveil (`receiveMessageOnPort`), qui dit aussi quel noyau calcule (`kernel: "typescript"` ; un noyau compilé y
+    viendrait avec sa mémoire). Mesuré : un fil de calcul et trois fils d'appoint au repos, 1,9 ms de processeur en
+    2 s pour tout le processus.
+  - **Perte d'un fil d'appoint** : endormi, il est retiré, l'eau continue avec une bande de moins, le journal le
+    dit. Au milieu d'une tranche (ou si sa passe lève une erreur), le pas ne peut pas être fini au bit près : le fil
+    de calcul attend une seconde au plus (`BAND_PATIENCE_MS`), puis s'arrête, et ses salles repartent du dernier
+    instantané de leur eau par le mécanisme de perte d'un fil ; le fil relancé a une bande de moins, et plus aucune
+    après trois pertes (`BAND_LOSSES_BEFORE_NONE`, dit dans le journal).
+  - **Ce que mesurent le budget de l'accélération et le seuil d'allègement** : toujours la durée d'horloge du pas
+    dans le fil de calcul. Avec des bandes elle baisse alors que le processeur total monte : ces deux garde-fous ne
+    voient pas ce que les fils d'appoint prennent aux autres cœurs.
+
 **L'eau se pose à la fin du rattrapage** (`WaterSimulation.liveAgain`, `settle`). Le rattrapage d'une salle vide fait
 vivre l'eau sans inertie par pas de 600 s, et chaque pas ne la déplace qu'une fois : il la laisse entassée là où
 elle est arrivée et creusée là où elle est partie. L'eau à inertie repartait de ces niveaux inégaux : de fausses

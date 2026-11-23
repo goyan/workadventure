@@ -33,6 +33,8 @@ export * from "./Terrain/TerrainBrush";
 export * from "./Terrain/WaterDoors";
 export * from "./Terrain/WaterBall";
 export * from "./Terrain/WaterArrays";
+export * from "./Terrain/WaterBands";
+export type { InertiaMove } from "./Terrain/WaterKernel";
 export * from "./Terrain/WaterGrid";
 export * from "./Terrain/WaterInputs";
 export * from "./Terrain/WaterLoad";
