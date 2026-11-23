@@ -5961,6 +5961,32 @@ Chromium sans écran, sur la carte entière ; pas encore vu en jeu.
   - la température de la salle est gardée.
 - Les essais d'identité, avec et sans fil de calcul et en trois bandes, rejouent un ouragan dans leur scénario commun.
 
+**La mer, l'écume et les arbres suivent le vent de chaque point.**
+- Le shader de l'eau et la passe de mémoire d'écume évaluent le vent de l'ouragan **par pixel** : `seaWindHere`, jumeau
+  GLSL de `hurricaneHere`. Comparé à TypeScript sur 288 points dans un Chromium sans écran : au plus 1,4 km/h et 0,8°.
+- La hauteur des vagues suit le carré du vent local, rapporté au vent maximal pour lequel elles sont dessinées : la mer
+  est lisse dans l'œil.
+- Les traînées d'écume, les lignes laissées par les crêtes, la découpe des crêtes et les groupes de vagues sont posés
+  dans le repère de l'écoulement (`seaFlowHere`) : des spirales logarithmiques qui rentrent de 22,6° vers l'œil
+  (ln r + sens × tan(22,6°) × θ y est constant), calculées avec deux angles, l'un dans ]−π, π] et l'autre dans
+  [0, 2π[, mêlés loin de leurs coupures, sans couture. L'écume dérive avec le vent local.
+- Mesure sur un œil fixe, en 8 points à r = Rmax (tenseur de structure de l'image sur 160 px) : écart entre
+  l'orientation des traînées et le vent théorique de 0,1 à 13,8°, 6,7° en moyenne.
+- Limite : les 12 composantes de vagues gardent une direction globale, celle du centre de la caméra. Leur relief ne
+  tourne pas avec la spirale (les rendre locales coûterait environ 4 fois le shader).
+- Sans ouragan, l'image de la mer est identique à l'octet (60, 90 et 107 km/h). Coût avec ouragan : de +0,07 à
+  +0,2 ms par image sur 1920 × 1080 (M4 Max).
+- Chaque arbre se balance dans le vent de l'ouragan à sa place (`TreeSway.windAt`) : immobile dans l'œil. La pluie
+  lit le point au centre de la caméra.
+
+**Le widget « > >> >>> » accélère aussi l'ouragan** (`hurricaneTimesOf`, `hurricaneSpedUp`).
+- C'est le même réglage que la vitesse du gel et de la fonte, avec une correspondance propre à l'ouragan :
+  ×1, ×5 au cran ×60, ×10 au cran ×600 (×2 à ×10). Un passage de 5 min dure ainsi 5 min, 1 min ou 30 s, jamais
+  moins de 30 s.
+- Le serveur relit le cran chaque seconde et ré-ancre le départ : l'œil continue d'où il est. La pluie tombe d'autant
+  plus fort, et le cumul reste le même.
+- Le message porte la durée en cours et l'accélération (`HurricaneTrackMessage.durationMs = 13`, `times = 14`).
+
 **Ce que tout le monde voit.**
 - Le navigateur calcule la météo **du point au centre de sa caméra** (`withHurricane`, appliqué en dernier dans
   `shownWeatherSettings`) : pluie, vent pour les arbres, la pluie penchée, la mer du vent et les embruns, ciel dégagé
