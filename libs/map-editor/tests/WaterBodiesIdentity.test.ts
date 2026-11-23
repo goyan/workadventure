@@ -334,6 +334,7 @@ describe("landPlacesOf, each cell asked once", () => {
         // A bridge over the channel between the lake and the pond: what walks crosses the water on its deck.
         const bridges = new Set(["18,10", "19,10", "18,11", "19,11"]);
         let pieces = 0;
+        let shoresSeen = 0;
         flood((grid, step) => {
             const depthAt = dryOnBridges((cellX, cellY) => grid.depthAt(cellX, cellY), bridges);
             const before = landAsBefore(width, height, landWalls, depthAt);
@@ -342,10 +343,34 @@ describe("landPlacesOf, each cell asked once", () => {
             const labels: number[] = [];
             for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) labels.push(land.bodyAt(x, y));
             expect(labels, `bodies at step ${step}`).toEqual(Array.from(before.labels));
+            // The cells beside water, read once by the land (the first time an animal is thirsty): the nearest
+            // shore from every fourth cell is the one asking each cell and its neighbours finds.
+            const shores: number[] = [];
+            for (let y = 0; y < height; y++)
+                for (let x = 0; x < width; x++) if (land.atShore?.(x, y)) shores.push(y * width + x);
+            for (let y = 0; y < height; y += 4) {
+                for (let x = 0; x < width; x += 4) {
+                    let nearest: number | undefined;
+                    let least = Infinity;
+                    for (const index of shores) {
+                        const far = ((index % width) - x) ** 2 + (Math.floor(index / width) - y) ** 2;
+                        if (far < least && depthAt(index % width, Math.floor(index / width)) < WADE_DEPTH_PX) {
+                            least = far;
+                            nearest = index;
+                        }
+                    }
+                    const found = land.shoreNear?.(-1, x, y, WADE_DEPTH_PX);
+                    expect(found && found.cellY * width + found.cellX, `shore near ${x},${y} at step ${step}`).toBe(
+                        nearest,
+                    );
+                }
+            }
+            shoresSeen = Math.max(shoresSeen, shores.length);
             pieces = Math.max(pieces, before.sizes.length - 1);
         });
         // The flood cuts the land into pieces at some point.
         expect(pieces).toBeGreaterThan(1);
+        expect(shoresSeen).toBeGreaterThan(50);
     }, 120_000);
 });
 

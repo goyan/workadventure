@@ -135,9 +135,29 @@ export function landPlacesOf(input: LandInput): Places {
     // The cells of the land beside water, read the first time an animal is thirsty.
     let shores: Int32Array | undefined;
     const readShores = (): Int32Array => {
+        // What atShore answers for each cell of the land, read from the water as it is now: each cell is asked its
+        // depth once (dry enough to stand on, deep enough to drink from), not once for itself and once more from
+        // each of its neighbours.
+        const DRY = 1;
+        const DRINK = 2;
+        const depths = new Uint8Array(width * height);
+        for (let index = 0; index < depths.length; index++) {
+            const depth = depthAt(index % width, Math.floor(index / width));
+            depths[index] = (depth >= DRY_LAND_PX ? 0 : DRY) | (depth >= DRINK_DEPTH_PX ? DRINK : 0);
+        }
         const found: number[] = [];
         for (let index = 0; index < labels.length; index++) {
-            if (labels[index] !== 0 && atShore(index % width, Math.floor(index / width))) found.push(index);
+            if (labels[index] === 0 || !(depths[index] & DRY)) continue;
+            const cellX = index % width;
+            const cellY = (index - cellX) / width;
+            if (
+                (cellX + 1 < width && depths[index + 1] & DRINK) ||
+                (cellX > 0 && depths[index - 1] & DRINK) ||
+                (cellY + 1 < height && depths[index + width] & DRINK) ||
+                (cellY > 0 && depths[index - width] & DRINK)
+            ) {
+                found.push(index);
+            }
         }
         return Int32Array.from(found);
     };

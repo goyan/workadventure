@@ -2532,6 +2532,12 @@ ne l'est pas).
   (`CATCH_UP_PAUSE_MS`), comme la prairie depuis #489 : mêmes pas, même ordre, même état final
   (`AquaticLifeManagerCatchUp.test.ts`). Mesuré, même salle : tour le plus long 2 431 → 24 ms, rattrapage fini en
   6 s.
+- **Rivages des terres lus en une question par cellule** (`LandPlaces.readShores`). Le pas de vie le plus long qui
+  restait (toutes les 5 s, quand les terres sont relues) se décompose ainsi sur la carte d'entrée inondée (Mac au
+  calme) : terres 2,1 ms, étendues d'eau 1,05 ms, population 1 à 2 ms, et **rivages 5,4 ms** : à la première soif
+  d'un animal après chaque relecture des terres, chaque cellule était demandée pour elle-même puis par chacune de
+  ses voisines. Une question par cellule : 5,4 → 2,0 ms, mêmes rivages (`WaterBodiesIdentity.test.ts` compare le
+  rivage le plus proche depuis une cellule sur seize à celui que donne `atShore`, le long de la crue).
 - **Catastrophes dans le sol d'un joueur** (`LocalTerrainSimulation`, `LocalTerrainWorker`). Le sol d'un joueur
   (météo d'un lieu choisi) ignorait les catastrophes de la salle : il les voyait sans que son eau en soit touchée.
   Il sait maintenant les recevoir, par le sol commun : `setCatastrophes` (averses, drains, boules du moment, qui
