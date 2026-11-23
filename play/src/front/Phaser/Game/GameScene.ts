@@ -4674,10 +4674,14 @@ export class GameScene extends DirtyScene {
                         isFlatAt: (x, y) => this.seenRelief?.isFlatAt(x, y) ?? false,
                     },
                 );
-                // Under a hurricane, the wind sea takes its wind at each point (seaWindHere).
-                this.terrainView.seaHurricaneWith(() =>
-                    seaHurricaneOf(getRoomHurricane(), this.nightManager?.serverDate()),
-                );
+                // Under a hurricane, the wind sea takes its wind at each point (seaWindHere): that of its air where the
+                // server simulates it.
+                this.terrainView.seaHurricaneWith(() => {
+                    const hurricane = getRoomHurricane();
+                    const sea = seaHurricaneOf(hurricane, this.nightManager?.serverDate());
+                    const air = sea ? roomHurricaneAir.seaAir(hurricane?.id) : undefined;
+                    return sea && air ? { ...sea, air } : sea;
+                });
                 // What is built stays flat where the relief is seen in 3/4: paved, indoors, a pool.
                 this.seenRelief = new SeenRelief({
                     terrain: () => this.terrainWater.relief(),

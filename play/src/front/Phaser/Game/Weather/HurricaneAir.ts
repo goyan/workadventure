@@ -1,5 +1,6 @@
 import { hurricaneAirWindAt } from "@workadventure/map-editor";
 import type { HurricaneAirMessage } from "@workadventure/messages";
+import type { SeaAir } from "../Terrain/WindSeaShader";
 
 /** The server tells the wind of the air of a hurricane twice a second (MAP_AIR_STEPS_PER_MESSAGE). */
 export const HURRICANE_AIR_MESSAGE_MS = 500;
@@ -21,6 +22,8 @@ export class HurricaneAirField {
     private receivedAt = 0;
     /** Changes with each field told: what draws from it knows when to draw again. */
     public version = 0;
+    /** The picture of the last two fields for the sea, made again when a field is told. */
+    private picture: { version: number; step: number; pixels: Uint8ClampedArray<ArrayBuffer> } | undefined;
 
     constructor(private readonly clock: () => number = () => performance.now()) {}
 
@@ -51,6 +54,42 @@ export class HurricaneAirField {
         if (!(since < HURRICANE_AIR_STALE_MS)) return undefined;
         const previous = this.previous && sameGrid(this.previous, current) ? this.previous : current;
         return { previous, current, share: Math.min(1, Math.max(0, since / HURRICANE_AIR_MESSAGE_MS)) };
+    }
+
+    /**
+     * The wind of the air as the sea reads it (SeaAir): the field before and the last side by side, in bytes of a step
+     * that holds both. Undefined when none is known for the hurricane `hurricaneId`.
+     */
+    public seaAir(hurricaneId: number | undefined): SeaAir | undefined {
+        const fields = this.fields(hurricaneId);
+        if (!fields) return undefined;
+        const { previous, current, share } = fields;
+        const { columns, rows, cellPx } = current;
+        if (this.picture?.version !== this.version) {
+            const step = Math.max(previous.step, current.step);
+            const pixels = new Uint8ClampedArray(columns * 2 * rows * 4);
+            const write = (message: HurricaneAirMessage, offset: number): void => {
+                const east = new Int8Array(message.east.buffer, message.east.byteOffset, message.east.byteLength);
+                const north = new Int8Array(message.north.buffer, message.north.byteOffset, message.north.byteLength);
+                const scale = message.step / step;
+                for (let row = 0; row < rows; row++) {
+                    for (let column = 0; column < columns; column++) {
+                        const at = row * columns + column;
+                        const texel = (row * columns * 2 + column + offset) * 4;
+                        pixels[texel] = 128 + Math.round(east[at] * scale);
+                        pixels[texel + 1] = 128 + Math.round(north[at] * scale);
+                        pixels[texel + 2] = 128;
+                        // Opaque: a canvas keeps its colours premultiplied.
+                        pixels[texel + 3] = 255;
+                    }
+                }
+            };
+            write(previous, 0);
+            write(current, columns);
+            this.picture = { version: this.version, step, pixels };
+        }
+        const picture = this.picture;
+        return { version: picture.version, columns, rows, cellPx, step: picture.step, share, pixels: picture.pixels };
     }
 
     /** The wind at 10 m at a map point (m/s, east and north) under the hurricane `hurricaneId`; undefined: not known. */

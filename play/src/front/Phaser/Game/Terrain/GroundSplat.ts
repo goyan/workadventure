@@ -19,7 +19,7 @@ import {
     WIND_SEA_WATER_GLSL,
     windSeaUniforms,
 } from "./WindSeaShader";
-import type { SeaDrawing } from "./WindSeaShader";
+import type { SeaAir, SeaDrawing } from "./WindSeaShader";
 import { WindSeaFoam } from "./WindSeaFoam";
 import { HEIGHT_OFFSET, HEIGHT_SCALE, OBLIQUE_HALVINGS, OBLIQUE_STEPS, writeHeights } from "./ObliqueView";
 import { DROP_SCALE, MAX_DROP, MAX_RISE } from "./Pixel/ColumnPainter";
@@ -1048,6 +1048,7 @@ export class GroundSplat {
                             }
                             const foam = this.seaFoam?.shown();
                             setUniform("uSeaFoam", this.seaFoamUnit());
+                            setUniform("uHurAirTex", this.seaFoamUnit() + 1);
                             setUniform(
                                 "uSeaFoamArea",
                                 foam
@@ -1082,7 +1083,8 @@ export class GroundSplat {
                     "__DEFAULT",
                     "__DEFAULT",
                     ...(canProject ? ["__DEFAULT"] : []),
-                    ...(canSea ? ["__DEFAULT"] : []),
+                    // The foam of the wind sea, then the wind of the air of a hurricane.
+                    ...(canSea ? ["__DEFAULT", "__DEFAULT"] : []),
                 ],
             )
             .setOrigin(0)
@@ -1093,6 +1095,7 @@ export class GroundSplat {
                 scene,
                 SEA_FOAM_FRAG,
                 () => (this.scene.textures.exists(this.key) ? this.key : "__DEFAULT"),
+                () => (this.scene.textures.exists(this.airKey) ? this.airKey : "__DEFAULT"),
                 (setUniform) => {
                     const area = this.area;
                     setUniform("uData", 1);
@@ -1118,6 +1121,9 @@ export class GroundSplat {
     /** The relief seen in 3/4, and the picture of the exact heights it reads (ObliqueView.ts), made at its first use. */
     private oblique = false;
     private readonly heightsKey = `ground-heights-${splatCount}`;
+    /** The picture of the wind of the air of a hurricane the sea reads (SeaAir), and the version it holds. */
+    private readonly airKey = `ground-air-${splatCount}`;
+    private airVersion = -1;
     private heights: ImageData | undefined;
     private groundHeights: Float32Array | undefined;
     private surfaceHeights = new Float32Array(0);
@@ -1292,8 +1298,8 @@ export class GroundSplat {
             kept(this.reflection.lamps?.key),
             // Where these shaders can draw the relief in 3/4: the picture of the heights.
             ...(this.canProject ? [kept(this.heightsKey)] : []),
-            // Last, where the water draws the wind sea: the foam its crests left.
-            ...(this.canSea ? [kept(this.seaFoam?.shown()?.key)] : []),
+            // Last, where the water draws the wind sea: the foam its crests left, and the wind of the air of a hurricane.
+            ...(this.canSea ? [kept(this.seaFoam?.shown()?.key), kept(this.airKey)] : []),
         ]);
     }
 
@@ -1339,7 +1345,32 @@ export class GroundSplat {
         coarse: boolean,
     ): void {
         this.sea = sea;
+        this.uploadAir(sea?.hurricane?.air);
         if (this.seaFoam?.update(nowMs, sea, view, coarse)) this.bindWaterTextures();
+    }
+
+    /** The picture of the wind of the air of a hurricane, sent again when the server told another field. */
+    private uploadAir(air: SeaAir | undefined): void {
+        if (!air || !this.canSea || air.version === this.airVersion) return;
+        this.airVersion = air.version;
+        const width = air.columns * 2;
+        const height = air.rows;
+        let texture = this.scene.textures.exists(this.airKey) ? this.scene.textures.get(this.airKey) : undefined;
+        const source = texture?.source[0];
+        if (
+            !(texture instanceof Phaser.Textures.CanvasTexture) ||
+            source?.width !== width ||
+            source.height !== height
+        ) {
+            if (texture) this.scene.textures.remove(this.airKey);
+            texture = this.scene.textures.createCanvas(this.airKey, width, height) ?? undefined;
+            // Smooth: the wind is read straight between the points of its grid.
+            texture?.setFilter(Phaser.Textures.FilterMode.LINEAR);
+            this.bindWaterTextures();
+        }
+        if (!(texture instanceof Phaser.Textures.CanvasTexture)) return;
+        texture.getContext().putImageData(new ImageData(air.pixels, width, height), 0, 0);
+        refreshCanvasTexture(texture);
     }
 
     /** Whether the water shader draws the wind sea on this graphics card. */

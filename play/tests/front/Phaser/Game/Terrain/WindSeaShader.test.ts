@@ -232,6 +232,39 @@ describe("the uniforms of the wind sea", () => {
         for (let at = 0; at < SEA_COMPONENTS / 2; at++) expect(uniforms.has(`uSeaB${at}`)).toBe(true);
     });
 
+    it("tell the shader the wind of the air of a hurricane where the server simulates it, none otherwise", () => {
+        const sea = seaDrawing(150, EAST);
+        if (!sea) throw new Error("A wind of 150 km/h raises a sea");
+        const storm = {
+            eyeX: 700,
+            eyeY: 500,
+            rmaxPx: 876,
+            spin: 1 as const,
+            maxMs: 59,
+            hollandB: 1.5,
+            motionEast: 0,
+            motionSouth: 0,
+            share: 1,
+            inflow: 0.39,
+        };
+        const formula = new Map(windSeaUniforms({ ...sea, hurricane: storm }, 10));
+        expect(formula.get("uHurAir")?.[0]).toBe(0);
+        const air = {
+            version: 3,
+            columns: 61,
+            rows: 41,
+            cellPx: 128,
+            step: 0.4,
+            share: 0.25,
+            pixels: new Uint8ClampedArray(0),
+        };
+        const simulated = new Map(windSeaUniforms({ ...sea, hurricane: { ...storm, air } }, 10));
+        expect(simulated.get("uHurAir")).toEqual([1, 0.25, 0.4, 128]);
+        expect(simulated.get("uHurAirSize")).toEqual([61, 41]);
+        // Without a hurricane, the shader returns before reading it.
+        expect(new Map(windSeaUniforms(sea, 10)).get("uHurEye")?.[3]).toBe(0);
+    });
+
     it("keep the phases and the drifts small after days of an open page", () => {
         const sea = seaDrawing(60, EAST);
         if (!sea) throw new Error("A wind of 60 km/h raises a sea");
