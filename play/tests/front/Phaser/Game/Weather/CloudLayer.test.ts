@@ -1,6 +1,6 @@
 import * as Phaser from "phaser";
 import { describe, expect, it } from "vitest";
-import { CloudLayer } from "../../../../../src/front/Phaser/Game/Weather/CloudLayer";
+import { CloudLayer, cloudEvolution } from "../../../../../src/front/Phaser/Game/Weather/CloudLayer";
 import type { CloudFrame } from "../../../../../src/front/Phaser/Game/Weather/CloudLayer";
 
 function setup(): { layer: CloudLayer; uniforms: () => Record<string, unknown> } {
@@ -94,5 +94,18 @@ describe("cloud motion between thickness redraws", () => {
         layer.hide();
         expect(layer.moveSky({ x: frame.sky.x + 8, y: frame.sky.y + 6 })).toBe(false);
         expect(uniforms().uMotion).toEqual([0, 0]);
+    });
+});
+
+describe("the evolution of the 3D noise of the cumulus", () => {
+    it("is computed on the processor from the clock of the shaders, and stays small", () => {
+        expect(cloudEvolution(86_399)).toBeGreaterThanOrEqual(0);
+        expect(cloudEvolution(86_399)).toBeLessThan(256);
+        expect(cloudEvolution(Number.NaN)).toBe(0);
+    });
+
+    it("goes on smoothly, and round only where the noise repeats", () => {
+        expect(cloudEvolution(10) - cloudEvolution(0)).toBeCloseTo(0.04, 6);
+        expect(cloudEvolution(256 / 0.004)).toBeCloseTo(0, 6);
     });
 });

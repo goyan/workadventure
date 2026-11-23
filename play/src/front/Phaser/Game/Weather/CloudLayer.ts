@@ -106,7 +106,7 @@ uniform vec3 uShadow;        // x, y offset of the shadows (map pixels), their o
 uniform vec4 uVeil;          // the veils over the outdoors, premultiplied
 uniform vec2 uSky;           // how far the sky has drifted (map pixels): the billows go with their cloud
 uniform vec2 uMotion;        // drift since the thickness texture was drawn, in map pixels
-uniform float uTime;         // seconds: the billows change slowly
+uniform float uEvolve;       // how far the 3D noise of the cumulus has evolved (cloudEvolution)
 uniform vec4 uBillowA;      // how far the billows have drifted, octave by octave (ShaderNoise.billowDrift)
 uniform vec2 uBillowB;
 uniform vec4 uRainbow;       // centre x, y and radius of the rainbow (map pixels), its strength (0: none)
@@ -200,7 +200,7 @@ float cloudDensity(vec2 world, float hf, int octaves) {
     float c = sampleThickness(world);
     if (c <= 0.01) return 0.0;
     vec2 q = world - uSky - uMotion;
-    float n = fbm3(vec3(q / 55.0, hf * 2.4 + uTime * 0.004), octaves);
+    float n = fbm3(vec3(q / 55.0, hf * 2.4 + uEvolve), octaves);
     float d = c * 1.35 - 0.2 - hf * hf * 0.95 - (1.0 - n * 1.9) * 0.55;
     return clamp(d * 3.0, 0.0, 1.0);
 }
@@ -330,6 +330,20 @@ void main() {
     gl_FragColor = color;
 }
 `;
+
+/** Layers of the 3D noise a second: the billows of a cumulus change slowly as it drifts. */
+const CLOUD_EVOLUTION_PER_SECOND = 0.004;
+
+/**
+ * How far the 3D noise of the cumulus has evolved, `seconds` read on the clock of the shaders (shaderSeconds): taken
+ * round NOISE_SIZE layers, where the noise repeats exactly (a layer is 37 texels further along x, and 37 × 256 texels
+ * make whole turns of the texture). Small numbers for the 32 bits of the GPU; it jumps once a day, with that clock.
+ */
+export function cloudEvolution(seconds: number): number {
+    if (!Number.isFinite(seconds)) return 0;
+    const layers = (seconds * CLOUD_EVOLUTION_PER_SECOND) % NOISE_SIZE;
+    return layers < 0 ? layers + NOISE_SIZE : layers;
+}
 
 let layerCount = 0;
 
@@ -559,7 +573,7 @@ export class CloudLayer {
             "uMotion",
             frame && this.sky && !frame.still ? [this.sky.x - frame.sky.x, this.sky.y - frame.sky.y] : [0, 0],
         );
-        setUniform("uTime", frame?.still ? 0 : shaderSeconds(this.scene.time.now));
+        setUniform("uEvolve", frame?.still ? 0 : cloudEvolution(shaderSeconds(this.scene.time.now)));
         const billows = frame?.still ? { first: [0, 0, 0, 0], third: [0, 0] } : billowDrift(this.scene.time.now);
         setUniform("uBillowA", billows.first);
         setUniform("uBillowB", billows.third);
