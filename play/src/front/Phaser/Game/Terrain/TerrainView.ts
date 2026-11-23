@@ -63,7 +63,10 @@ import type { GroundArea } from "./TexturedGround";
 import { GroundSplat } from "./GroundSplat";
 import { BreakingFoam, closedSidesOf, FOAM_VISITS_PER_FRAME } from "./BreakingFoam";
 import type { ClosedSide } from "./BreakingFoam";
-import { whitecapShare, windHeading } from "./Whitecaps";
+import { windHeading } from "./Whitecaps";
+import { SeaFetch } from "./WindSea";
+import { seaDrawing } from "./WindSeaShader";
+import type { SeaDrawing } from "./WindSeaShader";
 import { depthsSeen } from "./BuiltGround";
 import { drawnArea, heightsOver, stillCovers } from "./ObliqueView";
 import { classicPoolsShown, imagePoolCells, imagePoolsOf, signatureOf } from "./ImagePools";
@@ -228,6 +231,11 @@ export class TerrainView {
     private foamWallsOf: unknown;
     private breakingVersion = -1;
     private foam = new Uint8Array(0);
+    /** The sea the wind raises (WindSeaShader), for the wind it was made for, and the fetch of that wind. */
+    private sea: SeaDrawing | undefined;
+    private seaKey = "";
+    private readonly seaFetch = new SeaFetch();
+    private seaBytes = new Uint8Array(0);
     /** The current of the water over the canvas, two a cell (see currentOver). */
     private current = new Float32Array(0);
     private shore = new Uint8Array(0);
@@ -386,9 +394,32 @@ export class TerrainView {
             this.breaking.begin(this.water.settled(), this.water.relief(), now, this.closedSides());
         }
         if (shown) this.breaking.advance(FOAM_VISITS_PER_FRAME, now);
-        const wind = shown ? this.wind?.() : undefined;
-        const heading = windHeading(wind?.from) ?? { x: 0, y: 1 };
-        this.splat.setWind({ ...heading, share: whitecapShare(wind?.speed) });
+        const wind = shown && this.splat.drawsSea() ? this.wind?.() : undefined;
+        // Made again when the wind changes by a tenth of a km/h or a degree: its waves, and where they go.
+        const key = wind?.speed === undefined ? "" : `${Math.round(wind.speed * 10)}:${Math.round(wind.from ?? 0)}`;
+        if (key !== this.seaKey) {
+            this.seaKey = key;
+            this.sea = seaDrawing(wind?.speed, windHeading(wind?.from) ?? { x: 0, y: 1 });
+        }
+        // The fetch of that wind over the water: the shader is told it when the water is drawn.
+        if (this.sea && this.seaFetch.update(this.water.settled(), version, this.sea.heading, now)) {
+            this.lastKey = undefined;
+        }
+        this.splat.setSea(this.sea);
+    }
+
+    /** The fetch of the wind over the cells of a canvas, for the shader; undefined without a wind sea. */
+    private fetchOver(canvas: { x: number; y: number; columns: number; rows: number }): Uint8Array | undefined {
+        if (!this.sea) return undefined;
+        const size = canvas.columns * canvas.rows;
+        if (this.seaBytes.length !== size) this.seaBytes = new Uint8Array(size);
+        return this.seaFetch.over(
+            canvas.x / TERRAIN_CELL,
+            canvas.y / TERRAIN_CELL,
+            canvas.columns,
+            canvas.rows,
+            this.seaBytes,
+        );
     }
 
     private draw(view: WeatherView, now: number): void {
@@ -589,6 +620,7 @@ export class TerrainView {
                 foamy ? this.foam : undefined,
                 anyWater ? this.currentOver(canvas, wet) : undefined,
                 depths,
+                anyWater ? this.fetchOver(canvas) : undefined,
             );
         } else if (this.grounds) {
             this.layWater(this.grounds, canvas, anyWater ? wet : undefined);

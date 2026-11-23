@@ -10,6 +10,9 @@ import type { IceBreak } from "../Ice/IceBreaks";
 import { groundDrifts, NOISE_GLSL, shaderSeconds } from "../ShaderNoise";
 import { SHORE_PX } from "./TerrainShading";
 import { WHITECAP_MIN_DEPTH_PX } from "./Whitecaps";
+import { MAP_PX_METRES } from "./WindSea";
+import { FETCH_GLSL_METRES, WIND_SEA_GLSL, WIND_SEA_UNIFORM_VECTORS, windSeaUniforms } from "./WindSeaShader";
+import type { SeaDrawing } from "./WindSeaShader";
 import { HEIGHT_OFFSET, HEIGHT_SCALE, OBLIQUE_HALVINGS, OBLIQUE_STEPS, writeHeights } from "./ObliqueView";
 import { DROP_SCALE, MAX_DROP, MAX_RISE } from "./Pixel/ColumnPainter";
 import { GROUND_TEXTURES } from "./TexturedGround";
@@ -54,6 +57,12 @@ export const FLOW_PACK = 10;
 export const FLOW_UNITS = 32;
 /** A film reaches the colour of the water at this depth (map pixels, SHORE_PX): thinner, it is clearer. */
 export const SHORE_FILM_PX = SHORE_PX;
+/** The pack that holds the fetch of the wind over the water, in its red (WindSea.fetchByte). */
+export const FETCH_PACK = 11;
+/** How much the slopes of the wind sea light or shade the water, facing the light or turned from it. */
+const SEA_SHADE = 0.35;
+/** How far (map pixels) a slope of 1 of the wind sea bends what the water reflects. */
+const SEA_RIPPLE_PX = 24;
 /** A current this fast (cells a second, 0.27 m/s) reads in full on a thin film: its ripples and its tint. */
 const RUNNING_FULL_CELLS = 0.5;
 /** How much of the colour of the water a film shows (see filmCover): lying still, and running. */
@@ -102,6 +111,8 @@ const RELIEF_SHADE = 0.6;
 const UNITS_NEEDED = 9;
 /** Compiles in the shaders what draws the relief in 3/4: only where the graphics card can (GroundSplat.create). */
 const OBLIQUE_DEFINE = "#define OBLIQUE 1\n";
+/** Compiles in the water shader the wind sea: only where the graphics card has the precision and the uniforms. */
+const WIND_SEA_DEFINE = "#define WIND_SEA 1\n";
 /** The picture of the heights is the last texture of each shader. */
 const GROUND_HEIGHTS_UNIT = 9;
 const WATER_HEIGHTS_UNIT = 4;
@@ -534,9 +545,6 @@ uniform float uSnow;
 // 1 for a player who follows the weather of the server: the ice and the snow on it are those the server keeps, cell
 // by cell; 0 for one who follows a place of their own: the ice of their own cold (uIce), the snow of their map.
 uniform float uServerIce;
-// The wind over the water: which way it blows (a vector of length 1) and the share of open water its whitecaps
-// whiten (Whitecaps.ts), 0 in a light wind.
-uniform vec3 uWind;
 // The fronts of the waves of the comets fallen into the water (x, y, radius in map pixels, strength 0 to 1).
 uniform vec4 uRing0;
 uniform vec4 uRing1;
@@ -607,43 +615,9 @@ vec3 snowOnIce(vec3 ice, vec2 world) {
     return mix(ice, vec3(0.95, 0.97, 1.0) * (0.94 + 0.06 * hash(floor(world))), covered);
 }
 
-// A chance from 0 to 1 for a cell of the whitecaps, without sin: hash() takes the sine of a dot product, which the
-// GPUs compute well only for small numbers. Past about 30 000 (a few thousand cells, or an hour of the clock of the
-// game times 17), Metal on a Mac returns the same value everywhere, and every cell broke at once: the water was
-// covered with a regular grid of crests. Kept to small numbers by the callers, this one stays even on every GPU.
-float capHash(vec2 p) {
-    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-    p3 += dot(p3, p3.yzx + 33.33);
-    return fract((p3.x + p3.y) * p3.z);
-}
-
-// The whitecaps of the wind at a point of open water, 0 to 1: short crests lying across the wind, each in a cell of
-// a grid laid along it (14 px across the wind, 7 along). A cell breaks for a second and a half, by chance, as
-// often as the wind asks: a crest whitens about a tenth of its cell over its life (it rises, then fades; measured
-// on the GPU), so the share of the cells is ten times that of the water. They drift slowly downwind. The clock and the cells go round (every two hours, every 4096 cells),
-// so that the chance of a cell is drawn from small numbers however long the game has run and however far the map
-// goes: the crests only change all at once when the clock goes round.
-float whitecapsAt(vec2 world, float t) {
-    float share = uWind.z;
-    if (share <= 0.0) return 0.0;
-    float tw = mod(t, 7200.0);
-    vec2 along = uWind.xy;
-    vec2 across = vec2(-along.y, along.x);
-    vec2 p = vec2(dot(world, across) / 14.0, (dot(world, along) - tw * 3.0) / 7.0);
-    // Every other row is shifted: no columns of crests.
-    p.x += 0.5 * mod(floor(p.y), 2.0);
-    vec2 cell = mod(floor(p), 4096.0);
-    float phase = tw / 1.5 + capHash(cell + 3.7);
-    float turn = mod(floor(phase), 4096.0);
-    float life = fract(phase);
-    float breaks = step(capHash(cell + vec2(turn * 17.0 + 11.0, turn * 29.0 + 5.0)), min(1.0, share * 10.0));
-    if (breaks <= 0.0) return 0.0;
-    vec2 q =
-        fract(p) - 0.5 - (vec2(capHash(cell + turn + 1.3), capHash(cell + turn + 2.9)) - 0.5) * 0.3;
-    // A crest: long across the wind, thin along it, its edge torn by a fine noise.
-    float shape = 1.0 - smoothstep(0.5, 1.0, length(q * vec2(2.6, 5.0)) + (vnoise(world / 2.0) - 0.5) * 0.7);
-    return breaks * shape * smoothstep(0.0, 0.15, life) * (1.0 - smoothstep(0.55, 1.0, life));
-}
+#ifdef WIND_SEA
+${WIND_SEA_GLSL}
+#endif
 
 const vec3 SHALLOW = vec3(0.1, 0.48, 0.52);
 const vec3 DEEP = vec3(0.05, 0.17, 0.34);
@@ -839,7 +813,25 @@ void main() {
         float lines = 1.0 - smoothstep(0.0, 0.04, abs(n1 - n2));
         water += lines * mix(0.14, 0.07, deep);
         water *= 0.9 + 0.2 * n1;
-        water = reflected(water, world, vec2(n1 - 0.5, n2 - 0.5) * 12.0, lines + 0.3 * n2);
+        // The wind sea (WindSeaShader.ts), on open water outdoors: its waves light and shade the water, bend what it
+        // reflects, and their crests break into foam.
+        float open = outdoors * step(${WHITECAP_MIN_DEPTH_PX}.0, depthPx);
+        vec2 seaRipple = vec2(0.0);
+        float seaWhite = 0.0;
+#ifdef WIND_SEA
+        if (uSea.z > 0.5 && open > 0.5) {
+            seaAmplitudes(pack(${FETCH_PACK}.0, world).r * ${FETCH_GLSL_METRES}, depthPx * ${glsl(MAP_PX_METRES)});
+            seaWhite = seaFoam(world);
+            water *= 1.0 + ${glsl(SEA_SHADE)} * seaLight(gSeaSlope);
+            seaRipple = gSeaSlope * ${glsl(SEA_RIPPLE_PX)};
+        }
+#endif
+        water = reflected(
+            water,
+            world,
+            vec2(n1 - 0.5, n2 - 0.5) * 12.0 + seaRipple,
+            lines + 0.3 * n2 + min(1.0, length(seaRipple) * ${glsl(1 / SEA_RIPPLE_PX)})
+        );
         float glint = step(0.992, hash(floor(world / 2.0) + uGlint)) * smoothstep(0.55, 0.7, n2);
         water = mix(water, FOAM, glint * 0.8);
         water = withShards(water, world, broken.y);
@@ -869,9 +861,8 @@ void main() {
         float surf = smoothstep(0.78 - 0.62 * broken, 0.9 - 0.62 * broken, boil) * step(0.03, broken);
         foam = max(foam, surf * 0.92);
 
-        // The whitecaps of the wind, on open water outdoors.
-        float open = outdoors * step(${WHITECAP_MIN_DEPTH_PX}.0, depthPx);
-        foam = max(foam, whitecapsAt(world, t) * open * 0.85);
+        // The foam of the crests of the wind sea that break, and the foam they left (WindSeaShader.ts).
+        foam = max(foam, seaWhite * 0.9);
 
         water = mix(water, FOAM, foam);
         alpha = max(alpha, foam * 0.9);
@@ -952,7 +943,10 @@ export class GroundSplat {
         if (!(units >= UNITS_NEEDED)) return undefined;
         // The relief in 3/4 reads one more texture, and heights that only fit in precise numbers.
         const precise = (gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT)?.precision ?? 0) > 0;
-        return new GroundSplat(scene, groundDepth, waterDepth, units > UNITS_NEEDED && precise);
+        // The wind sea sums its waves in precise numbers, with some forty uniforms more than the rest of the water.
+        const vectors = Number(gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS));
+        const sea = precise && vectors >= WIND_SEA_UNIFORM_VECTORS;
+        return new GroundSplat(scene, groundDepth, waterDepth, units > UNITS_NEEDED && precise, sea);
     }
 
     private constructor(
@@ -961,6 +955,8 @@ export class GroundSplat {
         waterDepth: number,
         /** Whether these shaders can draw the relief in 3/4 on this graphics card. */
         private readonly canProject: boolean,
+        /** Whether the water shader draws the wind sea on this graphics card. */
+        private readonly canSea = false,
     ) {
         const time = (): number => shaderSeconds(this.scene.time.now);
         this.groundShader = scene.add
@@ -1001,7 +997,7 @@ export class GroundSplat {
             .shader(
                 {
                     name: "WaterSplat",
-                    fragmentSource: `${canProject ? OBLIQUE_DEFINE : ""}${WATER_FRAG}`,
+                    fragmentSource: `${canProject ? OBLIQUE_DEFINE : ""}${canSea ? WIND_SEA_DEFINE : ""}${WATER_FRAG}`,
                     setupUniforms: (setUniform: (name: string, value: unknown) => void) => {
                         this.setCommonUniforms(setUniform, time(), WATER_HEIGHTS_UNIT);
                         setUniform("uStrength", this.strength);
@@ -1010,7 +1006,9 @@ export class GroundSplat {
                         setUniform("uIce", this.cycle.ice);
                         setUniform("uSnow", this.snow);
                         setUniform("uServerIce", this.serverIce ? 1 : 0);
-                        setUniform("uWind", [this.wind.x, this.wind.y, this.wind.share]);
+                        if (this.canSea) {
+                            for (const [name, value] of windSeaUniforms(this.sea, time())) setUniform(name, value);
+                        }
                         this.setReflectionUniforms(setUniform);
                         for (let index = 0; index < MAX_ICE_BREAKS; index++) {
                             const shown = this.breaks[index];
@@ -1069,8 +1067,8 @@ export class GroundSplat {
     public setBreaks(breaks: readonly IceBreak[]): void {
         this.breaks = breaks;
     }
-    /** The wind over the water: which way it blows and the share of open water its whitecaps whiten. */
-    private wind = { x: 0, y: 1, share: 0 };
+    /** The sea the wind raises on the water (WindSeaShader); undefined: none (a light wind, or no wind). */
+    private sea: SeaDrawing | undefined;
 
     /** Lays the grounds over `area` from their weights. Nothing to draw: the ground shader is hidden. */
     public setGround(area: GroundArea, weights: GroundWeights): void {
@@ -1151,6 +1149,8 @@ export class GroundSplat {
         flow?: Float32Array,
         /** The depth of the water as it is, cell by cell: where its surface is, seen in 3/4. */
         depths?: Float32Array,
+        /** The fetch of the wind over each cell (WindSea.fetchByte); undefined: no wind sea. */
+        fetch?: Uint8Array,
     ): void {
         const area = this.area;
         const pixels = this.pixels;
@@ -1170,6 +1170,7 @@ export class GroundSplat {
         // The foam of the waves, in the red of pack 9.
         writeFoam(pixels.data, wet, foam, columns, rows);
         writeFlow(pixels.data, flow, columns, rows);
+        writeFetch(pixels.data, fetch, columns, rows);
         if (!any && !this.anyWater) return;
         this.anyWater = any;
         this.upload();
@@ -1236,8 +1237,14 @@ export class GroundSplat {
         setUniform("uLampOpacity", lamps?.opacity ?? 0);
     }
 
-    public setWind(wind: { x: number; y: number; share: number }): void {
-        this.wind = wind;
+    /** The sea the wind raises on the water: read by the water shader at its next drawing. */
+    public setSea(sea: SeaDrawing | undefined): void {
+        this.sea = sea;
+    }
+
+    /** Whether the water shader draws the wind sea on this graphics card. */
+    public drawsSea(): boolean {
+        return this.canSea;
     }
 
     /** The fronts of the waves of the comets fallen into the water: the first MAX_WATER_RINGS are drawn. */
@@ -1558,6 +1565,18 @@ export function writeFoam(
 ): void {
     for (let cell = 0; cell < columns * rows; cell++) {
         data[texel(9, cell, columns, rows)] = (wet?.[cell] ?? 0) > 0 ? (foam?.[cell] ?? 0) : 0;
+    }
+}
+
+/** The fetch of the wind over each cell (WindSea.fetchByte), into the red of FETCH_PACK; undefined: none. */
+export function writeFetch(
+    data: Uint8ClampedArray,
+    fetch: Uint8Array | undefined,
+    columns: number,
+    rows: number,
+): void {
+    for (let cell = 0; cell < columns * rows; cell++) {
+        data[texel(FETCH_PACK, cell, columns, rows)] = fetch?.[cell] ?? 0;
     }
 }
 
