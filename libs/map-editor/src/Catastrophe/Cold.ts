@@ -1,4 +1,5 @@
 import { TILE_PX } from "../types";
+import { waterSaturationPressure } from "../Weather/HoarFrost";
 
 /** The radius of a mass of cold air, in tiles: what a player chooses, from a frozen puddle to a frozen bay. */
 export const COLD_MIN_TILES = 1;
@@ -73,6 +74,40 @@ export function coldAirAt(masses: Iterable<ColdMass>, x: number, y: number, mapC
         if (here < coldest) coldest = here;
     }
     return coldest;
+}
+
+/** The air of a point: its temperature (°C), its relative humidity (%) when known, its wind (km/h) when known. */
+export interface ColdAir {
+    temperature: number;
+    humidity?: number;
+    windSpeed?: number;
+}
+
+/**
+ * An air brought to `celsius` without any vapour added: its relative humidity is that of the same vapour at the new
+ * temperature, 100 % at most (cooled under its dew point, an air sheds what it cannot hold, as frost or as mist).
+ * Its wind is unchanged. The air itself when the temperature is the same, or not a number.
+ */
+export function airBroughtTo<A extends ColdAir>(air: A, celsius: number): A {
+    if (!Number.isFinite(celsius) || celsius === air.temperature) return air;
+    const humidity =
+        air.humidity !== undefined && Number.isFinite(air.humidity) && Number.isFinite(air.temperature)
+            ? Math.min(
+                  100,
+                  (air.humidity * waterSaturationPressure(air.temperature)) / waterSaturationPressure(celsius),
+              )
+            : air.humidity;
+    return { ...air, temperature: celsius, humidity };
+}
+
+/**
+ * The air of a point of the map (pixels) under the masses of cold air lying there: the air of the map (`air`)
+ * brought to the temperature the masses give that point (coldAirAt). The air of the map itself outside every mass.
+ * What the frost of the ground, the frost of the soil and the ice of that point go by: the server reads the same
+ * temperature tile by tile (Meadow.readCold), and a browser reads it here from the masses it was told.
+ */
+export function coldAirOver<A extends ColdAir>(masses: Iterable<ColdMass>, x: number, y: number, air: A): A {
+    return airBroughtTo(air, coldAirAt(masses, x, y, air.temperature));
 }
 
 /**

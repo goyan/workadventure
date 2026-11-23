@@ -5519,16 +5519,19 @@ froid là où deux masses se croisent. Trois règles lisent cet air par case, et
 
 La glace et la neige sont celles du serveur, envoyées à tous par le message du pré.
 
-**Ce qui gèle, mesuré** (−80 °C, sans vent, horloge habituelle d'une minute pour une heure) : une glace où l'on
-glisse (5 mm) en 2 s, qui porte un marcheur (50 mm) en 32 s, une cabane de pêche (102 mm) en 2 min 8 s ; une mare de
-10 cm est prise en masse en 2 min ; au large la glace croît comme la racine du temps : 30 cm en 18 min. Avec 30 km/h
-de vent, deux fois plus vite (1 m en 1 h 43). Un ruisseau à 1,5 m/s ne prend pas.
+**Ce qui gèle, mesuré** (−80 °C, sans vent), en temps de la carte : une glace où l'on glisse (5 mm) en 2 min, qui
+porte un marcheur (50 mm) en 32 min, une cabane de pêche (102 mm) en 2 h 8 min ; une mare de 10 cm est prise en
+masse en 2 h ; au large la glace croît comme la racine du temps : 30 cm en 18 h 30. Avec 30 km/h de vent, deux fois
+plus vite. Un ruisseau à 1,5 m/s ne prend pas. **À la vitesse par défaut (1, le temps réel), ce sont ces durées à
+l'écran** ; à 60 (une minute pour une heure) elles se lisent en secondes et en minutes : 2 s, 32 s, 2 min 8 s. Le
+froid suit l'horloge de la glace et de la neige (`snowTimes`), sans horloge à lui : un réglage qui accélère le gel
+accélère le coup de froid d'autant.
 
 **Quand on relâche.** La masse n'est plus tenue par personne : `MeadowSimulation` la garde et la réchauffe à chaque
 pas (`warmedCold`) : ce qui la sépare de l'air de la carte est divisé par e toutes les **15 minutes du temps de la
-carte** (15 s à l'horloge habituelle, la même que l'eau, la neige et la glace) ; à moins de 0,5 °C de cet air, elle
-est oubliée. Elle continue donc de geler quelques secondes, puis la glace **fond par la règle de dégel**, pas d'un
-coup : à 10 °C, 60 mm de glace mettent une trentaine de minutes à partir.
+carte** (15 min réelles à la vitesse 1, 15 s à 60 : l'horloge de la glace et de la neige) ; à moins de 0,5 °C de
+cet air, elle est oubliée. Elle continue donc de geler un moment, puis la glace **fond par la règle de dégel**, pas
+d'un coup : à 10 °C, 60 mm de glace mettent une trentaine d'heures de la carte à partir.
 
 **Protocole.** `CatastropheKind.CATASTROPHE_COLD = 7` ; `LaunchCatastropheMessage.temperature = 7` et
 `CatastropheMessage.temperature = 13` (facultatifs). `CatastropheManager.cold` borne le rayon (`coldTiles`) et la
@@ -5539,10 +5542,19 @@ masses tenues voyagent par valeur dans l'état de la salle donné au sol (`RoomG
 (le scénario commun des essais d'identité pose une masse, la traîne et la lâche). Le sol d'un joueur qui suit sa
 propre météo les reçoit par `LocalCatastropheRelay`. `play` et `back` se déploient ensemble.
 
+**L'air d'une case, lisible partout.** `coldAirOver(masses, x, y, air)` (`Catastrophe/Cold.ts`, pure) rend l'air
+d'un point sous les masses : l'air de la carte ramené à la température de la case (`coldAirAt`), avec l'humidité
+relative de la même vapeur à cette température, 100 % au plus (`airBroughtTo`), et le même vent. Le navigateur lit
+les masses dans `GameScene.coldMasses()` (celles que le serveur a annoncées, les relâchées réchauffées par sa règle).
+C'est ce que lisent le givre du coup de froid et la pipette de « Visualisation ».
+
 **Ce que tout le monde voit** (`Catastrophe/ColdView.ts`, règles pures dans `ColdShape.ts`) : sur le disque même que
-le serveur gèle, le **givre qui gagne le sol** depuis le cœur (blanc bleuté, plein au cœur, fondu au bord comme le
-froid lui-même), une **brume qui rampe** vers l'extérieur (l'air froid est lourd), et des **cristaux qui
-scintillent** dans l'air. Relâchée, la masse pâlit à mesure que son air se réchauffe, par la règle du serveur. Sous
+le serveur gèle, le **givre qui gagne le sol** depuis le cœur. Ce givre est celui de la règle du givre, pas un
+dessin à part : chaque bande du disque est blanche comme le dit `hoarFrost` de l'air de la case (`coldFrostAt`) :
+épais là où l'air est à quelques degrés sous zéro et tient encore de la vapeur, plus mince dans le froid extrême du
+cœur, absent au bord où l'air est encore au-dessus de zéro ; il reste tant que l'air de la masse relâchée est sous
+zéro. S'y ajoutent une **brume qui rampe** vers l'extérieur (l'air froid est lourd) et des **cristaux qui
+scintillent** dans l'air, qui pâlissent à mesure que la masse se réchauffe, par la règle du serveur. Sous
 l'interrupteur des averses ; rien n'est dessiné ni calculé quand aucune masse n'existe ; immobile en mouvement
 réduit.
 
@@ -5551,8 +5563,9 @@ réduit.
 du pas à la mesure près (5,6 à 6,1 ms sur le Mac, bruit compris).
 
 **Ce que ça ne modélise pas.** La pluie et l'averse ne tombent pas en neige dans la zone (elles lisent l'air de la
-carte) ; le givre et le sol gelé que le navigateur dessine d'après l'air de la carte ne suivent pas la masse (c'est
-le rendu de la catastrophe qui montre le froid) ; la masse ne se déplace pas avec le vent et ne refroidit pas l'eau
+carte) ; le givre du sol que le navigateur dessine pour toute la carte (un seul réglage du shader du sol) ne suit
+pas la masse : dans la zone c'est la vue de la catastrophe qui pose le givre, par la même règle et le même air ; le
+sol gelé de la zone n'a pas de dessin ; la masse ne se déplace pas avec le vent et ne refroidit pas l'eau
 elle-même ; la repousse après un feu et le séchage de l'herbe morte restent ceux de l'air de la carte ; les animaux,
 le feu et les joueurs ne sentent pas ce froid ; pendant qu'une salle revit le temps où elle était vide, aucune masse
 n'agit. Un navigateur d'avant dessine une comète à chaque message.

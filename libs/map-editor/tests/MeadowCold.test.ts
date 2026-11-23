@@ -9,7 +9,9 @@ import {
     COLD_MIN_CELSIUS,
     COLD_MIN_TILES,
     COLD_WARMS_MINUTES,
+    airBroughtTo,
     coldAirAt,
+    coldAirOver,
     coldCelsius,
     coldShare,
     coldTiles,
@@ -17,6 +19,7 @@ import {
 } from "../src/Catastrophe/Cold";
 import type { ColdMass } from "../src/Catastrophe/Cold";
 import { ICE_BEARS_MM, ICE_SLIPS_MM } from "../src/Terrain/Ice";
+import { hoarFrost } from "../src/Weather/HoarFrost";
 import { Meadow, MEADOW_STEP_SECONDS } from "../src/Terrain/Meadow";
 import type { MeadowStepInput } from "../src/Terrain/Meadow";
 import type { SnowWeather } from "../src/Terrain/Snow";
@@ -28,7 +31,7 @@ const mild: SnowWeather = { temperature: 10, humidity: 50, windSpeed: 0 };
 const ponds = (tileX: number, tileY: number): number => (tileY === 10 && (tileX === 10 || tileX === 30) ? 16 : 0);
 /** A mass of air at -80 °C, 4 tiles wide, over the pond of the west. */
 const mass: ColdMass = { id: 1, x: 10.5 * TILE_PX, y: 10.5 * TILE_PX, radiusTiles: 4, temperature: -80 };
-/** The usual clock of a map: a minute for an hour. */
+/** A map whose water, snow and ice go sixty times faster than reality: a minute for an hour. */
 const under = (more: Partial<MeadowStepInput> = {}): MeadowStepInput => ({
     seconds: MEADOW_STEP_SECONDS,
     snowTimes: 60,
@@ -81,6 +84,23 @@ describe("a mass of cold air", () => {
         expect(coldAirAt([mass], mass.x, mass.y, -100)).toBe(-100);
     });
 
+    it("gives the whole air of a point: colder, and as damp as the same vapour makes it there, 100 % at most", () => {
+        const air = { temperature: 10, humidity: 50, windSpeed: 12 };
+        // Outside: the air of the map, the very same.
+        expect(coldAirOver([mass], mass.x + 5 * TILE_PX, mass.y, air)).toBe(air);
+        // In the core: -80 °C, saturated (the air of the map held far more vapour than an air that cold can), same wind.
+        expect(coldAirOver([mass], mass.x, mass.y, air)).toEqual({ temperature: -80, humidity: 100, windSpeed: 12 });
+        // Cooled a little: the same vapour is a higher relative humidity, not yet saturated.
+        expect(airBroughtTo(air, 5).humidity).toBeGreaterThan(65);
+        expect(airBroughtTo(air, 5).humidity).toBeLessThan(75);
+        // The frost of the ground goes by that air: none in the mild air of the map, some under the mass.
+        expect(hoarFrost({ ...air })).toBe(0);
+        expect(hoarFrost(coldAirOver([mass], mass.x, mass.y, air))).toBeGreaterThan(0);
+        expect(hoarFrost(coldAirOver([mass], mass.x + 3 * TILE_PX, mass.y, air))).toBeGreaterThan(0.9);
+        // An air whose humidity is not known stays so.
+        expect(coldAirOver([mass], mass.x, mass.y, { temperature: 10 })).toEqual({ temperature: -80 });
+    });
+
     it("comes back to the air of the map little by little once it is let go", () => {
         expect(COLD_WARMS_MINUTES).toBe(15);
         expect(warmedCold(-80, 10, 0)).toBe(-80);
@@ -104,7 +124,7 @@ describe("the meadow under a mass of cold air", () => {
         expect(meadow.icy()).toBe(true);
     });
 
-    it("bears a walker after about half a minute at -80 °C, at the usual clock", () => {
+    it("bears a walker after about half an hour of the map at -80 °C: half a minute at a minute for an hour", () => {
         const meadow = new Meadow(size, undefined, undefined);
         run(meadow, 12, under({ cold: [mass] }));
         expect(meadow.iceAt(10, 10)).toBeLessThan(ICE_BEARS_MM);

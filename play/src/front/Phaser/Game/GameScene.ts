@@ -52,7 +52,7 @@ import {
     bridgesOf,
     pavedTilesOf,
 } from "@workadventure/map-editor";
-import type { Bridges, TerrainData, WeatherLocation } from "@workadventure/map-editor";
+import type { Bridges, ColdMass, TerrainData, WeatherLocation } from "@workadventure/map-editor";
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
 import Debug from "debug";
 import { asError } from "catch-unknown";
@@ -3683,6 +3683,15 @@ export class GameScene extends DirtyScene {
         return getFrozenPoolRectangles(this).some((pool) => pool.entityId === entityId);
     }
 
+    /**
+     * The masses of cold air lying on the map now (the cold snap of the catastrophes), as the server told them, those
+     * let go warmed as the server warms them: what reads the air of a point gives them to coldAirOver. None while no
+     * cold air lies on the map.
+     */
+    public coldMasses(): ColdMass[] {
+        return this.coldView?.masses(this.time.now) ?? [];
+    }
+
     public isDrainCalm(x: number, y: number): boolean {
         return this.drainView?.calms(x, y) ?? false;
     }
@@ -5112,10 +5121,13 @@ export class GameScene extends DirtyScene {
         const coldView = new ColdView(
             this,
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
-            // A mass let go comes back to the air of the room, at the clock of its water, as on the server.
+            // A mass let go comes back to the air of the room, at the clock of its water, as on the server; the
+            // frost it lays is the hoar frost of that air, cooled.
             () =>
-                roomPrecipitationAir(this.getGameMap().getWamFile()?.getWam().settings, this.nightManager?.serverDate())
-                    ?.temperature,
+                roomPrecipitationAir(
+                    this.getGameMap().getWamFile()?.getWam().settings,
+                    this.nightManager?.serverDate(),
+                ),
             () => waterTimesOf(this.getGameMap().getWamFile()?.getWam().settings?.water),
             (x, y) => this.surfaceDropAt(x, y),
         );

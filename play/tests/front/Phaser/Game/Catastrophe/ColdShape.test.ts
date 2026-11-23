@@ -1,8 +1,9 @@
-import { COLD_LASTS_MS, coldShare, warmedCold } from "@workadventure/map-editor";
+import { airBroughtTo, COLD_LASTS_MS, coldShare, hoarFrost, warmedCold } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
 import {
     coldAt,
-    coldFrostRings,
+    coldFrostAt,
+    coldFrostBands,
     coldMist,
     coldSparkles,
     coldStrength,
@@ -21,20 +22,40 @@ describe("coldStrength", () => {
     });
 });
 
-describe("coldFrostRings", () => {
-    it("whitens the ground as the cold reaches it: whole in the core, fading to the rim", () => {
-        const rings = coldFrostRings();
-        expect(rings.length).toBeGreaterThanOrEqual(6);
-        expect(rings[0].radius).toBe(1);
-        for (let ring = 1; ring < rings.length; ring++) expect(rings[ring].radius).toBeLessThan(rings[ring - 1].radius);
-        // Laid one over the other from the rim inwards, they add up to the share of the cold at each distance.
-        let laid = 0;
-        for (const ring of rings) {
-            laid += ring.alpha;
-            expect(laid).toBeCloseTo(coldShare(ring.radius - 1e-9) > 0 ? laid : 0, 6);
-            expect(ring.alpha).toBeGreaterThanOrEqual(0);
+describe("coldFrostBands", () => {
+    const mild = { temperature: 10, humidity: 50, windSpeed: 0 };
+
+    it("lays the hoar frost of the air of the ground: a core, then bands out to the rim, none where it is over zero", () => {
+        const bands = coldFrostBands(-80, mild);
+        expect(bands[0]).toMatchObject({ inner: 0, outer: 0.5 });
+        expect(bands.at(-1)?.outer).toBeCloseTo(1, 9);
+        for (let band = 1; band < bands.length; band++) expect(bands[band].inner).toBeCloseTo(bands[band - 1].outer, 9);
+        // The frost of each distance is what the rule of the frost says of the air there.
+        for (const away of [0, 0.3, 0.6, 0.8, 0.95]) {
+            const here = airBroughtTo(mild, 10 - 90 * coldShare(away));
+            expect(coldFrostAt(-80, mild, away)).toBeCloseTo(hoarFrost({ ...here, humidity: here.humidity ?? 0 }), 9);
         }
-        expect(laid).toBeCloseTo(1, 6);
+        // A band is that frost, with a little of its neighbours: never further from it than they are.
+        for (let band = 1; band < bands.length - 1; band++) {
+            const own = coldFrostAt(-80, mild, (bands[band].inner + bands[band].outer) / 2);
+            const around = [bands[band - 1], bands[band + 1]].map((other) =>
+                coldFrostAt(-80, mild, other.inner === 0 ? 0 : (other.inner + other.outer) / 2),
+            );
+            expect(bands[band].frost).toBeGreaterThanOrEqual(Math.min(own, ...around) - 1e-9);
+            expect(bands[band].frost).toBeLessThanOrEqual(Math.max(own, ...around) + 1e-9);
+        }
+        // Frost in the core, thicker where the air is only a few degrees under zero, none at the rim (still over 0 °C).
+        expect(bands[0].frost).toBeGreaterThan(0.3);
+        expect(Math.max(...bands.map((band) => band.frost))).toBeGreaterThan(bands[0].frost);
+        expect(bands.at(-1)?.frost).toBe(0);
+    });
+
+    it("lays none under a mass no colder than the air of the map, and goes by the cold alone when the humidity is not known", () => {
+        expect(coldFrostBands(15, mild).every((band) => band.frost === 0)).toBe(true);
+        const unknown = coldFrostBands(-80, { temperature: 10 });
+        expect(unknown[0].frost).toBe(1);
+        expect(unknown.at(-1)?.frost).toBeLessThan(0.2);
+        expect(coldFrostBands(-80, undefined)[0].frost).toBe(1);
     });
 });
 

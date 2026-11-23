@@ -1,14 +1,23 @@
 import { TILE_PX } from "@workadventure/map-editor";
+import type { ColdAir, ColdMass } from "@workadventure/map-editor";
 import type { CatastropheMessage } from "@workadventure/messages";
 import { DEPTH_NIGHT_INDEX } from "@wa/front/Phaser/Game/DepthIndexes";
 import { drawLower } from "@wa/front/Phaser/Game/Terrain/GroundDrop";
 import { isEffectShown } from "@wa/front/Stores/EffectsStore";
-import { coldAt, coldFrostRings, coldMist, coldSparkles, coldStrength, tellCold } from "./ColdShape";
+import {
+    coldAt,
+    coldFrostBands,
+    coldMist,
+    coldSparkles,
+    coldStrength,
+    tellCold,
+    UNKNOWN_AIR_CELSIUS,
+} from "./ColdShape";
 import type { ShownCold } from "./ColdShape";
 
 /** The frost on the ground: a white that leans to blue. */
 const FROST_COLOR = 0xe6f3ff;
-const FROST_ALPHA = 0.34;
+const FROST_ALPHA = 0.42;
 /** The frost takes this long to reach the rim of a mass that just came (ms): it is seen gaining ground. */
 const FROST_GAINS_MS = 2500;
 /** The mist that creeps on the ground, and the paler heart of each wisp. */
@@ -49,8 +58,11 @@ export class ColdView {
     constructor(
         private readonly scene: Phaser.Scene & { markDirty(): void },
         private readonly reducedMotion: () => boolean,
-        /** The temperature of the air of the map (°C), which a mass let go comes back to; undefined while not known. */
-        private readonly mapCelsius: () => number | undefined,
+        /**
+         * The air of the map: a mass let go comes back to its temperature, and the frost on the ground is the hoar
+         * frost of that air brought to the cold of the mass. Undefined while not known.
+         */
+        private readonly mapAir: () => ColdAir | undefined,
         /** How many times faster than the clock the time of the map goes (the speed of its water). */
         private readonly times: () => number,
         /** How much lower the ground or the water under a point is drawn (the relief seen in 3/4). */
@@ -66,6 +78,23 @@ export class ColdView {
         this.shown.set(message.id, { ...told, drawnX: known?.drawnX ?? told.x, drawnY: known?.drawnY ?? told.y });
     }
 
+    /**
+     * The masses of cold air lying on the map at `now` (ms of the game), as the server told them: those held, and
+     * those let go, warmed by the rule of the server. What reads the air of a point (coldAirOver) reads them here.
+     */
+    public masses(now: number): ColdMass[] {
+        if (this.shown.size === 0) return [];
+        const air = this.mapAir()?.temperature;
+        const times = this.times();
+        const masses: ColdMass[] = [];
+        for (const [id, cold] of this.shown) {
+            const temperature = coldAt(cold, now, air, times);
+            if (temperature === undefined) continue;
+            masses.push({ id, x: cold.x, y: cold.y, radiusTiles: cold.radiusTiles, temperature });
+        }
+        return masses;
+    }
+
     public update(now: number): void {
         if (this.shown.size === 0) {
             this.lastUpdate = undefined;
@@ -76,12 +105,12 @@ export class ColdView {
         const elapsed = this.lastUpdate === undefined ? 0 : Math.max(0, now - this.lastUpdate);
         this.lastUpdate = now;
         const follow = Math.min(1, elapsed * FOLLOW_PER_MS);
-        const air = this.mapCelsius();
+        const air = this.mapAir();
         const times = this.times();
         const reduced = this.reducedMotion();
         this.graphics.clear();
         for (const [id, cold] of this.shown) {
-            const temperature = coldAt(cold, now, air, times);
+            const temperature = coldAt(cold, now, air?.temperature, times);
             if (temperature === undefined) {
                 this.shown.delete(id);
                 continue;
@@ -89,25 +118,38 @@ export class ColdView {
             cold.drawnX += (cold.x - cold.drawnX) * follow;
             cold.drawnY += (cold.y - cold.drawnY) * follow;
             // Held under an air that is not known, it is seen as against a mild air.
-            const strength = coldStrength(temperature, air ?? 10);
+            const strength = coldStrength(temperature, air?.temperature ?? UNKNOWN_AIR_CELSIUS);
             if (!visible || strength <= 0) continue;
             drawLower([this.graphics], Math.round(this.dropAt(cold.drawnX, cold.drawnY)), () =>
-                this.draw(cold, now - cold.beganAt, strength, reduced),
+                this.draw(cold, now - cold.beganAt, temperature, air, strength, reduced),
             );
         }
         this.scene.markDirty();
     }
 
-    private draw(cold: Shown, elapsed: number, strength: number, reduced: boolean): void {
+    private draw(
+        cold: Shown,
+        elapsed: number,
+        temperature: number,
+        air: ColdAir | undefined,
+        strength: number,
+        reduced: boolean,
+    ): void {
         const graphics = this.graphics;
         const radius = cold.radiusTiles * TILE_PX;
         const { drawnX: x, drawnY: y } = cold;
         // The frost gains the ground from the core of a mass that just came.
         const gained = reduced ? 1 : Math.min(1, 0.35 + (0.65 * Math.max(0, elapsed)) / FROST_GAINS_MS);
-        for (const ring of coldFrostRings()) {
-            if (ring.alpha <= 0) continue;
-            graphics.fillStyle(FROST_COLOR, FROST_ALPHA * strength * ring.alpha);
-            graphics.fillCircle(x, y, ring.radius * radius * gained);
+        // The hoar frost of the air of the ground under the mass, band by band: its core, then rings out to its rim.
+        for (const band of coldFrostBands(temperature, air)) {
+            if (band.frost <= 0) continue;
+            if (band.inner <= 0) {
+                graphics.fillStyle(FROST_COLOR, FROST_ALPHA * band.frost);
+                graphics.fillCircle(x, y, band.outer * radius * gained);
+            } else {
+                graphics.lineStyle((band.outer - band.inner) * radius * gained, FROST_COLOR, FROST_ALPHA * band.frost);
+                graphics.strokeCircle(x, y, ((band.inner + band.outer) / 2) * radius * gained);
+            }
         }
         const wisps = Math.min(MOST_WISPS, Math.max(FEWEST, cold.radiusTiles * WISPS_PER_TILE));
         for (const wisp of coldMist(elapsed, wisps, reduced)) {

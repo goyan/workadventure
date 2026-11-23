@@ -1,10 +1,21 @@
-import { COLD_CORE_SHARE, coldCelsius, coldShare, coldTiles, warmedCold } from "@workadventure/map-editor";
+import {
+    airBroughtTo,
+    COLD_CORE_SHARE,
+    coldCelsius,
+    coldShare,
+    coldTiles,
+    hoarFrost,
+    warmedCold,
+} from "@workadventure/map-editor";
+import type { ColdAir } from "@workadventure/map-editor";
 import type { CatastropheMessage } from "@workadventure/messages";
 
 /** A mass this many degrees colder than the air of the map is drawn whole; less cold, fainter. */
 const FULL_STRENGTH_DEGREES = 60;
-/** The frost on the ground is laid in this many rings, from the rim of the mass to its core. */
-const FROST_RINGS = 14;
+/** The frost on the ground is laid in this many bands between the core of a mass and its rim. */
+const FROST_BANDS = 14;
+/** A mass held under an air that is not known is seen as against a mild air (°C). */
+export const UNKNOWN_AIR_CELSIUS = 10;
 /** A wisp of mist creeps from the core to past the rim in this long (ms), then comes again from the core. */
 const MIST_CREEP_MS = 9000;
 /** How far past the rim a wisp of mist goes before it is gone, in shares of the radius. */
@@ -30,22 +41,53 @@ export function coldStrength(temperature: number, mapCelsius: number): number {
     return Math.min(1, Math.max(0, (mapCelsius - temperature) / FULL_STRENGTH_DEGREES));
 }
 
+/** A band of the frost a mass lays on the ground, between two distances from its middle (shares of its radius). */
+export interface ColdFrostBand {
+    inner: number;
+    outer: number;
+    /** How white the ground is there, 0 to 1. */
+    frost: number;
+}
+
 /**
- * The frost a mass of cold air lays on the ground: discs laid one over the other from its rim to its core (radius in
- * shares of its own), whose opacities add up, at each distance, to the share of the cold there (coldShare): whole in
- * the core, fading to nothing at the rim, as the server freezes it.
+ * How white the ground is with frost under a mass of air at `temperature`, `away` from its middle (shares of its
+ * radius), under an air of the map `air`: the hoar frost of the air of the ground there (hoarFrost of the air of the
+ * map brought to the temperature the mass gives that distance, as coldAirOver gives it). So the frost is that of the
+ * rule of the frost, not a drawing of its own: thick where the air is a few degrees under zero and still holds
+ * vapour, thinner in the extreme cold of the core, none where the air of the rim is still over zero. Under an air
+ * whose humidity is not known, the cold itself whitens the ground (coldShare), as much as the mass is colder than
+ * the map.
  */
-export function coldFrostRings(): { radius: number; alpha: number }[] {
-    const rings: { radius: number; alpha: number }[] = [];
-    let laid = 0;
-    for (let ring = 0; ring < FROST_RINGS; ring++) {
-        const radius = 1 - ((1 - COLD_CORE_SHARE) * ring) / (FROST_RINGS - 1);
-        // What the cold is just inside this ring: at the core, all of it.
-        const inside = ring === FROST_RINGS - 1 ? 1 : coldShare(radius - (1 - COLD_CORE_SHARE) / (FROST_RINGS - 1));
-        rings.push({ radius, alpha: inside - laid });
-        laid = inside;
+export function coldFrostAt(temperature: number, air: ColdAir | undefined, away: number): number {
+    const share = coldShare(away);
+    if (air === undefined || air.humidity === undefined || !Number.isFinite(air.humidity)) {
+        return share * coldStrength(temperature, air?.temperature ?? UNKNOWN_AIR_CELSIUS);
     }
-    return rings;
+    if (!(temperature < air.temperature)) return 0;
+    const here = airBroughtTo(air, air.temperature + (temperature - air.temperature) * share);
+    return hoarFrost({ temperature: here.temperature, humidity: here.humidity ?? 0, windSpeed: here.windSpeed });
+}
+
+/**
+ * The frost a mass lays on the ground, as it is drawn: its core, then bands out to its rim, each as white as the
+ * frost of the ground there (coldFrostAt), a band taking a little of its two neighbours: the air of a mass mixes
+ * with the air around it, and its frost has no edge drawn with a compass.
+ */
+export function coldFrostBands(temperature: number, air: ColdAir | undefined): ColdFrostBand[] {
+    const wide = (1 - COLD_CORE_SHARE) / FROST_BANDS;
+    const raw = [coldFrostAt(temperature, air, 0)];
+    for (let band = 0; band < FROST_BANDS; band++) {
+        raw.push(coldFrostAt(temperature, air, COLD_CORE_SHARE + (band + 0.5) * wide));
+    }
+    // Past the rim there is no frost of the mass.
+    const at = (band: number): number => (band < 0 ? raw[0] : band >= raw.length ? 0 : raw[band]);
+    const bands: ColdFrostBand[] = [];
+    for (let band = 0; band < raw.length; band++) {
+        const frost = band === 0 ? raw[0] : 0.25 * at(band - 1) + 0.5 * at(band) + 0.25 * at(band + 1);
+        const inner = band === 0 ? 0 : COLD_CORE_SHARE + (band - 1) * wide;
+        bands.push({ inner, outer: band === 0 ? COLD_CORE_SHARE : inner + wide, frost });
+    }
+    return bands;
 }
 
 /** A wisp of the mist of a mass of cold air: where it is (shares of the radius), how wide, how visible. */
