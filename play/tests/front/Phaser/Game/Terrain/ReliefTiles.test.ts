@@ -11,6 +11,39 @@ import { BlockPainter } from "../../../../../src/front/Phaser/Game/Terrain/Pixel
 import type { BlockJob } from "../../../../../src/front/Phaser/Game/Terrain/Pixel/BlockPainter";
 import { RAMPS, rampsFor } from "../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
 import type { Rgb } from "../../../../../src/front/Phaser/Game/Terrain/Pixel/PixelPalette";
+import type * as GroundPixel from "../../../../../src/front/Phaser/Game/Terrain/Pixel/GroundPixel";
+
+// The rays of the shadows are counted (the same function, counted): the work of a block, not its time.
+const rays = vi.hoisted(() => ({ count: 0 }));
+vi.mock("../../../../../src/front/Phaser/Game/Terrain/Pixel/GroundPixel", async (importOriginal) => {
+    const actual = await importOriginal<typeof GroundPixel>();
+    const shadowHorizon: typeof actual.shadowHorizon = (...args) => {
+        rays.count++;
+        return actual.shadowHorizon(...args);
+    };
+    return { ...actual, shadowHorizon };
+});
+
+/**
+ * The guards measured with the clock of the machine: they depend on its speed and its load, so they are not run with
+ * the suite (they made it fail at random). Run apart with RELIEF_REAL_TIME=1; the suite checks the same with counts.
+ */
+const REAL_TIME = import.meta.env.RELIEF_REAL_TIME === "1";
+
+// Drawing blocks until they all show takes a second or two, many more on a loaded machine: the 5 s of a test by
+// default made the suite fail at random there, a test that times out saying nothing of the relief.
+vi.setConfig({ testTimeout: 30_000 });
+
+/** Runs `run` with a clock that moves `step` ms at each look: the budgets of an image, the same on any machine. */
+function withClock<T>(step: number, run: () => T): T {
+    let clock = 0;
+    const now = vi.spyOn(performance, "now").mockImplementation(() => (clock += step));
+    try {
+        return run();
+    } finally {
+        now.mockRestore();
+    }
+}
 
 /** Hollows dug all over a large part of the map: every block of 256 px holds some. */
 function dugEverywhere(): TerrainData {
@@ -374,29 +407,87 @@ describe("the blocks of the relief seen in 3/4", () => {
         expect(lightness(block, 204, 208)).toBeLessThan(lightness(block, 44, 48) * 0.9);
     });
 
-    it("draws a block with a mount, its shadow and a lake at its foot about as fast as a block dug as deep", () => {
-        const timeOf = (terrain: TerrainData): number => {
+    /** A lake at the foot of the mount (or of the hollow): 20 px of water on the cells x 16 to 31, y 28 to 31. */
+    const lakeAtTheFoot = (water: TerrainWater) => {
+        const bytes = new Uint8Array(64 * 64 * 2);
+        for (let y = 28; y < 32; y++) for (let x = 16; x < 32; x++) bytes[(y * 64 + x) * 2] = 160;
+        water.receive({ x: 0, y: 0, width: 64, height: 64, seq: 1, full: true, depths: bytes }, 0);
+    };
+
+    it("draws a block with a mount, its shadow and a lake at its foot with no more work than a block dug as deep", () => {
+        // The work is counted, not timed: the blocks begun, the rows and columns the steps of the painter go through,
+        // and the rays of the shadows followed (from the first row and the first column of a block only).
+        const workOf = (terrain: TerrainData) => {
+            const painter = BlockPainter.prototype;
+            const spies = {
+                blocks: vi.spyOn(painter, "begin"),
+                ground: vi.spyOn(painter, "groundRows"),
+                horizon: vi.spyOn(painter, "horizonRows"),
+                colors: vi.spyOn(painter, "colorRows"),
+                columns: vi.spyOn(painter, "projectColumns"),
+            };
+            rays.count = 0;
             const { tiles, water } = fixture(terrain);
-            // 20 px of water on the cells x 16 to 31, y 28 to 31: at the foot of the mount (or the hollow).
-            const bytes = new Uint8Array(64 * 64 * 2);
-            for (let y = 28; y < 32; y++) for (let x = 16; x < 32; x++) bytes[(y * 64 + x) * 2] = 160;
-            water.receive({ x: 0, y: 0, width: 64, height: 64, seq: 1, full: true, depths: bytes }, 0);
-            // Until every block around the view is drawn, coarse then sharp.
-            let total = 0;
-            let quiet = 0;
-            for (let frame = 0; frame < 5000 && quiet < 3; frame++) {
-                const before = tiles.redraws();
-                const start = performance.now();
-                tiles.update(frame);
-                total += performance.now() - start;
-                quiet = tiles.isDrawing() || tiles.redraws() !== before ? 0 : quiet + 1;
-            }
-            return total;
+            lakeAtTheFoot(water);
+            // Until every block around the view is drawn, coarse then sharp; the clock moves 1 ms at each look.
+            withClock(1, () => {
+                let quiet = 0;
+                for (let frame = 0; frame < 5000 && quiet < 3; frame++) {
+                    const before = tiles.redraws();
+                    tiles.update(frame);
+                    quiet = tiles.isDrawing() || tiles.redraws() !== before ? 0 : quiet + 1;
+                }
+            });
+            const span = (calls: unknown[][]) => calls.reduce((sum, [from, to]) => sum + Number(to) - Number(from), 0);
+            const work = {
+                blocks: spies.blocks.mock.calls.length,
+                ground: span(spies.ground.mock.calls),
+                horizon: span(spies.horizon.mock.calls),
+                colors: span(spies.colors.mock.calls),
+                columns: span(spies.columns.mock.calls),
+                rays: rays.count,
+            };
+            for (const spy of Object.values(spies)) spy.mockRestore();
+            return work;
         };
-        const dug = timeOf(mountOnSand(-128));
-        const raised = timeOf(mountOnSand(128));
-        expect(raised).toBeLessThan(dug * 1.5 + 10);
+        const dug = workOf(mountOnSand(-128));
+        const raised = workOf(mountOnSand(128));
+        expect(dug.blocks).toBeGreaterThan(0);
+        expect(raised.rays).toBeGreaterThan(0);
+        for (const kind of ["blocks", "ground", "horizon", "colors", "columns", "rays"] as const) {
+            expect(raised[kind], kind).toBeLessThanOrEqual(dug[kind] * 1.5);
+        }
+        // A ray is followed from the first row and the first column of a block only (256 points each at most): the
+        // other points take the horizon of their north-west neighbour.
+        expect(raised.rays).toBeLessThanOrEqual(raised.horizon + 256 * raised.blocks);
     });
+
+    it.runIf(REAL_TIME)(
+        "draws a block with a mount, its shadow and a lake at its foot about as fast as a block dug as deep (real time)",
+        () => {
+            const timeOf = (terrain: TerrainData): number => {
+                const { tiles, water } = fixture(terrain);
+                // 20 px of water on the cells x 16 to 31, y 28 to 31: at the foot of the mount (or the hollow).
+                const bytes = new Uint8Array(64 * 64 * 2);
+                for (let y = 28; y < 32; y++) for (let x = 16; x < 32; x++) bytes[(y * 64 + x) * 2] = 160;
+                water.receive({ x: 0, y: 0, width: 64, height: 64, seq: 1, full: true, depths: bytes }, 0);
+                // Until every block around the view is drawn, coarse then sharp.
+                let total = 0;
+                let quiet = 0;
+                for (let frame = 0; frame < 5000 && quiet < 3; frame++) {
+                    const before = tiles.redraws();
+                    const start = performance.now();
+                    tiles.update(frame);
+                    total += performance.now() - start;
+                    quiet = tiles.isDrawing() || tiles.redraws() !== before ? 0 : quiet + 1;
+                }
+                return total;
+            };
+            const dug = timeOf(mountOnSand(-128));
+            const raised = timeOf(mountOnSand(128));
+            expect(raised).toBeLessThan(dug * 1.5 + 10);
+        },
+    );
 
     describe("a mount from end to end", () => {
         /** mountOnSand, the mount in rock: told apart from the sand around it. */
@@ -590,7 +681,10 @@ describe("the blocks of the relief seen in 3/4", () => {
         it("shows the blocks landed within the time of an image: the others at the next images", () => {
             const { tiles, pool, scene } = fixture(floorWithSand(24), undefined, { pool: true });
             pool.capacity = 12;
-            for (let frame = 0; frame < 4; frame++) tiles.update(frame);
+            // Handed over with a clock that stands still: as many blocks as the workers take, on any machine.
+            withClock(0, () => {
+                for (let frame = 0; frame < 4; frame++) tiles.update(frame);
+            });
             const posted = pool.posted.length;
             expect(posted).toBeGreaterThanOrEqual(6);
             expect(pool.flush()).toBe(posted);
@@ -911,7 +1005,34 @@ describe("the blocks of the relief seen in 3/4", () => {
     });
 
     it("draws its first block without freezing: the textures are worked out as they are used", async () => {
-        // A fresh copy of the modules: no texture worked out yet.
+        // A fresh copy of the modules: no texture worked out yet (the watched copy of GroundPixel would be kept).
+        vi.doUnmock("../../../../../src/front/Phaser/Game/Terrain/Pixel/GroundPixel");
+        vi.resetModules();
+        const fresh = await import("../../../../../src/front/Phaser/Game/Terrain/ReliefTiles");
+        const pixel = await import("../../../../../src/front/Phaser/Game/Terrain/Pixel/GroundPixel");
+        const { scene } = fixture(floorWithSand(24));
+        const terrain = floorWithSand(24);
+        const water = new TerrainWater();
+        water.setTerrain(terrain);
+        const tiles = new fresh.ReliefTiles(scene as never, {
+            relief: () => terrain,
+            water,
+            season: () => undefined,
+            snowCoverAt: () => 0,
+        });
+        // The first image, the clock moving 1 ms at each look: a first block drawn in it.
+        withClock(1, () => tiles.update(0));
+        expect(tiles.redraws()).toBeGreaterThanOrEqual(1);
+        // Only the points read are worked out, not the whole table of a material (512 × 512) at its first use.
+        const worked = (["grass", "sand"] as const).map(
+            (material) => pixel.textureTable(material).filter((value) => !Number.isNaN(value)).length,
+        );
+        expect(worked.some((count) => count > 0)).toBe(true);
+        for (const count of worked) expect(count).toBeLessThan(512 * 512);
+    });
+
+    it.runIf(REAL_TIME)("draws its first block without freezing (real time)", async () => {
+        vi.doUnmock("../../../../../src/front/Phaser/Game/Terrain/Pixel/GroundPixel");
         vi.resetModules();
         const fresh = await import("../../../../../src/front/Phaser/Game/Terrain/ReliefTiles");
         const { scene, setTerrain } = fixture(floorWithSand(24));
@@ -986,6 +1107,44 @@ describe("the blocks of the relief seen in 3/4", () => {
     });
 
     it("spreads the drawing of a block over several images: an image spends a few ms on it, not a whole block", () => {
+        const deepest = withHeights(
+            undefined,
+            new Map(
+                Array.from({ length: 96 * 96 }, (_, index): [string, number] => [
+                    cellKey(index % 96, Math.floor(index / 96)),
+                    -256,
+                ]),
+            ),
+        );
+        const { tiles, painted } = fixture(deepest);
+        // The steps of the painter, counted, not timed: the rows (or columns) each goes through, and the images that
+        // worked on a block. The clock moves 1 ms at each look.
+        const painter = BlockPainter.prototype;
+        const steps = [
+            vi.spyOn(painter, "groundRows"),
+            vi.spyOn(painter, "horizonRows"),
+            vi.spyOn(painter, "colorRows"),
+            vi.spyOn(painter, "projectColumns"),
+        ];
+        const stepsTaken = () => steps.reduce((sum, spy) => sum + spy.mock.calls.length, 0);
+        let working = 0;
+        withClock(1, () => {
+            for (let frame = 0; frame < 120; frame++) {
+                const before = stepsTaken();
+                tiles.update(frame);
+                if (stepsTaken() > before) working++;
+            }
+        });
+        const spans = steps.flatMap((spy) => spy.mock.calls.map(([from, to]) => Number(to) - Number(from)));
+        for (const spy of steps) spy.mockRestore();
+        // Blocks were drawn, whole, a sixteenth of a block (16 rows or columns of 256) a step at most.
+        expect(painted.size).toBeGreaterThanOrEqual(4);
+        expect(Math.max(...spans)).toBeLessThanOrEqual(16);
+        // Several images for each block, not one.
+        expect(working).toBeGreaterThanOrEqual(2 * painted.size);
+    });
+
+    it.runIf(REAL_TIME)("spreads the drawing of a block over several images (real time)", () => {
         const deepest = withHeights(
             undefined,
             new Map(
