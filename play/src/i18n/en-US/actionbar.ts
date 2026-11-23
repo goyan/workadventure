@@ -123,6 +123,12 @@ const actionbar = {
         minutes: "{count} min",
         seconds: "{count} s",
     },
+    fastDay: {
+        start: "Speed the day and the night up, for you alone: the sun, the moon and their shadows go by fast",
+        stop: "Back to the real sky",
+        speed: "Speed of the day and the night: {speed} minutes of sky a second",
+        sky: "Time of the sky you see: {time}",
+    },
     basicMode: {
         label: "Basic",
         switch: "Basic mode: no effect at all",

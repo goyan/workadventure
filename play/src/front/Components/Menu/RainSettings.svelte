@@ -4,9 +4,11 @@
         rainAmountStore,
         rainCloudsStore,
         rainLeanStore,
+        rainPerspectiveStore,
         rainPuddlesStore,
         rainSplashesStore,
     } from "../../Stores/WeatherStore";
+    import InputSwitch from "../Input/InputSwitch.svelte";
     import SkyLightSlider from "./SkyLightSlider.svelte";
 
     const percent = (value: number): string => `${Math.round(value * 100)} %`;
@@ -14,6 +16,12 @@
 
 <div class="flex flex-col gap-2" data-testid="rain-settings">
     <span class="text-sm text-white">{$LL.menu.settings.rain.title()}</span>
+    <InputSwitch
+        id="rain-perspective"
+        bind:value={$rainPerspectiveStore}
+        label={$LL.menu.settings.rain.perspective()}
+        labelPosition="right"
+    />
     <SkyLightSlider
         id="rain-amount"
         label={$LL.menu.settings.rain.amount()}

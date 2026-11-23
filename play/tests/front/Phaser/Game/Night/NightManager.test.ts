@@ -49,6 +49,8 @@ const { rgbLampLightsStore } = await import("../../../../../src/front/Stores/Rgb
 const { torchLightsStore } = await import("../../../../../src/front/Stores/TorchStore");
 const { moonLightLimits, moonLightShownStore } = await import("../../../../../src/front/Stores/SkyLightStore");
 const { skyWindowLightsStore } = await import("../../../../../src/front/Stores/SkyWindowLightStore");
+const { fastDayOnStore, fastDaySkyStore, fastDaySpeedStore } =
+    await import("../../../../../src/front/Stores/FastDayStore");
 
 let manager: InstanceType<typeof NightManager> | undefined;
 afterEach(() => {
@@ -60,6 +62,7 @@ afterEach(() => {
     moonLightShownStore.set(true);
     moonLightLimits.intensityMax.set(1);
     skyWindowLightsStore.set([]);
+    fastDayOnStore.set(false);
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.useRealTimers();
@@ -147,6 +150,37 @@ describe("personal night clock choice", () => {
         manager.update(0);
         expect(draw).toHaveBeenCalledWith(expect.objectContaining({ opacity: 0.6 }));
         expect(manager.isNight()).toBe(true);
+    });
+
+    it("speeds the sky up for this player alone, the time of the server staying real, and gives it back once off", async () => {
+        vi.useFakeTimers();
+        vi.spyOn(performance, "now").mockReturnValue(0);
+        // 15:00 in Paris (CET), in daylight; the civil dusk is at 17:48.
+        const afternoon = Date.parse("2026-11-12T14:00:00Z");
+        vi.setSystemTime(afternoon);
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ now: afternoon }))));
+        manager = new NightManager(createScene());
+        await vi.advanceTimersByTimeAsync(0);
+        manager.update(0);
+        expect(manager.isNight()).toBe(false);
+        const noonSun = manager.sunPosition();
+
+        fastDayOnStore.set(true);
+        fastDaySpeedStore.set(10);
+        manager.update(16);
+        // Eighteen seconds of the game at ten minutes of sky a second: three hours of sky, 18:00 in Paris, night.
+        manager.update(18_016);
+        expect(manager.isNight()).toBe(true);
+        expect(manager.sunPosition()?.elevation).toBeLessThan(noonSun?.elevation ?? 0);
+        expect(manager.serverDate()?.getTime()).toBe(afternoon);
+        expect((manager.skyDate()?.getTime() ?? 0) - afternoon).toBeGreaterThan(170 * 60_000);
+        expect(get(fastDaySkyStore)).toBeDefined();
+
+        fastDayOnStore.set(false);
+        manager.update(18_032);
+        expect(manager.isNight()).toBe(false);
+        expect(manager.skyDate()?.getTime()).toBe(afternoon);
+        expect(get(fastDaySkyStore)).toBeUndefined();
     });
 
     it("lights the night a little under the full moon, and gives the moon as the light of the sky", async () => {
