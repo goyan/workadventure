@@ -4,6 +4,7 @@ import {
     mergeShadowBoxes,
     shadowDirection,
     shadowOffset,
+    posedTree,
     shadowPolygons,
     SHADOW_MAX_LENGTH,
 } from "../../../../../src/front/Phaser/Game/SkyShadows/SkyShadowGeometry";
@@ -134,6 +135,35 @@ describe("shadowPolygons", () => {
         expect(inAny(polygons, 200, 260)).toBe(true);
         expect(inAny(polygons, 200, 300 - 75)).toBe(true);
         expect(inAny(polygons, 200 + 30, 260)).toBe(false);
+    });
+
+    it("follows a tree that falls: its crown leans the way it falls and comes down, its foot stays", () => {
+        const tree = { x: 200, y: 300, crownRadius: 20, crownHeight: 60, trunkWidth: 6 };
+        const light = { azimuth: 180, elevation: 45 };
+        // Falling to the east, half way down (45 degrees), then lying.
+        const half = posedTree(tree, { towardX: 1, towardY: 0, tilt: Math.PI / 4, size: 1 });
+        expect(half.lean?.x).toBeCloseTo(60 * Math.SQRT1_2);
+        expect(half.lean?.y).toBeCloseTo(0);
+        expect(half.crownHeight).toBeCloseTo(60 * Math.SQRT1_2 + 20 * Math.SQRT1_2);
+        const lying = posedTree(tree, { towardX: 1, towardY: 0, tilt: Math.PI / 2, size: 1 });
+        expect(lying.lean?.x).toBeCloseTo(60);
+        // The crown lies on the ground: its centre a radius above it, its shadow short, east of the foot.
+        expect(lying.crownHeight).toBeCloseTo(20);
+        const polygons = shadowPolygons({ boxes: [], trees: [lying] }, light);
+        const offset = shadowOffset(20, light);
+        expect(inAny(polygons, 260 + (offset?.x ?? 0), 300 + (offset?.y ?? 0))).toBe(true);
+        expect(inAny(polygons, 200, 299)).toBe(true);
+        // Standing up straight, the tree is as it was.
+        expect(posedTree(tree, { towardX: 0, towardY: 1, tilt: 0, size: 1 })).toEqual({
+            ...tree,
+            lean: { x: 0, y: 0 },
+        });
+    });
+
+    it("throws the shadow of a tree growing back at its size", () => {
+        const tree = { x: 200, y: 300, crownRadius: 20, crownHeight: 60, trunkWidth: 6 };
+        const young = posedTree(tree, { towardX: 0, towardY: 1, tilt: 0, size: 0.5 });
+        expect(young).toMatchObject({ crownRadius: 10, crownHeight: 30, trunkWidth: 3 });
     });
 
     it("moves the shadow of the crown with a tree bent by the wind, its foot staying where it is", () => {

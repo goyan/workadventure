@@ -114,6 +114,34 @@ describe("SkyShadowManager", () => {
         expect(draw).toHaveBeenCalledTimes(3);
     });
 
+    it("draws the shadow of a tree the wind lays down again at each pose, falling the way it falls", () => {
+        let tilt = 0;
+        let version = 0;
+        const light: SkyLight = { ...sun, elevation: 60 };
+        const markDirty = vi.fn();
+        const scene = { markDirty, cameras: { main: { worldView: { x: 0, y: 0, width: 800, height: 600 }, zoom: 1 } } };
+        const manager = new SkyShadowManager(scene as never, {
+            light: () => light,
+            entities: () => [{ ...tree, id: "oak" }],
+            outdoorGrid: () => undefined,
+            outdoorVersion: () => 0,
+            enabled: () => true,
+            // Falling to the east.
+            treePose: (id) => (id === "oak" ? { towardX: 1, towardY: 0, tilt, size: 1 } : undefined),
+            fallenVersion: () => version,
+        });
+        manager.update(0);
+        expect(draw).toHaveBeenCalledTimes(1);
+        // Where the crown of the tree lies once fallen: east of its foot (132, 196), as far as its crown is high.
+        const crown = { x: 132 + 0.62 * 96, y: 196 };
+        expect(manager.shadedAt(crown.x, crown.y)).toBe(false);
+        tilt = Math.PI / 2;
+        version++;
+        manager.update(16);
+        expect(draw).toHaveBeenCalledTimes(2);
+        expect(manager.shadedAt(crown.x, crown.y)).toBe(true);
+    });
+
     it("only changes the opacity when the light fades", () => {
         const { manager, setLight } = setup();
         manager.update(0);
