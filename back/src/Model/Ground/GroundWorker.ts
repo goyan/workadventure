@@ -9,6 +9,7 @@ import {
 } from "@workadventure/map-editor";
 import { GroundBands } from "./GroundBands";
 import type { GroundCommand, GroundTold } from "./GroundProtocol";
+import { threadGroundTimings } from "./GroundTimings";
 import { HostedGround } from "./HostedGround";
 
 /**
@@ -19,6 +20,8 @@ import { HostedGround } from "./HostedGround";
  * their map asks for (86 % of a core, ten steps a second each); at 0.8 they give a level up.
  */
 const GROUND_THREAD_SHARE = 0.9;
+/** How often this thread tells how long its steps took (ms). */
+const TIMINGS_TOLD_MS = 1000;
 
 /**
  * Entry point of a thread that computes the grounds of rooms (the water of their relief and their meadow), away from
@@ -38,13 +41,15 @@ let group: GroundBands | undefined;
 if (bands > 1) {
     // For the tests that must see the threads of the bands at work whatever the machine does: one pass in
     // `patientBands`, this thread waits at its opening until a slice of it is claimed by another (five seconds at
-    // most: none ever came). Never asked for by the server.
+    // most). Once none came, it never waits again: threads that do not start must not hold the water back, pass
+    // after pass. Never asked for by the server.
     const every = Math.floor(Number(asked?.patientBands ?? 0));
     let passes = 0;
+    let alone = false;
     const patient: WaterBandsLead | undefined =
         every > 0
             ? new WaterBandsLead(bands - 1, undefined, undefined, undefined, () => {
-                  if (passes++ % every === 0) patient?.waitForAClaim(5000);
+                  if (!alone && passes++ % every === 0) alone = patient?.waitForAClaim(5000) === false;
               })
             : undefined;
     group = new GroundBands(
@@ -82,6 +87,16 @@ if (process.env.WATER_KERNEL === "wasm") {
 
 const grounds = new Map<number, { ground: HostedGround; last: Promise<void> }>();
 
+// How long the steps took, for the metrics of the server: once a second, while this thread has a room. What is not
+// told meanwhile is kept: the next telling spans it.
+let timings: ReturnType<typeof setInterval> | undefined;
+function tellTimings(told: (told: GroundTold) => void): void {
+    timings ??= setInterval(() => {
+        if (grounds.size === 0) return;
+        told({ kind: "timings", room: 0, batch: threadGroundTimings.take() });
+    }, TIMINGS_TOLD_MS);
+}
+
 port.on("message", (command: GroundCommand) => {
     let hosted = grounds.get(command.room);
     if (command.kind === "open") {
@@ -90,6 +105,7 @@ port.on("message", (command: GroundCommand) => {
             last: Promise.resolve(),
         };
         grounds.set(command.room, hosted);
+        tellTimings((told) => port.postMessage(told));
         return;
     }
     if (!hosted) return;

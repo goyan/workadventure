@@ -273,11 +273,12 @@ export class WaterBandsLead {
 
     /**
      * Sleeps until a slice of the pass that is open is claimed, `ms` at most: called as a pass opens (`opened`), it
-     * lets the threads that follow take their part whatever the machine does. For the tests.
+     * lets the threads that follow take their part whatever the machine does. For the tests. Returns whether a
+     * slice was claimed: when none was, no thread follows, and who asked had better not wait again.
      */
-    public waitForAClaim(ms: number): void {
+    public waitForAClaim(ms: number): boolean {
         const { words } = this.board;
-        Atomics.wait(words, CLAIM, Atomics.load(words, CLAIM), ms);
+        return Atomics.wait(words, CLAIM, Atomics.load(words, CLAIM), ms) !== "timed-out";
     }
 
     /** A grid is gone: who follows is told to forget its arrays at the next step of any grid. */

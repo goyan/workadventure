@@ -1,6 +1,7 @@
 import { Gauge } from "prom-client";
 import type { Space } from "../Model/Space";
 import { clientEventsEmitter } from "./ClientEventsEmitter";
+import { registerGroundMetrics } from "./GroundMetrics";
 
 //this class should manage all the custom metrics used by prometheus
 class GaugeManager {
@@ -47,6 +48,8 @@ class GaugeManager {
             help: "Number of watchers per space",
             labelNames: ["world"] as const,
         });
+
+        registerGroundMetrics();
 
         // It's ok to never unsubscribe from these subjects, as they live as long as the server
         /* eslint rxjs/no-ignored-subscription: "off", svelte/no-ignored-unsubscribe: "off" */
