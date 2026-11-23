@@ -1,7 +1,32 @@
 import { describe, expect, it } from "vitest";
 import { TreeFireState } from "@wa/front/Phaser/Game/Fire/TreeFireState";
-import { GROW_STEPS, growShare, growStep } from "@wa/front/Phaser/Game/Nature/FallenTreeTexture";
-import { FALL_MS, fallTilt, leaningImage, lyingRotation } from "@wa/front/Phaser/Game/Nature/FallenTreeView";
+import { GROW_STEPS, growShare, growStep, lyingWay } from "@wa/front/Phaser/Game/Nature/FallenTreeTexture";
+import { LYING_DEPTH, lyingLayout, lyingVector, treeBodyOf } from "@wa/front/Phaser/Game/Nature/FallenTreeShape";
+import { FALL_MS, fallTilt, leaningImage, lyingShare, turnedShare } from "@wa/front/Phaser/Game/Nature/FallenTreeView";
+
+/**
+ * An image of a tree of the map as its catalogue draws it (76 × 126, as "Nature:tree-2-10"): leaves from row 4 to row
+ * 95, a trunk 8 pixels wide from row 88 to row 120 around column 38, the shadow painted under it from row 117 to 125.
+ */
+function treeImage(): Uint8ClampedArray {
+    const width = 76;
+    const height = 126;
+    const pixels = new Uint8ClampedArray(width * height * 4);
+    const paint = (column: number, row: number, rgb: [number, number, number]) => {
+        pixels.set([...rgb, 255], (row * width + column) * 4);
+    };
+    for (let row = 117; row < 126; row++) for (let column = 20; column < 58; column++) paint(column, row, [50, 50, 55]);
+    for (let row = 88; row <= 120; row++)
+        for (let column = 34; column < 42; column++) paint(column, row, [110, 70, 40]);
+    for (let row = 4; row <= 95; row++) {
+        const half = Math.min(34, (row - 4) * 0.6 + 2);
+        for (let column = Math.round(38 - half); column < Math.round(38 + half); column++) {
+            if (row > 88 && column >= 34 && column < 42) continue;
+            paint(column, row, [60, 140, 60]);
+        }
+    }
+    return pixels;
+}
 
 const told = (trees: { id: string; fire: number; damage: number; fallen: number }[], whole = false) => ({
     trees,
@@ -37,10 +62,53 @@ describe("a tree the wind laid down, as the browser draws it", () => {
         expect(growShare(GROW_STEPS)).toBe(1);
     });
 
-    it("turns a standing image the way the tree lies: its crown north, east, south or west", () => {
-        expect(lyingRotation(0)).toBe(0);
-        expect(lyingRotation(90)).toBeCloseTo(Math.PI / 2);
-        expect(lyingRotation(270)).toBeCloseTo((3 * Math.PI) / 2);
+    it("lies foreshortened up and down the screen, at its length across it, in one of 16 ways", () => {
+        expect(lyingVector(90).x).toBeCloseTo(1);
+        expect(lyingVector(90).y).toBeCloseTo(0);
+        expect(lyingVector(180).x).toBeCloseTo(0);
+        expect(lyingVector(180).y).toBeCloseTo(LYING_DEPTH);
+        expect(lyingVector(0).y).toBeCloseTo(-LYING_DEPTH);
+        expect(lyingWay(0)).toBe(0);
+        expect(lyingWay(181)).toBe(180);
+        expect(lyingWay(350)).toBe(0);
+        expect(lyingWay(-90)).toBe(270);
+    });
+
+    it("finds the foot of a tree of the map at the bottom of its trunk, not at the bottom of its image", () => {
+        const body = treeBodyOf(treeImage(), 76, 126);
+        expect(body.footX).toBeCloseTo(38, 0);
+        expect(body.footY).toBe(121);
+        expect(body.crownTop).toBe(4);
+        expect(body.crownBottom).toBe(95);
+        expect(body.trunkTop).toBe(96);
+        expect(body.trunkWidth).toBeCloseTo(8, 0);
+        expect(body.crownRows).toHaveLength(92);
+    });
+
+    it("lays a tree down the screen shortened, its crown under its foot, its roots drawn first", () => {
+        const body = treeBodyOf(treeImage(), 76, 126);
+        const south = lyingLayout(body, 180);
+        expect(south.tip.x).toBeCloseTo(0);
+        expect(south.tip.y).toBeCloseTo((121 - 4) * LYING_DEPTH);
+        expect(south.centre.y).toBeGreaterThan(0);
+        expect(south.crownFirst).toBe(false);
+        // Its crown on the ground: its own outline as it stood, a little wider, its length shortened.
+        const xs = south.outline.map((point) => point.x);
+        const ys = south.outline.map((point) => point.y);
+        expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(68);
+        expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo((95 - 4) * LYING_DEPTH, 0);
+        // Its top, narrow, lies farthest from its foot.
+        const far = south.outline.filter((point) => point.y > Math.max(...ys) - 3);
+        expect(Math.max(...far.map((point) => point.x)) - Math.min(...far.map((point) => point.x))).toBeLessThan(10);
+        const north = lyingLayout(body, 0);
+        expect(north.centre.y).toBeLessThan(0);
+        expect(north.crownFirst).toBe(true);
+        const east = lyingLayout(body, 90);
+        expect(east.tip.x).toBeCloseTo(121 - 4);
+        expect(east.tip.y).toBeCloseTo(0);
+        // The plate of roots seen face on when the tree lies up or down the screen, edge on across it.
+        expect(south.plate.width).toBeGreaterThan(2 * east.plate.width);
+        expect(south.plate.y).toBeLessThan(0);
     });
 
     it("is seen falling only when it fell before the eyes of this player, not when found lying", () => {
@@ -72,10 +140,29 @@ describe("a tree the wind laid down, as the browser draws it", () => {
         expect(east.scaleY).toBeCloseTo(1);
         const south = leaningImage(180, Math.PI / 6);
         expect(south.rotation).toBeCloseTo(0);
-        expect(south.scaleY).toBeCloseTo(Math.cos(Math.PI / 6) - Math.sin(Math.PI / 6));
-        // Lying: the image of lyingRotation, full length.
+        expect(south.scaleY).toBeCloseTo(Math.cos(Math.PI / 6) - LYING_DEPTH * Math.sin(Math.PI / 6));
+        // On the ground: as long as the tree lying (lyingVector).
         const lying = leaningImage(180, Math.PI / 2);
-        expect(lying.rotation).toBeCloseTo(lyingRotation(180));
-        expect(lying.scaleY).toBeCloseTo(1);
+        expect(Math.abs(lying.rotation)).toBeCloseTo(Math.PI);
+        expect(lying.scaleY).toBeCloseTo(LYING_DEPTH);
+    });
+
+    it("hands over to the tree lying during the bounce", () => {
+        expect(lyingShare(0)).toBe(0);
+        expect(lyingShare(FALL_MS)).toBe(0);
+        expect(lyingShare(FALL_MS + 160)).toBeCloseTo(0.5);
+        expect(lyingShare(FALL_MS + 5000)).toBe(1);
+    });
+
+    it("never shows a tree falling towards the player upside down: the tree lying takes over before", () => {
+        // Falling south: its standing image shortens to nothing near atan(1 / LYING_DEPTH), then would turn over.
+        const turn = Math.atan(1 / LYING_DEPTH);
+        expect(turnedShare(180, turn - 0.3)).toBe(0);
+        expect(turnedShare(180, turn)).toBeCloseTo(0.5, 1);
+        expect(turnedShare(180, turn + 0.3)).toBe(1);
+        expect(leaningImage(180, turn + 0.3).rotation).toBeCloseTo(Math.PI);
+        // Across the screen or away from the player: the standing image is never upside down.
+        expect(turnedShare(90, Math.PI / 2)).toBe(0);
+        expect(turnedShare(0, Math.PI / 2)).toBe(0);
     });
 });
