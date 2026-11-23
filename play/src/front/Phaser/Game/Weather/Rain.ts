@@ -16,6 +16,17 @@ const RATE_LEVELS: readonly (readonly [rate: number, level: number])[] = [
     [20, 1],
 ];
 
+/** The rate (mm an hour) a rain of this intensity (0 to 1) falls at: the inverse of rainIntensity (no storm). */
+export function rainRateOfLevel(level: number): number {
+    if (!Number.isFinite(level) || level <= RATE_LEVELS[0][1]) return RATE_LEVELS[0][0];
+    for (let index = 1; index < RATE_LEVELS.length; index++) {
+        const [rate0, level0] = RATE_LEVELS[index - 1];
+        const [rate1, level1] = RATE_LEVELS[index];
+        if (level <= level1) return rate0 + ((rate1 - rate0) * (level - level0)) / (level1 - level0);
+    }
+    return RATE_LEVELS[RATE_LEVELS.length - 1][0];
+}
+
 /** A rain whose rate is unknown (a fixed or automatic weather): a steady rain, between light and moderate. */
 export const USUAL_RAIN = 0.5;
 /** A storm never falls lighter than this, and falls this hard when its rate is unknown. */
@@ -123,6 +134,19 @@ const RAIN_LAYERS: readonly RainLayer[] = [
     { split: 2, speed: 230, fall: 240, length: 10, alpha: 0.7, from: 0.05, full: 0.7 },
     { split: 1, speed: 330, fall: 320, length: 16, alpha: 0.9, from: 0.45, full: 1 },
 ];
+
+/**
+ * How many drops rainDrops draws over the view at this intensity, on the mean (no local factor): what the rain in
+ * perspective draws too, the same density of water on the screen.
+ */
+export function rainDropsExpected(view: WeatherView, intensity: number): number {
+    const base = rainCell(view);
+    return RAIN_LAYERS.reduce((sum, layer) => {
+        const shown = Math.max(0, Math.min(1, (Math.min(1, intensity) - layer.from) / (layer.full - layer.from)));
+        const cell = base / layer.split;
+        return sum + ((view.width * view.height) / (cell * cell)) * shown;
+    }, 0);
+}
 
 /**
  * How much harder or lighter the rain falls at a point of the map than on the whole (1: the same): more under the
