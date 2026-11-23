@@ -4153,6 +4153,11 @@ Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus
     - **Stabilité :** au-delà d'une heure de temps de jeu par pas (`ICE_EXACT_FROM_HOURS`), la glace pousse par la solution exacte de la loi de Stefan (`iceAfterHours`), sans sous-pas : le coût reste le même. En dessous, rien ne change au bit près.
     - **À chaud :** la valeur voyage avec les réglages de la carte et vaut dès le pas suivant de la prairie, dans le fil des salles comme dans le fil de calcul, qui reçoit le WAM. Le rattrapage d'une salle vide l'applique à ses tranches, dans sa limite de durée habituelle.
     - **Déploiement :** il ajoute le champ `freezeThawSpeed` (17) à `UpdateWaterSettingMessage`, donc `play`, `back` et `map-storage` doivent être déployés ensemble.
+    - **Dans la barre d'actions** (demande de l'utilisateur : « un widget > >> >>> pour accélérer ces paramètres sans rien casser ») : le widget se trouve juste à gauche du bouton baguette, qui active le mode Basique (`MapClockWidget.svelte`). « > » vaut ×1, « >> » ×60, « >>> » ×600. Il règle le même réglage de la carte que l'outil relief : les deux affichages suivent `mapClockSpeedsStore`, que met à jour toute commande de réglage de l'eau, d'où qu'elle vienne.
+      - **Qui le voit :** seulement qui peut éditer la carte (`mapEditorActivated`), et le pusher vérifie `canEdit`. Les autres joueurs voient un badge discret « Gel ×60 » quand la vitesse n'est pas ×1.
+      - **Sur une barre étroite :** un bouton passe au cran suivant, et un bouton « ×1 » revient au réel d'un clic.
+      - **Une vitesse entre deux crans**, choisie dans l'éditeur (×10), est affichée telle quelle.
+      - **Plus tard :** on pourra y ajouter d'autres horloges (`MAP_CLOCKS`, `MapClockId`, dans `Weather/MapClocks.ts`) sans refaire le widget.
   - Le feu fait fondre la neige autour de lui, même par temps de gel (`Meadow.warm`) : une case en feu chauffe sa
     case et les huit voisines (15 mm par seconde à pleine flamme), un arbre en feu deux cases autour de son pied, la
     catastrophe « feu » 60 mm par touche sous son disque. Cette fonte ne mouille pas le sol (le feu le sèche) ; son
