@@ -20,9 +20,9 @@ describe("charDegree", () => {
 describe("TreeFireState", () => {
     it("keeps the fire and the damage of the trees the server names, and says which ones to draw again", () => {
         const state = new TreeFireState();
-        expect(state.receive({ trees: [{ id: "oak", fire: 255, damage: 6, fallen: 0 }], whole: false, embers: [] }, 0)).toEqual([
-            "oak",
-        ]);
+        expect(
+            state.receive({ trees: [{ id: "oak", fire: 255, damage: 6, fallen: 0 }], whole: false, embers: [] }, 0),
+        ).toEqual(["oak"]);
         expect(state.fireOf("oak")).toBe(1);
         expect(state.degreeOf("oak")).toBe(2);
         expect(state.burning()).toEqual([{ id: "oak", fire: 1 }]);
@@ -37,16 +37,19 @@ describe("TreeFireState", () => {
         state.receive({ trees: [{ id: "oak", fire: 0, damage: 16, fallen: 0 }], whole: false, embers: [] }, 0);
         expect(state.degreeOf("oak")).toBe(4);
         expect(state.isBurning()).toBe(false);
-        expect(state.receive({ trees: [{ id: "oak", fire: 0, damage: 0, fallen: 0 }], whole: false, embers: [] }, 0)).toEqual([
-            "oak",
-        ]);
+        expect(
+            state.receive({ trees: [{ id: "oak", fire: 0, damage: 0, fallen: 0 }], whole: false, embers: [] }, 0),
+        ).toEqual(["oak"]);
         expect(state.degreeOf("oak")).toBe(0);
     });
 
     it("takes a whole state in place of what it knew: the trees not named are green again", () => {
         const state = new TreeFireState();
         state.receive({ trees: [{ id: "oak", fire: 100, damage: 4, fallen: 0 }], whole: false, embers: [] }, 0);
-        const touched = state.receive({ trees: [{ id: "pine", fire: 0, damage: 16, fallen: 0 }], whole: true, embers: [] }, 0);
+        const touched = state.receive(
+            { trees: [{ id: "pine", fire: 0, damage: 16, fallen: 0 }], whole: true, embers: [] },
+            0,
+        );
         expect(touched.sort()).toEqual(["oak", "pine"]);
         expect(state.degreeOf("oak")).toBe(0);
         expect(state.degreeOf("pine")).toBe(4);
