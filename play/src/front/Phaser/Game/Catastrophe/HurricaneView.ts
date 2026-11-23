@@ -52,22 +52,26 @@ void main() {
     // Their texture, carried round with them: billows and finer tufts.
     float n = fbm(q * 2.2 + 41.0);
     float fine = fbm(q * 9.0 + 7.0);
-    // Two arms of a logarithmic spiral of 15 degrees (tan 15 = 0.268), trailing outwards.
+    // Two arms of a logarithmic spiral of 15 degrees (tan 15 = 0.268), trailing outwards, with clear lanes between.
     float arms = 0.5 + 0.5 * cos(2.0 * (spin * theta + log(max(r, 0.05)) / 0.268));
-    float band = smoothstep(0.45, 0.9, arms + (n - 0.5) * 0.9) * (1.0 - smoothstep(4.0, 12.0, r));
-    // The central dense overcast, frayed at its edge.
-    float core = 1.0 - smoothstep(1.4, 3.6, r + (n - 0.5) * 1.2);
-    float density = max(core, band * mix(0.55, 0.95, n));
-    density *= 0.8 + 0.4 * fine;
+    float band = smoothstep(0.5, 0.78, arms + (n - 0.5) * 0.8 + (fine - 0.5) * 0.25);
+    band *= smoothstep(0.9, 1.7, r) * (1.0 - smoothstep(5.0, 11.0, r));
+    // The central dense overcast round the eye, frayed at its edge.
+    float core = 1.0 - smoothstep(1.3, 2.5, r + (n - 0.5) * 0.7);
+    float density = max(core, band * mix(0.75, 1.0, n));
+    density *= 0.85 + 0.3 * fine;
+    density = smoothstep(0.12, 0.7, density);
+    // A thin veil of high cloud over the whole storm, the lanes between the arms included.
+    density = max(density, 0.16 * (1.0 - smoothstep(3.0, 12.0, r)) * (0.7 + 0.6 * n));
     // The eye, open on the ground, its rim a little ragged.
-    density *= smoothstep(0.5, 0.8, r + (fine - 0.5) * 0.15);
-    density = clamp(density, 0.0, 1.0);
+    density *= smoothstep(0.5, 0.78, r + (fine - 0.5) * 0.15);
     if (density <= 0.01) discard;
-    // White tops, grey where thin; the inner face of the eyewall in its own shade.
-    vec3 lit = vec3(0.97, 0.98, 1.0);
-    vec3 shade = vec3(0.55, 0.6, 0.68);
-    vec3 color = mix(shade, lit, smoothstep(0.25, 0.95, density) * (0.75 + 0.25 * n));
-    color *= mix(0.72, 1.0, smoothstep(0.55, 1.2, r));
+    // White tops, grey where thin; the towers of the eyewall brightest, its inner face in its own shade.
+    vec3 lit = vec3(1.0, 1.0, 1.0);
+    vec3 shade = vec3(0.6, 0.64, 0.71);
+    vec3 color = mix(shade, lit, smoothstep(0.2, 0.9, density) * (0.62 + 0.38 * fine));
+    color *= mix(0.68, 1.0, smoothstep(0.55, 1.05, r));
+    color += 0.06 * (1.0 - smoothstep(0.0, 0.5, abs(r - 1.1))) * fine;
     // At night, the grey blue of the night clouds.
     color = mix(color, vec3(0.13, 0.16, 0.24), uLook.z * 0.8);
     float alpha = density * uLook.y * uLook.w;
