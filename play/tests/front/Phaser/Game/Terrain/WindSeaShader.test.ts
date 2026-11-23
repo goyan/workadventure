@@ -18,6 +18,7 @@ import {
 import {
     breakingAt,
     breakingFactorFor,
+    crestAt,
     foamDriftPx,
     groupAt,
     groupDrift,
@@ -48,7 +49,7 @@ describe("where a crest of the wind sea breaks", () => {
     const phases = sea.components.map((component) => seaPhase(component, 40));
     const groups = groupDrift(sea, 40);
 
-    it("only on the upper front of a wave steeper than the breaking slope, give or take 10 %", () => {
+    it("only on the upper front of a wave steeper than the breaking slope, give or take 10 %, along part of the crest", () => {
         let broke = 0;
         for (let y = 0; y < 400; y += 3) {
             for (let x = 0; x < 400; x += 3) {
@@ -57,7 +58,9 @@ describe("where a crest of the wind sea breaks", () => {
                 const slope = groupAt(sea, groups, x, y) * Math.hypot(point.sx, point.sy);
                 const front = point.sx * sea.heading.x + point.sy * sea.heading.y <= 0;
                 if (slope < sea.breakingSlope * 0.9 || point.eta < 0 || !front) expect(at).toBe(0);
-                if (slope > sea.breakingSlope * 1.1 && point.eta >= 0 && front) expect(at).toBe(1);
+                if (slope > sea.breakingSlope * 1.1 && point.eta >= 0 && front) {
+                    expect(at).toBeCloseTo(crestAt(sea, x, y), 12);
+                }
                 if (at > 0) broke++;
             }
         }
@@ -66,14 +69,15 @@ describe("where a crest of the wind sea breaks", () => {
         expect(broke / (134 * 134)).toBeLessThan(0.3);
     });
 
-    it("at the physical slope of Michell, within 15 % from 20 to 82 km/h, by the measure of the white on the GPU", () => {
-        for (let kmh = 20; kmh <= 82; kmh += 1) {
+    it("at the physical slope of Michell, within 15 % from 20 to 60 km/h, by the measure of the white on the GPU", () => {
+        for (let kmh = 20; kmh <= 60; kmh += 1) {
             expect(breakingFactorFor(kmh), `${kmh} km/h`).toBeGreaterThan(0.85);
             expect(breakingFactorFor(kmh), `${kmh} km/h`).toBeLessThan(1.15);
         }
-        for (let kmh = 82; kmh <= 200; kmh += 1) {
-            expect(breakingFactorFor(kmh), `${kmh} km/h`).toBeGreaterThan(0.45);
-            expect(breakingFactorFor(kmh), `${kmh} km/h`).toBeLessThan(1.5);
+        // Over, lower: the wind tears foam off crests not yet steep enough; never under a fifth of Michell.
+        for (let kmh = 60; kmh <= 200; kmh += 1) {
+            expect(breakingFactorFor(kmh), `${kmh} km/h`).toBeGreaterThan(0.2);
+            expect(breakingFactorFor(kmh), `${kmh} km/h`).toBeLessThanOrEqual(breakingFactorFor(60));
         }
         // Never lower than at 20 km/h in a breeze: no foam where the waves are not steep.
         expect(breakingFactorFor(11)).toBe(breakingFactorFor(20));
@@ -85,6 +89,26 @@ describe("where a crest of the wind sea breaks", () => {
         const calm = seaDrawing(10.5, EAST);
         expect(calm?.breakingSlope).toBe(Number.POSITIVE_INFINITY);
         if (calm) expect(breakingAt(calm, amplitudes, phases, 0, 10, 10)).toBe(0);
+    });
+
+    it("breaks a crest along part of its length, more of it as the wind rises", () => {
+        const share = (kmh: number): number => {
+            const each = seaDrawing(kmh, EAST);
+            if (!each) return 0;
+            let sum = 0;
+            for (let y = 0; y < 2000; y += 3) sum += crestAt(each, 100, y);
+            return sum / Math.ceil(2000 / 3);
+        };
+        let lowest = 1;
+        let highest = 0;
+        for (let y = 0; y < 2000; y += 3) {
+            lowest = Math.min(lowest, crestAt(sea, 100, y));
+            highest = Math.max(highest, crestAt(sea, 100, y));
+        }
+        expect(lowest).toBe(0);
+        expect(highest).toBe(1);
+        expect(share(40)).toBeLessThan(share(82));
+        expect(share(82)).toBeLessThan(share(110));
     });
 
     it("draws the waves higher or lower by their groups, the sea of the law on the whole", () => {
@@ -115,11 +139,22 @@ describe("the foam the crests leave", () => {
         expect(leftFoamFor(100).opacity).toBeLessThan(1);
         expect(leftFoamFor(40).cutShift).toBe(0);
         expect(leftFoamFor(100).cutShift).toBeGreaterThan(leftFoamFor(60).cutShift);
+        // Thicker in a gale, it lasts longer; as long as Callaghan's in a breeze.
+        expect(leftFoamFor(40).life).toBe(1);
+        expect(leftFoamFor(100).life).toBeGreaterThan(leftFoamFor(60).life);
+    });
+
+    it("differs from a trail to the next: width, whiteness and life drawn from a slow noise drifting with it", () => {
+        expect(WIND_SEA_FOAM_GLSL).toMatch(/float width = mix\(/);
+        expect(WIND_SEA_FOAM_GLSL).toMatch(/float white = mix\(/);
+        expect(WIND_SEA_FOAM_GLSL).toMatch(/float life = mix\(/);
+        // In the frame of the foam: the noise of a trail goes down the wind with it.
+        expect(WIND_SEA_FOAM_GLSL).toMatch(/float down = dot\(world, heading\) - uSeaDir\.w \*/);
     });
 
     it("is kept moved upwind by the drift, faded in FOAM_DECAY_S, and laid only where a crest breaks", () => {
         expect(WIND_SEA_FOAM_GLSL).toMatch(/world - uSeaDir\.xy \* uSeaDir\.z \* dt/);
-        expect(WIND_SEA_FOAM_GLSL).toContain(`exp(-dt / ${FOAM_DECAY_S.toPrecision(8)})`);
+        expect(WIND_SEA_FOAM_GLSL).toContain(`exp(-dt / (${FOAM_DECAY_S.toPrecision(8)} * uFoamLife * life))`);
         expect(WIND_SEA_FOAM_GLSL).toMatch(/float breaking = seaBreaking\(world\);\n\s*if \(breaking > 0\.0\)/);
         expect(WIND_SEA_FOAM_GLSL).toMatch(/max\(kept, laid\)/);
         // Rounded at random to the bytes of its picture: a fading foam never sticks at its last step.

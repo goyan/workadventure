@@ -168,6 +168,7 @@ export class WindSeaFoam {
             sea?.left.cutShift ?? 0,
             this.step.fresh || !this.before ? 1 : 0,
         ]);
+        setUniform("uFoamLife", sea?.left.life ?? 1);
         for (const [name, value] of windSeaUniforms(sea, shaderSeconds(this.lastMs ?? this.scene.time.now))) {
             setUniform(name, value);
         }
