@@ -112,9 +112,9 @@ const actionbar = {
     mapClock: {
         freezeThaw: {
             title: "Speed of the freeze and the thaw",
-            what: "The ice that takes and thaws, the snow that melts: for the whole map. The water keeps its own speed.",
-            real: "×1: as in reality, an hour of frost or thaw lasts an hour.",
-            faster: "×{speed}: an hour of frost or thaw lasts {duration}.",
+            what: "The ice that takes and thaws, the snow that melts, and the passage of a hurricane: for the whole map. The water keeps its own speed.",
+            real: "×1: as in reality, an hour of frost or thaw lasts an hour; the hurricane crosses the map in the time chosen.",
+            faster: "×{speed}: an hour of frost or thaw lasts {duration}; the hurricane goes {hurricane} times faster (never under 30 s).",
             badge: "Frost ×{speed}",
             badgeHint: "On this map, the freeze and the thaw go {speed} times faster than in reality (not the water).",
             reset: "Back to ×1, as in reality",

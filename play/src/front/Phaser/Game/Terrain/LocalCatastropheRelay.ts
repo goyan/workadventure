@@ -97,6 +97,8 @@ export class LocalCatastropheRelay {
                     toY: track.toY,
                     anchorX: track.anchorX,
                     anchorY: track.anchorY,
+                    // The crossing as the server runs it now (the speed of the map).
+                    ...(track.durationMs > 0 ? { durationMs: track.durationMs, times: track.times || 1 } : {}),
                 };
                 // Told again each second: the local ground is told only when it is another one.
                 if (!known || known.id !== id || known.startedAt !== hurricane.startedAt) this.changed = true;

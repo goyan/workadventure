@@ -675,6 +675,8 @@ describe("CatastropheManager, hurricanes", () => {
         toY: 0,
         anchorX: 0,
         anchorY: 0,
+        durationMs: 0,
+        times: 0,
     };
 
     it("lets a hurricane cross the map, told to the room once a second until it ends", () => {
@@ -742,5 +744,38 @@ describe("CatastropheManager, hurricanes", () => {
         vi.advanceTimersByTime(5 * HURRICANE_TELL_MS);
         expect(sent).toHaveLength(told);
         expect(manager.hurricane()).toBeUndefined();
+    });
+});
+
+describe("CatastropheManager, a hurricane sped up by the speed of the map", () => {
+    it("shortens its crossing when the map goes faster, its eye going on from where it is", () => {
+        const { manager, sent } = harness();
+        let times = 1;
+        manager.hurricaneTimesWith(() => times);
+        const asked = {
+            category: 4,
+            minutes: 5,
+            heading: 0,
+            southern: false,
+            startedAt: 0,
+            fromX: 0,
+            fromY: 0,
+            toX: 0,
+            toY: 0,
+            anchorX: 0,
+            anchorY: 0,
+            durationMs: 0,
+            times: 0,
+        };
+        manager.request(1, CatastropheKind.CATASTROPHE_HURRICANE, -1, -1, 0, true, false, undefined, asked);
+        expect(sent[0].hurricane).toMatchObject({ durationMs: 300_000, times: 1, minutes: 5 });
+        vi.advanceTimersByTime(100_000);
+        times = 5;
+        vi.advanceTimersByTime(HURRICANE_TELL_MS);
+        const told = sent[sent.length - 1].hurricane;
+        expect(told).toMatchObject({ durationMs: 60_000, times: 5, minutes: 5 });
+        // A third of the passage was gone when it sped up: a third of the new one is.
+        expect((101_000 - (told?.startedAt ?? NaN)) / 60_000).toBeCloseTo(101_000 / 300_000, 2);
+        expect(sent[sent.length - 1].impactInMs).toBeCloseTo(60_000 * (1 - 101_000 / 300_000), -2);
     });
 });

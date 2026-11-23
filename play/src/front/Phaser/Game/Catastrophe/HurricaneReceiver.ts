@@ -40,6 +40,8 @@ export class HurricaneReceiver {
             toY: track.toY,
             anchorX: track.anchorX,
             anchorY: track.anchorY,
+            // The crossing as the server runs it now (the speed of the map).
+            ...(track.durationMs > 0 ? { durationMs: track.durationMs, times: track.times || 1 } : {}),
         };
         // The same hurricane told again keeps its object: what is computed from it is not computed again.
         const same =
@@ -47,6 +49,7 @@ export class HurricaneReceiver {
             known.id === told.id &&
             known.startedAt === told.startedAt &&
             known.durationMs === told.durationMs &&
+            known.times === told.times &&
             known.category === told.category &&
             known.fromX === told.fromX &&
             known.fromY === told.fromY &&
