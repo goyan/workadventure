@@ -108,19 +108,24 @@ describe("the whitecaps in a strong wind, up to a hurricane", () => {
         expect(Whitecaps.WHITECAP_MOST_CELLS).toBeLessThanOrEqual(0.5);
     });
 
-    it("whitens as much water as the law asks, from a calm to 150 km/h", () => {
-        // The white the crests and the streaks draw, from the shares measured on the GPU: a crest whitens a tenth of
-        // its cell, as much more as it is thicker; the streaks whiten their share of the rest of the water.
+    it("whitens the water as the law asks up to 90 km/h, and never more than 45 % beyond (the water stays seen)", () => {
+        // The white the crests, the streaks and the veil draw one over the other, from their shares measured on the
+        // GPU: a crest whitens a tenth of its cell, as much more as it is thicker; the veil of 1 whitens 77.1 %.
         expect(typeof Whitecaps.whitecapDrawing).toBe("function");
         for (const kmh of kmhs) {
             const law = whitecapShare(kmh);
             const drawing = Whitecaps.whitecapDrawing(law);
             const crests = drawing.cells * 0.1 * drawing.thickness;
             const streaks = Whitecaps.streakShareOf(drawing.streakCut);
-            const white = crests + (1 - crests) * streaks;
-            expect(Math.abs(white - law), `${kmh} km/h: ${white} against ${law}`).toBeLessThanOrEqual(
-                Math.max(0.002, law * 0.05),
+            const white = 1 - (1 - crests) * (1 - streaks) * (1 - drawing.veil * 0.771);
+            const wanted = kmh <= 90 ? law : Whitecaps.whitecapWhite(law);
+            expect(Math.abs(white - wanted), `${kmh} km/h: ${white} against ${wanted}`).toBeLessThanOrEqual(
+                Math.max(0.002, wanted * 0.05),
             );
+            expect(white, `${kmh} km/h`).toBeLessThanOrEqual(0.45);
+            // The streaks stay streaks: never more than a sixth of the water.
+            expect(streaks, `${kmh} km/h`).toBeLessThanOrEqual(0.17 + 1e-9);
         }
+        expect(Whitecaps.whitecapWhite(whitecapShare(90))).toBeCloseTo(whitecapShare(90), 6);
     });
 });
