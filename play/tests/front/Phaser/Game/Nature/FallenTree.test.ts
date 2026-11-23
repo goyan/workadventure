@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { TreeFireState } from "@wa/front/Phaser/Game/Fire/TreeFireState";
 import { GROW_STEPS, growShare, growStep, lyingWay } from "@wa/front/Phaser/Game/Nature/FallenTreeTexture";
-import { LYING_DEPTH, lyingLayout, lyingVector, treeBodyOf } from "@wa/front/Phaser/Game/Nature/FallenTreeShape";
+import {
+    isPalm,
+    LYING_DEPTH,
+    lyingLayout,
+    lyingVector,
+    treeBodyOf,
+} from "@wa/front/Phaser/Game/Nature/FallenTreeShape";
 import { FALL_MS, fallTilt, leaningImage, lyingShare, turnedShare } from "@wa/front/Phaser/Game/Nature/FallenTreeView";
 
 /**
@@ -33,6 +39,29 @@ const told = (trees: { id: string; fire: number; damage: number; fallen: number 
     whole,
     embers: [],
 });
+
+/**
+ * A palm as the catalogue draws it (106 × 144, as "Nature:nature-4"): a trunk 10 pixels wide from row 45 to row 130,
+ * a tuft of fronds from row 2 to row 85 hanging round its top, the trunk seen between them.
+ */
+function palmImage(): Uint8ClampedArray {
+    const width = 106;
+    const height = 144;
+    const pixels = new Uint8ClampedArray(width * height * 4);
+    const paint = (column: number, row: number, rgb: [number, number, number]) => {
+        pixels.set([...rgb, 255], (row * width + column) * 4);
+    };
+    for (let row = 2; row <= 85; row++) {
+        const half = row < 45 ? Math.min(52, 10 + row) : 52 - (row - 45);
+        for (let column = 53 - half; column < 53 + half; column++) {
+            if (row >= 45 && Math.abs(column - 53) < 14) continue;
+            paint(column, row, [70, 150, 50]);
+        }
+    }
+    for (let row = 45; row <= 130; row++)
+        for (let column = 48; column < 58; column++) paint(column, row, [150, 100, 60]);
+    return pixels;
+}
 
 describe("a tree the wind laid down, as the browser draws it", () => {
     it("lies the way the wind blew, uncharred, then grows back from a sapling as the server tells it", () => {
@@ -115,10 +144,13 @@ describe("a tree the wind laid down, as the browser draws it", () => {
         expect(east.tip.x).toBeCloseTo(121 - 4);
         expect(east.tip.y).toBeCloseTo(0);
         // A bare crown lying: a limb and seven branches, each with a twig; across the screen, all above the trunk.
-        expect(east.branches).toHaveLength(1 + 2 * 7);
-        expect(Math.max(...east.branches.flatMap((branch) => [branch.from.y, branch.to.y]))).toBeLessThan(1);
-        expect(south.branches.some((branch) => branch.to.x > 5)).toBe(true);
-        expect(south.branches.some((branch) => branch.to.x < -5)).toBe(true);
+        expect(east.branches).toEqual([]);
+        const bareEast = lyingLayout(body, 90, "bare");
+        const bareSouth = lyingLayout(body, 180, "bare");
+        expect(bareEast.branches).toHaveLength(1 + 2 * 7);
+        expect(Math.max(...bareEast.branches.flatMap((branch) => [branch.from.y, branch.to.y]))).toBeLessThan(1);
+        expect(bareSouth.branches.some((branch) => branch.to.x > 5)).toBe(true);
+        expect(bareSouth.branches.some((branch) => branch.to.x < -5)).toBe(true);
         // The hole beside the plate, no larger than it.
         expect(south.pit.width).toBeLessThanOrEqual(south.plate.width);
         // The plate of roots seen face on when the tree lies up or down the screen, edge on across it.
@@ -179,5 +211,24 @@ describe("a tree the wind laid down, as the browser draws it", () => {
         // Across the screen or away from the player: the standing image is never upside down.
         expect(turnedShare(90, Math.PI / 2)).toBe(0);
         expect(turnedShare(0, Math.PI / 2)).toBe(0);
+    });
+
+    it("tells a palm by its shape: its trunk seen up to 60 % of its height and more, its fronds at its top", () => {
+        const palm = treeBodyOf(palmImage(), 106, 144);
+        expect(isPalm(palm)).toBe(true);
+        expect(isPalm(treeBodyOf(treeImage(), 76, 126))).toBe(false);
+        // Lying across the screen: its fronds from the top of its trunk, all on the side of the sky, arched.
+        const east = lyingLayout(palm, 90, "palm");
+        // Its trunk is read as wood from a bit over a third of the image down (treePixelPart): row 51 to its foot.
+        expect(east.trunkEnd.x).toBeCloseTo(131 - 51, 0);
+        expect(east.fronds.length).toBeGreaterThanOrEqual(5);
+        for (const frond of east.fronds) {
+            expect(frond[0].x).toBeCloseTo(east.trunkEnd.x, 0);
+            expect(Math.max(...frond.map((point) => point.y))).toBeLessThan(1);
+        }
+        // Up or down the screen: fronds to both sides.
+        const south = lyingLayout(palm, 180, "palm");
+        expect(south.fronds.some((frond) => frond[frond.length - 1].x > 20)).toBe(true);
+        expect(south.fronds.some((frond) => frond[frond.length - 1].x < -20)).toBe(true);
     });
 });
