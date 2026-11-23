@@ -11,8 +11,16 @@ import { groundDrifts, NOISE_GLSL, shaderSeconds } from "../ShaderNoise";
 import { SHORE_PX } from "./TerrainShading";
 import { WHITECAP_MIN_DEPTH_PX } from "./Whitecaps";
 import { MAP_PX_METRES } from "./WindSea";
-import { FETCH_GLSL_METRES, WIND_SEA_GLSL, WIND_SEA_UNIFORM_VECTORS, windSeaUniforms } from "./WindSeaShader";
+import {
+    FETCH_GLSL_METRES,
+    WIND_SEA_FOAM_GLSL,
+    WIND_SEA_GLSL,
+    WIND_SEA_UNIFORM_VECTORS,
+    WIND_SEA_WATER_GLSL,
+    windSeaUniforms,
+} from "./WindSeaShader";
 import type { SeaDrawing } from "./WindSeaShader";
+import { WindSeaFoam } from "./WindSeaFoam";
 import { HEIGHT_OFFSET, HEIGHT_SCALE, OBLIQUE_HALVINGS, OBLIQUE_STEPS, writeHeights } from "./ObliqueView";
 import { DROP_SCALE, MAX_DROP, MAX_RISE } from "./Pixel/ColumnPainter";
 import { GROUND_TEXTURES } from "./TexturedGround";
@@ -617,6 +625,7 @@ vec3 snowOnIce(vec3 ice, vec2 world) {
 
 #ifdef WIND_SEA
 ${WIND_SEA_GLSL}
+${WIND_SEA_WATER_GLSL}
 #endif
 
 const vec3 SHALLOW = vec3(0.1, 0.48, 0.52);
@@ -921,6 +930,23 @@ export interface GroundWeights {
 }
 
 /**
+ * The pass of the foam of the wind sea (WindSeaFoam): the weights of the ground, read as the water shader reads them,
+ * tell it where the water is open and deep enough to break (as the water shader, WHITECAP_MIN_DEPTH_PX outdoors) and
+ * the fetch of the wind there.
+ */
+const SEA_FOAM_FRAG = `${COMMON_GLSL}
+${WIND_SEA_GLSL}
+float seaOpenDepthPx(vec2 world) {
+    float depthPx = pack(2.0, world).b * ${WATER_SCALE_PX}.0;
+    float outdoors = step(0.5, pack(4.0, world).b);
+    return outdoors * step(${WHITECAP_MIN_DEPTH_PX}.0, depthPx) * depthPx;
+}
+float seaFetchM(vec2 world) {
+    return pack(${FETCH_PACK}.0, world).r * ${FETCH_GLSL_METRES};
+}
+${WIND_SEA_FOAM_GLSL}`;
+
+/**
  * The textured grounds and the water of the relief, drawn by two shaders over an area of the map. Undefined from
  * `create` where the graphics card cannot run them (no WebGL, too few texture units): the masked grounds are drawn then.
  */
@@ -1007,9 +1033,17 @@ export class GroundSplat {
                         setUniform("uSnow", this.snow);
                         setUniform("uServerIce", this.serverIce ? 1 : 0);
                         if (this.canSea) {
-                            for (const [name, value] of windSeaUniforms(this.sea, time(), this.seaAges)) {
+                            for (const [name, value] of windSeaUniforms(this.sea, time())) {
                                 setUniform(name, value);
                             }
+                            const foam = this.seaFoam?.shown();
+                            setUniform("uSeaFoam", this.seaFoamUnit());
+                            setUniform(
+                                "uSeaFoamArea",
+                                foam
+                                    ? [foam.area.x, foam.area.y, 1 / foam.area.width, 1 / foam.area.height]
+                                    : [0, 0, 0, 0],
+                            );
                         }
                         this.setReflectionUniforms(setUniform);
                         for (let index = 0; index < MAX_ICE_BREAKS; index++) {
@@ -1032,11 +1066,42 @@ export class GroundSplat {
                 0,
                 1,
                 1,
-                ["__DEFAULT", GROUND_TEXTURES.ice, "__DEFAULT", "__DEFAULT", ...(canProject ? ["__DEFAULT"] : [])],
+                [
+                    "__DEFAULT",
+                    GROUND_TEXTURES.ice,
+                    "__DEFAULT",
+                    "__DEFAULT",
+                    ...(canProject ? ["__DEFAULT"] : []),
+                    ...(canSea ? ["__DEFAULT"] : []),
+                ],
             )
             .setOrigin(0)
             .setDepth(waterDepth)
             .setVisible(false);
+        if (canSea) {
+            this.seaFoam = new WindSeaFoam(
+                scene,
+                SEA_FOAM_FRAG,
+                () => (this.scene.textures.exists(this.key) ? this.key : "__DEFAULT"),
+                (setUniform) => {
+                    const area = this.area;
+                    setUniform("uData", 1);
+                    setUniform(
+                        "uArea",
+                        area ? [area.x, area.y, area.columns * area.cell, area.rows * area.cell] : [0, 0, 1, 1],
+                    );
+                    setUniform("uCells", area ? [area.columns, area.rows] : [1, 1]);
+                },
+            );
+        }
+    }
+
+    /** The foam the breaking crests of the wind sea leave (WindSeaFoam), where the water shader draws that sea. */
+    private readonly seaFoam: WindSeaFoam | undefined;
+
+    /** The texture unit of the picture of the foam of the wind sea: after the heights, where they are read. */
+    private seaFoamUnit(): number {
+        return this.canProject ? WATER_HEIGHTS_UNIT + 1 : WATER_HEIGHTS_UNIT;
     }
 
     private autumn = 0;
@@ -1215,8 +1280,10 @@ export class GroundSplat {
             GROUND_TEXTURES.ice,
             kept(this.reflection.clouds?.key),
             kept(this.reflection.lamps?.key),
-            // Last, where these shaders can draw the relief in 3/4: the picture of the heights.
+            // Where these shaders can draw the relief in 3/4: the picture of the heights.
             ...(this.canProject ? [kept(this.heightsKey)] : []),
+            // Last, where the water draws the wind sea: the foam its crests left.
+            ...(this.canSea ? [kept(this.seaFoam?.shown()?.key)] : []),
         ]);
     }
 
@@ -1252,15 +1319,18 @@ export class GroundSplat {
     }
 
     /**
-     * The sea the wind raises on the water, and how many looks back for the foam left the shader takes (fewer on a
-     * modest graphics card): read by the water shader at its next drawing.
+     * The sea the wind raises on the water, read by the water shader at its next drawing; and the foam its crests
+     * leave, made again when due around the view of the camera (coarser on a modest graphics card).
      */
-    public setSea(sea: SeaDrawing | undefined, ages: number): void {
+    public setSea(
+        sea: SeaDrawing | undefined,
+        nowMs: number,
+        view: { x: number; y: number; width: number; height: number },
+        coarse: boolean,
+    ): void {
         this.sea = sea;
-        this.seaAges = ages;
+        if (this.seaFoam?.update(nowMs, sea, view, coarse)) this.bindWaterTextures();
     }
-
-    private seaAges = 0;
 
     /** Whether the water shader draws the wind sea on this graphics card. */
     public drawsSea(): boolean {
@@ -1301,6 +1371,7 @@ export class GroundSplat {
     public destroy(): void {
         this.groundShader.destroy();
         this.waterShader.destroy();
+        this.seaFoam?.destroy();
         if (this.scene.textures.exists(this.key)) this.scene.textures.remove(this.key);
         if (this.scene.textures.exists(this.heightsKey)) this.scene.textures.remove(this.heightsKey);
     }

@@ -48,14 +48,6 @@ export const BREAKING_SLOPE = Math.PI * BREAKING_STEEPNESS;
 export const FOAM_DECAY_S = 3;
 /** The foam drifts with the surface at this share of the wind (Wu 1983). */
 export const FOAM_DRIFT_SHARE = 0.03;
-/** The ages (s) at which the shader looks back for the foam a crest left: three looks, up to about a decay and more. */
-export const FOAM_AGES_S = [0.8, 2, 3.8] as const;
-/**
- * The waves whose slopes the shader reads to look back for the foam (the middle of the spectrum, where most of the
- * slope is: the longest waves are gentle, the shortest fade under the pixels); their envelope brought to that of all
- * the waves by the share of the slope they carry (seaEnvelope). Half the work of reading them all.
- */
-export const ENVELOPE_COMPONENTS = [3, 4, 5, 6, 7, 8] as const;
 /** The fetch the white of the water is measured at against the law: the open water of a large basin of a map. */
 export const REFERENCE_FETCH_M = 200;
 /** No wave shorter than this many map pixels is drawn: finer, it is noise; it fades in over as many more. */
@@ -234,12 +226,11 @@ export function seaAmplitudes(
     return out;
 }
 
-/** The surface at a point: its height (m), its slope (east, south) and the envelope of that slope. */
+/** The surface at a point: its height (m) and its slope (east, south). */
 export interface SeaPoint {
     eta: number;
     sx: number;
     sy: number;
-    envelope: number;
 }
 
 /**
@@ -255,62 +246,19 @@ export function seaSurface(
     back = 0,
 ): SeaPoint {
     let eta = 0;
-    let cx = 0;
-    let cy = 0;
     let sx = 0;
     let sy = 0;
     for (let at = 0; at < components.length; at++) {
         const component = components[at];
         const turn = x * component.cx + y * component.cy - phases[at] + component.f * back;
         const angle = 2 * Math.PI * (turn - Math.floor(turn));
-        const cos = Math.cos(angle);
         const sin = Math.sin(angle);
         const a = amplitudes[at];
-        eta += a * cos;
-        cx += a * cos * component.kx;
-        cy += a * cos * component.ky;
+        eta += a * Math.cos(angle);
         sx += a * sin * component.kx;
         sy += a * sin * component.ky;
     }
-    return { eta, sx: -sx, sy: -sy, envelope: Math.sqrt(cx * cx + cy * cy + sx * sx + sy * sy) };
-}
-
-/**
- * The envelope of the slope of the wind sea at a map point, `back` seconds before the phases given, read from the
- * waves of ENVELOPE_COMPONENTS only and brought to that of all of them by the share of the slope they carry: the twin
- * of seaEnvelopeAt in WindSeaShader.
- */
-export function seaEnvelope(
-    components: readonly SeaComponent[],
-    amplitudes: ArrayLike<number>,
-    phases: ArrayLike<number>,
-    x: number,
-    y: number,
-    back = 0,
-): number {
-    let all = 0;
-    let read = 0;
-    for (let at = 0; at < components.length; at++) {
-        const slope = amplitudes[at] * Math.hypot(components[at].kx, components[at].ky);
-        all += slope * slope;
-    }
-    let cx = 0;
-    let cy = 0;
-    let sx = 0;
-    let sy = 0;
-    for (const at of ENVELOPE_COMPONENTS) {
-        const component = components[at];
-        const slope = amplitudes[at] * Math.hypot(component.kx, component.ky);
-        read += slope * slope;
-        const turn = x * component.cx + y * component.cy - phases[at] + component.f * back;
-        const angle = 2 * Math.PI * (turn - Math.floor(turn));
-        const a = amplitudes[at];
-        cx += a * Math.cos(angle) * component.kx;
-        cy += a * Math.cos(angle) * component.ky;
-        sx += a * Math.sin(angle) * component.kx;
-        sy += a * Math.sin(angle) * component.ky;
-    }
-    return read > 0 ? Math.sqrt(cx * cx + cy * cy + sx * sx + sy * sy) * Math.sqrt(all / read) : 0;
+    return { eta, sx: -sx, sy: -sy };
 }
 
 /**

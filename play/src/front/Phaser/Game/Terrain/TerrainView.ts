@@ -65,7 +65,7 @@ import { GroundSplat } from "./GroundSplat";
 import { BreakingFoam, closedSidesOf, FOAM_VISITS_PER_FRAME } from "./BreakingFoam";
 import type { ClosedSide } from "./BreakingFoam";
 import { windHeading } from "./Whitecaps";
-import { FOAM_AGES_S, SeaFetch } from "./WindSea";
+import { SeaFetch } from "./WindSea";
 import { seaDrawing } from "./WindSeaShader";
 import type { SeaDrawing } from "./WindSeaShader";
 import { depthsSeen } from "./BuiltGround";
@@ -169,9 +169,6 @@ interface MeadowLayers extends BlockCanvasArea {
  * painted again only when the relief, the water or the part of the map on the screen changed. A map without relief
  * is not looked at.
  */
-/** In Medium graphics, the shader looks back for the foam the crests left this many times, not all (WindSea). */
-const MEDIUM_FOAM_AGES = 2;
-
 export class TerrainView {
     private readonly surface: BlockSurface;
     private drawn: WeatherView | undefined;
@@ -419,7 +416,14 @@ export class TerrainView {
             // over what is drawn: no redrawing of the ground.
             if (this.seaFetch.advance() && this.drawnCanvas) this.splat.setFetch(this.fetchOver(this.drawnCanvas));
         }
-        this.splat.setSea(this.sea, this.quality === GraphicsQuality.Medium ? MEDIUM_FOAM_AGES : FOAM_AGES_S.length);
+        // The foam the crests leave, around the view, on the clock of the shaders; coarser in Medium graphics.
+        const view = this.scene.cameras.main.worldView;
+        this.splat.setSea(
+            this.sea,
+            this.scene.time.now,
+            { x: view.x, y: view.y, width: view.width, height: view.height },
+            this.quality === GraphicsQuality.Medium,
+        );
     }
 
     /** The fetch of the wind over the cells of a canvas, for the shader; undefined without a wind sea. */
