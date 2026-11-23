@@ -74,6 +74,13 @@ describe("the snow of a player's own city", () => {
         expect(ownSnowAfter(20, 3, 0, mild)).toBeCloseTo(20 - (2 * 3) / 3600);
     });
 
+    it("melts on the clock of the freeze and the thaw of the map, and falls on the clock of its water", () => {
+        // The water in real time, the freeze and the thaw at 60: an hour of melt in a minute.
+        expect(ownSnowAfter(20, 3, 0, mild, 1, 60)).toBeCloseTo(20 - (2 * 60 * 3) / 3600);
+        // What falls keeps the clock of the water.
+        expect(ownSnowAfter(0, 9, 2, frost, 1, 60)).toBeCloseTo((2 * 9) / 3600);
+    });
+
     it("holds in a still cold air without anything falling, and goes slowly in a dry wind", () => {
         expect(ownSnowAfter(20, 60, 0, { ...frost, humidity: 100 })).toBeCloseTo(20);
         expect(ownSnowAfter(20, 60, 0, { temperature: -5, humidity: 20, windSpeed: 30 })).toBeLessThan(20);
@@ -98,6 +105,22 @@ describe("the cycle of a player's own city after an absence", () => {
         const day = cycleAfterAbsence(kept, 24 * 3600, target, 0, mild);
         expect(day.ice).toBe(0);
         expect(day.snowMm).toBeLessThan(minute.snowMm);
+    });
+
+    it("lets the frost and the ice come and go on the clock of the cold: at ×60, a minute of it in a second", () => {
+        const kept = { frost: 0, ice: 0, wet: 0, snowMm: 0 };
+        const target = { frost: 1, ice: 1, wet: 0 };
+        // In real time the frost takes a minute, the ice two.
+        const real = cycleAfterAbsence(kept, 1, target, 0, undefined);
+        expect(real.frost).toBeCloseTo(1 / 60);
+        expect(real.ice).toBeCloseTo(1 / 120);
+        // At ×60 of the freeze and the thaw: the frost whole in a second, the ice in two.
+        const fast = cycleAfterAbsence(kept, 1, target, 0, undefined, 1, 60);
+        expect(fast.frost).toBe(1);
+        expect(fast.ice).toBeCloseTo(0.5);
+        expect(cycleAfterAbsence(kept, 2, target, 0, undefined, 1, 60).ice).toBe(1);
+        // And back: the frost goes as fast as it came.
+        expect(cycleAfterAbsence({ ...kept, frost: 1 }, 1, { ...target, frost: 0 }, 0, undefined, 1, 60).frost).toBe(0);
     });
 
     it("keeps the snow of the city when its air is not known, instead of starting again from bare ground", () => {

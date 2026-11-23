@@ -24,7 +24,7 @@ import type { SnowWeather } from "./Snow";
 import { TreeFire } from "./TreeFire";
 import type { Ember, ToldTree } from "./TreeFire";
 import type { WaterGrid } from "./WaterGrid";
-import { PX_PER_MM, waterTimesOf } from "./WaterInputs";
+import { freezeThawSpeedOf, PX_PER_MM, waterTimesOf } from "./WaterInputs";
 import type { RainSlots, SimulationRoom } from "./WaterSimulation";
 
 /** A whole state of the meadow to start from, as a room tells it (its bytes unzipped). */
@@ -548,11 +548,14 @@ export class MeadowSimulation {
      * (its speed, waterTimesOf), so that a snow weighs what the same rain would have and nothing goes by another clock.
      */
     private snowInput(seconds: number): Pick<MeadowStepInput, "weather" | "snowfallMm" | "snowTimes"> {
-        const times = this.livedTimes?.() ?? waterTimesOf(this.room.getWam()?.settings?.water);
+        const water = this.room.getWam()?.settings?.water;
+        const times = this.livedTimes?.() ?? waterTimesOf(water);
         return {
             weather: this.replay?.weather ? this.replay.weather.snow : this.snowWeather(),
+            // The snow falls as the rain does, on the clock of the water.
             snowfallMm: (this.snowRate * seconds * times) / 3600,
-            snowTimes: times,
+            // The cold does its work that many times faster again (the speed of the freeze and the thaw).
+            snowTimes: times * freezeThawSpeedOf(water),
         };
     }
 

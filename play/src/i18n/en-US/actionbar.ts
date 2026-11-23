@@ -109,6 +109,20 @@ const actionbar = {
         back: "Back to the shared water",
         fromCity: "To see the effect of this weather within minutes, turn on fast water (Settings → Ambience).",
     },
+    mapClock: {
+        freezeThaw: {
+            title: "Speed of the freeze and the thaw",
+            what: "The ice that takes and thaws, the snow that melts: for the whole map. The water keeps its own speed.",
+            real: "×1: as in reality, an hour of frost or thaw lasts an hour.",
+            faster: "×{speed}: an hour of frost or thaw lasts {duration}.",
+            badge: "Frost ×{speed}",
+            badgeHint: "On this map, the freeze and the thaw go {speed} times faster than in reality (not the water).",
+            reset: "Back to ×1, as in reality",
+            cycle: "Next speed of the freeze and the thaw",
+        },
+        minutes: "{count} min",
+        seconds: "{count} s",
+    },
     basicMode: {
         label: "Basic",
         switch: "Basic mode: no effect at all",

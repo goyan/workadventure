@@ -14,10 +14,12 @@ import {
 } from "./Snow";
 import type { SnowWeather } from "./Snow";
 import {
+    ICE_EXACT_FROM_HOURS,
     ICE_GROWTH_TIMES,
     ICE_MAX_MM,
     ICE_SLIPS_MM,
     iceByte,
+    iceAfterHours,
     iceCurrentShare,
     iceGrowthMmPerDay,
     iceMmOfByte,
@@ -1004,7 +1006,13 @@ export class Meadow {
                     weather = this.chilledAir;
                     thawing = iceThawMmPerHour(weather) * hours;
                 }
-                if (weather) {
+                if (weather && hours > ICE_EXACT_FROM_HOURS) {
+                    // A fast clock: the ice of those hours by the exact law, whatever their number.
+                    const share = input.currentAt
+                        ? iceCurrentShare(input.currentAt(index % this.width, Math.floor(index / this.width)))
+                        : 1;
+                    thick = iceAfterHours(thick, weather, snow[index], hours, share);
+                } else if (weather) {
                     const growth = (iceGrowthMmPerDay(thick, weather, snow[index]) * hours * ICE_GROWTH_TIMES) / 24;
                     // On running water the cold makes frazil, not a sheet: less or no ice takes (iceCurrentShare).
                     const share =

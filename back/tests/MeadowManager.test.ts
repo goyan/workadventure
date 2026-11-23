@@ -786,6 +786,51 @@ describe("the snow of the MeadowManager", () => {
         manager.stop();
     });
 
+    it("does the work of the cold at the speed of the freeze and the thaw, the water and the snowfall on their own clock", () => {
+        const water = () => ({ depthAt: () => 16 });
+        // The water at 60, or in real time with the freeze and the thaw at 60: the same ice, the same melt.
+        const byWater = snowHarness({ water, waterSpeed: 60 });
+        const byCold = snowHarness({ water, waterSpeed: 1 });
+        byCold.wam.settings = {
+            ...byCold.wam.settings,
+            water: { ...DEFAULT_WATER_SETTINGS, speed: 1, freezeThawSpeed: 60 },
+        };
+        const plain = snowHarness({ water, waterSpeed: 1 });
+        for (const harness of [byWater, byCold, plain]) {
+            harness.manager.mapChanged();
+            harness.steps(20);
+        }
+        expect(byCold.manager.iceAt(1, 1)).toBeGreaterThan(plain.manager.iceAt(1, 1) * 10);
+        expect(byCold.manager.iceAt(1, 1)).toBeCloseTo(byWater.manager.iceAt(1, 1), 6);
+        // Changed while the room lives: the next step goes by the new speed, without a restart.
+        plain.wam.settings = {
+            ...plain.wam.settings,
+            water: { ...DEFAULT_WATER_SETTINGS, speed: 1, freezeThawSpeed: 600 },
+        };
+        const before = plain.manager.iceAt(1, 1);
+        plain.steps(1);
+        expect(plain.manager.iceAt(1, 1) - before).toBeGreaterThan(100 * (before / 20));
+        for (const harness of [byWater, byCold, plain]) harness.manager.stop();
+    });
+
+    it("lets the snow fall on the clock of the water, not on the clock of the cold", () => {
+        const fast = snowHarness({ weather: WeatherType.Rain, waterSpeed: 1 });
+        fast.wam.settings = {
+            ...fast.wam.settings,
+            water: { ...DEFAULT_WATER_SETTINGS, speed: 1, freezeThawSpeed: 600 },
+        };
+        const plain = snowHarness({ weather: WeatherType.Rain, waterSpeed: 1 });
+        // A cold that melts nothing: what lies is what fell.
+        const frozen: SnowWeather = { temperature: -20, humidity: 100, windSpeed: 0 };
+        for (const harness of [fast, plain]) {
+            harness.air.now = frozen;
+            harness.manager.mapChanged();
+            harness.steps(5);
+        }
+        expect(snowOf(fast.sent.at(-1))).toEqual(snowOf(plain.sent.at(-1)));
+        for (const harness of [fast, plain]) harness.manager.stop();
+    });
+
     it("pours the water of the snow that melts, and none while it freezes", () => {
         const { manager, sent, steps, air, pour } = snowHarness();
         manager.mapChanged();

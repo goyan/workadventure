@@ -764,6 +764,7 @@ const mapEditor: BaseTranslation = {
         absorption: "Ground absorption (how fast a flood goes down)",
         indoorDrain: "Drainage of the indoor floors",
         impactReach: "Blast of a meteor in the water (times the radius of the crater)",
+        freezeThawSpeed: "Speed of the freeze and the thaw",
         speed: "Speed of the water, the snow and the ice (1: as in reality, 60: a minute for an hour)",
         dashboard: {
             title: "Water balance",
@@ -838,6 +839,8 @@ const mapEditor: BaseTranslation = {
                 "The floors of the rooms closed by walls (doors closed) drain the water that came in. 300 mm/h by default: a flooded room is dry in about two hours, as in reality (two minutes at a speed of the water of 60); floor drains take it faster; 0 keeps the water inside. A pool dug indoors keeps its water.",
             impactReach:
                 "How far the impact drives the water away around its crater: all of it next to the crater, less and less further out. 1: only the water of the crater moves. In reality: the ejecta of a crater cover 2 to 3 times its radius; 2.5 by default. A pool hit in its middle is almost emptied.",
+            freezeThawSpeed:
+                "On top of the speed of the water, for the cold alone: the ice that takes and thaws, the snow that melts. ×1 by default, as in reality: at 24 °C 10 cm of ice take about 14 hours to go. At ×60, an hour of frost or thaw lasts a minute; at ×600, six seconds. The water, the rain and the snow that falls keep their own speed.",
             speed: "1 by default, as in reality: a rain of 10 mm/h takes hours to fill a pond, a snow hours to melt, an ice most of a day to bear a walker at -3 °C. For a trial, 60: a minute for an hour; the whole water then goes faster, its currents too, as fast as the server computes it.",
             maxSurface:
                 "256 px by default, as in reality: no flood is cut short. Lower, the water rises no higher: 18 px, enough to swim, under the upper floors (52 px).",

@@ -11,6 +11,8 @@ import type { RoomConnection } from "../../../../../Connection/RoomConnection";
 import { localUserStore } from "../../../../../Connection/LocalUserStore";
 import { gameManager } from "../../../GameManager";
 import { megaphoneCanBeUsedStore, megaphoneSpaceSettingsStore } from "../../../../../Stores/MegaphoneStore";
+import { mapClockSpeedsStore } from "../../../../../Stores/MapClockStore";
+import { mapClockSpeedsOf } from "../../../Weather/MapClocks";
 
 export class UpdateWAMSettingFrontCommand extends UpdateWAMSettingCommand implements FrontCommandInterface {
     public constructor(
@@ -81,6 +83,11 @@ export class UpdateWAMSettingFrontCommand extends UpdateWAMSettingCommand implem
 
     public async execute(): Promise<void> {
         await super.execute();
+
+        // The clocks of the map shown in the action bar follow its settings, from whoever changed them.
+        if (this.updateWAMSettingsMessage.message?.$case === "updateWaterSettingMessage") {
+            mapClockSpeedsStore.set(mapClockSpeedsOf(this.wam));
+        }
 
         if (this.updateWAMSettingsMessage.message?.$case === "updatePrefabOverrideSettingMessage") {
             this.applyPrefabOverride(this.updateWAMSettingsMessage.message.updatePrefabOverrideSettingMessage.prefabId);

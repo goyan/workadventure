@@ -29,6 +29,7 @@
     import PerfCounter from "./PerfCounter.svelte";
     import BasicModeButton from "./BasicModeButton.svelte";
     import FastWaterBadge from "./FastWaterBadge.svelte";
+    import MapClockWidget from "./MapClockWidget.svelte";
     import PictureInPictureMenuItem from "./MenuIcons/PictureInPictureMenuItem.svelte";
 
     let rightDiv: HTMLDivElement | undefined = $state();
@@ -71,6 +72,8 @@
                     <div
                         class="flex justify-center relative gap-1 @md/actions:gap-2 @xl/actions:gap-4 z-[1] mx-1 @md/actions:mx-2 @xl/actions:mx-4"
                     >
+                        <!-- The clocks of the map (the cold), left of the wand of the effects. -->
+                        <div class="flex items-center"><MapClockWidget /></div>
                         <div class="flex items-center"><BasicModeButton /></div>
                         <div class="hidden @md/actions:flex items-center"><FastWaterBadge /></div>
                         {#if $perfShownStore}

@@ -3,6 +3,7 @@ import {
     DEFAULT_FLOW_PACE,
     DEFAULT_WATER_PACE,
     DEFAULT_WATER_SETTINGS,
+    MAX_FREEZE_THAW_SPEED,
     DEFAULT_WAVE_SETTINGS,
     TERRAIN_CELL,
     TILE_PX,
@@ -88,6 +89,24 @@ export const PX_PER_MM = 1 / (-metresOf(-1) * 1000);
 export function waterTimesOf(water: { speed?: number } | undefined): number {
     const speed = water?.speed ?? DEFAULT_WATER_SETTINGS.speed;
     return Number.isFinite(speed) && speed > 0 ? speed : 1;
+}
+
+/**
+ * How many times faster than its water the cold of a map does its work (WaterSettings.freezeThawSpeed): 1 for a map
+ * that says nothing, within 1 and MAX_FREEZE_THAW_SPEED otherwise.
+ */
+export function freezeThawSpeedOf(water: { freezeThawSpeed?: number } | undefined): number {
+    const speed = water?.freezeThawSpeed;
+    if (speed === undefined || !Number.isFinite(speed)) return 1;
+    return Math.min(MAX_FREEZE_THAW_SPEED, Math.max(1, speed));
+}
+
+/**
+ * The clock the ice takes and thaws, the snow melts and goes and the frost comes and goes by: the clock of the water
+ * (waterTimesOf) times the speed of the freeze and the thaw. The snow that falls keeps the clock of the water.
+ */
+export function freezeThawTimesOf(water: { speed?: number; freezeThawSpeed?: number } | undefined): number {
+    return waterTimesOf(water) * freezeThawSpeedOf(water);
 }
 
 /**
