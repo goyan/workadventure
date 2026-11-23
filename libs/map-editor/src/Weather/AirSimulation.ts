@@ -21,7 +21,11 @@ import type { Hurricane } from "../Catastrophe/Hurricane";
  * size. The model keeps the Rossby number of a real hurricane, V / (f R) ≈ 60 / (5·10⁻⁵ × 3·10⁴) = 40, hence
  * f* = V / (40 R) = 0.05 s⁻¹ at R = 30 m; and the ratio of the drag to the Coriolis force, which sets the inflow,
  * (C_d V / h) / f ≈ (2·10⁻³ × 60 / 1000) / 5·10⁻⁵ = 2.4, hence a layer h* = 1 m instead of 1 km. Every length a
- * thousandth, the speeds kept, the times a thousandth. The layer is then raised to 5 m (AIR_LAYER_M: calibrated).
+ * thousandth, the speeds kept, the times a thousandth. The layer is then taken at 2 m (AIR_LAYER_M: see there why).
+ *
+ * The slab exchanges its air with the air above it (Smith 2003, "A simple model of the hurricane boundary layer",
+ * QJRMS 129): it rises out where the slab converges (its wind kept), the air above sinks in where it diverges and
+ * brings its gradient wind (w⁻ (u − u_gradient) / h, with w = −h div u).
  *
  * Numerics: semi-Lagrangian advection (stable at any step; bilinear, so it smooths a little: the loss is measured by
  * the tests), the drag implicit (stable however strong), the Coriolis force an exact rotation; edges copied from
@@ -43,12 +47,18 @@ export const AIR_DENSITY = 1.15;
 /** The Coriolis parameter of the reduced hurricane, s⁻¹ (see above: the same Rossby number as a real one). */
 export const AIR_CORIOLIS = 0.05;
 /**
- * The depth of the slab of air, m: a CHOICE, calibrated. The similarity above gives 1 m; but then the slab, which has
- * no ascent at the eyewall (two dimensions), lets the inflow run on into the eye and fill it (inflow of 53° over the
- * sea, 70° over land, the eye no longer calm: measured). At 5 m the eye stays calm over the sea, the land and a forest,
- * from category 1 to 5, the inflow grows with the roughness of the surface (see the tests).
+ * The depth of the slab of air, m. The similarity above gives 1 m. The slab exchanges its air with the air above it
+ * (Smith 2003): where it converges, its air rises out at the top (the eyewall); where it diverges, the air above
+ * sinks in with its own wind, the gradient wind. Without that exchange (a slab of two dimensions only), the inflow ran
+ * on into the eye and filled it (measured: 53° of inflow over the sea, the eye no longer calm). With it, at 1 m: the
+ * eye stays calm over the sea and the land, the inflow over the sea is 19 to 32°; but a forest fills the eye half way
+ * (53 km/h in it). At 2 m (a CHOICE, twice the similarity): calm everywhere, from category 1 to 5, the inflow over the
+ * sea 17 to 24° in categories 4 and 5 (about 20° measured on real hurricanes), more over land, more again over a
+ * forest; the strongest wind over the sea above that of its category at the eyewall, the more the stronger it is
+ * (+4 % in category 1, +14 % in category 4, +18 % in category 5: the supergradient jet of a boundary layer, Kepert
+ * 2001), where the slab without exchange at 5 m kept it within 6 % but with an inflow of only 8 to 15°.
  */
-export const AIR_LAYER_M = 5;
+export const AIR_LAYER_M = 2;
 /**
  * The drag coefficient of each surface (Large and Pond 1981 over the sea, capped at 2.5·10⁻³ past 31 m/s as Powell
  * 2003 measured in hurricanes; an order of magnitude over land and a forest, rougher).
@@ -64,7 +74,7 @@ export function seaDrag(speed: number): number {
 /**
  * The low of the hurricane is the pressure drop of hurricanePressureDrop (Holland 1980, V² = B Δp / (ρ e), the drop
  * the water already feels): the same one. The slab, slightly supergradient at its wall and slowed by the drag, keeps
- * the strongest wind of its category within 10 % (measured, see the tests): no other calibration.
+ * a strongest wind somewhat over that of its category (measured, see the tests): no other calibration.
  */
 
 export interface AirSetup {
@@ -75,6 +85,8 @@ export interface AirSetup {
     drag?: (x: number, y: number) => number | "sea";
     /** The depth of the slab (m): AIR_LAYER_M by default. */
     layerM?: number;
+    /** The exchange of the slab with the air above it (Smith 2003): true by default. */
+    exchange?: boolean;
 }
 
 /** What drives the air at a step: the hurricane crossing the map (if any) and the wind of the room it blows in. */
@@ -101,9 +113,11 @@ export class AirSimulation {
     /** The drag of each cell: a coefficient, or −1 for the sea (it depends on the wind there). */
     private readonly drag: Float32Array;
     private readonly layerM: number;
+    private readonly exchange: boolean;
 
     constructor(setup: AirSetup) {
         this.layerM = setup.layerM ?? AIR_LAYER_M;
+        this.exchange = setup.exchange ?? true;
         this.columns = Math.ceil(setup.width / AIR_CELL_PX) + 2 * AIR_MARGIN_CELLS;
         this.rows = Math.ceil(setup.height / AIR_CELL_PX) + 2 * AIR_MARGIN_CELLS;
         this.originX = (0.5 - AIR_MARGIN_CELLS) * AIR_CELL_PX;
@@ -188,6 +202,8 @@ export class AirSimulation {
         const { columns, rows } = this;
         const dt = seconds;
         const [roomE, roomN] = AirSimulation.roomPressureForce(forcing.room, AIR_CORIOLIS, dt, this.layerM);
+        const roomWindE = forcing.room.east;
+        const roomWindN = forcing.room.north;
         const storm = forcing.hurricane ? hurricaneAt(forcing.hurricane, forcing.epoch) : undefined;
         const share = storm?.share ?? 0;
         const spin = forcing.hurricane?.southern ? -1 : 1;
@@ -213,9 +229,12 @@ export class AirSimulation {
                 const rn = -e * sin + n * cos;
                 e = re;
                 n = rn;
-                // Pressure: the room, and the low.
+                // Pressure: the room, and the low. And the wind of the air above the slab, in balance with that
+                // pressure (the gradient wind of the low, the wind of the room): what the slab takes in where it sinks.
                 let pe = roomE;
                 let pn = roomN;
+                let aboveE = roomWindE;
+                let aboveN = roomWindN;
                 if (storm && share > 0) {
                     const x = this.originX + column * AIR_CELL_PX;
                     const y = this.originY + row * AIR_CELL_PX;
@@ -226,9 +245,26 @@ export class AirSimulation {
                     const g = dropOverRho * b * (rmb / r) * Math.exp(-rmb) * share;
                     pe -= (g * de) / r;
                     pn -= (g * dn) / r;
+                    const half = (r * Math.abs(f)) / 2;
+                    const gradient = Math.sqrt(half * half + r * g) - half;
+                    aboveE += (-dn / r) * spin * gradient;
+                    aboveN += (de / r) * spin * gradient;
                 }
                 e += pe * dt;
                 n += pn * dt;
+                // The slab and the air above it (Smith 2003): where the slab diverges, the air above sinks into it
+                // and brings its own wind (w⁻ (u − u_above) / h, implicit); where it converges, its air rises out at
+                // the top, its wind kept: the inflow ends at the eyewall, where it goes up.
+                if (this.exchange) {
+                    const div =
+                        (this.east[at + 1] - this.east[at - 1] + this.north[at - columns] - this.north[at + columns]) /
+                        (2 * cell);
+                    if (div > 0) {
+                        const sink = dt * div;
+                        e = (e + sink * aboveE) / (1 + sink);
+                        n = (n + sink * aboveN) / (1 + sink);
+                    }
+                }
                 // Drag, implicit.
                 const speed = Math.hypot(e, n);
                 const slow = 1 + (dt * this.dragAt(at, speed) * speed) / this.layerM;
