@@ -88,6 +88,11 @@ const WATER_ATTENUATION_PX = 32;
 const WATER_LIGHT_ELEVATION_DEG = 45;
 const WATER_LIGHT_ACROSS = Math.cos((WATER_LIGHT_ELEVATION_DEG * Math.PI) / 180) * Math.SQRT1_2;
 const WATER_LIGHT_UP = Math.sin((WATER_LIGHT_ELEVATION_DEG * Math.PI) / 180);
+/**
+ * The steepest a surface of water stands (map px a map px): the crest of the steepest wave, 120 degrees (Stokes), its
+ * sides at 30 degrees. Steeper, the water falls down a step: it is not lit as a face (WATER_FRAG).
+ */
+const WATER_STEEPEST_SLOPE = Math.tan(Math.PI / 6);
 /** The slope of the water is worked out where a cell and the four around it hold at least this (map px): a shore is
  * not a slope of the water. */
 const SLOPE_WET_PX = 2;
@@ -870,10 +875,14 @@ void main() {
         float open = outdoors * step(${WHITECAP_MIN_DEPTH_PX}.0, depthPx);
         // The surface of the water itself aslant (a dome under the low of a hurricane, the water piled up by its
         // wind, a wave of a flood): the light it lets into the water follows the cosine of the light on its face
-        // (Lambert), from the north-west as the relief, so the colour of the water is lit or shaded as much. A level
-        // water is left exactly as it was.
+        // (Lambert), from the north-west as the relief, so the colour the water gives back is lit or shaded as much:
+        // the share of it that is the water's own (deep), not the ground seen through a film. A surface steeper than
+        // a wave can be (WATER_STEEPEST_SLOPE) is water falling down a step, not a face of water: left as it was. A
+        // level water is left exactly as it was.
         vec2 surfaceSlope = waterSlopeAt(world);
-        water *= waterFacing(surfaceSlope);
+        float aslant = deep * (1.0 - smoothstep(${glsl(WATER_STEEPEST_SLOPE)}, ${glsl(1.25 * WATER_STEEPEST_SLOPE)},
+            length(surfaceSlope)));
+        water *= mix(1.0, waterFacing(surfaceSlope), aslant);
         vec2 seaRipple = vec2(0.0);
         float seaWhite = 0.0;
 #ifdef WIND_SEA
@@ -1778,7 +1787,8 @@ export function waterLevels(
 /**
  * The slope of the surface of the water over each cell (map px a map px), across the cells on each side, into the green
  * (east) and blue (south) of SLOPE_PACK, 128 level, SLOPE_UNITS a slope of 1: from the surface over each cell (`levels`,
- * NaN where the water is too thin); level where a side is dry or the grid ends, and everywhere without levels.
+ * NaN where the water is too thin); level where a side is dry, the grid ends or the water falls down a step (steeper
+ * than WATER_STEEPEST_SLOPE), and everywhere without levels.
  */
 export function writeSlopes(
     data: Uint8ClampedArray,
@@ -1807,8 +1817,14 @@ export function writeSlopes(
                     north === north &&
                     southward === southward
                 ) {
-                    east = byte((eastward - west) / (2 * TERRAIN_CELL));
-                    south = byte((southward - north) / (2 * TERRAIN_CELL));
+                    const towardsEast = (eastward - west) / (2 * TERRAIN_CELL);
+                    const towardsSouth = (southward - north) / (2 * TERRAIN_CELL);
+                    // Steeper than a wave stands, the water falls down a step: told level, so that the slope read
+                    // between this cell and the next does not sweep through the slopes of a face.
+                    if (Math.hypot(towardsEast, towardsSouth) <= WATER_STEEPEST_SLOPE) {
+                        east = byte(towardsEast);
+                        south = byte(towardsSouth);
+                    }
                 }
             }
             data[at + 1] = east;

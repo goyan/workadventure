@@ -53,6 +53,22 @@ describe("slope of the water", () => {
         expect(east[1 * columns + 2]).toBe(128);
     });
 
+    it("tells water falling down a step, steeper than the steepest wave (30 degrees), as level", () => {
+        const ground = new Array<number>(columns * rows).fill(-100);
+        const steep = slopes(
+            ground,
+            ground.map((_, cell) => (cell % columns < 3 ? 60 : 40)),
+        );
+        // Across the middle cell: (40 - 60) / 32 = -0.625, steeper than tan 30 degrees = 0.577.
+        expect(steep.east[1 * columns + 2]).toBe(128);
+        const gentle = slopes(
+            ground,
+            ground.map((_, cell) => (cell % columns < 3 ? 50 : 40)),
+        );
+        // (40 - 50) / 32 = -0.3125, a face: 128 - 0.3125 * 127.
+        expect(gentle.east[1 * columns + 2]).toBe(88);
+    });
+
     it("finds a level water everywhere without depths", () => {
         const data = new Uint8ClampedArray(columns * 4 * rows * 3 * 4).fill(7);
         writeSlopes(data, undefined, columns, rows);
