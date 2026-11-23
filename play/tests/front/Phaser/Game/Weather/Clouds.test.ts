@@ -85,6 +85,11 @@ describe("cloudTint", () => {
 });
 
 describe("cloudPatches", () => {
+    it("gives the puffs different stable silhouettes", () => {
+        const patches = cloudPatches(0, { x: 0, y: 0, width: 2100, height: 2100 }, 1, false);
+        const shapes = new Set(patches.map((patch) => JSON.stringify([patch.rotation, patch.stretch])));
+        expect(shapes.size).toBeGreaterThan(20);
+    });
     it("shows more clouds for a cloudier sky, one after the other", () => {
         const weight = (cloudiness: number) =>
             // Over a view bigger than the repeated square of the sky, every cloud is there.
@@ -181,6 +186,8 @@ describe("cloudPatches", () => {
             after.some(
                 (later) =>
                     later.radius === patch.radius &&
+                    later.rotation === patch.rotation &&
+                    later.stretch === patch.stretch &&
                     Math.abs(Math.hypot(later.x - patch.x, later.y - patch.y) - CLOUD_DRIFT_PER_SECOND) < 0.01,
             ),
         );
