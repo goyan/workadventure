@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { cellKey, withHeights } from "../src/Terrain/TerrainGrid";
 import { setWaterKernel, WaterGrid, waterKernel, waterKernelInUse, waterKernelNamed } from "../src/Terrain/WaterGrid";
 import { stepInputOf } from "../src/Terrain/WaterInputs";
@@ -222,5 +222,45 @@ describe("the kernel of the water compiled to WebAssembly", () => {
             setWaterKernel("typescript");
         }
         expect(lake().kernelName()).toBe("typescript");
+    });
+
+    it("computes in TypeScript, and says so once, where its module is refused", () => {
+        const warned = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        const refused = vi.spyOn(WebAssembly, "Instance").mockImplementation(function refusedInstance(): never {
+            throw new Error("refused for the test");
+        });
+        try {
+            setWaterKernel("wasm");
+            expect(waterKernelInUse()).toStrictEqual({ kernel: "typescript", fallback: "refused for the test" });
+            const reference = lake();
+            // Two grids, as two rooms: the same water as the passes written in TypeScript, and one warning.
+            for (const fallen of [lake(), lake()]) {
+                expect(fallen.kernelName()).toBe("typescript");
+                fallen.rainOn(30, 20, 9, 20);
+            }
+            expect(warned).toHaveBeenCalledTimes(1);
+            expect(warned).toHaveBeenCalledWith(
+                "The compiled kernel of the water could not be loaded: computing in TypeScript",
+                expect.objectContaining({ message: "refused for the test" }),
+            );
+            setWaterKernel("typescript");
+            reference.rainOn(30, 20, 9, 20);
+            setWaterKernel("wasm");
+            const fallen = lake();
+            fallen.rainOn(30, 20, 9, 20);
+            const input = { rainPx: 0, evaporationPx: 0, absorptionPx: 0, flows: [], inertia: true };
+            for (let step = 0; step < 20; step++) {
+                expect(fallen.step(input).moved).toBe(reference.step(input).moved);
+            }
+            expect(Buffer.from(fallen.writeDepths(true)).equals(Buffer.from(reference.writeDepths(true)))).toBe(true);
+        } finally {
+            refused.mockRestore();
+            warned.mockRestore();
+            setWaterKernel("typescript");
+        }
+        // Loaded again once it can be.
+        setWaterKernel("wasm");
+        expect(waterKernelInUse()).toStrictEqual({ kernel: "wasm" });
+        setWaterKernel("typescript");
     });
 });
