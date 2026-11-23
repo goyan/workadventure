@@ -7,7 +7,7 @@ import type { WaterCycle } from "@wa/front/Phaser/Game/Weather/Frost";
 import type { WaterRing } from "@wa/front/Phaser/Game/Catastrophe/MeteorFall";
 import { MAX_SHOWN_BREAKS } from "../Ice/IceBreaks";
 import type { IceBreak } from "../Ice/IceBreaks";
-import { NOISE_GLSL, shaderSeconds } from "../ShaderNoise";
+import { groundDrifts, NOISE_GLSL, shaderSeconds } from "../ShaderNoise";
 import { SHORE_PX } from "./TerrainShading";
 import { WHITECAP_MIN_DEPTH_PX } from "./Whitecaps";
 import { HEIGHT_OFFSET, HEIGHT_SCALE, OBLIQUE_HALVINGS, OBLIQUE_STEPS, writeHeights } from "./ObliqueView";
@@ -128,6 +128,25 @@ uniform sampler2D uData;
 uniform vec4 uArea;   // x, y, width, height of the area, in map pixels
 uniform vec2 uCells;  // columns, rows
 uniform float uTime;  // seconds
+// How far each noise has drifted, in cells of its noise (ShaderNoise.groundDrifts): computed on the processor in 64
+// bits, going round where the noise repeats, so that a noise never jumps however long the page stays open.
+uniform vec2 uFireDrift;
+uniform vec4 uPoolNearA;
+uniform vec2 uPoolNearB;
+uniform vec4 uPoolFarA;
+uniform vec2 uPoolFarB;
+uniform vec4 uWaterNearA;
+uniform vec2 uWaterNearB;
+uniform vec4 uWaterFarA;
+uniform vec2 uWaterFarB;
+uniform vec4 uIceA;
+uniform vec2 uIceB;
+uniform vec4 uFrothA;
+uniform vec2 uFrothB;
+uniform vec4 uBoilA;
+uniform vec2 uBoilB;
+uniform float uGlint;
+uniform float uWavePhase;
 #ifdef OBLIQUE
 // The relief seen in 3/4 (ObliqueView.ts): 1 when it is, and the exact heights of the cells of the area, on two bytes:
 // the ground on the left half of the picture, what is seen (the ground, or the water over it) on the right half. Only
@@ -399,8 +418,8 @@ void main() {
         outColor = vec4(ashColor * ashAlpha, ashAlpha) + outColor * (1.0 - ashAlpha);
     }
     if (fire > 0.002) {
-        float glow = step(1.0 - fire, 0.5 + 0.5 * vnoise(world / 6.0 + uTime * 2.0)) * 0.85;
-        vec3 glowColor = mix(vec3(1.0, 0.48, 0.1), vec3(1.0, 0.8, 0.3), vnoise(world / 4.0 - uTime * 3.0));
+        float glow = step(1.0 - fire, 0.5 + 0.5 * vnoise(world / 6.0 + uFireDrift.x)) * 0.85;
+        vec3 glowColor = mix(vec3(1.0, 0.48, 0.1), vec3(1.0, 0.8, 0.3), vnoise(world / 4.0 + uFireDrift.y));
         outColor = vec4(glowColor * glow, glow) + outColor * (1.0 - glow);
         tone = mix(tone, 1.0, glow);
     }
@@ -687,11 +706,11 @@ vec4 poolColor(vec2 world, float t) {
     c *= mix(0.82, 1.0, poolAround(world, 12.0));
     // Caustics over the floor, and a glint now and then on the surface.
     vec2 p = world / 34.0;
-    float n1 = fbm(p + vec2(t * 0.09, t * 0.05));
-    float n2 = fbm(p * 1.7 - vec2(t * 0.06, -t * 0.08) + 5.0);
+    float n1 = fbmDrift(p, uPoolNearA, uPoolNearB);
+    float n2 = fbmDrift(p * 1.7 + 5.0, uPoolFarA, uPoolFarB);
     float lines = 1.0 - smoothstep(0.0, 0.05, abs(n1 - n2));
     c += lines * mix(0.2, 0.08, deep) * wetness;
-    float glint = step(0.993, hash(floor(world / 2.0) + floor(t * 3.0))) * smoothstep(0.55, 0.7, n2);
+    float glint = step(0.993, hash(floor(world / 2.0) + uGlint)) * smoothstep(0.55, 0.7, n2);
     c = mix(c, vec3(1.0), glint * 0.7 * wetness);
     return vec4(c, 1.0);
 }
@@ -758,7 +777,7 @@ void main() {
     // However thin, water reaches the edge of its cell: whether a cell holds any (pack 8, blue), apart from how
     // deep it is, keeps a film of a few centimetres from vanishing (waterShoreLevel is the twin of this rule).
     float level = max(clamp(depth * ${SHORE_GAIN}.0, 0.0, 1.0), pack(8.0, world).b);
-    float drift = fbm(world / 18.0 + vec2(t * 0.05, -t * 0.04) * still) - 0.5;
+    float drift = fbmDrift(world / 18.0, uIceA * still, uIceB * still) - 0.5;
     float edge = bend(level, drift, 1.3);
     float cover = step(0.5, edge);
 
@@ -815,13 +834,13 @@ void main() {
         // The surface: two noises sliding across each other; where they cross, bright lines of light (caustics
         // over the shallows, glints over the deep).
         vec2 p = (world + vec2(shock * 5.0)) / 46.0;
-        float n1 = fbm(p + vec2(t * 0.06, t * 0.035));
-        float n2 = fbm(p * 1.6 - vec2(t * 0.045, -t * 0.07) + 9.0);
+        float n1 = fbmDrift(p, uWaterNearA, uWaterNearB);
+        float n2 = fbmDrift(p * 1.6 + 9.0, uWaterFarA, uWaterFarB);
         float lines = 1.0 - smoothstep(0.0, 0.04, abs(n1 - n2));
         water += lines * mix(0.14, 0.07, deep);
         water *= 0.9 + 0.2 * n1;
         water = reflected(water, world, vec2(n1 - 0.5, n2 - 0.5) * 12.0, lines + 0.3 * n2);
-        float glint = step(0.992, hash(floor(world / 2.0) + floor(t * 3.0))) * smoothstep(0.55, 0.7, n2);
+        float glint = step(0.992, hash(floor(world / 2.0) + uGlint)) * smoothstep(0.55, 0.7, n2);
         water = mix(water, FOAM, glint * 0.8);
         water = withShards(water, world, broken.y);
         alpha = max(alpha, glint * 0.8);
@@ -838,15 +857,15 @@ void main() {
 
         // The foam where the water meets the shore: a band that comes and goes, broken by a fine noise.
         float band = step(0.5, edge) * (1.0 - step(0.66, edge));
-        float wave = 0.5 + 0.5 * sin(t * 1.6 + drift * 12.0);
-        float froth = smoothstep(0.35, 0.6, fbm(world / 5.0 + vec2(t * 0.25, 0.0)) * (0.6 + 0.6 * wave));
+        float wave = 0.5 + 0.5 * sin(uWavePhase + drift * 12.0);
+        float froth = smoothstep(0.35, 0.6, fbmDrift(world / 5.0, uFrothA, uFrothB) * (0.6 + 0.6 * wave));
         // A film too thin to break does not froth.
         float foam = band * froth * film;
 
         // The foam of the waves that break and of the floods that advance (BreakingFoam.ts, the red of pack 9):
         // a froth torn by a fine noise that boils, whole where the foam is strong, in flecks where it fades.
         float broken = pack(9.0, world).r;
-        float boil = fbm(world / 3.5 + vec2(t * 0.35, -t * 0.25));
+        float boil = fbmDrift(world / 3.5, uBoilA, uBoilB);
         float surf = smoothstep(0.78 - 0.62 * broken, 0.9 - 0.62 * broken, boil) * step(0.03, broken);
         foam = max(foam, surf * 0.92);
 
@@ -1301,6 +1320,22 @@ export class GroundSplat {
         const area = this.area;
         setUniform("uData", 0);
         setUniform("uTime", time);
+        const drifts = groundDrifts(this.scene.time.now);
+        setUniform("uFireDrift", drifts.fire);
+        for (const [name, drift] of [
+            ["uPoolNear", drifts.poolNear],
+            ["uPoolFar", drifts.poolFar],
+            ["uWaterNear", drifts.waterNear],
+            ["uWaterFar", drifts.waterFar],
+            ["uIce", drifts.ice],
+            ["uFroth", drifts.froth],
+            ["uBoil", drifts.boil],
+        ] as const) {
+            setUniform(`${name}A`, drift.first);
+            setUniform(`${name}B`, drift.third);
+        }
+        setUniform("uGlint", drifts.glint);
+        setUniform("uWavePhase", drifts.wave);
         if (this.canProject) {
             setUniform("uOblique", this.oblique ? 1 : 0);
             setUniform("uHeights", heightsUnit);
