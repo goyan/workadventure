@@ -3,6 +3,7 @@ import {
     setWaterKernel,
     setWaterPassRunner,
     threadWaterLoads,
+    WaterBandsLead,
     waterKernelInUse,
     waterKernelNamed,
 } from "@workadventure/map-editor";
@@ -31,9 +32,22 @@ const port = parentPort;
 if (!port) throw new Error("GroundWorker runs in a worker thread only");
 
 // The bands of the water: threads that share with this one the passes of each move of its waters, when asked for.
-const bands = Math.floor(Number((workerData as { bands?: number } | null)?.bands ?? 1));
+const asked = workerData as { bands?: number; patientBands?: number } | null;
+const bands = Math.floor(Number(asked?.bands ?? 1));
+let group: GroundBands | undefined;
 if (bands > 1) {
-    const group = new GroundBands(
+    // For the tests that must see the threads of the bands at work whatever the machine does: one pass in
+    // `patientBands`, this thread waits at its opening until a slice of it is claimed by another (five seconds at
+    // most: none ever came). Never asked for by the server.
+    const every = Math.floor(Number(asked?.patientBands ?? 0));
+    let passes = 0;
+    const patient: WaterBandsLead | undefined =
+        every > 0
+            ? new WaterBandsLead(bands - 1, undefined, undefined, undefined, () => {
+                  if (passes++ % every === 0) patient?.waitForAClaim(5000);
+              })
+            : undefined;
+    group = new GroundBands(
         bands - 1,
         (reason, remaining) => {
             console.error(
@@ -48,6 +62,8 @@ if (bands > 1) {
                 throw error;
             });
         },
+        undefined,
+        patient,
     );
     setWaterPassRunner(group);
 }
@@ -79,6 +95,13 @@ port.on("message", (command: GroundCommand) => {
     if (!hosted) return;
     const { ground } = hosted;
     // One after the other: the start of the water awaits what was saved, and nothing must overtake it.
+    const shared = command.kind === "close" ? group : undefined;
+    if (shared) {
+        // How the passes of the waters were shared, for who started this thread: told before the room says it closed.
+        hosted.last = hosted.last.then(() =>
+            port.postMessage({ kind: "slices", room: 0, ...shared.computed() } satisfies GroundTold),
+        );
+    }
     hosted.last = hosted.last.then(() => ground.handle(command));
     if (command.kind === "close") grounds.delete(command.room);
 });

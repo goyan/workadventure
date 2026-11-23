@@ -106,7 +106,12 @@ export type GroundTold =
     | { kind: "closed"; room: number }
     | { kind: "error"; room: number; message: string }
     /** A thread of the bands of the water of this thread was left out (no room: said to who started the thread). */
-    | { kind: "band"; room: 0; reason: string; remaining: number };
+    | { kind: "band"; room: 0; reason: string; remaining: number }
+    /**
+     * How the passes of the waters of this thread were shared since it started, told each time a room closes: the
+     * slices of rows it computed itself, and those the threads of its bands computed.
+     */
+    | { kind: "slices"; room: 0; here: number; others: number };
 
 /** Where the commands of a room go and where what it is told comes from: a thread, or the same thread in a test. */
 export interface GroundPort {

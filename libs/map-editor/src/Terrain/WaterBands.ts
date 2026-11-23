@@ -188,6 +188,8 @@ function work(
         const slice = claim - mine;
         if (slice >= slices || computed >= most) return computed;
         if (Atomics.compareExchange(words, CLAIM, claim, claim + 1) !== claim) continue;
+        // For who waits to see a slice claimed (waitForAClaim): nothing when nobody does.
+        Atomics.notify(words, CLAIM);
         if (
             runWaterPass(
                 pass,
@@ -259,6 +261,23 @@ export class WaterBandsLead {
     /** How many threads follow from now on (one of them was lost, or came back). */
     public followedBy(followers: number): void {
         this.followers = Math.max(0, followers);
+    }
+
+    /**
+     * The claims of the pass that is open: a number that changes each time a slice is claimed, by this thread or by
+     * another, and each time a pass opens or ends.
+     */
+    public claims(): number {
+        return Atomics.load(this.board.words, CLAIM);
+    }
+
+    /**
+     * Sleeps until a slice of the pass that is open is claimed, `ms` at most: called as a pass opens (`opened`), it
+     * lets the threads that follow take their part whatever the machine does. For the tests.
+     */
+    public waitForAClaim(ms: number): void {
+        const { words } = this.board;
+        Atomics.wait(words, CLAIM, Atomics.load(words, CLAIM), ms);
     }
 
     /** A grid is gone: who follows is told to forget its arrays at the next step of any grid. */

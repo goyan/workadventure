@@ -1,8 +1,18 @@
-import { describe, expect, it } from "vitest";
-import { sharedWaterArrays } from "../src/Terrain/WaterArrays";
-import { runWaterPass, WaterBandsFollower, WaterBandsLead, WaterBandsLost } from "../src/Terrain/WaterBands";
+import { afterEach, describe, expect, it } from "vitest";
+import { ordinaryWaterArrays, sharedWaterArrays } from "../src/Terrain/WaterArrays";
+import {
+    runWaterPass,
+    setWaterPassRunner,
+    WaterBandsFollower,
+    WaterBandsLead,
+    WaterBandsLost,
+} from "../src/Terrain/WaterBands";
 import type { WaterPass } from "../src/Terrain/WaterBands";
+import { WaterGrid } from "../src/Terrain/WaterGrid";
+import type { WaterStepInput } from "../src/Terrain/WaterGrid";
 import type { InertiaMove } from "../src/Terrain/WaterKernel";
+import { DEFAULT_WAVE_SETTINGS } from "../src/types";
+import { bandsOnOneThread } from "./helpers/BandsOnOneThread";
 
 /**
  * The passes of the water shared between threads (WaterBands), without any thread: who follows is called by hand,
@@ -89,7 +99,100 @@ const neverSleeps = (): void => {
     throw new Error("Who leads slept");
 };
 
+/** The turns of the board come round after this many (see WaterBands). */
+const TURNS = 1 << 20;
+
 describe("the passes of the water shared between threads (WaterBands)", () => {
+    afterEach(() => setWaterPassRunner(undefined));
+
+    it("leaves alone the pass of another turn, even when the turns have come round", () => {
+        const { move, rowLost } = basin();
+        let stop = false;
+        const lead = new WaterBandsLead(
+            1,
+            neverSleeps,
+            1000,
+            () => 0,
+            () => {
+                // The pass is left open, nobody at work yet.
+                if (stop) throw new Error("opened");
+            },
+        );
+        const follower = new WaterBandsFollower(lead.board);
+        // The last turn before they come round.
+        Reflect.set(lead, "turn", TURNS - 2);
+        for (const news of lead.begin({}, move, rowLost)) follower.know(news.grid, news.arrays);
+        lead.run(0);
+        const flows = Array.from(move.east);
+        // Who follows wakes for that turn, and before it has read the pass, the turn is over and the next one is
+        // open: turn 0, whose claims are smaller than those of the turn it woke for.
+        follower.workOnce(() => {
+            stop = true;
+            expect(() => lead.run(1)).toThrow("opened");
+        });
+        // It claimed nothing of the pass that is open, and computed nothing.
+        expect(lead.claims()).toBe(0);
+        expect(Array.from(move.east)).toEqual(flows);
+        expect(Array.from(move.afford).every((share) => share === 0)).toBe(true);
+    });
+
+    it("shares nothing of a water that creeps, and goes on right when the water has inertia again", () => {
+        const creep: WaterStepInput = { rainPx: 0, evaporationPx: 0, absorptionPx: 0, flows: [] };
+        const inertia: WaterStepInput = {
+            ...creep,
+            inertia: true,
+            seconds: 0.1,
+            waves: { ...DEFAULT_WAVE_SETTINGS },
+            moves: 3,
+            pace: 1,
+        };
+        const bands = bandsOnOneThread(2, 7);
+        setWaterPassRunner(bands);
+        const grids = [ordinaryWaterArrays, sharedWaterArrays].map((arrays) => {
+            const grid = new WaterGrid(
+                undefined,
+                { x: 0, y: 0, width: WIDTH, height: HEIGHT },
+                undefined,
+                undefined,
+                undefined,
+                arrays,
+            );
+            const bytes = new Uint8Array(WIDTH * HEIGHT * 2);
+            for (let index = 0; index < WIDTH * HEIGHT; index++) {
+                bytes[index * 2] = index % WIDTH < 8 ? 240 : 16;
+            }
+            expect(grid.readDepths(bytes)).toBe(true);
+            return grid;
+        });
+        const lost = [0, 0];
+        const live = (input: WaterStepInput, steps: number): void => {
+            for (let step = 0; step < steps; step++) {
+                grids.forEach((grid, at) => {
+                    lost[at] += grid.step(input).lostPx;
+                });
+            }
+        };
+        live(inertia, 5);
+        const shared = bands.slices();
+        // Four passes a move, twelve slices a pass: four for each of the three threads.
+        expect(shared.here + shared.others).toBeGreaterThan(0);
+        expect((shared.here + shared.others) % (4 * 12)).toBe(0);
+        // The water creeps (the time a room missed, a map without inertia): its depths change places with their
+        // double at each step, in the memory the threads share too, and no pass is shared.
+        live(creep, 3);
+        expect(bands.slices()).toEqual(shared);
+        expect((Reflect.get(grids[1], "depth") as Float32Array).buffer).toBeInstanceOf(SharedArrayBuffer);
+        // Inertia again: who follows is told the depths are other arrays, and the water is the same to the bit.
+        live(inertia, 5);
+        expect(bands.told.map((news) => news.arrays !== undefined)).toEqual([true, false, true]);
+        expect(bands.slices().others).toBeGreaterThan(shared.others);
+        for (const name of ["depth", "flowEast", "flowSouth", "speedEast", "speedSouth"]) {
+            const read = (grid: WaterGrid): number[] => Array.from(Reflect.get(grid, name) as Float32Array);
+            expect(read(grids[1]), name).toEqual(read(grids[0]));
+        }
+        expect(lost[1]).toBe(lost[0]);
+    });
+
     it("gives the same water when nobody follows, though threads were expected", () => {
         const reference = alone(20);
         const { move, rowLost } = basin();
