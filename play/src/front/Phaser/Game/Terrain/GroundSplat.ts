@@ -9,7 +9,7 @@ import { MAX_SHOWN_BREAKS } from "../Ice/IceBreaks";
 import type { IceBreak } from "../Ice/IceBreaks";
 import { NOISE_GLSL, shaderSeconds } from "../ShaderNoise";
 import { SHORE_PX } from "./TerrainShading";
-import { WHITECAP_MIN_DEPTH_PX } from "./Whitecaps";
+import { WHITECAP_MIN_DEPTH_PX, whitecapDrawing } from "./Whitecaps";
 import { HEIGHT_OFFSET, HEIGHT_SCALE, OBLIQUE_HALVINGS, OBLIQUE_STEPS, writeHeights } from "./ObliqueView";
 import { DROP_SCALE, MAX_DROP, MAX_RISE } from "./Pixel/ColumnPainter";
 import { GROUND_TEXTURES } from "./TexturedGround";
@@ -518,6 +518,9 @@ uniform float uServerIce;
 // The wind over the water: which way it blows (a vector of length 1) and the share of open water its whitecaps
 // whiten (Whitecaps.ts), 0 in a light wind.
 uniform vec3 uWind;
+// How the whitecaps are drawn for that wind (Whitecaps.whitecapDrawing): share of the cells, length and thickness of
+// the crests, cut of the streaks (1: none).
+uniform vec4 uCaps;
 // The fronts of the waves of the comets fallen into the water (x, y, radius in map pixels, strength 0 to 1).
 uniform vec4 uRing0;
 uniform vec4 uRing1;
@@ -598,32 +601,44 @@ float capHash(vec2 p) {
     return fract((p3.x + p3.y) * p3.z);
 }
 
-// The whitecaps of the wind at a point of open water, 0 to 1: short crests lying across the wind, each in a cell of
-// a grid laid along it (14 px across the wind, 7 along). A cell breaks for a second and a half, by chance, as
-// often as the wind asks: a crest whitens about a tenth of its cell over its life (it rises, then fades; measured
-// on the GPU), so the share of the cells is ten times that of the water. They drift slowly downwind. The clock and the cells go round (every two hours, every 4096 cells),
-// so that the chance of a cell is drawn from small numbers however long the game has run and however far the map
-// goes: the crests only change all at once when the clock goes round.
+// The whitecaps of the wind at a point of open water, 0 to 1 (Whitecaps.whitecapDrawing says how, uCaps): short
+// crests lying across the wind, each in a cell of a grid laid along it (14 px across the wind, times uCaps.y in a
+// gale, 7 along). A cell breaks for a second and a half, by chance, for uCaps.x of the cells: never all of them, so
+// the grid never shows; past that, the crests grow thicker (uCaps.z) and longer, and from a gale streaks of foam lie
+// along the wind (uCaps.w: their cut, 1 for none), as the sea whitens. They drift slowly downwind. The clock and the
+// cells go round (every two hours, every 4096 cells), so that the chance of a cell is drawn from small numbers
+// however long the game has run and however far the map goes: the crests only change all at once when the clock
+// goes round.
 float whitecapsAt(vec2 world, float t) {
     float share = uWind.z;
     if (share <= 0.0) return 0.0;
     float tw = mod(t, 7200.0);
     vec2 along = uWind.xy;
     vec2 across = vec2(-along.y, along.x);
-    vec2 p = vec2(dot(world, across) / 14.0, (dot(world, along) - tw * 3.0) / 7.0);
+    vec2 p = vec2(dot(world, across) / (14.0 * uCaps.y), (dot(world, along) - tw * 3.0) / 7.0);
     // Every other row is shifted: no columns of crests.
     p.x += 0.5 * mod(floor(p.y), 2.0);
     vec2 cell = mod(floor(p), 4096.0);
     float phase = tw / 1.5 + capHash(cell + 3.7);
     float turn = mod(floor(phase), 4096.0);
     float life = fract(phase);
-    float breaks = step(capHash(cell + vec2(turn * 17.0 + 11.0, turn * 29.0 + 5.0)), min(1.0, share * 10.0));
-    if (breaks <= 0.0) return 0.0;
-    vec2 q =
-        fract(p) - 0.5 - (vec2(capHash(cell + turn + 1.3), capHash(cell + turn + 2.9)) - 0.5) * 0.3;
-    // A crest: long across the wind, thin along it, its edge torn by a fine noise.
-    float shape = 1.0 - smoothstep(0.5, 1.0, length(q * vec2(2.6, 5.0)) + (vnoise(world / 2.0) - 0.5) * 0.7);
-    return breaks * shape * smoothstep(0.0, 0.15, life) * (1.0 - smoothstep(0.55, 1.0, life));
+    float crest = 0.0;
+    if (capHash(cell + vec2(turn * 17.0 + 11.0, turn * 29.0 + 5.0)) < uCaps.x) {
+        vec2 q =
+            fract(p) - 0.5 - (vec2(capHash(cell + turn + 1.3), capHash(cell + turn + 2.9)) - 0.5) * 0.3;
+        // A crest: long across the wind, thin along it (thicker in a gale), its edge torn by a fine noise.
+        float shape = 1.0 - smoothstep(0.5, 1.0, length(q * vec2(2.6, 5.0 / uCaps.z)) + (vnoise(world / 2.0) - 0.5) * 0.7);
+        crest = shape * smoothstep(0.0, 0.15, life) * (1.0 - smoothstep(0.55, 1.0, life));
+    }
+    // The streaks of foam a gale lays along the wind: long and thin, drifting slowly downwind.
+    float streak = 0.0;
+    if (uCaps.w < 1.0) {
+        float down = dot(world, along) - t * 6.0;
+        float side = dot(world, across);
+        float n = 0.7 * vnoise(vec2(side / 7.0, down / 70.0)) + 0.3 * vnoise(vec2(side / 3.0, down / 30.0) + 5.0);
+        streak = smoothstep(uCaps.w, uCaps.w + 0.12, n);
+    }
+    return max(crest, streak);
 }
 
 const vec3 SHALLOW = vec3(0.1, 0.48, 0.52);
@@ -992,6 +1007,8 @@ export class GroundSplat {
                         setUniform("uSnow", this.snow);
                         setUniform("uServerIce", this.serverIce ? 1 : 0);
                         setUniform("uWind", [this.wind.x, this.wind.y, this.wind.share]);
+                        const caps = whitecapDrawing(this.wind.share);
+                        setUniform("uCaps", [caps.cells, caps.length, caps.thickness, caps.streakCut]);
                         this.setReflectionUniforms(setUniform);
                         for (let index = 0; index < MAX_ICE_BREAKS; index++) {
                             const shown = this.breaks[index];

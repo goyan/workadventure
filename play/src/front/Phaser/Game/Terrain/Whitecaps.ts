@@ -30,3 +30,92 @@ export function windHeading(windFrom: number | undefined): { x: number; y: numbe
     const angle = (windFrom * Math.PI) / 180;
     return { x: -Math.sin(angle) || 0, y: Math.cos(angle) || 0 };
 }
+
+/** How the shader draws the whitecaps for a share of white water (GroundSplat, uCaps). */
+export interface WhitecapDrawing {
+    /** The share of the cells of the grid whose crest breaks: never all of them, or the grid shows. */
+    cells: number;
+    /** How long the crests are across the wind, and how thick along it, against a breeze. */
+    length: number;
+    thickness: number;
+    /** The cut of the noise of the streaks of foam along the wind: 1, none; lower, more of them. */
+    streakCut: number;
+}
+
+/** No more than this share of the cells breaks at once: past it, the regular grid of the cells shows. */
+export const WHITECAP_MOST_CELLS = 0.35;
+/** The share of a cell a crest whitens over its life, as thick as in a breeze (measured on the GPU). */
+const CREST_SHARE = 0.1;
+/** The thickest a crest grows in a gale, against a breeze: still inside its cell (thicker, it was cut square). */
+const THICKEST = 1.6;
+
+/**
+ * How the shader draws the whitecaps of a share of white water (whitecapShare): crests in more cells as the wind
+ * rises, up to WHITECAP_MOST_CELLS; then thicker and longer crests; then, what they cannot whiten, streaks of foam
+ * along the wind. Each part measured on the GPU, so that the white drawn follows the law.
+ */
+export function whitecapDrawing(share: number): WhitecapDrawing {
+    const wanted = Number.isFinite(share) ? Math.max(0, Math.min(1, share)) : 0;
+    const cells = Math.min(WHITECAP_MOST_CELLS, wanted / CREST_SHARE);
+    const thickness =
+        cells < WHITECAP_MOST_CELLS ? 1 : Math.min(THICKEST, wanted / (WHITECAP_MOST_CELLS * CREST_SHARE));
+    const crests = cells * CREST_SHARE * crestGrowth(thickness);
+    const length = 1 + 1.5 * Math.min(1, Math.max(0, (thickness - 1) / (THICKEST - 1)));
+    // The streaks whiten their share of the water the crests leave: the two overlap by chance.
+    const streaks = crests >= wanted ? 0 : (wanted - crests) / (1 - crests);
+    return { cells, length, thickness, streakCut: streakCutFor(streaks) };
+}
+
+/** How much more a crest whitens as it grows thicker: as thick (measured on the GPU: 10.1 %, 15.2 % at 1.5, 24.0 % at 2.4). */
+function crestGrowth(thickness: number): number {
+    return thickness;
+}
+
+/**
+ * The share of the water the streaks whiten for a cut of their noise, measured on the GPU (Metal), from the cut 0 to 0.9: read backwards for the cut of a share.
+ */
+const STREAK_SHARES: readonly (readonly [number, number])[] = [
+    [0, 1],
+    [0.05, 0.994],
+    [0.1, 0.9799],
+    [0.15, 0.9529],
+    [0.2, 0.9092],
+    [0.25, 0.845],
+    [0.3, 0.7623],
+    [0.35, 0.6651],
+    [0.4, 0.5583],
+    [0.45, 0.4498],
+    [0.5, 0.3462],
+    [0.55, 0.2525],
+    [0.6, 0.1721],
+    [0.65, 0.1047],
+    [0.7, 0.0561],
+    [0.75, 0.0264],
+    [0.8, 0.01],
+    [0.85, 0.0026],
+    [0.9, 0.0003],
+];
+
+/** The share of the water the streaks whiten for a cut of their noise (measured on the GPU); none for 1. */
+export function streakShareOf(cut: number): number {
+    if (!(cut < STREAK_SHARES[STREAK_SHARES.length - 1][0])) return 0;
+    if (cut <= 0) return 1;
+    for (let at = 1; at < STREAK_SHARES.length; at++) {
+        const [upTo, made] = STREAK_SHARES[at];
+        const [from, madeBefore] = STREAK_SHARES[at - 1];
+        if (cut <= upTo) return madeBefore + ((made - madeBefore) * (cut - from)) / (upTo - from);
+    }
+    return 0;
+}
+
+/** The cut of the noise of the streaks that whitens this share of the water; 1, none. */
+export function streakCutFor(share: number): number {
+    if (!(share > STREAK_SHARES[STREAK_SHARES.length - 1][1])) return 1;
+    if (share >= STREAK_SHARES[0][1]) return STREAK_SHARES[0][0];
+    for (let at = 1; at < STREAK_SHARES.length; at++) {
+        const [cut, made] = STREAK_SHARES[at];
+        const [cutBefore, madeBefore] = STREAK_SHARES[at - 1];
+        if (share >= made) return cut + ((cutBefore - cut) * (share - made)) / (madeBefore - made);
+    }
+    return 1;
+}
