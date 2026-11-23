@@ -6063,12 +6063,62 @@ de l'œil, comme le vent, et prend de l'ordre de 0,2 m/s en une minute au rayon 
 garanties que la pression : rien sans ouragan, TypeScript et C identiques au bit (`Move` : 168 octets).
 
 **Effet sur l'eau exagéré, à la demande** (réglage du panneau de l'ouragan, « Effet sur l'eau (pression et vent) » :
-Réaliste, Exagéré ×2, ×4, ×6, ×8 ; `HurricaneTrackMessage.waterEffect`, champ 15, **le protobuf change**). Multiplie la
+Réaliste, Exagéré ×5, ×10, ×20 (recalés le 2026-11-23 : en réaliste le dôme d'une catégorie 4 fait environ 0,7 m sur
+un lac de la carte, invisible d'en haut ; ×20 testé : dôme de 15 m dans un bassin muré au plus profond du relief,
+volume gardé, vitesses bornées, repos, théorie à 10 %, la pression amenée en 30 s comme le fondu de l'ouragan) ; `HurricaneTrackMessage.waterEffect`, champ 15, **le protobuf change**). Multiplie la
 hauteur de pression et la poussée du vent sur l'eau, rien d'autre (le vent, la pluie, le ciel restent ceux d'un vrai
 ouragan). Choisi par le joueur qui lance l'ouragan, gardé par le serveur parmi les cinq valeurs, le même pour tous. À ×8
 une catégorie 4 creuse un dôme de 6 m (pentes d'un dixième) : le modèle tient (test : volume conservé dans un bassin
 qui le contient, vitesses bornées, au repos ensuite, dôme conforme à 10 % près) ; sur la carte, un tel dôme déborde des
 rives et inonde les terres basses, ce qui est voulu par l'exagération.
+
+**Similitude du fetch : le vent pousse l'eau comme sur une baie** (`Hurricane.HURRICANE_FETCH_SIMILITUDE`, un
+choix, comme la réduction de l'ouragan à la carte ; décidé le 2026-11-23 après « je voudrais voir descendre l'eau
+beaucoup plus »). Le vent tient l'eau d'un bassin fermé penchée de dh/dx = τ / (ρ g h) : quelques centimètres sur un
+lac de 150 m, quand un vrai ouragan sur une baie de dizaines de kilomètres retire l'eau de mètres et laisse le fond à
+sec. Référence : Irma (2017) à Tampa, l'eau à St. Petersburg « about 5 ft below normal » (Cangialosi, Latto et Berg,
+rapport NHC AL112017, 2018, relu dans le PDF), pour une baie de 3,7 m de fond moyen (USGS, Britannica [Gemini, non
+relu]) : un retrait de 0,41 de la profondeur. Le facteur est dérivé, pas tapé : pour le lac de référence (150 m dans
+le vent, 1,5 m de fond, vent maximal d'une catégorie 4), l'équilibre exact d'un canal fermé, h(x)² = h(0)² + 2 k x
+avec la profondeur moyenne gardée, donne le k qui retire l'eau de 0,41 h au vent (`drawdownSlope`, environ 0,7), et
+F = k ρ g h² / (τ L) ≈ 10 sur la contrainte du vent seule ; l'eau monte d'environ un tiers de la profondeur sous le
+vent. Le simple rapport des longueurs (×100 à ×400) viderait le lac : une vraie baie n'atteint jamais son équilibre
+sous un vent de quelques heures qui tourne. Les crans d'effet sur l'eau se multiplient par-dessus. Tests : canal du
+lac de référence (retrait 0,41 h à 10 % près, montée en face à 15 %, volume gardé) ; vent qui s'inverse au passage
+de l'œil, le mascaret revient, volume gardé ; au cran ×20 (vent ×200) le mascaret monte de 10 m contre la rive d'en
+face et passe par-dessus les plus hauts murs du relief : l'eau perdue est comptée, rien ne casse ; identité au bit
+TypeScript/WebAssembly à ×20. Le vent et la pression sur l'eau sont refaits au moins chaque seconde (le vent tourne au
+passage de l'œil même quand la dépression bouge peu).
+
+**La crue se lit** (`Terrain/HurricaneFlood.ts`, `HurricaneFloodView.ts`). Chaque navigateur garde l'eau telle
+qu'elle était au début de l'ouragan, cellule par cellule, et la plus haute depuis : le badge des niveaux sous le
+pointeur dit « +0,7 m » (l'eau plus haute qu'avant l'ouragan), le panneau de l'ouragan « Eau : +0,7 m au plus haut
+depuis le début ». Là où l'eau a couvert une terre sèche puis s'est retirée, le sol reste sombre et noyé, et une laisse
+de crue (écume et débris) marque la ligne la plus haute atteinte ; les deux s'effacent en 4 minutes. Le panneau
+rappelle que le dôme ne se forme qu'aux vitesses lentes du widget (un œil plus rapide que les ondes du lac, environ
+3 à 4 m/s, le devance : c'est physique). Le volume d'eau de la carte reste fermé (pas de mer qui l'alimente) : la
+carte d'Antoine n'a de l'eau qu'aux bords nord (35 m) et sud (15 m).
+
+**Le dôme se lit par la lumière sur sa pente** (2026-11-23, `GroundSplat.ts` : `waterFacing`, `waterLevels`,
+`writeSlopes`). Avant, l'eau fonçait linéairement avec la profondeur jusqu'à 2,2 m : un dôme d'eau, plus profond,
+se lisait comme un trou sombre. Désormais :
+- **Absorption de Beer-Lambert** (`WATER_ATTENUATION_PX`) : la part de couleur d'eau profonde est
+  1 − exp(−profondeur / 1,1 m). La lumière traverse la profondeur deux fois, d'où un coefficient d'atténuation de
+  0,45 par mètre, une valeur de lac (Kirk, *Light and Photosynthesis in Aquatic Ecosystems*). La couleur sature au
+  lieu de foncer sans fin. **Choix de l'utilisateur (« go la nouvelle »), aussi pour l'eau ordinaire** : les
+  hauts-fonds sont un peu plus foncés et plus opaques, l'eau de 2 m un peu plus claire (±0,14 vers la teinte
+  profonde, ±0,06 d'opacité).
+- **Loi du cosinus sur la pente de la surface** : la pente de la surface (sol + eau) est calculée sur le processeur
+  à partir des profondeurs exactes, puis rangée dans le vert et le bleu du paquet 11 (`SLOPE_PACK`). La part de
+  couleur propre à l'eau est éclairée selon le cosinus de sa face, lumière du nord-ouest comme le relief, à 45° de
+  hauteur (`WATER_LIGHT_ELEVATION_DEG`, un choix).
+- **Pas de reflet lié à la pente**, et c'est voulu : vu d'en haut, la part de ciel reflétée (Fresnel) passe seulement
+  de 2 à 2,4 % jusqu'à 40° d'inclinaison.
+- **Les marches ne sont pas éclairées** : une surface plus raide que 30° (la plus raide des vagues, Stokes) est de
+  l'eau qui tombe d'une marche. Elle est rendue de niveau.
+- **Ce qu'on voit** : au cran Réaliste, le dôme reste invisible (une pente de 0,04 donne 4 % de lumière en plus ou
+  en moins). À ×10, son flanc nord-ouest s'éclaircit et son flanc sud-est s'assombrit. Une marche d'eau de 10 à
+  18 px garde un liseré d'une case.
 
 **Ce que ça ne modélise pas, ou pas encore.**
 - **La pluie par position sur l'eau, le feu par position** : le sol du serveur lit une seule valeur pour la salle, au

@@ -186,7 +186,13 @@ import {
     mapEditorWamSettingsEditorToolCurrentMenuItemStore,
     WAM_SETTINGS_EDITOR_TOOL_MENU_ITEM,
 } from "@wa/front/Stores/MapEditorStore";
-import { coldLyingStore, heldBallStore, hurricaneShownStore } from "@wa/front/Stores/CatastropheStore";
+import {
+    coldLyingStore,
+    heldBallStore,
+    hurricaneHighestRiseStore,
+    hurricaneShownStore,
+    pointerFloodRiseStore,
+} from "@wa/front/Stores/CatastropheStore";
 import { refreshPromptStore } from "@wa/front/Stores/RefreshPromptStore";
 import { mapDeletedPromptStore } from "@wa/front/Stores/MapDeletedPromptStore";
 import { SpaceRegistry } from "@wa/front/Space/SpaceRegistry/SpaceRegistry";
@@ -327,6 +333,7 @@ import {
     weatherPipetteCellStore,
 } from "../../Stores/VisualisationStore";
 import { fastWaterActiveNow, setFastWaterResynchronize, sharedWaterBackStore } from "../../Stores/FastWaterStore";
+import { HurricaneFloodView } from "./Terrain/HurricaneFloodView";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -762,6 +769,9 @@ export class GameScene extends DirtyScene {
     private hurricaneView: HurricaneView | undefined;
     /** The debris the wind of a hurricane (or a wind of the map strong enough) carries, drawn here alone. */
     private hurricaneDebris: HurricaneDebris | undefined;
+    /** The flood of the hurricane as this browser sees it: the rise of the water, the marks it leaves. */
+    private hurricaneFlood: HurricaneFloodView | undefined;
+    private shownFloodRise: number | undefined;
     private fireTorchView: FireTorchView | undefined;
     private catastropheSubscription: Subscription | undefined;
     /** The animals of the water of the relief, as the server tells them. */
@@ -2000,6 +2010,8 @@ export class GameScene extends DirtyScene {
         this.hurricaneView = undefined;
         this.hurricaneDebris?.destroy();
         this.hurricaneDebris = undefined;
+        this.hurricaneFlood?.destroy();
+        this.hurricaneFlood = undefined;
         setRoomHurricane(undefined);
         hurricaneShownStore.set(undefined);
         this.fireTorchView?.destroy();
@@ -2640,6 +2652,15 @@ export class GameScene extends DirtyScene {
                     isOnFrozenWater(this, point),
                 ),
             );
+            // The flood of a hurricane: its marks, and how much higher the water stands under the pointer than before
+            // it (to the decimetre, told only when that changes).
+            this.hurricaneFlood?.update(time);
+            const risen = pointed && this.hurricaneFlood?.riseAt(pointed.x, pointed.y);
+            const shownRise = risen === undefined ? undefined : Math.round(risen * 10) / 10;
+            if (shownRise !== this.shownFloodRise) {
+                this.shownFloodRise = shownRise;
+                pointerFloodRiseStore.set(shownRise);
+            }
             // The weather pipette: the cell under the pointer explained, while it is on.
             this.stepWeatherPipette(pointed, time);
             // Their own ground, for a player who follows the weather of a place they chose.
@@ -5305,6 +5326,11 @@ export class GameScene extends DirtyScene {
         this.hurricaneDebris?.destroy();
         const hurricaneDebris = new HurricaneDebris(this);
         this.hurricaneDebris = hurricaneDebris;
+        this.hurricaneFlood?.destroy();
+        const hurricaneFlood = new HurricaneFloodView(this, this.terrainWater, (metres) =>
+            hurricaneHighestRiseStore.set(metres),
+        );
+        this.hurricaneFlood = hurricaneFlood;
         // The hurricane of the room, reduced to the map: its weather (wind, rain) where this player looks takes the
         // place of the weather of the map, and its spiral of clouds that of the clouds of the sky, computed here from
         // it and the time of the server, as the server computes it for its ground.
@@ -5316,6 +5342,7 @@ export class GameScene extends DirtyScene {
                 setRoomHurricane(hurricane);
                 hurricaneView?.setHurricane(hurricane);
                 hurricaneDebris.setHurricane(hurricane);
+                hurricaneFlood.setHurricane(hurricane, this.time.now);
                 const at = this.nightManager?.serverDate()?.getTime();
                 const look = this.cameras.main.midPoint;
                 const here = at === undefined ? undefined : hurricaneHere(hurricane, at, look.x, look.y);

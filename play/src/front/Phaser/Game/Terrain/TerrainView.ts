@@ -200,6 +200,8 @@ export class TerrainView {
     /** Whether the shaders draw the relief in 3/4 now. */
     private isOblique = false;
     private depths = new Float32Array(0);
+    /** The depth of the water over each cell, unrounded: the slope of its surface is lit. */
+    private exactDepths = new Float32Array(0);
     /** The pools placed as images, drawn by the shaders in their place (ImagePools.ts), and the ones hidden for it. */
     private imagePools: { pools: ImagePool[]; signature: string } = { pools: [], signature: "" };
     private poolSettingsSeen: { pools: unknown; ladders: unknown; version: number } = {
@@ -485,6 +487,23 @@ export class TerrainView {
         );
     }
 
+    private exactDepthsOver(
+        canvas: { x: number; y: number; columns: number; rows: number },
+        now: number,
+    ): Float32Array {
+        const size = canvas.columns * canvas.rows;
+        if (this.exactDepths.length !== size) this.exactDepths = new Float32Array(size);
+        this.water.depthsOver(
+            canvas.x / TERRAIN_CELL,
+            canvas.y / TERRAIN_CELL,
+            canvas.columns,
+            canvas.rows,
+            now,
+            this.exactDepths,
+        );
+        return this.exactDepths;
+    }
+
     private draw(view: WeatherView, now: number): void {
         const canvas = this.surface.begin(view, TERRAIN_CELL);
         const size = canvas.columns * canvas.rows;
@@ -684,6 +703,7 @@ export class TerrainView {
                 anyWater ? this.currentOver(canvas, wet) : undefined,
                 depths,
                 anyWater ? this.fetchOver(canvas) : undefined,
+                anyWater ? this.exactDepthsOver(canvas, now) : undefined,
             );
             this.drawnCanvas = { x: canvas.x, y: canvas.y, columns: canvas.columns, rows: canvas.rows };
         } else if (this.grounds) {
