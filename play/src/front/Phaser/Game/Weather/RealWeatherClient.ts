@@ -20,6 +20,7 @@ import type { ForecastCell } from "./WeatherForecast";
 import { withManualWind } from "./ManualConditions";
 import { chosenWeatherNow } from "./ChosenPlaceWeather";
 import { withHurricane } from "./HurricaneSky";
+import { roomHurricaneAir, windOfAir } from "./HurricaneAir";
 
 const debug = Debug("front:real-weather");
 
@@ -205,12 +206,14 @@ function hurricaneOver(settings: MapSnowSettings | undefined, date: Date | undef
     ) {
         return hurricaneMemo.shown;
     }
+    const air = roomHurricaneAir.windAt(hurricane.id, cellX * VIEWPOINT_STEP_PX, cellY * VIEWPOINT_STEP_PX);
     const shown = withHurricane(
         settings,
         hurricane,
         new Date(second * 1000),
         cellX * VIEWPOINT_STEP_PX,
         cellY * VIEWPOINT_STEP_PX,
+        air && windOfAir(air),
     );
     hurricaneMemo = { settings, hurricane, second, cellX, cellY, shown };
     return shown;

@@ -1,5 +1,6 @@
 import type * as Phaser from "phaser";
 import { HURRICANE_GUST_FACTOR, hurricaneHere } from "@workadventure/map-editor";
+import { roomHurricaneAir, windOfAir } from "../Weather/HurricaneAir";
 import type { Hurricane } from "@workadventure/map-editor";
 import { DEPTH_OVERLAY_INDEX } from "../DepthIndexes";
 import { DEBRIS_MAX, DEBRIS_MIN_GUST_KMH, DebrisField } from "./DebrisField";
@@ -73,6 +74,17 @@ export class HurricaneDebris {
             if (hurricane) {
                 const here = hurricaneHere(hurricane, epoch, x, y);
                 if (!here) return undefined;
+                // The wind of its air where the server simulates it (the storm grown in it already).
+                const air = roomHurricaneAir.windAt(hurricane.id, x, y);
+                if (air) {
+                    const wind = windOfAir(air);
+                    return {
+                        speed: wind.windSpeed,
+                        gust: wind.windSpeed * HURRICANE_GUST_FACTOR,
+                        from: wind.windFrom,
+                        calm: here.phase === "eye",
+                    };
+                }
                 const share = Math.min(1, Math.max(0, here.share));
                 return {
                     speed: here.windSpeed * share,

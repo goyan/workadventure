@@ -49,6 +49,17 @@ describe("withHurricane", () => {
         expect(far?.windSpeed).toBeLessThan((shown?.windSpeed ?? 0) * 0.7);
     });
 
+    it("blows the wind of the air of the server where it is simulated, the rest of the storm kept", () => {
+        const wall = { x: x + HURRICANE_RMAX_PX, y };
+        const formula = withHurricane(clear, storm, middle, wall.x, wall.y);
+        const shown = withHurricane(clear, storm, middle, wall.x, wall.y, { windSpeed: 150, windFrom: 200 });
+        expect(shown?.windSpeed).toBe(150);
+        expect(shown?.windFrom).toBe(200);
+        expect(shown?.rainRate).toBe(formula?.rainRate);
+        expect(shown?.weather).toBe(formula?.weather);
+        expect(shown?.hurricaneSky).toBe(true);
+    });
+
     it("clears the sky in the eye, whatever the map says", () => {
         const shown = withHurricane({ ...clear, weather: WeatherType.Rain, rainRate: 5 }, storm, middle, x, y);
         expect(shown?.weather).toBe(WeatherType.Clear);
