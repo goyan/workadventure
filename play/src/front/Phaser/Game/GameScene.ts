@@ -493,7 +493,8 @@ import { groundWind } from "./Weather/Snowfall";
 import { MeteorView } from "./Catastrophe/MeteorView";
 import { FireView } from "./Fire/FireView";
 import { TreeFireState } from "./Fire/TreeFireState";
-import { FallenTreeView, fallVector } from "./Nature/FallenTreeView";
+import { FallenTreeView } from "./Nature/FallenTreeView";
+import { lyingVector } from "./Nature/FallenTreeShape";
 import type { TreePose } from "./SkyShadows/SkyShadowGeometry";
 import { growShare, growStep } from "./Nature/FallenTreeTexture";
 import { TreeFireView } from "./Fire/TreeFireView";
@@ -3411,7 +3412,8 @@ export class GameScene extends DirtyScene {
     private fallenTreePose(id: string): TreePose | undefined {
         const fallen = this.treeFire.fallenOf(id);
         if (!fallen) return undefined;
-        const way = fallVector(fallen.toward);
+        // Along the ground as the tree lying is drawn: its shadow lies under it.
+        const way = lyingVector(fallen.toward);
         if (fallen.lying) {
             return { towardX: way.x, towardY: way.y, tilt: this.fallenTreeView?.tiltOf(id) ?? Math.PI / 2, size: 1 };
         }

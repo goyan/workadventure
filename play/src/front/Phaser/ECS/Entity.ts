@@ -14,7 +14,7 @@ import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
 import { SNOW_STEPS, seedOf, snowyTreeTexture, treeSnowStep } from "../Game/Nature/SnowyTreeTexture";
 import { charredTreeTexture } from "../Game/Nature/CharredTreeTexture";
-import { growingTreeTexture, growStep, stumpTexture, TREE_FOOT } from "../Game/Nature/FallenTreeTexture";
+import { growingTreeTexture, growStep, uprootedTexture } from "../Game/Nature/FallenTreeTexture";
 import { isSwayingTree } from "../Game/Nature/TreeSway";
 import { parseFloorPiece } from "../Game/MapEditor/MapLayer/MapLayerFloors";
 import { parseAnyLevelPrefab } from "../Game/MapEditor/MapLayer/MapLayerLevels";
@@ -210,15 +210,15 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
                 : 0;
         const unsnowed =
             seasonalPath && this.scene.textures.exists(seasonalPath) ? seasonalPath : this.prefab.imagePath;
-        // A tree the wind laid down: its stump stands while it lies on the ground (drawn by FallenTreeView), then it
-        // grows back from its foot. Not while the map is edited either.
+        // A tree the wind laid down: it lies uprooted on the ground (drawn by FallenTreeView: nothing stands at its
+        // place meanwhile), then grows back from its foot. Not while the map is edited either.
         const fallen =
             isSwayingTree(this.prefab.id) && !get(mapEditorModeStore)
                 ? scene.getTreeFire?.().fallenOf(this.entityId)
                 : undefined;
         const fallenTexture = fallen
             ? fallen.lying
-                ? stumpTexture(this.scene, unsnowed)
+                ? uprootedTexture(this.scene, unsnowed)
                 : growingTreeTexture(this.scene, unsnowed, growStep(fallen.grown))
             : undefined;
         scene.getFallenTreeView?.()?.show(
@@ -226,8 +226,8 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
             fallen?.lying
                 ? {
                       textureKey: unsnowed,
-                      footX: this.x + TREE_FOOT.x,
-                      footY: this.y + TREE_FOOT.y,
+                      x: this.x,
+                      y: this.y,
                       toward: fallen.toward,
                       depth: this.depth,
                       fellAt: scene.getTreeFire?.().fellAt(this.entityId),

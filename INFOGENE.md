@@ -6096,13 +6096,25 @@ catalogue ne disant pas leur essence. Conséquences : le mur d'un ouragan de cat
 et un vent de salle réglé à 106 km/h (moyen) ou plus en couche sur toute la carte. Il reste couché le temps qu'un arbre
 brûlé reste noir, puis repousse depuis son pied dans le même temps : la même horloge et la même branche de `TreeFire`
 que la repousse après un feu (`damage`, `wait`, en temps réel : 150 s puis 150 s par défaut, 30 s puis 30 s sur une
-carte réglée à une minute de pousse), et il ne brûle pas tant qu'il est couché. Tenu par le serveur dans `TreeFire`
+carte réglée à une minute de pousse), et il ne brûle pas tant qu'il est couché. **Pas de repousse pendant un
+ouragan** (règle de l'utilisateur, 2026-11-23) : tant qu'un ouragan traverse la salle (`hurricaneAt` à l'heure du pas
+de la simulation), le temps d'un arbre couché par le vent ne s'écoule pas, même pendant sa repousse ; il démarre à la
+fin de l'ouragan (fin naturelle ou arrêt par un joueur), avec les durées de la carte (`TreeFireStepInput.stormy`). Un
+arbre brûlé n'est pas retenu. Pendant le rattrapage d'une salle restée vide, aucun ouragan n'est rejoué. Tenu par le serveur dans `TreeFire`
 (champ `fallenFrom`, sauvegardé avec le pré), identique avec ou sans fil de calcul (tests `RoomGround` et
 `RemoteRoomGround`, arbres ajoutés au scénario du sol), dit aux navigateurs par `TreeFireStateMessage.fallen`
 (direction d'où venait le vent, plus 1). Autour de l'œil, ils tombent en travers du rayon, dans le sens où tourne la
-tempête (test). Dessin : la souche reste à la place de l'objet (`stumpTexture`), l'arbre est couché à part, son image
-tournée autour de son pied, la cime sous le vent (`FallenTreeView`), puis il repousse en 8 tailles
-(`growingTreeTexture`).
+tempête (test). Dessin (refait le 2026-11-23 après « pas terrible » de l'utilisateur) : le pied est lu dans l'image de
+chaque arbre (bas du tronc, l'ombre peinte retirée : `treeBodyOf`) et non plus un point fixe (32, 64), faux pour les
+arbres de la carte. Couché (`lyingTreeTexture`, `lyingLayout`) : déraciné, pas cassé (130 km/h déracine selon l'échelle
+de Fujita améliorée), une motte de racines soulevée au pied (2,3 fois la largeur du tronc, terre claire dessus, racines,
+trou à côté), un bout de tronc, puis la **moitié du houppier tournée vers le ciel** (demande de l'utilisateur : « des
+moitiés d'arbre ») : son contour debout couché dans le sens de la chute, élargi de 15 %, aplati, dessiné en touffes à
+ses couleurs, éclairé d'en haut ; sur le côté de l'écran la moitié au-dessus du tronc, vers le haut ou le bas toute la
+largeur ; raccourci à 0,7 vers le haut et le bas de l'écran (`LYING_DEPTH`, la même géométrie pour l'ombre du soleil
+et les feuilles). L'objet de la carte ne montre rien pendant ce temps (`uprootedTexture`). La chute : l'image debout,
+sans son ombre peinte, tourne sur son pied, puis le dessin couché la remplace pendant le rebond (avant qu'elle ne se
+retourne pour une chute vers le joueur). Il repousse en 8 tailles depuis son vrai pied (`growingTreeTexture`).
 
 **Débris emportés** (même demande). Des feuilles, brindilles et éclats sombres, 150 au plus, arrachés dans la vue là où
 la rafale dépasse 120 km/h (force 12 de Beaufort), d'autant plus que la rafale est forte : ils vont au vent de

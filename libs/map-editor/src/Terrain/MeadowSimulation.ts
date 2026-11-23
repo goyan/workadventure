@@ -735,6 +735,7 @@ export class MeadowSimulation {
         const crossing = replaying ? undefined : this.hurricane();
         const at = this.clock();
         const roomGust = weather.windSpeed * HURRICANE_GUST_FACTOR;
+        const stormy = hurricaneAt(crossing, at) !== undefined;
         const trees = this.trees.step({
             seconds: seconds,
             rainMmPerHour: this.rainRate,
@@ -743,7 +744,9 @@ export class MeadowSimulation {
             growSeconds: set.growMinutes * 60,
             groundBurning: meadow.burning() > 0,
             random: replaying ? NO_LUCK : this.random,
-            strongWind: hurricaneAt(crossing, at) !== undefined || roomGust >= TREE_FALL_GUST_KMH,
+            strongWind: stormy || roomGust >= TREE_FALL_GUST_KMH,
+            // The trees it laid down lie until it is over.
+            stormy,
             windAt: (x, y) => {
                 const here = hurricaneHere(crossing, at, x, y);
                 return here

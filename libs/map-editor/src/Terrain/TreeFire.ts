@@ -84,6 +84,12 @@ export interface TreeFireStepInput {
     windAt?: (x: number, y: number) => { gust: number; from: number } | undefined;
     /** False when no wind anywhere can lay a tree down: the wind at the trees is not looked at. */
     strongWind?: boolean;
+    /**
+     * True while a hurricane crosses the room: the trees the wind laid down stay lying, whatever their time, and only
+     * once it is over (it ended, or a player stopped it) do they start to wait, then grow back, as the map says. The
+     * charred trees are not held.
+     */
+    stormy?: boolean;
 }
 
 /**
@@ -312,7 +318,8 @@ export class TreeFire {
         for (const tree of this.trees.values()) tree.gained = 0;
 
         // The wind lays down the trees standing in its strongest gusts, the way it blows: each lies as long as a
-        // charred tree stays black, then grows back in the time a charred tree greens back (the same clock).
+        // charred tree stays black, then grows back in the time a charred tree greens back (the same clock), counted
+        // from the end of the hurricane that laid it down (stormy).
         if (windAt) {
             for (const tree of this.trees.values()) {
                 if (tree.fire > 0 || tree.damage > 0) {
@@ -397,6 +404,8 @@ export class TreeFire {
             if (burnt.has(tree)) continue;
             if (tree.damage > 0) {
                 tree.heat = 0;
+                // Laid down by the wind: nothing grows back before the hurricane is over.
+                if (input.stormy === true && tree.fallenFrom !== undefined) continue;
                 if (tree.wait > 0) {
                     tree.wait = Math.max(0, tree.wait - seconds);
                 } else {
