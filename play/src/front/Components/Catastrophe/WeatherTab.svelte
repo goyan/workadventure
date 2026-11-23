@@ -11,6 +11,7 @@
     import { onDestroy } from "svelte";
     import { LL } from "../../../i18n/i18n-svelte";
     import { COMPASS_POINTS, compassPointOf } from "../../Phaser/Game/Weather/WindDirection";
+    import { hurricaneShownStore } from "../../Stores/CatastropheStore";
     import { fireConditionsStore } from "../../Stores/FireConditionsStore";
     import { cloudsShownStore } from "../../Stores/WeatherStore";
     import { sendFireConditions } from "./fireConditionsActions";
@@ -152,6 +153,11 @@
     {/if}
     {#if !shown.manual}
         <p class="m-0 max-w-xs text-white/60">{$LL.actionbar.catastrophe.weather.realHint()}</p>
+    {/if}
+    {#if $hurricaneShownStore}
+        <p class="m-0 max-w-xs text-white/80" data-testid="fire-hurricane">
+            {$LL.actionbar.catastrophe.hurricaneOverWind()}
+        </p>
     {/if}
     {#each conditionRows as row (row.field)}
         <div

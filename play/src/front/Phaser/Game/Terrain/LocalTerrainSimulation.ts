@@ -4,6 +4,9 @@ import {
     DEFAULT_FIRE_THRESHOLDS,
     fireDanger,
     GroundSimulation,
+    HURRICANE_HUMIDITY,
+    hurricaneAt,
+    hurricaneConditions,
     MeadowSimulation,
     NEUTRAL_FIRE_CONDITIONS,
     REAL_WEATHER_SLOT_MS,
@@ -16,6 +19,7 @@ import type {
     Downpour,
     Drain,
     FireConditions,
+    Hurricane,
     PrecipitationAir,
     RealWeatherSlot,
     SeededMeadow,
@@ -78,6 +82,8 @@ export interface LocalCatastrophes {
     balls: readonly Ball[];
     /** The masses of cold air the players hold (a cold snap); absent while there is none. */
     colds?: readonly ColdMass[];
+    /** The hurricane crossing the map; absent while there is none. */
+    hurricane?: Hurricane;
 }
 
 /** What the local ground tells its player: a state of its water or of its meadow, its bytes as they are (unzipped). */
@@ -185,6 +191,7 @@ export class LocalTerrainSimulation {
                 drains: () => this.catastrophes.drains,
                 balls: () => this.catastrophes.balls,
                 colds: () => this.catastrophes.colds ?? [],
+                hurricane: () => this.catastrophes.hurricane,
             },
         });
         if (start.water) this.water.seed(start.water.depths, start.water.bounds);
@@ -303,11 +310,20 @@ export class LocalTerrainSimulation {
         if (slot?.temperature === null || slot?.temperature === undefined || slot.humidity === undefined) {
             return undefined;
         }
-        return { temperature: slot.temperature, humidity: slot.humidity };
+        // Under the hurricane of the room, an air near saturation, as on the server (InlineRoomGround).
+        const storm = hurricaneAt(this.catastrophes.hurricane, this.now());
+        if (!storm || storm.share <= 0) return { temperature: slot.temperature, humidity: slot.humidity };
+        const humid = Math.max(slot.humidity, HURRICANE_HUMIDITY);
+        return { temperature: slot.temperature, humidity: slot.humidity + (humid - slot.humidity) * storm.share };
     }
 
     /** The heat, the humidity and the wind of the place for its fire, mild where it does not say. */
     private conditions(): FireConditions {
+        // The hurricane of the room blows over the place too.
+        return hurricaneConditions(this.placeConditions(), this.catastrophes.hurricane, this.now());
+    }
+
+    private placeConditions(): FireConditions {
         const slot = this.slotNow();
         if (!slot) return NEUTRAL_FIRE_CONDITIONS;
         return boundedFireConditions(

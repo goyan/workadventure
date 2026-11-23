@@ -702,7 +702,12 @@ describe("CatastropheManager, hurricanes", () => {
             minutes: 500,
             offsetKm: -1000,
         });
-        expect(manager.hurricane()).toMatchObject({ category: 5, durationMs: 60 * 60_000, offsetKm: -60, southern: true });
+        expect(manager.hurricane()).toMatchObject({
+            category: 5,
+            durationMs: 60 * 60_000,
+            offsetKm: -60,
+            southern: true,
+        });
     });
 
     it("refuses a hurricane without its track, and forgets it when the room stops", () => {

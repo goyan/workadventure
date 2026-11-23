@@ -1,7 +1,7 @@
 import type { FireConditionsMessage } from "@workadventure/messages";
 import Debug from "debug";
 import { WeatherLocation, WeatherType } from "@workadventure/map-editor";
-import type { RealWeatherSlot } from "@workadventure/map-editor";
+import type { Hurricane, RealWeatherSlot } from "@workadventure/map-editor";
 import { derived, writable } from "svelte/store";
 import type { Readable } from "svelte/store";
 import { z } from "zod";
@@ -19,6 +19,7 @@ import { AUTO_CLOUDINESS, cloudinessAt } from "./WeatherSchedule";
 import type { ForecastCell } from "./WeatherForecast";
 import { withManualWind } from "./ManualConditions";
 import { chosenWeatherNow } from "./ChosenPlaceWeather";
+import { withHurricane } from "./HurricaneSky";
 
 const debug = Debug("front:real-weather");
 
@@ -140,10 +141,52 @@ export function shownWeatherSettings(
     settings: MapSnowSettings | undefined,
     date: Date | undefined,
 ): MapSnowSettings | undefined {
-    return withManualWind(
-        personalWeatherSettings(settings, date) ?? mapWeatherSettings(settings, date),
-        manualConditions,
+    // The hurricane of the room last: it takes the place of every weather, the one of a city followed included.
+    return hurricaneOver(
+        withManualWind(
+            personalWeatherSettings(settings, date) ?? placeWeatherSettings(settings, date),
+            manualConditions,
+        ),
+        date,
     );
+}
+
+/** The hurricane crossing the map, as the server last told it: its weather is computed from it (withHurricane). */
+let roomHurricane: Hurricane | undefined;
+export function setRoomHurricane(hurricane: Hurricane | undefined): void {
+    roomHurricane = hurricane;
+}
+
+export function getRoomHurricane(): Hurricane | undefined {
+    return roomHurricane;
+}
+
+// The weather last shown under the hurricane: the same object while neither it nor the second of the clock changed.
+let hurricaneMemo:
+    | {
+          settings: MapSnowSettings | undefined;
+          hurricane: Hurricane;
+          second: number;
+          shown: MapSnowSettings | undefined;
+      }
+    | undefined;
+
+/** A weather under the hurricane of the room, if one crosses the map: computed once a second of the clock. */
+function hurricaneOver(settings: MapSnowSettings | undefined, date: Date | undefined): MapSnowSettings | undefined {
+    const hurricane = roomHurricane;
+    if (!hurricane || !date) return settings;
+    const second = Math.floor(date.getTime() / 1000);
+    if (
+        hurricaneMemo &&
+        hurricaneMemo.settings === settings &&
+        hurricaneMemo.hurricane === hurricane &&
+        hurricaneMemo.second === second
+    ) {
+        return hurricaneMemo.shown;
+    }
+    const shown = withHurricane(settings, hurricane, new Date(second * 1000));
+    hurricaneMemo = { settings, hurricane, second, shown };
+    return shown;
 }
 
 // The weather of the chosen place last shown: the same object while neither it nor the second of the clock changed.
@@ -211,6 +254,14 @@ export function setRoomConditions(conditions: FireConditionsMessage | undefined)
  * weather of the city a player follows on their clock.
  */
 export function mapWeatherSettings(
+    settings: MapSnowSettings | undefined,
+    date: Date | undefined,
+): MapSnowSettings | undefined {
+    return hurricaneOver(placeWeatherSettings(settings, date), date);
+}
+
+/** The weather of the map at `date` without its hurricane (mapWeatherSettings). */
+function placeWeatherSettings(
     settings: MapSnowSettings | undefined,
     date: Date | undefined,
 ): MapSnowSettings | undefined {

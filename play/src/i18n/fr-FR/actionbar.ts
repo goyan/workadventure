@@ -492,6 +492,32 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         coldLeftMinutes: "{minutes} min {seconds} s",
         coldLeftSeconds: "{seconds} s",
         coldStop: "Arrêter le coup de froid",
+        hurricane: "Ouragan",
+        hurricaneCategoryLabel: "Catégorie de l'ouragan, sur l'échelle de Saffir-Simpson",
+        hurricaneCategory: "Catégorie {category} : vent jusqu'à {wind} km/h",
+        hurricaneMinutesLabel: "Durée du passage, en minutes de la carte",
+        hurricaneMinutes: "{minutes} min pour 36 h réelles",
+        hurricaneOffsetLabel: "Où passe l'œil, en km : la carte à sa droite ou à sa gauche",
+        hurricaneOffsetOver: "L'œil passe sur la carte",
+        hurricaneOffsetRight: "L'œil à {km} km, la carte à sa droite",
+        hurricaneOffsetLeft: "L'œil à {km} km, la carte à sa gauche",
+        hurricaneHeadingLabel: "Vers où va l'ouragan",
+        hurricaneHeading: "Il va vers {point} ({degrees}°)",
+        hurricaneStart: "Lancer l'ouragan",
+        hurricaneStop: "Arrêter l'ouragan",
+        hurricaneHelp:
+            "L'ouragan couvre toute la carte : la carte n'est qu'un point dans un cyclone de plusieurs centaines de kilomètres. Elle vit son passage : bandes de pluie, mur de l'œil, calme de l'œil sous un ciel dégagé, second mur au vent inversé, puis l'éloignement. Son vent, sa pluie et ses nuages remplacent la météo de la salle pour tous, et la carte reçoit la pluie d'un vrai passage. 36 h réelles en accéléré, les distances restent réelles. Tout joueur peut l'arrêter.",
+        hurricaneGoing:
+            "Ouragan de catégorie {category} : {phase}, vent {wind} km/h, rafales {gust}, pluie {rain} mm/h, encore {left}",
+        hurricanePhase: {
+            bands: "bandes de pluie",
+            wall: "mur de l'œil",
+            eye: "œil",
+            bandsAfter: "bandes de pluie, il s'éloigne",
+            wallAfter: "second mur de l'œil",
+        },
+        hurricaneOverWind:
+            "Un ouragan traverse la carte : son vent remplace celui de la salle jusqu'à la fin du passage.",
         ball: "Boule",
         ballSizeLabel: "Taille de la boule : son diamètre, en cases",
         ballArmedHelp:

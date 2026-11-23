@@ -405,8 +405,8 @@ export class GameRoom implements BrothersFinder {
         );
         groundParts.catastrophes = catastrophes;
         catastrophes.levelWith(ground.ballLevelAt.bind(ground));
-        // A hurricane turns clockwise over a map in the southern hemisphere (Paris without a place).
-        catastrophes.southernWith(() => (gameRoom.getWam()?.settings?.weatherLocation?.latitude ?? 48.86) < 0);
+        // A hurricane turns clockwise over a map in the southern hemisphere.
+        catastrophes.southernWith(gameRoom.inSouthernHemisphere.bind(gameRoom));
         gameRoom.catastrophes = catastrophes;
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => catastrophes.stop());
@@ -1362,6 +1362,11 @@ export class GameRoom implements BrothersFinder {
     /** Where the players of the room cast their fishing line from, by user id: on the ground or over it. */
     public anglers(): Map<number, { x: number; y: number }> {
         return anglersOf(this.users.values());
+    }
+
+    /** Whether the place of the map is in the southern hemisphere (Paris, in the north, without a place). */
+    public inSouthernHemisphere(): boolean {
+        return (this.getWam()?.settings?.weatherLocation?.latitude ?? 48.86) < 0;
     }
 
     /** A player launches a catastrophe at a point of the map: a meteor, or the downpour that follows their pointer. */

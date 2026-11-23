@@ -269,7 +269,7 @@ export function hurricaneAt(hurricane: Hurricane | undefined, epoch: number): Hu
     const windE = speed * (Math.cos(inflow) * roundE - Math.sin(inflow) * outE) + motion * goE;
     const windN = speed * (Math.cos(inflow) * roundN - Math.sin(inflow) * outN) + motion * goN;
     const windSpeed = Math.hypot(windE, windN);
-    const windFrom = (((Math.atan2(windE, windN) * 180) / Math.PI + 180) % 360 + 360) % 360;
+    const windFrom = ((((Math.atan2(windE, windN) * 180) / Math.PI + 180) % 360) + 360) % 360;
     const rmax = HURRICANE_RMAX_KM;
     const azimuth = Math.atan2(mapN, mapE);
     const rainRate =
@@ -277,8 +277,7 @@ export function hurricaneAt(hurricane: Hurricane | undefined, epoch: number): Hu
     const cloudCover =
         HURRICANE_EYE_CLOUD +
         (1 - HURRICANE_EYE_CLOUD) * smoothstep(HURRICANE_EYE_RMAX * rmax, HURRICANE_WALL_CLOUD_RMAX * rmax, distanceKm);
-    const share =
-        smoothstep(0, HURRICANE_FADE_SHARE, progress) * smoothstep(0, HURRICANE_FADE_SHARE, 1 - progress);
+    const share = smoothstep(0, HURRICANE_FADE_SHARE, progress) * smoothstep(0, HURRICANE_FADE_SHARE, 1 - progress);
     const phase: HurricanePhase =
         distanceKm < HURRICANE_EYE_RMAX * rmax ? "eye" : distanceKm < HURRICANE_WALL_RMAX * rmax ? "wall" : "bands";
     return {
@@ -319,7 +318,7 @@ export function blendedWind(
     const n = baseN + (stormN - baseN) * share;
     const windSpeed = Math.hypot(e, n);
     if (windSpeed === 0) return { windSpeed: 0, windFrom: base.windFrom };
-    return { windSpeed, windFrom: (((Math.atan2(e, n) * 180) / Math.PI + 180) % 360 + 360) % 360 };
+    return { windSpeed, windFrom: ((((Math.atan2(e, n) * 180) / Math.PI + 180) % 360) + 360) % 360 };
 }
 
 /**

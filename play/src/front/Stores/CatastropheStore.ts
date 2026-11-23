@@ -5,9 +5,12 @@ import {
     DOWNPOUR_DEFAULT_TILES,
     DRAIN_DEFAULT_TILES,
     FIRE_DEFAULT_TILES,
+    HURRICANE_DEFAULT_CATEGORY,
+    HURRICANE_DEFAULT_HEADING,
+    HURRICANE_DEFAULT_MINUTES,
     METEOR_DEFAULT_TILES,
 } from "@workadventure/map-editor";
-import type { WaterBall } from "@workadventure/map-editor";
+import type { Hurricane, HurricaneNow, WaterBall } from "@workadventure/map-editor";
 import { derived, get, writable } from "svelte/store";
 
 /** "meteor" is the comet, which brings water; "fireball" is the burning meteor, which sets its crater on fire. */
@@ -45,6 +48,23 @@ export const coldCelsiusStore = writable<number>(COLD_DEFAULT_CELSIUS);
  * cold air lies on the map. Written by the view of the cold snap, read by the panel, which offers to stop it.
  */
 export const coldLyingStore = writable<{ celsius: number; secondsLeft: number | undefined } | undefined>(undefined);
+
+/**
+ * How the next hurricane crosses the map: its category, the length of its passage (minutes of the map), how far from
+ * the map its eye passes (km, positive with the map on its right) and where it goes (degrees). Kept for the session.
+ */
+export const hurricaneCategoryStore = writable<number>(HURRICANE_DEFAULT_CATEGORY);
+export const hurricaneMinutesStore = writable<number>(HURRICANE_DEFAULT_MINUTES);
+export const hurricaneOffsetKmStore = writable<number>(0);
+export const hurricaneHeadingStore = writable<number>(HURRICANE_DEFAULT_HEADING);
+
+/**
+ * The hurricane crossing the map, and what it is at the map as the server last told it (once a second): the panel
+ * says it and offers to stop it. Undefined while none crosses the map.
+ */
+export const hurricaneShownStore = writable<{ hurricane: Hurricane; now: HurricaneNow | undefined } | undefined>(
+    undefined,
+);
 
 /** How wide the patch of fire set under the pointer is, in tiles: kept for the session. */
 export const fireRadiusTilesStore = writable<number>(FIRE_DEFAULT_TILES);

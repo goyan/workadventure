@@ -487,6 +487,32 @@ const actionbar = {
         coldLeftMinutes: "{minutes} min {seconds} s",
         coldLeftSeconds: "{seconds} s",
         coldStop: "Stop the cold snap",
+        hurricane: "Hurricane",
+        hurricaneCategoryLabel: "Category of the hurricane, on the Saffir-Simpson scale",
+        hurricaneCategory: "Category {category}: wind up to {wind} km/h",
+        hurricaneMinutesLabel: "Length of the passage, in minutes of the map",
+        hurricaneMinutes: "{minutes} min for 36 real hours",
+        hurricaneOffsetLabel: "Where the eye passes, in km: the map on its right or on its left",
+        hurricaneOffsetOver: "The eye passes over the map",
+        hurricaneOffsetRight: "The eye {km} km away, the map on its right",
+        hurricaneOffsetLeft: "The eye {km} km away, the map on its left",
+        hurricaneHeadingLabel: "Where the hurricane goes",
+        hurricaneHeading: "It goes towards {point} ({degrees}°)",
+        hurricaneStart: "Launch the hurricane",
+        hurricaneStop: "Stop the hurricane",
+        hurricaneHelp:
+            "The hurricane covers the whole map: the map is only a point in a cyclone hundreds of kilometres wide. It lives its passage: rain bands, eyewall, the calm of the eye under a clear sky, the second wall with the wind the other way round, then the storm going away. Its wind, its rain and its clouds take the place of the weather of the room for everyone, and the map receives the rain of a real passage. 36 real hours, sped up; distances stay real. Any player can stop it.",
+        hurricaneGoing:
+            "Category {category} hurricane: {phase}, wind {wind} km/h, gusts {gust}, rain {rain} mm/h, {left} left",
+        hurricanePhase: {
+            bands: "rain bands",
+            wall: "eyewall",
+            eye: "eye",
+            bandsAfter: "rain bands, going away",
+            wallAfter: "second eyewall",
+        },
+        hurricaneOverWind:
+            "A hurricane crosses the map: its wind takes the place of that of the room until the passage ends.",
         ball: "Ball",
         ballSizeLabel: "Size of the ball: its diameter, in tiles",
         ballArmedHelp:

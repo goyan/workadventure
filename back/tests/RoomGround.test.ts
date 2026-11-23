@@ -84,7 +84,12 @@ describe("the ground of a room behind its door (RoomGround)", () => {
             const inflow = ground.water.livedTimes().inflow;
             ground.stop();
             const told = seen.told
-                .map((line) => JSON.parse(line) as { message?: { $case?: string; terrainWaterMessage?: { stats?: { rainRate?: number } } } })
+                .map(
+                    (line) =>
+                        JSON.parse(line) as {
+                            message?: { $case?: string; terrainWaterMessage?: { stats?: { rainRate?: number } } };
+                        },
+                )
                 .filter((message) => message.message?.$case === "terrainWaterMessage");
             return { rate: told[told.length - 1]?.message?.terrainWaterMessage?.stats?.rainRate ?? NaN, inflow };
         };

@@ -10,6 +10,7 @@ import {
     privateMessageRequestSchema,
 } from "@workadventure/shared-utils";
 import type {
+    HurricaneTrackMessage,
     AddSpaceFilterMessage,
     AnswerMessage,
     ApplicationMessage,
@@ -1276,6 +1277,8 @@ export class RoomConnection implements RoomConnection {
         release = false,
         /** A cold snap: the temperature of its air, in °C. */
         temperature?: number,
+        /** A hurricane: how it crosses the map. */
+        hurricane?: HurricaneTrackMessage,
     ): void {
         this.send({
             message: {
@@ -1288,6 +1291,7 @@ export class RoomConnection implements RoomConnection {
                     wholeMap,
                     release,
                     ...(temperature === undefined ? {} : { temperature }),
+                    ...(hurricane === undefined ? {} : { hurricane }),
                 },
             },
         });

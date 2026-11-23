@@ -185,7 +185,7 @@ import {
     mapEditorWamSettingsEditorToolCurrentMenuItemStore,
     WAM_SETTINGS_EDITOR_TOOL_MENU_ITEM,
 } from "@wa/front/Stores/MapEditorStore";
-import { coldLyingStore, heldBallStore } from "@wa/front/Stores/CatastropheStore";
+import { coldLyingStore, heldBallStore, hurricaneShownStore } from "@wa/front/Stores/CatastropheStore";
 import { refreshPromptStore } from "@wa/front/Stores/RefreshPromptStore";
 import { mapDeletedPromptStore } from "@wa/front/Stores/MapDeletedPromptStore";
 import { SpaceRegistry } from "@wa/front/Space/SpaceRegistry/SpaceRegistry";
@@ -339,6 +339,7 @@ import { weatherAtTime } from "./Weather/WeatherFrame";
 import {
     mapPlaceSlotsNow,
     setRoomConditions,
+    setRoomHurricane,
     showsChosenPlaceWeather,
     shownWeatherSettings,
 } from "./Weather/RealWeatherClient";
@@ -494,6 +495,7 @@ import { DownpourView } from "./Catastrophe/DownpourView";
 import { DrainView } from "./Catastrophe/DrainView";
 import { BallView } from "./Catastrophe/BallView";
 import { ColdView } from "./Catastrophe/ColdView";
+import { HurricaneReceiver } from "./Catastrophe/HurricaneReceiver";
 import { FireTorchView } from "./Catastrophe/FireTorchView";
 import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
 import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
@@ -745,6 +747,7 @@ export class GameScene extends DirtyScene {
     private drainView: DrainView | undefined;
     private ballView: BallView | undefined;
     private coldView: ColdView | undefined;
+    private hurricaneReceiver: HurricaneReceiver | undefined;
     private fireTorchView: FireTorchView | undefined;
     private catastropheSubscription: Subscription | undefined;
     /** The animals of the water of the relief, as the server tells them. */
@@ -1975,6 +1978,10 @@ export class GameScene extends DirtyScene {
         this.coldView?.destroy();
         this.coldView = undefined;
         coldLyingStore.set(undefined);
+        this.hurricaneReceiver?.destroy();
+        this.hurricaneReceiver = undefined;
+        setRoomHurricane(undefined);
+        hurricaneShownStore.set(undefined);
         this.fireTorchView?.destroy();
         this.fireTorchView = undefined;
         rodEquippedStore.set(false);
@@ -5216,6 +5223,18 @@ export class GameScene extends DirtyScene {
             (x, y) => this.surfaceDropAt(x, y),
         );
         this.fireTorchView = fireTorchView;
+        this.hurricaneReceiver?.destroy();
+        // The hurricane of the room: its weather (wind, rain, sky) takes the place of the weather of the map for
+        // everyone, computed here from it and the time of the server, as the server computes it for its ground.
+        const hurricaneReceiver = new HurricaneReceiver(
+            () => this.nightManager?.serverDate()?.getTime(),
+            (hurricane, now) => {
+                setRoomHurricane(hurricane);
+                hurricaneShownStore.set(hurricane ? { hurricane, now } : undefined);
+                this.markDirty();
+            },
+        );
+        this.hurricaneReceiver = hurricaneReceiver;
         this.catastropheSubscription = this.connection?.catastropheMessageStream.subscribe((message) => {
             // The water of this player, when it is their own, lives the catastrophes of the room too.
             this.localTerrain.fromCatastrophe(message);
@@ -5223,6 +5242,7 @@ export class GameScene extends DirtyScene {
             else if (message.kind === CatastropheKind.CATASTROPHE_DRAIN) drainView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_BALL) ballView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_COLD) coldView.report(message, this.time.now);
+            else if (message.kind === CatastropheKind.CATASTROPHE_HURRICANE) hurricaneReceiver.report(message);
             else if (message.kind === CatastropheKind.CATASTROPHE_FIRE) fireTorchView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_ICE_BREAK) {
                 // The ice another player broke (or ours, told back): the same hole for everyone.

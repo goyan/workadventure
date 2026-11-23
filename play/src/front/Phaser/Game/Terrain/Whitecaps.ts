@@ -55,3 +55,20 @@ function lawEnd(): number {
     lawEndMemo ??= whitecapShare(LAW_UP_TO_MS * 3.6);
     return lawEndMemo;
 }
+
+/**
+ * Past the whitecaps, the sea of a hurricane: from about 30 m/s the whitecaps stop growing and streaks of foam and
+ * spray along the wind take over; by about 40 m/s (144 km/h) they cover the waves as a white sheet, the sea a milky
+ * white without distinct waves (Holthuijsen, Powell and Pietrzak 2012, Journal of Geophysical Research 117, C09003,
+ * from low-level reconnaissance films and dropsondes; the thresholds [Gemini, to be checked against the paper]).
+ * Beaufort 12 (WMO): "Sea completely white with driving spray; visibility very seriously affected".
+ */
+export const SPUME_FROM_MS = 30;
+export const SPUME_WHOLE_MS = 40;
+
+/** How much of that white sheet a wind (km/h, ten metres up) lays on open water, 0 to 1. */
+export function spumeShare(windKmh: number | undefined): number {
+    if (windKmh === undefined || !Number.isFinite(windKmh)) return 0;
+    const t = Math.max(0, Math.min(1, (windKmh / 3.6 - SPUME_FROM_MS) / (SPUME_WHOLE_MS - SPUME_FROM_MS)));
+    return t * t * (3 - 2 * t);
+}

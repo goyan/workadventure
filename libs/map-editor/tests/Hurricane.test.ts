@@ -122,7 +122,8 @@ describe("hurricaneAt", () => {
     it("brings the strongest wind of its category in the wall, no more than the motion of the storm over it", () => {
         const storm = hurricane();
         let strongest = 0;
-        for (let i = 0; i < 2000; i++) strongest = Math.max(strongest, hurricaneAt(storm, at(storm, i / 2000))?.windSpeed ?? 0);
+        for (let i = 0; i < 2000; i++)
+            strongest = Math.max(strongest, hurricaneAt(storm, at(storm, i / 2000))?.windSpeed ?? 0);
         expect(strongest).toBeGreaterThan(hurricaneMaxWind(4));
         expect(strongest).toBeLessThanOrEqual(hurricaneMaxWind(4) + HURRICANE_MOTION_SHARE * HURRICANE_TRANSLATION_KMH);
     });
@@ -130,7 +131,8 @@ describe("hurricaneAt", () => {
     it("blows harder on the right of its track in the north, on the left in the south", () => {
         const strongest = (storm: Hurricane): number => {
             let most = 0;
-            for (let i = 0; i < 2000; i++) most = Math.max(most, hurricaneAt(storm, at(storm, i / 2000))?.windSpeed ?? 0);
+            for (let i = 0; i < 2000; i++)
+                most = Math.max(most, hurricaneAt(storm, at(storm, i / 2000))?.windSpeed ?? 0);
             return most;
         };
         expect(strongest(hurricane({ offsetKm: 20 }))).toBeGreaterThan(strongest(hurricane({ offsetKm: -20 })));
@@ -219,10 +221,9 @@ describe("the rain of a hurricane", () => {
 
 describe("blendedWind", () => {
     it("mixes two winds as vectors", () => {
-        expect(blendedWind({ windSpeed: 10, windFrom: 90 }, { windSpeed: 10, windFrom: 270 }, 0.5).windSpeed).toBeCloseTo(
-            0,
-            10,
-        );
+        expect(
+            blendedWind({ windSpeed: 10, windFrom: 90 }, { windSpeed: 10, windFrom: 270 }, 0.5).windSpeed,
+        ).toBeCloseTo(0, 10);
         const half = blendedWind({ windSpeed: 10, windFrom: 0 }, { windSpeed: 10, windFrom: 90 }, 0.5);
         expect(half.windFrom).toBeCloseTo(45, 6);
     });

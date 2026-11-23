@@ -1,5 +1,5 @@
 import { shaderWrap } from "../ShaderNoise";
-import { whitecapShare, whitecapWhite } from "./Whitecaps";
+import { SPUME_FROM_MS, SPUME_WHOLE_MS, whitecapShare, whitecapWhite } from "./Whitecaps";
 import {
     BREAKING_SLOPE,
     FETCH_UNIT_METRES,
@@ -137,6 +137,16 @@ const BREAKING_EDGE = 0.1;
  * on them, at FOAM_OFF_LINE between them. The lines drift with the foam.
  */
 const FOAM_LINE_ALONG_PX = 60;
+/**
+ * The streaks of the white sheet of a hurricane (seaSpume): how wide across the wind and how long along it (map px),
+ * long filaments parallel to the wind; the white of the sheet between them once whole; the most the spray hides the
+ * water, reached at SPRAY_WHOLE_MS (m/s). Choices, to look like the films of Holthuijsen et al. 2012.
+ */
+const SPUME_ACROSS_PX = 6;
+const SPUME_ALONG_PX = 140;
+const SPUME_SHEET = 0.78;
+const SPRAY_MOST = 0.45;
+const SPRAY_WHOLE_MS = 55;
 const FOAM_LINE_CUT = 0.55;
 const FOAM_OFF_LINE = 0.1;
 /**
@@ -461,11 +471,33 @@ export const WIND_SEA_WATER_GLSL = `
 uniform sampler2D uSeaFoam;
 uniform vec4 uSeaFoamArea;
 
+// The white sheet of a hurricane (spumeShare): long streaks of foam and spray along the wind, laid over the waves,
+// which join into a milky white as the wind passes 40 m/s, still streaked. They drift with the foam left.
+float seaSpume(vec2 world) {
+    float share = smoothstep(${glsl(SPUME_FROM_MS)}, ${glsl(SPUME_WHOLE_MS)}, uSea.x);
+    if (share <= 0.0) return 0.0;
+    vec2 heading = uSeaDir.xy;
+    float down = dot(world, heading) - uSeaDir.w * ${glsl(FOAM_LINE_ALONG_PX)};
+    float side = dot(world, vec2(-heading.y, heading.x));
+    float streaks = 0.6 * seaNoise(vec2(side / ${glsl(SPUME_ACROSS_PX)}, down / ${glsl(SPUME_ALONG_PX)}))
+        + 0.4 * seaNoise(vec2(side / ${glsl(SPUME_ACROSS_PX / 2)} + 5.0, down / ${glsl(SPUME_ALONG_PX / 3)} + 11.0));
+    // Few streaks at first, then most of the water: between them the white of the sheet itself.
+    float cut = mix(0.8, 0.25, share);
+    float streak = smoothstep(cut, cut + 0.2, streaks);
+    return share * max(streak, share * ${glsl(SPUME_SHEET)});
+}
+
 float seaFoam(vec2 world) {
     float breaking = seaBreaking(world);
     vec2 uv = (world - uSeaFoamArea.xy) * uSeaFoamArea.zw;
     float left = uv.x > 0.0 && uv.y > 0.0 && uv.x < 1.0 && uv.y < 1.0 ? texture2D(uSeaFoam, uv).r : 0.0;
-    return max(breaking, left * uSea.w);
+    return max(max(breaking, left * uSea.w), seaSpume(world));
+}
+
+// The spray the wind tears off the sea: a haze over the water that hides its waves, from 30 m/s on (Beaufort 12:
+// "the air is filled with foam and spray"). 0 to SPRAY_MOST.
+float seaSpray() {
+    return ${glsl(SPRAY_MOST)} * smoothstep(${glsl(SPUME_FROM_MS)}, ${glsl(SPRAY_WHOLE_MS)}, uSea.x);
 }
 `;
 
