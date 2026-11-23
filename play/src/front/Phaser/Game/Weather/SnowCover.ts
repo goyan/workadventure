@@ -28,4 +28,6 @@ export interface MapSnowSettings {
     rainDryFrom?: number;
     /** Real weather only (never saved): how hard it rains, mm an hour (rainIntensity). */
     rainRate?: number;
+    /** A hurricane crosses the map (never saved): its own spiral of clouds takes the place of the clouds of the sky. */
+    hurricaneSky?: boolean;
 }

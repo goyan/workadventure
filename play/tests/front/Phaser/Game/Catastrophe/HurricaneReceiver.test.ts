@@ -15,7 +15,19 @@ function told(impactInMs: number, startedAt = START): CatastropheMessage {
         impactInMs,
         radiusTiles: 0,
         wholeMap: true,
-        hurricane: { category: 3, minutes: 20, offsetKm: -10, heading: 270, southern: true, startedAt },
+        hurricane: {
+            category: 3,
+            minutes: 20,
+            heading: 270,
+            southern: true,
+            startedAt,
+            fromX: 7680,
+            fromY: 100,
+            toX: 0,
+            toY: 100,
+            anchorX: 3840,
+            anchorY: 100,
+        },
     };
 }
 
@@ -37,9 +49,14 @@ describe("HurricaneReceiver", () => {
             startedAt: START,
             category: 3,
             durationMs: 20 * 60_000,
-            offsetKm: -10,
             heading: 270,
             southern: true,
+            fromX: 7680,
+            fromY: 100,
+            toX: 0,
+            toY: 100,
+            anchorX: 3840,
+            anchorY: 100,
         });
         expect(seen[0].now?.progress).toBeCloseTo(0.05, 6);
         receiver.destroy();

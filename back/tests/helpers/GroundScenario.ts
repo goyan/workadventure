@@ -3,9 +3,8 @@ import {
     cellKey,
     DEFAULT_FIRE_THRESHOLDS,
     fireDanger,
-    HURRICANE_HUMIDITY,
-    hurricaneAt,
     hurricaneConditions,
+    hurricaneHumidity,
     NEUTRAL_FIRE_CONDITIONS,
     WeatherType,
     withHeights,
@@ -206,10 +205,7 @@ export async function byHand(
     const conditionsNow = () => hurricaneConditions(inputs.fire(), inputs.hurricane?.(), now());
     const airNow = () => {
         const air = inputs.air();
-        const storm = hurricaneAt(inputs.hurricane?.(), now());
-        if (!air || !storm || storm.share <= 0) return air;
-        const humid = Math.max(air.humidity, HURRICANE_HUMIDITY);
-        return { ...air, humidity: air.humidity + (humid - air.humidity) * storm.share };
+        return air ? { ...air, humidity: hurricaneHumidity(air.humidity, inputs.hurricane?.(), now()) } : air;
     };
     water.fallThrough(() => airNow());
     const meadow = new MeadowManager(
@@ -331,12 +327,18 @@ export function happenAt(
         state.air = { temperature: 26, humidity: 80 };
         state.hurricane = {
             id: 30,
-            startedAt: GROUND_NOW + 18_000 - 0.44 * 300_000,
+            startedAt: GROUND_NOW + 18_000 - 0.26 * 300_000,
             category: 4,
             durationMs: 300_000,
-            offsetKm: 10,
-            heading: 290,
+            heading: 0,
             southern: false,
+            // Over the pond of the map, northwards: the point is in the wall at the start.
+            fromX: 200,
+            fromY: 2000,
+            toX: 200,
+            toY: -1600,
+            anchorX: 200,
+            anchorY: 200,
         };
     }
     if (tenth === 290) {

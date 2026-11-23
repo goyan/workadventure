@@ -87,7 +87,17 @@ export class LocalCatastropheRelay {
                     return [];
                 }
                 const known = this.hurricane?.hurricane;
-                const hurricane = { id, startedAt: track.startedAt, ...hurricaneTrack(track, track.southern) };
+                const hurricane = {
+                    id,
+                    startedAt: track.startedAt,
+                    ...hurricaneTrack(track, track.southern),
+                    fromX: track.fromX,
+                    fromY: track.fromY,
+                    toX: track.toX,
+                    toY: track.toY,
+                    anchorX: track.anchorX,
+                    anchorY: track.anchorY,
+                };
                 // Told again each second: the local ground is told only when it is another one.
                 if (!known || known.id !== id || known.startedAt !== hurricane.startedAt) this.changed = true;
                 this.hurricane = { hurricane, until };

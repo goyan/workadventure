@@ -167,25 +167,52 @@ let hurricaneMemo:
           settings: MapSnowSettings | undefined;
           hurricane: Hurricane;
           second: number;
+          cellX: number;
+          cellY: number;
           shown: MapSnowSettings | undefined;
       }
     | undefined;
 
-/** A weather under the hurricane of the room, if one crosses the map: computed once a second of the clock. */
+/**
+ * Where this player looks (map pixels, the middle of their camera): the wind of a hurricane is not the same all over
+ * the map, the weather drawn for them is that of where they look. Undefined: where the hurricane was sent over.
+ */
+let viewpoint: { x: number; y: number } | undefined;
+export function setHurricaneViewpoint(x: number, y: number): void {
+    viewpoint = { x, y };
+}
+
+/** How far the viewpoint moves (map pixels) before the weather under the hurricane is worked out again. */
+const VIEWPOINT_STEP_PX = 32;
+
+/**
+ * A weather under the hurricane of the room, if one crosses the map, where this player looks: worked out again when
+ * the second of the clock changes or the viewpoint moves by a tile.
+ */
 function hurricaneOver(settings: MapSnowSettings | undefined, date: Date | undefined): MapSnowSettings | undefined {
     const hurricane = roomHurricane;
     if (!hurricane || !date) return settings;
     const second = Math.floor(date.getTime() / 1000);
+    const cellX = Math.round((viewpoint?.x ?? hurricane.anchorX) / VIEWPOINT_STEP_PX);
+    const cellY = Math.round((viewpoint?.y ?? hurricane.anchorY) / VIEWPOINT_STEP_PX);
     if (
         hurricaneMemo &&
         hurricaneMemo.settings === settings &&
         hurricaneMemo.hurricane === hurricane &&
-        hurricaneMemo.second === second
+        hurricaneMemo.second === second &&
+        hurricaneMemo.cellX === cellX &&
+        hurricaneMemo.cellY === cellY
     ) {
         return hurricaneMemo.shown;
     }
-    const shown = withHurricane(settings, hurricane, new Date(second * 1000));
-    hurricaneMemo = { settings, hurricane, second, shown };
+    const shown = withHurricane(
+        settings,
+        hurricane,
+        new Date(second * 1000),
+        cellX * VIEWPOINT_STEP_PX,
+        cellY * VIEWPOINT_STEP_PX,
+    );
+    hurricaneMemo = { settings, hurricane, second, cellX, cellY, shown };
     return shown;
 }
 

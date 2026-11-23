@@ -13,7 +13,6 @@
         FIRE_MAX_TILES,
         FIRE_MIN_TILES,
         HURRICANE_MAX_MINUTES,
-        HURRICANE_MAX_OFFSET_KM,
         HURRICANE_MIN_MINUTES,
         hurricaneMaxWind,
         METEOR_MAX_TILES,
@@ -36,7 +35,6 @@
         hurricaneCategoryStore,
         hurricaneHeadingStore,
         hurricaneMinutesStore,
-        hurricaneOffsetKmStore,
         hurricaneShownStore,
         meteorRadiusTilesStore,
         toggleArmedCatastrophe,
@@ -85,8 +83,8 @@
     /** What the panel says of the hurricane crossing the map, as the server last told it. */
     const hurricaneGoing = $derived.by((): string | undefined => {
         const going = $hurricaneShownStore;
-        if (!going?.now) return undefined;
-        const { hurricane, now } = going;
+        if (!going?.here) return undefined;
+        const { hurricane, here: now } = going;
         const secondsLeft = Math.max(0, Math.round((1 - now.progress) * (hurricane.durationMs / 1000)));
         const phases = $LL.actionbar.catastrophe.hurricanePhase;
         const phase =
@@ -114,13 +112,6 @@
                     : $LL.actionbar.catastrophe.coldLeftSeconds({ seconds: secondsLeft }),
         });
     });
-    const hurricaneOffset = $derived(
-        $hurricaneOffsetKmStore === 0
-            ? $LL.actionbar.catastrophe.hurricaneOffsetOver()
-            : $hurricaneOffsetKmStore > 0
-              ? $LL.actionbar.catastrophe.hurricaneOffsetRight({ km: $hurricaneOffsetKmStore })
-              : $LL.actionbar.catastrophe.hurricaneOffsetLeft({ km: -$hurricaneOffsetKmStore }),
-    );
     const hurricanePoint = $derived(compassPointOf(Number($hurricaneHeadingStore)) ?? "n");
 
     interface Props {
@@ -396,7 +387,7 @@
                                     class="w-24"
                                     min={HURRICANE_MIN_MINUTES}
                                     max={HURRICANE_MAX_MINUTES}
-                                    step="5"
+                                    step="1"
                                     aria-label={$LL.actionbar.catastrophe.hurricaneMinutesLabel()}
                                     data-testid="catastrophe-hurricane-minutes"
                                     bind:value={$hurricaneMinutesStore}
@@ -406,19 +397,6 @@
                                         minutes: $hurricaneMinutesStore,
                                     })}</span
                                 >
-                            </label>
-                            <label class="flex items-center gap-2">
-                                <input
-                                    type="range"
-                                    class="w-24"
-                                    min={-HURRICANE_MAX_OFFSET_KM}
-                                    max={HURRICANE_MAX_OFFSET_KM}
-                                    step="5"
-                                    aria-label={$LL.actionbar.catastrophe.hurricaneOffsetLabel()}
-                                    data-testid="catastrophe-hurricane-offset"
-                                    bind:value={$hurricaneOffsetKmStore}
-                                />
-                                <span class="whitespace-nowrap tabular-nums">{hurricaneOffset}</span>
                             </label>
                             <label class="flex items-center gap-2">
                                 <input

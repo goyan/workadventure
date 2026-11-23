@@ -323,7 +323,9 @@ export class WeatherManager {
         const sunlight = cloudSunlight(sun?.elevation);
         // The grey veil of an overcast sky only by day: at night it would light the night veil up.
         const veilAlpha = overcastVeil(cloudiness, 1 - sunlight.night);
-        const showClouds = enabled && this.cloudsShown && cloudiness > 0;
+        // Under a hurricane its own spiral of clouds (HurricaneView) takes the place of the clouds of the sky.
+        const cloudsShown = this.cloudsShown && settings?.hurricaneSky !== true;
+        const showClouds = enabled && cloudsShown && cloudiness > 0;
         if (!showWeather && !showClouds) {
             if (this.visible) {
                 this.graphics.clear().setVisible(false);
@@ -427,7 +429,7 @@ export class WeatherManager {
         // The clouds and the fog drift slowly, by whole blocks: they are painted a few times a second, while what
         // falls is drawn 30 times. Painted again at once when what they show changes or the scroll nears their edge.
         // Painted again at once when the avatar goes into another room: the fog seen from far leaves it clear.
-        const blockKey = [weather, showClouds, this.cloudsShown, night, size, this.reducedMotion, avatarRoom].join("|");
+        const blockKey = [weather, showClouds, cloudsShown, night, size, this.reducedMotion, avatarRoom].join("|");
         // The outdoors the walls leave (the same list while they do not change); the whole view without walls.
         const outdoors = grid ? veil : undefined;
         const kept = this.blockFrame;
@@ -491,7 +493,8 @@ export class WeatherManager {
             const covering =
                 weather === WeatherType.Storm ? STORM_CLOUDS : weather === WeatherType.Rain ? RAIN_CLOUDS : undefined;
             let underClouds: RainLocal | undefined;
-            if (covering) {
+            // Under a hurricane its rain is already that of its bands where this player looks: no clouds of the sky.
+            if (covering && settings?.hurricaneSky !== true) {
                 // The real cover when known, never so thin that the rain seems to fall from a clear sky.
                 const cover =
                     settings?.cloudCover === undefined
@@ -501,7 +504,7 @@ export class WeatherManager {
                     const patches = cloudPatches(epoch, view, shownRainCover(cover), this.reducedMotion, sky);
                     const painted = fieldLevels(canvas, size, patches);
                     this.blockFrame.rainLevels = painted;
-                    if (this.cloudsShown && !this.smoothCloudLayer()) {
+                    if (cloudsShown && !this.smoothCloudLayer()) {
                         const body = covering.alpha * this.zoomFade();
                         this.paintCumulus(
                             canvas,
@@ -514,7 +517,7 @@ export class WeatherManager {
                         );
                     }
                 }
-                if (this.cloudsShown && this.smoothCloudLayer()) {
+                if (cloudsShown && this.smoothCloudLayer()) {
                     this.layerClouds = this.cloudSky(
                         epoch,
                         view,

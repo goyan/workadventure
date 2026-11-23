@@ -4,9 +4,8 @@ import {
     DEFAULT_FIRE_THRESHOLDS,
     fireDanger,
     GroundSimulation,
-    HURRICANE_HUMIDITY,
-    hurricaneAt,
     hurricaneConditions,
+    hurricaneHumidity,
     MeadowSimulation,
     NEUTRAL_FIRE_CONDITIONS,
     REAL_WEATHER_SLOT_MS,
@@ -311,10 +310,10 @@ export class LocalTerrainSimulation {
             return undefined;
         }
         // Under the hurricane of the room, an air near saturation, as on the server (InlineRoomGround).
-        const storm = hurricaneAt(this.catastrophes.hurricane, this.now());
-        if (!storm || storm.share <= 0) return { temperature: slot.temperature, humidity: slot.humidity };
-        const humid = Math.max(slot.humidity, HURRICANE_HUMIDITY);
-        return { temperature: slot.temperature, humidity: slot.humidity + (humid - slot.humidity) * storm.share };
+        return {
+            temperature: slot.temperature,
+            humidity: hurricaneHumidity(slot.humidity, this.catastrophes.hurricane, this.now()),
+        };
     }
 
     /** The heat, the humidity and the wind of the place for its fire, mild where it does not say. */

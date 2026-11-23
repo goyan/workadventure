@@ -901,20 +901,25 @@ enum CatastropheKind {
 }
 
 // How a hurricane crosses the map, as a player asks for it (the server keeps each value within bounds) and as the
-// server tells it.
+// server tells it. The hurricane is reduced to the size of the map: its eye crosses it.
 message HurricaneTrackMessage {
   // Saffir-Simpson, 1 to 5.
   int32 category = 1;
-  // The length of the passage in the time of the map, minutes.
+  // How long the eye takes to cross the map, minutes.
   int32 minutes = 2;
-  // How far from the map the eye passes, km: positive with the map on the right of the track.
-  double offsetKm = 3;
+  reserved 3;
   // Where the storm goes, degrees (0 north, 90 east).
   double heading = 4;
-  // Told by the server only: it turns clockwise (a map in the southern hemisphere), and when it began (ms, the time
-  // of the server).
+  // Told by the server only: it turns clockwise (a map in the southern hemisphere), when it began (ms, the time of
+  // the server), where its eye comes in and goes out (map pixels), and the point it was sent over.
   bool southern = 5;
   double startedAt = 6;
+  double fromX = 7;
+  double fromY = 8;
+  double toX = 9;
+  double toY = 10;
+  double anchorX = 11;
+  double anchorY = 12;
 }
 
 // Browser to server: a player sets the conditions the fire of the room goes by (heat, humidity of the air, wind) by
@@ -959,7 +964,8 @@ message LaunchCatastropheMessage {
   bool release = 6;
   // A cold snap: the temperature of its air, in °C. The server keeps it within what a cold snap may be.
   optional double temperature = 7;
-  // A hurricane: how it crosses the map. `release` stops it.
+  // A hurricane: how it crosses the map, its eye over `x`, `y` (the middle of the map when outside it). `release`
+  // stops it.
   optional HurricaneTrackMessage hurricane = 8;
 }
 

@@ -663,14 +663,33 @@ describe("ice that gives way", () => {
 
 describe("CatastropheManager, hurricanes", () => {
     const HURRICANE = CatastropheKind.CATASTROPHE_HURRICANE;
-    const track = { category: 4, minutes: 10, offsetKm: 0, heading: 290, southern: false, startedAt: 0 };
+    const track = {
+        category: 4,
+        minutes: 10,
+        heading: 290,
+        southern: false,
+        startedAt: 0,
+        fromX: 0,
+        fromY: 0,
+        toX: 0,
+        toY: 0,
+        anchorX: 0,
+        anchorY: 0,
+    };
 
     it("lets a hurricane cross the map, told to the room once a second until it ends", () => {
         const { manager, sent } = harness();
-        expect(manager.request(1, HURRICANE, 0, 0, 0, true, false, undefined, track)).toBe(true);
+        expect(manager.request(1, HURRICANE, -1, -1, 0, true, false, undefined, track)).toBe(true);
         expect(sent).toHaveLength(1);
         expect(sent[0]).toMatchObject({ kind: HURRICANE, impactInMs: 10 * 60_000 });
-        expect(sent[0].hurricane).toMatchObject({ category: 4, minutes: 10, offsetKm: 0, heading: 290, startedAt: 0 });
+        expect(sent[0].hurricane).toMatchObject({
+            category: 4,
+            minutes: 10,
+            heading: 290,
+            startedAt: 0,
+            anchorX: 320,
+            anchorY: 240,
+        });
         expect(manager.hurricane()).toMatchObject({ category: 4, durationMs: 600_000, startedAt: 0 });
         vi.advanceTimersByTime(HURRICANE_TELL_MS);
         expect(sent).toHaveLength(2);
@@ -696,17 +715,21 @@ describe("CatastropheManager, hurricanes", () => {
     it("keeps what is asked within bounds, and turns it the way of the hemisphere of the map", () => {
         const { manager } = harness();
         manager.southernWith(() => true);
-        manager.request(1, HURRICANE, 0, 0, 0, true, false, undefined, {
+        manager.request(1, HURRICANE, 160, 120, 0, true, false, undefined, {
             ...track,
             category: 9,
             minutes: 500,
-            offsetKm: -1000,
+            heading: 90,
         });
+        // Eastwards over (160, 120) of a map of 640 x 480: in at its west edge, out at its east edge.
         expect(manager.hurricane()).toMatchObject({
             category: 5,
-            durationMs: 60 * 60_000,
-            offsetKm: -60,
+            durationMs: 30 * 60_000,
             southern: true,
+            fromX: 0,
+            toX: 640,
+            anchorX: 160,
+            anchorY: 120,
         });
     });
 

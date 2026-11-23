@@ -10,7 +10,7 @@ import {
     HURRICANE_DEFAULT_MINUTES,
     METEOR_DEFAULT_TILES,
 } from "@workadventure/map-editor";
-import type { Hurricane, HurricaneNow, WaterBall } from "@workadventure/map-editor";
+import type { Hurricane, HurricaneHere, WaterBall } from "@workadventure/map-editor";
 import { derived, get, writable } from "svelte/store";
 
 /** "meteor" is the comet, which brings water; "fireball" is the burning meteor, which sets its crater on fire. */
@@ -50,19 +50,18 @@ export const coldCelsiusStore = writable<number>(COLD_DEFAULT_CELSIUS);
 export const coldLyingStore = writable<{ celsius: number; secondsLeft: number | undefined } | undefined>(undefined);
 
 /**
- * How the next hurricane crosses the map: its category, the length of its passage (minutes of the map), how far from
- * the map its eye passes (km, positive with the map on its right) and where it goes (degrees). Kept for the session.
+ * How the next hurricane crosses the map: its category, how long its eye takes to cross the map (minutes) and where it
+ * goes (degrees). Kept for the session.
  */
 export const hurricaneCategoryStore = writable<number>(HURRICANE_DEFAULT_CATEGORY);
 export const hurricaneMinutesStore = writable<number>(HURRICANE_DEFAULT_MINUTES);
-export const hurricaneOffsetKmStore = writable<number>(0);
 export const hurricaneHeadingStore = writable<number>(HURRICANE_DEFAULT_HEADING);
 
 /**
- * The hurricane crossing the map, and what it is at the map as the server last told it (once a second): the panel
- * says it and offers to stop it. Undefined while none crosses the map.
+ * The hurricane crossing the map, and what it is where this player looks, as of the last word of the server (once a
+ * second): the panel says it and offers to stop it. Undefined while none crosses the map.
  */
-export const hurricaneShownStore = writable<{ hurricane: Hurricane; now: HurricaneNow | undefined } | undefined>(
+export const hurricaneShownStore = writable<{ hurricane: Hurricane; here: HurricaneHere | undefined } | undefined>(
     undefined,
 );
 

@@ -36,6 +36,7 @@ import {
     GameMapProperties,
     GRAZING_COVER,
     heightAt,
+    hurricaneHere,
     type LifeFire,
     lifeFireOf,
     listeningZoneJamKey,
@@ -339,6 +340,7 @@ import { weatherAtTime } from "./Weather/WeatherFrame";
 import {
     mapPlaceSlotsNow,
     setRoomConditions,
+    setHurricaneViewpoint,
     setRoomHurricane,
     showsChosenPlaceWeather,
     shownWeatherSettings,
@@ -496,6 +498,7 @@ import { DrainView } from "./Catastrophe/DrainView";
 import { BallView } from "./Catastrophe/BallView";
 import { ColdView } from "./Catastrophe/ColdView";
 import { HurricaneReceiver } from "./Catastrophe/HurricaneReceiver";
+import { HurricaneView } from "./Catastrophe/HurricaneView";
 import { FireTorchView } from "./Catastrophe/FireTorchView";
 import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
 import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
@@ -748,6 +751,7 @@ export class GameScene extends DirtyScene {
     private ballView: BallView | undefined;
     private coldView: ColdView | undefined;
     private hurricaneReceiver: HurricaneReceiver | undefined;
+    private hurricaneView: HurricaneView | undefined;
     private fireTorchView: FireTorchView | undefined;
     private catastropheSubscription: Subscription | undefined;
     /** The animals of the water of the relief, as the server tells them. */
@@ -1980,6 +1984,8 @@ export class GameScene extends DirtyScene {
         coldLyingStore.set(undefined);
         this.hurricaneReceiver?.destroy();
         this.hurricaneReceiver = undefined;
+        this.hurricaneView?.destroy();
+        this.hurricaneView = undefined;
         setRoomHurricane(undefined);
         hurricaneShownStore.set(undefined);
         this.fireTorchView?.destroy();
@@ -2570,11 +2576,19 @@ export class GameScene extends DirtyScene {
             this.gameMapFrontWrapper
                 .getEntitiesManager()
                 .updateSeason(time, serverDate, forcedTreeSeason(this.getSeasonalTheme()));
+            // Under a hurricane, the weather drawn is that of where this player looks.
+            const look = this.cameras.main.midPoint;
+            setHurricaneViewpoint(look.x, look.y);
             this.weatherManager?.update(
                 time,
                 serverDate,
                 this.nightManager?.isNight(),
                 this.nightManager?.sunPosition(),
+            );
+            this.hurricaneView?.update(
+                serverDate,
+                this.nightManager?.sunPosition()?.elevation,
+                window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
             );
             // After the weather: the textures of the clouds it drew this time (one may have just been made again).
             if (this.weatherManager) {
@@ -5224,13 +5238,21 @@ export class GameScene extends DirtyScene {
         );
         this.fireTorchView = fireTorchView;
         this.hurricaneReceiver?.destroy();
-        // The hurricane of the room: its weather (wind, rain, sky) takes the place of the weather of the map for
-        // everyone, computed here from it and the time of the server, as the server computes it for its ground.
+        this.hurricaneView?.destroy();
+        // The hurricane of the room, reduced to the map: its weather (wind, rain) where this player looks takes the
+        // place of the weather of the map, and its spiral of clouds that of the clouds of the sky, computed here from
+        // it and the time of the server, as the server computes it for its ground.
+        const hurricaneView = HurricaneView.create(this);
+        this.hurricaneView = hurricaneView;
         const hurricaneReceiver = new HurricaneReceiver(
             () => this.nightManager?.serverDate()?.getTime(),
-            (hurricane, now) => {
+            (hurricane) => {
                 setRoomHurricane(hurricane);
-                hurricaneShownStore.set(hurricane ? { hurricane, now } : undefined);
+                hurricaneView?.setHurricane(hurricane);
+                const at = this.nightManager?.serverDate()?.getTime();
+                const look = this.cameras.main.midPoint;
+                const here = at === undefined ? undefined : hurricaneHere(hurricane, at, look.x, look.y);
+                hurricaneShownStore.set(hurricane ? { hurricane, here } : undefined);
                 this.markDirty();
             },
         );

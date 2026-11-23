@@ -2,9 +2,8 @@ import {
     boundedFireConditions,
     fireDanger,
     GroundSimulation,
-    HURRICANE_HUMIDITY,
-    hurricaneAt,
     hurricaneConditions,
+    hurricaneHumidity,
     NEUTRAL_FIRE_CONDITIONS,
 } from "@workadventure/map-editor";
 import type { Downpour, LifeFire, RealWeatherSlot, ReplayedWeather, WaterView } from "@workadventure/map-editor";
@@ -68,10 +67,7 @@ export class InlineRoomGround implements RoomGround {
         const conditionsNow = () => hurricaneConditions(inputs.fire(), inputs.hurricane?.(), now());
         const airNow = () => {
             const air = inputs.air();
-            const storm = hurricaneAt(inputs.hurricane?.(), now());
-            if (!air || !storm || storm.share <= 0) return air;
-            const humid = Math.max(air.humidity, HURRICANE_HUMIDITY);
-            return { ...air, humidity: air.humidity + (humid - air.humidity) * storm.share };
+            return air ? { ...air, humidity: hurricaneHumidity(air.humidity, inputs.hurricane?.(), now()) } : air;
         };
         this.ground = new GroundSimulation({
             makeWater: () =>

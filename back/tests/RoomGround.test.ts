@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { hurricaneAt } from "@workadventure/map-editor";
+import { HURRICANE_RMAX_PX, hurricaneHere } from "@workadventure/map-editor";
 import type { Hurricane } from "@workadventure/map-editor";
 import { InlineRoomGround } from "../src/Model/Ground/InlineRoomGround";
 import type { RoomGround } from "../src/Model/Ground/RoomGround";
@@ -66,7 +66,7 @@ describe("the ground of a room behind its door (RoomGround)", () => {
         // its water lives six steps of its time in each.
     }, 60_000);
 
-    it("rains on the water the total of a real passage under a hurricane, and not at all in its eye", async () => {
+    it("rains on the water at the real rate of a hurricane, and not at all in its eye", async () => {
         /** The rain the water of the room last said it reads (mm an hour of its own time), and how fast it lives. */
         const rainUnder = async (
             hurricane: ReturnType<typeof world>["state"]["hurricane"],
@@ -93,23 +93,29 @@ describe("the ground of a room behind its door (RoomGround)", () => {
                 .filter((message) => message.message?.$case === "terrainWaterMessage");
             return { rate: told[told.length - 1]?.message?.terrainWaterMessage?.stats?.rainRate ?? NaN, inflow };
         };
+        // Northwards over the point (200, 200) of the map, 3600 px in 5 min: at 0.5 its eye is there.
         const storm = (progress: number): Hurricane => ({
             id: 1,
             startedAt: Date.now() - progress * 300_000,
             category: 4,
             durationMs: 300_000,
-            offsetKm: 0,
-            heading: 290,
+            heading: 0,
             southern: false,
+            fromX: 200,
+            fromY: 2000,
+            toX: 200,
+            toY: -1600,
+            anchorX: 200,
+            anchorY: 200,
         });
-        const wall = storm(0.45);
+        // Its wall over the point: the eye a radius of the strongest winds (876 px) south of it.
+        const wall = storm((2000 - 200 - HURRICANE_RMAX_PX) / 3600);
         const under = await rainUnder(wall);
-        // What the storm rains then, 432 times faster than reality (a passage of 36 h in 5 min): over the speed this
-        // water already lives at, so that it is not counted twice.
-        const falling = hurricaneAt(wall, Date.now())?.rainRate ?? NaN;
+        // What the storm rains there, at its real rate, over the speed this water already lives at: not counted twice.
+        const falling = hurricaneHere(wall, Date.now(), 200, 200)?.rainRate ?? NaN;
         expect(falling).toBeGreaterThan(5);
         // Read within the last second: the storm went on meanwhile.
-        expect((under.rate * under.inflow) / (falling * 432)).toBeCloseTo(1, 1);
+        expect((under.rate * under.inflow) / falling).toBeCloseTo(1, 1);
         // In the eye no rain falls, whatever the map says (30 mm/h).
         expect((await rainUnder(undefined)).rate).toBeCloseTo(30, 6);
         expect((await rainUnder(storm(0.5))).rate).toBe(0);

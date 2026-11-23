@@ -1,12 +1,7 @@
 import { CatastropheKind } from "@workadventure/messages";
 import { get } from "svelte/store";
 import { gameManager } from "../../Phaser/Game/GameManager";
-import {
-    hurricaneCategoryStore,
-    hurricaneHeadingStore,
-    hurricaneMinutesStore,
-    hurricaneOffsetKmStore,
-} from "../../Stores/CatastropheStore";
+import { hurricaneCategoryStore, hurricaneHeadingStore, hurricaneMinutesStore } from "../../Stores/CatastropheStore";
 
 /**
  * Asks the server to send a hurricane across the map, as chosen in the panel: it begins at once for the whole room,
@@ -15,14 +10,20 @@ import {
 export function startHurricane(): void {
     gameManager
         .getCurrentGameScene()
-        .connection?.emitLaunchCatastrophe(CatastropheKind.CATASTROPHE_HURRICANE, 0, 0, 0, true, false, undefined, {
+        // Its eye over the middle of the map: a point outside it.
+        .connection?.emitLaunchCatastrophe(CatastropheKind.CATASTROPHE_HURRICANE, -1, -1, 0, true, false, undefined, {
             category: get(hurricaneCategoryStore),
             minutes: get(hurricaneMinutesStore),
-            offsetKm: get(hurricaneOffsetKmStore),
             heading: get(hurricaneHeadingStore),
-            // The server decides these two.
+            // The server decides the rest.
             southern: false,
             startedAt: 0,
+            fromX: 0,
+            fromY: 0,
+            toX: 0,
+            toY: 0,
+            anchorX: 0,
+            anchorY: 0,
         });
 }
 

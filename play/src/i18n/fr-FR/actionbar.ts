@@ -495,18 +495,14 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         hurricane: "Ouragan",
         hurricaneCategoryLabel: "Catégorie de l'ouragan, sur l'échelle de Saffir-Simpson",
         hurricaneCategory: "Catégorie {category} : vent jusqu'à {wind} km/h",
-        hurricaneMinutesLabel: "Durée du passage, en minutes de la carte",
-        hurricaneMinutes: "{minutes} min pour 36 h réelles",
-        hurricaneOffsetLabel: "Où passe l'œil, en km : la carte à sa droite ou à sa gauche",
-        hurricaneOffsetOver: "L'œil passe sur la carte",
-        hurricaneOffsetRight: "L'œil à {km} km, la carte à sa droite",
-        hurricaneOffsetLeft: "L'œil à {km} km, la carte à sa gauche",
+        hurricaneMinutesLabel: "Temps que met l'œil pour traverser la carte, en minutes",
+        hurricaneMinutes: "{minutes} min pour traverser la carte",
         hurricaneHeadingLabel: "Vers où va l'ouragan",
         hurricaneHeading: "Il va vers {point} ({degrees}°)",
         hurricaneStart: "Lancer l'ouragan",
         hurricaneStop: "Arrêter l'ouragan",
         hurricaneHelp:
-            "L'ouragan couvre toute la carte : la carte n'est qu'un point dans un cyclone de plusieurs centaines de kilomètres. Elle vit son passage : bandes de pluie, mur de l'œil, calme de l'œil sous un ciel dégagé, second mur au vent inversé, puis l'éloignement. Son vent, sa pluie et ses nuages remplacent la météo de la salle pour tous, et la carte reçoit la pluie d'un vrai passage. 36 h réelles en accéléré, les distances restent réelles. Tout joueur peut l'arrêter.",
+            "Un ouragan RÉDUIT À LA TAILLE DE LA CARTE (un choix, comme la comète : un vrai fait des centaines de kilomètres) : son œil d'une trentaine de mètres traverse la carte, entouré de sa spirale de nuages. Le vent tourne autour de l'œil, le plus fort au mur, calme dans l'œil sous un ciel dégagé, puis de l'autre côté une fois l'œil passé ; pluie en bandes spirales, mer blanche d'embruns sous les vents les plus forts. Son vent, sa pluie et ses nuages remplacent la météo de la salle pour tous. Tout joueur peut l'arrêter.",
         hurricaneGoing:
             "Ouragan de catégorie {category} : {phase}, vent {wind} km/h, rafales {gust}, pluie {rain} mm/h, encore {left}",
         hurricanePhase: {

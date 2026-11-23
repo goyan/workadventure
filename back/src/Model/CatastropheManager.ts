@@ -19,6 +19,7 @@ import {
     FIRE_PATCHES_PER_SECOND,
     fireTiles,
     HURRICANE_TELL_MS,
+    hurricaneCrossing,
     hurricaneTrack,
     METEOR_FALL_MS,
     meteorShape,
@@ -492,20 +493,29 @@ export class CatastropheManager {
     }
 
     /**
-     * A player sends a hurricane across the map, on the track they chose (kept within what a hurricane may be): it
-     * begins now and lasts the length asked for, in the time of the map. The room is told at once, then once a second
+     * A player sends a hurricane across the map, its eye over the point (x, y) (the middle of the map when outside it),
+     * the way they chose (kept within what a hurricane may be): it begins now, its eye coming in at the edge of the map,
+     * and lasts the time asked for its eye to cross the map. The room is told at once, then once a second
      * while it goes on, and once more when it ends; every browser computes its weather from that and the time of the
      * server, as the ground of the room does. One a room: false while one goes on, or once the room stopped.
      */
-    public startHurricane(asked: HurricaneTrackMessage): boolean {
+    public startHurricane(asked: HurricaneTrackMessage, x = -1, y = -1): boolean {
         if (this.stopped || this.hurricane()) return false;
+        const size = this.mapSize();
+        if (!size) return false;
         let southern = false;
         try {
             southern = this.southern();
         } catch (error) {
             console.error("The hemisphere of the map could not be read", error);
         }
-        this.storm = { id: this.nextId++, startedAt: this.now(), ...hurricaneTrack(asked, southern) };
+        const track = hurricaneTrack(asked, southern);
+        this.storm = {
+            id: this.nextId++,
+            startedAt: this.now(),
+            ...track,
+            ...hurricaneCrossing(size.width, size.height, x, y, track.heading),
+        };
         this.tellHurricane();
         if (!this.stormTimer) {
             this.stormTimer = setInterval(() => {
@@ -561,10 +571,15 @@ export class CatastropheManager {
                     hurricane: {
                         category: storm.category,
                         minutes: storm.durationMs / 60_000,
-                        offsetKm: storm.offsetKm,
                         heading: storm.heading,
                         southern: storm.southern,
                         startedAt: storm.startedAt,
+                        fromX: storm.fromX,
+                        fromY: storm.fromY,
+                        toX: storm.toX,
+                        toY: storm.toY,
+                        anchorX: storm.anchorX,
+                        anchorY: storm.anchorY,
                     },
                 },
             },
@@ -596,7 +611,8 @@ export class CatastropheManager {
         if (kind === CatastropheKind.CATASTROPHE_BALL) return this.ball(userId, x, y, radiusTiles);
         if (kind === CatastropheKind.CATASTROPHE_ICE_BREAK) return this.iceBreak(userId, x, y);
         if (kind === CatastropheKind.CATASTROPHE_COLD) return this.cold(userId, x, y, radiusTiles, temperature);
-        if (kind === CatastropheKind.CATASTROPHE_HURRICANE) return hurricane ? this.startHurricane(hurricane) : false;
+        if (kind === CatastropheKind.CATASTROPHE_HURRICANE)
+            return hurricane ? this.startHurricane(hurricane, x, y) : false;
         return this.launch(kind, x, y, radiusTiles);
     }
 

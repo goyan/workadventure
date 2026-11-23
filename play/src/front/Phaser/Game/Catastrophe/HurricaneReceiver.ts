@@ -34,6 +34,12 @@ export class HurricaneReceiver {
             id: message.id,
             startedAt: track.startedAt,
             ...hurricaneTrack(track, track.southern),
+            fromX: track.fromX,
+            fromY: track.fromY,
+            toX: track.toX,
+            toY: track.toY,
+            anchorX: track.anchorX,
+            anchorY: track.anchorY,
         };
         // The same hurricane told again keeps its object: what is computed from it is not computed again.
         const same =
@@ -42,7 +48,10 @@ export class HurricaneReceiver {
             known.startedAt === told.startedAt &&
             known.durationMs === told.durationMs &&
             known.category === told.category &&
-            known.offsetKm === told.offsetKm &&
+            known.fromX === told.fromX &&
+            known.fromY === told.fromY &&
+            known.toX === told.toX &&
+            known.toY === told.toY &&
             known.heading === told.heading &&
             known.southern === told.southern;
         if (!same) this.hurricane = told;
