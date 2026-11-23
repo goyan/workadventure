@@ -2692,6 +2692,25 @@ de toutes les salles. Le retard de la boucle d'événements de `back` est déjà
 (`nodejs_eventloop_lag_p99_seconds` sur `/metrics`, `PrometheusController`) : rien à ajouter pour le lire sur le
 serveur, il suffit d'interroger ce point d'accès.
 
+**Durée du pas de l'eau et part du sol dans son fil, sur `/metrics`.** Le calcul du sol dit lui-même ce qu'il
+coûte, dans les trois montages (fil des salles, fil de calcul `GROUND_THREADS`, bandes `GROUND_BANDS`) : la mesure
+est prise dans le fil qui calcule (`Ground/GroundTimings.ts`, autour du pas de `TerrainWaterManager` et de
+`MeadowManager`), un fil de calcul l'envoie une fois par seconde au fil des salles, et `Services/GroundMetrics.ts`
+l'expose. Comme le retard de boucle, chaque valeur porte sur la **fenêtre depuis la lecture précédente** : lire deux
+fois à une minute d'écart et ne garder que la seconde lecture.
+
+| Métrique | Sens |
+|---|---|
+| `workadventure_water_step_p50_seconds`, `_p90_`, `_p99_` | durée sous laquelle sont 50, 90 et 99 % des pas de l'eau, toutes salles confondues (seaux de 5 % : la valeur dite dépasse la vraie de 5 % au plus) |
+| `workadventure_water_step_max_seconds` | pas le plus long (exact) |
+| `workadventure_water_steps` | nombre de pas de l'eau dans la fenêtre (10 par seconde et par salle dont l'eau bouge) |
+| `workadventure_ground_busy_ratio{thread=…}` | part de son temps (0 à 1) qu'un fil a donnée aux pas de l'eau et de la prairie ; `thread="rooms"` : le fil des salles, `thread="1"`… : un fil de calcul |
+
+Aucune salle n'est nommée. Avec des bandes, la durée est celle du pas vu par le fil qui mène (ce qu'attend la
+salle) ; le temps des fils d'appoint n'est pas compté dans la part. La durée du pas ne compte pas la copie de l'eau
+pour la salle ; la part du fil la compte. Une durée lue au réveil d'un fil qui dort entre deux pas dépend de la
+charge de la machine : comparer deux réglages sur la même machine et à la même heure.
+
 **Écume des vagues et moutons du vent.** Trois écumes, chacune avec sa règle, toutes calculées par le navigateur à
 partir de ce qu'il reçoit déjà (profondeurs, vent) :
 
