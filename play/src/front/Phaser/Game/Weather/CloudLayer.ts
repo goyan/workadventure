@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import { NOISE_GLSL, shaderSeconds } from "../ShaderNoise";
+import { billowDrift, NOISE_GLSL, shaderSeconds } from "../ShaderNoise";
 import type { FogPatch, WeatherView } from "./WeatherFrame";
 
 /**
@@ -95,6 +95,8 @@ uniform vec3 uShadow;        // x, y offset of the shadows (map pixels), their o
 uniform vec4 uVeil;          // the veils over the outdoors, premultiplied
 uniform vec2 uSky;           // how far the sky has drifted (map pixels): the billows go with their cloud
 uniform float uTime;         // seconds: the billows change slowly
+uniform vec4 uBillowA;      // how far the billows have drifted, octave by octave (ShaderNoise.billowDrift)
+uniform vec2 uBillowB;
 uniform vec4 uRainbow;       // centre x, y and radius of the rainbow (map pixels), its strength (0: none)
 uniform vec2 uRainbowDir;    // the way the rainbow bows, away from the sun
 uniform float uRainbowSpan;  // the cosine of the half opening of its arc
@@ -144,7 +146,7 @@ float density(vec2 world) {
     float t = thickness(world);
     if (t <= 0.002) return 0.0;
     vec2 p = world - uSky;
-    float billows = fbm(p / 30.0 + vec2(uTime * 0.012, -uTime * 0.008));
+    float billows = fbmDrift(p / 30.0, uBillowA, uBillowB);
     return t * (0.45 + 1.1 * billows);
 }
 
@@ -395,6 +397,9 @@ export class CloudLayer {
         setUniform("uVeil", premultipliedVeil(frame?.veils ?? []));
         setUniform("uSky", frame ? [frame.sky.x, frame.sky.y] : [0, 0]);
         setUniform("uTime", frame?.still ? 0 : shaderSeconds(this.scene.time.now));
+        const billows = frame?.still ? { first: [0, 0, 0, 0], third: [0, 0] } : billowDrift(this.scene.time.now);
+        setUniform("uBillowA", billows.first);
+        setUniform("uBillowB", billows.third);
         const bow = frame?.rainbow;
         setUniform("uRainbow", bow ? [bow.x, bow.y, bow.radius, bow.strength] : [0, 0, 1, 0]);
         setUniform("uRainbowDir", bow ? [bow.direction.x, bow.direction.y] : [0, -1]);
