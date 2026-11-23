@@ -275,7 +275,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
                 onlyAir:
                     "Seul l'air compte : sa température, son vent, son humidité. Ni le soleil, ni l'ombre, ni la profondeur ne changent la fonte.",
                 real: "Sur cette carte, la neige et la glace vont en temps réel.",
-                fast: "Sur cette carte, la neige et la glace vont {times} fois plus vite qu'en vrai (la vitesse de l'eau).",
+                fast: "Sur cette carte, la neige et la glace vont {times} fois plus vite qu'en vrai (la vitesse de l'eau de la carte, fois sa vitesse du gel et de la fonte).",
                 iceMore:
                     "Tenue par le serveur, case par case, la même pour tous ceux qui le suivent. Elle épaissit quand il gèle, de moins en moins vite, moins sur l'eau qui court et sous la neige. Elle fond comme la neige, par la température, le vent et l'humidité de l'air de la carte, du même nombre de millimètres partout : la plus mince disparaît d'abord. Vise un endroit avec la pipette pour son épaisseur.",
                 mm: "{value} mm",
@@ -291,6 +291,11 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
                 close: "Ranger la pipette",
                 serverGround: "Sol du serveur : le même pour tous ceux qui le suivent.",
                 ownGround: "Tu suis {city} : c'est ton propre sol que tu vois, pour toi seul.",
+                floorOver: "Un palier à {altitude} couvre cette case : la pipette lit le sol dessous.",
+                hotPool: "Piscine chauffée : son eau ne gèle pas et fait fondre la neige qui y tombe.",
+                iceHotPool: "Piscine chauffée : elle ne gèle jamais.",
+                shaded: "Cette case est à l'ombre (les ombres du ciel dessinées chez toi).",
+                sunlit: "Cette case est en pleine lumière.",
                 relief: "Relief et sol",
                 ground: "Sol à {altitude}. {soil}.",
                 indoor: "À l'intérieur : rien n'y tombe, l'eau n'y gèle pas.",
@@ -435,7 +440,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
                 minutes: "{value} min",
                 hours: "{value} h",
                 water: "Seule la part de pluie apporte de l'eau à la carte : la neige reste au sol, puis rend son eau en fondant.",
-                honest: "Tenue par le serveur, case par case : ce tableau lit ce que le serveur a envoyé, il ne calcule pas la couche lui-même. La neige et la glace y vont {times} fois plus vite qu'en vrai : la vitesse de l'eau de la carte.",
+                honest: "Tenue par le serveur, case par case : ce tableau lit ce que le serveur a envoyé, il ne calcule pas la couche lui-même. La neige et la glace y vont {times} fois plus vite qu'en vrai : la vitesse de l'eau de la carte, fois sa vitesse du gel et de la fonte.",
                 honestReal:
                     "Tenue par le serveur, case par case : ce tableau lit ce que le serveur a envoyé, il ne calcule pas la couche lui-même. La neige et la glace y vont comme en vrai : des heures pour fondre ou porter un marcheur.",
             },

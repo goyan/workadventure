@@ -300,3 +300,14 @@ export function mergeShadowBoxes(boxes: readonly ShadowBox[]): ShadowBox[] {
     }
     return merged;
 }
+
+/** Whether a point is inside a polygon (map pixels), by the parity of the edges a ray from it crosses. */
+export function insidePolygon(polygon: readonly Point[], x: number, y: number): boolean {
+    let inside = false;
+    for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
+        const a = polygon[index];
+        const b = polygon[previous];
+        if (a.y > y !== b.y > y && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+    }
+    return inside;
+}

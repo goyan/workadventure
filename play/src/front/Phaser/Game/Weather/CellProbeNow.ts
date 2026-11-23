@@ -1,4 +1,4 @@
-import { CELL_METRES, snowShareOf, soilFrostOf, TILE_PX, waterTimesOf } from "@workadventure/map-editor";
+import { CELL_METRES, freezeThawTimesOf, snowShareOf, soilFrostOf, TILE_PX } from "@workadventure/map-editor";
 import type { SnowWeather, TerrainData } from "@workadventure/map-editor";
 import { get } from "svelte/store";
 import { fireConditionsStore } from "@wa/front/Stores/FireConditionsStore";
@@ -21,7 +21,7 @@ import { fallsUnder } from "./WeatherBoardNow";
 /** What the pipette reads of the scene: the readers the game itself draws and walks by. */
 export interface ProbedScene {
     terrain: TerrainData | undefined;
-    settings: (MapSnowSettings & { water?: { speed?: number } }) | undefined;
+    settings: (MapSnowSettings & { water?: { speed?: number; freezeThawSpeed?: number } }) | undefined;
     water: TerrainWater;
     meadow: MeadowState;
     /** Outdoors at a point of the map (OutdoorGrid); true where the map has no walls to tell. */
@@ -30,6 +30,12 @@ export interface ProbedScene {
     iceUnderfoot(point: { x: number; y: number }): IceState;
     /** The height of the sun over the horizon, in degrees. */
     sunElevation: number | undefined;
+    /** The pool painted under a point, and whether its water is heated (FrozenWater.poolStyleUnder). */
+    poolAt(point: { x: number; y: number }): { hot: boolean } | undefined;
+    /** The altitudes of the raised floors drawn over a point of the map as it is seen (FloorSpike.floorsOver). */
+    floorsOver(seen: { x: number; y: number }): number[];
+    /** Whether a shadow of the sky is drawn over a point (SkyShadowManager.shadedAt). */
+    shadedAt(point: { x: number; y: number }): boolean | undefined;
 }
 
 /** A place without its region and country. */
@@ -41,7 +47,13 @@ function townOf(name: string | undefined): string | undefined {
  * What goes on in the cell at `point` (map pixels) now, each thing read by the reader the game draws from: asked a
  * few times a second while the pipette is on, for that one cell, never otherwise.
  */
-export function cellProbeNow(scene: ProbedScene, point: { x: number; y: number }, date: Date): CellExplained {
+export function cellProbeNow(
+    scene: ProbedScene,
+    point: { x: number; y: number },
+    date: Date,
+    /** The point as it is seen under the pointer, where a raised floor is drawn: the ground point when absent. */
+    seen: { x: number; y: number } = point,
+): CellExplained {
     const { settings, water, meadow } = scene;
     const server = followsServerGround();
     // The place followed: a point far from any city says its long name (as the weather board).
@@ -95,8 +107,11 @@ export function cellProbeNow(scene: ProbedScene, point: { x: number; y: number }
         own: { snowMm: cycle.snowMm, frost: cycle.frost },
         weather,
         snowing: fallsUnder(shown, date) && snowShareOf(weather) > 0,
-        times: waterTimesOf(settings?.water),
+        times: freezeThawTimesOf(settings?.water),
         soilFrost: soilFrostOf(roomAir),
         sunElevation: scene.sunElevation,
+        pool: scene.poolAt(point),
+        floorsOver: scene.floorsOver(seen),
+        shaded: scene.shadedAt(point),
     });
 }
