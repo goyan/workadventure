@@ -283,7 +283,8 @@ export async function byHand(
 
 /**
  * What happens to a room at each tenth of a second of a minute and a half: rain and snow, a source, the drain of a
- * building, and every catastrophe. The levels a ball is held at are noted in `levels`.
+ * building, a cold snap that freezes the water, and every catastrophe. The levels a ball is held at are noted in
+ * `levels`.
  */
 export function happenAt(
     tenth: number,
@@ -306,6 +307,8 @@ export function happenAt(
     if (tenth === 480) state.drains = [];
     if (tenth === 500) ground.ignite(600, 150, 2);
     if (tenth === 560) ground.burn(240, 240, 2, 9);
+    // A cold snap: the water of the map takes, and what falls on its ice breaks it.
+    if (tenth === 570) state.air = { temperature: -25, humidity: 85 };
     if (tenth === 640) ground.shatter(200, 200, 3);
     if (tenth === 700) state.air = { temperature: 12, humidity: 60 };
     if (tenth === 760) ground.mapChanged();
