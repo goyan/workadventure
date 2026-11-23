@@ -2858,7 +2858,10 @@ interrupteur les masque ; au-delà de 30 000 morceaux dans la vue, seules les li
 dans la carte enregistrée ni sur le fil : un geste envoie toujours des hauteurs par case. Les courbes sont gardées
 morceau de carte par morceau de carte (`ContourCache`) : un coup ne recalcule que les morceaux qu'il a changés et
 leurs voisins, et seules les régions de 1024 px dans la vue sont tracées (Phaser retrace un `Graphics` en entier à
-chaque image). Mesuré le 2026-11-23 sur la carte d'Antoine en dev local (113 000 morceaux de lignes) : 7 ms par
+chaque image). Dézoomé sous la moitié, les lignes d'une région sont montrées en image, peinte une fois à l'échelle de
+la puissance de deux qui suit le zoom (un quart au plus : 256 px pour une région), puis repeinte quand un coup y
+change le relief (`ContourView`) : tracées en lignes de 1 px du monde, elles tombaient sous le pixel de l'écran et ne
+se voyaient qu'en pointillés. Mesuré le 2026-11-23 sur la carte d'Antoine en dev local (113 000 morceaux de lignes) : 7 ms par
 image et environ 100 ms par coup avant, l'outil Relief ouvert ; 59 à 62 images/s en creusant après. Le flou du sol
 (`smoothWeights`), refait à chaque coup sur toute la zone dessinée, passe en deux passes (même résultat à l'octet
 près) : 280 ms avant, 30 ms après, la carte entière en vue. Le sol n'est plus dessiné qu'au-dessus de la carte et de
