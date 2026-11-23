@@ -6015,6 +6015,27 @@ mesuré.
 - Un navigateur d'avant reçoit un genre inconnu et dessine une comète à chaque annonce (chaque seconde).
 - Poser l'œil à la souris : non fait, l'œil passe au-dessus du centre de la carte.
 
+**Arbres couchés par le vent** (demandés le 2026-11-23). Un arbre qui reste 4 s (`TREE_FALL_SECONDS`, deux pas du
+pré) dans des rafales de 250 km/h ou plus (`TREE_FALL_GUST_KMH`, seuil demandé par l'utilisateur) **à son pied** est
+couché : la rafale du vent de l'ouragan en ce point (`hurricaneHere`, vent moyen × 1,23), sinon celle du vent de la
+salle. Cela arrive près du mur d'une catégorie 4 (rafale 263 km/h) et dans une catégorie 5 (307), pas en catégorie 3
+(221). Il reste couché le temps qu'un arbre brûlé reste noir (150 s), puis repousse depuis son pied en 150 s : la même
+horloge et la même branche de `TreeFire` que la repousse après un feu (`damage`, `wait`), et il ne brûle pas tant
+qu'il est couché. Tenu par le serveur dans `TreeFire` (champ `fallenFrom`, sauvegardé avec le pré), identique avec ou
+sans fil de calcul (tests `RoomGround` et `RemoteRoomGround`, arbres ajoutés au scénario du sol), dit aux navigateurs
+par `TreeFireStateMessage.fallen` (direction d'où venait le vent, plus 1). Dessin : la souche reste à la place de
+l'objet (`stumpTexture`), l'arbre est couché à part, son image tournée autour de son pied, la cime sous le vent
+(`FallenTreeView`), puis il repousse en 8 tailles (`growingTreeTexture`). Les vrais arbres tombent bien plus tôt :
+rafales de 120 km/h pour un résineux, 140 pour un feuillu (échelle EF, modèles de chablis). Le seuil de 250 est un choix
+pour le spectacle.
+
+**Débris emportés** (même demande). Des feuilles, brindilles et éclats sombres, 150 au plus, arrachés dans la vue là où
+la rafale dépasse 120 km/h (force 12 de Beaufort), d'autant plus que la rafale est forte : ils vont au vent de
+l'ouragan à l'endroit où chacun se trouve (1,2 px/s par km/h, l'ouragan étant réduit à la carte), tournent donc autour
+de l'œil, plus denses et plus rapides au mur, et disparaissent dans l'œil (`DebrisField`, `HurricaneDebris`). Un vent
+de la carte réglé à plus de 98 km/h (rafale de 120) en emporte aussi, en ligne droite. Dessinés par chaque navigateur,
+rien d'envoyé ; masqués avec les effets de météo, en mode Basique et dans l'éditeur.
+
 **Compatibilité.** `play` et `back` se déploient ensemble (protobuf). Le PNJ du dépôt d'infra doit être réaligné sur
 `messages.proto`.
 
