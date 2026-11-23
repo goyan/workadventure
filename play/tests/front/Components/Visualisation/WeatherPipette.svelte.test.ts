@@ -67,20 +67,26 @@ describe("WeatherPipette", () => {
         expect(shown).toEqual(
             ["relief", "water", "ice", "snow", "frost", "meadow", "sun"].map((id) => `weather-pipette-${id}`),
         );
-        expect(text("weather-pipette-ground")).toBe("Sol du serveur : le même pour tous ceux qui le suivent.");
+        expect(text("weather-pipette-ground")).toContain("Sol du serveur : le même pour tous ceux qui le suivent.");
         expect(text("weather-pipette-ice")).toContain("Glace de 10 cm d'épaisseur.");
         expect(text("weather-pipette-ice")).toContain("Elle aura disparu dans environ 14 h.");
         // Whose air decides and who sees the same, as on the weather board.
-        expect(text("weather-pipette-ice")).toContain("Décidé par l'air de la carte");
-        expect(text("weather-pipette-ice")).toContain("Vu par tous ceux qui suivent le serveur");
+        expect(text("weather-pipette-ground")).toContain("Décidé par l'air de la carte");
+        expect(text("weather-pipette-ground")).toContain("Vu par tous ceux qui suivent le serveur");
+        // The sections that ground holds bear its colour; the relief and the sun are no one's.
+        expect(find("weather-pipette-ice")?.getAttribute("data-air")).toBe("map");
+        expect(find("weather-pipette-relief")?.getAttribute("data-air")).toBeNull();
         expect(text("weather-pipette")).not.toContain("undefined");
     });
 
     it("says the ground is the player's own when they follow a city", () => {
         render(explainCell({ ...ICE, ground: "own", city: "Oslo", kept: undefined, hold: "thin" }));
-        expect(text("weather-pipette-ground")).toBe("Tu suis Oslo : c'est ton propre sol que tu vois, pour toi seul.");
-        expect(text("weather-pipette-ice")).toContain("Décidé par ton air");
-        expect(text("weather-pipette-ice")).toContain("Vu par toi seul");
+        expect(text("weather-pipette-ground")).toContain(
+            "Tu suis Oslo : c'est ton propre sol que tu vois, pour toi seul.",
+        );
+        expect(text("weather-pipette-ground")).toContain("Décidé par ton air");
+        expect(text("weather-pipette-ground")).toContain("Vu par toi seul");
+        expect(find("weather-pipette-ice")?.getAttribute("data-air")).toBe("own");
     });
 
     it("is put away by its cross", () => {

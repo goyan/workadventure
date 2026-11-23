@@ -79,10 +79,11 @@
             </div>
         {/if}
         {#if probing}
-            <!-- What goes on in the cell of the ground under the pointer: read only while this is on. -->
+            <!-- What goes on in the cell of the ground under the pointer: read only while this is on. The weather
+                 board, which lays itself over the panels when short of room, waits until the pipette is put away. -->
             <WeatherPipette cell={$weatherPipetteCellStore} />
         {/if}
-        {#if explaining}
+        {#if explaining && !probing}
             <!-- Why this player sees the rain, the snow, the frost and the ice they see. -->
             <WeatherBoardLive />
         {/if}

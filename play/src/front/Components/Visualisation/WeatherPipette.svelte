@@ -57,43 +57,43 @@
     {#if !cell}
         <p class="m-0 opacity-80" data-testid="weather-pipette-away">{t.pipette.away()}</p>
     {:else}
-        <p class="m-0 font-bold" data-testid="weather-pipette-ground">
-            {cell.ground === "own" && cell.city !== undefined
-                ? t.pipette.ownGround({ city: cell.city })
-                : t.pipette.serverGround()}
-        </p>
+        {@const owner = cell.ground}
+        <div class="flex flex-col gap-1" data-testid="weather-pipette-ground">
+            <p class="m-0 font-bold">
+                {owner === "own" && cell.city !== undefined
+                    ? t.pipette.ownGround({ city: cell.city })
+                    : t.pipette.serverGround()}
+            </p>
+            <!-- Whose air decides and who sees the same, once for the cell: the sections it holds for bear its colour. -->
+            <div class="flex flex-wrap gap-1">
+                <span class="inline-flex items-center gap-1 rounded-full px-1.5 {OWNER_PILL[owner]}" data-air={owner}>
+                    {#if owner === "map"}<IconMap width="11" height="11" />{:else}<IconUser
+                            width="11"
+                            height="11"
+                        />{/if}
+                    <span>{t.decidedBy.label()} <b>{ownerName(owner)}</b></span>
+                </span>
+                <span
+                    class="inline-flex items-center gap-1 rounded-full px-1.5 ring-1 ring-white/50"
+                    data-audience={cell.audience}
+                >
+                    {#if cell.audience === "you"}<IconUser width="11" height="11" />{:else}<IconUsers
+                            width="11"
+                            height="11"
+                        />{/if}
+                    <span>{t.seenBy.label()} <b>{audienceName(cell.audience)}</b></span>
+                </span>
+            </div>
+        </div>
         {#each sections as section (section.id)}
             <article
                 class="flex flex-col gap-0.5 rounded-lg border-0 border-s-4 border-solid bg-white/10 p-1.5 {section.owner
                     ? OWNER_EDGE[section.owner]
                     : 'border-white/30'}"
                 data-testid="weather-pipette-{section.id}"
+                data-air={section.owner}
             >
-                <div class="flex flex-wrap items-center gap-1">
-                    <h3 class="m-0 me-1 text-xs font-bold uppercase tracking-wide opacity-80">{section.title}</h3>
-                    {#if section.owner && section.audience}
-                        <span
-                            class="inline-flex items-center gap-1 rounded-full px-1.5 {OWNER_PILL[section.owner]}"
-                            data-air={section.owner}
-                        >
-                            {#if section.owner === "map"}<IconMap width="11" height="11" />{:else}<IconUser
-                                    width="11"
-                                    height="11"
-                                />{/if}
-                            <span>{t.decidedBy.label()} <b>{ownerName(section.owner)}</b></span>
-                        </span>
-                        <span
-                            class="inline-flex items-center gap-1 rounded-full px-1.5 ring-1 ring-white/50"
-                            data-audience={section.audience}
-                        >
-                            {#if section.audience === "you"}<IconUser width="11" height="11" />{:else}<IconUsers
-                                    width="11"
-                                    height="11"
-                                />{/if}
-                            <span>{t.seenBy.label()} <b>{audienceName(section.audience)}</b></span>
-                        </span>
-                    {/if}
-                </div>
+                <h3 class="m-0 text-xs font-bold uppercase tracking-wide opacity-80">{section.title}</h3>
                 {#each section.lines as line, index (index)}
                     <p class="m-0 {index === 0 ? 'font-bold' : 'opacity-90'}">{line}</p>
                 {/each}

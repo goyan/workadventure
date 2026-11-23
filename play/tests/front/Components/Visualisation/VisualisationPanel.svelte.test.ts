@@ -88,6 +88,7 @@ afterEach(async () => {
     visualisationPanelStore.set(false);
     waterFlowOverlayStore.set(false);
     weatherExplainedStore.set(false);
+    weatherPipetteStore.set(false);
     terrainWaterStatsStore.set(undefined);
 });
 
@@ -196,5 +197,17 @@ describe("VisualisationPanel", () => {
         flushSync();
         expect(find("weather-pipette")).toBeNull();
         weatherPipetteCellStore.set(undefined);
+    });
+
+    it("keeps the weather board off the pipette: the board waits until the pipette is put away", () => {
+        visualisationPanelStore.set(true);
+        weatherExplainedStore.set(true);
+        weatherPipetteStore.set(true);
+        flushSync();
+        expect(find("weather-pipette")).not.toBeNull();
+        expect(find("weather-board-live")).toBeNull();
+        weatherPipetteStore.set(false);
+        flushSync();
+        expect(find("weather-board-live")).not.toBeNull();
     });
 });
