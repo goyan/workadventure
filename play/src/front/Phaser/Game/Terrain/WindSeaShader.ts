@@ -142,8 +142,8 @@ const FOAM_LINE_ALONG_PX = 60;
  * long filaments parallel to the wind; the white of the sheet between them once whole; the most the spray hides the
  * water, reached at SPRAY_WHOLE_MS (m/s). Choices, to look like the films of Holthuijsen et al. 2012.
  */
-const SPUME_ACROSS_PX = 6;
-const SPUME_ALONG_PX = 140;
+const SPUME_ACROSS_PX = 8;
+const SPUME_ALONG_PX = 360;
 const SPUME_SHEET = 0.78;
 const SPRAY_MOST = 0.45;
 const SPRAY_WHOLE_MS = 55;

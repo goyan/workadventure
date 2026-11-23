@@ -5975,13 +5975,15 @@ pluie.
 Vers 40 m/s (144 km/h), elles couvrent les vagues d'une nappe blanche (« white out ») ; les seuils viennent de
 [Gemini], le phénomène de l'article. L'échelle de Beaufort de l'OMM dit pour la force 12 : « Sea completely white with
 driving spray; visibility very seriously affected ».
-- Le shader de l'eau pose, entre ces deux vents, de longues traînées d'écume parallèles au vent (6 px de large, 140 px
+- Le shader de l'eau pose, entre ces deux vents, de longues traînées d'écume parallèles au vent (8 px de large, 360 px
   de long, des choix), qui dérivent avec l'écume laissée. Elles se rejoignent en un blanc laiteux encore strié
   (78 % entre les traînées).
 - Un voile d'embruns gris-blanc (45 % au plus, atteint à 55 m/s) estompe la lumière des vagues et ce qu'elles
   reflètent.
 - Cela ne dépend que du vent : un vent manuel de 200 km/h fait la même mer.
 - Comme pour la mer du vent : rien en qualité Basse, ni sans le shader.
+- Mesuré sur le banc GPU de l'étude de la houle (moutons et écume d'ouragan, sans l'écume laissée) : 12 % de blanc
+  à 110 km/h, 54 % à 130, 90 % à 140, 95 % de 150 à 250 km/h. Les shaders compilent, sur Metal comme sur SwiftShader.
 
 **Ce que ça ne modélise pas.**
 - **La surcote** : le modèle d'eau n'a pas de bord ouvert sur une mer, et la carte n'a pas d'océan à son bord. Une eau
