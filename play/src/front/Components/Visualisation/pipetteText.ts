@@ -18,7 +18,7 @@ import {
  * then where it goes. Only words: every figure comes from CellExplained.
  */
 export interface PipetteSection {
-    id: "relief" | "water" | "ice" | "snow" | "frost" | "meadow" | "sun";
+    id: "relief" | "air" | "water" | "ice" | "snow" | "frost" | "meadow" | "sun";
     title: string;
     lines: string[];
     /** Whose air decides and who sees the same, where it is worth saying. */
@@ -42,7 +42,21 @@ export function pipetteSections(ll: TranslationFunctions, locale: string, cell: 
         cell.outdoor ? p.outdoor() : p.indoor(),
         // What is drawn over the cell: the pipette reads the ground, not the floor over it.
         ...cell.floorsOver.map((elevation) => p.floorOver({ altitude: metresLabel(metresOf(elevation), locale) })),
+        ...(cell.imagePool ? [p.imagePool()] : []),
     ];
+
+    // The air the ice and the snow of the cell go by: the air of that ground, or the cold air of a cold snap.
+    const air: string[] = [];
+    if (cell.temperature === undefined) air.push(p.airUnknown());
+    else if (cell.cold) {
+        air.push(
+            p.airCold({ temperature: f.degrees(cell.temperature), map: f.degrees(cell.cold.mapTemperature) }),
+            cell.cold.goneIn === undefined ? p.coldHeld() : p.coldGone({ duration: f.duration(cell.cold.goneIn) }),
+        );
+    } else {
+        const temperature = f.degrees(cell.temperature);
+        air.push(cell.ground === "own" ? p.airOwn({ temperature }) : p.airMap({ temperature }));
+    }
 
     const wet: string[] = [];
     if (!water || reading.depth === undefined || reading.surface === undefined) {
@@ -77,11 +91,19 @@ export function pipetteSections(ll: TranslationFunctions, locale: string, cell: 
         const kept = ice.kept;
         frozen.push(kept.mm > 0 ? t.kept.iceHere({ thickness: f.thickness(kept.mm) }) : t.kept.iceNone());
         // A water running too fast to freeze over says so in place of "the ice begins to take".
-        const current = iceCurrentLine(t, f, kept, water?.speed);
-        if (!(ice.why === "current" && current)) frozen.push(iceTrendLine(t, f, kept));
-        if (current) frozen.push(current);
-        if (kept.trend === "growing" && snow.kept.mm > 0) frozen.push(t.kept.underSnow());
-        frozen.push(...iceBearingLines(t, f, kept, water?.deep ?? false));
+        if (cell.catchingUp && kept.mm > 0) {
+            // The thickness is true; where it goes is not known while the server lives the time the room missed.
+            frozen.push(t.kept.catchingUp());
+            frozen.push(
+                ...iceBearingLines(t, f, { ...kept, givesWayIn: undefined, trend: "unknown" }, water?.deep ?? false),
+            );
+        } else {
+            const current = iceCurrentLine(t, f, kept, water?.speed);
+            if (!(ice.why === "current" && current)) frozen.push(iceTrendLine(t, f, kept));
+            if (current) frozen.push(current);
+            if (kept.trend === "growing" && snow.kept.mm > 0) frozen.push(t.kept.underSnow());
+            frozen.push(...iceBearingLines(t, f, kept, water?.deep ?? false));
+        }
     } else {
         // A ground of their own without ice kept tile by tile: the ice of the cold of their city.
         if (ice.hold === "none") frozen.push(t.kept.iceNone());
@@ -94,7 +116,7 @@ export function pipetteSections(ll: TranslationFunctions, locale: string, cell: 
             ? t.kept.snowHere({ mm: f.mm(snow.kept.mm), percent: f.percent(snow.cover) })
             : t.kept.snowNone(),
     ];
-    const snowTrend = snowTrendLine(t, f, snow.kept);
+    const snowTrend = cell.catchingUp && snow.kept.mm > 0 ? t.kept.catchingUp() : snowTrendLine(t, f, snow.kept);
     if (snowTrend) white.push(snowTrend);
 
     const cold: string[] = [
@@ -128,6 +150,7 @@ export function pipetteSections(ll: TranslationFunctions, locale: string, cell: 
 
     return [
         { id: "relief", title: p.relief(), lines: relief },
+        { id: "air", title: p.air(), lines: air, owner: cell.ground, audience: cell.audience },
         { id: "water", title: p.water(), lines: wet },
         { id: "ice", title: p.ice(), lines: frozen, owner: cell.ground, audience: cell.audience },
         { id: "snow", title: p.snow(), lines: white, owner: cell.ground, audience: cell.audience },

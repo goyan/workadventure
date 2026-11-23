@@ -3300,6 +3300,7 @@ export class GameScene extends DirtyScene {
                     ash,
                     snow,
                     ice,
+                    catchingUp: message.catchingUp,
                 };
                 // While this player lives their own ground, the server's is kept aside, not shown.
                 if (this.localTerrain.fromServerMeadow(state)) return;
@@ -3595,6 +3596,15 @@ export class GameScene extends DirtyScene {
                     },
                     floorsOver: (seen) => this.floorSpike?.floorsOver(seen.x, seen.y) ?? [],
                     shadedAt: (at) => this.skyShadowManager?.shadedAt(at.x, at.y),
+                    coldMasses: () => this.coldMasses(),
+                    imagePoolAt: (at) =>
+                        imagePoolsOf(this.gameMapFrontWrapper.getEntitiesManager().getEntities().values()).some(
+                            (pool) =>
+                                at.x >= pool.x &&
+                                at.y >= pool.y &&
+                                at.x < pool.x + pool.width &&
+                                at.y < pool.y + pool.height,
+                        ),
                 },
                 point,
                 date,

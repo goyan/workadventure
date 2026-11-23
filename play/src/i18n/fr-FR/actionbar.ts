@@ -236,8 +236,17 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
                     snowSome: "sur {percent} % de la carte",
                 },
             },
+            cold: {
+                title: "Air froid sur la carte",
+                lying: "Un coup de froid a posé de l'air à {temperature} sur une partie de la carte. Sous lui, la glace prend et la neige tient, quoi que dise l'air de la carte. Vise-le avec la pipette pour l'air d'une case.",
+                held: "Un joueur le tient : il reste tant qu'il est tenu.",
+                gone: "Relâché, il redevient l'air de la carte dans environ {duration}.",
+                ice: "Sous l'air froid d'un coup de froid, la glace épaissit au lieu de fondre.",
+            },
             kept: {
                 iceUnknown: "Le serveur n'a encore rien dit de la glace de cette carte.",
+                catchingUp:
+                    "Le serveur rattrape le temps passé pendant que la carte était vide : la glace et la neige changent selon la météo de ce temps-là. La tendance reprend ensuite.",
                 iceNone: "Pas de glace.",
                 iceUpTo: "De la glace sur l'eau : jusqu'à {thickness} d'épaisseur.",
                 iceHere: "Glace de {thickness} d'épaisseur.",
@@ -277,7 +286,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
                 real: "Sur cette carte, la neige et la glace vont en temps réel.",
                 fast: "Sur cette carte, la neige et la glace vont {times} fois plus vite qu'en vrai (la vitesse de l'eau de la carte, fois sa vitesse du gel et de la fonte).",
                 iceMore:
-                    "Tenue par le serveur, case par case, la même pour tous ceux qui le suivent. Elle épaissit quand il gèle, de moins en moins vite, moins sur l'eau qui court et sous la neige. Elle fond comme la neige, par la température, le vent et l'humidité de l'air de la carte, du même nombre de millimètres partout : la plus mince disparaît d'abord. Vise un endroit avec la pipette pour son épaisseur.",
+                    "Tenue par le serveur, case par case, la même pour tous ceux qui le suivent. Elle épaissit quand il gèle, de moins en moins vite, moins sur l'eau qui court et sous la neige. Elle fond comme la neige, par la température, le vent et l'humidité de l'air de la carte, du même nombre de millimètres partout : la plus mince disparaît d'abord. Vise un endroit avec la pipette pour son épaisseur. Si le serveur prend du retard, il vit moins vite que la vitesse demandée : ces durées s'allongent d'autant.",
                 mm: "{value} mm",
                 cm: "{value} cm",
                 days: "{value} j",
@@ -296,6 +305,16 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
                 iceHotPool: "Piscine chauffée : elle ne gèle jamais.",
                 shaded: "Cette case est à l'ombre (les ombres du ciel dessinées chez toi).",
                 sunlit: "Cette case est en pleine lumière.",
+                air: "Air de la case",
+                airMap: "{temperature} : c'est l'air de la carte.",
+                airOwn: "{temperature} : c'est l'air de ta ville.",
+                airUnknown: "L'air n'est pas connu.",
+                airCold:
+                    "Air froid posé ici (coup de froid) : {temperature}, au lieu de {map} ailleurs. La glace et la neige de cette case suivent cet air.",
+                coldHeld: "Un joueur le tient : il reste tant qu'il est tenu.",
+                coldGone: "Relâché, il redevient l'air de la carte dans environ {duration}.",
+                imagePool:
+                    "Une piscine posée comme objet couvre cette case : c'est un décor, son dessin ne suit pas l'eau. L'eau lue ici est celle du sol dessous.",
                 relief: "Relief et sol",
                 ground: "Sol à {altitude}. {soil}.",
                 indoor: "À l'intérieur : rien n'y tombe, l'eau n'y gèle pas.",

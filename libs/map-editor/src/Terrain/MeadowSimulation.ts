@@ -179,6 +179,8 @@ export class MeadowSimulation {
     private catchUpRestUntil = -Infinity;
     /** Whether slices were lived that the room is not told yet. */
     private catchUpUntold = false;
+    /** Whether the room was last told the meadow is living its missed time: told again when it no longer is. */
+    private sentCatchingUp = false;
 
     constructor(
         private readonly room: SimulationRoom,
@@ -550,6 +552,8 @@ export class MeadowSimulation {
         // Its water is still coming to rest: the meadow has caught up, the room is not given back yet.
         if (catchUp.at >= catchUp.to && !this.alongSettles) {
             this.catchUp = undefined;
+            // The room learns the time missed is all lived, even when its last slice changed nothing.
+            this.tell(meadow);
             this.save();
             return false;
         }
@@ -827,6 +831,7 @@ export class MeadowSimulation {
             ash: this.zip(this.sentAsh ?? meadow.writeAsh()),
             snow: snowField(snow, this.zip),
             ice: snowField(ice, this.zip),
+            catchingUp: this.catchingUp(),
         };
     }
 
@@ -883,6 +888,7 @@ export class MeadowSimulation {
         const snow = meadow.writeSnow();
         const ice = meadow.writeIce();
         this.snowMoved = false;
+        const catchingUp = this.catchingUp();
         const same = (a: Uint8Array, b: Uint8Array | undefined): boolean =>
             b !== undefined && a.length === b.length && a.every((value, index) => value === b[index]);
         // A bare and dry map the room was never told about: nothing to say.
@@ -902,10 +908,14 @@ export class MeadowSimulation {
             same(fire, this.sentFire) &&
             same(ash, this.sentAsh) &&
             same(snow, this.sentSnow) &&
-            same(ice, this.sentIce)
+            same(ice, this.sentIce) &&
+            // Done with the time missed (or starting on it): told even when nothing else changed, so that what reads
+            // where the snow and the ice are going knows the air of now is the one that counts again.
+            catchingUp === this.sentCatchingUp
         ) {
             return;
         }
+        this.sentCatchingUp = catchingUp;
         this.sentGrass = grass;
         this.sentMoisture = moisture;
         this.sentDryness = dryness;
@@ -927,6 +937,7 @@ export class MeadowSimulation {
                     ash: this.zip(ash),
                     snow: snowField(snow, this.zip),
                     ice: snowField(ice, this.zip),
+                    catchingUp,
                 },
             },
         });

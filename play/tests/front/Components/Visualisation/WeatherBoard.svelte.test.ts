@@ -378,6 +378,57 @@ describe("WeatherBoard", () => {
         expect(text("weather-board-ice")).toContain("60 fois plus vite qu'en vrai");
     });
 
+    it("says no trend while the server lives the time the room missed: the thicknesses stay, they are true", () => {
+        const warm = { temperature: 24, humidity: 49, windSpeed: 10 };
+        render(
+            input({
+                roomAir: warm,
+                frostAir: warm,
+                mapFrostAir: warm,
+                snow: { map: 0.8, here: 1 },
+                peaks: { iceMm: 100, snowMm: 12, catchingUp: true },
+                roomWind: 10,
+            }),
+        );
+        const catching =
+            "Le serveur rattrape le temps passé pendant que la carte était vide : la glace et la neige changent selon la météo de ce temps-là. La tendance reprend ensuite.";
+        expect(text("weather-board-ice-result")).toBe("De la glace sur l'eau : jusqu'à 10 cm d'épaisseur.");
+        expect(text("weather-board-ice")).toContain(catching);
+        expect(text("weather-board-ice")).not.toContain("elle fond de");
+        expect(text("weather-board-snow")).toContain("Au plus épais : 12 mm d'eau.");
+        expect(text("weather-board-snow")).toContain(catching);
+        expect(text("weather-board-snow")).not.toContain("elle fond de");
+    });
+
+    it("says the cold air of a cold snap lies on the map, held or let go, and that the ice thickens under it", () => {
+        const mild = { temperature: 17.8, humidity: 50, windSpeed: 5 };
+        render(
+            input({
+                roomAir: mild,
+                frostAir: mild,
+                mapFrostAir: mild,
+                peaks: { iceMm: 33, snowMm: 0 },
+                roomWind: 5,
+                cold: { celsius: -80, secondsLeft: undefined },
+            }),
+        );
+        expect(text("weather-board-cold")).toContain("Air froid sur la carte");
+        expect(text("weather-board-cold")).toContain(
+            "Un coup de froid a posé de l'air à -80 °C sur une partie de la carte.",
+        );
+        expect(text("weather-board-cold")).toContain("Un joueur le tient : il reste tant qu'il est tenu.");
+        expect(text("weather-board-ice")).toContain(
+            "Sous l'air froid d'un coup de froid, la glace épaissit au lieu de fondre.",
+        );
+    });
+
+    it("says when the cold air let go is the air of the map again, and nothing without cold air", () => {
+        render(input({ cold: { celsius: -20, secondsLeft: 150 } }));
+        expect(text("weather-board-cold")).toContain("Relâché, il redevient l'air de la carte dans environ 3 min.");
+        render(input());
+        expect(find("weather-board-cold")).toBeNull();
+    });
+
     it("says the server told nothing of the ice yet rather than no ice", () => {
         render(input());
         expect(text("weather-board-ice-result")).toBe("Le serveur n'a encore rien dit de la glace de cette carte.");

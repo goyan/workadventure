@@ -66,12 +66,13 @@ function now(): Date {
     nightDateStore.set(date);
     return date;
 }
-const told = (map_: number, here: number, version = 1, peaks = { iceMm: 0, snowMm: 0 }) => ({
+const told = (map_: number, here: number, version = 1, peaks = { iceMm: 0, snowMm: 0 }, catching = false) => ({
     version: () => version,
     meanSnowCover: () => map_,
     snowCoverAt: () => here,
     peakSnowMm: () => peaks.snowMm,
     peakIceMm: () => peaks.iceMm,
+    catchingUp: () => catching,
 });
 
 beforeEach(() => {
@@ -213,5 +214,12 @@ describe("weatherBoardNow", () => {
         expect(goneIn({ speed: 2 })).toBeCloseTo(real / 2, 6);
         expect(goneIn({ freezeThawSpeed: 60 })).toBeCloseTo(real / 60, 6);
         expect(goneIn({ speed: 2, freezeThawSpeed: 10 })).toBeCloseTo(real / 20, 6);
+    });
+
+    it("says the server is living the time the room missed, as the meadow was told", () => {
+        map.timeline = timeline(24, 49, 10);
+        const peaks = { iceMm: 100, snowMm: 5 };
+        expect(weatherBoardNow(settings, now(), told(0, 0, 1, peaks, true), undefined).kept?.catchingUp).toBe(true);
+        expect(weatherBoardNow(settings, now(), told(0, 0, 1, peaks), undefined).kept?.catchingUp).toBe(false);
     });
 });

@@ -275,6 +275,65 @@ describe("pipetteSections (fr-FR)", () => {
         expect(sections(cell()).sun.lines).toEqual(["Le soleil est à 35° au-dessus de l'horizon."]);
     });
 
+    it("says no trend nor time while the server lives the time the room missed, but what the ice bears now", () => {
+        const catching =
+            "Le serveur rattrape le temps passé pendant que la carte était vide : la glace et la neige changent selon la météo de ce temps-là. La tendance reprend ensuite.";
+        const said = sections(cell(lake({ kept: { ...dry, iceMm: 100, snowMm: 4 }, hold: "solid", catchingUp: true })));
+        expect(said.ice.lines).toEqual([
+            "Glace de 10 cm d'épaisseur.",
+            catching,
+            "Elle porte un marcheur (il faut 50 mm).",
+            "Pas assez épaisse pour une cabane de pêche (il faut 10,2 cm).",
+        ]);
+        expect(said.snow.lines).toEqual(["Neige : 4 mm d'eau, sol blanc à 27 %.", catching]);
+        // Never for a ground of the player's own: it is not the server's.
+        const own = sections(
+            cell(lake({ ground: "own", city: "Oslo", kept: { ...dry, iceMm: 100 }, hold: "solid", catchingUp: true })),
+        );
+        expect(own.ice.lines).not.toContain(catching);
+    });
+
+    it("says the air the cell goes by: the map's, the player's city's, or none known", () => {
+        expect(sections(cell()).air.lines).toEqual(["24 °C : c'est l'air de la carte."]);
+        expect(sections(cell({ ground: "own", city: "Oslo", kept: undefined })).air.lines).toEqual([
+            "24 °C : c'est l'air de ta ville.",
+        ]);
+        expect(sections(cell({ weather: undefined })).air.lines).toEqual(["L'air n'est pas connu."]);
+    });
+
+    it("says the cold air of a cold snap lying on the cell, and that its ice takes though the map is mild", () => {
+        // The map is at 17.8 °C; a mass held at -80 °C lies on the cell: its ice goes by that air.
+        const under = { temperature: -80, humidity: 100, windSpeed: 5 };
+        const held = sections(
+            cell(
+                lake({
+                    weather: under,
+                    cold: { mapTemperature: 17.8, goneIn: undefined },
+                    kept: { ...dry, iceMm: 33 },
+                    hold: "thin",
+                }),
+            ),
+        );
+        expect(held.air.lines).toEqual([
+            "Air froid posé ici (coup de froid) : -80 °C, au lieu de 17,8 °C ailleurs. La glace et la neige de cette case suivent cet air.",
+            "Un joueur le tient : il reste tant qu'il est tenu.",
+        ]);
+        expect(held.ice.lines[0]).toBe("Glace de 33 mm d'épaisseur.");
+        expect(held.ice.lines[1]).toMatch(/^-80 °C : elle épaissit de [\d,]+ mm par heure, de moins en moins vite\.$/);
+        expect(held.ice.lines.join(" ")).not.toContain("elle fond");
+        expect(held.ice.lines.some((line) => line.startsWith("Elle portera un marcheur dans environ"))).toBe(true);
+        const letGo = sections(cell(lake({ weather: under, cold: { mapTemperature: 17.8, goneIn: 300 } })));
+        expect(letGo.air.lines[1]).toBe("Relâché, il redevient l'air de la carte dans environ 5 min.");
+    });
+
+    it("says a pool placed as an object is a decoration that does not follow the water read under it", () => {
+        const said = sections(cell(lake({ imagePool: true })));
+        expect(said.relief.lines).toContain(
+            "Une piscine posée comme objet couvre cette case : c'est un décor, son dessin ne suit pas l'eau. L'eau lue ici est celle du sol dessous.",
+        );
+        expect(sections(cell()).relief.lines.join(" ")).not.toContain("piscine posée");
+    });
+
     it("goes as fast as the water of the map", () => {
         const said = sections(cell(lake({ kept: { ...dry, iceMm: 100 }, hold: "solid", times: 60 })));
         expect(said.ice.lines[1]).toBe("24 °C : elle fond de 428 mm par heure. Elle aura disparu dans environ 14 min.");

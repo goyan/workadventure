@@ -1,6 +1,7 @@
 import { freezeThawTimesOf, WeatherType } from "@workadventure/map-editor";
 import type { FireConditionsMessage } from "@workadventure/messages";
 import { get } from "svelte/store";
+import { coldLyingStore } from "@wa/front/Stores/CatastropheStore";
 import { fireConditionsStore } from "@wa/front/Stores/FireConditionsStore";
 import type { WorldPlace } from "../Night/WorldDaylight";
 import { pointWords } from "../Night/PointWords";
@@ -29,6 +30,8 @@ export interface ToldGround {
     /** The thickest snow (mm of water) and the thickest ice (mm) of the map. */
     peakSnowMm(): number;
     peakIceMm(): number;
+    /** Whether the server is living the time the room missed (MeadowState.catchingUp). */
+    catchingUp(): boolean;
 }
 
 /** A place without its region and country, as the weather banner names it. */
@@ -103,7 +106,11 @@ export function weatherBoardNow(
                 ? { map: ground.meanSnowCover(), here: avatar ? ground.snowCoverAt(avatar.x, avatar.y) : 0 }
                 : undefined,
         roomWind: conditions?.windSpeed,
-        peaks: ground && ground.version() > 0 ? { iceMm: ground.peakIceMm(), snowMm: ground.peakSnowMm() } : undefined,
+        cold: get(coldLyingStore),
+        peaks:
+            ground && ground.version() > 0
+                ? { iceMm: ground.peakIceMm(), snowMm: ground.peakSnowMm(), catchingUp: ground.catchingUp() }
+                : undefined,
         // The clock the snow melts and the ice takes and thaws by: the water of the map times its freeze and thaw speed.
         snowTimes: freezeThawTimesOf(settings?.water),
     });

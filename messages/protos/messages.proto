@@ -1157,6 +1157,9 @@ message MeadowMessage {
   // A byte a tile, the ice over the water lying on it (iceByte in libs/map-editor: 0 none, 255 the thickest), row by
   // row, gzipped. Empty when no water of the map is frozen, and from an older server.
   bytes ice = 9;
+  // Whether the server is still living the time the room missed while it was empty (MeadowSimulation.catchingUp): the
+  // snow and the ice then change by the weather of that time, not by the air of now. False from an older server.
+  bool catchingUp = 10;
 }
 
 // The water of the relief of the map (WaterGrid in libs/map-editor): the depth of the water over each cell of a

@@ -298,16 +298,26 @@
             ? t.compare.short.keptIce({ thickness: figures.thickness(keptIce.mm) })
             : t.compare.short.noIce(),
     );
-    const keptIceWhy = $derived(keptIce ? [iceTrendLine(t, figures, keptIce, true)] : []);
-    const keptIceNotes = $derived(
-        keptIce && keptIce.mm > 0 ? [t.kept.onlyAir(), coverClockLine(t, $locale, board.snow.times)] : [],
+    // While the server lives the time the room missed, where they go is not what the air of now says: said so.
+    const catchingUp = $derived(board.kept?.catchingUp === true);
+    const keptIceWhy = $derived(
+        !keptIce
+            ? []
+            : catchingUp && keptIce.mm > 0
+              ? [t.kept.catchingUp()]
+              : [iceTrendLine(t, figures, keptIce, true)],
     );
+    const keptIceNotes = $derived([
+        // Under the cold air of a cold snap the ice does not go the way the air of the map says.
+        ...(board.cold ? [t.cold.ice()] : []),
+        ...(keptIce && keptIce.mm > 0 ? [t.kept.onlyAir(), coverClockLine(t, $locale, board.snow.times)] : []),
+    ]);
     /** The snow: what falls on it first (the old sentence, with its share of flakes), else where the thickest goes. */
     const snowWhy = $derived.by(() => {
         if (board.snow.trend === "building" || !keptSnow || keptSnow.mm <= 0) {
             return snowTrend === undefined ? [] : [snowTrend];
         }
-        const trend = snowTrendLine(t, figures, keptSnow, true);
+        const trend = catchingUp ? t.kept.catchingUp() : snowTrendLine(t, figures, keptSnow, true);
         return [t.kept.snowPeak({ mm: figures.mm(keptSnow.mm) }), ...(trend === undefined ? [] : [trend])];
     });
 
@@ -605,6 +615,22 @@
         <p class="m-0 opacity-80" data-testid="weather-board-fast-water">{$LL.actionbar.fastWater.fromCity()}</p>
     {/if}
 
+    {#if board.cold}
+        <!-- A cold snap: the air of a part of the map is not the air shown above. -->
+        <div
+            class="flex flex-col gap-0.5 rounded-lg border-0 border-s-4 border-solid border-blue-500 bg-white/10 p-2"
+            data-testid="weather-board-cold"
+        >
+            <h3 class="m-0 text-xs font-bold">{t.cold.title()}</h3>
+            <p class="m-0">{t.cold.lying({ temperature: degrees(board.cold.celsius) })}</p>
+            <p class="m-0 opacity-80">
+                {board.cold.secondsLeft === undefined
+                    ? t.cold.held()
+                    : t.cold.gone({ duration: figures.duration(board.cold.secondsLeft) })}
+            </p>
+        </div>
+    {/if}
+
     {#if summary.length > 0}
         <div class="flex flex-col gap-0.5 rounded-lg bg-white/10 p-2" data-testid="weather-board-summary">
             <h3 class="m-0 text-xs font-bold">{t.compare.summary()}</h3>
@@ -664,13 +690,13 @@
                         <span>{t.seenBy.label()} <b>{audienceName(card.audience)}</b></span>
                     </span>
                 </div>
-                {#each card.why as line (line)}
+                {#each card.why as line, index (index)}
                     <p class="m-0">{line}</p>
                 {/each}
-                {#each card.change as line (line)}
+                {#each card.change as line, index (index)}
                     <p class="m-0 opacity-80" data-testid="weather-board-{card.id}-change">→ {line}</p>
                 {/each}
-                {#each card.notes as line (line)}
+                {#each card.notes as line, index (index)}
                     <p class="m-0 opacity-80">{line}</p>
                 {/each}
             </div>
@@ -683,7 +709,7 @@
                     <p class="m-0 text-sm font-bold" data-testid="weather-board-{card.id}-map-result">
                         {card.onMap.result}
                     </p>
-                    {#each card.onMap.why as line (line)}
+                    {#each card.onMap.why as line, index (index)}
                         <p class="m-0">{line}</p>
                     {/each}
                 </div>
@@ -694,7 +720,7 @@
                     data-testid="weather-board-{card.id}-gap"
                 >
                     <div class="font-bold text-yellow-300">{t.compare.gap()}</div>
-                    {#each card.gap as line (line)}
+                    {#each card.gap as line, index (index)}
                         <p class="m-0">{line}</p>
                     {/each}
                 </div>
@@ -702,7 +728,7 @@
             {#if card.same}
                 <p class="m-0 opacity-80" data-testid="weather-board-{card.id}-same">{card.same}</p>
             {/if}
-            {#each card.server ?? [] as line (line)}
+            {#each card.server ?? [] as line, index (index)}
                 <p class="m-0" data-testid="weather-board-{card.id}-server">{line}</p>
             {/each}
             <details>
