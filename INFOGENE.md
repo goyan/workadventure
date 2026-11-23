@@ -6096,7 +6096,11 @@ catalogue ne disant pas leur essence. Conséquences : le mur d'un ouragan de cat
 et un vent de salle réglé à 106 km/h (moyen) ou plus en couche sur toute la carte. Il reste couché le temps qu'un arbre
 brûlé reste noir, puis repousse depuis son pied dans le même temps : la même horloge et la même branche de `TreeFire`
 que la repousse après un feu (`damage`, `wait`, en temps réel : 150 s puis 150 s par défaut, 30 s puis 30 s sur une
-carte réglée à une minute de pousse), et il ne brûle pas tant qu'il est couché. Tenu par le serveur dans `TreeFire`
+carte réglée à une minute de pousse), et il ne brûle pas tant qu'il est couché. **Pas de repousse pendant un
+ouragan** (règle de l'utilisateur, 2026-11-23) : tant qu'un ouragan traverse la salle (`hurricaneAt` à l'heure du pas
+de la simulation), le temps d'un arbre couché par le vent ne s'écoule pas, même pendant sa repousse ; il démarre à la
+fin de l'ouragan (fin naturelle ou arrêt par un joueur), avec les durées de la carte (`TreeFireStepInput.stormy`). Un
+arbre brûlé n'est pas retenu. Pendant le rattrapage d'une salle restée vide, aucun ouragan n'est rejoué. Tenu par le serveur dans `TreeFire`
 (champ `fallenFrom`, sauvegardé avec le pré), identique avec ou sans fil de calcul (tests `RoomGround` et
 `RemoteRoomGround`, arbres ajoutés au scénario du sol), dit aux navigateurs par `TreeFireStateMessage.fallen`
 (direction d'où venait le vent, plus 1). Autour de l'œil, ils tombent en travers du rayon, dans le sens où tourne la
