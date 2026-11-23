@@ -236,6 +236,8 @@ export class TerrainView {
     private seaKey = "";
     private readonly seaFetch = new SeaFetch();
     private seaBytes = new Uint8Array(0);
+    /** The cells the water was last drawn over: the fetch is told again over them when it is made anew. */
+    private drawnCanvas: { x: number; y: number; columns: number; rows: number } | undefined;
     /** The current of the water over the canvas, two a cell (see currentOver). */
     private current = new Float32Array(0);
     private shore = new Uint8Array(0);
@@ -404,8 +406,9 @@ export class TerrainView {
         // The fetch of that wind over the water: the shader is told it when the water is drawn.
         if (this.sea) {
             this.seaFetch.update(this.water.settled(), version, this.sea.heading, now);
-            // A ray of the fetch at each image; drawn again with it once it is all made.
-            if (this.seaFetch.advance()) this.lastKey = undefined;
+            // A ray of the fetch at each image; once it is all made, only the fetch the shader reads is told again,
+            // over what is drawn: no redrawing of the ground.
+            if (this.seaFetch.advance() && this.drawnCanvas) this.splat.setFetch(this.fetchOver(this.drawnCanvas));
         }
         this.splat.setSea(this.sea);
     }
@@ -624,6 +627,7 @@ export class TerrainView {
                 depths,
                 anyWater ? this.fetchOver(canvas) : undefined,
             );
+            this.drawnCanvas = { x: canvas.x, y: canvas.y, columns: canvas.columns, rows: canvas.rows };
         } else if (this.grounds) {
             this.layWater(this.grounds, canvas, anyWater ? wet : undefined);
         } else if (anyWater) {

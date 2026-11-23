@@ -1237,6 +1237,18 @@ export class GroundSplat {
         setUniform("uLampOpacity", lamps?.opacity ?? 0);
     }
 
+    /**
+     * The fetch of the wind over the area of the water (WindSea.fetchByte), cell by cell, when it alone changed: only
+     * its pack is written, and the picture sent again. Nothing else is laid again (the grounds, their smoothing).
+     */
+    public setFetch(fetch: Uint8Array | undefined): void {
+        const area = this.area;
+        const pixels = this.pixels;
+        if (!area || !pixels) return;
+        writeFetch(pixels.data, fetch, area.columns, area.rows);
+        this.upload();
+    }
+
     /** The sea the wind raises on the water: read by the water shader at its next drawing. */
     public setSea(sea: SeaDrawing | undefined): void {
         this.sea = sea;

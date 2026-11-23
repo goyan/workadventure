@@ -35,6 +35,12 @@ export const FETCH_UNIT_METRES = FETCH_UNIT_CELLS * TERRAIN_CELL * MAP_PX_METRES
 export const FETCH_MOST_METRES = 255 * FETCH_UNIT_METRES;
 /** Water at least this deep (map pixels) is open water the wind blows over; shallower, the fetch starts again. */
 export const FETCH_WATER_PX = 4;
+/**
+ * A cell already open stays so until its water is thinner than this, one closed opens only past this: the water
+ * that wavers about FETCH_WATER_PX (a wave, a source, the rain) does not move the shores, nor make the fetch again.
+ */
+export const FETCH_CLOSES_PX = 2;
+export const FETCH_OPENS_PX = 6;
 /** The steepest a wave stands (H / L, Michell 1893, Miche 1944), and the slope of a sine wave that steep. */
 export const BREAKING_STEEPNESS = 0.142;
 export const BREAKING_SLOPE = Math.PI * BREAKING_STEEPNESS;
@@ -453,7 +459,12 @@ export class SeaFetch {
         this.checkedAt = now;
         const size = water.width * water.height;
         const open = new Uint8Array(size);
-        for (let cell = 0; cell < size; cell++) open[cell] = water.depths[cell] >= FETCH_WATER_PX ? 1 : 0;
+        const before = this.job?.open ?? this.open;
+        const kept = !resized && before.length === size;
+        for (let cell = 0; cell < size; cell++) {
+            const depth = water.depths[cell];
+            open[cell] = (kept && before[cell] ? depth >= FETCH_CLOSES_PX : depth >= FETCH_OPENS_PX) ? 1 : 0;
+        }
         // The water moved but not its shores: the fetch is the same.
         const shores = this.job?.open ?? this.open;
         if (

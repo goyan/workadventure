@@ -185,7 +185,32 @@ describe("SeaFetch: the fetch of the map, made again when it should", () => {
         expect(fetch.update(dried, 3, turned, 300 + 2 * FETCH_REFRESH_MS)).toBe(true);
     });
 
-    it("reads the fetch of the cells of the map, nothing off the water or under 4 px", () => {
+    it("does not move its shores for water that wavers about the edge of open water", () => {
+        const fetch = new SeaFetch();
+        fetch.update(water(10), 1, EAST, 0);
+        finish(fetch);
+        // A wave or a source makes the water of the edge go from 5 to 3 px and back: the shores stay.
+        let version = 2;
+        for (const depth of [3, 5, 3, 2.5, 5]) {
+            expect(fetch.update(water(depth), version++, EAST, version * FETCH_REFRESH_MS)).toBe(false);
+        }
+        // Dry under 2 px: the shores moved.
+        expect(fetch.update(water(1), version++, EAST, version * FETCH_REFRESH_MS)).toBe(true);
+    });
+
+    it("once made anew, is told to the shader alone: the ground is not drawn again", () => {
+        const view = readFileSync(
+            resolve(
+                dirname(fileURLToPath(import.meta.url)),
+                "../../../../../src/front/Phaser/Game/Terrain/TerrainView.ts",
+            ),
+            "utf8",
+        );
+        expect(view).not.toMatch(/advance\(\)\)\s*this\.lastKey/);
+        expect(view).toMatch(/this\.seaFetch\.advance\(\) && this\.drawnCanvas\) this\.splat\.setFetch\(/);
+    });
+
+    it("reads the fetch of the cells of the map, nothing off the water nor on water too thin to open", () => {
         const fetch = new SeaFetch();
         fetch.update(water(10), 1, EAST, 0);
         finish(fetch);
