@@ -2823,7 +2823,8 @@ partir de ce qu'il reçoit déjà (profondeurs, vent) :
 Le déferlement des vagues du serveur et la mer du vent sont dessinés par le **shader de l'eau**
 (`Terrain/GroundSplat.ts`), comme l'écume de rive : l'écume des vagues lui arrive par cellule (rouge du paquet 9),
 déchirée par un bruit fin qui bouillonne ; le fetch par cellule (rouge du paquet 11, recalculé quand le vent tourne
-de plus de 5° ou quand les rives ont bougé, au plus toutes les 3 s ; un rayon du fetch effectif par image : 12 à 17 ms
+de plus de 5° ou quand les rives ont bougé (hystérésis : une cellule se ferme sous 2 px d'eau, s'ouvre au-delà de 6 px),
+au plus toutes les 3 s ; à la fin, seul ce paquet est réécrit (`GroundSplat.setFetch`), jamais le sol ; un rayon du fetch effectif par image : 12 à 17 ms
 d'un bloc sur la carte d'Antoine, 45 ms sur une carte quatre fois plus grande) ; les vagues par des uniformes (phases calculées sur le processeur et
 ramenées dans [0, 1), aucun sinus d'un grand nombre, aucun hachage par sinus : pas de dérive sur une page ouverte des
 jours). Compilé seulement si la carte graphique a la précision haute et 128 vecteurs d'uniformes ; sinon ni mer du
