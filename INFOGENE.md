@@ -2513,6 +2513,15 @@ ne l'est pas).
   même 60 s après l'arrêt des sources (30 relectures d'étendues et 6 de terres en 30 s, comme avant) ; les pas
   de 10 à 15 ms toutes les 5 s restent. Pour une eau qui coule, la suite est de calculer ces lieux dans le fil de
   calcul et de les publier.
+- **Rattrapage de la vie aquatique borné en temps** (`AquaticLifeManager.stepCatchUp`, `hurryCatchUp`). Une salle
+  vide depuis plus d'une minute fait revivre à sa vie le temps manqué (30 minutes au plus), par paquets de 120 pas à
+  chaque tour, sur le fil des salles. Prévu pour 90 ms par tour ; sur la carte d'entrée inondée, où un pas coûte des
+  millisecondes et relit ses lieux pendant que l'eau coule, un tour tenait le fil jusqu'à 2,4 s (13 s sur les 25
+  premières secondes d'une salle rouverte après une demi-heure) : c'est le blocage vu à l'arrivée du premier joueur.
+  Les pas sont maintenant vécus par tranches de 8 ms au plus (`CATCH_UP_BUDGET_MS`), avec 8 ms de pause
+  (`CATCH_UP_PAUSE_MS`), comme la prairie depuis #489 : mêmes pas, même ordre, même état final
+  (`AquaticLifeManagerCatchUp.test.ts`). Mesuré, même salle : tour le plus long 2 431 → 24 ms, rattrapage fini en
+  6 s.
 - **Catastrophes dans le sol d'un joueur** (`LocalTerrainSimulation`, `LocalTerrainWorker`). Le sol d'un joueur
   (météo d'un lieu choisi) ignorait les catastrophes de la salle : il les voyait sans que son eau en soit touchée.
   Il sait maintenant les recevoir, par le sol commun : `setCatastrophes` (averses, drains, boules du moment, qui

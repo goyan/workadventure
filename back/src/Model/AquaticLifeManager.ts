@@ -57,8 +57,17 @@ import type { GameRoom } from "./GameRoom";
  * missed beyond is not lived: its animals are delayed by it (delayAnimal), not killed by an age they did not live.
  */
 const CATCH_UP_MAX_MS = 30 * 60 * 1000;
-/** The steps of the missed time lived at each step of the timer: about 90 ms of a full room (0.76 ms a step). */
+/** The most steps of the missed time lived in one slice. */
 const CATCH_UP_STEPS_A_TICK = 120;
+/**
+ * A slice of the missed time holds the thread of the rooms no longer than this (ms), then leaves it for
+ * CATCH_UP_PAUSE_MS: half the thread at most, as the meadow does (MeadowSimulation). A step of the life of a large
+ * flooded map takes milliseconds, and reads its places again as the water goes on running: 120 steps at once held
+ * the thread for seconds (measured on the map of the entry, a room opened again after half an hour: 2.4 s at
+ * worst, 13 s out of the first 25).
+ */
+const CATCH_UP_BUDGET_MS = 8;
+const CATCH_UP_PAUSE_MS = 8;
 /** A room empty for less than this lives no missed time (ms). */
 const CATCH_UP_FROM_MS = 60_000;
 
@@ -221,6 +230,9 @@ export class AquaticLifeManager {
     private catchUp: { at: number; to: number } | undefined;
     /** The moment being lived again, while it catches up. */
     private replayAt: number | undefined;
+    /** What times the slices of the missed time, and the timer of the next one. */
+    private stopwatch: () => number = () => performance.now();
+    private catchUpTimer: ReturnType<typeof setTimeout> | undefined;
 
     constructor(
         private readonly room: Pick<GameRoom, "getWam" | "sendSubMessageToRoom">,
@@ -347,16 +359,22 @@ export class AquaticLifeManager {
     private stepCatchUp(): void {
         const catchUp = this.catchUp;
         if (!catchUp) return;
+        const started = this.stopwatch();
         try {
             for (let step = 0; step < CATCH_UP_STEPS_A_TICK && catchUp.at < catchUp.to; step++) {
                 this.replayAt = catchUp.at;
                 this.step();
                 catchUp.at += LIFE_STEP_MS;
+                // The same steps in the same order, however they are sliced: only the thread is given back sooner.
+                if (this.stopwatch() - started >= CATCH_UP_BUDGET_MS) break;
             }
         } finally {
             this.replayAt = undefined;
         }
-        if (catchUp.at < catchUp.to) return;
+        if (catchUp.at < catchUp.to) {
+            this.hurryCatchUp();
+            return;
+        }
         this.catchUp = undefined;
         this.census = lifeCensus(this.population, this.bodies ?? NO_BODIES);
         this.tell();
@@ -481,8 +499,11 @@ export class AquaticLifeManager {
     /** A step from the timer: a failure stops the life of the room until its map changes, never the server. */
     private tick(): void {
         try {
-            if (this.catchUp) this.stepCatchUp();
-            else this.step();
+            // While the missed time is lived by slices, the step of the timer leaves them their pause: the next
+            // slice has its own timer.
+            if (this.catchUp) {
+                if (!this.catchUpTimer) this.stepCatchUp();
+            } else this.step();
         } catch (error) {
             console.error("The life of the water of the map stopped", error);
             this.clearTimer();
@@ -734,6 +755,24 @@ export class AquaticLifeManager {
     private clearTimer(): void {
         if (this.timer) clearInterval(this.timer);
         this.timer = undefined;
+        if (this.catchUpTimer) clearTimeout(this.catchUpTimer);
+        this.catchUpTimer = undefined;
+    }
+
+    /** While the time missed is lived again, its next slice comes after a short pause, not at the next step. */
+    private hurryCatchUp(): void {
+        if (!this.catchUp || !this.timer || this.catchUpTimer) return;
+        this.catchUpTimer = setTimeout(() => {
+            this.catchUpTimer = undefined;
+            if (this.timer && this.catchUp) this.tick();
+        }, CATCH_UP_PAUSE_MS);
+        // The life of a room must never keep the process alive.
+        this.catchUpTimer.unref?.();
+    }
+
+    /** The clock (ms) the slices of the time missed are timed with: a slice stops once it took CATCH_UP_BUDGET_MS. */
+    public timeCatchUpWith(stopwatch: () => number): void {
+        this.stopwatch = stopwatch;
     }
 
     private hashKey(): string {
