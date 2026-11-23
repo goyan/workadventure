@@ -82,6 +82,27 @@ describe("LocalCatastropheRelay", () => {
         ]);
     });
 
+    it("holds a mass of cold air where the server says, at its temperature, until the server stops telling it", () => {
+        const relay = new LocalCatastropheRelay();
+        const cold = told({ id: 6, kind: CatastropheKind.CATASTROPHE_COLD, impactInMs: 1000, radiusTiles: 3 });
+        relay.receive({ ...cold, temperature: -60 }, 0);
+        expect(relay.due(1)).toEqual([
+            {
+                kind: "catastrophes",
+                downpours: [],
+                drains: [],
+                balls: [],
+                colds: [{ id: 6, x: 320, y: 160, radiusTiles: 3, temperature: -60 }],
+            },
+        ]);
+        // Let go: the local ground is told there is none held; it keeps the mass while it warms, by itself.
+        expect(relay.due(1001)).toEqual([{ kind: "catastrophes", downpours: [], drains: [], balls: [] }]);
+        // The cold snap of the room is stopped: the local ground dispels its cold air too, held or not.
+        relay.receive({ ...cold, temperature: -60 }, 2000);
+        expect(relay.receive({ ...cold, id: 77, impactInMs: 0, radiusTiles: 0 }, 2100)).toEqual([{ kind: "calm" }]);
+        expect(relay.state()).toEqual({ kind: "catastrophes", downpours: [], drains: [], balls: [] });
+    });
+
     it("tells all that is going on to a local ground that starts", () => {
         const relay = new LocalCatastropheRelay();
         relay.receive(told({ id: 4, kind: CatastropheKind.CATASTROPHE_DRAIN, impactInMs: 2000 }), 0);

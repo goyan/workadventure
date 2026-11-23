@@ -1,5 +1,7 @@
 import {
     BALL_LASTS_MS,
+    COLD_LASTS_MS,
+    COLDS_PER_ROOM,
     BALL_MIN_REPORT_MS,
     BALLS_PER_ROOM,
     DOWNPOUR_DEFAULT_TILES,
@@ -390,6 +392,81 @@ describe("CatastropheManager, balls", () => {
         manager.stop();
         expect(manager.balls()).toHaveLength(0);
         expect(manager.ball(7, 100, 80, 4)).toBe(false);
+    });
+});
+
+describe("CatastropheManager, cold snaps", () => {
+    const COLD = CatastropheKind.CATASTROPHE_COLD;
+
+    it("lays a mass of cold air under the pointer, told to the room, held a second after the last message", () => {
+        const { manager, sent } = harness();
+        expect(manager.request(7, COLD, 100, 80, 0, false, false, undefined)).toBe(true);
+        // No size and no temperature: the usual ones, 3 tiles and -80 °C.
+        expect(sent[0]).toMatchObject({ kind: COLD, x: 100, y: 80, radiusTiles: 3, temperature: -80 });
+        expect(sent[0].impactInMs).toBe(COLD_LASTS_MS);
+        expect(manager.colds()).toEqual([{ id: sent[0].id, x: 100, y: 80, radiusTiles: 3, temperature: -80 }]);
+        vi.advanceTimersByTime(COLD_LASTS_MS - 1);
+        expect(manager.colds()).toHaveLength(1);
+        vi.advanceTimersByTime(1);
+        expect(manager.colds()).toHaveLength(0);
+    });
+
+    it("is as wide and as cold as its player says, within 1 to 16 tiles and -120 to -5 °C", () => {
+        const { manager, sent } = harness();
+        expect(manager.cold(7, 100, 80, 9, -40)).toBe(true);
+        expect(manager.cold(8, 100, 80, 99, -900)).toBe(true);
+        expect(manager.cold(9, 100, 80, -4, 30)).toBe(true);
+        expect(sent.map((message) => [message.radiusTiles, message.temperature])).toEqual([
+            [9, -40],
+            [16, -120],
+            [1, -5],
+        ]);
+    });
+
+    it("follows its player under the same id, and ignores messages that come too fast", () => {
+        const { manager, sent } = harness();
+        manager.cold(7, 100, 80, 3, -80);
+        vi.advanceTimersByTime(50);
+        expect(manager.cold(7, 300, 90, 3, -80)).toBe(false);
+        vi.advanceTimersByTime(150);
+        expect(manager.cold(7, 300, 90, 3, -60)).toBe(true);
+        expect(sent[1].id).toBe(sent[0].id);
+        expect(manager.colds()).toEqual([expect.objectContaining({ x: 300, y: 90, temperature: -60 })]);
+    });
+
+    it("refuses a point outside the map, numbers that are not, and one mass more than the room may have", () => {
+        const { manager, sent } = harness();
+        expect(manager.cold(1, -1, 10, 3, -80)).toBe(false);
+        expect(manager.cold(1, 10, MAP.height, 3, -80)).toBe(false);
+        expect(manager.cold(1, Number.NaN, 10, 3, -80)).toBe(false);
+        for (let user = 1; user <= COLDS_PER_ROOM; user++) expect(manager.cold(user, 10, 10, 3, -80)).toBe(true);
+        expect(manager.cold(99, 10, 10, 3, -80)).toBe(false);
+        expect(sent).toHaveLength(COLDS_PER_ROOM);
+    });
+
+    it("stops the cold snap of the room when a player asks: nobody holds any, the ground is told, and so is the room", () => {
+        const { manager, sent } = harness();
+        const calmed = vi.fn();
+        manager.calmWith(calmed);
+        manager.cold(7, 100, 80, 3, -80);
+        manager.cold(8, 300, 80, 3, -80);
+        // Anyone may stop it, as anyone may lay it: the same rights as the other catastrophes.
+        expect(manager.request(9, COLD, 0, 0, 0, false, true)).toBe(true);
+        expect(manager.colds()).toEqual([]);
+        expect(calmed).toHaveBeenCalledTimes(1);
+        expect(sent.at(-1)).toMatchObject({ kind: COLD, impactInMs: 0 });
+        // A player still holding their click lays a new mass at their next message.
+        vi.advanceTimersByTime(200);
+        expect(manager.cold(7, 100, 80, 3, -80)).toBe(true);
+        expect(manager.colds()).toHaveLength(1);
+    });
+
+    it("holds no cold air once the room stops", () => {
+        const { manager } = harness();
+        manager.cold(7, 100, 80, 3, -80);
+        manager.stop();
+        expect(manager.colds()).toHaveLength(0);
+        expect(manager.cold(7, 100, 80, 3, -80)).toBe(false);
     });
 });
 

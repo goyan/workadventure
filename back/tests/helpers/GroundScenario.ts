@@ -7,7 +7,7 @@ import {
     WeatherType,
     withHeights,
 } from "@workadventure/map-editor";
-import type { Ball, Downpour, Drain, RealWeatherSlot, WAMFileFormat } from "@workadventure/map-editor";
+import type { Ball, ColdMass, Downpour, Drain, RealWeatherSlot, WAMFileFormat } from "@workadventure/map-editor";
 import { luckOf } from "../../src/Model/Ground/GroundProtocol";
 import type { RoomGround, RoomGroundInputs } from "../../src/Model/Ground/RoomGround";
 import { MeadowManager } from "../../src/Model/MeadowManager";
@@ -120,6 +120,7 @@ export function world(wam: WAMFileFormat, stored: Record<string, Record<string, 
         downpours: [] as Downpour[],
         drains: [] as Drain[],
         balls: [] as Ball[],
+        colds: [] as ColdMass[],
         air: { temperature: 1, humidity: 85 } as { temperature: number; humidity: number } | undefined,
         /** The conditions of the fire of the room: a cold rain until the test says a heat wave. */
         fire: { temperature: 1, humidity: 85, windSpeed: 20, windFrom: 270 },
@@ -153,6 +154,7 @@ export function world(wam: WAMFileFormat, stored: Record<string, Record<string, 
         downpours: () => state.downpours,
         drains: () => state.drains,
         balls: () => state.balls,
+        colds: () => state.colds,
         grazers: () => [{ x: 100, y: 600 }],
         air: () => state.air,
         fire,
@@ -212,6 +214,7 @@ export async function byHand(
         return air ? { ...air, windSpeed: inputs.fire().windSpeed } : undefined;
     });
     meadow.pourWith(water.pour.bind(water));
+    meadow.coldUnder(() => inputs.colds?.() ?? []);
     meadow.liveAlong(water.liveAgain.bind(water));
     meadow.catchUpWith(
         (place, since) => inputs.rain.history(place, since),
@@ -264,6 +267,7 @@ export async function byHand(
             meadow.scorch(x, y, radiusTiles, id);
         },
         shatter: meadow.shatter.bind(meadow),
+        calm: meadow.calm.bind(meadow),
         soak: meadow.soak.bind(meadow),
         ignite: (x, y, radiusTiles) => {
             meadow.ignite(x, y, radiusTiles);
@@ -311,6 +315,13 @@ export function happenAt(
     if (tenth === 570) state.air = { temperature: -25, humidity: 85 };
     if (tenth === 640) ground.shatter(200, 200, 3);
     if (tenth === 700) state.air = { temperature: 12, humidity: 60 };
+    // A player lays a mass of air at -80 °C on the pond of the east (tiles 20 to 22) in the mild air that came
+    // back, drags it, then lets it go: the pond takes, and thaws by itself.
+    if (tenth === 720) state.colds = [{ id: 20, x: 43 * 16, y: 9 * 16, radiusTiles: 3, temperature: -80 }];
+    if (tenth === 780) state.colds = [{ id: 20, x: 44 * 16, y: 9 * 16, radiusTiles: 3, temperature: -80 }];
+    if (tenth === 840) state.colds = [];
+    // And someone stops the cold snap while it warms.
+    if (tenth === 850) ground.calm();
     if (tenth === 760) ground.mapChanged();
     // A heat wave: the rain stops, the grass dries, and a fire a player sets takes.
     if (tenth === 900) {

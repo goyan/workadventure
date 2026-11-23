@@ -1,5 +1,8 @@
 import { Season, TERRAIN_CELL, TILE_PX } from "../types";
 import type { PoolStyle, TerrainData, WAMFileFormat } from "../types";
+import { coldShare } from "../Catastrophe/Cold";
+import type { ColdMass } from "../Catastrophe/Cold";
+import { soilFrost } from "../Weather/SoilFrost";
 import {
     rainMeltMm,
     SNOW_FULL_MM,
@@ -195,6 +198,11 @@ export interface MeadowStepInput {
     /** The air over the snow (temperature, humidity, wind); absent while not known: the snow neither melts nor goes. */
     weather?: SnowWeather;
     /**
+     * The masses of cold air lying on the map (the cold snap of the catastrophes): on the tiles they reach, the air
+     * is theirs (coldAirAt) for the snow, the ice and the frost of the soil. None when absent: nothing is read.
+     */
+    cold?: readonly ColdMass[];
+    /**
      * How many times faster than the real clock the snow falls, melts and goes, and the ice takes and thaws: the speed
      * of the water of the map (waterTimesOf), so that they never part; real time when absent.
      */
@@ -245,6 +253,16 @@ export class Meadow {
     /** The ice over the water of each tile, in mm (see Ice.ts), and whether any of it changed at the last step. */
     private readonly ice: Float32Array;
     private iceChanged = false;
+    /**
+     * The air of the tiles a mass of cold air reaches at this step (°C), not a number elsewhere, and those tiles:
+     * neither exists on a map where no cold air ever lay.
+     */
+    private chilled: Float32Array | undefined;
+    private chilledTiles: number[] = [];
+    /** Whether any tile is chilled at this step: the snow and the ice then read the air tile by tile. */
+    private chilling = false;
+    /** The air of a chilled tile, written again for each: the humidity and the wind are those of the map. */
+    private readonly chilledAir: SnowWeather = { temperature: 0, humidity: 50, windSpeed: 0 };
     /**
      * Whether a pool painted on a tile is heated. The water of a pool is the water of the relief (see poolBasins): it
      * freezes as a lake does, unless it is hot.
@@ -683,6 +701,7 @@ export class Meadow {
                 : 0;
         // A hot, dry wind dries the soil itself, not under the rain.
         const parching = rain > 0 ? 1 : 1 + PARCHING * danger;
+        const chilled = this.readCold(input);
         // What of the soil is not frozen: only that part of it changes. Frozen water stays where it is.
         const thaw =
             input.soilFrost !== undefined && Number.isFinite(input.soilFrost)
@@ -703,9 +722,10 @@ export class Meadow {
                     moisture[index] = 1;
                 } else {
                     const kept = moisture[index] + rain * seconds * RAIN_GAIN;
+                    const thawed = chilled && chilled[index] === chilled[index] ? 1 - soilFrost(chilled[index]) : thaw;
                     moisture[index] = Math.min(
                         1,
-                        kept - kept * Math.min(1, (seconds * parching * thaw) / (hold[index] * holds)),
+                        kept - kept * Math.min(1, (seconds * parching * thawed) / (hold[index] * holds)),
                     );
                 }
             }
@@ -731,7 +751,8 @@ export class Meadow {
                 if (ground[other] > ground[index]) change += (MOISTURE_RUNOFF / 4) * slope * moisture[other];
                 else if (ground[other] < ground[index]) change -= (MOISTURE_RUNOFF / 4) * slope * moisture[index];
             }
-            next[index] = Math.min(1, Math.max(0, moisture[index] + change * Math.min(1, pace) * thaw));
+            const thawed = chilled && chilled[index] === chilled[index] ? 1 - soilFrost(chilled[index]) : thaw;
+            next[index] = Math.min(1, Math.max(0, moisture[index] + change * Math.min(1, pace) * thawed));
         }
         moisture.set(next);
         this.drinkFromBanks();
@@ -739,6 +760,7 @@ export class Meadow {
         for (let index = 0; index < grass.length; index++) {
             if (!outdoor[index]) continue;
             let cover = grass[index];
+            const thawed = chilled && chilled[index] === chilled[index] ? 1 - soilFrost(chilled[index]) : thaw;
             if (fertility[index] <= 0 || water[index] >= DROWNING_WATER_PX) {
                 cover -= seconds / DROWN_SECONDS;
             } else if (snowCover(ground[index], input.season) > 0) {
@@ -748,7 +770,7 @@ export class Meadow {
                 // Under the snow that fell the grass lies dormant: it neither dies of thirst nor grows.
             } else if (moisture[index] < DRY_MOISTURE) {
                 // The grass of a frozen soil lies dormant: it does not go thirsty for the water it cannot draw.
-                cover -= (seconds * thaw) / thirstSeconds;
+                cover -= (seconds * thawed) / thirstSeconds;
             } else if (
                 input.daylight &&
                 growth > 0 &&
@@ -756,7 +778,7 @@ export class Meadow {
                 moisture[index] >= GROWING_MOISTURE[0] &&
                 moisture[index] <= GROWING_MOISTURE[1]
             ) {
-                cover += ((seconds * thaw) / growSeconds) * fertility[index] * growth * altitudeGrowth(ground[index]);
+                cover += ((seconds * thawed) / growSeconds) * fertility[index] * growth * altitudeGrowth(ground[index]);
             }
             grass[index] = Math.min(1, Math.max(0, cover));
         }
@@ -809,6 +831,7 @@ export class Meadow {
         if (seconds === 0) return undefined;
         const rain = Number.isFinite(input.rainMmPerHour) && input.rainMmPerHour > 0 ? input.rainMmPerHour : 0;
         const { width, height, water, outdoor } = this;
+        this.readCold(input);
         water.fill(0);
         for (let tileY = 0; tileY < height; tileY++) {
             for (let tileX = 0; tileX < width; tileX++) {
@@ -828,6 +851,58 @@ export class Meadow {
      * wind takes some of it. On open water it melts at once, unless it freezes. With `wets`, what melts wets the soil under it as the
      * same rain would. True when any melted: its water is in `melted`.
      */
+    /**
+     * The masses of cold air of this step, read once: the air of each tile they reach (the air of the map brought
+     * towards theirs, whole in their core and fading to their rim; the coldest where several meet). Returns those
+     * airs, undefined when no tile is chilled: nothing is then read tile by tile. The air of the map counts as 0 °C
+     * while it is not known.
+     */
+    private readCold(input: MeadowStepInput): Float32Array | undefined {
+        if (this.chilled) {
+            for (const index of this.chilledTiles) this.chilled[index] = Number.NaN;
+            this.chilledTiles.length = 0;
+        }
+        this.chilling = false;
+        const masses = input.cold;
+        if (!masses || masses.length === 0) return undefined;
+        const known = input.weather?.temperature;
+        const base = known !== undefined && Number.isFinite(known) ? known : 0;
+        const { width, height } = this;
+        for (const mass of masses) {
+            if (!Number.isFinite(mass.x) || !Number.isFinite(mass.y) || !(mass.radiusTiles > 0)) continue;
+            if (!(mass.temperature < base)) continue;
+            const middleX = mass.x / TILE_PX;
+            const middleY = mass.y / TILE_PX;
+            const fromY = Math.max(0, Math.floor(middleY - mass.radiusTiles));
+            const toY = Math.min(height - 1, Math.floor(middleY + mass.radiusTiles));
+            const fromX = Math.max(0, Math.floor(middleX - mass.radiusTiles));
+            const toX = Math.min(width - 1, Math.floor(middleX + mass.radiusTiles));
+            for (let tileY = fromY; tileY <= toY; tileY++) {
+                for (let tileX = fromX; tileX <= toX; tileX++) {
+                    const away = Math.hypot(tileX + 0.5 - middleX, tileY + 0.5 - middleY) / mass.radiusTiles;
+                    const share = coldShare(away);
+                    if (share <= 0) continue;
+                    if (!this.chilled) this.chilled = new Float32Array(width * height).fill(Number.NaN);
+                    const index = tileY * width + tileX;
+                    const here = base + (mass.temperature - base) * share;
+                    const before = this.chilled[index];
+                    if (before !== before) this.chilledTiles.push(index);
+                    else if (before <= here) continue;
+                    this.chilled[index] = here;
+                }
+            }
+        }
+        this.chilling = this.chilledTiles.length > 0;
+        if (this.chilling && input.weather) {
+            this.chilledAir.humidity = input.weather.humidity;
+            this.chilledAir.windSpeed = input.weather.windSpeed;
+        } else {
+            this.chilledAir.humidity = 50;
+            this.chilledAir.windSpeed = 0;
+        }
+        return this.chilling ? this.chilled : undefined;
+    }
+
     private stepSnow(input: MeadowStepInput, seconds: number, rain: number, wets: boolean): boolean {
         const { snow, melted, water, outdoor, moisture, hold, heat, fire, width, height, ice, hotPool } = this;
         // A tile on fire warms itself and the eight around it.
@@ -850,18 +925,28 @@ export class Meadow {
                 : 1;
         const hours = (seconds * times) / 3600;
         const weather = input.weather;
-        const melting = weather
+        const mapMelting = weather
             ? snowMeltMmPerHour(weather) * hours + rainMeltMm(rain * hours, weather.temperature)
             : 0;
         const going = weather ? snowSublimationMmPerHour(weather) * hours : 0;
         // When it freezes the water does not take the snow: it holds on it as on ice.
-        const freezing = weather !== undefined && Number.isFinite(weather.temperature) && weather.temperature <= 0;
+        const mapFreezing = weather !== undefined && Number.isFinite(weather.temperature) && weather.temperature <= 0;
+        const chilled = this.chilling ? this.chilled : undefined;
+        const chilledAir = this.chilledAir;
         melted.fill(0);
         let any = false;
         for (let index = 0; index < snow.length; index++) {
             if (!outdoor[index]) continue;
             let lying = Math.min(SNOW_MAX_MM, snow[index] + falling);
             if (lying <= 0) continue;
+            let melting = mapMelting;
+            let freezing = mapFreezing;
+            // Under a mass of cold air the snow melts, or holds on the water, by the air of its tile.
+            if (chilled && chilled[index] === chilled[index]) {
+                chilledAir.temperature = chilled[index];
+                melting = snowMeltMmPerHour(chilledAir) * hours + rainMeltMm(rain * hours, chilledAir.temperature);
+                freezing = chilledAir.temperature <= 0;
+            }
             // The heat of a fire first: it melts the snow whatever the air, and dries the soil it bares.
             const burnt = Math.min(lying, heat[index]);
             lying -= burnt;
@@ -900,8 +985,9 @@ export class Meadow {
                 ? input.snowTimes
                 : 1;
         const hours = (seconds * times) / 3600;
-        const weather = input.weather;
-        const thawing = weather ? iceThawMmPerHour(weather) * hours : 0;
+        const mapWeather = input.weather;
+        const mapThawing = mapWeather ? iceThawMmPerHour(mapWeather) * hours : 0;
+        const chilled = this.chilling ? this.chilled : undefined;
         let changed = false;
         for (let index = 0; index < ice.length; index++) {
             if (!outdoor[index]) continue;
@@ -912,6 +998,14 @@ export class Meadow {
             if (lying < SOAKED_WATER_PX) {
                 thick = 0;
             } else {
+                let weather = mapWeather;
+                let thawing = mapThawing;
+                // Under a mass of cold air the ice takes and thaws by the air of its tile.
+                if (chilled && chilled[index] === chilled[index]) {
+                    this.chilledAir.temperature = chilled[index];
+                    weather = this.chilledAir;
+                    thawing = iceThawMmPerHour(weather) * hours;
+                }
                 if (weather && hours > ICE_EXACT_FROM_HOURS) {
                     // A fast clock: the ice of those hours by the exact law, whatever their number.
                     const share = input.currentAt

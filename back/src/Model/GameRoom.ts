@@ -379,6 +379,7 @@ export class GameRoom implements BrothersFinder {
             downpours: () => groundParts.catastrophes?.downpours() ?? [],
             drains: () => groundParts.catastrophes?.drains() ?? [],
             balls: () => groundParts.catastrophes?.balls() ?? [],
+            colds: () => groundParts.catastrophes?.colds() ?? [],
             // The antelopes of the life of the land graze the meadow.
             grazers: () => groundParts.aquaticLife?.grazers() ?? [],
             // In the cold of the room the rain of the map falls as snow; the weather is not known until it is read.
@@ -449,6 +450,7 @@ export class GameRoom implements BrothersFinder {
         groundParts.fireConditions = fireConditions;
         // The ice that gives way under a player is the ice the meadow keeps, broken as by a comet.
         catastrophes.breakIceWith(ground.shatter.bind(ground));
+        catastrophes.calmWith(ground.calm.bind(ground));
         // The animals of the map run from the fire of its grass and of its trees.
         aquaticLife.followFire(() => ground.lifeFire());
         // A downpour also soaks the ground of the meadow.
@@ -1367,8 +1369,9 @@ export class GameRoom implements BrothersFinder {
         radiusTiles: number,
         wholeMap: boolean,
         release = false,
+        temperature?: number,
     ): void {
-        this.catastrophes?.request(user.id, kind, x, y, radiusTiles, wholeMap, release);
+        this.catastrophes?.request(user.id, kind, x, y, radiusTiles, wholeMap, release, temperature);
     }
 
     /** A player casts their fishing line at a point of the map. */

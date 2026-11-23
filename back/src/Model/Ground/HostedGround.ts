@@ -59,6 +59,7 @@ export class HostedGround {
             downpours: () => this.state.downpours,
             drains: () => this.state.drains,
             balls: () => this.state.balls,
+            colds: () => this.state.colds ?? [],
             grazers: () => this.state.grazers,
             air: () => this.state.air,
             fire: () => this.state.fire,
@@ -128,6 +129,9 @@ export class HostedGround {
                 break;
             case "ignite":
                 this.ground.ignite(command.x, command.y, command.radiusTiles);
+                break;
+            case "calm":
+                this.ground.calm();
                 break;
             case "burn":
                 this.ground.burn(command.x, command.y, command.radiusTiles, command.id);
