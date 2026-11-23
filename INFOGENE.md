@@ -2411,6 +2411,17 @@ Ce bilan a changé une fois dans ses derniers chiffres (3 pour cent mille millia
 identique : `WaterFingerprints.test.ts` garde deux empreintes par scénario, celle de l'eau seule (inchangée depuis
 `eb17d9b92`) et celle de tout, réenregistrée pour les huit scénarios qui perdent de l'eau.
 
+**Où une grille d'eau garde ses tableaux** (`Terrain/WaterArrays.ts`). Les tableaux que les quatre passes lisent et
+écrivent (profondeurs, sol, niveau de débordement, frottement, creux, côtés fermés, flux, ce que chaque cellule peut
+donner, vitesses, eau perdue par ligne) sont demandés à un allocateur `WaterArrays` : mémoire ordinaire par défaut,
+comme avant ; mémoire partagée entre fils (`sharedWaterArrays`, un `SharedArrayBuffer` par tableau) quand on le
+demande, pour la grille (dernier paramètre de `WaterGrid`) ou pour toutes celles du fil (`setWaterArrays`). C'est la
+seule façon d'allouer : un découpage du pas sur plusieurs fils, ou un noyau compilé qui garde les tableaux dans sa
+mémoire, en sont d'autres implémentations, et la grille ne sait pas où vivent ses tableaux. Rien ne le demande
+encore : aucun comportement ne change. `WaterFingerprints.test.ts` rejoue ses 19 scénarios en mémoire partagée,
+mêmes empreintes. Mesuré (banc commun, carte d'entrée inondée) : un pas coûte autant sur tableaux partagés que
+sur tableaux ordinaires (9,14 contre 9,16 ms).
+
 **L'eau se pose à la fin du rattrapage** (`WaterSimulation.liveAgain`, `settle`). Le rattrapage d'une salle vide fait
 vivre l'eau sans inertie par pas de 600 s, et chaque pas ne la déplace qu'une fois : il la laisse entassée là où
 elle est arrivée et creusée là où elle est partie. L'eau à inertie repartait de ces niveaux inégaux : de fausses
