@@ -46,6 +46,32 @@ describe("GroundTimings", () => {
         expect(read.longestMs).toBe(100);
     });
 
+    it("gives the wait of the threads for their bands, and how many times one went on alone", () => {
+        const clock = handClock();
+        const here = new GroundTimings(clock.now);
+        const board = new GroundTimingsBoard(here);
+        // Nothing shared: nothing told of the bands.
+        here.waterStepped(10);
+        expect(here.take().bandWaits).toBeUndefined();
+        expect(board.read().bandSteps).toBe(0);
+        // A thread of the grounds: 99 steps that waited 1 ms for its bands, one that waited 40 ms and went on alone.
+        const thread = new GroundTimings(clock.now);
+        for (let step = 0; step < 99; step++) thread.bandsWaited(1, false);
+        thread.bandsWaited(40, true);
+        thread.bandsWaited(Number.NaN, true);
+        board.add("1", thread.take());
+        const read = board.read();
+        expect(read.bandSteps).toBe(100);
+        expect(read.bandWaitP99Ms).toBeGreaterThanOrEqual(1);
+        expect(read.bandWaitP99Ms).toBeLessThanOrEqual(1.05);
+        expect(read.longestBandWaitMs).toBe(40);
+        expect(read.bandsLeftAlone).toBe(1);
+        // A new window at each reading, for the thread and for the board.
+        expect(thread.take().bandWaits).toBeUndefined();
+        const next = board.read();
+        expect([next.bandSteps, next.bandWaitP99Ms, next.longestBandWaitMs, next.bandsLeftAlone]).toEqual([0, 0, 0, 0]);
+    });
+
     it("gives the share of its time a thread gave the water and the meadow, by thread and never by room", () => {
         const clock = handClock();
         const here = new GroundTimings(clock.now);
@@ -174,8 +200,20 @@ describe("registerGroundMetrics", () => {
         registerGroundMetrics(board, registry);
         for (let step = 0; step < 10; step++) here.waterStepped(20, 25);
         clock.advance(1000);
-        board.add("1", { steps: [], longestMs: 0, busyMs: 500, spanMs: 1000 });
+        board.add("1", {
+            steps: [],
+            longestMs: 0,
+            busyMs: 500,
+            spanMs: 1000,
+            bandWaits: [[0, 9]],
+            longestBandWaitMs: 25,
+            bandsLeftAlone: 1,
+        });
         const first = await registry.metrics();
+        expect(first).toContain("workadventure_water_band_steps 9\n");
+        expect(first).toContain("workadventure_water_band_wait_max_seconds 0.025\n");
+        expect(first).toContain("workadventure_water_bands_left_alone 1\n");
+        expect(first).toMatch(/^workadventure_water_band_wait_p99_seconds 0\.00001$/m);
         expect(first).toContain("workadventure_water_steps 10\n");
         expect(first).toContain("workadventure_water_step_max_seconds 0.02\n");
         expect(first).toContain('workadventure_ground_busy_ratio{thread="rooms"} 0.25\n');
@@ -189,6 +227,8 @@ describe("registerGroundMetrics", () => {
         const second = await registry.metrics();
         expect(second).toContain("workadventure_water_steps 0\n");
         expect(second).toContain("workadventure_water_step_p50_seconds 0\n");
+        expect(second).toContain("workadventure_water_band_steps 0\n");
+        expect(second).toContain("workadventure_water_bands_left_alone 0\n");
         expect(second).toContain('workadventure_ground_busy_ratio{thread="rooms"} 0\n');
         expect(second).not.toContain('thread="1"');
     });

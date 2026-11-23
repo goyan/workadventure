@@ -1047,6 +1047,13 @@ export const MAX_WATER_INDOOR_DRAIN = 10000;
 /** The strongest current a map may set: twice the usual one. */
 export const MAX_WATER_CURRENT = 2;
 export const MAX_WATER_SPEED = 1000;
+/**
+ * The speed of the freeze and the thaw of a map (WaterSettings.freezeThawSpeed): how many times faster than its water
+ * its ice takes and thaws, its snow melts and goes, its frost comes and goes. At most 600 (an hour of frost or thaw in
+ * six seconds), the steps offered by the editor in between.
+ */
+export const MAX_FREEZE_THAW_SPEED = 600;
+export const FREEZE_THAW_SPEED_STEPS = [1, 10, 60, 600] as const;
 /** The highest a map may let its water stand over the level it spills at, in pixels: as high as its relief goes. */
 export const MAX_WATER_MAX_SURFACE = 256;
 export const WaterSettings = z.object({
@@ -1121,6 +1128,13 @@ export const WaterSettings = z.object({
      * absent, 1: the water of the crater alone is moved).
      */
     impactReach: z.number().min(IMPACT_REACH_BOUNDS[0]).max(IMPACT_REACH_BOUNDS[1]).optional(),
+    /**
+     * How many times faster than its water the cold of the map does its work (1 when absent): its ice takes and
+     * thaws, its snow melts and goes, its frost comes and goes that many times faster, on top of `speed`; the water
+     * itself, the rain and the snow that falls keep the clock of `speed`. 60: an hour of frost or thaw in a minute
+     * on water in real time.
+     */
+    freezeThawSpeed: z.number().min(1).max(MAX_FREEZE_THAW_SPEED).optional(),
     waves: z
         .object({
             roughness: z.number().min(WAVE_BOUNDS.roughness[0]).max(WAVE_BOUNDS.roughness[1]),

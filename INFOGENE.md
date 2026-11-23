@@ -2496,6 +2496,15 @@ le fil seul, comme avant. À N, le fil de calcul démarre N − 1 fils d'appoint
     Node 23.9 et plus ; à défaut, le processus comme avant). Même seuil (`CPU_OVERHEAT_THRESHOLD`, 80 % par
     défaut), même sens. Sans fil de calcul, la mesure baisse seulement de ce que V8 fait dans ses propres fils
     (ramasse-miettes, compilation).
+  - **Repli quand la machine n'a pas de cœur pour les bandes** : un fil d'appoint qui a réclamé une tranche puis
+    perd son cœur fait attendre le fil de calcul à la fin de la passe ; personne ne peut reprendre sa tranche (elle
+    est à moitié écrite). Le fil de calcul chronomètre cette attente, pas après pas : au-delà de 20 ms dans un pas
+    (`BAND_SLOW_WAIT_MS` ; moins d'1 ms en temps normal, 14 ms au pire mesurés sur une machine saturée), il calcule
+    seul pendant dix secondes (`BAND_ALONE_MS`), fils d'appoint endormis, puis réessaie, et le dit dans le journal.
+    La borne d'une seconde reste le dernier recours. Même eau au bit près, noyau TypeScript ou compilé. Sur
+    `/metrics` : `workadventure_water_band_steps` (pas partagés depuis la dernière lecture),
+    `workadventure_water_band_wait_p99_seconds` et `_max_seconds` (attente du fil de calcul par pas),
+    `workadventure_water_bands_left_alone` (replis).
   - **Compte des tranches** : à la fermeture d'une salle, le fil de calcul dit à qui l'a démarré combien de
     tranches il a calculées lui-même et combien ses fils d'appoint (`GroundThreads.slices()`). Le test du sol entier
     à 3 bandes s'en sert pour prouver que les fils d'appoint ont travaillé : il demande au fil de calcul d'attendre,
@@ -4245,6 +4254,20 @@ Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus
     2026-11-22 ; `THAW_SPEED` ×600 retiré) : temps réel par défaut, 60 fois plus vite à « Vitesse de l'eau » 60.
     15 mm fondent en 11 h 30 à +5 °C et 5 h 50 à +10 °C (80 % d'humidité, sans vent) en temps réel ; 11 min 30 et
     5 min 50 à 60 (avant : 69 s et 35 s).
+  - **Vitesse du gel et de la fonte** (2026-11-23, demande de l'utilisateur : « un paramètre pour accélérer spécifiquement gel et fonte »). C'est un réglage de la carte, `settings.water.freezeThawSpeed`, absent par défaut ce qui vaut ×1. On le choisit dans les réglages de l'eau de l'outil relief, par crans : ×1, ×10, ×60, ×600 (`FREEZE_THAW_SPEED_STEPS`, borne `MAX_FREEZE_THAW_SPEED` = 600).
+    - **Ce qu'il accélère :** la glace qui prend et dégèle, la neige qui fond et part, la fonte de la neige de sa ville en météo personnelle, et le fondu du givre et de la glace dessinés vers l'air du moment. Ce fondu prend une minute pour le givre et deux pour la glace à ×1 ; à ×60, il ne prend plus qu'une et deux secondes. Il suit aussi « Vitesse de l'eau », qu'il ne suivait pas avant. Il se multiplie avec « Vitesse de l'eau » : `freezeThawTimesOf` = `waterTimesOf` × le facteur.
+    - **Ce qui garde l'horloge de l'eau :** l'eau, la pluie et la neige qui tombe. Une neige pèse donc toujours ce qu'aurait pesé la même pluie.
+    - **Ce qu'il ne touche pas :**
+      - le sol gelé, qui se déduit de l'air à l'instant (`soilFrostOf`) ;
+      - la casse de la glace, la cabane et l'eau.
+    - **Stabilité :** au-delà d'une heure de temps de jeu par pas (`ICE_EXACT_FROM_HOURS`), la glace pousse par la solution exacte de la loi de Stefan (`iceAfterHours`), sans sous-pas : le coût reste le même. En dessous, rien ne change au bit près.
+    - **À chaud :** la valeur voyage avec les réglages de la carte et vaut dès le pas suivant de la prairie, dans le fil des salles comme dans le fil de calcul, qui reçoit le WAM. Le rattrapage d'une salle vide l'applique à ses tranches, dans sa limite de durée habituelle.
+    - **Déploiement :** il ajoute le champ `freezeThawSpeed` (17) à `UpdateWaterSettingMessage`, donc `play`, `back` et `map-storage` doivent être déployés ensemble.
+    - **Dans la barre d'actions** (demande de l'utilisateur : « un widget > >> >>> pour accélérer ces paramètres sans rien casser ») : le widget se trouve juste à gauche du bouton baguette, qui active le mode Basique (`MapClockWidget.svelte`). « > » vaut ×1, « >> » ×60, « >>> » ×600. Il règle le même réglage de la carte que l'outil relief : les deux affichages suivent `mapClockSpeedsStore`, que met à jour toute commande de réglage de l'eau, d'où qu'elle vienne.
+      - **Qui le voit :** seulement qui peut éditer la carte (`mapEditorActivated`), et le pusher vérifie `canEdit`. Les autres joueurs voient un badge discret « Gel ×60 » quand la vitesse n'est pas ×1.
+      - **Sur une barre étroite :** un bouton passe au cran suivant, et un bouton « ×1 » revient au réel d'un clic.
+      - **Une vitesse entre deux crans**, choisie dans l'éditeur (×10), est affichée telle quelle.
+      - **Plus tard :** on pourra y ajouter d'autres horloges (`MAP_CLOCKS`, `MapClockId`, dans `Weather/MapClocks.ts`) sans refaire le widget.
   - Le feu fait fondre la neige autour de lui, même par temps de gel (`Meadow.warm`) : une case en feu chauffe sa
     case et les huit voisines (15 mm par seconde à pleine flamme), un arbre en feu deux cases autour de son pied, la
     catastrophe « feu » 60 mm par touche sous son disque. Cette fonte ne mouille pas le sol (le feu le sèche) ; son
