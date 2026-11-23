@@ -3,6 +3,7 @@ import { WaterGrid, WaterSimulation } from "@workadventure/map-editor";
 import { z } from "zod";
 import type { VariablesRepositoryInterface } from "../Services/Repository/VariablesRepositoryInterface";
 import type { GameRoom } from "./GameRoom";
+import { threadGroundTimings } from "./Ground/GroundTimings";
 import type { RainTimelineService } from "./Services/RainTimelineService";
 
 /**
@@ -47,8 +48,12 @@ export class TerrainWaterManager extends WaterSimulation {
     public stepped: () => void = () => undefined;
 
     public override step(): void {
+        const started = performance.now();
         super.step();
+        const stepMs = performance.now() - started;
         this.stepped();
+        // For the metrics of the server: the step itself, and what it took of its thread with what follows it.
+        threadGroundTimings.waterStepped(stepMs, performance.now() - started);
     }
 
     /**
