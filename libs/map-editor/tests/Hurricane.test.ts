@@ -234,7 +234,7 @@ describe("hurricaneTrack", () => {
             waterEffect: 1,
         });
         // The effect on the water: one of those offered.
-        expect(hurricaneTrack({ waterEffect: 5 }, false).waterEffect).toBe(4);
+        expect(hurricaneTrack({ waterEffect: 12 }, false).waterEffect).toBe(10);
     });
 });
 

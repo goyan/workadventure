@@ -749,7 +749,7 @@ describe("CatastropheManager, hurricanes", () => {
 });
 
 describe("CatastropheManager, a hurricane sped up by the speed of the map", () => {
-    it("keeps the effect on the water a player asked for, one of real, ×2, ×4, ×6, ×8, and tells it to the room", () => {
+    it("keeps the effect on the water a player asked for, one of real, ×5, ×10, ×20, and tells it to the room", () => {
         const { manager, sent } = harness();
         const track = {
             category: 4,
@@ -769,10 +769,10 @@ describe("CatastropheManager, a hurricane sped up by the speed of the map", () =
         };
         manager.request(1, CatastropheKind.CATASTROPHE_HURRICANE, -1, -1, 0, true, false, undefined, {
             ...track,
-            waterEffect: 5,
+            waterEffect: 12,
         });
-        expect(sent[0].hurricane?.waterEffect).toBe(4);
-        expect(manager.hurricane()?.waterEffect).toBe(4);
+        expect(sent[0].hurricane?.waterEffect).toBe(10);
+        expect(manager.hurricane()?.waterEffect).toBe(10);
         manager.stopHurricane();
         manager.request(1, CatastropheKind.CATASTROPHE_HURRICANE, -1, -1, 0, true, false, undefined, track);
         // Not said (an older browser): the real effect.

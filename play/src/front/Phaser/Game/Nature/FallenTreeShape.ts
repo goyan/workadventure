@@ -22,8 +22,36 @@ const TRUNK_UNDER_CROWN = 6;
 const TRUNK_SHOWN_PX = 9;
 /** A bare crown lying is drawn with this many branches. */
 const BARE_BRANCHES = 7;
+/** A palm: its trunk shows from its foot up to this share of its height at least, its fronds only at its top. */
+const PALM_TRUNK_SHARE = 0.6;
+/** The fronds of a palm lying, their ways on the ground from the way it fell (degrees), and their arch. */
+const PALM_FRONDS = [0, 40, -40, 80, -80, 120, -120];
+const PALM_FRONDS_ACROSS = [0, 35, 70, 105, 140];
+const FROND_ARCH = 0.18;
+
+/** What a crown is, for its drawing lying: leaves (tufts), bare branches, or the fronds of a palm. */
+export type CrownKind = "leafy" | "bare" | "palm";
+
+/**
+ * A palm by its shape, whatever its name: a leafy crown on a trunk seen from its foot up to 60 % of its height or more
+ * (its fronds hang round it only at its top). Measured on the trees of the map: the palm (nature-4) 0.64; the others
+ * 0.57 at most (winter-auto-6), most of them under 0.36; the bare ones (more) are told apart before, by their colour.
+ */
+export function isPalm(body: TreeBody): boolean {
+    const height = body.footY - body.crownTop;
+    return height > 0 && (body.footY - body.trunkSeenTop) / height >= PALM_TRUNK_SHARE;
+}
 /** Rows of the root flare skipped above the foot when looking for where the crown starts. */
 const ROOT_FLARE_ROWS = 4;
+
+/** Whether a colour of a crown is foliage: green, a bright autumn leaf, or snow; not the brown of bare wood. */
+export function isFoliage([red, green, blue]: readonly [number, number, number] | readonly number[]): boolean {
+    const max = Math.max(red, green, blue) / 255;
+    const min = Math.min(red, green, blue) / 255;
+    const lightness = (max + min) / 2;
+    const saturation = max === min ? 0 : (max - min) / (1 - Math.abs(2 * lightness - 1));
+    return green >= red || (lightness > 0.4 && saturation > 0.5) || lightness > 0.6;
+}
 
 /** The way a tree falls, as a unit vector on the map (y down): north up, east right. */
 export function fallVector(toward: number): { x: number; y: number } {
@@ -53,6 +81,11 @@ export interface TreeBody {
     trunkWidth: number;
     /** The highest row of the bare trunk, under the crown. */
     trunkTop: number;
+    /**
+     * The highest row the trunk shows up to in the middle of the tree, from its foot, even among the leaves around it
+     * (a palm: its trunk seen up to its tuft of fronds).
+     */
+    trunkSeenTop: number;
     crownTop: number;
     crownBottom: number;
     crownLeft: number;
@@ -92,6 +125,7 @@ export function treeBodyOf(pixels: ArrayLike<number>, width: number, height: num
     let footY = height;
     let trunkWidth = width / 8;
     let trunkTop = height;
+    let trunkSeenTop = height;
     if (footRow >= 0) {
         // The foot and the trunk from the few rows above the lowest wood: the roots spread at the very bottom.
         const near = wood.slice(Math.max(0, footRow - 8), Math.max(0, footRow - 1)).filter((columns) => columns.length);
@@ -101,6 +135,21 @@ export function treeBodyOf(pixels: ArrayLike<number>, width: number, height: num
         footY = footRow + 1;
         trunkWidth = Math.max(2, bottom.reduce((sum, columns) => sum + columns.length, 0) / bottom.length);
         trunkTop = Math.max(0, footRow - ROOT_FLARE_ROWS);
+        // Up the middle of the tree as long as its wood shows there (a gap of a few rows at most), not a bright leaf.
+        const strip = Math.max(1, trunkWidth / 4);
+        let gap = 0;
+        trunkSeenTop = footRow;
+        for (let row = footRow; row >= 0 && gap <= 3; row--) {
+            const seen = wood[row].some((column) => {
+                if (Math.abs(column + 0.5 - footX) > strip) return false;
+                const at = (row * width + column) * 4;
+                return !isFoliage([pixels[at], pixels[at + 1], pixels[at + 2]]);
+            });
+            if (seen) {
+                trunkSeenTop = row;
+                gap = 0;
+            } else gap++;
+        }
         for (let row = trunkTop; row >= 0; row--) {
             const extent = solid[row];
             if (extent && extent.right - extent.left + 1 > trunkWidth * 2.5 + 2) break;
@@ -130,6 +179,7 @@ export function treeBodyOf(pixels: ArrayLike<number>, width: number, height: num
         footY,
         trunkWidth,
         trunkTop,
+        trunkSeenTop,
         crownTop,
         crownBottom,
         crownLeft,
@@ -171,10 +221,12 @@ export interface LyingLayout {
      * twig on each, as seen from above (lines, widths in pixels).
      */
     branches: { from: Point; to: Point; width: number }[];
+    /** The fronds of a palm lying: from the top of its trunk, arched, each a line of points (empty for another tree). */
+    fronds: Point[][];
 }
 
 /** How a tree (`body`, its image) lies the way `toward` (degrees, 0 north): one geometry for all that draws it. */
-export function lyingLayout(body: TreeBody, toward: number): LyingLayout {
+export function lyingLayout(body: TreeBody, toward: number, kind: CrownKind = "leafy"): LyingLayout {
     const way = fallVector(toward);
     const along = lyingVector(toward);
     // Across the tree on the ground, on the screen: shortened as any length up or down the screen.
@@ -246,9 +298,30 @@ export function lyingLayout(body: TreeBody, toward: number): LyingLayout {
         const middle = at(length + row.half * 0.3, row.centre + side * row.half * 0.48);
         branches.push({ from: middle, to: at(length + row.half * 0.95, row.centre + side * row.half * 0.4), width: 1 });
     }
+    // The fronds of a palm, from the top of its trunk: those of the half turned to the sky, all round up or down the
+    // screen; each a little arched up from the ground.
+    const fronds: Point[][] = [];
+    if (kind === "palm") {
+        const top = Math.max(0, body.footY - body.trunkSeenTop);
+        const reach = ((body.crownRight - body.crownLeft + 1) / 2) * 1.05;
+        const ways = near < 0.3 ? PALM_FRONDS_ACROSS.map((angle) => angle * sky) : PALM_FRONDS;
+        for (const angle of ways) {
+            const turn = (angle * Math.PI) / 180;
+            const frond: Point[] = [];
+            for (let step = 0; step <= 6; step++) {
+                const share = step / 6;
+                const point = at(top + Math.cos(turn) * reach * share, Math.sin(turn) * reach * share);
+                frond.push({ x: point.x, y: point.y - reach * FROND_ARCH * Math.sin(Math.PI * share) });
+            }
+            fronds.push(frond);
+        }
+    }
     return {
         tip: at(height, 0),
-        trunkEnd: at(bare + farther + TRUNK_UNDER_CROWN, 0),
+        trunkEnd:
+            kind === "palm"
+                ? at(Math.max(0, body.footY - body.trunkSeenTop), 0)
+                : at(bare + farther + TRUNK_UNDER_CROWN, 0),
         trunkWidth: body.trunkWidth,
         outline: [...left, ...right.reverse()],
         centre: middle.count ? { x: middle.x / middle.count, y: middle.y / middle.count } : at(height / 2, 0),
@@ -262,6 +335,7 @@ export function lyingLayout(body: TreeBody, toward: number): LyingLayout {
             height: plateSize * 0.35,
         },
         crownFirst: way.y < -1e-6,
-        branches,
+        branches: kind === "bare" ? branches : [],
+        fronds,
     };
 }

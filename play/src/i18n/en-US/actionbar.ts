@@ -495,6 +495,9 @@ const actionbar = {
         hurricaneWaterEffectLabel: "Effect on the water (pressure and wind)",
         hurricaneWaterRealistic: "Realistic",
         hurricaneWaterExaggerated: "Exaggerated ×{times}",
+        hurricaneWaterEffectHelp:
+            "The dome of water under the eye only forms at the slow speeds of the « > » widget: an eye faster than the waves of the lake outruns it.",
+        hurricaneRise: "Water: +{rise} m at the highest since it began",
         hurricaneHeadingLabel: "Where the hurricane goes",
         hurricaneHeading: "It goes towards {point} ({degrees}°)",
         hurricaneStart: "Launch the hurricane",

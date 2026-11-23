@@ -20,7 +20,7 @@
         METEOR_MIN_TILES,
     } from "@workadventure/map-editor";
     import { onDestroy, untrack } from "svelte";
-    import { LL } from "../../../i18n/i18n-svelte";
+    import { LL, locale } from "../../../i18n/i18n-svelte";
     import {
         armedCatastropheStore,
         ballDiameterTilesStore,
@@ -35,6 +35,7 @@
         fireRadiusTilesStore,
         hurricaneCategoryStore,
         hurricaneHeadingStore,
+        hurricaneHighestRiseStore,
         hurricaneMinutesStore,
         hurricaneShownStore,
         hurricaneWaterEffectStore,
@@ -113,6 +114,12 @@
                       })
                     : $LL.actionbar.catastrophe.coldLeftSeconds({ seconds: secondsLeft }),
         });
+    });
+    /** The highest the water rose since the hurricane began, to the decimetre; undefined while it is not worth a line. */
+    const hurricaneRise = $derived.by((): string | undefined => {
+        const rise = $hurricaneHighestRiseStore;
+        if (rise === undefined || rise < 0.05) return undefined;
+        return new Intl.NumberFormat($locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(rise);
     });
     const hurricanePoint = $derived(compassPointOf(Number($hurricaneHeadingStore)) ?? "n");
 
@@ -441,6 +448,9 @@
                                     {/each}
                                 </select>
                             </label>
+                            <p class="m-0 basis-full text-xs opacity-70">
+                                {$LL.actionbar.catastrophe.hurricaneWaterEffectHelp()}
+                            </p>
                             {#if hurricaneGoing === undefined}
                                 <button
                                     type="button"
@@ -578,6 +588,11 @@
                         <!-- A hurricane crosses the map: where it is, how hard it blows and rains, how to stop it. -->
                         <span class="flex basis-full items-center gap-2">
                             <span class="tabular-nums" data-testid="catastrophe-hurricane-going">{hurricaneGoing}</span>
+                            {#if hurricaneRise !== undefined}
+                                <span class="tabular-nums text-sky-300" data-testid="catastrophe-hurricane-rise">
+                                    {$LL.actionbar.catastrophe.hurricaneRise({ rise: hurricaneRise })}
+                                </span>
+                            {/if}
                             <button
                                 type="button"
                                 class="rounded-full bg-white/10 px-2 py-1 hover:bg-white/20"
