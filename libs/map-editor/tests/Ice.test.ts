@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+    ICE_CURRENT_OPEN_MS,
+    ICE_CURRENT_SHEET_MS,
+    iceCurrentShare,
     ICE_BEARS_MM,
     ICE_MAX_MM,
     ICE_SLIPS_MM,
@@ -51,5 +54,20 @@ describe("the ice on the water", () => {
             expect(iceMmOfByte(iceByte(mm))).toBeGreaterThan(mm * 0.85);
             expect(iceMmOfByte(iceByte(mm))).toBeLessThan(mm * 1.15);
         }
+    });
+});
+
+describe("the ice on running water", () => {
+    it("takes as on a pond up to the speed under which a sheet of ice forms, none on water that runs fast", () => {
+        // Carstens 1971 (rivers of Norway), cited by Gosink and Osterkamp 1983: moving slush over 0.6 m/s, open over 1.2.
+        expect(ICE_CURRENT_SHEET_MS).toBe(0.6);
+        expect(ICE_CURRENT_OPEN_MS).toBe(1.2);
+        expect(iceCurrentShare(0)).toBe(1);
+        expect(iceCurrentShare(ICE_CURRENT_SHEET_MS)).toBe(1);
+        expect(iceCurrentShare(0.9)).toBeCloseTo(0.5);
+        expect(iceCurrentShare(ICE_CURRENT_OPEN_MS)).toBe(0);
+        expect(iceCurrentShare(3)).toBe(0);
+        // A speed that is not known: as on still water.
+        expect(iceCurrentShare(Number.NaN)).toBe(1);
     });
 });
