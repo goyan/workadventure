@@ -28,6 +28,7 @@ import { skyWindowLightsStore } from "../../../Stores/SkyWindowLightStore";
 import { torchLightsStore } from "../../../Stores/TorchStore";
 import { iceShackLightsStore } from "../../../Stores/IceShackStore";
 import { worldFallStore } from "../../../Stores/WorldFallStore";
+import { fastDayOnStore, fastDaySkyStore, fastDaySpeedStore } from "../../../Stores/FastDayStore";
 import type { GameScene } from "../GameScene";
 import { shownMapPlace } from "../Weather/RealWeatherClient";
 import {
@@ -61,11 +62,14 @@ import { NightOverlay } from "./NightOverlay";
 import { nightHiddenInEditor, nightRenderAction } from "./NightRenderDecision";
 import type { NightFrame } from "./NightRenderDecision";
 import { ServerNightClock } from "./ServerNightClock";
+import { FastDayClock } from "./FastDayClock";
 import { moonlitNightOpacity, skyLightAt } from "./SkyLight";
 import type { SkyLight, SkyLightSettings } from "./SkyLight";
 
 /** The sun only moves the veil during dusk and dawn, over half an hour or more: once a second is plenty. */
 const CLOCK_INTERVAL_MS = 1000;
+/** With the day sped up (FastDayClock), up to ten minutes of sky a second: the sun and the shadows move in small steps. */
+const FAST_CLOCK_INTERVAL_MS = 100;
 
 /**
  * Night mode of the map: darkens the scene in the evening, lights the areas where someone is and carries a halo of
@@ -77,6 +81,13 @@ export class NightManager {
     private readonly lights = new NightLights();
     private readonly halos = new NightHalos();
     private readonly clock = new ServerNightClock();
+    /** The day sped up for this player alone: how far ahead of the real sky the one shown is. */
+    private readonly fastDay = new FastDayClock();
+    private fastDayOn = false;
+    private fastDaySpeed = 1;
+    private readonly unsubscribeFastDay: Unsubscriber;
+    /** How far ahead of the real sky the one shown is, in ms (0 unless the day is sped up). */
+    private skyAhead = 0;
     // Halo id of the local player; remote players use their MapPlayersByKey key.
     private readonly localId = localUserStore.getLocalUser()?.uuid ?? "local";
     // Development override of the clock (`?nightAt=HH:MM`), fixed for the life of the scene.
@@ -234,6 +245,15 @@ export class NightManager {
             this.lastClockAt = undefined;
             this.scene.markDirty();
         });
+        // The day sped up, or back to the real sky: at once.
+        this.unsubscribeFastDay = derived([fastDayOnStore, fastDaySpeedStore], (values) => values).subscribe(
+            ([on, speed]) => {
+                this.fastDayOn = on;
+                this.fastDaySpeed = speed;
+                this.lastClockAt = undefined;
+                this.scene.markDirty();
+            },
+        );
         // Another moment of the sky of the world: its city and its light at once.
         this.unsubscribeWorld = derived(
             [worldMomentStore, worldCustomMinutesStore, worldPointStore, worldFallStore],
@@ -246,11 +266,18 @@ export class NightManager {
     }
 
     public update(now: number): void {
-        if (this.lastClockAt === undefined || now - this.lastClockAt >= CLOCK_INTERVAL_MS) {
+        const interval = this.fastDayOn ? FAST_CLOCK_INTERVAL_MS : CLOCK_INTERVAL_MS;
+        if (this.lastClockAt === undefined || now - this.lastClockAt >= interval) {
             this.lastClockAt = now;
             const date = this.mode === NightMode.Computer ? new Date() : this.clock.now();
             nightDateStore.set(date);
-            const sunAt = this.sunInstant(date);
+            // The one place the day sped up acts on: the instant of the sky. The sun, the moon, the night, the shadows
+            // of the sky and the lamps that go on follow it; the time and the weather of the map stay real.
+            const realSunAt = this.sunInstant(date);
+            const ahead = this.fastDay.ahead(now, this.fastDayOn, this.fastDaySpeed);
+            const sunAt = realSunAt === undefined ? undefined : new Date(realSunAt.getTime() + ahead);
+            this.skyAhead = ahead;
+            fastDaySkyStore.set(this.fastDayOn ? sunAt : undefined);
             // The sun of the place of the map (Paris when it has none), shared with its real weather.
             const mapPlace = shownMapPlace(this.scene.getGameMap().getWamFile()?.getWam().settings);
             // The sky of the world: the point chosen on its map, the place picked where it rains or snows, or the city
@@ -412,9 +439,20 @@ export class NightManager {
         return this.clock.now();
     }
 
+    /**
+     * The time of the server, ahead of it as the sky shown while this player speeds the day up (updated with it): for
+     * what lights up with the sky. The weather and the seasons of the map keep the server's time.
+     */
+    public skyDate(): Date | undefined {
+        const date = this.clock.now();
+        return date === undefined || this.skyAhead === 0 ? date : new Date(date.getTime() + this.skyAhead);
+    }
+
     public destroy(): void {
         this.clock.destroy();
         nightDateStore.set(undefined);
+        fastDaySkyStore.set(undefined);
+        this.unsubscribeFastDay();
         mapTimeZoneStore.set(undefined);
         this.unsubscribeEditor();
         this.unsubscribeMode();
