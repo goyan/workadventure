@@ -119,14 +119,14 @@ describe("AquaticLifeManager, the time a room missed", () => {
         vi.useFakeTimers();
         const saved = livedAndSaved();
         // Steps of 3 ms: three of them fill the 8 ms a slice may take.
-        const slow = await reopened(saved, 10, 3);
+        const slow = await reopened(saved, 3, 3);
         expect(Math.max(...slow.steps.slices)).toBe(3);
-        // Ten minutes at two steps a second, all lived.
-        expect(slow.steps.count).toBe(1200);
+        // Three minutes at two steps a second, all lived.
+        expect(slow.steps.count).toBe(360);
         // Steps that cost nothing (a small map): the slices are as long as they ever were.
-        const quick = await reopened(saved, 10, 0);
+        const quick = await reopened(saved, 3, 0);
         expect(Math.max(...quick.steps.slices)).toBe(120);
-        expect(quick.steps.count).toBe(1200);
+        expect(quick.steps.count).toBe(360);
         // A step that takes longer than a slice by itself still goes: one at a time.
         const heavy = await reopened(saved, 2, 40);
         expect(Math.max(...heavy.steps.slices)).toBe(1);
@@ -136,9 +136,10 @@ describe("AquaticLifeManager, the time a room missed", () => {
     it("ends with the same animals however it was sliced: the same steps in the same order", async () => {
         vi.useFakeTimers();
         const saved = livedAndSaved();
-        const whole = await reopened(saved, 30, 0);
-        const sliced = await reopened(saved, 30, 3);
-        const single = await reopened(saved, 30, 40);
+        // Five minutes missed: six hundred steps, lived at once, by threes, one by one.
+        const whole = await reopened(saved, 5, 0);
+        const sliced = await reopened(saved, 5, 3);
+        const single = await reopened(saved, 5, 40);
         const state = JSON.parse(whole.saved.state) as { animals: unknown[] };
         expect(state.animals.length).toBeGreaterThan(2);
         expect(sliced.saved.state).toBe(whole.saved.state);

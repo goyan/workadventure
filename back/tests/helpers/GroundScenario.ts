@@ -42,7 +42,8 @@ export function seededLuck(): () => number {
 /**
  * A map with all the ground has to deal with: a lake (cells 4..19), a source that pours next to a building, the floor
  * of that building (tiles 14..19, "Carte Sols") with a drain on it, a pond far from it, real weather, water with
- * inertia at sixty times reality.
+ * inertia at six times reality (enough for the rain, the source and the snow to act within a minute and a half;
+ * at sixty its water would live sixty steps of its time at each step, and the tests would be ten times as long).
  */
 export function groundWam(): WAMFileFormat {
     const heights = new Map<string, number>();
@@ -82,7 +83,7 @@ export function groundWam(): WAMFileFormat {
             water: {
                 runoff: 10,
                 evaporation: 0.2,
-                speed: 60,
+                speed: 6,
                 absorption: 5,
                 current: 1,
                 maxSurface: 18,
