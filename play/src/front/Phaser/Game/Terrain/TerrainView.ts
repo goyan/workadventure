@@ -20,6 +20,7 @@ import { waterCycleNow } from "@wa/front/Phaser/Game/Weather/Frost";
 import { meadowHoldsSnow } from "@wa/front/Phaser/Game/Weather/GroundSource";
 import type { WaterCycle } from "@wa/front/Phaser/Game/Weather/Frost";
 import type { WaterRing } from "@wa/front/Phaser/Game/Catastrophe/MeteorFall";
+import { GraphicsQuality, graphicsQualityStore } from "@wa/front/Stores/GraphicsSettingsStore";
 import type { GameScene } from "../GameScene";
 import { createBlockSurface } from "../Weather/BlockSurface";
 import type { BlockCanvasArea, BlockSnapshot, BlockSurface } from "../Weather/BlockSurface";
@@ -63,7 +64,10 @@ import type { GroundArea } from "./TexturedGround";
 import { GroundSplat } from "./GroundSplat";
 import { BreakingFoam, closedSidesOf, FOAM_VISITS_PER_FRAME } from "./BreakingFoam";
 import type { ClosedSide } from "./BreakingFoam";
-import { whitecapShare, windHeading } from "./Whitecaps";
+import { windHeading } from "./Whitecaps";
+import { FOAM_AGES_S, SeaFetch } from "./WindSea";
+import { seaDrawing } from "./WindSeaShader";
+import type { SeaDrawing } from "./WindSeaShader";
 import { depthsSeen } from "./BuiltGround";
 import { drawnArea, heightsOver, stillCovers } from "./ObliqueView";
 import { classicPoolsShown, imagePoolCells, imagePoolsOf, signatureOf } from "./ImagePools";
@@ -165,6 +169,9 @@ interface MeadowLayers extends BlockCanvasArea {
  * painted again only when the relief, the water or the part of the map on the screen changed. A map without relief
  * is not looked at.
  */
+/** In Medium graphics, the shader looks back for the foam the crests left this many times, not all (WindSea). */
+const MEDIUM_FOAM_AGES = 2;
+
 export class TerrainView {
     private readonly surface: BlockSurface;
     private drawn: WeatherView | undefined;
@@ -228,6 +235,18 @@ export class TerrainView {
     private foamWallsOf: unknown;
     private breakingVersion = -1;
     private foam = new Uint8Array(0);
+    /** The sea the wind raises (WindSeaShader), for the wind it was made for, and the fetch of that wind. */
+    private sea: SeaDrawing | undefined;
+    private seaKey = "";
+    private readonly seaFetch = new SeaFetch();
+    /** The quality of the graphics this player chose: no wind sea in Low, fewer looks back for its foam in Medium. */
+    private quality: GraphicsQuality | undefined;
+    private readonly unsubscribeQuality = graphicsQualityStore.subscribe((quality) => {
+        this.quality = quality;
+    });
+    private seaBytes = new Uint8Array(0);
+    /** The cells the water was last drawn over: the fetch is told again over them when it is made anew. */
+    private drawnCanvas: { x: number; y: number; columns: number; rows: number } | undefined;
     /** The current of the water over the canvas, two a cell (see currentOver). */
     private current = new Float32Array(0);
     private shore = new Uint8Array(0);
@@ -386,9 +405,35 @@ export class TerrainView {
             this.breaking.begin(this.water.settled(), this.water.relief(), now, this.closedSides());
         }
         if (shown) this.breaking.advance(FOAM_VISITS_PER_FRAME, now);
-        const wind = shown ? this.wind?.() : undefined;
-        const heading = windHeading(wind?.from) ?? { x: 0, y: 1 };
-        this.splat.setWind({ ...heading, share: whitecapShare(wind?.speed) });
+        const wind = shown && this.splat.drawsSea() && this.quality !== GraphicsQuality.Low ? this.wind?.() : undefined;
+        // Made again when the wind changes by a tenth of a km/h or a degree: its waves, and where they go.
+        const key = wind?.speed === undefined ? "" : `${Math.round(wind.speed * 10)}:${Math.round(wind.from ?? 0)}`;
+        if (key !== this.seaKey) {
+            this.seaKey = key;
+            this.sea = seaDrawing(wind?.speed, windHeading(wind?.from) ?? { x: 0, y: 1 });
+        }
+        // The fetch of that wind over the water: the shader is told it when the water is drawn.
+        if (this.sea) {
+            this.seaFetch.update(this.water.settled(), version, this.sea.heading, now);
+            // A ray of the fetch at each image; once it is all made, only the fetch the shader reads is told again,
+            // over what is drawn: no redrawing of the ground.
+            if (this.seaFetch.advance() && this.drawnCanvas) this.splat.setFetch(this.fetchOver(this.drawnCanvas));
+        }
+        this.splat.setSea(this.sea, this.quality === GraphicsQuality.Medium ? MEDIUM_FOAM_AGES : FOAM_AGES_S.length);
+    }
+
+    /** The fetch of the wind over the cells of a canvas, for the shader; undefined without a wind sea. */
+    private fetchOver(canvas: { x: number; y: number; columns: number; rows: number }): Uint8Array | undefined {
+        if (!this.sea) return undefined;
+        const size = canvas.columns * canvas.rows;
+        if (this.seaBytes.length !== size) this.seaBytes = new Uint8Array(size);
+        return this.seaFetch.over(
+            canvas.x / TERRAIN_CELL,
+            canvas.y / TERRAIN_CELL,
+            canvas.columns,
+            canvas.rows,
+            this.seaBytes,
+        );
     }
 
     private draw(view: WeatherView, now: number): void {
@@ -589,7 +634,9 @@ export class TerrainView {
                 foamy ? this.foam : undefined,
                 anyWater ? this.currentOver(canvas, wet) : undefined,
                 depths,
+                anyWater ? this.fetchOver(canvas) : undefined,
             );
+            this.drawnCanvas = { x: canvas.x, y: canvas.y, columns: canvas.columns, rows: canvas.rows };
         } else if (this.grounds) {
             this.layWater(this.grounds, canvas, anyWater ? wet : undefined);
         } else if (anyWater) {
@@ -1100,6 +1147,7 @@ export class TerrainView {
     }
 
     public destroy(): void {
+        this.unsubscribeQuality();
         this.basicPools?.destroy();
         this.basicWater?.destroy();
         this.surface.destroy();

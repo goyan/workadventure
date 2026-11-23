@@ -2796,16 +2796,44 @@ partir de ce qu'il reçoit déjà (profondeurs, vent) :
   cartes réglées à 1 envoi), elle venait par bouffées. Vague qui déferle en continu, lue toutes les 50 ms :
   à 1 état par seconde, écume moyenne 4,64 → 5,51 (5,52 → 5,68 à 5 états), écart creux à crête 41 % → 12 %, plus
   grand saut entre deux dessins 40 % → 1 %.
-- **Moutons** (`Terrain/Whitecaps.ts`) : le vent lève des vagues courtes qui cassent à leur crête, sans rapport
-  avec la houle. Part de l'eau blanchie selon la loi usuelle (Monahan et O'Muircheartaigh, 1980 :
-  3,84 × 10⁻⁶ × vent^3,41, vent en m/s) : rien sous 3 m/s, environ 0,03 % à force 3, 0,3 % à force 4, 1 % à
-  force 5, 2,4 % à force 6. Seulement dehors, sur une eau d'au moins 8 px, non gelée ; courtes crêtes en travers
-  du vent, qui dérivent lentement sous lui. Le vent est celui que le joueur voit (météo réelle ou réglée).
+- **Mer du vent, déferlement et moutons** (`Terrain/WindSea.ts`, `Terrain/WindSeaShader.ts`) : le vent lève sur
+  l'eau libre des vagues courtes qui grossissent avec lui et avec la distance qu'il a parcourue sur l'eau (le fetch,
+  mesuré depuis la rive au vent ; fetch effectif, moyenne en cos² des directions à ±40° du vent : le calme derrière
+  une île se resserre et s'efface sous le vent). Loi de croissance et spectre du rapport JONSWAP
+  (Hasselmann et al. 1973) : 40 km/h sur 200 m donnent des crêtes d'environ 1 m (30 px) et 8 cm de creux à crête
+  significatifs, 80 km/h sur 142 m des crêtes de 1,3 m. Échelle réelle du jeu, sans grossissement. Douze vagues de
+  fréquence et de direction fixes (écart autour du vent d'une mer du vent), sommées par le shader ; aucune plus courte
+  que 4 px. Elles sont choisies par pas de 5 km/h et de 10° : un vent qui hésite garde les mêmes vagues, sans saut,
+  seule leur hauteur le suit. Sur les hauts-fonds, elles ne dépassent pas 0,8 fois la profondeur.
+  Une crête **déferle** quand sa pente dépasse celle de la vague la plus raide possible (H/L = 0,142, Michell 1893,
+  Miche 1944) : les moutons naissent sur ces crêtes, plus de tirage au hasard. Les **groupes de vagues** viennent à
+  des places et des tailles aléatoires (un champ lisse, de moyenne quadratique 1, qui monte ou baisse la hauteur, et
+  qui avance à la vitesse des groupes) : quelques vagues sommées battraient en motif régulier, ce qu'une vraie mer ne
+  fait pas. La **lumière** (pente tournée vers la lumière ou non) lit surtout les vagues de plus de 8 à 24 px : les
+  plus courtes faisaient des hachures ; elles comptent entières dans le déferlement. L'**écume** laissée dure quelques
+  secondes (s'efface en 3 s, Callaghan et al. 2012), dérive à 3 % du vent (Wu 1983) et se déchire en filaments dans
+  le sens du vent ; translucide en brise, plus dense et plus opaque par grand vent, selon l'échelle de Beaufort (OMM :
+  traînées à force 7, bien marquées à 8, denses à 9, la mer blanche à 10).
+  La part blanchie suit la loi usuelle des moutons (Monahan et O'Muircheartaigh, 1980) : le seuil de pente est le
+  seuil physique à 7 % près de 20 à 82 km/h, 14 % sous lui à 90 km/h (table `BREAKING_FACTORS`, mesurée sur 2048 px).
+  Au-delà de 90 km/h, où les mesures de cette loi s'arrêtent, le blanc tend vers 45 % au plus (`whitecapWhite`) :
+  l'eau reste visible. Mesuré sur le GPU (Metal, sonde de l'étude, 2048 px, six instants) : 0,13 % à 20 km/h (loi
+  0,13 %), 1,31 % à 40 (1,41), 4,95 % à 60 (5,63), 14,6 % à 82 (16,3), 34,8 % à 110 (visée 34,2) ; 30 et 50 km/h
+  sont 27 % sous la loi sur le GPU (hachage calculé autrement par Metal que par le jumeau processeur). Sur un fetch
+  plus court, moins de moutons. Rien ne change sous 10 km/h (image identique à l'octet). Seulement dehors, sur une
+  eau d'au moins 8 px, non gelée. Le vent est celui que le joueur voit (carte, réglé à la main, ou météo réelle).
+  Qualité graphique : **Basse**, pas de mer du vent ; **Moyenne**, deux regards en arrière pour l'écume laissée au lieu
+  de trois. Coût mesuré (Mac M4 Max, 1920 x 1080 couvert d'eau) : 1,1 → 1,7 ms par image sans écume, 2,4 à 2,6 ms avec.
 
-Le déferlement et les moutons sont dessinés par le **shader de l'eau** (`Terrain/GroundSplat.ts`), comme l'écume
-de rive : l'écume des vagues lui arrive par cellule (rouge du paquet 9), déchirée par un bruit fin qui bouillonne ;
-les moutons par un uniforme (`uWind` : sens du vent et part blanchie), dans une grille posée le long du vent. Sans
-shader (rendu de secours), ni l'un ni l'autre. Coupés avec l'effet « eau en mouvement ».
+Le déferlement des vagues du serveur et la mer du vent sont dessinés par le **shader de l'eau**
+(`Terrain/GroundSplat.ts`), comme l'écume de rive : l'écume des vagues lui arrive par cellule (rouge du paquet 9),
+déchirée par un bruit fin qui bouillonne ; le fetch par cellule (rouge du paquet 11, recalculé quand le vent tourne
+de plus de 5° ou quand les rives ont bougé (hystérésis : une cellule se ferme sous 2 px d'eau, s'ouvre au-delà de 6 px),
+au plus toutes les 3 s ; à la fin, seul ce paquet est réécrit (`GroundSplat.setFetch`), jamais le sol ; un rayon du fetch effectif par image : 12 à 17 ms
+d'un bloc sur la carte d'Antoine, 45 ms sur une carte quatre fois plus grande) ; les vagues par des uniformes (phases calculées sur le processeur et
+ramenées dans [0, 1), aucun sinus d'un grand nombre, aucun hachage par sinus : pas de dérive sur une page ouverte des
+jours). Compilé seulement si la carte graphique a la précision haute et 128 vecteurs d'uniformes ; sinon ni mer du
+vent ni moutons. Sans shader (rendu de secours), ni l'un ni l'autre. Coupés avec l'effet « eau en mouvement ».
 
 Aucun réglage, rien d'envoyé par le serveur. Non vu à l'écran par un agent.
 
