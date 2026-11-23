@@ -2592,6 +2592,9 @@ ne l'est pas).
     à fait la finesse (de 2 à 3 il monte de 26 % sur cette carte, pas de 50 %), donc après un pic (une salle qui
     démarre) la finesse 3 ne revient que si le fil est sous 57 % à la finesse 2 : 8 salles restent alors à 2
     (68 % d'un cœur) alors que le fil tiendrait 3.
+  - **Réglage et module** : `GROUND_THREADS` est lu par `Ground/ServerGroundThreads.ts`, seul à valider
+    l'environnement de `back` ; `GroundThreads.ts`, le fil et ses tests n'en dépendent pas (un test tourne sans aucune
+    variable d'environnement). Un fil qui meurt au démarrage le dit dans les journaux de `back`, avec sa raison.
   - **Journaux** : au démarrage, `back` dit où le sol est calculé (« The ground of the rooms (water and meadow) is
     computed on N thread(s) of its own (GROUND_THREADS) », ou « … on the thread of the rooms (GROUND_THREADS is
     0) ») ; « Ground thread i of N starts for its first room » quand un fil démarre pour sa première salle ;
