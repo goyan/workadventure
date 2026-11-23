@@ -20,6 +20,8 @@ const ROOT_PLATE_TRUNKS = 1.15;
 const TRUNK_UNDER_CROWN = 6;
 /** At least this much of the trunk shows (screen pixels) between the plate of roots and the crown. */
 const TRUNK_SHOWN_PX = 9;
+/** A bare crown lying is drawn with this many branches. */
+const BARE_BRANCHES = 7;
 /** Rows of the root flare skipped above the foot when looking for where the crown starts. */
 const ROOT_FLARE_ROWS = 4;
 
@@ -164,6 +166,11 @@ export interface LyingLayout {
     pit: { x: number; y: number; width: number; height: number };
     /** True when the tree lies up the screen: its crown is drawn first, then its trunk and its roots over it. */
     crownFirst: boolean;
+    /**
+     * A bare crown lying (no leaves): its limb along the trunk, its branches out to the side of the sky and forward, a
+     * twig on each, as seen from above (lines, widths in pixels).
+     */
+    branches: { from: Point; to: Point; width: number }[];
 }
 
 /** How a tree (`body`, its image) lies the way `toward` (degrees, 0 north): one geometry for all that draws it. */
@@ -209,6 +216,36 @@ export function lyingLayout(body: TreeBody, toward: number): LyingLayout {
         const point = at(length, centre);
         middle = { x: middle.x + point.x, y: middle.y + point.y, count: middle.count + 1 };
     });
+    // The branches of a bare crown: its rows give how far each reaches at its place along the tree.
+    const rows = body.crownRows.flatMap((row, index) =>
+        row
+            ? [
+                  {
+                      length: body.footY - (body.crownTop + index) - 0.5 + farther,
+                      centre: (row.left + row.right + 1) / 2 - body.footX,
+                      half: ((row.right - row.left + 1) / 2) * CROWN_SPREAD,
+                  },
+              ]
+            : [],
+    );
+    const start = bare + farther;
+    const branches: LyingLayout["branches"] = [
+        { from: at(Math.max(0, start - 4), 0), to: at(height * 0.97, 0), width: Math.max(1.5, body.trunkWidth * 0.45) },
+    ];
+    for (let branch = 0; branch < BARE_BRANCHES && rows.length; branch++) {
+        const length = start + ((branch + 0.6) / BARE_BRANCHES) * 0.85 * (height - start);
+        const row = rows.reduce((best, each) =>
+            Math.abs(each.length - length) < Math.abs(best.length - length) ? each : best,
+        );
+        // Every other one to the side against the ground, when it shows (up or down the screen).
+        const side = branch % 2 === 0 || near < 0.3 ? sky : -sky * near;
+        // Each its own slant forward, as branches are: not a comb.
+        const slant = 0.3 + 0.55 * ((branch * 0.618) % 1);
+        const end = at(length + row.half * slant, row.centre + side * row.half * (1.05 - slant * 0.3));
+        branches.push({ from: at(length, 0), to: end, width: Math.max(1, body.trunkWidth * 0.22) });
+        const middle = at(length + row.half * 0.3, row.centre + side * row.half * 0.48);
+        branches.push({ from: middle, to: at(length + row.half * 0.95, row.centre + side * row.half * 0.4), width: 1 });
+    }
     return {
         tip: at(height, 0),
         trunkEnd: at(bare + farther + TRUNK_UNDER_CROWN, 0),
@@ -217,13 +254,14 @@ export function lyingLayout(body: TreeBody, toward: number): LyingLayout {
         centre: middle.count ? { x: middle.x / middle.count, y: middle.y / middle.count } : at(height / 2, 0),
         thickness,
         plate: { x: -along.x * 2, y: -plateHeight * 0.5 - along.y * 2, width: plateWidth, height: plateHeight },
-        // The hole on the side away from the tree, a little aside: it shows next to the plate.
+        // The hole on the side away from the tree, a little aside: it shows next to the plate, as large as it.
         pit: {
-            x: -along.x * plateSize * 1.2 + across.x * plateSize * 0.5,
-            y: -along.y * plateSize * 1.2 + across.y * plateSize * 0.5,
-            width: plateSize * 1.1,
-            height: plateSize * 0.5,
+            x: -along.x * plateSize * 1.1 + across.x * plateSize * 0.4,
+            y: -along.y * plateSize * 1.1 + across.y * plateSize * 0.4,
+            width: plateSize * 0.85,
+            height: plateSize * 0.35,
         },
         crownFirst: way.y < -1e-6,
+        branches,
     };
 }

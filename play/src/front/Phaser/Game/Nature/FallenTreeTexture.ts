@@ -15,7 +15,9 @@ const EARTH_TOP = "#94744c";
 const EARTH_EDGE = "#3b2a1a";
 const ROOTS = "#3b2a1a";
 const GRASS = "#55702c";
-const PIT = "rgba(52, 37, 22, 0.75)";
+const PIT = "rgba(52, 37, 22, 0.5)";
+/** Under this share of leaves (green, bright or snowy pixels), a crown is bare: drawn lying in branches. */
+const BARE_FOLIAGE = 0.35;
 /** The tufts of leaves the crown lying is drawn with: their radius against the width of the crown. */
 const TUFT_RADIUS = 0.055;
 /** The shadow right under what lies on the ground, whatever the light. */
@@ -50,6 +52,8 @@ interface ReadTree {
     standing: HTMLCanvasElement;
     /** The colours of its leaves, from their shade to their light, and of their outline (CSS). */
     palette: { outline: string; shade: string; middle: string; light: string };
+    /** A crown with hardly any leaves (a bare tree in winter): drawn lying in branches, not in tufts. */
+    bare: boolean;
 }
 
 const read = new Map<string, ReadTree | null>();
@@ -71,6 +75,15 @@ function paletteOf(leaves: [number, number, number][]): ReadTree["palette"] {
         return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
     };
     return { outline: at(0.03), shade: at(0.2), middle: at(0.5), light: at(0.85) };
+}
+
+/** Whether a colour of a crown is foliage: green, a bright autumn leaf, or snow; not the brown of bare wood. */
+function isFoliage([red, green, blue]: [number, number, number]): boolean {
+    const max = Math.max(red, green, blue) / 255;
+    const min = Math.min(red, green, blue) / 255;
+    const lightness = (max + min) / 2;
+    const saturation = max === min ? 0 : (max - min) / (1 - Math.abs(2 * lightness - 1));
+    return green >= red || (lightness > 0.4 && saturation > 0.5) || lightness > 0.6;
 }
 
 /** The image of a tree read by part, once; undefined while it is not loaded. */
@@ -118,6 +131,7 @@ function readTree(scene: Phaser.Scene, sourceKey: string): ReadTree | undefined 
         wood: put(wood),
         standing: put(standing),
         palette: paletteOf(leaves),
+        bare: leaves.filter(isFoliage).length < BARE_FOLIAGE * leaves.length,
     };
     read.set(sourceKey, tree);
     return tree;
@@ -271,6 +285,30 @@ function drawCrown(context: CanvasRenderingContext2D, tree: ReadTree, layout: Ly
     context.stroke();
 }
 
+/** A bare crown lying: its limb and its branches in the colours of its wood, an outline under them, lit on top. */
+function drawBranches(context: CanvasRenderingContext2D, tree: ReadTree, layout: LyingLayout): void {
+    const { palette } = tree;
+    context.save();
+    context.lineCap = "round";
+    for (const [extra, rise, colour] of [
+        [2, 0, palette.outline],
+        [0, 0, palette.middle],
+        [-1, 0.6, palette.light],
+    ] as const) {
+        context.strokeStyle = colour;
+        for (const branch of layout.branches) {
+            const width = branch.width + extra;
+            if (width < 0.5) continue;
+            context.lineWidth = width;
+            context.beginPath();
+            context.moveTo(branch.from.x, branch.from.y - rise);
+            context.lineTo(branch.to.x, branch.to.y - rise);
+            context.stroke();
+        }
+    }
+    context.restore();
+}
+
 /** The trunk on the ground from the foot, its bark stretched along it. */
 function drawTrunk(context: CanvasRenderingContext2D, tree: ReadTree, layout: LyingLayout): void {
     const { body } = tree;
@@ -341,7 +379,7 @@ function drawPlate(context: CanvasRenderingContext2D, layout: LyingLayout): void
 }
 
 /** The shadow right under the tree lying: under its trunk and its crown. */
-function drawContactShadow(context: CanvasRenderingContext2D, layout: LyingLayout): void {
+function drawContactShadow(context: CanvasRenderingContext2D, layout: LyingLayout, bare: boolean): void {
     context.save();
     context.filter = "blur(2px)";
     context.fillStyle = CONTACT_SHADOW;
@@ -352,7 +390,15 @@ function drawContactShadow(context: CanvasRenderingContext2D, layout: LyingLayou
     context.moveTo(0, 2);
     context.lineTo(layout.trunkEnd.x, layout.trunkEnd.y + 2);
     context.stroke();
-    if (layout.outline.length >= 3) {
+    if (bare) {
+        for (const branch of layout.branches) {
+            context.lineWidth = branch.width + 1;
+            context.beginPath();
+            context.moveTo(branch.from.x, branch.from.y + 2);
+            context.lineTo(branch.to.x, branch.to.y + 2);
+            context.stroke();
+        }
+    } else if (layout.outline.length >= 3) {
         context.translate(1, 3);
         outlinePath(context, layout.outline, 0);
         context.fill();
@@ -382,11 +428,11 @@ export function lyingTreeTexture(scene: Phaser.Scene, sourceKey: string, toward:
         context.ellipse(layout.pit.x, layout.pit.y, layout.pit.width, layout.pit.height, 0, 0, 2 * Math.PI);
         context.fillStyle = PIT;
         context.fill();
-        drawContactShadow(context, layout);
+        drawContactShadow(context, layout, tree.bare);
         const parts = [
             () => drawPlate(context, layout),
             () => drawTrunk(context, tree, layout),
-            () => drawCrown(context, tree, layout),
+            () => (tree.bare ? drawBranches(context, tree, layout) : drawCrown(context, tree, layout)),
         ];
         for (const draw of layout.crownFirst ? parts.reverse() : parts) draw();
     });

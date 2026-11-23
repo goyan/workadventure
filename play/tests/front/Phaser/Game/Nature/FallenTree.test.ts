@@ -114,6 +114,13 @@ describe("a tree the wind laid down, as the browser draws it", () => {
         expect(Math.min(...east.outline.map((point) => point.y))).toBeLessThan(-20);
         expect(east.tip.x).toBeCloseTo(121 - 4);
         expect(east.tip.y).toBeCloseTo(0);
+        // A bare crown lying: a limb and seven branches, each with a twig; across the screen, all above the trunk.
+        expect(east.branches).toHaveLength(1 + 2 * 7);
+        expect(Math.max(...east.branches.flatMap((branch) => [branch.from.y, branch.to.y]))).toBeLessThan(1);
+        expect(south.branches.some((branch) => branch.to.x > 5)).toBe(true);
+        expect(south.branches.some((branch) => branch.to.x < -5)).toBe(true);
+        // The hole beside the plate, no larger than it.
+        expect(south.pit.width).toBeLessThanOrEqual(south.plate.width);
         // The plate of roots seen face on when the tree lies up or down the screen, edge on across it.
         expect(south.plate.width).toBeGreaterThan(2 * east.plate.width);
         expect(south.plate.y).toBeLessThan(0);
