@@ -153,7 +153,11 @@ describe("the foam the crests leave", () => {
     });
 
     it("is kept moved upwind by the drift, faded in FOAM_DECAY_S, and laid only where a crest breaks", () => {
-        expect(WIND_SEA_FOAM_GLSL).toMatch(/world - uSeaDir\.xy \* uSeaDir\.z \* dt/);
+        // Upwind by the drift of the wind here: that of the sea without a hurricane (seaWindHere).
+        expect(WIND_SEA_FOAM_GLSL).toMatch(
+            /world - heading \* uSeaDir\.z \* \(gSeaWind\.z \/ max\(uSea\.x, 0\.1\)\) \* dt/,
+        );
+        expect(WIND_SEA_FOAM_GLSL).toMatch(/seaWindHere\(world\);\n\s*\/\/ Where this point is/);
         expect(WIND_SEA_FOAM_GLSL).toContain(`exp(-dt / (${FOAM_DECAY_S.toPrecision(8)} * uFoamLife * life))`);
         expect(WIND_SEA_FOAM_GLSL).toMatch(/float breaking = seaBreaking\(world\);\n\s*if \(breaking > 0\.0\)/);
         expect(WIND_SEA_FOAM_GLSL).toMatch(/max\(kept, laid\)/);

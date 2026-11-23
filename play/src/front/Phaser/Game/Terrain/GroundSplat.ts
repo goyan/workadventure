@@ -829,6 +829,7 @@ void main() {
         float seaWhite = 0.0;
 #ifdef WIND_SEA
         if (uSea.z > 0.5 && open > 0.5) {
+            seaWindHere(world);
             seaAmplitudes(pack(${FETCH_PACK}.0, world).r * ${FETCH_GLSL_METRES}, depthPx * ${glsl(MAP_PX_METRES)});
             seaWhite = seaFoam(world);
             // In a hurricane the spray hides the waves: less light and shade, less of what the water reflects.

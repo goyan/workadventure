@@ -5,6 +5,7 @@ import {
     DEFAULT_FIRE_THRESHOLDS,
     NEUTRAL_FIRE_CONDITIONS,
     GameMapProperties,
+    hurricaneTimesOf,
     LISTENING_ZONE_JAM_VARIABLE,
     parseListeningZoneJams,
     parseListeningZoneJamsUpdate,
@@ -407,6 +408,8 @@ export class GameRoom implements BrothersFinder {
         catastrophes.levelWith(ground.ballLevelAt.bind(ground));
         // A hurricane turns clockwise over a map in the southern hemisphere.
         catastrophes.southernWith(gameRoom.inSouthernHemisphere.bind(gameRoom));
+        // The widget of the speed of the map speeds the hurricane up too.
+        catastrophes.hurricaneTimesWith(gameRoom.hurricaneTimes.bind(gameRoom));
         gameRoom.catastrophes = catastrophes;
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => catastrophes.stop());
@@ -1362,6 +1365,11 @@ export class GameRoom implements BrothersFinder {
     /** Where the players of the room cast their fishing line from, by user id: on the ground or over it. */
     public anglers(): Map<number, { x: number; y: number }> {
         return anglersOf(this.users.values());
+    }
+
+    /** How many times faster the hurricane goes, by the speed of the freeze and the thaw of the map. */
+    public hurricaneTimes(): number {
+        return hurricaneTimesOf(this.getWam()?.settings?.water?.freezeThawSpeed);
     }
 
     /** Whether the place of the map is in the southern hemisphere (Paris, in the north, without a place). */

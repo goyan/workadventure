@@ -111,6 +111,49 @@ export const HURRICANE_DEFAULT_MINUTES = 5;
 export const HURRICANE_DEFAULT_CATEGORY = 4;
 /** Where the storm goes, in degrees (0 north, 90 east): west-north-west, a usual track in the tropics. */
 export const HURRICANE_DEFAULT_HEADING = 290;
+/**
+ * The widget of the speed of the map (the speed of its freeze and its thaw: ×1, ×60, ×600) speeds the hurricane up too,
+ * by steps of its own (a choice of the user: « >>> » a crossing of 5 min in 30 s): ×1, ×5 at ×60, ×10 at ×600, ×2 at
+ * ×10; never a crossing shorter than HURRICANE_SHORTEST_MS.
+ */
+const HURRICANE_TIMES: readonly (readonly [number, number])[] = [
+    [1, 1],
+    [10, 2],
+    [60, 5],
+    [600, 10],
+];
+export const HURRICANE_SHORTEST_MS = 30_000;
+
+/** How many times faster the hurricane goes at that speed of the freeze and the thaw of the map. */
+export function hurricaneTimesOf(freezeThawSpeed: number | undefined): number {
+    const speed = freezeThawSpeed !== undefined && Number.isFinite(freezeThawSpeed) ? freezeThawSpeed : 1;
+    if (speed <= HURRICANE_TIMES[0][0]) return HURRICANE_TIMES[0][1];
+    for (let at = 1; at < HURRICANE_TIMES.length; at++) {
+        const [speed1, times1] = HURRICANE_TIMES[at];
+        if (speed <= speed1) {
+            const [speed0, times0] = HURRICANE_TIMES[at - 1];
+            const t = Math.log(speed / speed0) / Math.log(speed1 / speed0);
+            return times0 * Math.pow(times1 / times0, t);
+        }
+    }
+    return HURRICANE_TIMES[HURRICANE_TIMES.length - 1][1];
+}
+
+/**
+ * The hurricane going `asked` times faster than the passage asked for (hurricaneTimesOf), from `now`: its crossing
+ * shortened (never under HURRICANE_SHORTEST_MS, nor longer than asked), and its start moved so that its eye is where
+ * it was: no jump when the speed changes during the passage. The same hurricane when nothing changes.
+ */
+export function hurricaneSpedUp(hurricane: Hurricane, asked: number, now: number): Hurricane {
+    const was = hurricane.times ?? 1;
+    const passage = hurricane.durationMs * was;
+    const wanted = Number.isFinite(asked) && asked > 0 ? asked : 1;
+    const durationMs = Math.max(Math.min(passage, HURRICANE_SHORTEST_MS), passage / wanted);
+    if (Math.abs(durationMs - hurricane.durationMs) < 1) return hurricane;
+    const progress = Math.min(1, Math.max(0, (now - hurricane.startedAt) / hurricane.durationMs));
+    return { ...hurricane, durationMs, times: passage / durationMs, startedAt: now - progress * durationMs };
+}
+
 /** The hurricane of a room is told this often, so that a player who joins sees it at once. */
 export const HURRICANE_TELL_MS = 1000;
 
@@ -131,6 +174,11 @@ export interface HurricaneTrack {
 export interface Hurricane extends HurricaneTrack {
     id: number;
     startedAt: number;
+    /**
+     * How many times faster than asked it goes (the speed of the map, hurricaneTimesOf): its `durationMs` is the
+     * passage asked divided by it. 1 when absent.
+     */
+    times?: number;
     fromX: number;
     fromY: number;
     toX: number;
@@ -300,7 +348,8 @@ export function hurricaneWind(
     const mapE = (x - storm.eyeX) / PX_PER_METRE;
     const mapN = -(y - storm.eyeY) / PX_PER_METRE;
     const distanceM = Math.hypot(mapE, mapN);
-    const speed = hurricaneMaxWind(hurricane.category) * hollandShare(distanceM);
+    const share = hollandShare(distanceM);
+    const speed = hurricaneMaxWind(hurricane.category) * share;
     const spin = hurricane.southern ? -1 : 1;
     const outE = distanceM > 0 ? mapE / distanceM : 0;
     const outN = distanceM > 0 ? mapN / distanceM : 0;
@@ -308,7 +357,8 @@ export function hurricaneWind(
     const roundN = outE * spin;
     const inflow = (HURRICANE_INFLOW_DEGREES * Math.PI) / 180;
     const heading = (hurricane.heading * Math.PI) / 180;
-    const motion = HURRICANE_MOTION_SHARE * storm.speedKmh;
+    // The motion of the storm where its wind blows: none in the calm of the eye.
+    const motion = HURRICANE_MOTION_SHARE * storm.speedKmh * share;
     return {
         east: speed * (Math.cos(inflow) * roundE - Math.sin(inflow) * outE) + motion * Math.sin(heading),
         north: speed * (Math.cos(inflow) * roundN - Math.sin(inflow) * outN) + motion * Math.cos(heading),
@@ -427,7 +477,8 @@ export function skyRainUnder(
 ): number {
     const here = hurricaneHere(hurricane, epoch, x, y);
     if (!here || here.share <= 0) return mapRate;
-    const storm = here.rainRate / (groundSpeed > 0 ? groundSpeed : 1);
+    // Sped up, its passage is shorter: its rain falls that many times harder, the same total.
+    const storm = (here.rainRate * (hurricane?.times ?? 1)) / (groundSpeed > 0 ? groundSpeed : 1);
     return mapRate + (storm - mapRate) * here.share;
 }
 

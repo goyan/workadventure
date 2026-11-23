@@ -27,6 +27,8 @@ function told(impactInMs: number, startedAt = START): CatastropheMessage {
             toY: 100,
             anchorX: 3840,
             anchorY: 100,
+            durationMs: 0,
+            times: 0,
         },
     };
 }

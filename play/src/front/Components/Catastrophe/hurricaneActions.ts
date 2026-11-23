@@ -24,6 +24,8 @@ export function startHurricane(): void {
             toY: 0,
             anchorX: 0,
             anchorY: 0,
+            durationMs: 0,
+            times: 0,
         });
 }
 

@@ -920,6 +920,10 @@ message HurricaneTrackMessage {
   double toY = 10;
   double anchorX = 11;
   double anchorY = 12;
+  // Told by the server only: how long the crossing lasts now (ms) and how many times faster than asked it goes (the
+  // speed of the map); `startedAt` is moved with them so that the eye goes on from where it is.
+  double durationMs = 13;
+  double times = 14;
 }
 
 // Browser to server: a player sets the conditions the fire of the room goes by (heat, humidity of the air, wind) by

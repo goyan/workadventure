@@ -54,12 +54,18 @@ describe("isSwayingTree", () => {
 });
 
 describe("TreeSway", () => {
-    function fixture(enabled = true, reducedMotion = false, readable = true) {
+    function fixture(
+        enabled = true,
+        reducedMotion = false,
+        readable = true,
+        windAt?: (x: number, y: number) => { speed: number; from: number } | undefined,
+    ) {
         const events = new Phaser.Events.EventEmitter();
         const markDirty = vi.fn();
         const scene = { events, markDirty } as unknown as Phaser.Scene & { markDirty(): void };
         const tree = {
             x: 100,
+            y: 0,
             scaleX: 1,
             texture: { key: "oak.png" },
             setTexture(key: string) {
@@ -74,6 +80,7 @@ describe("TreeSway", () => {
             enabled: () => enabled,
             poseTexture: (key, pose) => (readable ? `${key}@${pose}` : undefined),
             reducedMotion,
+            windAt,
         });
         return { events, markDirty, tree, sway };
     }
@@ -92,6 +99,19 @@ describe("TreeSway", () => {
         expect(tree.texture.key).toBe("oak.png");
         expect(tree.x).toBe(100);
         sway.destroy();
+    });
+
+    it("sways each tree in the wind where it stands when there is one (a hurricane): still in its calm eye", () => {
+        const calm = fixture(true, false, true, () => ({ speed: 0, from: 270 }));
+        calm.sway.update(0, 1_234_567);
+        const blown = fixture(true, false, true, () => ({ speed: 80, from: 270 }));
+        blown.sway.update(0, 1_234_567);
+        expect(Math.abs(calm.sway.poseOf("oak"))).toBeLessThan(blown.sway.poseOf("oak"));
+        // The other way under the opposite wind.
+        const east = fixture(true, false, true, () => ({ speed: 80, from: 90 }));
+        east.sway.update(0, 1_234_567);
+        expect(east.sway.poseOf("oak")).toBeLessThan(0);
+        for (const { sway } of [calm, blown, east]) sway.destroy();
     });
 
     it("draws the map again only when a tree changes pose", () => {
