@@ -65,6 +65,12 @@ export const EnvironmentVariables = z.object({
         .describe(
             "Number of threads that compute the ground of the rooms (the water of their relief and their meadow) away from the thread of the rooms. 0 computes it on the thread of the rooms. Defaults to 0",
         ),
+    WATER_KERNEL: z
+        .enum(["typescript", "wasm"])
+        .optional()
+        .describe(
+            'What computes the water with inertia of the rooms: "typescript", or "wasm" for the same computation compiled to WebAssembly (the same water, to the bit, about 1.6 times as fast). Defaults to "typescript"',
+        ),
     HTTP_PORT: PositiveIntAsString.optional()
         .transform((val) => toNumber(val, 8080))
         .describe("HTTP port for the back service. Defaults to 8080"),

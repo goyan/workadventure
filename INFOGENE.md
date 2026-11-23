@@ -2413,8 +2413,16 @@ identique : `WaterFingerprints.test.ts` garde deux empreintes par scénario, cel
 **Noyau de l'eau compilé en WebAssembly** (`libs/map-editor/kernel/water_kernel.c`, `Terrain/WaterKernel.ts`,
 `Terrain/WaterKernelWasm.ts`). Les quatre passes d'un mouvement de l'eau à inertie (flux, ce qu'une cellule peut
 donner, mise à l'échelle, profondeurs) existent deux fois, au bit près : en TypeScript (`WaterKernel.ts`, la
-référence et le repli) et en C compilé en WebAssembly. **Éteint par défaut** : `setWaterKernel("wasm")` l'allume
-pour les grilles créées ensuite, ou le sixième paramètre de `WaterGrid` pour une seule.
+référence et le repli) et en C compilé en WebAssembly. **Éteint par défaut**, et allumé sans toucher au code :
+
+- **serveur** : variable d'environnement `WATER_KERNEL=wasm` de `back` (`Ground/ServerWaterKernel.ts`). Elle vaut
+  pour le fil des salles et pour les fils de calcul (`GROUND_THREADS`), qui héritent de l'environnement. Le journal
+  le dit au démarrage de la première salle : « The water of the rooms is computed by the WebAssembly kernel », ou
+  « … by the TypeScript kernel », suivi de la raison si le noyau compilé n'a pas pu être chargé ; chaque fil de
+  calcul ajoute sa ligne ;
+- **navigateur** (eau de la météo locale, eau rapide) : `localStorage.setItem("waterKernel", "wasm")` dans la
+  console, puis recharger ; lu au démarrage de l'eau locale, transmis à son worker, qui l'écrit dans la console ;
+- **code** : `setWaterKernel("wasm")` pour les grilles créées ensuite, ou le sixième paramètre de `WaterGrid`.
 
 - **Mesure** (carte d'Antoine inondée, 480 × 320, finesse 3, médiane de 300 pas, trois passes alternées) : un pas
   de la grille 10,5 → 6,6 ms (×1,6) ; les passes seules 9,7 → 5,8 ms (×1,67). `-O3` et le SIMD n'apportent rien.

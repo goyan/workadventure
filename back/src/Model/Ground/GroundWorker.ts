@@ -1,5 +1,5 @@
 import { parentPort } from "node:worker_threads";
-import { threadWaterLoads } from "@workadventure/map-editor";
+import { setWaterKernel, threadWaterLoads, waterKernelInUse, waterKernelNamed } from "@workadventure/map-editor";
 import type { GroundCommand, GroundTold } from "./GroundProtocol";
 import { HostedGround } from "./HostedGround";
 
@@ -19,6 +19,17 @@ const GROUND_THREAD_SHARE = 0.9;
  */
 // Nothing but grounds is computed here: their water may take most of the thread before it eases.
 threadWaterLoads.mayTake(GROUND_THREAD_SHARE);
+// The kernel of the water of the server (ServerWaterKernel), read here from the environment this thread inherits:
+// the variables of the server are checked on its own thread, not here.
+setWaterKernel(waterKernelNamed(process.env.WATER_KERNEL));
+if (process.env.WATER_KERNEL === "wasm") {
+    const inUse = waterKernelInUse();
+    console.info(
+        inUse.kernel === "wasm"
+            ? "A thread of the ground computes its water with the WebAssembly kernel"
+            : `A thread of the ground computes its water with the TypeScript kernel: the WebAssembly one could not be loaded (${inUse.fallback ?? "unknown"})`,
+    );
+}
 
 const port = parentPort;
 if (!port) throw new Error("GroundWorker runs in a worker thread only");

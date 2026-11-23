@@ -1,4 +1,11 @@
-import type { RealWeatherSlot, SeededMeadow, WAMFileFormat, WeatherLocation } from "@workadventure/map-editor";
+import { waterKernelNamed } from "@workadventure/map-editor";
+import type {
+    RealWeatherSlot,
+    SeededMeadow,
+    WAMFileFormat,
+    WaterKernelKind,
+    WeatherLocation,
+} from "@workadventure/map-editor";
 import type { CatastropheMessage, TerrainWaterStatsMessage } from "@workadventure/messages";
 import { LocalCatastropheRelay } from "./LocalCatastropheRelay";
 import type { LocalTerrainCommand, LocalTerrainTold } from "./LocalTerrainSimulation";
@@ -43,6 +50,19 @@ const WALKERS_EVERY_MS = 1000;
 const BACK_TO_SERVER_GLIDE_MS = 1000;
 
 type MeadowState = SeededMeadow & { fire?: Uint8Array };
+
+/**
+ * What computes the water this browser simulates for its player (the water of a local weather, the fast water): the
+ * TypeScript kernel, or the compiled one for who typed `localStorage.setItem("waterKernel", "wasm")` in the console
+ * (a setting of the developers, without any interface; the same water, to the bit). Read when the local water starts.
+ */
+export function localWaterKernel(): WaterKernelKind {
+    try {
+        return waterKernelNamed(localStorage.getItem("waterKernel"));
+    } catch {
+        return "typescript";
+    }
+}
 
 /**
  * Runs the ground of this player while they follow the weather of a place they chose, or while their water is fast
@@ -226,6 +246,7 @@ export class LocalTerrainController {
                         place,
                         slots,
                         fast,
+                        kernel: localWaterKernel(),
                         ...(shown
                             ? {
                                   water: {
