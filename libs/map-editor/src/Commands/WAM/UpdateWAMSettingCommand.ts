@@ -17,6 +17,7 @@ import {
     IMPACT_REACH_BOUNDS,
     LAND_LIFE_BOUNDS,
     LIFE_BOUNDS,
+    MAX_FREEZE_THAW_SPEED,
     MAX_POOL_LADDERS,
     MAX_WATER_CURRENT,
     MAX_WATER_INDOOR_DRAIN,
@@ -151,6 +152,7 @@ export class UpdateWAMSettingCommand extends Command {
                     updates,
                     flowPace,
                     impactReach,
+                    freezeThawSpeed,
                 } = message.updateWaterSettingMessage;
                 const within = (value: number, min: number, max: number, fallback: number): number =>
                     Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
@@ -201,6 +203,14 @@ export class UpdateWAMSettingCommand extends Command {
                         : Number.isFinite(impactReach)
                           ? within(impactReach, IMPACT_REACH_BOUNDS[0], IMPACT_REACH_BOUNDS[1], DEFAULT_IMPACT_REACH)
                           : keptWater?.impactReach;
+                // The speed of the freeze and the thaw: as the map had it when the client says nothing of it (none for a
+                // map that never set one), 1 for what is not a number.
+                const keptFreezeThawSpeed =
+                    freezeThawSpeed === undefined
+                        ? keptWater?.freezeThawSpeed
+                        : Number.isFinite(freezeThawSpeed)
+                          ? within(freezeThawSpeed, 1, MAX_FREEZE_THAW_SPEED, 1)
+                          : 1;
                 this.wam.settings.water = {
                     runoff: within(runoff, 0, 100, DEFAULT_WATER_SETTINGS.runoff),
                     evaporation: within(evaporation, 0, 10, DEFAULT_WATER_SETTINGS.evaporation),
@@ -225,6 +235,7 @@ export class UpdateWAMSettingCommand extends Command {
                     ...(paced("updates", updates) === undefined ? {} : { updates: paced("updates", updates) }),
                     ...(keptFlowPace === undefined ? {} : { flowPace: keptFlowPace }),
                     ...(keptImpactReach === undefined ? {} : { impactReach: keptImpactReach }),
+                    ...(keptFreezeThawSpeed === undefined ? {} : { freezeThawSpeed: keptFreezeThawSpeed }),
                 };
                 break;
             }

@@ -114,6 +114,21 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         back: "Retour à l'eau partagée",
         fromCity: "Pour voir l'effet de cette météo en quelques minutes, activez l'eau rapide (Réglages → Ambiance).",
     },
+    mapClock: {
+        freezeThaw: {
+            title: "Vitesse du gel et de la fonte",
+            what: "La glace qui prend et dégèle, la neige qui fond : pour toute la carte. L'eau garde sa vitesse.",
+            real: "×1 : comme en vrai, une heure de gel ou de fonte dure une heure.",
+            faster: "×{speed} : une heure de gel ou de fonte dure {duration}.",
+            badge: "Gel ×{speed}",
+            badgeHint:
+                "Sur cette carte, le gel et la fonte vont {speed} fois plus vite que dans la réalité (l'eau, non).",
+            reset: "Revenir à ×1, comme en vrai",
+            cycle: "Vitesse suivante du gel et de la fonte",
+        },
+        minutes: "{count} min",
+        seconds: "{count} s",
+    },
     basicMode: {
         label: "Basique",
         switch: "Mode basique : aucun effet",

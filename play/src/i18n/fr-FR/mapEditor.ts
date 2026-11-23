@@ -775,6 +775,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         absorption: "Absorption du sol (retrait d'une inondation)",
         indoorDrain: "Vidange des sols intérieurs",
         impactReach: "Souffle d'un météore dans l'eau (fois le rayon du cratère)",
+        freezeThawSpeed: "Vitesse du gel et de la fonte",
         speed: "Vitesse de l'eau, de la neige et de la glace (1 : comme en vrai, 60 : une minute pour une heure)",
         dashboard: {
             title: "Bilan de l'eau",
@@ -851,6 +852,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 "Les sols des pièces fermées par des murs (portes fermées) évacuent l'eau entrée. 300 mm/h par défaut : une pièce inondée sèche en deux heures environ, comme en vrai (deux minutes à « Vitesse de l'eau » 60) ; des grilles d'évacuation posées au sol vont plus vite ; 0 garde l'eau à l'intérieur. Un bassin creusé à l'intérieur garde son eau.",
             impactReach:
                 "Jusqu'où l'impact chasse l'eau autour de son cratère : tout près du cratère, de moins en moins ensuite. 1 : seule l'eau du cratère bouge. En réel : les projections d'un cratère couvrent 2 à 3 fois son rayon ; 2,5 par défaut. Une piscine touchée en plein milieu se vide presque entièrement.",
+            freezeThawSpeed:
+                "En plus de la vitesse de l'eau, pour le froid seul : la glace qui prend et dégèle, la neige qui fond. ×1 par défaut, comme en vrai : à 24 °C, 10 cm de glace mettent environ 14 heures à partir. À ×60, une heure de gel ou de fonte dure une minute ; à ×600, six secondes. L'eau, la pluie et la neige qui tombe gardent leur propre vitesse.",
             speed: "1 par défaut, comme en vrai : une pluie de 10 mm/h met des heures à remplir un étang, une neige des heures à fondre, une glace près d'un jour à porter un marcheur à -3 °C. Pour un essai, 60 : une minute pour une heure ; toute l'eau va alors plus vite, ses courants compris, aussi vite que le serveur le calcule.",
             maxSurface:
                 "256 px par défaut, comme en vrai : aucune crue n'est coupée. Plus bas, l'eau ne monte pas plus haut : 18 px, de quoi nager, sous les étages (52 px).",
