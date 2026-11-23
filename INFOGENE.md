@@ -5895,6 +5895,110 @@ navigateur d'avant dessine une comète à chaque message ; la boule apparue d'un
 sa pose vient du volume chassé, pas d'un élan ; traînée plus vite qu'une vague ne court, elle entasse l'eau devant
 elle ; pas de son. `play` et `back` se déploient ensemble.
 
+## Catastrophes : l'ouragan
+
+Huitième catastrophe du widget (tuile « Ouragan »), demandée le 2026-11-23 : « une catastrophe de type ouragan : ça
+couvre sûrement toute la map, ça override le système de nuages ».
+
+**L'échelle.** Une case vaut 1,1 m : la carte d'Antoine (263 × 175 m) n'est qu'un point dans un cyclone de plusieurs
+centaines de kilomètres. On ne voit donc jamais la spirale des photos satellite. La carte vit le **passage** de
+l'ouragan : le vent monte par bandes de pluie, puis vient le mur de l'œil (vent maximal, pluie forte, mer blanche).
+Quand l'œil passe dessus, c'est le calme sous un ciel dégagé, puis le second mur, au vent inversé, puis l'éloignement.
+
+**Le modèle** (`libs/map-editor/src/Catastrophe/Hurricane.ts`, fonctions pures) :
+- **trajectoire** : un cyclone qui va tout droit à 20 km/h (5,5 m/s, une vitesse courante sous les tropiques), le
+  centre de −12 à +12 Rmax de la carte, avec Rmax = 30 km (un choix). Un passage réel dure donc 36 h. La carte le vit
+  dans la durée choisie, 30 min par défaut (de 5 à 60), soit 72 fois plus vite. Le temps est compressé, pas les
+  distances. Le cap (290° par défaut, vers l'ouest-nord-ouest) et le décalage de l'œil (de −60 à +60 km, positif
+  avec la carte à droite de la trajectoire) se règlent ;
+- **vent** : le vent de gradient du profil de Holland (1980, *Monthly Weather Review* 108, avec le terme de Coriolis
+  à 20° de latitude), B = 1,5 (la plupart des ouragans ont un B entre 1 et 2,5) :
+  - il vaut le maximum de la catégorie au rayon Rmax, rien au centre, environ 30 km/h au début du passage ;
+  - ce maximum est la moyenne sur 10 min (le vent des conditions de la salle), soit le milieu de la plage
+    Saffir-Simpson sur 1 min multiplié par 0,93 (OMM TD-1555) : 126, 153, 179, 214 et 250 km/h pour les catégories 1
+    à 5. La catégorie 5 est la plus faible qui tienne sous la borne de 250 km/h de la salle ;
+  - le vent tourne autour du centre, dans le sens antihoraire au nord et horaire au sud (hémisphère lu dans le lieu de
+    la carte, Paris sans lieu), et rentre vers lui de 22,6° (Zhang et Uhlhorn 2012, MWR 140, plus de 1 600
+    dropsondes) ;
+  - 55 % de la vitesse de translation s'y ajoutent (un choix d'après les modèles paramétriques) : le vent est plus fort
+    à droite de la trajectoire au nord ;
+  - quand l'œil passe sur la carte, le vent tourne de 180°. Les rafales valent 1,23 fois la moyenne (OMM TD-1555, en
+    mer [Gemini]) : elles sont seulement affichées ;
+- **pluie** : la moyenne azimutale de Lonfat, Marks et Chen (2004, MWR 132, TRMM, 260 cyclones) :
+  - 7 mm/h au rayon Rmax en catégories 1 et 2, 12 mm/h en catégories 3 à 5 ;
+  - rien dans l'œil (r < 0,6 Rmax) ; au-delà de Rmax, une décroissance exponentielle sur 125 km (un choix) ;
+  - deux bras de spirale logarithmique, d'angle 15°, qui modulent la pluie de ±80 % sans changer sa moyenne sur un
+    cercle : averses et accalmies se succèdent ;
+- **nuages** : une couverture de 1 qui remplace le système de nuages, et dans l'œil un ciel dégagé avec quelques
+  nuages bas (ouverture de 0,85 à 0,6 Rmax, un choix) ;
+- **foudre** : l'orage gronde seulement dans les bandes extérieures, de 200 à 300 km du centre. Il pleut sans foudre
+  dans le mur. D'après Molinari et al. 1999, la foudre au sol des ouragans atlantiques y a son maximum le plus fort
+  [Gemini, à vérifier].
+
+**Le serveur décide** (`CatastropheManager.startHurricane`).
+- Il garde un seul ouragan par salle. Un nouvel ouragan est refusé tant que le premier dure. Le serveur borne chaque
+  réglage (`hurricaneTrack`).
+- Il annonce l'ouragan à la salle chaque seconde : `CATASTROPHE_HURRICANE = 8` et `HurricaneTrackMessage` (catégorie,
+  minutes, décalage, cap, hémisphère, date de départ à l'heure du serveur). `impactInMs` donne le temps restant :
+  il vaut 0 à la fin et à l'arrêt (`LaunchCatastropheMessage.release`).
+- Tout joueur peut le lancer ou l'arrêter.
+- Le sol de la salle (eau et pré, sur le fil des salles ou sur un fil de calcul) reçoit l'ouragan par valeur
+  (`GroundRoomState.hurricane`). Il calcule à chaque pas, à partir de l'ouragan et de l'heure de la salle :
+  - le vent et l'humidité (95 % au moins) qui poussent le feu et sèchent l'herbe (`hurricaneConditions`) ;
+  - la pluie, qui **remplace** celle de la carte (aucune pluie dans l'œil, même sur une carte réglée sur Pluie).
+- La température de la salle est gardée. Par grand froid, l'ouragan tombe en neige.
+- Les essais d'identité, avec et sans fil de calcul et en trois bandes, rejouent un ouragan dans leur scénario commun.
+
+**La pluie d'un vrai passage.** Le sol reçoit le cumul d'un vrai passage : la pluie de l'ouragan, compressée comme son
+temps, divisée par la vitesse à laquelle l'eau de la carte vit déjà (`skyRainUnder`), pour ne pas la compter deux
+fois. Avec l'œil qui passe dessus en catégorie 4, cela fait environ 150 mm. La règle de Kraft (100 / vitesse en
+nœuds, en pouces) donne 235 mm : c'est une borne haute, Lonfat et al. trouvent des débits 2,5 à 3 fois plus faibles
+que ceux qu'on utilise d'habitude. Pendant un passage de 30 min, l'eau reçoit donc jusqu'à environ 1 000 mm/h dans les bandes les plus fortes (14 mm/h × 72).
+Les creux se remplissent : c'est la crue d'eau douce d'un ouragan. Le pré est trempé et le feu s'éteint sous cette
+pluie.
+
+**Ce que tout le monde voit.**
+- Le navigateur reçoit le message (`HurricaneReceiver`) et calcule la météo de l'ouragan à l'heure du serveur, une
+  fois par seconde.
+- Cette météo s'applique **en dernier** dans `shownWeatherSettings` et `mapWeatherSettings` (`withHurricane`) :
+  - elle prime sur le vent manuel et sur la météo de la ville que suit un joueur ;
+  - pluie au débit de l'ouragan, sous des nuages gris pleins, orage dans les bandes extérieures ;
+  - ciel dégagé dans l'œil, vent de l'ouragan pour les nuages, les arbres, la pluie penchée et la mer ;
+  - fondu depuis la météo de la carte sur 3 % du passage à chaque bout.
+- Un joueur qui suit sa propre météo a aussi l'ouragan sur son sol local (`LocalCatastropheRelay`).
+- Le panneau affiche la phase, le vent, les rafales, la pluie et le temps restant, et propose « Arrêter l'ouragan ».
+  L'onglet Météo dit que le vent de l'ouragan remplace celui de la salle.
+
+**La mer blanche** (`Whitecaps.spumeShare`, `WindSeaShader.seaSpume`, `seaSpray`). Holthuijsen, Powell et Pietrzak
+(2012, *JGR* 117, C09003, films de reconnaissance à basse altitude et dropsondes) ont observé ceci : au-delà d'environ
+30 m/s, les moutons cessent de croître et des traînées d'écume et d'embruns, alignées sur le vent, prennent le relais.
+Vers 40 m/s (144 km/h), elles couvrent les vagues d'une nappe blanche (« white out ») ; les seuils viennent de
+[Gemini], le phénomène de l'article. L'échelle de Beaufort de l'OMM dit pour la force 12 : « Sea completely white with
+driving spray; visibility very seriously affected ».
+- Le shader de l'eau pose, entre ces deux vents, de longues traînées d'écume parallèles au vent (6 px de large, 140 px
+  de long, des choix), qui dérivent avec l'écume laissée. Elles se rejoignent en un blanc laiteux encore strié
+  (78 % entre les traînées).
+- Un voile d'embruns gris-blanc (45 % au plus, atteint à 55 m/s) estompe la lumière des vagues et ce qu'elles
+  reflètent.
+- Cela ne dépend que du vent : un vent manuel de 200 km/h fait la même mer.
+- Comme pour la mer du vent : rien en qualité Basse, ni sans le shader.
+
+**Ce que ça ne modélise pas.**
+- **La surcote** : le modèle d'eau n'a pas de bord ouvert sur une mer, et la carte n'a pas d'océan à son bord. Une eau
+  « qui monte par les bords » serait inventée ; une source de bord à niveau cible serait possible plus tard.
+- La baisse du vent sur la terre (rugosité) : toute la carte a l'exposition d'une côte.
+- La température de l'air tropical (celle de la salle est gardée).
+- Les dégâts aux arbres, aux objets et aux bâtiments, et la fuite des animaux.
+- La spirale vue de haut.
+- Les rafales dans le rendu : les arbres plafonnent déjà à 80 km/h.
+- Le recalcul du fetch de la mer quand le vent tourne vite dans l'œil : jusqu'à un toutes les 3 s, 12 à 17 ms d'un bloc
+  sur la carte d'Antoine.
+- Le sol local d'un joueur lit l'heure de son ordinateur, pas celle du serveur : un décalage d'horloge de quelques
+  secondes y décale l'ouragan d'autant.
+
+**Compatibilité.** `play` et `back` se déploient ensemble (protobuf). Le PNJ du dépôt d'infra doit être réaligné sur
+`messages.proto`.
+
 ## Catastrophes : l'averse
 
 Deuxième catastrophe du widget (bouton « Catastrophe » du menu des applications) : une **grosse pluie sous le
