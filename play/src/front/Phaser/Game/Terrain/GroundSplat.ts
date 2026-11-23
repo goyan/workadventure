@@ -60,7 +60,7 @@ export const SHORE_FILM_PX = SHORE_PX;
 /** The pack that holds the fetch of the wind over the water, in its red (WindSea.fetchByte). */
 export const FETCH_PACK = 11;
 /** How much the slopes of the wind sea light or shade the water, facing the light or turned from it. */
-const SEA_SHADE = 0.35;
+const SEA_SHADE = 0.45;
 /** How far (map pixels) a slope of 1 of the wind sea bends what the water reflects. */
 const SEA_RIPPLE_PX = 24;
 /** A current this fast (cells a second, 0.27 m/s) reads in full on a thin film: its ripples and its tint. */
@@ -822,8 +822,8 @@ void main() {
         if (uSea.z > 0.5 && open > 0.5) {
             seaAmplitudes(pack(${FETCH_PACK}.0, world).r * ${FETCH_GLSL_METRES}, depthPx * ${glsl(MAP_PX_METRES)});
             seaWhite = seaFoam(world);
-            water *= 1.0 + ${glsl(SEA_SHADE)} * seaLight(gSeaSlope);
-            seaRipple = gSeaSlope * ${glsl(SEA_RIPPLE_PX)};
+            water *= 1.0 + ${glsl(SEA_SHADE)} * seaLight(gSeaLight);
+            seaRipple = gSeaLight * ${glsl(SEA_RIPPLE_PX)};
         }
 #endif
         water = reflected(
@@ -862,7 +862,7 @@ void main() {
         foam = max(foam, surf * 0.92);
 
         // The foam of the crests of the wind sea that break, and the foam they left (WindSeaShader.ts).
-        foam = max(foam, seaWhite * 0.9);
+        foam = max(foam, seaWhite * 0.95);
 
         water = mix(water, FOAM, foam);
         alpha = max(alpha, foam * 0.9);
@@ -1007,7 +1007,9 @@ export class GroundSplat {
                         setUniform("uSnow", this.snow);
                         setUniform("uServerIce", this.serverIce ? 1 : 0);
                         if (this.canSea) {
-                            for (const [name, value] of windSeaUniforms(this.sea, time())) setUniform(name, value);
+                            for (const [name, value] of windSeaUniforms(this.sea, time(), this.seaAges)) {
+                                setUniform(name, value);
+                            }
                         }
                         this.setReflectionUniforms(setUniform);
                         for (let index = 0; index < MAX_ICE_BREAKS; index++) {
@@ -1249,10 +1251,16 @@ export class GroundSplat {
         this.upload();
     }
 
-    /** The sea the wind raises on the water: read by the water shader at its next drawing. */
-    public setSea(sea: SeaDrawing | undefined): void {
+    /**
+     * The sea the wind raises on the water, and how many looks back for the foam left the shader takes (fewer on a
+     * modest graphics card): read by the water shader at its next drawing.
+     */
+    public setSea(sea: SeaDrawing | undefined, ages: number): void {
         this.sea = sea;
+        this.seaAges = ages;
     }
+
+    private seaAges = 0;
 
     /** Whether the water shader draws the wind sea on this graphics card. */
     public drawsSea(): boolean {

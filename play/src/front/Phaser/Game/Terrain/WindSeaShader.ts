@@ -7,7 +7,9 @@ import {
     FOAM_AGES_S,
     FOAM_DECAY_S,
     FOAM_DRIFT_SHARE,
+    fetchSea,
     MAP_PX_METRES,
+    REFERENCE_FETCH_M,
     SEA_COMPONENTS,
     seaAmplitudes,
     seaComponents,
@@ -32,44 +34,91 @@ import type { SeaComponent } from "./WindSea";
 
 /**
  * The breaking slope is the physical one (BREAKING_SLOPE) times this factor, measured (seaWhite, CPU twin of the
- * shader, 512 px every 4 px, six instants) so that the foam of a wind whitens the share of the water of the law
- * (whitecapWhite of whitecapShare) at REFERENCE_FETCH_M: [km/h, factor]. From 25 to 82 km/h it stays within 11 % of
- * the physical slope (the physical slope alone whitens 0.42 % at 30 km/h for 0.53 % of the law, 12.2 % at 82 km/h
- * for 16.3 %); at 90 km/h it is 23 % under it. Under 20 km/h it stays at its value of 20 km/h: a lower slope would not
- * be physical, and the law asks for a few hundredths of a percent there, which no one sees. Past 90 km/h, where the
- * measures of the law end, the white creeps towards 45 % (whitecapWhite): the wind tears foam off crests not yet
- * steep enough to break. Measured again on the GPU (Metal) by the probe of the study: within 4 % of these up to
- * 125 km/h.
+ * shader, 2048 px every 16 px: many groups of waves, three instants) so that the foam of a wind whitens the share of
+ * the water of the law (whitecapWhite of whitecapShare) at REFERENCE_FETCH_M: [km/h, factor]. From 20 to 82 km/h it
+ * stays within 7 % of the physical slope (the physical slope alone whitens 0.62 % at 30 km/h for 0.53 % of the law,
+ * 14.5 % at 82 km/h for 16.3 %); 14 % under it at 90 km/h. Under 20 km/h it stays at its value of 20 km/h: a lower
+ * slope would not be physical, and the law asks for a few hundredths of a percent there, which no one sees. Past
+ * 90 km/h, where the measures of the law end, the white creeps towards 45 % (whitecapWhite): the wind tears foam off
+ * crests not yet steep enough to break. Measured again on the GPU (Metal) by the probe of the study.
  */
 export const BREAKING_FACTORS: readonly (readonly [number, number])[] = [
-    [20, 0.821],
-    [25, 0.911],
-    [30, 0.984],
-    [35, 1.027],
-    [40, 1.067],
-    [50, 1.083],
-    [60, 1.043],
-    [70, 0.981],
-    [82, 0.894],
-    [90, 0.774],
-    [100, 0.685],
-    [110, 0.596],
-    [125, 0.476],
-    [150, 0.4],
+    [20, 0.959],
+    [25, 1.002],
+    [30, 1.032],
+    [35, 1.022],
+    [40, 1.006],
+    [50, 1.035],
+    [60, 0.976],
+    [70, 0.939],
+    [82, 0.942],
+    [90, 0.863],
+    [100, 0.717],
+    [110, 0.647],
+    [125, 0.571],
+    [150, 0.517],
+    [200, 0.654],
 ];
 
-/** How opaque the foam a crest left is against the foam of a crest breaking now (1). */
-export const LEFT_FOAM_OPACITY = 0.85;
+/**
+ * How opaque the foam a crest left is (a crest breaking now: 1), and how little of it the streaks tear away (the cut of
+ * their noise lowered by this), by the wind (km/h), after the descriptions of the Beaufort scale (WMO): a few white
+ * horses whose foam soon goes under force 6; from force 7 (50 km/h) foam blown in streaks along the wind, well-marked
+ * at force 8 (62), dense at force 9 (75); from force 10 (89) great patches, the sea white on the whole. Translucent
+ * below: the water is seen through the foam left.
+ */
+export const LEFT_FOAM: readonly (readonly [number, number, number])[] = [
+    [40, 0.4, 0],
+    [50, 0.5, 0.03],
+    [62, 0.65, 0.08],
+    [75, 0.8, 0.15],
+    [89, 0.9, 0.24],
+];
+
+/** The foam left by the crests for a wind (km/h): its opacity and how much less the streaks tear it (LEFT_FOAM). */
+export function leftFoamFor(windKmh: number): { opacity: number; cutShift: number } {
+    const table = LEFT_FOAM;
+    if (!(windKmh > table[0][0])) return { opacity: table[0][1], cutShift: table[0][2] };
+    for (let at = 1; at < table.length; at++) {
+        const [upTo, opacity, shift] = table[at];
+        if (windKmh <= upTo) {
+            const [from, opacityBefore, shiftBefore] = table[at - 1];
+            const share = (windKmh - from) / (upTo - from);
+            return {
+                opacity: opacityBefore + (opacity - opacityBefore) * share,
+                cutShift: shiftBefore + (shift - shiftBefore) * share,
+            };
+        }
+    }
+    const [, opacity, cutShift] = table[table.length - 1];
+    return { opacity, cutShift };
+}
+/**
+ * The groups of waves. A few waves summed beat in a regular pattern, which a real sea, of a continuous spectrum, has
+ * not: its groups come at random places and sizes. The waves are drawn higher or lower by a smooth random field (mean
+ * square 1: the sea keeps the height of the law on the whole), its cells this many peak wavelengths long down the wind
+ * and twice as wide across it, drifting at the speed of the groups (half that of the crests, in deep water).
+ */
+const GROUP_WAVES = 3.5;
+const GROUP_LOWEST = 0.2;
+const GROUP_RANGE = 1.6;
+/**
+ * The light on the waves comes from their slopes; but the waves of a few pixels, which carry as much slope as the long
+ * ones, read as a fine hatching: their share of the light grows from this wavelength (map px) to the next. They keep
+ * all their part in the breaking.
+ */
+const LIGHT_FROM_PX = 8;
+const LIGHT_FULL_PX = 24;
 /** The breaking starts this share under the breaking slope and is whole this share over it. */
 const BREAKING_EDGE = 0.1;
 /** The streaks of old foam: their noise, across and along the wind (map pixels a cell of the noise), two octaves. */
-const STREAK_ACROSS_PX = 5;
-const STREAK_ALONG_PX = 50;
+const STREAK_ACROSS_PX = 2;
+const STREAK_ALONG_PX = 90;
 // A whole number: the fine octave goes round with the first (4096 cells), never a jump.
 const STREAK_FINE = 2;
 /** The cut of the noise of the streaks, from fresh foam (whole, nearly) to the oldest looked for. */
-const STREAK_CUT_FRESH = 0.35;
-const STREAK_CUT_OLD = 0.62;
+const STREAK_CUT_FRESH = 0.56;
+const STREAK_CUT_OLD = 0.74;
 /** The light on the slopes of the waves comes from the north-west, as on the relief (TerrainShading). */
 const LIGHT = { x: -Math.SQRT1_2, y: -Math.SQRT1_2 };
 /** The noise of the streaks goes round every this many of its cells: the hash without sine repeats exactly there. */
@@ -98,6 +147,10 @@ export interface SeaDrawing {
     components: SeaComponent[];
     /** The slope a crest breaks at; Infinity when the law whitens nothing (no foam at all). */
     breakingSlope: number;
+    /** The groups of waves: the length of a cell of their field (map px) and how fast they go downwind (map px a s). */
+    group: { lengthPx: number; speedPx: number };
+    /** The foam the crests leave: its opacity, and how much less the streaks tear it (leftFoamFor). */
+    left: { opacity: number; cutShift: number };
 }
 
 /**
@@ -117,11 +170,16 @@ export function seaDrawing(windKmh: number | undefined, heading: { x: number; y:
     const stepped = { x: Math.cos(angle), y: Math.sin(angle) };
     const components = seaComponents(stepKmh, stepped);
     const white = whitecapWhite(whitecapShare(windKmh));
+    const peak = fetchSea(stepKmh / 3.6, REFERENCE_FETCH_M);
+    // Deep water: the groups go at half the speed of the crests, g T / 4 pi.
+    const groupSpeed = (9.81 * peak.tp) / (4 * Math.PI);
     return {
         windMs: windKmh / 3.6,
         heading: stepped,
         components,
         breakingSlope: white > 0 ? BREAKING_SLOPE * breakingFactorFor(windKmh) : Number.POSITIVE_INFINITY,
+        group: { lengthPx: (GROUP_WAVES * peak.lp) / MAP_PX_METRES, speedPx: groupSpeed / MAP_PX_METRES },
+        left: leftFoamFor(windKmh),
     };
 }
 
@@ -175,6 +233,24 @@ const smoothstep = (from: number, to: number, value: number): number => {
     return t * t * (3 - 2 * t);
 };
 
+/** The drift of the field of the groups down the wind, in its cells, brought round its period. */
+export function groupDrift(sea: SeaDrawing, seconds: number): number {
+    return shaderWrap((sea.group.speedPx * seconds) / sea.group.lengthPx, STREAK_PERIOD);
+}
+
+/** How much higher or lower the waves are drawn by their groups at a map point, `back` seconds before: the twin of
+ * seaGroup. */
+export function groupAt(sea: SeaDrawing, drift: number, x: number, y: number, back = 0): number {
+    const { heading, group } = sea;
+    const along = x * heading.x + y * heading.y;
+    const across = -x * heading.y + y * heading.x;
+    const cells = group.speedPx / group.lengthPx;
+    return (
+        GROUP_LOWEST +
+        GROUP_RANGE * seaNoise(along / group.lengthPx - drift + cells * back, across / (2 * group.lengthPx) + 51)
+    );
+}
+
 /** The drift of the streaks along the wind, in cells of their noise, brought round its period. */
 export function streakDrift(windMs: number, seconds: number): number {
     return shaderWrap((foamDriftPx(windMs) * seconds) / STREAK_ALONG_PX, STREAK_PERIOD);
@@ -190,6 +266,7 @@ export function seaFoamAt(
     drift: number,
     x: number,
     y: number,
+    groups = 0,
 ): number {
     const slope = sea.breakingSlope;
     if (!Number.isFinite(slope)) return 0;
@@ -197,34 +274,33 @@ export function seaFoamAt(
     const to = slope * (1 + BREAKING_EDGE);
     const { heading } = sea;
     const now = seaSurface(sea.components, amplitudes, phases, x, y);
+    const here = groupAt(sea, groups, x, y);
     const front = now.sx * heading.x + now.sy * heading.y <= 0 ? 1 : 0;
-    const breaking = smoothstep(from, to, Math.hypot(now.sx, now.sy)) * (now.eta >= 0 ? 1 : 0) * front;
+    const breaking = smoothstep(from, to, here * Math.hypot(now.sx, now.sy)) * (now.eta >= 0 ? 1 : 0) * front;
     const driftPx = foamDriftPx(sea.windMs);
     const along = x * heading.x + y * heading.y;
     const across = -x * heading.y + y * heading.x;
     let left = 0;
     for (const age of FOAM_AGES_S) {
-        const envelope = seaEnvelope(
-            sea.components,
-            amplitudes,
-            phases,
-            x - heading.x * driftPx * age,
-            y - heading.y * driftPx * age,
-            age,
-        );
+        const bx = x - heading.x * driftPx * age;
+        const by = y - heading.y * driftPx * age;
+        const envelope =
+            seaEnvelope(sea.components, amplitudes, phases, bx, by, age) * groupAt(sea, groups, bx, by, age);
         const cut =
-            STREAK_CUT_FRESH + ((STREAK_CUT_OLD - STREAK_CUT_FRESH) * age) / FOAM_AGES_S[FOAM_AGES_S.length - 1];
+            STREAK_CUT_FRESH +
+            ((STREAK_CUT_OLD - STREAK_CUT_FRESH) * age) / FOAM_AGES_S[FOAM_AGES_S.length - 1] -
+            sea.left.cutShift;
         const streak = smoothstep(cut, cut + 0.2, streakNoise(across, along, drift));
         left = Math.max(left, smoothstep(from, to, envelope) * Math.exp(-age / FOAM_DECAY_S) * streak);
     }
-    return Math.max(breaking, left * LEFT_FOAM_OPACITY);
+    return Math.max(breaking, left * sea.left.opacity);
 }
 
 /**
  * The mean white of the foam over a square of open water `fetchM` from the shore, deep, averaged over a few instants:
  * what the GPU probe measures, computed here on a grid of points every `stepPx` map pixels.
  */
-export function seaWhite(sea: SeaDrawing, fetchM: number, sizePx = 512, stepPx = 4, instants = 6): number {
+export function seaWhite(sea: SeaDrawing, fetchM: number, sizePx = 2048, stepPx = 8, instants = 6): number {
     const amplitudes = seaAmplitudes(sea.components, sea.windMs, fetchM, 10);
     let total = 0;
     let count = 0;
@@ -232,9 +308,10 @@ export function seaWhite(sea: SeaDrawing, fetchM: number, sizePx = 512, stepPx =
         const seconds = 1000 + instant * 7.3;
         const phases = sea.components.map((component) => seaPhase(component, seconds));
         const drift = streakDrift(sea.windMs, seconds);
+        const groups = groupDrift(sea, seconds);
         for (let y = stepPx / 2; y < sizePx; y += stepPx) {
             for (let x = stepPx / 2; x < sizePx; x += stepPx) {
-                total += seaFoamAt(sea, amplitudes, phases, drift, x, y);
+                total += seaFoamAt(sea, amplitudes, phases, drift, x, y, groups);
                 count++;
             }
         }
@@ -260,6 +337,11 @@ export const WIND_SEA_GLSL = `
 uniform vec4 uSea;
 // Where the wind goes (x, y), how fast the foam drifts (map px a second), the drift of the streaks (cells, wrapped).
 uniform vec4 uSeaDir;
+// The field of the groups: 1 / its cell down the wind and across it (map px), its drift (cells, wrapped), cells a s.
+uniform vec4 uSeaGroup;
+// How many of the looks back for the foam left are taken (the quality of the graphics, 0 to ${FOAM_AGES_S.length}), and
+// how much less the streaks tear the foam left (leftFoamFor).
+uniform vec2 uSeaLook;
 // Each wave: cycles a map pixel (x, y), its phase now (cycles, in [0, 1)), its frequency (Hz).
 ${range(SEA_COMPONENTS)
     .map((at) => `uniform vec4 uSeaA${at};`)
@@ -272,8 +354,13 @@ ${range(SEA_COMPONENTS / 2)
 ${range(SEA_COMPONENTS)
     .map((at) => `float gSeaA${at};`)
     .join("\n")}
+${range(SEA_COMPONENTS)
+    .map((at) => `float gSeaV${at};`)
+    .join("\n")}
 float gSeaEta;
 vec2 gSeaSlope;
+// The slope the light reads: the waves of a few pixels count less in it (LIGHT_FROM_PX).
+vec2 gSeaLight;
 float gSeaEnvelope;
 // What the envelope read from the waves of ENVELOPE_COMPONENTS is multiplied by: the share of the slope they carry.
 float gSeaShare;
@@ -323,6 +410,12 @@ ${range(SEA_COMPONENTS)
         .join(" + ")};
     float read = ${ENVELOPE_COMPONENTS.map((at) => `seaSlope2(gSeaA${at}, uSeaA${at}.xy)`).join(" + ")};
     gSeaShare = read > 0.0 ? sqrt(all / read) : 0.0;
+${range(SEA_COMPONENTS)
+    .map(
+        (at) =>
+            `    gSeaV${at} = smoothstep(${glsl(LIGHT_FROM_PX)}, ${glsl(LIGHT_FULL_PX)}, 1.0 / max(length(uSeaA${at}.xy), 0.0001));`,
+    )
+    .join("\n")}
 }
 
 // The envelope of the slope back seconds before now, from the waves of ENVELOPE_COMPONENTS (the twin of seaEnvelope).
@@ -345,6 +438,7 @@ void seaAt(vec2 p, float back) {
     float eta = 0.0;
     vec2 c = vec2(0.0);
     vec2 s = vec2(0.0);
+    vec2 l = vec2(0.0);
     float turn;
     float co;
     float si;
@@ -357,11 +451,13 @@ ${range(SEA_COMPONENTS)
     k = uSeaA${at}.xy * ${glsl((2 * Math.PI) / MAP_PX_METRES)} * gSeaA${at};
     eta += gSeaA${at} * co;
     c += k * co;
-    s += k * si;`,
+    s += k * si;
+    l += k * si * gSeaV${at};`,
     )
     .join("\n")}
     gSeaEta = eta;
     gSeaSlope = -s;
+    gSeaLight = -l;
     gSeaEnvelope = sqrt(dot(c, c) + dot(s, s));
 }
 
@@ -372,6 +468,14 @@ float seaNoise(vec2 p) {
     f = f * f * (3.0 - 2.0 * f);
     return mix(mix(hashWide(i), hashWide(i + vec2(1.0, 0.0)), f.x),
         mix(hashWide(i + vec2(0.0, 1.0)), hashWide(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+
+// How much higher or lower the waves are drawn by their groups at a map point, back seconds before (groupAt).
+float seaGroup(vec2 p, float back) {
+    float along = dot(p, uSeaDir.xy);
+    float across = dot(p, vec2(-uSeaDir.y, uSeaDir.x));
+    return ${glsl(GROUP_LOWEST)} + ${glsl(GROUP_RANGE)}
+        * seaNoise(vec2(along * uSeaGroup.x - uSeaGroup.z + uSeaGroup.w * back, across * uSeaGroup.y + 51.0));
 }
 
 // The noise the old foam tears along: long thin streaks down the wind, two octaves (the twin of streakNoise).
@@ -389,6 +493,10 @@ float seaFoam(vec2 world) {
     float to = slope * ${glsl(1 + BREAKING_EDGE)};
     vec2 heading = uSeaDir.xy;
     seaAt(world, 0.0);
+    float here = seaGroup(world, 0.0);
+    gSeaEta *= here;
+    gSeaSlope *= here;
+    gSeaLight *= here;
     float eta = gSeaEta;
     vec2 now = gSeaSlope;
     float front = dot(now, heading) <= 0.0 ? 1.0 : 0.0;
@@ -400,12 +508,16 @@ float seaFoam(vec2 world) {
     float left = 0.0;
     float cut;
     float laid;
+    vec2 back;
 ${FOAM_AGES_S.map(
-    (age) => `    laid = smoothstep(from, to, seaEnvelopeAt(world - heading * uSeaDir.z * ${glsl(age)}, ${glsl(age)}))
-        * ${glsl(Math.exp(-age / FOAM_DECAY_S))};
+    (age, index) => `    back = world - heading * uSeaDir.z * ${glsl(age)};
+    laid = uSeaLook.x > ${glsl(index + 0.5)}
+        ? smoothstep(from, to, seaEnvelopeAt(back, ${glsl(age)}) * seaGroup(back, ${glsl(age)}))
+            * ${glsl(Math.exp(-age / FOAM_DECAY_S))}
+        : 0.0;
     // The noise of the streaks only where foam was laid.
     if (laid > left) {
-        cut = ${glsl(STREAK_CUT_FRESH + ((STREAK_CUT_OLD - STREAK_CUT_FRESH) * age) / FOAM_AGES_S[FOAM_AGES_S.length - 1])};
+        cut = ${glsl(STREAK_CUT_FRESH + ((STREAK_CUT_OLD - STREAK_CUT_FRESH) * age) / FOAM_AGES_S[FOAM_AGES_S.length - 1])} - uSeaLook.y;
         left = max(left, laid * smoothstep(cut, cut + 0.2, streakNoise(across, along)));
     }`,
 ).join("\n")}
@@ -419,18 +531,38 @@ float seaLight(vec2 slope) {
 `;
 
 /** The uniforms of the wind sea at `seconds` of the clock of the shaders, for `sea` (undefined: none drawn). */
-export function windSeaUniforms(sea: SeaDrawing | undefined, seconds: number): [string, number[]][] {
+export function windSeaUniforms(
+    sea: SeaDrawing | undefined,
+    seconds: number,
+    /** How many of the looks back for the foam left are taken (FOAM_AGES_S): fewer on a modest graphics card. */
+    ages: number = FOAM_AGES_S.length,
+): [string, number[]][] {
     const uniforms: [string, number[]][] = [];
     if (!sea) {
-        uniforms.push(["uSea", [1, 99, 0, 0]], ["uSeaDir", [0, 1, 0, 0]]);
+        uniforms.push(
+            ["uSea", [1, 99, 0, 0]],
+            ["uSeaDir", [0, 1, 0, 0]],
+            ["uSeaGroup", [0, 0, 0, 0]],
+            ["uSeaLook", [0, 0]],
+        );
         for (let at = 0; at < SEA_COMPONENTS; at++) uniforms.push([`uSeaA${at}`, [0, 0, 0, 1]]);
         for (let at = 0; at < SEA_COMPONENTS / 2; at++) uniforms.push([`uSeaB${at}`, [0, 0, 0, 0]]);
         return uniforms;
     }
     const slope = Number.isFinite(sea.breakingSlope) ? sea.breakingSlope : 99;
     uniforms.push(
-        ["uSea", [sea.windMs, slope, 1, LEFT_FOAM_OPACITY]],
+        ["uSea", [sea.windMs, slope, 1, sea.left.opacity]],
         ["uSeaDir", [sea.heading.x, sea.heading.y, foamDriftPx(sea.windMs), streakDrift(sea.windMs, seconds)]],
+        [
+            "uSeaGroup",
+            [
+                1 / sea.group.lengthPx,
+                1 / (2 * sea.group.lengthPx),
+                groupDrift(sea, seconds),
+                sea.group.speedPx / sea.group.lengthPx,
+            ],
+        ],
+        ["uSeaLook", [ages, sea.left.cutShift]],
     );
     sea.components.forEach((component, at) => {
         uniforms.push([`uSeaA${at}`, [component.cx, component.cy, seaPhase(component, seconds), component.f]]);

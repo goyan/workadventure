@@ -26,10 +26,10 @@ import {
 const EAST = { x: 1, y: 0 };
 
 describe("the white of the wind sea against the law of the whitecaps", () => {
-    // The CPU twin of the shader, on a coarser grid than the measure of the table (every 8 px, three instants).
+    // The CPU twin of the shader, on a coarser grid than the measure of the table (every 16 px, three instants).
     const white = (kmh: number): number => {
         const sea = seaDrawing(kmh, EAST);
-        return sea ? seaWhite(sea, REFERENCE_FETCH_M, 512, 8, 3) : 0;
+        return sea ? seaWhite(sea, REFERENCE_FETCH_M, 2048, 16, 3) : 0;
     };
 
     it("whitens the share of the law from 25 to 90 km/h (within a fifth, or 0.1 % of the water)", () => {
@@ -49,10 +49,10 @@ describe("the white of the wind sea against the law of the whitecaps", () => {
         }
     }, 60_000);
 
-    it("breaks the crests at the physical slope, give or take 12 %, from 25 to 82 km/h", () => {
-        for (let kmh = 25; kmh <= 82; kmh += 1) {
-            expect(breakingFactorFor(kmh), `${kmh} km/h`).toBeGreaterThan(0.88);
-            expect(breakingFactorFor(kmh), `${kmh} km/h`).toBeLessThan(1.12);
+    it("breaks the crests at the physical slope, give or take 10 %, from 20 to 82 km/h", () => {
+        for (let kmh = 20; kmh <= 82; kmh += 1) {
+            expect(breakingFactorFor(kmh), `${kmh} km/h`).toBeGreaterThan(0.9);
+            expect(breakingFactorFor(kmh), `${kmh} km/h`).toBeLessThan(1.1);
         }
         // Never lower than at 20 km/h in a breeze: no foam where the waves are not steep.
         expect(breakingFactorFor(11)).toBe(breakingFactorFor(20));

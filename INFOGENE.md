@@ -2806,19 +2806,24 @@ partir de ce qu'il reçoit déjà (profondeurs, vent) :
   que 4 px. Elles sont choisies par pas de 5 km/h et de 10° : un vent qui hésite garde les mêmes vagues, sans saut,
   seule leur hauteur le suit. Sur les hauts-fonds, elles ne dépassent pas 0,8 fois la profondeur.
   Une crête **déferle** quand sa pente dépasse celle de la vague la plus raide possible (H/L = 0,142, Michell 1893,
-  Miche 1944) : les moutons naissent sur ces crêtes, plus de tirage au hasard. L'**écume** qu'elles laissent dure
-  quelques secondes (s'efface en 3 s, Callaghan et al. 2012), dérive à 3 % du vent (Wu 1983) et se déchire en
-  traînées dans le sens du vent en vieillissant : plaques plus grandes et traînées plus longues par grand vent.
-  La part d'eau blanchie suit la loi usuelle des moutons (Monahan et O'Muircheartaigh, 1980) : le seuil de pente est
-  le seuil physique à 11 % près de 25 à 82 km/h, 23 % sous lui à 90 km/h (table `BREAKING_FACTORS`, mesurée). Au-delà de 90 km/h, où les
-  mesures de cette loi s'arrêtent, le blanc tend vers 45 % au plus (`whitecapWhite`) : l'eau reste visible.
-  Mesuré sur le GPU (Metal, sonde de l'étude, 512 px, six instants) : 0,13 % à 20 km/h (loi 0,13 %), 1,43 % à 40
-  (1,41), 5,8 % à 60 (5,6), 16,2 % à 82 (16,3), 33,9 % à 110 (visée 34,2), 42,7 % à 150 (visée 43,3), sur un fetch de 200 m. Sur un fetch
-  plus court, moins de moutons (jumeau processeur) : à 40 km/h, rien sous 50 m, 0,18 % à 100 m, 0,7 % à 142 m ; à
-  82 km/h, 9 % à 25 m, 14 % à 50 m, 18 % à 142 m. Sur la carte d'Antoine (fetch médian 23 m), les moutons ne
-  viennent donc qu'à grand vent, sauf sur le grand bassin. Coût mesuré
-  (Mac M4 Max, 1920 x 1080 couvert d'eau) : 1,0 → 1,3 ms par image sans écume, 1,7 à 1,9 ms avec. Rien ne change sous 10 km/h (image identique à l'octet). Seulement dehors, sur une
+  Miche 1944) : les moutons naissent sur ces crêtes, plus de tirage au hasard. Les **groupes de vagues** viennent à
+  des places et des tailles aléatoires (un champ lisse, de moyenne quadratique 1, qui monte ou baisse la hauteur, et
+  qui avance à la vitesse des groupes) : quelques vagues sommées battraient en motif régulier, ce qu'une vraie mer ne
+  fait pas. La **lumière** (pente tournée vers la lumière ou non) lit surtout les vagues de plus de 8 à 24 px : les
+  plus courtes faisaient des hachures ; elles comptent entières dans le déferlement. L'**écume** laissée dure quelques
+  secondes (s'efface en 3 s, Callaghan et al. 2012), dérive à 3 % du vent (Wu 1983) et se déchire en filaments dans
+  le sens du vent ; translucide en brise, plus dense et plus opaque par grand vent, selon l'échelle de Beaufort (OMM :
+  traînées à force 7, bien marquées à 8, denses à 9, la mer blanche à 10).
+  La part blanchie suit la loi usuelle des moutons (Monahan et O'Muircheartaigh, 1980) : le seuil de pente est le
+  seuil physique à 7 % près de 20 à 82 km/h, 14 % sous lui à 90 km/h (table `BREAKING_FACTORS`, mesurée sur 2048 px).
+  Au-delà de 90 km/h, où les mesures de cette loi s'arrêtent, le blanc tend vers 45 % au plus (`whitecapWhite`) :
+  l'eau reste visible. Mesuré sur le GPU (Metal, sonde de l'étude, 2048 px, six instants) : 0,13 % à 20 km/h (loi
+  0,13 %), 1,31 % à 40 (1,41), 4,95 % à 60 (5,63), 14,6 % à 82 (16,3), 34,8 % à 110 (visée 34,2) ; 30 et 50 km/h
+  sont 27 % sous la loi sur le GPU (hachage calculé autrement par Metal que par le jumeau processeur). Sur un fetch
+  plus court, moins de moutons. Rien ne change sous 10 km/h (image identique à l'octet). Seulement dehors, sur une
   eau d'au moins 8 px, non gelée. Le vent est celui que le joueur voit (carte, réglé à la main, ou météo réelle).
+  Qualité graphique : **Basse**, pas de mer du vent ; **Moyenne**, deux regards en arrière pour l'écume laissée au lieu
+  de trois. Coût mesuré (Mac M4 Max, 1920 x 1080 couvert d'eau) : 1,1 → 1,7 ms par image sans écume, 2,4 à 2,6 ms avec.
 
 Le déferlement des vagues du serveur et la mer du vent sont dessinés par le **shader de l'eau**
 (`Terrain/GroundSplat.ts`), comme l'écume de rive : l'écume des vagues lui arrive par cellule (rouge du paquet 9),
