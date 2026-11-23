@@ -464,13 +464,13 @@ describe("a tree the wind lays down", () => {
         return new TreeFire([tree("west", 2, 5), tree("east", 30, 5)], ground().meadow);
     };
 
-    it("falls after 4 s of gusts of 250 km/h at its place, the way the wind blows, and not under 250", () => {
+    it("falls after 4 s of gusts of 130 km/h at its place, the way the wind blows, and not under 130", () => {
         const fire = two();
-        run(fire, 20, blowing(249, 90));
+        run(fire, 20, blowing(129, 90));
         expect(fire.stateOf("west").damage).toBe(0);
-        run(fire, 2, blowing(250, 90));
+        run(fire, 2, blowing(130, 90));
         expect(fire.stateOf("west").damage).toBe(0);
-        run(fire, 2, blowing(250, 90));
+        run(fire, 2, blowing(130, 90));
         // From the east: it lies towards the west.
         expect(fire.stateOf("west")).toMatchObject({ damage: 1, fallenFrom: 90 });
         expect(fire.damaged()).toContainEqual({ id: "west", fire: 0, damage: 16, fallen: 91 });
@@ -563,6 +563,26 @@ describe("the trees a hurricane lays down round its eye", () => {
         { id: "west", x: EYE.x - HURRICANE_RMAX_PX, y: EYE.y, out: 270 },
         { id: "south", x: EYE.x, y: EYE.y + HURRICANE_RMAX_PX, out: 180 },
     ];
+
+    it("are laid down by a category 1 at its eyewall, not far out in its bands", () => {
+        const hurricane = { ...still(false), category: 1 };
+        const fire = new TreeFire(
+            [
+                { id: "wall", x: EYE.x + HURRICANE_RMAX_PX, y: EYE.y },
+                { id: "bands", x: EYE.x + 6 * HURRICANE_RMAX_PX, y: EYE.y },
+            ],
+            ground().meadow,
+        );
+        run(fire, 4, {
+            ...calm,
+            windAt: (x, y) => {
+                const here = hurricaneHere(hurricane, 300_000, x, y);
+                return here && { gust: here.gust * here.share, from: here.windFrom };
+            },
+        });
+        expect(fire.stateOf("wall").fallenFrom).toBeDefined();
+        expect(fire.stateOf("bands").fallenFrom).toBeUndefined();
+    });
 
     for (const southern of [false, true]) {
         it(`lies across the radius, turned the way the storm turns (${southern ? "south" : "north"})`, () => {

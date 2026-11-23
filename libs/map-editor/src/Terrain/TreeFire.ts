@@ -87,12 +87,22 @@ export interface TreeFireStepInput {
 }
 
 /**
- * The gusts that lay a tree down: 250 km/h, asked by the user, reached by a category 5 and by the gusts of a
- * category 4 near its eyewall. Real trees fall well before (uprooted or snapped from about 120 km/h of gusts for a
- * conifer, 140 km/h for a broadleaf, EF scale and models of windthrow): a choice for the show, not a physical rule.
+ * The gusts that lay a tree down (3 s gusts, km/h): 130, a value for every tree, its species unknown (the trees of the
+ * catalogue are images, "Nature:tree-2-10"). It lies between the lowest and the expected gusts that uproot a tree in
+ * the Enhanced Fujita scale: 73 to 87 mph (117 to 140 km/h) for a softwood (pine, spruce, fir), 76 to 94 mph (122 to
+ * 151 km/h) for a hardwood (oak, maple, birch, ash); trunks snap at 104 and 107 mph (167, 172 km/h) expected (Wind
+ * Science and Engineering Center, Texas Tech University, "A Recommendation for an Enhanced Fujita Scale", 2006,
+ * appendix A, DI 27 and 28, pp. A-67 to A-69, read). Models of windthrow give critical gusts of 90 to 145 km/h by
+ * species and stand (ForestGALES, HWIND: Peltola et al. 1999, Gardiner et al. 2008; summed up by Gemini, to be
+ * checked), and Beaufort 10 (89 to 102 km/h of mean wind) "trees uprooted". Reached at the eyewall of a category 1
+ * (gusts of 155 km/h), and by a wind of the room of 106 km/h (mean) and more, over the whole map.
  */
-export const TREE_FALL_GUST_KMH = 250;
-/** How long a tree stands in those gusts before it falls (a gust alone does not lay it down): two steps. */
+export const TREE_FALL_GUST_KMH = 130;
+/**
+ * How long a tree stands in those gusts before it falls: two steps of the meadow. A gust is a 3 s peak, and the storm is
+ * reduced to the map (its eyewall passes over a tree in seconds, faster still when the hurricane is sped up): one step
+ * of strong wind alone does not lay a tree down, two do.
+ */
 export const TREE_FALL_SECONDS = 4;
 
 /** An ember on its way, in map pixels: where it left, where it falls, how long it flies. */
