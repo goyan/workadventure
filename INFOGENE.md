@@ -6099,6 +6099,27 @@ rappelle que le dôme ne se forme qu'aux vitesses lentes du widget (un œil plus
 3 à 4 m/s, le devance : c'est physique). Le volume d'eau de la carte reste fermé (pas de mer qui l'alimente) : la
 carte d'Antoine n'a de l'eau qu'aux bords nord (35 m) et sud (15 m).
 
+**Le dôme se lit par la lumière sur sa pente** (2026-11-23, `GroundSplat.ts` : `waterFacing`, `waterLevels`,
+`writeSlopes`). Avant, l'eau fonçait linéairement avec la profondeur jusqu'à 2,2 m : un dôme d'eau, plus profond,
+se lisait comme un trou sombre. Désormais :
+- **Absorption de Beer-Lambert** (`WATER_ATTENUATION_PX`) : la part de couleur d'eau profonde est
+  1 − exp(−profondeur / 1,1 m). La lumière traverse la profondeur deux fois, d'où un coefficient d'atténuation de
+  0,45 par mètre, une valeur de lac (Kirk, *Light and Photosynthesis in Aquatic Ecosystems*). La couleur sature au
+  lieu de foncer sans fin. **Choix de l'utilisateur (« go la nouvelle »), aussi pour l'eau ordinaire** : les
+  hauts-fonds sont un peu plus foncés et plus opaques, l'eau de 2 m un peu plus claire (±0,14 vers la teinte
+  profonde, ±0,06 d'opacité).
+- **Loi du cosinus sur la pente de la surface** : la pente de la surface (sol + eau) est calculée sur le processeur
+  à partir des profondeurs exactes, puis rangée dans le vert et le bleu du paquet 11 (`SLOPE_PACK`). La part de
+  couleur propre à l'eau est éclairée selon le cosinus de sa face, lumière du nord-ouest comme le relief, à 45° de
+  hauteur (`WATER_LIGHT_ELEVATION_DEG`, un choix).
+- **Pas de reflet lié à la pente**, et c'est voulu : vu d'en haut, la part de ciel reflétée (Fresnel) passe seulement
+  de 2 à 2,4 % jusqu'à 40° d'inclinaison.
+- **Les marches ne sont pas éclairées** : une surface plus raide que 30° (la plus raide des vagues, Stokes) est de
+  l'eau qui tombe d'une marche. Elle est rendue de niveau.
+- **Ce qu'on voit** : au cran Réaliste, le dôme reste invisible (une pente de 0,04 donne 4 % de lumière en plus ou
+  en moins). À ×10, son flanc nord-ouest s'éclaircit et son flanc sud-est s'assombrit. Une marche d'eau de 10 à
+  18 px garde un liseré d'une case.
+
 **Ce que ça ne modélise pas, ou pas encore.**
 - **La pluie par position sur l'eau, le feu par position** : le sol du serveur lit une seule valeur pour la salle, au
   point survolé par l'œil. L'eau ne reçoit donc pas plus de pluie sous le mur qu'ailleurs, et le feu ne sent pas le
