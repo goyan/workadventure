@@ -93,6 +93,8 @@ describe("the kernel of the water compiled to WebAssembly", () => {
             nextSpeedSouth: floats(() => 0),
             closed: Uint8Array.from({ length: cells }, () => (random() < 0.05 ? 1 + Math.floor(random() * 15) : 0)),
             hollow: Uint8Array.from({ length: cells }, () => (random() < 0.7 ? 1 : 0)),
+            // A low over the grid: the heights its pressure holds (AirPressure), read by the flows.
+            head: floats(() => -random() * 20),
         };
         const figures = {
             width,
@@ -107,6 +109,7 @@ describe("the kernel of the water compiled to WebAssembly", () => {
             damping: 0.02,
             breaking: 4,
             carried: 1,
+            pressed: 1,
         };
         // A memory threads share: a second kernel joins it, as a thread that follows the passes does.
         const kernel = new WasmWaterKernel({ shared: true });

@@ -37,6 +37,9 @@ function move(): InertiaMove {
         damping: 0.02,
         breaking: 4,
         carried: 1,
+        // A low over the grid: the heights its pressure holds, read by the flows.
+        head: floats(() => -random() * 20),
+        pressed: 1,
         compiled: undefined,
     };
 }

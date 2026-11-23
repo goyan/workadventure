@@ -21,7 +21,7 @@ import { meteorShape } from "../Catastrophe/Meteor";
 import { liquidRainRate, snowShareOf } from "../Weather/Precipitation";
 import type { PrecipitationAir } from "../Weather/Precipitation";
 import { rainRateAt } from "../Weather/RainRate";
-import { skyRainUnder } from "../Catastrophe/Hurricane";
+import { hurricanePressure, skyRainUnder } from "../Catastrophe/Hurricane";
 import type { Hurricane } from "../Catastrophe/Hurricane";
 import type { MapPlace, RealWeatherSlot } from "../Weather/RealWeather";
 import { waterPassRunner } from "./WaterBands";
@@ -442,7 +442,12 @@ export class WaterSimulation {
         const waving = this.waves.length > 0 || raining || draining || displacing || this.steps < this.stirredUntilStep;
         if (this.waves.length > 0) this.advanceWaves(grid);
         const pouring = this.rainRate > 0 || this.objects.some((object) => object.litresPerMinute > 0);
-        if (this.moving || pouring) {
+        // Under the low of a hurricane the water stands higher, and follows it as it goes (the inverted barometer):
+        // the grid is kept moving while it crosses the map.
+        const pressure = hurricanePressure(this.hurricane(), this.now());
+        grid.setPressure(pressure);
+        const pressing = pressure !== undefined;
+        if (this.moving || pouring || pressing) {
             const input = stepInputOf(stepWater, this.rainRate, this.objects, WATER_STEP_MS / 1000);
             // The water with inertia runs as it really does at each step of its time: no move more towards the sinks,
             // no exchange from far (they made up for inflows faster than the flow, and would now distort it).
@@ -460,7 +465,7 @@ export class WaterSimulation {
                 this.sums.absorptionPx += tally.absorptionPx;
                 this.sums.lostPx += tally.lostPx;
                 // Still water with nothing coming in: the steps left would change nothing.
-                if (!tally.moved && !pouring) break;
+                if (!tally.moved && !pouring && !pressing) break;
             }
         }
         // As often as the map asks while the water moves, less while the server or the network is loaded, and at least

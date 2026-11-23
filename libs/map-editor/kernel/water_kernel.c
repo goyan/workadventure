@@ -53,10 +53,14 @@ typedef struct {
     double damping;
     double breaking;
     double carried;
+    /* The pressure of the air as a height of water, read only when `pressed` is 1 (InertiaMove.head). */
+    float *head;
+    int pressed;
 } Move;
 
 _Static_assert(__builtin_offsetof(Move, dt) == 72, "the layout WaterKernelWasm.ts writes");
-_Static_assert(sizeof(Move) == 152, "the layout WaterKernelWasm.ts writes");
+_Static_assert(__builtin_offsetof(Move, head) == 152, "the layout WaterKernelWasm.ts writes");
+_Static_assert(sizeof(Move) == 160, "the layout WaterKernelWasm.ts writes");
 
 #define MAX(a, b) __builtin_wasm_max_f64((a), (b))
 #define MIN(a, b) __builtin_wasm_min_f64((a), (b))
@@ -75,6 +79,8 @@ __attribute__((export_name("flux"))) void flux(const Move *move, int rowFrom, in
     const double dt = move->dt, swiftest = move->swiftest, pull = move->pull, pulled = move->pulled;
     const double roughness = move->roughness, damping = move->damping, breaking = move->breaking;
     const double carried = move->carried;
+    const float *head = move->head;
+    const int pressed = move->pressed == 1;
     for (int row = rowFrom; row < rowTo; row++) {
         for (int column = 0; column < width; column++) {
             const int index = row * width + column;
@@ -94,7 +100,8 @@ __attribute__((export_name("flux"))) void flux(const Move *move, int rowFrom, in
                     else {
                         const double drop = surface - otherSurface;
                         const int inWater = hollow[index] == 1 && hollow[other] == 1;
-                        double flow = F(east, index) + pull * MIN(passing, pulled) * drop;
+                        const double drive = pressed ? drop + (F(head, index) - F(head, other)) : drop;
+                        double flow = F(east, index) + pull * MIN(passing, pulled) * drive;
                         if (carried > 0 && inWater) {
                             const double along = F(speedEast, index);
                             const double alongChange =
@@ -134,7 +141,8 @@ __attribute__((export_name("flux"))) void flux(const Move *move, int rowFrom, in
                     else {
                         const double drop = surface - otherSurface;
                         const int inWater = hollow[index] == 1 && hollow[other] == 1;
-                        double flow = F(south, index) + pull * MIN(passing, pulled) * drop;
+                        const double drive = pressed ? drop + (F(head, index) - F(head, other)) : drop;
+                        double flow = F(south, index) + pull * MIN(passing, pulled) * drive;
                         if (carried > 0 && inWater) {
                             const double along = F(speedSouth, index);
                             const double alongChange =

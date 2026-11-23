@@ -5999,12 +5999,33 @@ calcul, dans un conteneur Linux sur le Mac. La version à l'échelle de la carte
 pour la météo du navigateur. Le coût de la spirale (un shader plein écran, deux fbm de trois octaves) n'a pas été
 mesuré.
 
+**La pression sur l'eau : le baromètre inversé** (`Terrain/AirPressure.ts`, `Hurricane.hurricanePressure`,
+demandé le 2026-11-23 : « la pression dans un ouragan diffère selon la position : faible (très) dans l'œil, donc ça
+attire l'eau vers le haut »). Sous une basse pression la mer monte d'environ 1 cm par hPa (100 Pa / (ρ g), 1,02 cm en
+eau douce ; Pugh, *Tides, Surges and Mean Sea-Level*, 1987, ch. 7). Profil de Holland, le même que le vent :
+p(r) − p_loin = −Δp (1 − exp(−(R/r)^B)), R = 30 m, B = 1,5 ; Δp tiré du vent maximal par la relation de Holland
+(V² = B Δp / (ρ_air e), ρ_air = 1,15) : 26 hPa en catégorie 1, 74 en 4, 100 en 5 (cohérent avec les pressions
+centrales de Saffir-Simpson), soit 0,26, 0,75 et 1,0 m d'eau sous l'œil par rapport au loin, au fondu de l'ouragan
+près. Dans le modèle d'eau du serveur, l'eau à inertie coule selon la pente de sa surface **plus** cette hauteur
+(`WaterKernel.fluxPass`, et le même calcul dans le noyau C `kernel/water_kernel.c`, identique au bit ; `Move` gagne
+un pointeur `head` et un drapeau `pressed` en fin de structure) : à l'équilibre, surface + hauteur de pression est
+de niveau. Dans un bassin fermé l'eau se redistribue : un dôme sous l'œil, la mer qui baisse loin de lui, les rives
+que l'œil approche qui se couvrent, et le dôme qui suit l'œil (0,9 m/s, bien moins vite que les ondes : pas de
+résonance) puis retombe en vagues quand il s'en va. Un bassin de 110 m ballotte environ deux minutes avant de se
+poser (amortissement existant, aucun ajout). Sans ouragan le calcul est exactement l'ancien (empreintes de l'eau
+inchangées). Coût : la hauteur de pression de chaque cellule est refaite quand l'œil a bougé d'une demi-cellule
+(environ un pas sur trois, 1,5 ms sur 480 × 320 cellules sur le Mac, une table au lieu d'une exponentielle par
+cellule), une addition de plus par face sous ouragan. La grille reste éveillée tant que l'ouragan passe. Le
+protobuf ne change pas.
+
 **Ce que ça ne modélise pas, ou pas encore.**
 - **La pluie par position sur l'eau, le feu par position** : le sol du serveur lit une seule valeur pour la salle, au
   point survolé par l'œil. L'eau ne reçoit donc pas plus de pluie sous le mur qu'ailleurs, et le feu ne sent pas le
   vent du point où il brûle.
 - **La mer du vent par position** : un seul vent pour toute la vue, celui du centre de la caméra.
-- **La surcote** : le modèle d'eau n'a pas de bord ouvert sur une mer.
+- **La surcote par le vent** (frottement du vent sur l'eau, souvent plus forte que la pression : pente
+  τ / (ρ g h), τ = ρ_air C_d U²) : non faite ; elle entrerait au même endroit que la hauteur de pression, mais demande
+  le vent par cellule. Et le modèle d'eau n'a pas de bord ouvert sur une mer.
 - Le feu : sous la pluie réelle du mur, il ralentit (test : 20 % de cases en feu en moins au plus fort sur un pré
   sec) et l'air humide (95 %) n'en allume plus de nouveau. Un feu déjà pris dans une herbe sèche brûle toutefois
   jusqu'au bout.

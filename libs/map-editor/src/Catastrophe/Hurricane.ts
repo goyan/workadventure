@@ -1,6 +1,8 @@
 import { TILE_PX } from "../types";
 import type { FireConditions } from "../Weather/FireConditions";
 import { TILE_AREA_M2 } from "../Terrain/Scale";
+import { waterHeightOfPressure } from "../Terrain/AirPressure";
+import type { AirPressure } from "../Terrain/AirPressure";
 
 /**
  * A hurricane crosses the map, REDUCED TO THE SIZE OF THE MAP: a creative choice, as the comet is. A real one is
@@ -409,4 +411,35 @@ export function skyRainUnder(
     if (!here || here.share <= 0) return mapRate;
     const storm = here.rainRate / (groundSpeed > 0 ? groundSpeed : 1);
     return mapRate + (storm - mapRate) * here.share;
+}
+
+/** The density of the air at the surface of a tropical sea, kg/m³ (Holland 1980 takes 1.15). */
+const HURRICANE_AIR_DENSITY = 1.15;
+
+/**
+ * How much lower the pressure is in the eye than far from it, Pa: from its strongest wind by the relation of Holland
+ * (1980), V² = B Δp / (ρ e), the same profile as its wind (hollandShare). 26 hPa for a category 1, 74 for a 4, 100 for
+ * a 5: within the central pressures of the Saffir-Simpson scale (980 hPa and over, 920 to 944, under 920) under
+ * 1010 hPa far from it.
+ */
+export function hurricanePressureDrop(category: number): number {
+    const wind = hurricaneMaxWind(category) / 3.6;
+    return (HURRICANE_AIR_DENSITY * Math.E * wind * wind) / HURRICANE_HOLLAND_B;
+}
+
+/**
+ * The low of the hurricane over the water at `epoch` (WaterGrid.setPressure): under its eye the water stands higher
+ * by the height of water its drop of pressure holds (the inverted barometer, about 1 cm a hPa), the drop fading in
+ * and out with the storm. Undefined outside its passage.
+ */
+export function hurricanePressure(hurricane: Hurricane | undefined, epoch: number): AirPressure | undefined {
+    const storm = hurricaneAt(hurricane, epoch);
+    if (!hurricane || !storm || !(storm.share > 0)) return undefined;
+    return {
+        x: storm.eyeX,
+        y: storm.eyeY,
+        dropPx: waterHeightOfPressure(hurricanePressureDrop(hurricane.category) * storm.share) * PX_PER_METRE,
+        radiusPx: HURRICANE_RMAX_PX,
+        b: HURRICANE_HOLLAND_B,
+    };
 }
