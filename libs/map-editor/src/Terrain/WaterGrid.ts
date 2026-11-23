@@ -15,6 +15,8 @@ import { ballColumn, ballHalfHeight } from "./WaterBall";
 import type { WaterBall } from "./WaterBall";
 import { affordPass, depthsPass, DRY_PX, fluxPass, scalePass } from "./WaterKernel";
 import type { InertiaMove } from "./WaterKernel";
+import { waterArrays } from "./WaterArrays";
+import type { WaterArrays } from "./WaterArrays";
 import { LAND_DEPTH_BITS, lifeDepthClass, restLevelOf, SWIM_DEPTH_BITS, WATER_FILM_PX } from "./WaterView";
 import type {
     RestLevelFields,
@@ -529,17 +531,17 @@ export class WaterGrid implements WaterView {
      * (`flowSouth`), in pixels of water over one cell a second, negative the other way; and the share of what it
      * gives each cell can afford. Empty on a map whose water only creeps.
      */
-    private flowEast = new Float32Array(0);
-    private flowSouth = new Float32Array(0);
-    private afford = new Float32Array(0);
+    private flowEast: Float32Array = new Float32Array(0);
+    private flowSouth: Float32Array = new Float32Array(0);
+    private afford: Float32Array = new Float32Array(0);
     /** The water each row lost at the last move of the water with inertia (see depthsPass). */
-    private rowLost = new Float64Array(0);
+    private rowLost: Float64Array = new Float64Array(0);
     /** The speed of the water through each of those passages at the move before, for the momentum it carries. */
-    private speedEast = new Float32Array(0);
-    private speedSouth = new Float32Array(0);
+    private speedEast: Float32Array = new Float32Array(0);
+    private speedSouth: Float32Array = new Float32Array(0);
     /** The same speeds as this move makes them: they take the place of the others when it ends. */
-    private nextSpeedEast = new Float32Array(0);
-    private nextSpeedSouth = new Float32Array(0);
+    private nextSpeedEast: Float32Array = new Float32Array(0);
+    private nextSpeedSouth: Float32Array = new Float32Array(0);
     /** The friction of the ground of each cell: the square of the roughness of its soil, times MANNING. */
     private readonly rough: Float32Array;
     /**
@@ -585,14 +587,20 @@ export class WaterGrid implements WaterView {
         walls?: WaterWallSides,
         /** The walls that close the rooms (doors closed): what they close is indoors. No room when absent. */
         rooms?: WaterWallSides,
+        /**
+         * Where the arrays the passes of its moves read and write are kept (WaterArrays): where the grids of this
+         * thread usually are (ordinary memory, unless setWaterArrays said otherwise) when absent.
+         */
+        private readonly arrays: WaterArrays = waterArrays(),
     ) {
         this.bounds = bounds ?? { x: 0, y: 0, width: 0, height: 0 };
         const size = this.bounds.width * this.bounds.height;
-        this.ground = new Float32Array(size);
+        this.ground = arrays.floats(size);
         this.blocked = new Uint8Array(size);
-        this.depth = new Float32Array(size);
+        this.depth = arrays.floats(size);
         this.sealed = new Uint8Array(size);
-        this.next = new Float32Array(size);
+        // The depths and these change places at each step of the water that creeps: kept where the depths are.
+        this.next = arrays.floats(size);
         this.queue = new Int32Array(Math.min(size, MAX_DISC_CELLS));
         this.basin = new Int32Array(Math.min(size, BASIN_CELLS));
         this.basinAbove = new Float32Array(this.basin.length);
@@ -607,11 +615,12 @@ export class WaterGrid implements WaterView {
                 if (blocked?.(cellX, cellY)) this.blocked[index] = 1;
             }
         }
-        this.spill = spillLevels(this.ground, this.bounds.width, this.bounds.height);
+        this.spill = arrays.floats(size);
+        this.spill.set(spillLevels(this.ground, this.bounds.width, this.bounds.height));
         this.indoor = indoorCells(this.bounds, rooms);
         this.drinks = new Float32Array(size);
-        this.rough = new Float32Array(size);
-        this.hollow = new Uint8Array(size);
+        this.rough = arrays.floats(size);
+        this.hollow = arrays.bytes(size);
         for (let row = 0; row < this.bounds.height; row++) {
             for (let column = 0; column < this.bounds.width; column++) {
                 const index = row * this.bounds.width + column;
@@ -621,7 +630,7 @@ export class WaterGrid implements WaterView {
                 this.drinks[index] = soilDrinks(soil, this.ground[index] < this.spill[index]);
             }
         }
-        this.closed = new Uint8Array(size);
+        this.closed = arrays.bytes(size);
         const { width, height } = this.bounds;
         for (let row = 0; row < height; row++) {
             for (let column = 0; column < width; column++) {
@@ -1944,13 +1953,13 @@ export class WaterGrid implements WaterView {
         const { width, height } = this.bounds;
         const size = width * height;
         if (this.flowEast.length !== size) {
-            this.flowEast = new Float32Array(size);
-            this.flowSouth = new Float32Array(size);
-            this.afford = new Float32Array(size);
-            this.speedEast = new Float32Array(size);
-            this.speedSouth = new Float32Array(size);
-            this.nextSpeedEast = new Float32Array(size);
-            this.nextSpeedSouth = new Float32Array(size);
+            this.flowEast = this.arrays.floats(size);
+            this.flowSouth = this.arrays.floats(size);
+            this.afford = this.arrays.floats(size);
+            this.speedEast = this.arrays.floats(size);
+            this.speedSouth = this.arrays.floats(size);
+            this.nextSpeedEast = this.arrays.floats(size);
+            this.nextSpeedSouth = this.arrays.floats(size);
         }
         const figure = (value: number | undefined, fallback: number): number =>
             value !== undefined && Number.isFinite(value) && value >= 0 ? value : fallback;
@@ -2025,7 +2034,7 @@ export class WaterGrid implements WaterView {
             breaking,
             carried,
         };
-        if (this.rowLost.length !== height) this.rowLost = new Float64Array(height);
+        if (this.rowLost.length !== height) this.rowLost = this.arrays.doubles(height);
         const rowLost = this.rowLost;
         let moved = false;
         for (let step = 0; step < moves; step++) {

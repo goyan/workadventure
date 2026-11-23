@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { cellKey, withHeights, withSoils } from "../src/Terrain/TerrainGrid";
+import { ordinaryWaterArrays, setWaterArrays, sharedWaterArrays } from "../src/Terrain/WaterArrays";
 import { WaterGrid } from "../src/Terrain/WaterGrid";
 import type { WaterStepInput, WaterTally, WaterWallSides } from "../src/Terrain/WaterGrid";
 import { DEFAULT_WAVE_SETTINGS, TERRAIN_CELL } from "../src/types";
@@ -519,4 +520,39 @@ describe("WaterGrid, the same water to the bit", () => {
             SCENARIO_TIMEOUT_MS,
         );
     }
+});
+
+describe("WaterGrid, the same water to the bit with its arrays in a memory threads share", () => {
+    beforeAll(() => setWaterArrays(sharedWaterArrays));
+    afterAll(() => setWaterArrays(ordinaryWaterArrays));
+
+    for (const scenario of SCENARIOS) {
+        it(
+            `ends on the fingerprint of the water as it was: ${scenario.name}`,
+            () => {
+                const { whole, water } = play(scenario);
+                expect(water).toBe(WATER_ALONE[scenario.name]);
+                expect(whole).toBe(scenario.fingerprint);
+            },
+            SCENARIO_TIMEOUT_MS,
+        );
+    }
+
+    it("keeps the arrays of its moves there, and nowhere else unless told", () => {
+        const shared = newGrid();
+        setWaterArrays(ordinaryWaterArrays);
+        const ordinary = newGrid();
+        setWaterArrays(sharedWaterArrays);
+        for (const grid of [shared, ordinary]) {
+            fill(grid, 4);
+            grid.step(inertia);
+        }
+        const names = ["depth", "ground", "spill", "rough", "hollow", "closed", "flowEast", "flowSouth", "afford"];
+        const names2 = ["speedEast", "speedSouth", "nextSpeedEast", "nextSpeedSouth", "next", "rowLost"];
+        for (const name of [...names, ...names2]) {
+            const where = (grid: WaterGrid): unknown => (Reflect.get(grid, name) as Float32Array).buffer;
+            expect(where(shared), name).toBeInstanceOf(SharedArrayBuffer);
+            expect(where(ordinary), name).toBeInstanceOf(ArrayBuffer);
+        }
+    });
 });
