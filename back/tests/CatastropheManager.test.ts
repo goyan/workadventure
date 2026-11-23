@@ -677,6 +677,7 @@ describe("CatastropheManager, hurricanes", () => {
         anchorY: 0,
         durationMs: 0,
         times: 0,
+        waterEffect: 0,
     };
 
     it("lets a hurricane cross the map, told to the room once a second until it ends", () => {
@@ -748,6 +749,36 @@ describe("CatastropheManager, hurricanes", () => {
 });
 
 describe("CatastropheManager, a hurricane sped up by the speed of the map", () => {
+    it("keeps the effect on the water a player asked for, one of real, ×2, ×4, ×6, ×8, and tells it to the room", () => {
+        const { manager, sent } = harness();
+        const track = {
+            category: 4,
+            minutes: 5,
+            heading: 0,
+            southern: false,
+            startedAt: 0,
+            fromX: 0,
+            fromY: 0,
+            toX: 0,
+            toY: 0,
+            anchorX: 0,
+            anchorY: 0,
+            durationMs: 0,
+            times: 0,
+            waterEffect: 0,
+        };
+        manager.request(1, CatastropheKind.CATASTROPHE_HURRICANE, -1, -1, 0, true, false, undefined, {
+            ...track,
+            waterEffect: 5,
+        });
+        expect(sent[0].hurricane?.waterEffect).toBe(4);
+        expect(manager.hurricane()?.waterEffect).toBe(4);
+        manager.stopHurricane();
+        manager.request(1, CatastropheKind.CATASTROPHE_HURRICANE, -1, -1, 0, true, false, undefined, track);
+        // Not said (an older browser): the real effect.
+        expect(sent[sent.length - 1].hurricane?.waterEffect).toBe(1);
+    });
+
     it("shortens its crossing when the map goes faster, its eye going on from where it is", () => {
         const { manager, sent } = harness();
         let times = 1;
@@ -766,6 +797,7 @@ describe("CatastropheManager, a hurricane sped up by the speed of the map", () =
             anchorY: 0,
             durationMs: 0,
             times: 0,
+            waterEffect: 0,
         };
         manager.request(1, CatastropheKind.CATASTROPHE_HURRICANE, -1, -1, 0, true, false, undefined, asked);
         expect(sent[0].hurricane).toMatchObject({ durationMs: 300_000, times: 1, minutes: 5 });
