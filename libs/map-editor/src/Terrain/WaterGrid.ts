@@ -532,6 +532,8 @@ export class WaterGrid implements WaterView {
     private flowEast = new Float32Array(0);
     private flowSouth = new Float32Array(0);
     private afford = new Float32Array(0);
+    /** The water each row lost at the last move of the water with inertia (see depthsPass). */
+    private rowLost = new Float64Array(0);
     /** The speed of the water through each of those passages at the move before, for the momentum it carries. */
     private speedEast = new Float32Array(0);
     private speedSouth = new Float32Array(0);
@@ -1989,6 +1991,8 @@ export class WaterGrid implements WaterView {
             breaking,
             carried,
         };
+        if (this.rowLost.length !== height) this.rowLost = new Float64Array(height);
+        const rowLost = this.rowLost;
         let moved = false;
         for (let step = 0; step < moves; step++) {
             fluxPass(move, 0, height);
@@ -2001,9 +2005,9 @@ export class WaterGrid implements WaterView {
             nextSpeedSouth = move.nextSpeedSouth = wasSouth;
             affordPass(move, 0, height);
             if (scalePass(move, 0, height)) moved = true;
-            const depths = depthsPass(move, 0, height, tally.lostPx);
-            tally.lostPx = depths.lost;
-            if (depths.moved) moved = true;
+            if (depthsPass(move, 0, height, rowLost)) moved = true;
+            // The water lost, row after row: the same sum whoever computed which rows.
+            for (let row = 0; row < height; row++) tally.lostPx += rowLost[row];
         }
         this.speedEast = speedEast;
         this.speedSouth = speedSouth;

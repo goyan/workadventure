@@ -211,19 +211,16 @@ export function scalePass(move: InertiaMove, rowFrom: number, rowTo: number): bo
 }
 
 /**
- * The depths follow the flows. `lost` is the water lost so far (off the edge of the grid, over the highest level
- * a map may set): what these rows lose is added to it, cell after cell, and the sum is returned, with whether
- * any of it moved the water.
+ * The depths follow the flows. What each row loses (off the edge of the grid, over the highest level a map may
+ * set) is written in `rowLost`, a sum for each row of the grid, from nothing: who calls adds the rows up in their
+ * order. So the water lost is the same sum whoever computes which rows, one thread or several. Returns whether any
+ * loss moved the water.
  */
-export function depthsPass(
-    move: InertiaMove,
-    rowFrom: number,
-    rowTo: number,
-    lost: number,
-): { lost: number; moved: boolean } {
+export function depthsPass(move: InertiaMove, rowFrom: number, rowTo: number, rowLost: Float64Array): boolean {
     const { width, height, depth, ground, spill, east, south, dt, edgeShare, top } = move;
     let moved = false;
     for (let row = rowFrom; row < rowTo; row++) {
+        let lost = 0;
         for (let column = 0; column < width; column++) {
             const index = row * width + column;
             let net = 0;
@@ -257,6 +254,7 @@ export function depthsPass(
             }
             depth[index] = held;
         }
+        rowLost[row] = lost;
     }
-    return { lost, moved };
+    return moved;
 }

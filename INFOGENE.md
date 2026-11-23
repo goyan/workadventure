@@ -2401,6 +2401,16 @@ finesse réduite à 5 sur 8 »), par `easedPrecision` et `easedUpdates` de `Terr
 précise (vagues plus amorties, fronts moins nets) pendant les moments les plus lourds, un tsunami compris. Sans
 inertie, seuls les envois peuvent être réduits. Seuils posés par raisonnement, non calés sur une mesure en jeu.
 
+**L'eau à inertie en quatre passes par plage de lignes** (`Terrain/WaterKernel.ts`). Les quatre balayages d'un
+mouvement (flux, ce qu'une cellule peut donner, mise à l'échelle, profondeurs) sont des fonctions à part qui
+prennent une plage de lignes : la forme dont un découpage sur plusieurs fils a besoin. Une passe ne lit rien
+qu'une passe en cours écrit sur d'autres lignes, donc des bandes de lignes donnent les mêmes chiffres dans
+n'importe quel ordre (`tests/WaterKernel.test.ts`). L'eau perdue (`lostPx` : bord de la carte, plafond des crues)
+est sommée ligne par ligne, puis les lignes dans l'ordre : la somme ne dépend plus de qui calcule quelles lignes.
+Ce bilan a changé une fois dans ses derniers chiffres (3 pour cent mille milliards au plus) ; l'eau, elle, est
+identique : `WaterFingerprints.test.ts` garde deux empreintes par scénario, celle de l'eau seule (inchangée depuis
+`eb17d9b92`) et celle de tout, réenregistrée pour les huit scénarios qui perdent de l'eau.
+
 **L'eau se pose à la fin du rattrapage** (`WaterSimulation.liveAgain`, `settle`). Le rattrapage d'une salle vide fait
 vivre l'eau sans inertie par pas de 600 s, et chaque pas ne la déplace qu'une fois : il la laisse entassée là où
 elle est arrivée et creusée là où elle est partie. L'eau à inertie repartait de ces niveaux inégaux : de fausses

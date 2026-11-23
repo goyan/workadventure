@@ -7,10 +7,14 @@ import type { TerrainData } from "../src/types";
 
 /**
  * The water of a whole map, fingerprinted: each scenario below ends on a fingerprint of everything the grid holds
- * and tells (depths, flows, speeds, tallies, bytes sent), recorded with the code as it was at the commit eb17d9b92
- * of the fork. A change that is meant to leave the water as it is, to the bit (a faster loop), keeps them all; one
- * that changes the physics on purpose records them again:
+ * and tells (depths, flows, speeds, tallies, bytes sent). A change that is meant to leave the water as it is, to
+ * the bit (a faster loop), keeps them all; one that changes the physics on purpose records them again:
  * `RECORD_WATER_FINGERPRINTS=1 npx vitest run tests/WaterFingerprints.test.ts`.
+ *
+ * Those of the water alone (WATER_ALONE) were recorded with the code as it was at the commit eb17d9b92 of the
+ * fork. So were the whole ones, but for the eight scenarios that lose water: the water lost at a step is now
+ * summed row by row (depthsPass), so that several threads may share the rows, which changed that figure in its
+ * last places (by 3 parts in a hundred million million at most) and nothing else.
  */
 
 const WIDTH = 150;
@@ -134,7 +138,7 @@ interface Run {
 interface Scenario {
     name: string;
     steps: number;
-    /** The fingerprint of the run with the code of the commit eb17d9b92. */
+    /** The fingerprint of everything the grid holds and tells along the run. */
     fingerprint: string;
     setup?: (run: Run) => void;
     /** What happens at a step, and what the step is given (undefined: the grid is not stepped, as when at rest). */
@@ -193,7 +197,7 @@ const SCENARIOS: Scenario[] = [
     {
         name: "a downpour on the whole map, then everything runs",
         steps: 300,
-        fingerprint: "262f17622ce27c4e",
+        fingerprint: "0b3f6db52ddf7b9d",
         each: (run, step) => {
             if (step === 0) run.notes.push(run.grid.rainOn(0, 0, undefined, 20));
             if (step === 100) run.notes.push(run.grid.rainOn(0, 0, undefined, 5));
@@ -203,7 +207,7 @@ const SCENARIOS: Scenario[] = [
     {
         name: "a rough sea: three impacts in the lake",
         steps: 300,
-        fingerprint: "2300914e22bb6382",
+        fingerprint: "8da4e552f631d00e",
         setup: (run) => fill(run.grid, -6, inLake),
         each: (run, step) => {
             const strike = (cellX: number, cellY: number, radius: number): void => {
@@ -223,7 +227,7 @@ const SCENARIOS: Scenario[] = [
     {
         name: "a ball dragged through the lake, then taken away",
         steps: 300,
-        fingerprint: "9b4ba0b4b309572e",
+        fingerprint: "83f74706dbe97318",
         setup: (run) => fill(run.grid, -6, inLake),
         each: (run, step) => {
             if (step < 240) {
@@ -273,7 +277,7 @@ const SCENARIOS: Scenario[] = [
     {
         name: "a drain that takes the lake down and a downpour on the hill",
         steps: 300,
-        fingerprint: "3446764cc4e36250",
+        fingerprint: "fa581073b3fe575f",
         setup: (run) => fill(run.grid, -6, inLake),
         each: (run, step) => {
             if (step < 100) run.notes.push(run.grid.drainDisc(LAKE_CENTRE.cellX, LAKE_CENTRE.cellY, 6, 3, 0.5));
@@ -298,7 +302,7 @@ const SCENARIOS: Scenario[] = [
     {
         name: "the time a room missed lived again without inertia, then inertia again",
         steps: 330,
-        fingerprint: "010808756b937031",
+        fingerprint: "42e54240528e1cf8",
         each: (_run, step) => {
             const flows = [{ ...HILL_TOP, px: 2 }];
             if (step >= 100 && step < 130) {
@@ -310,7 +314,7 @@ const SCENARIOS: Scenario[] = [
     {
         name: "a map that goes faster than reality: sinks that ask for more than they find",
         steps: 300,
-        fingerprint: "1ea8b4a07a4bca36",
+        fingerprint: "f0041b166a257e56",
         setup: (run) => fill(run.grid, -6, inLake),
         each: () => ({
             ...inertia,
@@ -361,7 +365,7 @@ const SCENARIOS: Scenario[] = [
     {
         name: "a restart: the water saved and read back, then a lower ceiling for the floods",
         steps: 300,
-        fingerprint: "4c38ef0143020f51",
+        fingerprint: "5c6b01ea390aba0a",
         setup: (run) => fill(run.grid, 4, (x, y) => x < 75),
         each: (run, step) => {
             if (step === 150) {
@@ -377,7 +381,7 @@ const SCENARIOS: Scenario[] = [
     {
         name: "a source at the edge of the grid: its water falls off the map",
         steps: 250,
-        fingerprint: "4699699c9f9b7da8",
+        fingerprint: "1353ef1ec71a3172",
         each: () => ({
             ...inertia,
             flows: [
