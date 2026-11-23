@@ -15,8 +15,8 @@ const learn = (): void => {
         const received = receiveMessageOnPort(news);
         if (!received) return;
         for (const one of received.message as GroundBandNews[]) {
-            // Only the passes written in TypeScript are known here.
-            if (one.kernel === "typescript") follower.know(one.grid, one.arrays);
+            // The passes written in TypeScript, or those of the compiled kernel of the grid, on its memory.
+            follower.know(one.grid, one.arrays);
         }
     }
 };

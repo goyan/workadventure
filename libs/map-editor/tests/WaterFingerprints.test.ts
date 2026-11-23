@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { cellKey, withHeights, withSoils } from "../src/Terrain/TerrainGrid";
 import { ordinaryWaterArrays, setWaterArrays, sharedWaterArrays } from "../src/Terrain/WaterArrays";
 import { setWaterPassRunner } from "../src/Terrain/WaterBands";
-import { WaterGrid } from "../src/Terrain/WaterGrid";
+import { setWaterKernel, WaterGrid } from "../src/Terrain/WaterGrid";
 import type { WaterStepInput, WaterTally, WaterWallSides } from "../src/Terrain/WaterGrid";
 import { DEFAULT_WAVE_SETTINGS, TERRAIN_CELL } from "../src/types";
 import type { TerrainData } from "../src/types";
@@ -602,5 +602,71 @@ describe("WaterGrid, the same water to the bit with its passes shared in slices 
         expect(others).toBeGreaterThan(1000);
         // Each grid was told to who follows, and forgotten when its arrays changed.
         expect(bands.told.filter((news) => news.arrays).length).toBeGreaterThan(SCENARIOS.length / 2);
+    });
+});
+
+describe("WaterGrid, the same water to the bit with the kernel compiled to WebAssembly", () => {
+    beforeAll(() => setWaterKernel("wasm"));
+    afterAll(() => setWaterKernel("typescript"));
+
+    for (const scenario of SCENARIOS) {
+        it(
+            `ends on the fingerprint of the water as it was: ${scenario.name}`,
+            () => {
+                const { whole, water } = play(scenario);
+                expect(water).toBe(WATER_ALONE[scenario.name]);
+                expect(whole).toBe(scenario.fingerprint);
+            },
+            SCENARIO_TIMEOUT_MS,
+        );
+    }
+
+    it("computed with it indeed, its arrays in the memory of the kernel", () => {
+        const grid = newGrid();
+        expect(grid.kernelName()).toBe("wasm");
+        fill(grid, 4);
+        grid.step(inertia);
+        const where = (name: string): unknown => (Reflect.get(grid, name) as Float32Array).buffer;
+        for (const name of ["ground", "spill", "rough", "hollow", "closed", "flowEast", "afford", "next", "rowLost"]) {
+            expect(where(name), name).toBe(where("depth"));
+        }
+    });
+});
+
+describe("WaterGrid, the same water to the bit with the compiled kernel on bands of rows (WaterBands)", () => {
+    const bands = bandsOnOneThread(3, 20261124);
+    beforeAll(() => {
+        setWaterKernel("wasm", true);
+        setWaterPassRunner(bands);
+    });
+    afterAll(() => {
+        setWaterKernel("typescript");
+        setWaterPassRunner(undefined);
+    });
+
+    for (const scenario of SCENARIOS) {
+        it(
+            `ends on the fingerprint of the water as it was: ${scenario.name}`,
+            () => {
+                const { whole, water } = play(scenario);
+                expect(water).toBe(WATER_ALONE[scenario.name]);
+                expect(whole).toBe(scenario.fingerprint);
+            },
+            SCENARIO_TIMEOUT_MS,
+        );
+    }
+
+    it("shared the passes of the compiled kernel indeed: who follows joined the memory of each grid", () => {
+        const { here, others } = bands.slices();
+        expect(here).toBeGreaterThan(1000);
+        expect(others).toBeGreaterThan(1000);
+        const grid = newGrid();
+        expect(grid.kernelName()).toBe("wasm");
+        const told = bands.told.filter((news) => news.arrays);
+        expect(told.length).toBeGreaterThan(SCENARIOS.length / 2);
+        for (const news of told) {
+            expect(news.arrays?.memory).toBeInstanceOf(WebAssembly.Memory);
+            expect(news.arrays?.depth.buffer).toBeInstanceOf(SharedArrayBuffer);
+        }
     });
 });
