@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import { CLOUD_BILLOW_PERIOD_PX, NOISE_GLSL, shaderSeconds, shaderWrap } from "../ShaderNoise";
 import type { FogPatch, WeatherView } from "./WeatherFrame";
 
 /**
@@ -98,20 +99,7 @@ uniform vec4 uRainbow;       // centre x, y and radius of the rainbow (map pixel
 uniform vec2 uRainbowDir;    // the way the rainbow bows, away from the sun
 uniform float uRainbowSpan;  // the cosine of the half opening of its arc
 
-float hash(vec2 p) {
-    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-}
-
-float vnoise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
-}
-
-float fbm(vec2 p) {
-    return 0.5 * vnoise(p) + 0.3 * vnoise(p * 2.03 + 17.0) + 0.2 * vnoise(p * 4.01 + 31.0);
-}
+${NOISE_GLSL}
 
 // The colours of a rainbow across its band: 0 violet (inside) to 1 red (outside).
 vec3 spectrum(float t) {
@@ -405,8 +393,13 @@ export class CloudLayer {
         const shadow = clouds?.shadow;
         setUniform("uShadow", shadow ? [shadow.x, shadow.y, shadow.alpha] : [0, 0, 0]);
         setUniform("uVeil", premultipliedVeil(frame?.veils ?? []));
-        setUniform("uSky", frame ? [frame.sky.x, frame.sky.y] : [0, 0]);
-        setUniform("uTime", frame?.still ? 0 : this.scene.time.now / 1000);
+        setUniform(
+            "uSky",
+            frame
+                ? [shaderWrap(frame.sky.x, CLOUD_BILLOW_PERIOD_PX), shaderWrap(frame.sky.y, CLOUD_BILLOW_PERIOD_PX)]
+                : [0, 0],
+        );
+        setUniform("uTime", frame?.still ? 0 : shaderSeconds(this.scene.time.now));
         const bow = frame?.rainbow;
         setUniform("uRainbow", bow ? [bow.x, bow.y, bow.radius, bow.strength] : [0, 0, 1, 0]);
         setUniform("uRainbowDir", bow ? [bow.direction.x, bow.direction.y] : [0, -1]);
