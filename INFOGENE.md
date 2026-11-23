@@ -2517,8 +2517,8 @@ ne l'est pas).
   (météo d'un lieu choisi) ignorait les catastrophes de la salle : il les voyait sans que son eau en soit touchée.
   Il sait maintenant les recevoir, par le sol commun : `setCatastrophes` (averses, drains, boules du moment, qui
   agissent à chaque pas de son eau), `strike`, `burn`, `shatter`, `soak`, `ignite`, et les commandes du même nom
-  dans le protocole de son worker (`LocalTerrainCommand`). **Rien ne les lui envoie encore** : le contrôleur et la
-  scène (`LocalTerrainController`, `GameScene`) restent à brancher ; d'ici là son comportement est inchangé.
+  dans le protocole de son worker (`LocalTerrainCommand`). Le contrôleur les lui envoie depuis la PR suivante
+  (`LocalCatastropheRelay`, voir « Eau rapide »).
 - **Façade du sol dans `back`** (`back/src/Model/Ground/RoomGround.ts`, `InlineRoomGround.ts`, PR 2). `GameRoom`
   ne tient plus `TerrainWaterManager` et `MeadowManager` : il parle à un `RoomGround` (démarrer l'eau, démarrer la
   prairie, arrêter, carte changée ; comète, boule de feu, glace brisée, averse qui mouille, feu posé ; niveau d'une
@@ -3404,7 +3404,8 @@ relief de ce joueur va 60 fois plus vite, sous la météo de la carte, ou sous c
 - **Coupure** : l'eau glisse en 1 s vers l'eau du serveur, et la barre affiche « Retour à l'eau partagée ».
   Avec une ville suivie, le sol local continue, au temps de la carte.
 - **Serveur** : rien ne lui est envoyé, sauf le symbole de perception (`water`). Les catastrophes de la salle
-  n'atteignent pas cette eau, ce que l'aide dit. Les conditions réglées à la main dans la salle (Catastrophe → Météo)
+  agissent aussi sur cette eau (`LocalCatastropheRelay` : la comète frappe et la boule de feu brûle à l'impact, la glace
+  se brise et le feu prend aussitôt, averses, siphons et boules tant que le serveur les dit). Les conditions réglées à la main dans la salle (Catastrophe → Météo)
   ne sont pas suivies par l'air local.
 - **Non vérifié** : aucun rendu vu, aucune mesure dans un navigateur.
 

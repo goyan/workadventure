@@ -1,0 +1,94 @@
+import { ballRadiusPx } from "@workadventure/map-editor";
+import type { Ball, Downpour, Drain } from "@workadventure/map-editor";
+import { CatastropheKind } from "@workadventure/messages";
+import type { CatastropheMessage } from "@workadventure/messages";
+import type { LocalTerrainCommand } from "./LocalTerrainSimulation";
+
+/** What the relay tells the local ground of the catastrophes of the room. */
+export type LocalCatastropheCommand = Extract<
+    LocalTerrainCommand,
+    { kind: "catastrophes" | "strike" | "shatter" | "ignite" | "burn" | "soak" }
+>;
+type CatastropheState = Extract<LocalTerrainCommand, { kind: "catastrophes" }>;
+
+/**
+ * The catastrophes of the room, as the server tells them to this browser (CatastropheMessage), turned into what the
+ * local ground of the player does with them (LocalTerrainSimulation): the server acts on its own water as it tells
+ * them (CatastropheManager), the local ground the same, on its water. What falls lands after its fall
+ * (`impactInMs`): the meteor strikes, the fireball burns. The ice breaks and the fire is set at once; a downpour
+ * soaks the meadow each time it is told. The downpours, the drains and the balls go on as long as the server tells
+ * them (`impactInMs` more each time; a ball let go: 0), and the local ground is told their list when it changes.
+ * `now`: a clock in ms, the game's.
+ */
+export class LocalCatastropheRelay {
+    private readonly downpours = new Map<number, { downpour: Downpour; until: number }>();
+    private readonly drains = new Map<number, { drain: Drain; until: number }>();
+    private readonly balls = new Map<number, { ball: Ball; until: number }>();
+    private falls: { at: number; command: LocalCatastropheCommand }[] = [];
+    private changed = false;
+
+    /** A message of the server: what acts at once on the local ground. */
+    public receive(message: CatastropheMessage, now: number): LocalCatastropheCommand[] {
+        const { id, x, y, radiusTiles } = message;
+        const until = now + message.impactInMs;
+        switch (message.kind) {
+            case CatastropheKind.CATASTROPHE_METEOR:
+                this.falls.push({ at: until, command: { kind: "strike", x, y, radiusTiles } });
+                return [];
+            case CatastropheKind.CATASTROPHE_FIREBALL:
+                this.falls.push({ at: until, command: { kind: "burn", x, y, radiusTiles, id } });
+                return [];
+            case CatastropheKind.CATASTROPHE_ICE_BREAK:
+                return [{ kind: "shatter", x, y, radiusTiles }];
+            case CatastropheKind.CATASTROPHE_FIRE:
+                return [{ kind: "ignite", x, y, radiusTiles }];
+            case CatastropheKind.CATASTROPHE_DOWNPOUR: {
+                const downpour = { id, x, y, radiusTiles, wholeMap: message.wholeMap };
+                this.downpours.set(id, { downpour, until });
+                this.changed = true;
+                return [{ kind: "soak", downpour: { x, y, radiusTiles, wholeMap: message.wholeMap } }];
+            }
+            case CatastropheKind.CATASTROPHE_DRAIN:
+                this.drains.set(id, { drain: { id, x, y, radiusTiles }, until });
+                this.changed = true;
+                return [];
+            case CatastropheKind.CATASTROPHE_BALL:
+                if (message.impactInMs <= 0) this.balls.delete(id);
+                else this.balls.set(id, { ball: { id, x, y, radiusPx: ballRadiusPx(radiusTiles) }, until });
+                this.changed = true;
+                return [];
+            default:
+                return [];
+        }
+    }
+
+    /** At each image: what landed since, and the list of what goes on when it changed (or ended). */
+    public due(now: number): LocalCatastropheCommand[] {
+        const landed = this.falls.filter((fall) => fall.at <= now);
+        if (landed.length > 0) this.falls = this.falls.filter((fall) => fall.at > now);
+        const commands = landed.map((fall) => fall.command);
+        for (const kept of [this.downpours, this.drains, this.balls] as Map<number, { until: number }>[]) {
+            for (const [id, { until }] of kept) {
+                if (until <= now) {
+                    kept.delete(id);
+                    this.changed = true;
+                }
+            }
+        }
+        if (this.changed) {
+            this.changed = false;
+            commands.push(this.state());
+        }
+        return commands;
+    }
+
+    /** The downpours, the drains and the balls going on: what a local ground that starts is told. */
+    public state(): CatastropheState {
+        return {
+            kind: "catastrophes",
+            downpours: [...this.downpours.values()].map(({ downpour }) => downpour),
+            drains: [...this.drains.values()].map(({ drain }) => drain),
+            balls: [...this.balls.values()].map(({ ball }) => ball),
+        };
+    }
+}
