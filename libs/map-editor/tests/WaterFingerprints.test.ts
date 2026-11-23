@@ -441,20 +441,57 @@ function take(print: Fingerprint, grid: WaterGrid): void {
     print.numbers([grid.totalPx(), grid.wetCells()]);
 }
 
-/** Runs a scenario and returns its fingerprint. */
-function play(scenario: Scenario): string {
+/**
+ * Runs a scenario and returns its two fingerprints: `whole`, of everything the grid holds and tells, and `water`,
+ * the same without the water lost at each step (WaterTally.lostPx), a figure for the dashboard that no water
+ * depends on.
+ */
+function play(scenario: Scenario): { whole: string; water: string } {
     const run: Run = { grid: newGrid(), notes: [] };
-    const print = new Fingerprint();
+    const whole = new Fingerprint();
+    const water = new Fingerprint();
     scenario.setup?.(run);
     for (let step = 0; step < scenario.steps; step++) {
         const input = scenario.each(run, step);
         const tally = input ? run.grid.step(input) : undefined;
-        print.numbers(tally ? tallyFigures(tally) : [-1]);
-        if (step % 20 === 19 || step === scenario.steps - 1) take(print, run.grid);
+        whole.numbers(tally ? tallyFigures(tally) : [-1]);
+        water.numbers(tally ? tallyFigures({ ...tally, lostPx: 0 }) : [-1]);
+        if (step % 20 === 19 || step === scenario.steps - 1) {
+            take(whole, run.grid);
+            take(water, run.grid);
+        }
     }
-    print.numbers(run.notes);
-    return print.text();
+    whole.numbers(run.notes);
+    water.numbers(run.notes);
+    return { whole: whole.text(), water: water.text() };
 }
+
+/**
+ * The fingerprint of the water alone of each scenario (without the water lost at each step), recorded with the
+ * code of the commit eb17d9b92.
+ */
+const WATER_ALONE: Record<string, string> = {
+    "a dry grid": "557f65b5196929e7",
+    "a lake at rest": "ea2e42156aadcdaf",
+    "a lake at rest and a source far from it": "853445d7710326db",
+    "a source on a hill from a dry start, a sink and a sink that holds a level in the lake": "08f0168b081112b6",
+    "rain on the whole map, then dry weather": "b7cc0e642bfc4e36",
+    "a downpour on the whole map, then everything runs": "f59e70d1bfd64661",
+    "a rough sea: three impacts in the lake": "ef3eaa2c8cf0edca",
+    "a ball dragged through the lake, then taken away": "d379bda2a5c6e5dc",
+    "a house that floods: its door closed, open, closed again": "f63e124fb663b8b5",
+    "a pool its pump fills, under the rain, and its overflow": "e757910d712b9d2f",
+    "a drain that takes the lake down and a downpour on the hill": "df3b5ebe14777b76",
+    "an edit of the relief: the water is taken to a new grid": "c2c0148b2e3c0c57",
+    "the time a room missed lived again without inertia, then inertia again": "13bd2db1daadae1d",
+    "a map that goes faster than reality: sinks that ask for more than they find": "4fdad9dab3498266",
+    "a deep pit: one move a step, eight, then a flow four times as fast": "a9f9d499f82a9253",
+    "a water that dries out wholly, then comes back there and elsewhere": "9108a7196a8e7f6d",
+    "a puddle taken away while it spreads, a pond that stays, then water again where the puddle was":
+        "3b09d52585108acf",
+    "a restart: the water saved and read back, then a lower ceiling for the floods": "aa9bc747a7218d61",
+    "a source at the edge of the grid: its water falls off the map": "78cf2454bed3730a",
+};
 
 /** A scenario takes a second or two alone; more when the whole suite runs at once on a busy machine. */
 const SCENARIO_TIMEOUT_MS = 60_000;
@@ -467,9 +504,13 @@ describe("WaterGrid, the same water to the bit", () => {
         it(
             `ends on the fingerprint of the water as it was: ${scenario.name}`,
             () => {
-                const fingerprint = play(scenario);
-                if (record) process.stdout.write(`FINGERPRINT\t${scenario.name}\t${fingerprint}\n`);
-                else expect(fingerprint).toBe(scenario.fingerprint);
+                const { whole, water } = play(scenario);
+                if (record) {
+                    process.stdout.write(`FINGERPRINT\t${scenario.name}\t${whole}\t${water}\n`);
+                    return;
+                }
+                expect(water).toBe(WATER_ALONE[scenario.name]);
+                expect(whole).toBe(scenario.fingerprint);
             },
             SCENARIO_TIMEOUT_MS,
         );
