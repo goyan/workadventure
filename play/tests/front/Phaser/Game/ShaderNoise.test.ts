@@ -51,5 +51,6 @@ describe("the noise of the shaders, however long a page stays open", () => {
             expect(source, file).toContain("shaderSeconds(this.scene.time.now)");
             expect(source, file).not.toMatch(/scene\.time\.now \/ 1000/);
         }
+        expect(sourceOf("Weather/CloudLayer.ts")).toContain("shaderWrap(frame.sky.x, CLOUD_BILLOW_PERIOD_PX)");
     });
 });
