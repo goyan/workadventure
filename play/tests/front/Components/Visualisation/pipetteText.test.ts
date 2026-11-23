@@ -279,7 +279,7 @@ describe("pipetteSections (fr-FR)", () => {
         const said = sections(cell(lake({ kept: { ...dry, iceMm: 100 }, hold: "solid", times: 60 })));
         expect(said.ice.lines[1]).toBe("24 °C : elle fond de 428 mm par heure. Elle aura disparu dans environ 14 min.");
         expect(said.sun.lines).toContain(
-            "Sur cette carte, la neige et la glace vont 60 fois plus vite qu'en vrai (la vitesse de l'eau).",
+            "Sur cette carte, la neige et la glace vont 60 fois plus vite qu'en vrai (la vitesse de l'eau de la carte, fois sa vitesse du gel et de la fonte).",
         );
     });
 });

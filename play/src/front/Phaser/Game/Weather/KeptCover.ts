@@ -15,7 +15,7 @@ import type { SnowWeather } from "@workadventure/map-editor";
  * bear a walker or give way. Nothing is computed by a rule of its own: each rate is what the rules of the server give
  * (Terrain/Ice.ts, Terrain/Snow.ts) for the air of the room, put together as the meadow of the server steps them
  * (Meadow.stepIce, Meadow.stepSnow). Pure. Rates and times are in the real clock: the clock of the map (the speed of
- * its water, waterTimesOf) is already counted in.
+ * its water times its freeze and thaw speed, freezeThawTimesOf) is already counted in.
  */
 
 /** Nothing there and nothing coming; going; thickening; staying as it is; the air of the room is not known. */
@@ -97,7 +97,7 @@ export interface KeptIceInput {
     snowMm?: number;
     /** How fast the water runs under it, in m/s; still when not known. */
     currentMs?: number;
-    /** How many times faster than reality the map goes (waterTimesOf). */
+    /** How many times faster than reality the ice and the snow of the map go (freezeThawTimesOf). */
     times?: number;
     /** The most ice the water under it holds, in mm: the ice is never thicker than its water. */
     capMm?: number;

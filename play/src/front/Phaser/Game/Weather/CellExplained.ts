@@ -49,7 +49,7 @@ export interface CellInput {
     weather: SnowWeather | undefined;
     /** Whether a snow falls on that ground now. */
     snowing: boolean;
-    /** How many times faster than reality that ground goes (waterTimesOf). */
+    /** How many times faster than reality the ice and the snow of that ground go (freezeThawTimesOf). */
     times: number;
     /** How frozen the soil of the map is, 0 to 1 (soilFrostOf the air of the room). */
     soilFrost: number;

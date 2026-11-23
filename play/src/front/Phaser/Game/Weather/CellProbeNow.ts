@@ -1,4 +1,4 @@
-import { CELL_METRES, snowShareOf, soilFrostOf, TILE_PX, waterTimesOf } from "@workadventure/map-editor";
+import { CELL_METRES, freezeThawTimesOf, snowShareOf, soilFrostOf, TILE_PX } from "@workadventure/map-editor";
 import type { SnowWeather, TerrainData } from "@workadventure/map-editor";
 import { get } from "svelte/store";
 import { fireConditionsStore } from "@wa/front/Stores/FireConditionsStore";
@@ -21,7 +21,7 @@ import { fallsUnder } from "./WeatherBoardNow";
 /** What the pipette reads of the scene: the readers the game itself draws and walks by. */
 export interface ProbedScene {
     terrain: TerrainData | undefined;
-    settings: (MapSnowSettings & { water?: { speed?: number } }) | undefined;
+    settings: (MapSnowSettings & { water?: { speed?: number; freezeThawSpeed?: number } }) | undefined;
     water: TerrainWater;
     meadow: MeadowState;
     /** Outdoors at a point of the map (OutdoorGrid); true where the map has no walls to tell. */
@@ -107,7 +107,7 @@ export function cellProbeNow(
         own: { snowMm: cycle.snowMm, frost: cycle.frost },
         weather,
         snowing: fallsUnder(shown, date) && snowShareOf(weather) > 0,
-        times: waterTimesOf(settings?.water),
+        times: freezeThawTimesOf(settings?.water),
         soilFrost: soilFrostOf(roomAir),
         sunElevation: scene.sunElevation,
         pool: scene.poolAt(point),

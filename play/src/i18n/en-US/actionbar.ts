@@ -268,7 +268,7 @@ const actionbar = {
                 onlyAir:
                     "Only the air counts: its temperature, its wind, its humidity. Neither the sun, nor the shade, nor the depth change the thaw.",
                 real: "On this map, the snow and the ice go in real time.",
-                fast: "On this map, the snow and the ice go {times} times faster than in the real world (the speed of the water).",
+                fast: "On this map, the snow and the ice go {times} times faster than in the real world (the speed of the water of the map, times its freeze and thaw speed).",
                 iceMore:
                     "Kept by the server, tile by tile, the same for everyone who follows it. It thickens when it freezes, slower and slower, less on running water and under the snow. It thaws as the snow does, by the temperature, the wind and the humidity of the air of the map, by the same millimetres everywhere: the thinnest goes first. Aim at a place with the pipette for its thickness.",
                 mm: "{value} mm",
@@ -435,7 +435,7 @@ const actionbar = {
                 minutes: "{value} min",
                 hours: "{value} h",
                 water: "Only the part that falls as rain brings water to the map: the snow lies on the ground, then gives its water back as it melts.",
-                honest: "Kept by the server, tile by tile: this board reads what the server sent, it does not work the cover out itself. The snow and the ice go {times} times faster there than in the real world: the speed of the water of the map.",
+                honest: "Kept by the server, tile by tile: this board reads what the server sent, it does not work the cover out itself. The snow and the ice go {times} times faster there than in the real world: the speed of the water of the map, times its freeze and thaw speed.",
                 honestReal:
                     "Kept by the server, tile by tile: this board reads what the server sent, it does not work the cover out itself. The snow and the ice go as in the real world: hours to melt or to bear a walker.",
             },
