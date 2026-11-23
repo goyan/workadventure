@@ -37,6 +37,7 @@ export const ADMIN_API_TOKEN = env.ADMIN_API_TOKEN;
 export const CPU_OVERHEAT_THRESHOLD = env.CPU_OVERHEAT_THRESHOLD;
 export const GROUND_THREADS = env.GROUND_THREADS;
 export const GROUND_BANDS = env.GROUND_BANDS;
+export const WATER_KERNEL = env.WATER_KERNEL;
 export const JITSI_URL = env.JITSI_URL;
 export const JITSI_ISS = env.JITSI_ISS;
 export const SECRET_JITSI_KEY = env.SECRET_JITSI_KEY;
