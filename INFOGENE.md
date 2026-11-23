@@ -3383,6 +3383,29 @@ son fil (une salle seule, le worker du navigateur), elle garde son budget, et sa
 carte comme avant. Preuve : `libs/map-editor/tests/WaterPaceThread.test.ts`. Une salle à 20 ms par pas ne laisse
 que deux pas de 2 ms à la salle accélérée, et une salle à 40 ms ne lui en laisse aucun ; la première n'est jamais
 allégée.
+## Écume des vagues sans saccade (`BreakingFoam`)
+
+Mesuré dans le navigateur de test, sur la carte d'Antoine en crue (153 600 cellules, environ 85 000 sous l'eau) : le
+calcul de l'écume prenait 100 à 120 ms à chaque état de l'eau (175 ms en eau rapide), en une seule image, chez tous
+les joueurs. #498 l'avait rendu environ 60 % plus lourd : 150 → 240 ms sur un banc Node de la même taille.
+
+- **Moins cher** : le lit de chaque cellule et les murs sont lus une fois par carte, dans des tableaux. Avant, chaque
+  cellule fabriquait une vingtaine de clés de chaîne (`heightAt`, `closedSidesOf`). Les murs sont lus mur par mur
+  (`ClosedSide.walls`). Une cellule n'est recalculée que si son eau, ou celle des cellules que sa vague regarde
+  (3 cellules sur sa ligne et sa colonne), a bougé ; sinon elle garde sa vague. La vitesse de l'eau vive est
+  relue à chaque état. Sur le banc Node : 240 → 11 à 12 ms par état.
+- **Étalé** : `begin` à chaque état, puis `advance` à chaque image, `FOAM_VISITS_PER_FRAME` (120 000) visites de
+  cellules au plus. Une cellule pas encore atteinte montre l'écume de l'état d'avant. Atteinte, sa nouvelle écume
+  repart de ce qu'elle montrait, à son propre instant (`cellAt`) : rien ne saute. Un état arrivé pendant le calcul
+  attend ; seul le dernier attend, et il monte sur le temps écoulé depuis l'état d'avant.
+- **Mesures dans le navigateur, avant → après** : aucune image longue sur 30 s (avant, une de 108 à 142 ms par
+  seconde, et de 150 à 175 ms en eau rapide). Coût de l'écume par image : 0,7 ms en moyenne, 1,8 ms au plus.
+  Un état prend 13 images (eau du serveur), 28 en eau rapide.
+- **Preuves** (`BreakingFoam.test.ts`, déterministes) : l'écume est égale cellule par cellule à `foamOfCell`, avec
+  les murs et le relief, à l'arrondi 32 bits près. Quand une partie seulement de l'eau bouge, il y a moins de la
+  moitié des visites. Chaque image reste sous son budget. La même écume (±10 %), sans bouffées, est tenue à 1, 2
+  et 5 états par seconde, calculée sur 13 ou 30 images par état.
+
 ## Eau rapide, pour soi seul (« Réglages → Ambiance »)
 
 Un interrupteur personnel, mémorisé dans le navigateur comme Basique (`fastWaterStore`, clé `fastWater`) : l'eau du

@@ -61,7 +61,7 @@ import { BasicPools } from "./BasicPools";
 import { BasicWater } from "./BasicWater";
 import type { GroundArea } from "./TexturedGround";
 import { GroundSplat } from "./GroundSplat";
-import { BreakingFoam, closedSidesOf } from "./BreakingFoam";
+import { BreakingFoam, closedSidesOf, FOAM_VISITS_PER_FRAME } from "./BreakingFoam";
 import type { ClosedSide } from "./BreakingFoam";
 import { whitecapShare, windHeading } from "./Whitecaps";
 import { depthsSeen } from "./BuiltGround";
@@ -381,8 +381,11 @@ export class TerrainView {
             this.breakingVersion = -1;
         } else if (version !== this.breakingVersion) {
             this.breakingVersion = version;
-            this.breaking.absorb(this.water.settled(), this.water.relief(), now, this.closedSides());
+            // Worked out over the next images, a little at each (BreakingFoam.advance): all at once, it held an
+            // image for a tenth of a second at each state on a large map.
+            this.breaking.begin(this.water.settled(), this.water.relief(), now, this.closedSides());
         }
+        if (shown) this.breaking.advance(FOAM_VISITS_PER_FRAME, now);
         const wind = shown ? this.wind?.() : undefined;
         const heading = windHeading(wind?.from) ?? { x: 0, y: 1 };
         this.splat.setWind({ ...heading, share: whitecapShare(wind?.speed) });
