@@ -61,6 +61,13 @@ export const hurricaneHeadingStore = writable<number>(HURRICANE_DEFAULT_HEADING)
  * effect, 2 to 8 an exaggeration to see it better (HURRICANE_WATER_EFFECTS). Sent with the hurricane, for everyone.
  */
 export const hurricaneWaterEffectStore = writable<number>(1);
+/**
+ * The flood of the hurricane as this browser saw it (Terrain/HurricaneFloodView): the most the water has risen over
+ * a cell of the map since the hurricane began (m), and how much higher than before it the water stands under the
+ * pointer (m). Undefined while there is no hurricane (nor its marks) to tell.
+ */
+export const hurricaneHighestRiseStore = writable<number | undefined>(undefined);
+export const pointerFloodRiseStore = writable<number | undefined>(undefined);
 
 /**
  * The hurricane crossing the map, and what it is where this player looks, as of the last word of the server (once a

@@ -939,6 +939,7 @@ const mapEditor: BaseTranslation = {
             pointerIce: "Ice surface",
             pointerNoWater: "No water",
             pointerDepth: "Depth {depth}",
+            pointerFloodRise: "Water higher than before the hurricane",
             pointerOff: "Pointer off the game",
             pointerUnpainted: "{soil} (unpainted)",
             pointerRoughness: "Roughness (Manning) {n}",

@@ -27,7 +27,7 @@ import {
     HURRICANE_WATER_EFFECTS,
 } from "../src/Catastrophe/Hurricane";
 import type { Hurricane } from "../src/Catastrophe/Hurricane";
-import { TERRAIN_CELL, TILE_PX } from "../src/types";
+import { TERRAIN_CELL, TERRAIN_MAX_HEIGHT, TERRAIN_MIN_HEIGHT, TILE_PX } from "../src/types";
 import { TILE_AREA_M2 } from "../src/Terrain/Scale";
 
 const PX_PER_METRE = TILE_PX / Math.sqrt(TILE_AREA_M2);
@@ -368,13 +368,14 @@ describe("the wind over the water (its stress)", () => {
 });
 
 describe("an effect on the water exaggerated, as a player may ask for it", () => {
-    it("is one of real, ×2, ×4, ×6, ×8: anything else is brought to the nearest under it, or to the real one", () => {
-        expect(HURRICANE_WATER_EFFECTS).toStrictEqual([1, 2, 4, 6, 8]);
+    it("is one of real, ×5, ×10, ×20: anything else is brought to the nearest under it, or to the real one", () => {
+        expect(HURRICANE_WATER_EFFECTS).toStrictEqual([1, 5, 10, 20]);
         expect(hurricaneWaterEffect(undefined)).toBe(1);
         expect(hurricaneWaterEffect(0)).toBe(1);
-        expect(hurricaneWaterEffect(5)).toBe(4);
-        expect(hurricaneWaterEffect(8)).toBe(8);
-        expect(hurricaneWaterEffect(100)).toBe(8);
+        expect(hurricaneWaterEffect(4)).toBe(1);
+        expect(hurricaneWaterEffect(8)).toBe(5);
+        expect(hurricaneWaterEffect(20)).toBe(20);
+        expect(hurricaneWaterEffect(100)).toBe(20);
         expect(hurricaneWaterEffect(Number.NaN)).toBe(1);
     });
 
@@ -394,26 +395,45 @@ describe("an effect on the water exaggerated, as a player may ask for it", () =>
             anchorY: 500,
         };
         const real = hurricanePressure(base, 150_000);
-        const eight = hurricanePressure({ ...base, waterEffect: 8 }, 150_000);
-        expect(eight?.dropPx).toBeCloseTo((real?.dropPx ?? 0) * 8, 9);
-        expect(eight?.windGain).toBe(8);
+        const twenty = hurricanePressure({ ...base, waterEffect: 20 }, 150_000);
+        expect(twenty?.dropPx).toBeCloseTo((real?.dropPx ?? 0) * 20, 9);
+        expect(twenty?.windGain).toBe(20);
         expect(real?.windGain).toBe(1);
-        expect(eight?.x).toBe(real?.x);
+        expect(twenty?.x).toBe(real?.x);
         // The weather of the storm is the same: its wind where a player stands.
-        expect(hurricaneHere({ ...base, waterEffect: 8 }, 150_000, 100, 100)?.windSpeed).toBe(
+        expect(hurricaneHere({ ...base, waterEffect: 20 }, 150_000, 100, 100)?.windSpeed).toBe(
             hurricaneHere(base, 150_000, 100, 100)?.windSpeed,
         );
     });
 
-    it("holds at ×8: a dome of 6 m, slopes of a tenth, the water kept, no swing left", () => {
+    it("holds at ×20: a dome of 15 m, slopes of a quarter, the water kept, no swing left", () => {
         const LENGTH = 200;
         const ROW = 6;
-        // A lake 3.4 m deep in a pit 10 m deep: the dome of 6 m stays in it (over its brim it would flood the land
-        // around, and run off the edge of this small grid).
-        const grid = basin(LENGTH, 9, 300, undefined, 0.4);
+        // A lake in a pit as deep as the relief goes (TERRAIN_MIN_HEIGHT, 8.8 m), ringed by the highest walls
+        // the relief has: the dome of 15 m stays in it (over a brim it would flood the land around, and run off the
+        // edge of this small grid).
+        const cells = new Map<string, number>();
+        for (let y = 1; y < 2 + 9 + 1; y++) {
+            for (let x = 1; x < 2 + LENGTH + 1; x++) {
+                const inside = x >= 2 && x < 2 + LENGTH && y >= 2 && y < 2 + 9;
+                cells.set(cellKey(x, y), inside ? TERRAIN_MIN_HEIGHT : TERRAIN_MAX_HEIGHT);
+            }
+        }
+        const grid = new WaterGrid(withHeights(undefined, cells), { x: 0, y: 0, width: LENGTH + 4, height: 9 + 4 });
+        const bytes = new Uint8Array(grid.bounds.width * grid.bounds.height * 2);
+        for (let y = 2; y < 2 + 9; y++) {
+            for (let x = 2; x < 2 + LENGTH; x++) {
+                // 5.5 m of water: the top of the dome stays under the highest level the water may stand at
+                // (MAX_WATER_MAX_SURFACE over the ground of the map), its foot over the bottom.
+                const eighths = 160 * 8;
+                bytes[(y * grid.bounds.width + x) * 2] = eighths & 255;
+                bytes[(y * grid.bounds.width + x) * 2 + 1] = eighths >> 8;
+            }
+        }
+        expect(grid.readDepths(bytes)).toBe(true);
         const before = grid.totalPx();
         const centre = 2 + LENGTH / 2;
-        const eye = low(centre, ROW, 22 * 8);
+        const eye = low(centre, ROW, 22 * 20);
         const wind = (x: number, y: number): { east: number; south: number } => {
             // A wind of a category 4 turning round the eye, 55 m/s at 30 m.
             const dx = x - eye.x;
@@ -422,9 +442,12 @@ describe("an effect on the water exaggerated, as a player may ask for it", () =>
             const share = Math.min(1, distance / HURRICANE_RMAX_PX);
             return { east: (55 * share * dy) / distance, south: (-55 * share * dx) / distance };
         };
-        grid.setPressure({ ...eye, wind, windGain: 8 });
         let fastest = 0;
         for (let step = 0; step < 6000; step++) {
+            // Brought in over half a minute, as a hurricane fades in over the map (HURRICANE_FADE_SHARE): set at once,
+            // the dome would overshoot by as much again, over the highest level the water may stand at.
+            const share = Math.min(1, step / 300);
+            grid.setPressure({ ...eye, dropPx: eye.dropPx * share, wind, windGain: 20 * share });
             grid.step(inertia);
             if (step % 50 === 0) {
                 const east = Reflect.get(grid, "flowEast") as Float32Array;
@@ -438,11 +461,11 @@ describe("an effect on the water exaggerated, as a player may ask for it", () =>
         // The water kept: nothing created, nothing lost (a closed basin).
         expect(Math.abs(grid.totalPx() - before) / before).toBeLessThan(1e-3);
         const line = surfaces(grid, LENGTH, ROW);
-        // A dome as high as eight real ones, the heights of the pressure say how much: within a tenth at rest.
+        // A dome as high as twenty real ones, the heights of the pressure say how much: within a tenth at rest.
         const heads = new Float32Array(grid.bounds.width * grid.bounds.height);
         pressureHeads(eye, 0, 0, grid.bounds.width, grid.bounds.height, TERRAIN_CELL, heads);
         const wanted = heads[ROW * grid.bounds.width + 2] - heads[ROW * grid.bounds.width + centre];
-        expect(wanted).toBeGreaterThan(60);
+        expect(wanted).toBeGreaterThan(150);
         const got = line[centre - 2] - line[0];
         expect(Math.abs(got - wanted) / wanted).toBeLessThan(0.1);
         // Never faster than the kernel bears (FASTEST_FLOW_CELLS): no blow-up.

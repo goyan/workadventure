@@ -172,8 +172,11 @@ export interface HurricaneTrack {
     waterEffect?: number;
 }
 
-/** The effects on the water a player may ask for: the real one, then exaggerated two to eight times. */
-export const HURRICANE_WATER_EFFECTS: readonly number[] = [1, 2, 4, 6, 8];
+/**
+ * The effects on the water a player may ask for: the real one, then exaggerated five to twenty times. Real, the dome
+ * under the eye of a category 4 is some 0.7 m on a lake of the map, hard to see from above: exaggerated, it floods.
+ */
+export const HURRICANE_WATER_EFFECTS: readonly number[] = [1, 5, 10, 20];
 
 /** The effect on the water asked, as one of HURRICANE_WATER_EFFECTS (the nearest under it; the real one otherwise). */
 export function hurricaneWaterEffect(asked: number | undefined): number {

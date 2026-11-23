@@ -6063,12 +6063,23 @@ de l'œil, comme le vent, et prend de l'ordre de 0,2 m/s en une minute au rayon 
 garanties que la pression : rien sans ouragan, TypeScript et C identiques au bit (`Move` : 168 octets).
 
 **Effet sur l'eau exagéré, à la demande** (réglage du panneau de l'ouragan, « Effet sur l'eau (pression et vent) » :
-Réaliste, Exagéré ×2, ×4, ×6, ×8 ; `HurricaneTrackMessage.waterEffect`, champ 15, **le protobuf change**). Multiplie la
+Réaliste, Exagéré ×5, ×10, ×20 (recalés le 2026-11-23 : en réaliste le dôme d'une catégorie 4 fait environ 0,7 m sur
+un lac de la carte, invisible d'en haut ; ×20 testé : dôme de 15 m dans un bassin muré au plus profond du relief,
+volume gardé, vitesses bornées, repos, théorie à 10 %, la pression amenée en 30 s comme le fondu de l'ouragan) ; `HurricaneTrackMessage.waterEffect`, champ 15, **le protobuf change**). Multiplie la
 hauteur de pression et la poussée du vent sur l'eau, rien d'autre (le vent, la pluie, le ciel restent ceux d'un vrai
 ouragan). Choisi par le joueur qui lance l'ouragan, gardé par le serveur parmi les cinq valeurs, le même pour tous. À ×8
 une catégorie 4 creuse un dôme de 6 m (pentes d'un dixième) : le modèle tient (test : volume conservé dans un bassin
 qui le contient, vitesses bornées, au repos ensuite, dôme conforme à 10 % près) ; sur la carte, un tel dôme déborde des
 rives et inonde les terres basses, ce qui est voulu par l'exagération.
+
+**La crue se lit** (`Terrain/HurricaneFlood.ts`, `HurricaneFloodView.ts`). Chaque navigateur garde l'eau telle
+qu'elle était au début de l'ouragan, cellule par cellule, et la plus haute depuis : le badge des niveaux sous le
+pointeur dit « +0,7 m » (l'eau plus haute qu'avant l'ouragan), le panneau de l'ouragan « Eau : +0,7 m au plus haut
+depuis le début ». Là où l'eau a couvert une terre sèche puis s'est retirée, le sol reste sombre et noyé, et une laisse
+de crue (écume et débris) marque la ligne la plus haute atteinte ; les deux s'effacent en 4 minutes. Le panneau
+rappelle que le dôme ne se forme qu'aux vitesses lentes du widget (un œil plus rapide que les ondes du lac, environ
+3 à 4 m/s, le devance : c'est physique). Le volume d'eau de la carte reste fermé (pas de mer qui l'alimente) : la
+carte d'Antoine n'a de l'eau qu'aux bords nord (35 m) et sud (15 m).
 
 **Ce que ça ne modélise pas, ou pas encore.**
 - **La pluie par position sur l'eau, le feu par position** : le sol du serveur lit une seule valeur pour la salle, au
