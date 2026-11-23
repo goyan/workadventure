@@ -604,6 +604,7 @@ export class CatastropheManager {
                         anchorY: storm.anchorY,
                         durationMs: storm.durationMs,
                         times: storm.times ?? 1,
+                        waterEffect: storm.waterEffect ?? 1,
                     },
                 },
             },

@@ -14,6 +14,7 @@
         FIRE_MIN_TILES,
         HURRICANE_MAX_MINUTES,
         HURRICANE_MIN_MINUTES,
+        HURRICANE_WATER_EFFECTS,
         hurricaneMaxWind,
         METEOR_MAX_TILES,
         METEOR_MIN_TILES,
@@ -36,6 +37,7 @@
         hurricaneHeadingStore,
         hurricaneMinutesStore,
         hurricaneShownStore,
+        hurricaneWaterEffectStore,
         meteorRadiusTilesStore,
         toggleArmedCatastrophe,
     } from "../../Stores/CatastropheStore";
@@ -415,6 +417,29 @@
                                         degrees: $hurricaneHeadingStore,
                                     })}</span
                                 >
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <span class="whitespace-nowrap"
+                                    >{$LL.actionbar.catastrophe.hurricaneWaterEffectLabel()}</span
+                                >
+                                <select
+                                    class="rounded bg-white/10 px-1 py-0.5"
+                                    aria-label={$LL.actionbar.catastrophe.hurricaneWaterEffectLabel()}
+                                    data-testid="catastrophe-hurricane-water-effect"
+                                    value={String($hurricaneWaterEffectStore)}
+                                    onchange={(event) =>
+                                        hurricaneWaterEffectStore.set(Number(event.currentTarget.value))}
+                                >
+                                    {#each HURRICANE_WATER_EFFECTS as effect (effect)}
+                                        <option value={String(effect)}>
+                                            {effect === 1
+                                                ? $LL.actionbar.catastrophe.hurricaneWaterRealistic()
+                                                : $LL.actionbar.catastrophe.hurricaneWaterExaggerated({
+                                                      times: effect,
+                                                  })}
+                                        </option>
+                                    {/each}
+                                </select>
                             </label>
                             {#if hurricaneGoing === undefined}
                                 <button

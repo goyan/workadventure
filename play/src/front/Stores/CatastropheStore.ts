@@ -56,6 +56,11 @@ export const coldLyingStore = writable<{ celsius: number; secondsLeft: number | 
 export const hurricaneCategoryStore = writable<number>(HURRICANE_DEFAULT_CATEGORY);
 export const hurricaneMinutesStore = writable<number>(HURRICANE_DEFAULT_MINUTES);
 export const hurricaneHeadingStore = writable<number>(HURRICANE_DEFAULT_HEADING);
+/**
+ * How many times stronger than in reality the next hurricane acts on the water (its low and its wind): 1 the real
+ * effect, 2 to 8 an exaggeration to see it better (HURRICANE_WATER_EFFECTS). Sent with the hurricane, for everyone.
+ */
+export const hurricaneWaterEffectStore = writable<number>(1);
 
 /**
  * The hurricane crossing the map, and what it is where this player looks, as of the last word of the server (once a

@@ -57,6 +57,10 @@ function basin(): { move: InertiaMove; rowLost: Float64Array } {
         damping: 0.01,
         breaking: 4,
         carried: 1,
+        head: floats(),
+        pressed: 0,
+        windEast: floats(),
+        windSouth: floats(),
         compiled: undefined,
     };
     for (let index = 0; index < size; index++) {

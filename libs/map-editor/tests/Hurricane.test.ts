@@ -224,13 +224,17 @@ describe("hurricaneTrack", () => {
             durationMs: 30 * 60_000,
             heading: 350,
             southern: true,
+            waterEffect: 1,
         });
         expect(hurricaneTrack({}, false)).toEqual({
             category: 4,
             durationMs: 5 * 60_000,
             heading: 290,
             southern: false,
+            waterEffect: 1,
         });
+        // The effect on the water: one of those offered.
+        expect(hurricaneTrack({ waterEffect: 5 }, false).waterEffect).toBe(4);
     });
 });
 

@@ -56,6 +56,9 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 hurricaneHeadingLabel: label("Where the hurricane goes"),
                 hurricaneHeading: ({ point, degrees }: { point: string; degrees: number }) =>
                     `It goes towards ${point} (${degrees}°)`,
+                hurricaneWaterEffectLabel: label("Effect on the water (pressure and wind)"),
+                hurricaneWaterRealistic: label("Realistic"),
+                hurricaneWaterExaggerated: ({ times }: { times: number }) => `Exaggerated ×${times}`,
                 hurricaneStart: label("Launch the hurricane"),
                 hurricaneStop: label("Stop the hurricane"),
                 hurricaneHelp: label("A hurricane reduced to the size of the map"),
@@ -99,6 +102,7 @@ import {
     coldRadiusTilesStore,
     fireRadiusTilesStore,
     hurricaneShownStore,
+    hurricaneWaterEffectStore,
     downpourWholeMapStore,
     drainRadiusTilesStore,
     meteorRadiusTilesStore,
@@ -370,6 +374,30 @@ describe("CatastrophePanel", () => {
         hurricaneShownStore.set(undefined);
         flushSync();
         expect(target.querySelector('[data-testid="catastrophe-hurricane-stop"]')).toBeNull();
+    });
+
+    it("chooses how much the hurricane acts on the water, realistic by default, and keeps it a number", () => {
+        hurricaneWaterEffectStore.set(1);
+        renderOpen();
+        target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-hurricane"]')?.click();
+        flushSync();
+        const select = target.querySelector<HTMLSelectElement>('[data-testid="catastrophe-hurricane-water-effect"]');
+        expect(select).not.toBeNull();
+        expect(select?.selectedOptions[0]?.textContent?.trim()).toBe("Realistic");
+        expect(Array.from(select?.options ?? []).map((option) => option.textContent?.trim())).toEqual([
+            "Realistic",
+            "Exaggerated ×2",
+            "Exaggerated ×4",
+            "Exaggerated ×6",
+            "Exaggerated ×8",
+        ]);
+        if (select) {
+            select.value = "4";
+            select.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        flushSync();
+        expect(get(hurricaneWaterEffectStore)).toBe(4);
+        hurricaneWaterEffectStore.set(1);
     });
 
     it("arms the ball, and chooses its diameter from 1 to 16 tiles, with a help that says where its centre is", () => {

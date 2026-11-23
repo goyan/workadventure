@@ -1,7 +1,12 @@
 import { CatastropheKind } from "@workadventure/messages";
 import { get } from "svelte/store";
 import { gameManager } from "../../Phaser/Game/GameManager";
-import { hurricaneCategoryStore, hurricaneHeadingStore, hurricaneMinutesStore } from "../../Stores/CatastropheStore";
+import {
+    hurricaneCategoryStore,
+    hurricaneHeadingStore,
+    hurricaneMinutesStore,
+    hurricaneWaterEffectStore,
+} from "../../Stores/CatastropheStore";
 
 /**
  * Asks the server to send a hurricane across the map, as chosen in the panel: it begins at once for the whole room,
@@ -26,6 +31,8 @@ export function startHurricane(): void {
             anchorY: 0,
             durationMs: 0,
             times: 0,
+            // Its effect on the water: real, or exaggerated as chosen.
+            waterEffect: get(hurricaneWaterEffectStore),
         });
 }
 

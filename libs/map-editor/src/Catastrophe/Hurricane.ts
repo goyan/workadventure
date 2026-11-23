@@ -1,6 +1,8 @@
 import { TILE_PX } from "../types";
 import type { FireConditions } from "../Weather/FireConditions";
 import { TILE_AREA_M2 } from "../Terrain/Scale";
+import { waterHeightOfPressure } from "../Terrain/AirPressure";
+import type { AirPressure } from "../Terrain/AirPressure";
 
 /**
  * A hurricane crosses the map, REDUCED TO THE SIZE OF THE MAP: a creative choice, as the comet is. A real one is
@@ -163,6 +165,22 @@ export interface HurricaneTrack {
     heading: number;
     /** It turns clockwise, as in the southern hemisphere. */
     southern: boolean;
+    /**
+     * How many times stronger than in reality its low and its wind act on the water (HURRICANE_WATER_EFFECTS): 1 is
+     * the real effect, more an exaggeration a player asked for, to see it better. 1 when absent.
+     */
+    waterEffect?: number;
+}
+
+/** The effects on the water a player may ask for: the real one, then exaggerated two to eight times. */
+export const HURRICANE_WATER_EFFECTS: readonly number[] = [1, 2, 4, 6, 8];
+
+/** The effect on the water asked, as one of HURRICANE_WATER_EFFECTS (the nearest under it; the real one otherwise). */
+export function hurricaneWaterEffect(asked: number | undefined): number {
+    if (asked === undefined || !Number.isFinite(asked) || asked < 1) return 1;
+    let kept = 1;
+    for (const effect of HURRICANE_WATER_EFFECTS) if (effect <= asked) kept = effect;
+    return kept;
 }
 
 /**
@@ -230,7 +248,7 @@ export function hurricaneHeading(heading: number | undefined): number {
 
 /** A track as a player asks for it, kept within what a hurricane may be. */
 export function hurricaneTrack(
-    asked: { category?: number; minutes?: number; heading?: number },
+    asked: { category?: number; minutes?: number; heading?: number; waterEffect?: number },
     southern: boolean,
 ): HurricaneTrack {
     return {
@@ -238,6 +256,7 @@ export function hurricaneTrack(
         durationMs: hurricaneMinutes(asked.minutes ?? 0) * 60_000,
         heading: hurricaneHeading(asked.heading),
         southern,
+        waterEffect: hurricaneWaterEffect(asked.waterEffect),
     };
 }
 
@@ -332,6 +351,37 @@ export function hurricaneAt(hurricane: Hurricane | undefined, epoch: number): Hu
     };
 }
 
+/**
+ * The wind of the storm at the point (x, y) of the map (pixels), towards the east and the north, km/h, averaged over
+ * 10 minutes: round the centre (anticlockwise in the north), turned in towards it, falling off by the profile of
+ * Holland, the motion of the storm added. What hurricaneHere tells, and what pushes the water (hurricanePressure).
+ */
+export function hurricaneWind(
+    hurricane: Hurricane,
+    storm: HurricaneNow,
+    x: number,
+    y: number,
+): { east: number; north: number } {
+    const mapE = (x - storm.eyeX) / PX_PER_METRE;
+    const mapN = -(y - storm.eyeY) / PX_PER_METRE;
+    const distanceM = Math.hypot(mapE, mapN);
+    const share = hollandShare(distanceM);
+    const speed = hurricaneMaxWind(hurricane.category) * share;
+    const spin = hurricane.southern ? -1 : 1;
+    const outE = distanceM > 0 ? mapE / distanceM : 0;
+    const outN = distanceM > 0 ? mapN / distanceM : 0;
+    const roundE = -outN * spin;
+    const roundN = outE * spin;
+    const inflow = (HURRICANE_INFLOW_DEGREES * Math.PI) / 180;
+    const heading = (hurricane.heading * Math.PI) / 180;
+    // The motion of the storm where its wind blows: none in the calm of the eye.
+    const motion = HURRICANE_MOTION_SHARE * storm.speedKmh * share;
+    return {
+        east: speed * (Math.cos(inflow) * roundE - Math.sin(inflow) * outE) + motion * Math.sin(heading),
+        north: speed * (Math.cos(inflow) * roundN - Math.sin(inflow) * outN) + motion * Math.cos(heading),
+    };
+}
+
 /** The storm at the point (x, y) of the map (pixels) at `epoch`; undefined outside its passage. */
 export function hurricaneHere(
     hurricane: Hurricane | undefined,
@@ -345,20 +395,7 @@ export function hurricaneHere(
     const mapE = (x - storm.eyeX) / PX_PER_METRE;
     const mapN = -(y - storm.eyeY) / PX_PER_METRE;
     const distanceM = Math.hypot(mapE, mapN);
-    const share = hollandShare(distanceM);
-    const speed = hurricaneMaxWind(hurricane.category) * share;
-    // Round the centre (anticlockwise in the north), turned in towards it.
-    const spin = hurricane.southern ? -1 : 1;
-    const outE = distanceM > 0 ? mapE / distanceM : 0;
-    const outN = distanceM > 0 ? mapN / distanceM : 0;
-    const roundE = -outN * spin;
-    const roundN = outE * spin;
-    const inflow = (HURRICANE_INFLOW_DEGREES * Math.PI) / 180;
-    const heading = (hurricane.heading * Math.PI) / 180;
-    // The motion of the storm where its wind blows: none in the calm of the eye.
-    const motion = HURRICANE_MOTION_SHARE * storm.speedKmh * share;
-    const windE = speed * (Math.cos(inflow) * roundE - Math.sin(inflow) * outE) + motion * Math.sin(heading);
-    const windN = speed * (Math.cos(inflow) * roundN - Math.sin(inflow) * outN) + motion * Math.cos(heading);
+    const { east: windE, north: windN } = hurricaneWind(hurricane, storm, x, y);
     const windSpeed = Math.hypot(windE, windN);
     const windFrom = ((((Math.atan2(windE, windN) * 180) / Math.PI + 180) % 360) + 360) % 360;
     const rmax = HURRICANE_RMAX_M;
@@ -460,4 +497,44 @@ export function skyRainUnder(
     // Sped up, its passage is shorter: its rain falls that many times harder, the same total.
     const storm = (here.rainRate * (hurricane?.times ?? 1)) / (groundSpeed > 0 ? groundSpeed : 1);
     return mapRate + (storm - mapRate) * here.share;
+}
+
+/** The density of the air at the surface of a tropical sea, kg/m³ (Holland 1980 takes 1.15). */
+const HURRICANE_AIR_DENSITY = 1.15;
+
+/**
+ * How much lower the pressure is in the eye than far from it, Pa: from its strongest wind by the relation of Holland
+ * (1980), V² = B Δp / (ρ e), the same profile as its wind (hollandShare). 26 hPa for a category 1, 74 for a 4, 100 for
+ * a 5: within the central pressures of the Saffir-Simpson scale (980 hPa and over, 920 to 944, under 920) under
+ * 1010 hPa far from it.
+ */
+export function hurricanePressureDrop(category: number): number {
+    const wind = hurricaneMaxWind(category) / 3.6;
+    return (HURRICANE_AIR_DENSITY * Math.E * wind * wind) / HURRICANE_HOLLAND_B;
+}
+
+/**
+ * The low of the hurricane over the water at `epoch` (WaterGrid.setPressure): under its eye the water stands higher
+ * by the height of water its drop of pressure holds (the inverted barometer, about 1 cm a hPa), and its wind pushes
+ * the water, both fading in and out with the storm. Undefined outside its passage.
+ */
+export function hurricanePressure(hurricane: Hurricane | undefined, epoch: number): AirPressure | undefined {
+    const storm = hurricaneAt(hurricane, epoch);
+    if (!hurricane || !storm || !(storm.share > 0)) return undefined;
+    const share = storm.share;
+    // The real effect, or that many times stronger when a player asked for it to be seen better.
+    const effect = hurricaneWaterEffect(hurricane.waterEffect);
+    return {
+        x: storm.eyeX,
+        y: storm.eyeY,
+        dropPx: waterHeightOfPressure(hurricanePressureDrop(hurricane.category) * share) * PX_PER_METRE * effect,
+        radiusPx: HURRICANE_RMAX_PX,
+        b: HURRICANE_HOLLAND_B,
+        windGain: effect,
+        // Its wind pushes the water, fading in and out with the storm (m/s, east and south).
+        wind: (x, y) => {
+            const wind = hurricaneWind(hurricane, storm, x, y);
+            return { east: (wind.east / 3.6) * share, south: (-wind.north / 3.6) * share };
+        },
+    };
 }

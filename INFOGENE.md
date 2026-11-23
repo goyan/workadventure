@@ -6030,12 +6030,52 @@ calcul, dans un conteneur Linux sur le Mac. La version à l'échelle de la carte
 pour la météo du navigateur. Le coût de la spirale (un shader plein écran, deux fbm de trois octaves) n'a pas été
 mesuré.
 
+**La pression sur l'eau : le baromètre inversé** (`Terrain/AirPressure.ts`, `Hurricane.hurricanePressure`,
+demandé le 2026-11-23 : « la pression dans un ouragan diffère selon la position : faible (très) dans l'œil, donc ça
+attire l'eau vers le haut »). Sous une basse pression la mer monte d'environ 1 cm par hPa (100 Pa / (ρ g), 1,02 cm en
+eau douce ; Pugh, *Tides, Surges and Mean Sea-Level*, 1987, ch. 7). Profil de Holland, le même que le vent :
+p(r) − p_loin = −Δp (1 − exp(−(R/r)^B)), R = 30 m, B = 1,5 ; Δp tiré du vent maximal par la relation de Holland
+(V² = B Δp / (ρ_air e), ρ_air = 1,15) : 26 hPa en catégorie 1, 74 en 4, 100 en 5 (cohérent avec les pressions
+centrales de Saffir-Simpson), soit 0,26, 0,75 et 1,0 m d'eau sous l'œil par rapport au loin, au fondu de l'ouragan
+près. Dans le modèle d'eau du serveur, l'eau à inertie coule selon la pente de sa surface **plus** cette hauteur
+(`WaterKernel.fluxPass`, et le même calcul dans le noyau C `kernel/water_kernel.c`, identique au bit ; `Move` gagne
+un pointeur `head` et un drapeau `pressed` en fin de structure) : à l'équilibre, surface + hauteur de pression est
+de niveau. Dans un bassin fermé l'eau se redistribue : un dôme sous l'œil, la mer qui baisse loin de lui, les rives
+que l'œil approche qui se couvrent, et le dôme qui suit l'œil (0,9 m/s, bien moins vite que les ondes : pas de
+résonance) puis retombe en vagues quand il s'en va. Un bassin de 110 m ballotte environ deux minutes avant de se
+poser (amortissement existant, aucun ajout). Sans ouragan le calcul est exactement l'ancien (empreintes de l'eau
+inchangées). Coût : la hauteur de pression de chaque cellule est refaite quand l'œil a bougé d'une demi-cellule
+(environ un pas sur trois, 1,5 ms sur 480 × 320 cellules sur le Mac, une table au lieu d'une exponentielle par
+cellule), une addition de plus par face sous ouragan. La grille reste éveillée tant que l'ouragan passe. Le
+protobuf ne change pas.
+
+**Le vent sur l'eau : son frottement** (`AirPressure.windPush`, `Hurricane.hurricaneWind`). Le vent de l'ouragan (le
+même calcul que `hurricaneHere`, extrait dans `hurricaneWind`) tire sur la surface : τ = ρ_air C_d U², C_d de Large et
+Pond (1981 : 1,2·10⁻³ jusqu'à 11 m/s, puis (0,49 + 0,065 U)·10⁻³) plafonné à 2,5·10⁻³ au-delà de 31 m/s (Powell,
+Vickery et Reinhold, *Nature* 2003 : l'écume et les embruns empêchent la surface de devenir plus rugueuse) : environ
+9 Pa dans le mur d'une catégorie 4. Dans les deux noyaux, chaque face reçoit dt × la poussée moyenne de ses deux
+cellules (dq/dt = τ / ρ_w), lue sur une grille de 4 × 4 cellules et interpolée, refaite avec la hauteur de pression
+(1,2 ms sur 480 × 320 cellules). Au repos dans un canal fermé, la surface penche de τ / (ρ_w g h) (test à 15 % près) :
+quelques centimètres sur une centaine de mètres, la carte étant réduite (une vraie surcote se forme sur des dizaines
+de kilomètres de plateau). Ce qui se voit surtout, ce sont les **courants** : l'eau des lacs se met à tourner autour
+de l'œil, comme le vent, et prend de l'ordre de 0,2 m/s en une minute au rayon des vents maximaux (test contre
+τ t / (ρ_w h)), jusqu'à environ 1 m/s sur la planche de l'étude ; sur un lac étroit le courant longe les rives. Mêmes
+garanties que la pression : rien sans ouragan, TypeScript et C identiques au bit (`Move` : 168 octets).
+
+**Effet sur l'eau exagéré, à la demande** (réglage du panneau de l'ouragan, « Effet sur l'eau (pression et vent) » :
+Réaliste, Exagéré ×2, ×4, ×6, ×8 ; `HurricaneTrackMessage.waterEffect`, champ 15, **le protobuf change**). Multiplie la
+hauteur de pression et la poussée du vent sur l'eau, rien d'autre (le vent, la pluie, le ciel restent ceux d'un vrai
+ouragan). Choisi par le joueur qui lance l'ouragan, gardé par le serveur parmi les cinq valeurs, le même pour tous. À ×8
+une catégorie 4 creuse un dôme de 6 m (pentes d'un dixième) : le modèle tient (test : volume conservé dans un bassin
+qui le contient, vitesses bornées, au repos ensuite, dôme conforme à 10 % près) ; sur la carte, un tel dôme déborde des
+rives et inonde les terres basses, ce qui est voulu par l'exagération.
+
 **Ce que ça ne modélise pas, ou pas encore.**
 - **La pluie par position sur l'eau, le feu par position** : le sol du serveur lit une seule valeur pour la salle, au
   point survolé par l'œil. L'eau ne reçoit donc pas plus de pluie sous le mur qu'ailleurs, et le feu ne sent pas le
   vent du point où il brûle.
 - **La mer du vent par position** : un seul vent pour toute la vue, celui du centre de la caméra.
-- **La surcote** : le modèle d'eau n'a pas de bord ouvert sur une mer.
+- La surcote de tempête d'une vraie côte : le modèle d'eau n'a pas de bord ouvert sur une mer.
 - Le feu : sous la pluie réelle du mur, il ralentit (test : 20 % de cases en feu en moins au plus fort sur un pré
   sec) et l'air humide (95 %) n'en allume plus de nouveau. Un feu déjà pris dans une herbe sèche brûle toutefois
   jusqu'au bout.

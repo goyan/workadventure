@@ -29,6 +29,7 @@ function told(impactInMs: number, startedAt = START): CatastropheMessage {
             anchorY: 100,
             durationMs: 0,
             times: 0,
+            waterEffect: 0,
         },
     };
 }
@@ -53,6 +54,8 @@ describe("HurricaneReceiver", () => {
             durationMs: 20 * 60_000,
             heading: 270,
             southern: true,
+            // Told 0 (an older server): the real effect on the water.
+            waterEffect: 1,
             fromX: 7680,
             fromY: 100,
             toX: 0,

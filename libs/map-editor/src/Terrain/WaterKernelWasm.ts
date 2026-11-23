@@ -20,14 +20,14 @@ import { WATER_KERNEL_SHARED_WASM_BASE64, WATER_KERNEL_WASM_BASE64 } from "./Wat
 /** The bytes a page of WebAssembly memory holds. */
 const PAGE_BYTES = 65_536;
 /** The Move of water_kernel.c: its size, and where its figures start (after its three sizes and its arrays). */
-const MOVE_BYTES = 152;
+const MOVE_BYTES = 168;
 const MOVE_FIGURES_AT = 72;
 /**
  * What each thread keeps for itself in the memory: a Move, the place `moved` is written at, and a stack. The
  * module has one pointer of stack an instance, which starts at the same place for all: each thread sets its own on
  * its slot, so that no two threads ever share a stack, whatever the compiler puts there.
  */
-const SLOT_HEAD_BYTES = 168;
+const SLOT_HEAD_BYTES = 192;
 const STACK_BYTES = 4096;
 const SLOT_BYTES = SLOT_HEAD_BYTES + STACK_BYTES;
 /** The most threads that work in one memory: who leads and who follows. */
@@ -35,7 +35,7 @@ const MOST_SLOTS = 64;
 /** The pages kept at the start of the memory for the module and for the slots of the threads. */
 const RESERVED_PAGES = 6;
 /** The arrays of floats and of bytes a grid cuts out of the memory, one cell each (see WaterGrid). */
-const FLOAT_ARRAYS = 12;
+const FLOAT_ARRAYS = 15;
 const BYTE_ARRAYS = 2;
 /** Room kept for the table of powers (floats) and for what the rows lose (doubles): more than any grid asks for. */
 const MOST_POWERS = 8192;
@@ -315,6 +315,11 @@ export class WasmWaterKernel implements WaterArrays, CompiledPasses {
         view.setFloat64(at + 56, move.damping, true);
         view.setFloat64(at + 64, move.breaking, true);
         view.setFloat64(at + 72, move.carried, true);
+        // After the figures: the pressure of the air (read only when pressed).
+        view.setInt32(at + 80, move.head.byteOffset, true);
+        view.setInt32(at + 84, move.pressed === 1 ? 1 : 0, true);
+        view.setInt32(at + 88, move.windEast.byteOffset, true);
+        view.setInt32(at + 92, move.windSouth.byteOffset, true);
         return loaded;
     }
 }
