@@ -307,9 +307,11 @@
               ? [t.kept.catchingUp()]
               : [iceTrendLine(t, figures, keptIce, true)],
     );
-    const keptIceNotes = $derived(
-        keptIce && keptIce.mm > 0 ? [t.kept.onlyAir(), coverClockLine(t, $locale, board.snow.times)] : [],
-    );
+    const keptIceNotes = $derived([
+        // Under the cold air of a cold snap the ice does not go the way the air of the map says.
+        ...(board.cold ? [t.cold.ice()] : []),
+        ...(keptIce && keptIce.mm > 0 ? [t.kept.onlyAir(), coverClockLine(t, $locale, board.snow.times)] : []),
+    ]);
     /** The snow: what falls on it first (the old sentence, with its share of flakes), else where the thickest goes. */
     const snowWhy = $derived.by(() => {
         if (board.snow.trend === "building" || !keptSnow || keptSnow.mm <= 0) {
@@ -611,6 +613,22 @@
     {#if board.follows === "city" && board.city !== undefined && !$fastWaterStore}
         <!-- The water of a city followed goes at the pace of reality: hours before a lake fills. -->
         <p class="m-0 opacity-80" data-testid="weather-board-fast-water">{$LL.actionbar.fastWater.fromCity()}</p>
+    {/if}
+
+    {#if board.cold}
+        <!-- A cold snap: the air of a part of the map is not the air shown above. -->
+        <div
+            class="flex flex-col gap-0.5 rounded-lg border-0 border-s-4 border-solid border-blue-500 bg-white/10 p-2"
+            data-testid="weather-board-cold"
+        >
+            <h3 class="m-0 text-xs font-bold">{t.cold.title()}</h3>
+            <p class="m-0">{t.cold.lying({ temperature: degrees(board.cold.celsius) })}</p>
+            <p class="m-0 opacity-80">
+                {board.cold.secondsLeft === undefined
+                    ? t.cold.held()
+                    : t.cold.gone({ duration: figures.duration(board.cold.secondsLeft) })}
+            </p>
+        </div>
     {/if}
 
     {#if summary.length > 0}

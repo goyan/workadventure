@@ -66,7 +66,7 @@ describe("WeatherPipette", () => {
         const shown = [...target.querySelectorAll("article")].map((section) => section.getAttribute("data-testid"));
         expect(shown).toEqual(
             // Under water there is no grass to tell: no meadow.
-            ["relief", "water", "ice", "snow", "frost", "sun"].map((id) => `weather-pipette-${id}`),
+            ["relief", "air", "water", "ice", "snow", "frost", "sun"].map((id) => `weather-pipette-${id}`),
         );
         expect(text("weather-pipette-ground")).toContain("Sol du serveur : le même pour tous ceux qui le suivent.");
         expect(text("weather-pipette-ice")).toContain("Glace de 10 cm d'épaisseur.");

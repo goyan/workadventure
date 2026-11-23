@@ -236,6 +236,13 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
                     snowSome: "sur {percent} % de la carte",
                 },
             },
+            cold: {
+                title: "Air froid sur la carte",
+                lying: "Un coup de froid a posé de l'air à {temperature} sur une partie de la carte. Sous lui, la glace prend et la neige tient, quoi que dise l'air de la carte. Vise-le avec la pipette pour l'air d'une case.",
+                held: "Un joueur le tient : il reste tant qu'il est tenu.",
+                gone: "Relâché, il redevient l'air de la carte dans environ {duration}.",
+                ice: "Sous l'air froid d'un coup de froid, la glace épaissit au lieu de fondre.",
+            },
             kept: {
                 iceUnknown: "Le serveur n'a encore rien dit de la glace de cette carte.",
                 catchingUp:
@@ -298,6 +305,16 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
                 iceHotPool: "Piscine chauffée : elle ne gèle jamais.",
                 shaded: "Cette case est à l'ombre (les ombres du ciel dessinées chez toi).",
                 sunlit: "Cette case est en pleine lumière.",
+                air: "Air de la case",
+                airMap: "{temperature} : c'est l'air de la carte.",
+                airOwn: "{temperature} : c'est l'air de ta ville.",
+                airUnknown: "L'air n'est pas connu.",
+                airCold:
+                    "Air froid posé ici (coup de froid) : {temperature}, au lieu de {map} ailleurs. La glace et la neige de cette case suivent cet air.",
+                coldHeld: "Un joueur le tient : il reste tant qu'il est tenu.",
+                coldGone: "Relâché, il redevient l'air de la carte dans environ {duration}.",
+                imagePool:
+                    "Une piscine posée comme objet couvre cette case : c'est un décor, son dessin ne suit pas l'eau. L'eau lue ici est celle du sol dessous.",
                 relief: "Relief et sol",
                 ground: "Sol à {altitude}. {soil}.",
                 indoor: "À l'intérieur : rien n'y tombe, l'eau n'y gèle pas.",

@@ -1,6 +1,7 @@
 import { freezeThawTimesOf, WeatherType } from "@workadventure/map-editor";
 import type { FireConditionsMessage } from "@workadventure/messages";
 import { get } from "svelte/store";
+import { coldLyingStore } from "@wa/front/Stores/CatastropheStore";
 import { fireConditionsStore } from "@wa/front/Stores/FireConditionsStore";
 import type { WorldPlace } from "../Night/WorldDaylight";
 import { pointWords } from "../Night/PointWords";
@@ -105,6 +106,7 @@ export function weatherBoardNow(
                 ? { map: ground.meanSnowCover(), here: avatar ? ground.snowCoverAt(avatar.x, avatar.y) : 0 }
                 : undefined,
         roomWind: conditions?.windSpeed,
+        cold: get(coldLyingStore),
         peaks:
             ground && ground.version() > 0
                 ? { iceMm: ground.peakIceMm(), snowMm: ground.peakSnowMm(), catchingUp: ground.catchingUp() }

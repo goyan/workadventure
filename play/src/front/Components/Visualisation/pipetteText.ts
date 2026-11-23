@@ -18,7 +18,7 @@ import {
  * then where it goes. Only words: every figure comes from CellExplained.
  */
 export interface PipetteSection {
-    id: "relief" | "water" | "ice" | "snow" | "frost" | "meadow" | "sun";
+    id: "relief" | "air" | "water" | "ice" | "snow" | "frost" | "meadow" | "sun";
     title: string;
     lines: string[];
     /** Whose air decides and who sees the same, where it is worth saying. */
@@ -42,7 +42,21 @@ export function pipetteSections(ll: TranslationFunctions, locale: string, cell: 
         cell.outdoor ? p.outdoor() : p.indoor(),
         // What is drawn over the cell: the pipette reads the ground, not the floor over it.
         ...cell.floorsOver.map((elevation) => p.floorOver({ altitude: metresLabel(metresOf(elevation), locale) })),
+        ...(cell.imagePool ? [p.imagePool()] : []),
     ];
+
+    // The air the ice and the snow of the cell go by: the air of that ground, or the cold air of a cold snap.
+    const air: string[] = [];
+    if (cell.temperature === undefined) air.push(p.airUnknown());
+    else if (cell.cold) {
+        air.push(
+            p.airCold({ temperature: f.degrees(cell.temperature), map: f.degrees(cell.cold.mapTemperature) }),
+            cell.cold.goneIn === undefined ? p.coldHeld() : p.coldGone({ duration: f.duration(cell.cold.goneIn) }),
+        );
+    } else {
+        const temperature = f.degrees(cell.temperature);
+        air.push(cell.ground === "own" ? p.airOwn({ temperature }) : p.airMap({ temperature }));
+    }
 
     const wet: string[] = [];
     if (!water || reading.depth === undefined || reading.surface === undefined) {
@@ -136,6 +150,7 @@ export function pipetteSections(ll: TranslationFunctions, locale: string, cell: 
 
     return [
         { id: "relief", title: p.relief(), lines: relief },
+        { id: "air", title: p.air(), lines: air, owner: cell.ground, audience: cell.audience },
         { id: "water", title: p.water(), lines: wet },
         { id: "ice", title: p.ice(), lines: frozen, owner: cell.ground, audience: cell.audience },
         { id: "snow", title: p.snow(), lines: white, owner: cell.ground, audience: cell.audience },

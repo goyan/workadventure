@@ -3833,10 +3833,28 @@ et quatre fois par seconde au plus ; `Weather/CellExplained.ts` (pur) en fait l'
 serveur, aucun clic n'est pris (on marche et on édite comme avant), rien n'est lu pipette rangée. Échap ou la croix
 la rangent ; le curseur devient « aide ».
 
+**Suite (#535).** Les durées suivent `freezeThawTimesOf` (vitesse de l'eau de la carte × vitesse du gel et de la
+fonte). La pipette dit aussi : l'**air de la case** (section « Air de la case ») : l'air de la carte, celui de la
+ville du joueur, ou l'air froid d'un coup de froid posé là (`coldAirOver(scene.coldMasses(), …)`, comme le serveur le
+lit case par case), tenu par un joueur ou relâché avec le temps avant qu'il redevienne l'air de la carte
+(`coldGoneInMinutes`, à l'horloge du gel et de la fonte) ; la glace et la neige de la case suivent cet air ; une
+**piscine chauffée** (elle ne gèle jamais) ; une **piscine posée comme objet** (un décor dont le dessin ne suit pas
+l'eau : l'eau lue est celle du sol dessous) ; un **palier** dessiné au-dessus de la case (`FloorSpike.floorsOver`) ;
+l'**ombre** ou la pleine lumière de la case, de jour, quand les ombres du ciel sont dessinées
+(`SkyShadowManager.shadedAt`) ; plus de Prairie sous l'eau. Le tableau dit « Air froid sur la carte » quand un coup
+de froid est posé (`coldLyingStore`).
+
+**Rattrapage du serveur.** Après un redémarrage ou une carte restée vide, le serveur revit le temps manqué avec la
+météo de ce temps-là : la glace et la neige changent alors à rebours de l'air du moment. `MeadowMessage.catchingUp`
+(champ 10, rempli par `MeadowSimulation` à chaque message du pré, avec un envoi de plus à la fin du rattrapage même
+si rien d'autre n'a changé) le dit ; `MeadowState.catchingUp()` le garde ; le tableau et la pipette gardent alors
+les épaisseurs et remplacent la tendance par une phrase. Quand le serveur prend du retard il vit moins vite que la
+vitesse demandée : les durées affichées s'allongent d'autant (dit dans « En savoir plus », aucun champ).
+
 Limites : pour un joueur qui suit une ville avec son sol local, la tendance de sa glace et de sa neige est calculée
-avec l'air de sa ville (température, humidité, vent) : non vérifié contre le calcul du sol local ; une piscine
-chauffée est dite comme une eau ordinaire ; le palier (étage) sous la souris n'est pas dit ; soleil : sa hauteur
-seulement, pas l'ombre portée sur la case (elle ne change rien à la fonte).
+avec l'air de sa ville (température, humidité, vent) : non vérifié contre le calcul du sol local ; l'ombre des arbres
+en ombre « réaliste » (image posée au sol) n'est pas comptée ; le temps restant d'un air froid est celui de l'air de
+la case, et « tenu » se lit sur la masse la plus froide de la carte.
 
 ## Vie aquatique (poissons et dauphins)
 

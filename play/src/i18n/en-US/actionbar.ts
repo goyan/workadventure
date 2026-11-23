@@ -230,6 +230,13 @@ const actionbar = {
                     snowSome: "on {percent} % of the map",
                 },
             },
+            cold: {
+                title: "Cold air on the map",
+                lying: "A cold snap laid air at {temperature} over a part of the map. Under it, the ice takes and the snow holds, whatever the air of the map says. Aim at it with the pipette for the air of a cell.",
+                held: "A player holds it: it stays as long as it is held.",
+                gone: "Let go, it is the air of the map again in about {duration}.",
+                ice: "Under the cold air of a cold snap, the ice thickens instead of thawing.",
+            },
             kept: {
                 iceUnknown: "The server has said nothing yet of the ice of this map.",
                 catchingUp:
@@ -291,6 +298,16 @@ const actionbar = {
                 iceHotPool: "Heated pool: it never freezes.",
                 shaded: "This cell is in the shade (the shadows of the sky drawn for you).",
                 sunlit: "This cell is in full light.",
+                air: "Air of the cell",
+                airMap: "{temperature}: it is the air of the map.",
+                airOwn: "{temperature}: it is the air of your city.",
+                airUnknown: "The air is not known.",
+                airCold:
+                    "Cold air lying here (cold snap): {temperature}, instead of {map} elsewhere. The ice and the snow of this cell go by that air.",
+                coldHeld: "A player holds it: it stays as long as it is held.",
+                coldGone: "Let go, it is the air of the map again in about {duration}.",
+                imagePool:
+                    "A pool placed as an object covers this cell: it is a decoration, its picture does not follow the water. The water read here is that of the ground under it.",
                 relief: "Relief and soil",
                 ground: "Ground at {altitude}. {soil}.",
                 indoor: "Indoors: nothing falls there, the water does not freeze.",

@@ -59,6 +59,13 @@ export interface CellInput {
     pool?: { hot: boolean };
     /** The server is living the time the room missed: where its ice and its snow go is not what the air of now says. */
     catchingUp?: boolean;
+    /**
+     * The cold air of a cold snap lying on the cell (coldAirOver): the air of the map there (°C), and the seconds
+     * before the mass is the air of the map again; no seconds while a player holds it. Undefined out of any cold air.
+     */
+    cold?: { mapTemperature: number; goneIn: number | undefined };
+    /** A pool placed as an object lies over the cell: a picture, which does not follow the water of the ground. */
+    imagePool?: boolean;
     /** The altitudes (pixels) of the raised floors drawn over the cell, the highest first. */
     floorsOver?: readonly number[];
     /** Whether a shadow of the sky is drawn over the cell for this player; undefined while none is drawn. */
@@ -110,7 +117,11 @@ export interface CellExplained {
      * not known. Never for a ground of the player's own.
      */
     catchingUp: boolean;
-    /** The air that ground goes by. */
+    /** The cold air of a cold snap lying on the cell: see CellInput.cold. */
+    cold: { mapTemperature: number; goneIn: number | undefined } | undefined;
+    /** A pool placed as an object lies over the cell: its picture does not follow the water read here. */
+    imagePool: boolean;
+    /** The air that cell goes by: the air of that ground, or the cold air lying on the cell. */
     temperature: number | undefined;
     times: number;
 }
@@ -197,6 +208,8 @@ export function explainCell(input: CellInput): CellExplained {
                 : undefined,
         sunElevation: input.sunElevation,
         hotPool,
+        cold: input.cold,
+        imagePool: input.imagePool === true,
         catchingUp: input.ground === "map" && input.kept !== undefined && input.catchingUp === true,
         floorsOver: input.floorsOver ?? [],
         shaded: input.outdoor ? input.shaded : undefined,

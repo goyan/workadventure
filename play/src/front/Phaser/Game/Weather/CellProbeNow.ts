@@ -1,6 +1,15 @@
-import { CELL_METRES, freezeThawTimesOf, snowShareOf, soilFrostOf, TILE_PX } from "@workadventure/map-editor";
-import type { SnowWeather, TerrainData } from "@workadventure/map-editor";
+import {
+    CELL_METRES,
+    coldAirOver,
+    coldGoneInMinutes,
+    freezeThawTimesOf,
+    snowShareOf,
+    soilFrostOf,
+    TILE_PX,
+} from "@workadventure/map-editor";
+import type { ColdMass, SnowWeather, TerrainData } from "@workadventure/map-editor";
 import { get } from "svelte/store";
+import { coldLyingStore } from "@wa/front/Stores/CatastropheStore";
 import { fireConditionsStore } from "@wa/front/Stores/FireConditionsStore";
 import { groundReadingAt } from "../Floors/AvatarAltitude";
 import type { IceState } from "../Ice/IceHold";
@@ -36,6 +45,10 @@ export interface ProbedScene {
     floorsOver(seen: { x: number; y: number }): number[];
     /** Whether a shadow of the sky is drawn over a point (SkyShadowManager.shadedAt). */
     shadedAt(point: { x: number; y: number }): boolean | undefined;
+    /** The masses of cold air lying on the map now (GameScene.coldMasses). */
+    coldMasses(): ColdMass[];
+    /** Whether a pool placed as an object lies over a point (ImagePools). */
+    imagePoolAt(point: { x: number; y: number }): boolean;
 }
 
 /** A place without its region and country. */
@@ -69,13 +82,31 @@ export function cellProbeNow(
     const roomAir = roomPrecipitationAir(settings, date);
     const roomWind = get(fireConditionsStore)?.windSpeed;
     const ownAir = frostAirNow(settings, date);
-    const weather: SnowWeather | undefined = server
+    const mapWeather: SnowWeather | undefined = server
         ? roomAir && roomWind !== undefined
             ? { ...roomAir, windSpeed: roomWind }
             : undefined
         : ownAir?.humidity !== undefined
           ? { temperature: ownAir.temperature, humidity: ownAir.humidity, windSpeed: ownAir.windSpeed ?? 0 }
           : undefined;
+    // Under the cold air of a cold snap the cell goes by that air, as the server reads it tile by tile
+    // (Meadow.readCold) and as a player's own ground does (LocalCatastropheRelay).
+    const weather = mapWeather && coldAirOver(scene.coldMasses(), point.x, point.y, mapWeather);
+    const times = freezeThawTimesOf(settings?.water);
+    const lying = get(coldLyingStore);
+    const cold =
+        mapWeather && weather && weather.temperature < mapWeather.temperature
+            ? {
+                  mapTemperature: mapWeather.temperature,
+                  // A mass a player holds does not warm (the coldest one tells: coldLyingStore).
+                  goneIn:
+                      lying && lying.secondsLeft === undefined
+                          ? undefined
+                          : (coldGoneInMinutes(weather.temperature, mapWeather.temperature, mapWeather.windSpeed) *
+                                60) /
+                            times,
+              }
+            : undefined;
     const shown = server ? mapWeatherSettings(settings, date) : shownWeatherSettings(settings, date);
     return explainCell({
         city: server ? undefined : (place?.longName ?? townOf(place?.name)),
@@ -107,11 +138,13 @@ export function cellProbeNow(
         own: { snowMm: cycle.snowMm, frost: cycle.frost },
         weather,
         snowing: fallsUnder(shown, date) && snowShareOf(weather) > 0,
-        times: freezeThawTimesOf(settings?.water),
+        times,
         soilFrost: soilFrostOf(roomAir),
         sunElevation: scene.sunElevation,
         pool: scene.poolAt(point),
         catchingUp: server && meadow.catchingUp(),
+        cold,
+        imagePool: scene.imagePoolAt(point),
         floorsOver: scene.floorsOver(seen),
         shaded: scene.shadedAt(point),
     });
