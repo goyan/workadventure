@@ -7,6 +7,7 @@ import type { WaterCycle } from "@wa/front/Phaser/Game/Weather/Frost";
 import type { WaterRing } from "@wa/front/Phaser/Game/Catastrophe/MeteorFall";
 import { MAX_SHOWN_BREAKS } from "../Ice/IceBreaks";
 import type { IceBreak } from "../Ice/IceBreaks";
+import { NOISE_GLSL, shaderSeconds } from "../ShaderNoise";
 import { SHORE_PX } from "./TerrainShading";
 import { WHITECAP_MIN_DEPTH_PX } from "./Whitecaps";
 import { HEIGHT_OFFSET, HEIGHT_SCALE, OBLIQUE_HALVINGS, OBLIQUE_STEPS, writeHeights } from "./ObliqueView";
@@ -140,20 +141,7 @@ float gStretch;
 float gScreenRow;
 float gSeenHeight;
 
-float hash(vec2 p) {
-    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-}
-
-float vnoise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
-}
-
-float fbm(vec2 p) {
-    return 0.5 * vnoise(p) + 0.3 * vnoise(p * 2.03 + 17.0) + 0.2 * vnoise(p * 4.01 + 31.0);
-}
+${NOISE_GLSL}
 
 
 // One pack of the weights at a point of the map, smooth between the centres of the cells.
@@ -955,7 +943,7 @@ export class GroundSplat {
         /** Whether these shaders can draw the relief in 3/4 on this graphics card. */
         private readonly canProject: boolean,
     ) {
-        const time = (): number => this.scene.time.now / 1000;
+        const time = (): number => shaderSeconds(this.scene.time.now);
         this.groundShader = scene.add
             .shader(
                 {
