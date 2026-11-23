@@ -15,7 +15,7 @@ import { ballColumn, ballHalfHeight } from "./WaterBall";
 import type { WaterBall } from "./WaterBall";
 import { affordPass, depthsPass, DRY_PX, fluxPass, scalePass } from "./WaterKernel";
 import type { InertiaMove } from "./WaterKernel";
-import { pressureHeads } from "./AirPressure";
+import { pressureHeads, windPushes } from "./AirPressure";
 import type { AirPressure } from "./AirPressure";
 import { ordinaryWaterArrays, setWaterArrays, sharedWaterArrays, waterArrays, waterArraysFor } from "./WaterArrays";
 import { WasmWaterKernel } from "./WaterKernelWasm";
@@ -594,6 +594,9 @@ export class WaterGrid implements WaterView {
      * inertia; and the low it was made for (undefined: none, the flows as without it).
      */
     private head: Float32Array = new Float32Array(0);
+    /** How hard the wind over the water pushes it over each cell (AirPressure.windPushes), east and south. */
+    private windEast: Float32Array = new Float32Array(0);
+    private windSouth: Float32Array = new Float32Array(0);
     private pressure: AirPressure | undefined;
     private headFor: { pressure: AirPressure; x: number; y: number; width: number; height: number } | undefined;
     /** The friction of the ground of each cell: the square of the roughness of its soil, times MANNING. */
@@ -859,15 +862,17 @@ export class WaterGrid implements WaterView {
      * a height that was lowered is lost at the next step.
      */
     /**
-     * The low of the air over the water (a hurricane), or none: the water with inertia runs down the slope of its
-     * surface plus the height of water the pressure holds (the inverted barometer). Read at the next step.
+     * The low of the air over the water (a hurricane) and its wind, or none: the water with inertia runs down the
+     * slope of its surface plus the height of water the pressure holds (the inverted barometer), and the wind pushes
+     * it (its stress on the surface). Read at the next step.
      */
     public setPressure(pressure: AirPressure | undefined): void {
         this.pressure =
             pressure &&
             Number.isFinite(pressure.x) &&
             Number.isFinite(pressure.y) &&
-            pressure.dropPx > 0 &&
+            pressure.dropPx >= 0 &&
+            (pressure.dropPx > 0 || pressure.wind !== undefined) &&
             pressure.radiusPx > 0 &&
             pressure.b > 0
                 ? pressure
@@ -2044,6 +2049,8 @@ export class WaterGrid implements WaterView {
             this.nextSpeedEast = this.arrays.floats(size);
             this.nextSpeedSouth = this.arrays.floats(size);
             this.head = this.arrays.floats(size);
+            this.windEast = this.arrays.floats(size);
+            this.windSouth = this.arrays.floats(size);
             this.headFor = undefined;
         }
         const pressed = this.pressure !== undefined;
@@ -2123,6 +2130,8 @@ export class WaterGrid implements WaterView {
             carried,
             head: this.head,
             pressed: pressed ? 1 : 0,
+            windEast: this.windEast,
+            windSouth: this.windSouth,
             compiled: this.wasm,
         };
         if (this.rowLost.length !== height) this.rowLost = this.arrays.doubles(height);
@@ -2196,6 +2205,7 @@ export class WaterGrid implements WaterView {
             return;
         }
         pressureHeads(pressure, x, y, width, height, TERRAIN_CELL, this.head);
+        windPushes(pressure, x, y, width, height, TERRAIN_CELL, this.windEast, this.windSouth);
         this.headFor = { pressure, x, y, width, height };
     }
 

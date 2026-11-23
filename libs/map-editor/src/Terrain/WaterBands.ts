@@ -149,6 +149,8 @@ export type WaterBandsArrays = Pick<
     | "nextSpeedEast"
     | "nextSpeedSouth"
     | "head"
+    | "windEast"
+    | "windSouth"
 > & {
     rowLost: Float64Array;
     /** The memory of the compiled kernel of the grid, when it has one: who follows joins it to run its passes. */
@@ -173,6 +175,8 @@ const ARRAYS = [
     "south",
     "afford",
     "head",
+    "windEast",
+    "windSouth",
 ] as const;
 
 /** The slice `slice` of `slices` of the rows of a grid: where it starts. */
@@ -398,6 +402,8 @@ export class WaterBandsLead {
                 nextSpeedEast: move.nextSpeedEast,
                 nextSpeedSouth: move.nextSpeedSouth,
                 head: move.head,
+                windEast: move.windEast,
+                windSouth: move.windSouth,
                 rowLost,
                 memory: move.compiled?.threadMemory(),
             };
@@ -520,6 +526,8 @@ export class WaterBandsFollower {
             carried: 0,
             head: shared.head,
             pressed: 0,
+            windEast: shared.windEast,
+            windSouth: shared.windSouth,
             // The compiled kernel of the grid, on its memory: this thread has its own instance of it there.
             compiled: memory ? WasmWaterKernel.join(memory) : undefined,
         };

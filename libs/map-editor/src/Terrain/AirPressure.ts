@@ -8,7 +8,10 @@
  * winds. Pure; WaterGrid fills its cells from it.
  */
 
-/** The air over the water: where its low is, how deep it is and how wide (map pixels). */
+import { TILE_PX } from "../types";
+import { TILE_AREA_M2 } from "./Scale";
+
+/** The air over the water: where its low is, how deep it is and how wide (map pixels), and its wind. */
 export interface AirPressure {
     /** The centre of the low, map pixels. */
     x: number;
@@ -18,11 +21,17 @@ export interface AirPressure {
     /** The radius of the strongest winds R, map pixels, and the width of the profile B (Holland). */
     radiusPx: number;
     b: number;
+    /** The wind at 10 m over a point of the map (map pixels), m/s towards the east and the south; none: still air. */
+    wind?: (x: number, y: number) => { east: number; south: number };
 }
 
 /** The density of fresh water (kg/m³) and the gravity (m/s²): a pressure as a height of water. */
 const WATER_DENSITY = 1000;
 const GRAVITY = 9.81;
+/** Map pixels in a metre (Scale). */
+const PX_PER_METRE = TILE_PX / Math.sqrt(TILE_AREA_M2);
+/** The density of the air at the surface of the sea under a hurricane, kg/m³ (Holland 1980). */
+const AIR_DENSITY = 1.15;
 
 /** The height of water (m) a pressure (Pa) holds up: 1.02 cm for 1 hPa. */
 export function waterHeightOfPressure(pascals: number): number {
@@ -83,6 +92,90 @@ export function pressureHeads(
         for (let column = 0; column < width; column++) {
             const dx = (column + x + 0.5) * cellPx - pressure.x;
             out[row * width + column] = -dropPx * lowShareFast(Math.sqrt(dx * dx + dy * dy) * over, b);
+        }
+    }
+}
+
+/**
+ * The drag coefficient of the sea surface for a wind of `speed` m/s at 10 m: 1.2e-3 up to 11 m/s, then growing with
+ * the wind (Large and Pond, J. Phys. Oceanogr. 11, 1981: (0.49 + 0.065 U) 1e-3, measured to 25 m/s), and levelling
+ * off at 2.5e-3 past about 31 m/s, where the spray and the foam of a hurricane keep the surface from getting rougher
+ * (Powell, Vickery and Reinhold, Nature 422, 2003).
+ */
+export const MOST_DRAG = 2.5e-3;
+export function seaDrag(speed: number): number {
+    if (!(speed > 11)) return 1.2e-3;
+    return Math.min(MOST_DRAG, (0.49 + 0.065 * speed) * 1e-3);
+}
+
+/** The stress of a wind of `speed` m/s on the water, Pa: ρ_air C_d U². */
+export function windStress(speed: number): number {
+    return speed > 0 ? AIR_DENSITY * seaDrag(speed) * speed * speed : 0;
+}
+
+/**
+ * How hard a wind of (east, south) m/s pushes the water over a cell `cellPx` wide, as the flows of WaterKernel count
+ * it: map pixels of water over a cell a second, a second (the depth a cell gains from a flow, per second). The stress
+ * accelerates the water of a column of unit width: dq/dt = τ / ρ_w; a flow of a cell is q over its side, in pixels.
+ * At rest in a closed basin it holds the surface aslant, dη/dx = τ / (ρ_w g h).
+ */
+export function windPush(east: number, south: number, cellPx: number): { east: number; south: number } {
+    const speed = Math.hypot(east, south);
+    if (!(speed > 0)) return { east: 0, south: 0 };
+    const push = (windStress(speed) * PX_PER_METRE * PX_PER_METRE) / (WATER_DENSITY * cellPx);
+    return { east: (push * east) / speed, south: (push * south) / speed };
+}
+
+/** The wind is read every this many cells each way, and straight between them: it changes over tens of cells. */
+export const WIND_BLOCK_CELLS = 4;
+
+/**
+ * How hard the wind of `pressure` pushes the water over each cell of a grid (windPush), as pressureHeads lays its
+ * heights: read at the corners of blocks of WIND_BLOCK_CELLS cells, straight between them. Zero without wind.
+ */
+export function windPushes(
+    pressure: AirPressure,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    cellPx: number,
+    outEast: Float32Array,
+    outSouth: Float32Array,
+): void {
+    const wind = pressure.wind;
+    if (!wind) {
+        outEast.fill(0, 0, width * height);
+        outSouth.fill(0, 0, width * height);
+        return;
+    }
+    const block = WIND_BLOCK_CELLS;
+    const across = Math.ceil(width / block) + 1;
+    const down = Math.ceil(height / block) + 1;
+    const cornersEast = new Float64Array(across * down);
+    const cornersSouth = new Float64Array(across * down);
+    for (let row = 0; row < down; row++) {
+        for (let column = 0; column < across; column++) {
+            const air = wind((x + column * block + 0.5) * cellPx, (y + row * block + 0.5) * cellPx);
+            const push = windPush(air.east, air.south, cellPx);
+            cornersEast[row * across + column] = push.east;
+            cornersSouth[row * across + column] = push.south;
+        }
+    }
+    for (let row = 0; row < height; row++) {
+        const blockRow = Math.floor(row / block);
+        const v = (row - blockRow * block) / block;
+        for (let column = 0; column < width; column++) {
+            const blockColumn = Math.floor(column / block);
+            const u = (column - blockColumn * block) / block;
+            const at = blockRow * across + blockColumn;
+            const below = at + across;
+            outEast[row * width + column] =
+                (cornersEast[at] * (1 - u) + cornersEast[at + 1] * u) * (1 - v) +
+                (cornersEast[below] * (1 - u) + cornersEast[below + 1] * u) * v;
+            outSouth[row * width + column] =
+                (cornersSouth[at] * (1 - u) + cornersSouth[at + 1] * u) * (1 - v) +
+                (cornersSouth[below] * (1 - u) + cornersSouth[below + 1] * u) * v;
         }
     }
 }

@@ -40,6 +40,9 @@ function move(): InertiaMove {
         // A low over the grid: the heights its pressure holds, read by the flows.
         head: floats(() => -random() * 20),
         pressed: 1,
+        // And its wind, pushing the water every way.
+        windEast: floats(() => random() * 40 - 20),
+        windSouth: floats(() => random() * 40 - 20),
         compiled: undefined,
     };
 }

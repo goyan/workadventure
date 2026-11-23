@@ -95,6 +95,8 @@ describe("the kernel of the water compiled to WebAssembly", () => {
             hollow: Uint8Array.from({ length: cells }, () => (random() < 0.7 ? 1 : 0)),
             // A low over the grid: the heights its pressure holds (AirPressure), read by the flows.
             head: floats(() => -random() * 20),
+            windEast: floats(() => random() * 40 - 20),
+            windSouth: floats(() => random() * 40 - 20),
         };
         const figures = {
             width,

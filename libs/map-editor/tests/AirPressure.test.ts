@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { lowShare, lowShareFast, pressureHeads, waterHeightOfPressure } from "../src/Terrain/AirPressure";
+import {
+    lowShare,
+    lowShareFast,
+    MOST_DRAG,
+    pressureHeads,
+    seaDrag,
+    waterHeightOfPressure,
+    windPush,
+    windStress,
+} from "../src/Terrain/AirPressure";
 import type { AirPressure } from "../src/Terrain/AirPressure";
 import { cellKey, withHeights } from "../src/Terrain/TerrainGrid";
 import { WaterGrid } from "../src/Terrain/WaterGrid";
@@ -9,8 +18,11 @@ import {
     HURRICANE_HOLLAND_B,
     HURRICANE_RMAX_PX,
     hurricaneMaxWind,
+    hurricaneHere,
     hurricanePressure,
     hurricanePressureDrop,
+    hurricaneWind,
+    hurricaneAt,
 } from "../src/Catastrophe/Hurricane";
 import type { Hurricane } from "../src/Catastrophe/Hurricane";
 import { TERRAIN_CELL, TILE_PX } from "../src/types";
@@ -207,12 +219,18 @@ describe("the water of a closed basin under a low", () => {
         expect(Math.max(...line) - Math.min(...line)).toBeLessThan(1);
     });
 
-    it("is the same, to the bit, with the kernel compiled to WebAssembly", () => {
+    it("is the same, to the bit, with the kernel compiled to WebAssembly, its wind included", () => {
         const grids = [basin(60, 7, 60), basin(60, 7, 60, new WasmWaterKernel())];
         expect(grids.map((grid) => grid.kernelName())).toStrictEqual(["typescript", "wasm"]);
         for (let step = 0; step < 200; step++) {
             for (const grid of grids) {
-                grid.setPressure({ ...low(20, 5, 22), x: (20 + step * 0.1) * TERRAIN_CELL });
+                // A low that moves on, and a wind that turns round it.
+                const x = (20 + step * 0.1) * TERRAIN_CELL;
+                grid.setPressure({
+                    ...low(20, 5, 22),
+                    x,
+                    wind: (at, row) => ({ east: (row - 90) / 3, south: (x - at) / 30 }),
+                });
                 grid.step(inertia);
             }
             const [one, other] = grids.map((grid) => {
@@ -221,5 +239,128 @@ describe("the water of a closed basin under a low", () => {
             });
             if (Buffer.compare(one, other) !== 0) expect.fail(`the depths differ after step ${step}`);
         }
+    });
+});
+
+describe("the wind over the water (its stress)", () => {
+    it("drags the surface as the measures say: Large and Pond to 25 m/s, levelling off in a hurricane (Powell 2003)", () => {
+        expect(seaDrag(8)).toBeCloseTo(1.2e-3, 9);
+        expect(seaDrag(20)).toBeCloseTo((0.49 + 0.065 * 20) * 1e-3, 9);
+        expect(seaDrag(40)).toBe(MOST_DRAG);
+        expect(seaDrag(70)).toBe(MOST_DRAG);
+        // About 9 Pa in the wall of a category 4 (55 m/s).
+        expect(windStress(55)).toBeGreaterThan(8);
+        expect(windStress(55)).toBeLessThan(9.5);
+        expect(windStress(0)).toBe(0);
+        const push = windPush(30, -40, TERRAIN_CELL);
+        expect(push.east / push.south).toBeCloseTo(-0.75, 9);
+    });
+
+    it("of a hurricane: the wind of hurricaneHere, the same at every point", () => {
+        const hurricane: Hurricane = {
+            id: 2,
+            category: 3,
+            durationMs: 300_000,
+            heading: 290,
+            southern: false,
+            startedAt: 0,
+            fromX: 6000,
+            fromY: 3000,
+            toX: 0,
+            toY: 1000,
+            anchorX: 3000,
+            anchorY: 2000,
+        };
+        const storm = hurricaneAt(hurricane, 100_000);
+        if (!storm) throw new Error("the storm crosses the map at 100 s");
+        for (const [x, y] of [
+            [100, 200],
+            [3500, 1800],
+            [storm.eyeX + 900, storm.eyeY],
+        ]) {
+            const here = hurricaneHere(hurricane, 100_000, x, y);
+            const wind = hurricaneWind(hurricane, storm, x, y);
+            expect(Math.hypot(wind.east, wind.north)).toBeCloseTo(here?.windSpeed ?? NaN, 9);
+        }
+    });
+
+    it("holds the water of a closed channel aslant at rest: dη/dx = τ / (ρ_w g h)", () => {
+        const LENGTH = 200;
+        const grid = basin(LENGTH, 5, 80);
+        // 40 m/s towards the east over the whole channel, no low.
+        grid.setPressure({ x: 0, y: 0, dropPx: 0, radiusPx: 1, b: 1, wind: () => ({ east: 40, south: 0 }) });
+        for (let step = 0; step < 6000; step++) grid.step(inertia);
+        const line = surfaces(grid, LENGTH, 4);
+        const depthM = 60 / PX_PER_METRE;
+        const slope = windStress(40) / (1000 * 9.81 * depthM);
+        const wanted = slope * (LENGTH - 1) * (TERRAIN_CELL / PX_PER_METRE) * PX_PER_METRE;
+        const got = line[LENGTH - 1] - line[0];
+        // A few centimetres over 110 m: the water stands higher downwind.
+        expect(wanted).toBeGreaterThan(0.5);
+        expect(Math.abs(got - wanted) / wanted).toBeLessThan(0.15);
+    });
+
+    it("turns the water of a lake round a still eye, the way the wind goes round it", () => {
+        const SIDE = 120;
+        const grid = basin(SIDE, SIDE, 60);
+        const centre = 2 + SIDE / 2;
+        const eye = { x: centre * TERRAIN_CELL, y: centre * TERRAIN_CELL };
+        // The wind of a category 4 round a still eye: anticlockwise seen from above in the north (y down: clockwise on
+        // the screen), turned in, strongest at 30 m.
+        const hurricane: Hurricane = {
+            id: 3,
+            category: 4,
+            durationMs: 3_600_000,
+            heading: 90,
+            southern: false,
+            startedAt: 0,
+            fromX: eye.x,
+            fromY: eye.y,
+            toX: eye.x + 1e-3,
+            toY: eye.y,
+            anchorX: eye.x,
+            anchorY: eye.y,
+        };
+        const storm = hurricaneAt(hurricane, 1_000_000);
+        if (!storm) throw new Error("the storm is there");
+        grid.setPressure({
+            x: eye.x,
+            y: eye.y,
+            dropPx: 0,
+            radiusPx: HURRICANE_RMAX_PX,
+            b: HURRICANE_HOLLAND_B,
+            wind: (x, y) => {
+                const wind = hurricaneWind(hurricane, storm, x, y);
+                return { east: wind.east / 3.6, south: -wind.north / 3.6 };
+            },
+        });
+        for (let step = 0; step < 600; step++) grid.step(inertia);
+        // The circulation of the flows round the eye, and that of the wind: the same way.
+        const east = Reflect.get(grid, "flowEast") as Float32Array;
+        const south = Reflect.get(grid, "flowSouth") as Float32Array;
+        const width = grid.bounds.width;
+        let water = 0;
+        let air = 0;
+        for (let row = 2; row < 2 + SIDE; row++) {
+            for (let column = 2; column < 2 + SIDE; column++) {
+                const dx = (column + 0.5) * TERRAIN_CELL - eye.x;
+                const dy = (row + 0.5) * TERRAIN_CELL - eye.y;
+                const index = row * width + column;
+                water += east[index] * -dy + south[index] * dx;
+                const wind = hurricaneWind(hurricane, storm, (column + 0.5) * TERRAIN_CELL, (row + 0.5) * TERRAIN_CELL);
+                air += (wind.east / 3.6) * -dy + (-wind.north / 3.6) * dx;
+            }
+        }
+        expect(Math.sign(water)).toBe(Math.sign(air));
+        expect(Math.abs(water)).toBeGreaterThan(0);
+        // At the radius of the strongest winds the water picks up as the stress says, τ / (ρ_w h) a second, held back
+        // a little by the friction of the bottom: some 0.2 m/s after a minute (and on, to a metre or two).
+        const rmaxCells = Math.round(HURRICANE_RMAX_PX / TERRAIN_CELL);
+        const at = (centre - rmaxCells) * width + centre;
+        const speed = (Math.hypot(east[at], south[at]) / 60) * (TERRAIN_CELL / PX_PER_METRE);
+        const wall = hurricaneWind(hurricane, storm, eye.x, eye.y - rmaxCells * TERRAIN_CELL);
+        const free = (windStress(Math.hypot(wall.east, wall.north) / 3.6) / (1000 * (60 / PX_PER_METRE))) * 60;
+        expect(speed).toBeGreaterThan(0.5 * free);
+        expect(speed).toBeLessThan(1.05 * free);
     });
 });

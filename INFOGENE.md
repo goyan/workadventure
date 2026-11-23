@@ -6018,14 +6018,25 @@ inchangées). Coût : la hauteur de pression de chaque cellule est refaite quand
 cellule), une addition de plus par face sous ouragan. La grille reste éveillée tant que l'ouragan passe. Le
 protobuf ne change pas.
 
+**Le vent sur l'eau : son frottement** (`AirPressure.windPush`, `Hurricane.hurricaneWind`). Le vent de l'ouragan (le
+même calcul que `hurricaneHere`, extrait dans `hurricaneWind`) tire sur la surface : τ = ρ_air C_d U², C_d de Large et
+Pond (1981 : 1,2·10⁻³ jusqu'à 11 m/s, puis (0,49 + 0,065 U)·10⁻³) plafonné à 2,5·10⁻³ au-delà de 31 m/s (Powell,
+Vickery et Reinhold, *Nature* 2003 : l'écume et les embruns empêchent la surface de devenir plus rugueuse) : environ
+9 Pa dans le mur d'une catégorie 4. Dans les deux noyaux, chaque face reçoit dt × la poussée moyenne de ses deux
+cellules (dq/dt = τ / ρ_w), lue sur une grille de 4 × 4 cellules et interpolée, refaite avec la hauteur de pression
+(1,2 ms sur 480 × 320 cellules). Au repos dans un canal fermé, la surface penche de τ / (ρ_w g h) (test à 15 % près) :
+quelques centimètres sur une centaine de mètres, la carte étant réduite (une vraie surcote se forme sur des dizaines
+de kilomètres de plateau). Ce qui se voit surtout, ce sont les **courants** : l'eau des lacs se met à tourner autour
+de l'œil, comme le vent, et prend de l'ordre de 0,2 m/s en une minute au rayon des vents maximaux (test contre
+τ t / (ρ_w h)), jusqu'à environ 1 m/s sur la planche de l'étude ; sur un lac étroit le courant longe les rives. Mêmes
+garanties que la pression : rien sans ouragan, TypeScript et C identiques au bit (`Move` : 168 octets).
+
 **Ce que ça ne modélise pas, ou pas encore.**
 - **La pluie par position sur l'eau, le feu par position** : le sol du serveur lit une seule valeur pour la salle, au
   point survolé par l'œil. L'eau ne reçoit donc pas plus de pluie sous le mur qu'ailleurs, et le feu ne sent pas le
   vent du point où il brûle.
 - **La mer du vent par position** : un seul vent pour toute la vue, celui du centre de la caméra.
-- **La surcote par le vent** (frottement du vent sur l'eau, souvent plus forte que la pression : pente
-  τ / (ρ g h), τ = ρ_air C_d U²) : non faite ; elle entrerait au même endroit que la hauteur de pression, mais demande
-  le vent par cellule. Et le modèle d'eau n'a pas de bord ouvert sur une mer.
+- La surcote de tempête d'une vraie côte : le modèle d'eau n'a pas de bord ouvert sur une mer.
 - Le feu : sous la pluie réelle du mur, il ralentit (test : 20 % de cases en feu en moins au plus fort sur un pré
   sec) et l'air humide (95 %) n'en allume plus de nouveau. Un feu déjà pris dans une herbe sèche brûle toutefois
   jusqu'au bout.

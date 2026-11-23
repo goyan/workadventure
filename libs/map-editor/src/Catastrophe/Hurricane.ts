@@ -286,6 +286,35 @@ export function hurricaneAt(hurricane: Hurricane | undefined, epoch: number): Hu
     };
 }
 
+/**
+ * The wind of the storm at the point (x, y) of the map (pixels), towards the east and the north, km/h, averaged over
+ * 10 minutes: round the centre (anticlockwise in the north), turned in towards it, falling off by the profile of
+ * Holland, the motion of the storm added. What hurricaneHere tells, and what pushes the water (hurricanePressure).
+ */
+export function hurricaneWind(
+    hurricane: Hurricane,
+    storm: HurricaneNow,
+    x: number,
+    y: number,
+): { east: number; north: number } {
+    const mapE = (x - storm.eyeX) / PX_PER_METRE;
+    const mapN = -(y - storm.eyeY) / PX_PER_METRE;
+    const distanceM = Math.hypot(mapE, mapN);
+    const speed = hurricaneMaxWind(hurricane.category) * hollandShare(distanceM);
+    const spin = hurricane.southern ? -1 : 1;
+    const outE = distanceM > 0 ? mapE / distanceM : 0;
+    const outN = distanceM > 0 ? mapN / distanceM : 0;
+    const roundE = -outN * spin;
+    const roundN = outE * spin;
+    const inflow = (HURRICANE_INFLOW_DEGREES * Math.PI) / 180;
+    const heading = (hurricane.heading * Math.PI) / 180;
+    const motion = HURRICANE_MOTION_SHARE * storm.speedKmh;
+    return {
+        east: speed * (Math.cos(inflow) * roundE - Math.sin(inflow) * outE) + motion * Math.sin(heading),
+        north: speed * (Math.cos(inflow) * roundN - Math.sin(inflow) * outN) + motion * Math.cos(heading),
+    };
+}
+
 /** The storm at the point (x, y) of the map (pixels) at `epoch`; undefined outside its passage. */
 export function hurricaneHere(
     hurricane: Hurricane | undefined,
@@ -299,18 +328,7 @@ export function hurricaneHere(
     const mapE = (x - storm.eyeX) / PX_PER_METRE;
     const mapN = -(y - storm.eyeY) / PX_PER_METRE;
     const distanceM = Math.hypot(mapE, mapN);
-    const speed = hurricaneMaxWind(hurricane.category) * hollandShare(distanceM);
-    // Round the centre (anticlockwise in the north), turned in towards it.
-    const spin = hurricane.southern ? -1 : 1;
-    const outE = distanceM > 0 ? mapE / distanceM : 0;
-    const outN = distanceM > 0 ? mapN / distanceM : 0;
-    const roundE = -outN * spin;
-    const roundN = outE * spin;
-    const inflow = (HURRICANE_INFLOW_DEGREES * Math.PI) / 180;
-    const heading = (hurricane.heading * Math.PI) / 180;
-    const motion = HURRICANE_MOTION_SHARE * storm.speedKmh;
-    const windE = speed * (Math.cos(inflow) * roundE - Math.sin(inflow) * outE) + motion * Math.sin(heading);
-    const windN = speed * (Math.cos(inflow) * roundN - Math.sin(inflow) * outN) + motion * Math.cos(heading);
+    const { east: windE, north: windN } = hurricaneWind(hurricane, storm, x, y);
     const windSpeed = Math.hypot(windE, windN);
     const windFrom = ((((Math.atan2(windE, windN) * 180) / Math.PI + 180) % 360) + 360) % 360;
     const rmax = HURRICANE_RMAX_M;
@@ -429,17 +447,23 @@ export function hurricanePressureDrop(category: number): number {
 
 /**
  * The low of the hurricane over the water at `epoch` (WaterGrid.setPressure): under its eye the water stands higher
- * by the height of water its drop of pressure holds (the inverted barometer, about 1 cm a hPa), the drop fading in
- * and out with the storm. Undefined outside its passage.
+ * by the height of water its drop of pressure holds (the inverted barometer, about 1 cm a hPa), and its wind pushes
+ * the water, both fading in and out with the storm. Undefined outside its passage.
  */
 export function hurricanePressure(hurricane: Hurricane | undefined, epoch: number): AirPressure | undefined {
     const storm = hurricaneAt(hurricane, epoch);
     if (!hurricane || !storm || !(storm.share > 0)) return undefined;
+    const share = storm.share;
     return {
         x: storm.eyeX,
         y: storm.eyeY,
-        dropPx: waterHeightOfPressure(hurricanePressureDrop(hurricane.category) * storm.share) * PX_PER_METRE,
+        dropPx: waterHeightOfPressure(hurricanePressureDrop(hurricane.category) * share) * PX_PER_METRE,
         radiusPx: HURRICANE_RMAX_PX,
         b: HURRICANE_HOLLAND_B,
+        // Its wind pushes the water, fading in and out with the storm (m/s, east and south).
+        wind: (x, y) => {
+            const wind = hurricaneWind(hurricane, storm, x, y);
+            return { east: (wind.east / 3.6) * share, south: (-wind.north / 3.6) * share };
+        },
     };
 }
