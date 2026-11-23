@@ -7,8 +7,8 @@
         WeatherBoard,
     } from "@wa/front/Phaser/Game/Weather/WeatherExplained";
     import { LL, locale } from "../../../i18n/i18n-svelte";
-    import { coverClockLine, coverFigures, iceTrendLine, snowTrendLine } from "./coverText";
     import { fastWaterStore } from "../../Stores/FastWaterStore";
+    import { coverClockLine, coverFigures, iceTrendLine, snowTrendLine } from "./coverText";
     import { IconMap, IconUser, IconUsers } from "@wa-icons";
 
     /**

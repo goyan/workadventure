@@ -33,14 +33,41 @@ vi.mock("../../../../src/front/Components/Visualisation/WeatherBoardLive.svelte"
     return { default: mod.default };
 });
 
+vi.mock("../../../../src/front/Components/Visualisation/WeatherPipette.svelte", async () => {
+    const mod = (await import("./WeatherPipetteStub.svelte")) as { default: unknown };
+    return { default: mod.default };
+});
+
 import VisualisationPanel from "../../../../src/front/Components/Visualisation/VisualisationPanel.svelte";
+import { explainCell } from "../../../../src/front/Phaser/Game/Weather/CellExplained";
+import type { CellInput } from "../../../../src/front/Phaser/Game/Weather/CellExplained";
 import { terrainWaterStatsStore } from "../../../../src/front/Stores/TerrainEditorStore";
 import {
     visualisationPanelStore,
     waterFlowMeasuredStore,
     waterFlowOverlayStore,
     weatherExplainedStore,
+    weatherPipetteCellStore,
+    weatherPipetteStore,
 } from "../../../../src/front/Stores/VisualisationStore";
+
+const DRY_CELL: CellInput = {
+    city: undefined,
+    ground: "map",
+    outdoor: true,
+    reading: { ground: 0 },
+    depthPx: 0,
+    deep: false,
+    current: undefined,
+    hold: "none",
+    kept: undefined,
+    own: { snowMm: 0, frost: 0 },
+    weather: undefined,
+    snowing: false,
+    times: 1,
+    soilFrost: 0,
+    sunElevation: undefined,
+};
 
 let target: HTMLElement;
 let component: ReturnType<typeof mount> | undefined;
@@ -153,5 +180,21 @@ describe("VisualisationPanel", () => {
         visualisationPanelStore.set(false);
         flushSync();
         expect(find("weather-board-live")).toBeNull();
+    });
+
+    it("shows the pipette only while it is on, with the cell the game read under the pointer", () => {
+        visualisationPanelStore.set(true);
+        flushSync();
+        expect(find("weather-pipette")).toBeNull();
+        weatherPipetteStore.set(true);
+        flushSync();
+        expect(find("weather-pipette")?.getAttribute("data-cell")).toBe("none");
+        weatherPipetteCellStore.set(explainCell(DRY_CELL));
+        flushSync();
+        expect(find("weather-pipette")?.getAttribute("data-cell")).toBe("read");
+        weatherPipetteStore.set(false);
+        flushSync();
+        expect(find("weather-pipette")).toBeNull();
+        weatherPipetteCellStore.set(undefined);
     });
 });

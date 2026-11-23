@@ -103,10 +103,7 @@ export function weatherBoardNow(
                 ? { map: ground.meanSnowCover(), here: avatar ? ground.snowCoverAt(avatar.x, avatar.y) : 0 }
                 : undefined,
         roomWind: conditions?.windSpeed,
-        peaks:
-            ground && ground.version() > 0
-                ? { iceMm: ground.peakIceMm(), snowMm: ground.peakSnowMm() }
-                : undefined,
+        peaks: ground && ground.version() > 0 ? { iceMm: ground.peakIceMm(), snowMm: ground.peakSnowMm() } : undefined,
         snowTimes: waterTimesOf(settings?.water),
     });
 }

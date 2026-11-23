@@ -161,7 +161,8 @@ export function explainKeptSnow(input: {
 }): KeptSnow {
     const mm = Number.isFinite(input.mm) ? Math.max(0, input.mm) : 0;
     const weather = input.weather;
-    if (input.building) return { mm, trend: "growing", mmPerHour: 0, meltMmPerHour: 0, temperature: weather?.temperature };
+    if (input.building)
+        return { mm, trend: "growing", mmPerHour: 0, meltMmPerHour: 0, temperature: weather?.temperature };
     if (mm <= 0) return { mm, trend: "none", mmPerHour: 0, meltMmPerHour: 0, temperature: weather?.temperature };
     if (!weather) return { mm, trend: "unknown", mmPerHour: 0, meltMmPerHour: 0 };
     const melt = snowMeltMmPerHour(weather) * clock(input.times);
