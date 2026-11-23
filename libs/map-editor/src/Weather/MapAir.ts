@@ -5,8 +5,16 @@ import { AIR_CELL_PX, AIR_DRAG, AIR_STEP_S, AIR_SURFACE_RATIO, AirSimulation } f
 
 /** The wind of the air is told to the room twice a second: every fifth step of the water (ten a second). */
 export const MAP_AIR_STEPS_PER_MESSAGE = 5;
-/** The steps of the air the water step is: one for each, ten a second. */
+/** A step of the air is a step of the water: 0.1 s, ten a second. */
 export const MAP_AIR_STEP_MS = AIR_STEP_S * 1000;
+/**
+ * The most steps of its air a hurricane the widget speeds up lives in a step of the room: 5, where the widget goes
+ * up to 10. Measured on a Mac at ×10: 2.9 ms a step with 10 (some 17 ms on the server, six times slower, in the
+ * thread of the water), 1.5 ms with 5; the same strongest wind and radius, the eye of the air 0.16 radius behind that
+ * of the formula after 5 s instead of 0.12. A step of 0.2 s every other step, as cheap, moved the strongest wind in
+ * from 0.90 to 0.65 radius: not kept.
+ */
+export const MAP_AIR_MOST_TIMES = 5;
 
 /**
  * A cell of the air drags as a forest where a quarter of its tiles hold a tree (a choice: 4 of the 16 tiles of a cell
@@ -35,6 +43,8 @@ export interface MapAirSetup {
     mapSize(): { width: number; height: number } | undefined;
     /** The surface of the map as it is when a hurricane starts (asked once for it): the drag at a point (pixels). */
     surface(): (x: number, y: number) => number | "sea";
+    /** The most steps of its air a sped up hurricane lives in a step: MAP_AIR_MOST_TIMES by default. */
+    mostTimes?: number;
 }
 
 /** The wind of the room in the slab (m/s, towards the east and the north): that at 10 m over AIR_SURFACE_RATIO. */
@@ -134,7 +144,7 @@ export class MapAir {
 
     /**
      * One step of the water (100 ms of the room). A hurricane the widget speeds up lives `times` steps of its air in
-     * it: its eye goes `times` as fast, and its air must turn as fast to keep up with it.
+     * it (MAP_AIR_MOST_TIMES at most): its eye goes `times` as fast, and its air must turn as fast to keep up with it.
      */
     public step(): void {
         const hurricane = this.setup.hurricane();
@@ -182,7 +192,8 @@ export class MapAir {
             this.steps = 0;
         }
         const air = this.air;
-        const times = Math.max(1, Math.round(hurricane.times ?? 1));
+        const most = this.setup.mostTimes ?? MAP_AIR_MOST_TIMES;
+        const times = Math.max(1, Math.min(most, Math.round(hurricane.times ?? 1)));
         for (let sub = 1; sub <= times; sub++) {
             const epoch = now - MAP_AIR_STEP_MS + (sub * MAP_AIR_STEP_MS) / times;
             air.step({ hurricane, epoch, room }, AIR_STEP_S);

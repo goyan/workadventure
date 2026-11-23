@@ -170,11 +170,12 @@ describe("the air of a map while a hurricane crosses it (MapAir)", () => {
         const lags = {
             real: lagOf(crossing(300_000)),
             spedUp: lagOf(crossing(30_000, 10)),
-            // The same sped up crossing, its air living one step of 0.1 s in each step of the room.
+            // The same sped up crossing, its air living one step in each step of the room.
             notSpedUp: lagOf(crossing(30_000)),
         };
-        // Measured after 5 s: 0.09 radius at the real pace, 0.12 sped up ten times with ten steps of its air in each
-        // step of the room, 0.29 with one only (its air cannot turn as fast as its eye goes).
+        // Measured after 5 s: 0.09 radius at the real pace; sped up ten times, 0.14 with the five steps of its air
+        // it lives in each step of the room (MAP_AIR_MOST_TIMES; 0.12 with ten), 0.29 with one only (its air cannot
+        // turn as fast as its eye goes).
         expect(lags.real).toBeLessThan(0.2);
         expect(lags.spedUp).toBeLessThan(0.2);
         expect(lags.notSpedUp).toBeGreaterThan(1.5 * lags.spedUp);

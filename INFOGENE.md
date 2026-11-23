@@ -6135,8 +6135,10 @@ mailles marge comprise sur la carte d'Antoine).
   l'eau du relief a la profondeur d'un poisson sur la moitié d'une maille, forêt là où un arbre occupe le quart des
   cases, terre ailleurs, deux seuils choisis). Il avance avec chaque pas de l'eau, donc de la même façon avec ou sans
   fil de calcul (scénario d'identité). Il est jeté à la fin de l'ouragan. Un ouragan accéléré par le widget vit
-  `times` pas de son air dans chaque pas de la salle (1, 2, 5 ou 10). Sans cela, son œil va plus vite que l'air ne
-  tourne : mesuré après 5 s, l'œil de l'air est à 0,12 Rmax de celui de la formule à ×10, à 0,29 Rmax sans les sous-pas.
+  `times` pas de son air dans chaque pas de la salle (1, 2, puis 5 au plus : `MAP_AIR_MOST_TIMES`). Sans cela, son œil
+  va plus vite que l'air ne tourne : mesuré après 5 s à ×10, l'œil de l'air est à 0,14 Rmax de celui de la formule
+  avec 5 sous-pas (0,12 avec 10), à 0,29 Rmax avec un seul. Le plafond de 5 vient du coût (ci-dessous). Un pas de
+  0,2 s un pas sur deux, aussi économe, a été essayé et écarté : il rentrait le maximum de 0,90 à 0,65 Rmax.
 - Le message : `HurricaneAirMessage`, le vent à 10 m aux points d'une grille de 128 px sur la carte, un octet signé
   par composante, envoyé deux fois par seconde pendant un ouragan seulement, et entier au joueur qui arrive
   (`RoomJoinedMessage.hurricaneAir`). Environ 5 ko par message, soit 10 ko/s par joueur, non compressé (2,8 à 3,6 ko
@@ -6144,8 +6146,9 @@ mailles marge comprise sur la carte d'Antoine).
 - Repli : sur une carte sans eau, l'air ne tourne pas (il suit le pas de l'eau). Si l'air échoue, il est abandonné
   pour cet ouragan, avec une seule erreur au journal. Dans les deux cas, rien n'est envoyé et le vent reste celui
   de la formule.
-- Coût mesuré sur le Mac (M4 Max), encodage compris : 0,32 ms par pas à ×1, 2,7 ms à ×10. Estimation pour le VPS
-  (×6) : 2 ms (2 % d'un cœur) à ×1, 16 ms (16 %) à ×10, dans le fil du sol qui prend déjà 55 ms par pas pour l'eau.
+- Coût mesuré sur le Mac (M4 Max), encodage compris : 0,32 ms par pas à ×1, 1,5 ms à ×10 avec le plafond de 5
+  sous-pas (2,9 ms avec 10). Estimation pour le VPS (×6) : 2 ms (2 % d'un cœur) à ×1, 9 ms (9 %) à ×10, dans le fil
+  du sol qui prend déjà 55 ms par pas pour l'eau.
 - Pas encore branché (lot c) : le front lit toujours la formule (`hurricaneHere`), comme les arbres couchés et les
   conditions du feu du serveur. Le flux `hurricaneAirMessageStream` du navigateur n'a pas encore d'abonné.
 
