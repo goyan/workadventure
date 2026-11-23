@@ -283,3 +283,151 @@ describe("BreakingFoam, whatever how often the water is told", () => {
         for (let at = 1; at < seen.length; at++) expect(Math.abs(seen[at] - seen[at - 1])).toBeLessThan(0.1);
     });
 });
+
+describe("BreakingFoam, worked out over the images that follow a state", () => {
+    /** A sea of 60 by 40 cells over a relief that rises and falls, behind a few walls, its waves moving with time. */
+    const WIDTH = 60;
+    const HEIGHT = 40;
+    const cells = new Map<string, number>();
+    for (let y = 0; y < HEIGHT; y++)
+        for (let x = 0; x < WIDTH; x++)
+            cells.set(cellKey(x, y), Math.round(-20 + 26 * Math.sin(x / 7) * Math.cos(y / 5)));
+    const relief = withHeights(undefined, cells);
+    const east = new Set<string>();
+    for (let y = 10; y < 20; y++) east.add(cellKey(30, y));
+    const south = new Set<string>();
+    for (let x = 5; x < 15; x++) south.add(cellKey(x, 25));
+    const walls = closedSidesOf({ east, south });
+    const bedOf = (x: number, y: number): number => Math.round(-20 + 26 * Math.sin(x / 7) * Math.cos(y / 5));
+    const levelAt = (x: number, y: number, t: number): number => 2 + 6 * Math.sin(x / 3 + t) * Math.cos(y / 4 - t);
+    /** The sea at `t`; still where `still` says so (its water as at the time 0). */
+    const seaAt = (t: number, before: number, still: (x: number, y: number) => boolean = () => false): SettledWater =>
+        state(
+            WIDTH,
+            HEIGHT,
+            (x, y) => Math.max(0, levelAt(x, y, still(x, y) ? 0 : t) - bedOf(x, y)),
+            (x, y) => Math.max(0, levelAt(x, y, still(x, y) ? 0 : before) - bedOf(x, y)),
+        );
+    /** The same foam, cell by cell, but for the rounding of its 32-bit store. */
+    const expectSame = (actual: number[], expected: number[]): void => {
+        expect(actual.length).toBe(expected.length);
+        const worst = actual.reduce((most, value, at) => Math.max(most, Math.abs(value - expected[at])), 0);
+        expect(worst).toBeLessThan(1e-6);
+        expect(actual.filter((value) => value > 0).length).toBe(expected.filter((value) => value > 0).length);
+    };
+    const everyCell = (read: (x: number, y: number) => number): number[] => {
+        const values: number[] = [];
+        for (let y = 0; y < HEIGHT; y++) for (let x = 0; x < WIDTH; x++) values.push(read(x, y));
+        return values;
+    };
+
+    it("makes the foam foamOfCell makes, cell by cell, the walls and the relief read once", () => {
+        const foam = new BreakingFoam();
+        for (const t of [0, 0.4, 0.8]) {
+            const sea = seaAt(t, t - 0.4);
+            foam.absorb(sea, relief, t * 1000, walls);
+            const expected = everyCell((x, y) => {
+                const made = foamOfCell(sea, relief, x, y, walls);
+                return made < 0.04 ? 0 : made;
+            });
+            expectSame(
+                everyCell((x, y) => foam.madeAt(x, y)),
+                expected,
+            );
+        }
+    });
+
+    it("works out again only the cells whose water, or the water as far as their wave reaches, moved", () => {
+        const visitsTo = (sea: SettledWater): number => {
+            const foam = new BreakingFoam();
+            foam.absorb(seaAt(0, 0), relief, 0, walls);
+            foam.begin(sea, relief, 400, walls);
+            foam.advance(Number.POSITIVE_INFINITY);
+            return foam.lastVisits;
+        };
+        // Only the west quarter of the sea moves: well under half of what the whole sea moving costs.
+        const quarter = seaAt(0.4, 0, (x) => x >= 15);
+        expect(visitsTo(quarter)).toBeLessThan(visitsTo(seaAt(0.4, 0)) / 2);
+        const foam = new BreakingFoam();
+        foam.absorb(seaAt(0, 0), relief, 0, walls);
+        foam.absorb(quarter, relief, 400, walls);
+        expectSame(
+            everyCell((x, y) => foam.madeAt(x, y)),
+            everyCell((x, y) => {
+                const made = foamOfCell(quarter, relief, x, y, walls);
+                return made < 0.04 ? 0 : made;
+            }),
+        );
+    });
+
+    it("never visits more cells in an image than its budget, and ends with the same foam", () => {
+        const budget = 2000;
+        const spread = new BreakingFoam();
+        const atOnce = new BreakingFoam();
+        let images = 0;
+        for (const t of [0, 0.4]) {
+            const sea = seaAt(t, t - 0.4);
+            atOnce.absorb(sea, relief, t * 1000, walls);
+            spread.begin(sea, relief, t * 1000, walls);
+            while (spread.working()) {
+                spread.advance(budget);
+                images++;
+                expect(spread.lastVisits).toBeLessThanOrEqual(budget);
+            }
+        }
+        expect(images).toBeGreaterThan(2);
+        expect(everyCell((x, y) => spread.madeAt(x, y))).toEqual(everyCell((x, y) => atOnce.madeAt(x, y)));
+    });
+});
+
+describe("BreakingFoam worked out over the images, whatever how often the water is told", () => {
+    const crestAt = (seconds: number, between: number): SettledWater => ({
+        ...state(70, 3, (x) => 5 + 12 * Math.exp(-(((x - 10 - 1.5 * seconds) / 3) ** 2))),
+        seconds: between,
+    });
+    /**
+     * As foamOver above, the foam worked out over `images` images of 1/60 s for each state (the browser: the map of
+     * Antoine in flood takes 13 to 28 images of FOAM_VISITS_PER_FRAME), read every 50 ms.
+     */
+    function foamOver(rate: number, images: number): { mean: number; swing: number; jump: number } {
+        const probe = new BreakingFoam();
+        probe.absorb(crestAt(0, 1 / rate), undefined, 0);
+        probe.begin(crestAt(1 / rate, 1 / rate), undefined, 1000 / rate);
+        probe.advance(Number.POSITIVE_INFINITY);
+        const budget = Math.ceil(probe.lastVisits / images);
+        const foam = new BreakingFoam();
+        const between = 1 / rate;
+        const totals: number[] = [];
+        let told = -1;
+        for (let tick = 0; tick <= 480; tick++) {
+            const now = tick * 50;
+            const due = Math.floor(now / 1000 / between + 1e-9);
+            if (due > told) {
+                told = due;
+                foam.begin(crestAt(due * between, between), undefined, due * between * 1000);
+            }
+            // Three images of 1/60 s in each 50 ms.
+            for (let image = 0; image < 3; image++) foam.advance(budget, now + (image * 50) / 3);
+            if (now < 4000) continue;
+            let total = 0;
+            for (let x = 0; x < 70; x++) total += foam.foamAt(x, 1, now);
+            totals.push(total);
+        }
+        const mean = totals.reduce((sum, total) => sum + total, 0) / totals.length;
+        let jump = 0;
+        for (let at = 1; at < totals.length; at++) jump = Math.max(jump, Math.abs(totals[at] - totals[at - 1]));
+        return { mean, swing: (Math.max(...totals) - Math.min(...totals)) / mean, jump: jump / mean };
+    }
+
+    it("makes the same foam as worked out at once, within a tenth, steadily, at one, two and five states a second", () => {
+        // 13 images a state on the map of Antoine in flood, 28 under fast water (measured): 30 here.
+        for (const [rate, images] of [1, 2, 5].flatMap((rate) => [13, 30].map((images) => [rate, images]))) {
+            const spread = foamOver(rate, images);
+            const atOnce = foamOver(rate, 1);
+            expect(spread.mean, `mean at ${rate} a second over ${images} images`).toBeGreaterThan(atOnce.mean * 0.9);
+            expect(spread.mean, `mean at ${rate} a second over ${images} images`).toBeLessThan(atOnce.mean * 1.1);
+            expect(spread.swing, `swing at ${rate} a second over ${images} images`).toBeLessThan(0.25);
+            expect(spread.jump, `jump at ${rate} a second over ${images} images`).toBeLessThan(0.08);
+        }
+    });
+});
