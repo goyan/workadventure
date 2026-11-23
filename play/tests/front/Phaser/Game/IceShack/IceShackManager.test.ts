@@ -231,6 +231,47 @@ describe("the stool of a shack", () => {
         expect(player.sitOnSeat).toHaveBeenCalledWith(iceShackSeatId(1));
     });
 
+    it("who put a shack up and sits in it as it is up gets the rod and the help too", () => {
+        const { manager, send, player } = harness();
+        send([{ ownerUserId: OWN_ID, occupantUserId: OWN_ID }], [[OWN_ID, 1, "built"]]);
+        // Sat on the stool as the shack is up (sitOnSeat slides there, then sits).
+        player.sitOnSeat.mockImplementation(() => {
+            player.seated = true;
+            seat.id = iceShackSeatId(1);
+            return true;
+        });
+        manager.update(0);
+        manager.update(16);
+        expect(manager.ownHole()).toEqual({ x: 318, y: 200 });
+        expect(get(rodEquippedStore)).toBe(true);
+        expect(get(fishingCardsStore).at(-1)?.text).toBe(get(LL).actionbar.iceShack.help());
+    });
+
+    it("sitting again in the same shack after getting up, the rod comes in hand again", () => {
+        const { manager, send, player } = harness();
+        send([{}]);
+        player.seated = true;
+        seat.id = iceShackSeatId(1);
+        manager.update(0);
+        send([{ occupantUserId: OWN_ID }], [[OWN_ID, 1, "entered"]]);
+        manager.update(16);
+        expect(get(rodEquippedStore)).toBe(true);
+        // Got up, rod put away, then sat down again in the same shack.
+        player.seated = false;
+        seat.id = undefined;
+        rodEquippedStore.set(false);
+        fishingCardsStore.set([]);
+        send([{}], [[OWN_ID, 1, "left"]]);
+        manager.update(32);
+        player.seated = true;
+        seat.id = iceShackSeatId(1);
+        manager.update(48);
+        send([{ occupantUserId: OWN_ID }], [[OWN_ID, 1, "entered"]]);
+        manager.update(64);
+        expect(get(rodEquippedStore)).toBe(true);
+        expect(get(fishingCardsStore).at(-1)?.text).toBe(get(LL).actionbar.iceShack.help());
+    });
+
     it("tells the server when its angler walked off", () => {
         const { manager, send, player, emitIceShackAction } = harness();
         send([{ occupantUserId: OWN_ID }]);

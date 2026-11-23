@@ -487,6 +487,33 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             expect(get(wokaMenuStore)).toBeUndefined();
         });
 
+        it("seated in an ice fishing shack, the own-avatar wheel still offers to take the rod in hand or put it away", () => {
+            Object.defineProperty(scene, "iceShackManager", {
+                configurable: true,
+                value: {
+                    wheelActions: () => [
+                        { actionName: "Get up", icon: "iceShack", testId: "avatar-ice-shack-leave", callback: vi.fn() },
+                    ],
+                },
+            });
+            const fishingManager = mock<FishingManager>();
+            fishingManager.toggleEquipment.mockImplementation(() => rodEquippedStore.update((value) => !value));
+            Object.defineProperty(scene, "fishingManager", { configurable: true, value: fishingManager });
+            const self = Object.assign(Object.create(Player.prototype) as Player, {
+                playerName: "Me",
+                sprites: new Map([["body1", mock<Phaser.GameObjects.Sprite>()]]),
+                isSeated: () => true,
+            });
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            const testIds = (get(wokaMenuStore)?.actions ?? []).map(({ testId }) => testId);
+            expect(testIds).toContain("avatar-ice-shack-leave");
+            const rod = get(wokaMenuStore)?.actions.find(({ testId }) => testId === "avatar-rod");
+            expect(rod?.actionName).toBe(get(LL).actionbar.rod.equip());
+            rod?.callback();
+            expect(fishingManager.toggleEquipment.mock.calls).toHaveLength(1);
+            rodEquippedStore.set(false);
+        });
+
         it("offers a fishing contest from the own-avatar wheel, rod in hand and no contest running", () => {
             const self = Object.assign(Object.create(Player.prototype) as Player, {
                 playerName: "Me",
