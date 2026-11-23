@@ -53,6 +53,8 @@ describe("the ground of a room behind its door (RoomGround)", () => {
         const iceOf = (read: RoomGround): number[] =>
             Array.from({ length: 24 * 24 }, (_, tile) => read.iceAt(tile % 24, Math.floor(tile / 24)));
         expect(iceOf(ground)).toEqual(iceOf(reference));
+        // The cold snap of the scenario froze water: what breaks the ice had ice to break.
+        expect(iceOf(ground).some((mm) => mm > 0)).toBe(true);
         expect(ground.hasMeadow()).toBe(true);
         expect(ground.catchingUp()).toBe(reference.catchingUp());
         // The map of these grounds goes six times faster than reality, and its steps cost nothing on their clock:
