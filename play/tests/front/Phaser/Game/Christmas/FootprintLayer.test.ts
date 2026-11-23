@@ -63,4 +63,22 @@ describe("FootprintLayer", () => {
         layer.add([step], 0);
         expect(images[0].alpha).toBeCloseTo(0.2);
     });
+
+    it.each([-1, 1])("projects both ends of a diagonal trail on a slope (%s)", (direction) => {
+        const { images, made, layer } = setup((_x, y) => y / 2);
+        layer.add([{ kind: "trail", x1: 100, y1: 200, x2: 110, y2: 200 + direction * 10 }], 0);
+        expect(made.mock.calls[0].slice(0, 2)).toEqual([100, 300]);
+        expect(images[0].setDisplaySize).toHaveBeenCalledWith(Math.hypot(10, direction * 15), 4);
+        expect(images[0].setRotation).toHaveBeenCalledWith(Math.atan2(direction * 15, 10));
+    });
+
+    it("uses the styled ground height at both ends of a trail", () => {
+        const { images, layer } = setup(() => 0);
+        layer.add([{ kind: "trail", x1: 100, y1: 200, x2: 110, y2: 210 }], 0, (_x, y) => ({
+            tint: 0xffffff,
+            alpha: 0.5,
+            drop: y / 2,
+        }));
+        expect(images[0].setRotation).toHaveBeenCalledWith(Math.atan2(15, 10));
+    });
 });

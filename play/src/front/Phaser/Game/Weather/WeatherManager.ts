@@ -83,6 +83,8 @@ import { SnowGround } from "./SnowGround";
 import { createBlockSurface } from "./BlockSurface";
 import { CLOUD_LAYER_MARGIN, CloudLayer } from "./CloudLayer";
 import { rainbowPlacement, rainbowStrength } from "./Rainbow";
+import { contrails } from "./Contrails";
+import type { Contrail } from "./Contrails";
 import type { CloudSky } from "./CloudLayer";
 import { screenScale, seenFromFar } from "./ScreenScale";
 import type { BlockCanvasArea, BlockSurface } from "./BlockSurface";
@@ -342,6 +344,9 @@ export class WeatherManager {
         // 5 times (each drawing makes the whole map drawn again).
         const falling = showWeather && weather !== WeatherType.Fog;
         const fogOnly = showWeather && weather === WeatherType.Fog;
+        const epoch = serverDate?.getTime() ?? now;
+        const sky = this.skyDrift.at(epoch, cloudDrift(settings?.windFrom, settings?.windSpeed));
+        if (showClouds && !fogOnly && this.smoothCloudLayer()?.moveSky(sky)) this.scene.markDirty();
         const camera = this.scene.cameras.main.worldView;
         const screen = { x: camera.x, y: camera.y, width: camera.width, height: camera.height };
         // A scroll that has used half of the drawn margin draws again at once, whatever the pace.
@@ -411,8 +416,6 @@ export class WeatherManager {
             return;
         }
         this.visible = true;
-        const epoch = serverDate?.getTime() ?? now;
-        const sky = this.skyDrift.at(epoch, cloudDrift(settings?.windFrom, settings?.windSpeed));
         const isOutdoor = grid
             ? (x: number, y: number): boolean => grid.isOutdoorAt(x, y) && cover?.has(x, y) !== true
             : undefined;
@@ -583,7 +586,16 @@ export class WeatherManager {
                 paint,
             );
         }
-        this.drawSkyLayer(view, sky, grid ? veil : undefined, sun);
+        const trails = this.reducedMotion
+            ? []
+            : contrails(
+                  epoch,
+                  cloudDrift(settings?.windFrom, settings?.windSpeed),
+                  { width: this.scene.Map.widthInPixels, height: this.scene.Map.heightInPixels },
+                  1 - sunlight.night,
+                  cloudiness,
+              );
+        this.drawSkyLayer(view, sky, grid ? veil : undefined, sun, trails);
         this.reflectedSky = this.skyOverWater(sun, sunlight, cloudiness, raining || storm);
         if (paint) this.blocks.end();
         // Only the fog passes over the buildings seen from far.
@@ -827,6 +839,7 @@ export class WeatherManager {
         const tint = (color: number): { color: number; alpha: number } => cloudTint(color, body, night);
         return {
             patches: cloudPatches(epoch, layerArea(view), shownCover, this.reducedMotion, sky),
+            cumulus: true,
             tones: { lit: tint(palette.lit).color, mid: tint(palette.mid).color, shade: tint(palette.shade).color },
             body: tint(palette.mid).alpha,
             shadow,
@@ -839,9 +852,13 @@ export class WeatherManager {
         sky: { x: number; y: number },
         outdoors: readonly WeatherView[] | undefined,
         sun: SunPosition | undefined,
+        trails: readonly Contrail[],
     ): void {
         const layer = this.smoothCloudLayer();
-        if (!layer || (!this.layerClouds && this.layerVeils.length === 0 && this.layerRainbow <= 0)) {
+        if (
+            !layer ||
+            (!this.layerClouds && this.layerVeils.length === 0 && this.layerRainbow <= 0 && trails.length === 0)
+        ) {
             this.cloudLayer?.hide();
             this.setRainbowSpot(undefined);
             return;
@@ -872,6 +889,7 @@ export class WeatherManager {
             overRoofs: this.layerOverRoofs ? (this.roofs?.share ?? 0) : 0,
             rainbow,
             still: this.reducedMotion,
+            contrails: trails,
         });
     }
 

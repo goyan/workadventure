@@ -1,6 +1,9 @@
 import * as Phaser from "phaser";
 import { billowDrift, CLOUD_BILLOW_PERIOD_PX, NOISE_GLSL, shaderSeconds, shaderWrap } from "../ShaderNoise";
-import type { FogPatch, WeatherView } from "./WeatherFrame";
+import type { WeatherView } from "./WeatherFrame";
+import type { CloudPatch } from "./Clouds";
+import { CONTRAIL_LIFE_SECONDS, MAX_CONTRAILS } from "./Contrails";
+import type { Contrail } from "./Contrails";
 
 /**
  * The sky of the weather drawn by the graphics card at every drawing of the weather: the clouds (of a clear sky, or of
@@ -16,7 +19,9 @@ import type { FogPatch, WeatherView } from "./WeatherFrame";
 
 export interface CloudSky {
     /** The puffs of the clouds over the view and CLOUD_LAYER_MARGIN around it. */
-    patches: readonly FogPatch[];
+    patches: readonly CloudPatch[];
+    /** Cumulus, frayed by a warped noise; omitted for the soft billows of fog. */
+    cumulus?: boolean;
     /** The three tones of the clouds and the opacity of their body, night included (cloudTint). */
     tones: { lit: number; mid: number; shade: number };
     body: number;
@@ -51,6 +56,8 @@ export interface CloudFrame {
         | undefined;
     /** Nothing moves (reduced motion): the billows of the clouds stay as they are. */
     still: boolean;
+    /** The trails of the planes (Contrails.ts), over the clouds. */
+    contrails?: readonly Contrail[];
 }
 
 /** How far a cloud looks towards the light (north-west) to tell its far side, in map pixels: as cloudTones. */
@@ -69,6 +76,8 @@ const MASK_TEXEL = 4;
 const MASK_MARGIN = 512;
 const PUFF_TEXTURE = "weather-cloud-puff";
 const PUFF_SIZE = 64;
+const NOISE_TEXTURE = "weather-cloud-noise";
+const NOISE_SIZE = 256;
 
 const CLOUD_FRAG = `
 #ifdef GL_FRAGMENT_PRECISION_HIGH
@@ -81,11 +90,13 @@ varying vec2 outTexCoord;
 
 uniform sampler2D uThickness;
 uniform sampler2D uMask;
+uniform sampler2D uNoise;     // 256² random texels, green = red shifted by 37 along x: a 3D noise in one fetch
 uniform vec4 uArea;          // the area drawn, map pixels: x, y, width, height
 uniform vec4 uThicknessArea; // the area of the thickness texture
 uniform vec4 uMaskArea;      // the area of the outdoor mask
 uniform float uAllOutdoor;   // 1: no mask, everything is outdoors
 uniform float uClouds;       // 1 when there are clouds to draw
+uniform float uCumulus;      // 1: cumulus, 0: the billows of fog
 uniform vec3 uLit;
 uniform vec3 uMid;
 uniform vec3 uShade;
@@ -94,10 +105,17 @@ uniform float uOverRoofs;
 uniform vec3 uShadow;        // x, y offset of the shadows (map pixels), their opacity
 uniform vec4 uVeil;          // the veils over the outdoors, premultiplied
 uniform vec2 uSky;           // how far the sky has drifted (map pixels): the billows go with their cloud
-uniform float uTime;         // seconds: the billows change slowly
+uniform vec2 uMotion;        // drift since the thickness texture was drawn, in map pixels
+uniform float uEvolve;       // how far the 3D noise of the cumulus has evolved (cloudEvolution)
 uniform vec4 uBillowA;      // how far the billows have drifted, octave by octave (ShaderNoise.billowDrift)
 uniform vec2 uBillowB;
 uniform vec4 uRainbow;       // centre x, y and radius of the rainbow (map pixels), its strength (0: none)
+uniform vec4 uTrail0;        // a contrail: its first point (map pixels at the drawing), its direction
+uniform vec4 uTrail1;
+uniform vec4 uTrail2;
+uniform vec4 uTrailInfo0;    // its length, map pixels of trail a second, its strength (0: none), 1 while flying
+uniform vec4 uTrailInfo1;
+uniform vec4 uTrailInfo2;
 uniform vec2 uRainbowDir;    // the way the rainbow bows, away from the sun
 uniform float uRainbowSpan;  // the cosine of the half opening of its arc
 
@@ -127,10 +145,18 @@ vec4 rainbow(vec2 world, float out_) {
     return vec4(colour * arc * uRainbow.w * mix(0.5, 1.0, out_), alpha);
 }
 
-float thickness(vec2 world) {
-    vec2 uv = (world - uThicknessArea.xy) / uThicknessArea.zw;
+float sampleThickness(vec2 world) {
+    vec2 uv = (world - uMotion - uThicknessArea.xy) / uThicknessArea.zw;
     // Stored bottom up, as the canvas textures.
     return texture2D(uThickness, vec2(uv.x, 1.0 - uv.y)).r;
+}
+
+// Four bilinear samples half a texel apart: the plain filter bends at each texel, and a relief lit from its slope
+// showed those bends as stairs of ${CELL} map pixels. Their average bends smoothly.
+float thickness(vec2 world) {
+    float h = ${CELL / 2}.0;
+    return 0.25 * (sampleThickness(world + vec2(-h, -h)) + sampleThickness(world + vec2(h, -h)) +
+        sampleThickness(world + vec2(-h, h)) + sampleThickness(world + vec2(h, h)));
 }
 
 float outdoor(vec2 world) {
@@ -142,10 +168,47 @@ float outdoor(vec2 world) {
 
 // The thickness of the puffs broken into billows: a cumulus is a heap of round swellings, not a smooth blob. The
 // billows are fixed to the cloud (moved with the sky), and its thin edge is eaten the most.
+// Value noise in 3D from one fetch of the noise texture: two slices of it, 37 texels apart along x (canvas textures
+// are stored bottom up: a shift along x only is the same either way), mixed along z.
+float noise3(vec3 x) {
+    vec3 i = floor(x);
+    vec3 f = fract(x);
+    f = f * f * (3.0 - 2.0 * f);
+    vec2 uv = i.xy + vec2(37.0, 0.0) * i.z + f.xy;
+    vec2 rg = texture2D(uNoise, (uv + 0.5) / ${NOISE_SIZE}.0).rg;
+    return mix(rg.x, rg.y, f.z);
+}
+
+float fbm3(vec3 p, int octaves) {
+    float sum = 0.0;
+    float amplitude = 0.5;
+    for (int i = 0; i < 4; i++) {
+        if (i >= octaves) break;
+        sum += amplitude * noise3(p);
+        p = p * 2.03 + vec3(1.7, 9.2, 3.3);
+        amplitude *= 0.5;
+    }
+    return sum;
+}
+
+const float CLOUD_TOP = 140.0;  // map pixels between the base and the highest tops of a cumulus
+const float EXTINCTION = 0.09;  // per map pixel at full density
+
+// The density of a cumulus at a point of its volume (hf: height over CLOUD_TOP): the heap of puffs, rounder and
+// thinner towards the top, eaten by a 3D noise fixed to the sky, so every cloud has its own billows, its frayed edges.
+float cloudDensity(vec2 world, float hf, int octaves) {
+    float c = sampleThickness(world);
+    if (c <= 0.01) return 0.0;
+    vec2 q = world - uSky - uMotion;
+    float n = fbm3(vec3(q / 55.0, hf * 2.4 + uEvolve), octaves);
+    float d = c * 1.35 - 0.2 - hf * hf * 0.95 - (1.0 - n * 1.9) * 0.55;
+    return clamp(d * 3.0, 0.0, 1.0);
+}
+
 float density(vec2 world) {
     float t = thickness(world);
     if (t <= 0.002) return 0.0;
-    vec2 p = world - uSky;
+    vec2 p = world - uSky - uMotion;
     float billows = fbmDrift(p / 30.0, uBillowA, uBillowB);
     return t * (0.45 + 1.1 * billows);
 }
@@ -153,6 +216,91 @@ float density(vec2 world) {
 // The outline of a cloud: a soft edge a few map pixels wide.
 float cover(float d) {
     return smoothstep(0.1, 0.22, d);
+}
+
+// A cumulus seen from above, marched as a volume: from its top down, the light that reaches each point (the cloud
+// between it and the sun dims it, Beer's law, with a softer share for the light scattered many times) and the
+// opacity gathered on the way. Lit tops are white, the inside and the far side blue grey, thin edges let the ground
+// show through.
+vec4 cumulus(vec2 world, float out_, vec4 under) {
+    if (sampleThickness(world) <= 0.01) return under;
+    vec2 away = length(uShadow.xy) > 0.0 ? normalize(uShadow.xy) : vec2(0.7071);
+    vec3 sun = normalize(vec3(-away * 0.7, 0.72));
+    vec3 ambient = uShade * vec3(0.72, 0.8, 0.95);
+    float step_ = CLOUD_TOP / 6.0;
+    float transmittance = 1.0;
+    vec3 light = vec3(0.0);
+    for (int i = 0; i < 6; i++) {
+        float hf = 1.0 - (float(i) + 0.5) / 6.0;
+        float d = cloudDensity(world, hf, 3);
+        if (d <= 0.0) continue;
+        // Towards the sun, the heap of the puffs only (no noise): two texture reads instead of two noises.
+        float toSun = 0.0;
+        for (int j = 1; j <= 2; j++) {
+            float s = float(j) * 24.0;
+            float hs = hf + sun.z * s / CLOUD_TOP;
+            toSun += clamp((sampleThickness(world + sun.xy * s) * 1.35 - 0.45 - hs * hs * 0.95) * 3.0, 0.0, 1.0);
+        }
+        float depth = toSun * 24.0 * EXTINCTION * 0.6;
+        float lit = max(exp(-depth), exp(-depth * 0.25) * 0.55);
+        vec3 tone = mix(ambient * (0.75 + 0.25 * hf), uLit, lit);
+        float a = 1.0 - exp(-d * EXTINCTION * step_);
+        light += transmittance * a * tone;
+        transmittance *= 1.0 - a;
+        if (transmittance < 0.03) break;
+    }
+    float alpha = (1.0 - transmittance) * uBody * mix(uOverRoofs, 1.0, out_);
+    vec3 colour = light / max(1.0 - transmittance, 0.001);
+    return vec4(colour * alpha, alpha) + under * (1.0 - alpha);
+}
+
+// The billows of fog and of the cloud layer before the cumulus: their density lit from the sun, a rim at their edge.
+vec4 billows(vec2 world, float out_, vec4 under) {
+    float d = density(world);
+    float body = cover(d);
+    if (body <= 0.0) return under;
+    vec2 away = length(uShadow.xy) > 0.0 ? normalize(uShadow.xy) : vec2(0.7071);
+    vec2 probe = away * 12.0;
+    float facing = (density(world + probe) - density(world - probe)) * (28.0 / 24.0);
+    vec2 reach = away * ${SHADE_REACH.toFixed(1)};
+    float far = thickness(world) - thickness(world - reach);
+    float light = clamp(0.55 + facing - far * 1.2 + (d - 0.3) * 0.2, 0.0, 1.0);
+    vec3 tone = light < 0.5 ? mix(uShade, uMid, light * 2.0) : mix(uMid, uLit, light * 2.0 - 1.0);
+    float rim = 1.0 - smoothstep(0.22, 0.32, d);
+    tone = mix(tone, uLit, rim * 0.4);
+    float alpha = body * uBody * mix(uOverRoofs, 1.0, out_);
+    return vec4(tone * alpha, alpha) + under * (1.0 - alpha);
+}
+
+// A contrail, high over the clouds: two engine trails, thin and close behind the plane, that merge, spread, wave and
+// break into puffs as they age, then fade. Fixed to the air (it drifts with the sky). Its opacity at this point.
+float contrail(vec2 world, vec4 trail, vec4 info) {
+    if (info.z <= 0.0) return 0.0;
+    vec2 rel = world - uMotion - trail.xy;
+    float along = dot(rel, trail.zw);
+    if (along < -6.0 || along > info.x + 6.0) return 0.0;
+    float age = max(info.x - along, 0.0) / info.y;
+    float across = dot(rel, vec2(-trail.w, trail.z));
+    // Far from the line: nothing, before any noise (most of the screen).
+    if (abs(across) > 26.0 + age * 3.0) return 0.0;
+    vec2 q = world - uSky - uMotion;
+    across += (noise3(vec3(along / 260.0, 0.5, 7.3)) - 0.5) * age * 0.5;
+    float spread = 6.0 + age * 0.8;
+    float twin = 7.0 * (1.0 - smoothstep(4.0, 14.0, age));
+    float core = exp(-pow((abs(across) - twin) / spread, 2.0));
+    float puffs = mix(1.0, 0.35 + 1.1 * fbm3(vec3(q / 26.0, age * 0.03), 2), smoothstep(10.0, 50.0, age));
+    float fade = (1.0 - smoothstep(${(CONTRAIL_LIFE_SECONDS * 0.35).toFixed(1)}, ${CONTRAIL_LIFE_SECONDS.toFixed(1)}, age)) / (1.0 + age * 0.02);
+    // The air needs a few seconds to condense: a gap behind the plane.
+    float condense = smoothstep(0.3, 1.5, age);
+    float plane = info.w * exp(-dot(world - uMotion - trail.xy - trail.zw * info.x, world - uMotion - trail.xy - trail.zw * info.x) / 3.0);
+    return clamp(core * puffs * fade * condense * 0.92 + plane, 0.0, 1.0) * info.z;
+}
+
+vec4 contrails(vec2 world, float out_, vec4 under) {
+    float a = max(max(contrail(world, uTrail0, uTrailInfo0), contrail(world, uTrail1, uTrailInfo1)),
+        contrail(world, uTrail2, uTrailInfo2));
+    if (a <= 0.0) return under;
+    return vec4(uLit * a, a) + under * (1.0 - a);
 }
 
 void main() {
@@ -168,33 +316,34 @@ void main() {
     if (uClouds > 0.5) {
         // The shadows on the ground, outdoors only: the same clouds moved away from the sun.
         if (uShadow.z > 0.0) {
-            float shade = cover(density(world - uShadow.xy)) * uShadow.z * out_;
+            vec2 shadowAt = world - uShadow.xy;
+            float caster = uCumulus > 0.5 ? smoothstep(0.2, 0.75, thickness(shadowAt)) : cover(density(shadowAt));
+            float shade = caster * uShadow.z * out_;
             color = vec4(0.0, 0.0, 0.0, shade) + color * (1.0 - shade);
         }
-        float d = density(world);
-        float body = cover(d);
-        if (body > 0.0) {
-            // Lit from the north-west, as the map: a swelling is bright where the density rises away from the light,
-            // dark where it falls away from it; and a whole cloud is darker on its far side (its own thickness).
-            vec2 probe = vec2(5.0, 0.0);
-            vec2 slope = vec2(density(world + probe.xy) - d, density(world + probe.yx) - d) / 5.0;
-            float facing = dot(slope, vec2(0.7071)) * 40.0;
-            vec2 reach = vec2(${(SHADE_REACH * Math.SQRT1_2).toFixed(2)});
-            float far = thickness(world) - thickness(world - reach);
-            float light = clamp(0.55 + facing - far * 1.2 + (d - 0.3) * 0.2, 0.0, 1.0);
-            vec3 tone = light < 0.5 ? mix(uShade, uMid, light * 2.0) : mix(uMid, uLit, light * 2.0 - 1.0);
-            // A rim lighter than the body, as the sun shines through the edge of a cumulus.
-            float rim = 1.0 - smoothstep(0.22, 0.32, d);
-            tone = mix(tone, uLit, rim * 0.4);
-            float alpha = body * uBody * mix(uOverRoofs, 1.0, out_);
-            color = vec4(tone * alpha, alpha) + color * (1.0 - alpha);
-        }
+        if (uCumulus > 0.5) color = cumulus(world, out_, color);
+        else color = billows(world, out_, color);
     }
+    if (uTrailInfo0.z + uTrailInfo1.z + uTrailInfo2.z > 0.0) color = contrails(world, out_, color);
 
     if (color.a <= 0.002) discard;
     gl_FragColor = color;
 }
 `;
+
+/** Layers of the 3D noise a second: the billows of a cumulus change slowly as it drifts. */
+const CLOUD_EVOLUTION_PER_SECOND = 0.004;
+
+/**
+ * How far the 3D noise of the cumulus has evolved, `seconds` read on the clock of the shaders (shaderSeconds): taken
+ * round NOISE_SIZE layers, where the noise repeats exactly (a layer is 37 texels further along x, and 37 × 256 texels
+ * make whole turns of the texture). Small numbers for the 32 bits of the GPU; it jumps once a day, with that clock.
+ */
+export function cloudEvolution(seconds: number): number {
+    if (!Number.isFinite(seconds)) return 0;
+    const layers = (seconds * CLOUD_EVOLUTION_PER_SECOND) % NOISE_SIZE;
+    return layers < 0 ? layers + NOISE_SIZE : layers;
+}
 
 let layerCount = 0;
 
@@ -209,12 +358,14 @@ export class CloudLayer {
     private maskArea = { x: 0, y: 0, width: 1, height: 1 };
     private puffs: readonly Phaser.GameObjects.Image[] = [];
     private frame: CloudFrame | undefined;
+    private sky: { x: number; y: number } | undefined;
 
     private constructor(
         private readonly scene: Phaser.Scene,
         depth: number,
     ) {
         ensurePuffTexture(scene);
+        ensureNoiseTexture(scene);
         this.shader = scene.add
             .shader(
                 {
@@ -226,7 +377,7 @@ export class CloudLayer {
                 0,
                 1,
                 1,
-                ["__DEFAULT", "__DEFAULT"],
+                ["__DEFAULT", "__DEFAULT", NOISE_TEXTURE],
             )
             .setOrigin(0)
             .setDepth(depth)
@@ -242,6 +393,7 @@ export class CloudLayer {
 
     public draw(frame: CloudFrame): void {
         this.frame = frame;
+        this.sky = frame.sky;
         if (frame.clouds) this.drawThickness(frame, frame.clouds);
         else this.thickness?.clear().fill(0x000000, 1).render();
         if (frame.outdoors) this.updateMask(frame.view, frame.outdoors);
@@ -249,6 +401,15 @@ export class CloudLayer {
             .setPosition(frame.view.x, frame.view.y)
             .setSize(frame.view.width, frame.view.height)
             .setVisible(true);
+    }
+
+    /** Move the cached thickness with the wind between its slower redraws. */
+    public moveSky(sky: { x: number; y: number }): boolean {
+        const previous = this.sky;
+        this.sky = sky;
+        return Boolean(
+            this.frame?.clouds && !this.frame.still && previous && (sky.x !== previous.x || sky.y !== previous.y),
+        );
     }
 
     public hide(): void {
@@ -288,7 +449,8 @@ export class CloudLayer {
             const diameter = (2 * patch.radius) / cell;
             const puff = this.puff(index)
                 .setPosition((patch.x - x) / cell, (patch.y - y) / cell)
-                .setDisplaySize(diameter, diameter)
+                .setDisplaySize(diameter, diameter * (patch.stretch ?? 1))
+                .setRotation(patch.rotation ?? 0)
                 .setAlpha(weight);
             thickness.draw(puff);
         });
@@ -368,7 +530,11 @@ export class CloudLayer {
     }
 
     private bindTextures(): void {
-        this.shader.setTextures([this.thickness?.texture.key ?? "__DEFAULT", this.maskTexture?.key ?? "__DEFAULT"]);
+        this.shader.setTextures([
+            this.thickness?.texture.key ?? "__DEFAULT",
+            this.maskTexture?.key ?? "__DEFAULT",
+            NOISE_TEXTURE,
+        ]);
     }
 
     private setUniforms(setUniform: (name: string, value: unknown) => void): void {
@@ -382,11 +548,13 @@ export class CloudLayer {
         ];
         setUniform("uThickness", 0);
         setUniform("uMask", 1);
+        setUniform("uNoise", 2);
         setUniform("uArea", frame ? area(frame.view) : [0, 0, 1, 1]);
         setUniform("uThicknessArea", area(this.thicknessArea));
         setUniform("uMaskArea", area(this.maskArea));
         setUniform("uAllOutdoor", frame?.outdoors ? 0 : 1);
         setUniform("uClouds", clouds ? 1 : 0);
+        setUniform("uCumulus", clouds?.cumulus ? 1 : 0);
         setUniform("uLit", rgb(clouds?.tones.lit ?? 0xffffff));
         setUniform("uMid", rgb(clouds?.tones.mid ?? 0xffffff));
         setUniform("uShade", rgb(clouds?.tones.shade ?? 0xffffff));
@@ -401,10 +569,25 @@ export class CloudLayer {
                 ? [shaderWrap(frame.sky.x, CLOUD_BILLOW_PERIOD_PX), shaderWrap(frame.sky.y, CLOUD_BILLOW_PERIOD_PX)]
                 : [0, 0],
         );
-        setUniform("uTime", frame?.still ? 0 : shaderSeconds(this.scene.time.now));
+        setUniform(
+            "uMotion",
+            frame && this.sky && !frame.still ? [this.sky.x - frame.sky.x, this.sky.y - frame.sky.y] : [0, 0],
+        );
+        setUniform("uEvolve", frame?.still ? 0 : cloudEvolution(shaderSeconds(this.scene.time.now)));
         const billows = frame?.still ? { first: [0, 0, 0, 0], third: [0, 0] } : billowDrift(this.scene.time.now);
         setUniform("uBillowA", billows.first);
         setUniform("uBillowB", billows.third);
+        for (let index = 0; index < MAX_CONTRAILS; index++) {
+            const trail = frame?.contrails?.at(index);
+            setUniform(
+                `uTrail${index}`,
+                trail ? [trail.x, trail.y, trail.direction.x, trail.direction.y] : [0, 0, 1, 0],
+            );
+            setUniform(
+                `uTrailInfo${index}`,
+                trail ? [trail.length, trail.speed, trail.strength, trail.flying ? 1 : 0] : [0, 1, 0, 0],
+            );
+        }
         const bow = frame?.rainbow;
         setUniform("uRainbow", bow ? [bow.x, bow.y, bow.radius, bow.strength] : [0, 0, 1, 0]);
         setUniform("uRainbowDir", bow ? [bow.direction.x, bow.direction.y] : [0, -1]);
@@ -454,4 +637,28 @@ function ensurePuffTexture(scene: Phaser.Scene): void {
     context.putImageData(pixels, 0, 0);
     texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
     texture.refresh();
+}
+
+/** Random texels for the 3D noise of the clouds: red at random, green the red of the texel 37 further along x, repeated. */
+function ensureNoiseTexture(scene: Phaser.Scene): void {
+    if (scene.textures.exists(NOISE_TEXTURE)) return;
+    const texture = scene.textures.createCanvas(NOISE_TEXTURE, NOISE_SIZE, NOISE_SIZE);
+    if (!texture) return;
+    const context = texture.getContext();
+    const pixels = context.createImageData(NOISE_SIZE, NOISE_SIZE);
+    const red = Array.from({ length: NOISE_SIZE * NOISE_SIZE }, () => Math.floor(Math.random() * 256));
+    for (let y = 0; y < NOISE_SIZE; y++) {
+        for (let x = 0; x < NOISE_SIZE; x++) {
+            const index = (y * NOISE_SIZE + x) * 4;
+            pixels.data[index] = red[y * NOISE_SIZE + x];
+            pixels.data[index + 1] = red[y * NOISE_SIZE + ((x + 37) % NOISE_SIZE)];
+            pixels.data[index + 2] = 0;
+            pixels.data[index + 3] = 255;
+        }
+    }
+    context.putImageData(pixels, 0, 0);
+    // After refresh(): uploading the canvas again puts back the filter of a pixel-art game, and the noise was blocks.
+    texture.refresh();
+    texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
+    texture.setWrap(Phaser.Textures.WrapMode.REPEAT);
 }
