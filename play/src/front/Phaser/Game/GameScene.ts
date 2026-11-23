@@ -2315,8 +2315,7 @@ export class GameScene extends DirtyScene {
             if (wheels === undefined && !takesSteps(character)) return;
             walkers.push({
                 id,
-                x: character.x,
-                y: character.y + CHARACTER_BODY_OFFSET_Y,
+                ...feetOf(character),
                 running: character.isRunning(),
                 ...(wheels !== undefined && { wheels }),
             });
@@ -2615,12 +2614,13 @@ export class GameScene extends DirtyScene {
             // Every character drawn as low as the ground (or the water) under it, in a hollow; at its place when the
             // relief is not seen in 3/4.
             const relief = this.reliefSeen();
-            const dropOf = (character: { x: number; y: number; getFloorZ(): number }): number =>
-                projected
+            const dropOf = (character: Character): number => {
+                const feet = feetOf(character);
+                return projected
                     ? avatarDrop(
                           relief,
-                          character,
-                          waterDepthAtPoint((x, y) => this.seenDepthAt(x, y, time), character.x, character.y),
+                          feet,
+                          waterDepthAtPoint((x, y) => this.seenDepthAt(x, y, time), feet.x, feet.y),
                           character.getFloorZ(),
                           false,
                           // A bridge is a raised floor: who walks on its deck is on a floor (no drop), who is
@@ -2628,6 +2628,7 @@ export class GameScene extends DirtyScene {
                           false,
                       )
                     : 0;
+            };
             if (this.CurrentPlayer) this.CurrentPlayer.setGroundDrop(dropOf(this.CurrentPlayer));
             for (const remote of this.MapPlayersByKey.values()) remote.setGroundDrop(dropOf(remote));
             this.waterFlowView?.update(time);

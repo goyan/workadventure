@@ -1,6 +1,7 @@
 import * as Phaser from "phaser";
 import type { GameScene } from "../Game/GameScene";
 import { TexturesHelper } from "../Helpers/TexturesHelper";
+import { ON_A_FLOOR } from "../Game/Terrain/AvatarDrop";
 
 const SMOKE_TEXTURE_KEY = "run-smoke-puff";
 const SMOKE_RADIUS = 10;
@@ -29,7 +30,7 @@ export class RunSmokeTrail {
      * Leaves a puff at the feet position, pushed away from the movement direction (dirX, dirY).
      * Does nothing if the last puff is too recent.
      */
-    public emit(feetX: number, feetY: number, dirX: number, dirY: number, depth: number): void {
+    public emit(feetX: number, feetY: number, dirX: number, dirY: number, depth: number, floorZ: number): void {
         const now = this.scene.time.now;
         if (now - this.lastPuffTime < PUFF_INTERVAL) {
             return;
@@ -42,12 +43,11 @@ export class RunSmokeTrail {
         }
         const jitter = () => Phaser.Math.FloatBetween(-5, 5);
         for (let i = 0; i < PUFFS_PER_EMISSION; i++) {
+            const x = feetX - (dirX / length) * PUFF_BEHIND_DISTANCE + jitter();
+            const y = feetY - (dirY / length) * PUFF_BEHIND_DISTANCE + jitter();
+            const drop = floorZ < ON_A_FLOOR ? this.scene.groundDropAt(x, y) : 0;
             const puff = this.scene.add
-                .image(
-                    feetX - (dirX / length) * PUFF_BEHIND_DISTANCE + jitter(),
-                    feetY - (dirY / length) * PUFF_BEHIND_DISTANCE + jitter(),
-                    SMOKE_TEXTURE_KEY,
-                )
+                .image(x, y + drop, SMOKE_TEXTURE_KEY)
                 .setDepth(depth)
                 .setAlpha(0.75)
                 .setScale(Phaser.Math.FloatBetween(0.9, 1.3));
