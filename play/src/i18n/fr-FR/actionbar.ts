@@ -105,7 +105,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
     fastWater: {
         label: "Eau rapide",
         switch: "Eau rapide : l'eau du relief 60 fois plus vite, pour toi seul",
-        hint: "La pluie, les sources et la neige arrivent 60 fois plus vite que dans la réalité, et l'eau coule aussi vite que ton ordinateur le permet. C'est ton eau à toi : les autres voient l'eau partagée, et une goutte au-dessus de ton avatar. Elle n'est pas enregistrée : elle repart de l'eau partagée à chaque connexion, quand tu reviens sur l'onglet, et avec « Resynchroniser ». Les catastrophes de la salle n'atteignent pas cette eau.",
+        hint: "La pluie, les sources et la neige arrivent 60 fois plus vite que dans la réalité, et l'eau coule aussi vite que ton ordinateur le permet. C'est ton eau à toi : les autres voient l'eau partagée, et une goutte au-dessus de ton avatar. Elle n'est pas enregistrée : elle repart de l'eau partagée à chaque connexion, quand tu reviens sur l'onglet, et avec « Resynchroniser ». Les catastrophes de la salle (comètes, averses, siphons, boules, feu, glace brisée) agissent aussi sur cette eau, comme sur l'eau partagée.",
         capped: "Quand les courants vont moins vite que les apports, l'eau qui coule est plus haute que dans la réalité, d'un facteur (60/k)^0,6 : ×{factor} ici.",
         resync: "Resynchroniser",
         resyncHint: "Repartir de l'eau partagée, celle du serveur",

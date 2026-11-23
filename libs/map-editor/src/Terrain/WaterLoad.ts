@@ -143,6 +143,19 @@ export class WaterLoad {
         return Math.max(this.mean, this.loads.totalMs()) / this.budgetMs;
     }
 
+    /** The time the other waters of the thread take at each step, together, as a mean (ms). */
+    public othersMs(): number {
+        return Math.max(0, this.loads.totalMs() - this.mean);
+    }
+
+    /**
+     * The time all the waters of the thread may take together at a step without anything easing, nor a level of
+     * fineness held back (ms): half the share from which they ease.
+     */
+    public quietMs(): number {
+        return (this.loads.easeAt() / 2) * this.budgetMs;
+    }
+
     /** The time a step of this water takes, as a mean (ms). */
     public meanMs(): number {
         return this.mean;

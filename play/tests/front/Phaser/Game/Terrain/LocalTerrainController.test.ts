@@ -1,4 +1,5 @@
 import type { RealWeatherSlot, WAMFileFormat, WeatherLocation } from "@workadventure/map-editor";
+import { CatastropheKind } from "@workadventure/messages";
 import { describe, expect, it, vi } from "vitest";
 import { LocalTerrainController } from "@wa/front/Phaser/Game/Terrain/LocalTerrainController";
 import type { LocalTerrainPort, LocalTerrainScene } from "@wa/front/Phaser/Game/Terrain/LocalTerrainController";
@@ -253,6 +254,41 @@ describe("LocalTerrainController", () => {
 
         const last = posted.filter((command) => command.kind === "start").at(-1);
         expect(last?.kind === "start" && last.start.water?.depths).toEqual(stateOf(5, 2).depths);
+    });
+
+    it("hands the catastrophes of the room to the local ground, as the server tells them", async () => {
+        const { controller, posted, fastWater } = harness();
+        // A drain already going on when the local ground starts: it is told at the start.
+        controller.fromCatastrophe({
+            id: 4,
+            kind: CatastropheKind.CATASTROPHE_DRAIN,
+            x: 64,
+            y: 32,
+            impactInMs: 5000,
+            radiusTiles: 2,
+            wholeMap: false,
+        });
+        fastWater({ slots: SLOTS });
+        controller.update();
+        await opened();
+        expect(posted).toContainEqual({
+            kind: "catastrophes",
+            downpours: [],
+            drains: [{ id: 4, x: 64, y: 32, radiusTiles: 2 }],
+            balls: [],
+        });
+        // A meteor: it strikes the local water when it lands.
+        controller.fromCatastrophe({
+            id: 5,
+            kind: CatastropheKind.CATASTROPHE_METEOR,
+            x: 10,
+            y: 20,
+            impactInMs: 0,
+            radiusTiles: 3,
+            wholeMap: false,
+        });
+        controller.update();
+        expect(posted).toContainEqual({ kind: "strike", x: 10, y: 20, radiusTiles: 3 });
     });
 
     it("keeps the ground of the server when the local one cannot start", async () => {

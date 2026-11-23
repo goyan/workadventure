@@ -2481,12 +2481,44 @@ ne l'est pas).
   (`LocalTerrainSimulation`), sans changement de comportement : `GroundSimulation.test.ts` compare, sur 400 pas
   avec neige, comète et boule de feu, les états dits par un sol câblé à la main et par `GroundSimulation` (mêmes
   octets).
+- **La vie aquatique relit l'eau moins cher** (`Life/WaterBodies.ts`, `Life/LandPlaces.ts`, `Terrain/CellMask.ts`,
+  `AquaticLifeManager`). Fil de calcul allumé, ce qui tenait encore le fil des salles était la vie aquatique : deux
+  fois par seconde elle relisait toute l'eau (étendues d'eau un pas sur deux, terres toutes les 5 s), 14 ms en
+  moyenne et jusqu'à 57 ms par pas sur la carte d'entrée inondée, assez pour faire à elle seule le 99e centile du
+  retard de la boucle. Quatre changements, à résultat identique : les cellules des piscines et les tuiles sous les
+  ponts se demandent à un masque d'octets (`cellMaskOf`) au lieu d'une clé de texte fabriquée par cellule ;
+  `waterBodiesOf` lit les cellules telles qu'elles sont tenues (`WaterView.cells`) au lieu de demander chaque
+  voisine ; `landPlacesOf` demande chaque cellule une fois ; les murs, les arbres et les ponts de la carte ne sont
+  relus qu'à un changement de carte (`mapChanged`), plus à chaque pas (ils parcouraient tous les objets de la carte :
+  3 ms par pas). Mesuré sur la carte d'entrée inondée (Mac très chargé) : pas de vie 14,8 → 3,2 ms en moyenne,
+  maximum 57 → 15 ms ; un pas ordinaire dure 1 à 2 ms, il reste un pas de 7 à 16 ms toutes les 5 s (relecture des
+  terres). `WaterBodiesIdentity.test.ts` garde l'ancienne lecture comme référence : mêmes étendues, mêmes réponses
+  cellule par cellule, mêmes tirages, mêmes poissons (population comparée à chaque état) le long d'une crue qui
+  monte et redescend avec lac, étang, chenal, piscine, mur et porte qui se ferme et s'ouvre, sur la grille et sur
+  un instantané ; mêmes terres avec murs et pont.
+- **La vie ne relit ses lieux que quand un seuil est franchi** (`WaterView.crossings`, `WaterGrid.crossings`,
+  `AquaticLifeManager`). La vie relisait ses étendues d'eau (au plus une fois par seconde) et ses terres (toutes les
+  5 s) dès que l'eau avait bougé, donc toujours. Or ce qu'elle lit ne dépend que de trois profondeurs
+  (`LIFE_DEPTHS_PX` : le film de 2 px où l'on boit et où le sol est sec, les 8 px d'un poisson, les 16 px d'un
+  dauphin et du gué) et des portes. L'eau tient deux compteurs qui ne montent que lorsqu'une cellule franchit l'une
+  de ces profondeurs (`swim` : 8 ou 16 px, ou une porte ; `land` : 2 ou 16 px), comparés quand on les demande
+  (dans le fil des salles) ou publiés avec l'instantané (fil de calcul). La vie garde ses lieux tant que le
+  compteur qui les concerne n'a pas bougé : elle aurait relu les mêmes. **Résultat identique**, vérifié par
+  `AquaticLifeManagerCrossings.test.ts` : trois vies sur la même eau (relecture à chaque changement comme avant,
+  compteurs sur la grille, compteurs sur un instantané) disent et sauvegardent la même chose et tiennent les
+  mêmes lieux à chaque pas, le long d'une crue, puis d'une nappe qui franchit un seuil à la fois, puis d'une
+  porte qui coupe le lac sans qu'aucune profondeur bouge ; cinq mutations (un seuil ou la porte oubliés) font
+  chacune échouer le test. **Gain mesuré** : sur une eau immobile, plus aucune relecture. **Sur la carte d'entrée
+  inondée, aucun** : tant que l'eau coule, des nappes minces franchissent un seuil quelque part à chaque seconde,
+  même 60 s après l'arrêt des sources (30 relectures d'étendues et 6 de terres en 30 s, comme avant) ; les pas
+  de 10 à 15 ms toutes les 5 s restent. Pour une eau qui coule, la suite est de calculer ces lieux dans le fil de
+  calcul et de les publier.
 - **Catastrophes dans le sol d'un joueur** (`LocalTerrainSimulation`, `LocalTerrainWorker`). Le sol d'un joueur
   (météo d'un lieu choisi) ignorait les catastrophes de la salle : il les voyait sans que son eau en soit touchée.
   Il sait maintenant les recevoir, par le sol commun : `setCatastrophes` (averses, drains, boules du moment, qui
   agissent à chaque pas de son eau), `strike`, `burn`, `shatter`, `soak`, `ignite`, et les commandes du même nom
-  dans le protocole de son worker (`LocalTerrainCommand`). **Rien ne les lui envoie encore** : le contrôleur et la
-  scène (`LocalTerrainController`, `GameScene`) restent à brancher ; d'ici là son comportement est inchangé.
+  dans le protocole de son worker (`LocalTerrainCommand`). Le contrôleur les lui envoie depuis la PR suivante
+  (`LocalCatastropheRelay`, voir « Eau rapide »).
 - **Façade du sol dans `back`** (`back/src/Model/Ground/RoomGround.ts`, `InlineRoomGround.ts`, PR 2). `GameRoom`
   ne tient plus `TerrainWaterManager` et `MeadowManager` : il parle à un `RoomGround` (démarrer l'eau, démarrer la
   prairie, arrêter, carte changée ; comète, boule de feu, glace brisée, averse qui mouille, feu posé ; niveau d'une
@@ -3342,6 +3374,15 @@ qu'elle ne pouvait couler, et le modèle était faussé (crues trop hautes, flot
   inchangées (k = 1 au temps réel).
 - Le rattrapage d'une salle vide garde la vitesse de la carte en un bloc sans inertie, comme avant.
 
+
+**Partage du fil** (après #497, `WaterLoads`) : à côté d'autres eaux sur son fil, une salle accélérée compte son pas
+réel entier dans la somme du fil. Elle n'accélère que dans ce que les autres lui laissent sous le seuil de retour de
+la finesse, soit la moitié du seuil d'allègement (25 ms sur le fil des salles) : `WaterLoad.quietMs() - othersMs()`.
+Si les autres tiennent déjà le fil, elle reste au temps réel, et elle ne fait jamais alléger les autres. Seule sur
+son fil (une salle seule, le worker du navigateur), elle garde son budget, et sa finesse suit un pas de temps de
+carte comme avant. Preuve : `libs/map-editor/tests/WaterPaceThread.test.ts`. Une salle à 20 ms par pas ne laisse
+que deux pas de 2 ms à la salle accélérée, et une salle à 40 ms ne lui en laisse aucun ; la première n'est jamais
+allégée.
 ## Eau rapide, pour soi seul (« Réglages → Ambiance »)
 
 Un interrupteur personnel, mémorisé dans le navigateur comme Basique (`fastWaterStore`, clé `fastWater`) : l'eau du
@@ -3363,7 +3404,8 @@ relief de ce joueur va 60 fois plus vite, sous la météo de la carte, ou sous c
 - **Coupure** : l'eau glisse en 1 s vers l'eau du serveur, et la barre affiche « Retour à l'eau partagée ».
   Avec une ville suivie, le sol local continue, au temps de la carte.
 - **Serveur** : rien ne lui est envoyé, sauf le symbole de perception (`water`). Les catastrophes de la salle
-  n'atteignent pas cette eau, ce que l'aide dit. Les conditions réglées à la main dans la salle (Catastrophe → Météo)
+  agissent aussi sur cette eau (`LocalCatastropheRelay` : la comète frappe et la boule de feu brûle à l'impact, la glace
+  se brise et le feu prend aussitôt, averses, siphons et boules tant que le serveur les dit). Les conditions réglées à la main dans la salle (Catastrophe → Météo)
   ne sont pas suivies par l'air local.
 - **Non vérifié** : aucun rendu vu, aucune mesure dans un navigateur.
 
