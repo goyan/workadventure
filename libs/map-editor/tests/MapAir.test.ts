@@ -133,6 +133,31 @@ describe("the air of a map while a hurricane crosses it (MapAir)", () => {
         expect(air.windAt(3840, 2560)).toBeUndefined();
     }, 30_000);
 
+    it("grows and fades with the storm, as its formula and its low over the water do", () => {
+        /** The strongest wind at 10 m round the eye (m/s) a second after the air starts at `progress` of its crossing. */
+        const strongestAt = (progress: number): number => {
+            const hurricane = { ...crossing(300_000), startedAt: NOW - progress * 300_000 };
+            const { air, clock, step } = mapAir(() => hurricane);
+            step(10);
+            const eye = hurricaneAt(hurricane, clock.now);
+            if (!eye) throw new Error("the hurricane left the map");
+            let strongest = 0;
+            for (let dy = -2 * RMAX_PX; dy <= 2 * RMAX_PX; dy += 64) {
+                for (let dx = -2 * RMAX_PX; dx <= 2 * RMAX_PX; dx += 64) {
+                    const wind = air.windAt(eye.eyeX + dx, eye.eyeY + dy);
+                    if (wind) strongest = Math.max(strongest, Math.hypot(wind.east, wind.north));
+                }
+            }
+            return strongest;
+        };
+        // At 1 % of its crossing the storm is grown by a quarter (its share, 0.26: it grows over the first 3 %); at
+        // 30 %, whole. Its wind goes as the square root of its low: about half (measured 0.45), where it would be
+        // whole if the low of the air did not grow with the storm.
+        const ratio = strongestAt(0.01) / strongestAt(0.3);
+        expect(ratio).toBeGreaterThan(0.3);
+        expect(ratio).toBeLessThan(0.6);
+    }, 30_000);
+
     it("leaves the wind to the formula when its air fails, for that hurricane only", () => {
         const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
         let hurricane: Hurricane | undefined = crossing(300_000);

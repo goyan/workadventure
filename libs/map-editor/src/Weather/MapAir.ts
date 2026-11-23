@@ -1,6 +1,6 @@
 import type { HurricaneAirMessage, SubToPusherRoomMessage } from "@workadventure/messages";
 import type { Hurricane } from "../Catastrophe/Hurricane";
-import { hurricaneHere } from "../Catastrophe/Hurricane";
+import { blendedWind, hurricaneHere } from "../Catastrophe/Hurricane";
 import { AIR_CELL_PX, AIR_DRAG, AIR_STEP_S, AIR_SURFACE_RATIO, AirSimulation } from "./AirSimulation";
 
 /** The wind of the air is told to the room twice a second: every fifth step of the water (ten a second). */
@@ -174,17 +174,20 @@ export class MapAir {
 
     private live(hurricane: Hurricane): void {
         const now = this.setup.now();
-        const room = slabWindOf(this.setup.roomWind());
+        const roomWind = this.setup.roomWind();
+        const room = slabWindOf(roomWind);
         if (!this.air || this.forId !== hurricane.id) {
             const size = this.setup.mapSize();
             if (!size) return;
             const air = new AirSimulation({ ...size, drag: this.setup.surface() });
-            // From the formula of the wind (at 10 m) brought to the slab, the room's wind where it does not blow.
+            // From the formula of the wind (at 10 m) brought to the slab, mixed into the room's as the storm is grown
+            // (its share), the room's wind where it does not blow.
             air.fill((x, y) => {
                 const here = hurricaneHere(hurricane, now, x, y);
                 if (!here) return room;
-                const speed = here.windSpeed / 3.6 / AIR_SURFACE_RATIO;
-                const to = ((here.windFrom + 180) * Math.PI) / 180;
+                const wind = blendedWind(roomWind, here, here.share);
+                const speed = wind.windSpeed / 3.6 / AIR_SURFACE_RATIO;
+                const to = ((wind.windFrom + 180) * Math.PI) / 180;
                 return { east: speed * Math.sin(to), north: speed * Math.cos(to) };
             });
             this.air = air;

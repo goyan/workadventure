@@ -197,7 +197,7 @@ export function world(wam: WAMFileFormat, stored: Record<string, Record<string, 
  */
 export async function byHand(
     inputs: RoomGroundInputs,
-): Promise<RoomGround & { water: TerrainWaterManager; meadow: MeadowManager }> {
+): Promise<RoomGround & { water: TerrainWaterManager; meadow: MeadowManager; air: MapAir }> {
     const water = new TerrainWaterManager(
         inputs.room,
         inputs.rain,
@@ -263,6 +263,7 @@ export async function byHand(
             ),
     });
     water.stepAlong(() => air.step());
+    meadow.airUnder((x, y) => air.windAt(x, y));
     // The snow and the ice go as fast as what comes in to the water, as GroundSimulation wires them.
     meadow.timesWith(() => water.livedTimes().inflow);
     meadow.snowUnder(() => {
@@ -304,6 +305,7 @@ export async function byHand(
     return {
         water,
         meadow,
+        air,
         startWater: () => Promise.resolve(),
         startMeadow: () => Promise.resolve(),
         stop: () => {

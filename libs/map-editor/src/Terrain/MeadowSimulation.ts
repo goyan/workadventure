@@ -129,6 +129,8 @@ export class MeadowSimulation {
     private air: () => PrecipitationAir | undefined = () => undefined;
     /** The hurricane crossing the map, whose rain takes the place of that of the map (none on a ground of one's own). */
     private hurricane: () => Hurricane | undefined = () => undefined;
+    /** The wind at 10 m of the air of a hurricane where it is simulated (m/s, east and north); undefined elsewhere. */
+    private hurricaneAir: (x: number, y: number) => { east: number; north: number } | undefined = () => undefined;
     /** The part of the rain of the map that falls as snow now, in mm of water an hour. */
     private snowRate = 0;
     /** The air over the snow lying on the ground (temperature, humidity, wind): unknown until the room gives it. */
@@ -377,6 +379,27 @@ export class MeadowSimulation {
     /** The catastrophes of the room say which hurricane crosses the map: its rain falls in place of that of the map. */
     public skyUnder(hurricane: () => Hurricane | undefined): void {
         this.hurricane = hurricane;
+    }
+
+    /**
+     * The air of the hurricane, where the server simulates it (MapAir): its wind lays the trees down and pushes the
+     * fires, each where it is, in place of the formula of the hurricane and of the one wind of the room.
+     */
+    public airUnder(air: (x: number, y: number) => { east: number; north: number } | undefined): void {
+        this.hurricaneAir = air;
+    }
+
+    /** The wind of the air at a point (km/h at 10 m, where it comes from), while it is simulated; undefined otherwise. */
+    private airWind(): ((x: number, y: number) => { speed: number; from: number } | undefined) | undefined {
+        const air = this.hurricaneAir;
+        const windOf = (x: number, y: number): { speed: number; from: number } | undefined => {
+            const wind = air(x, y);
+            if (!wind) return undefined;
+            const from = (Math.atan2(wind.east, wind.north) * 180) / Math.PI + 180;
+            return { speed: Math.hypot(wind.east, wind.north) * 3.6, from: ((from % 360) + 360) % 360 };
+        };
+        // Simulated everywhere or nowhere: asked once.
+        return windOf(0, 0) ? windOf : undefined;
     }
 
     /** The catastrophes of the room say which masses of cold air its players hold. */
@@ -706,6 +729,8 @@ export class MeadowSimulation {
         }
         this.cleared = false;
         const weather = this.fireNow();
+        // Under a hurricane whose air the server simulates, the wind of each place: it pushes the fires there.
+        const airWind = replaying ? undefined : this.airWind();
         const thawed = meadow.step({
             seconds: seconds,
             rainMmPerHour: this.rainRate,
@@ -718,6 +743,7 @@ export class MeadowSimulation {
             fireDanger: weather.danger,
             windFrom: weather.windFrom,
             windSpeed: weather.windSpeed,
+            ...(airWind ? { windAt: airWind } : {}),
             random: replaying ? NO_LUCK : this.random,
             soilFrost: this.frost,
             waterAt,
@@ -747,7 +773,11 @@ export class MeadowSimulation {
             strongWind: stormy || roomGust >= TREE_FALL_GUST_KMH,
             // The trees it laid down lie until it is over.
             stormy,
+            ...(airWind ? { fireWindAt: airWind } : {}),
             windAt: (x, y) => {
+                // The gusts of the air where it is simulated; of the formula of the hurricane otherwise.
+                const air = airWind?.(x, y);
+                if (air) return { gust: air.speed * HURRICANE_GUST_FACTOR, from: air.from };
                 const here = hurricaneHere(crossing, at, x, y);
                 return here
                     ? { gust: here.gust * Math.min(1, Math.max(0, here.share)), from: here.windFrom }

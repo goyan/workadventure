@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { HURRICANE_RMAX_PX, hurricaneHere } from "@workadventure/map-editor";
+import { HURRICANE_GUST_FACTOR, HURRICANE_RMAX_PX, hurricaneHere, TREE_FALL_GUST_KMH } from "@workadventure/map-editor";
 import type { Hurricane } from "@workadventure/map-editor";
 import { InlineRoomGround } from "../src/Model/Ground/InlineRoomGround";
 import type { RoomGround } from "../src/Model/Ground/RoomGround";
@@ -77,20 +77,37 @@ describe("the ground of a room behind its door (RoomGround)", () => {
     it("lays down each tree the way the wind blows at that tree", async () => {
         const hand = world(groundWam());
         const reference = await byHand(hand.inputs);
+        // The wind of the air of the hurricane at the foot of each tree, after each step of the air (the meadow reads
+        // it between two): where it comes from (degrees) and its gusts (km/h).
+        const feet = { "oak-west": { x: 40, y: 100 }, "oak-south-east": { x: 700, y: 700 } };
+        const blew: Record<string, { from: number; gust: number }[]> = { "oak-west": [], "oak-south-east": [] };
+        reference.water.stepAlong(() => {
+            for (const [id, foot] of Object.entries(feet)) {
+                const wind = reference.air.windAt(foot.x, foot.y);
+                if (!wind) continue;
+                const from = ((((Math.atan2(wind.east, wind.north) * 180) / Math.PI + 180) % 360) + 360) % 360;
+                blew[id].push({ from, gust: Math.hypot(wind.east, wind.north) * 3.6 * HURRICANE_GUST_FACTOR });
+            }
+        });
         await live(reference, hand.state);
         reference.stop();
         const trees = reference.treeSnapshot()?.trees ?? [];
-        // Both trees stood in gusts over 130 km/h while the hurricane blew, each from where the wind came at its
-        // foot (hurricaneHere): from 57 to 58 degrees at the tree west of the lake (40, 100), from 122 to 127 degrees
-        // at the one of the south-east corner (700, 700). Each lies its own way, still lying a minute later.
-        const west = trees.find((tree) => tree.id === "oak-west");
-        expect(west).toMatchObject({ fire: 0, damage: 16 });
-        expect(west?.fallen).toBeGreaterThanOrEqual(57 + 1);
-        expect(west?.fallen).toBeLessThanOrEqual(58 + 1);
-        const southEast = trees.find((tree) => tree.id === "oak-south-east");
-        expect(southEast).toMatchObject({ fire: 0, damage: 16 });
-        expect(southEast?.fallen).toBeGreaterThanOrEqual(122 + 1);
-        expect(southEast?.fallen).toBeLessThanOrEqual(127 + 1);
+        // Both trees stood in gusts over 130 km/h while the hurricane blew, and each lies the way the wind of the air
+        // blew at its foot then (its own way: the trees are on either side of the track of the eye), still lying a
+        // minute later. Laid by the formula of the hurricane, they lay from 57 and 122 to 127 degrees; by its air,
+        // turned by its inflow and the wind of the room, from about 98 at the tree west of the lake.
+        for (const id of ["oak-west", "oak-south-east"]) {
+            const tree = trees.find((told) => told.id === id);
+            expect(tree, id).toMatchObject({ fire: 0, damage: 16 });
+            const fallen = (tree?.fallen ?? 0) - 1;
+            expect(
+                blew[id].some((wind) => Math.round(wind.from) % 360 === fallen && wind.gust >= TREE_FALL_GUST_KMH),
+                `${id} fallen from ${fallen}`,
+            ).toBe(true);
+        }
+        const west = trees.find((told) => told.id === "oak-west")?.fallen ?? 0;
+        const southEast = trees.find((told) => told.id === "oak-south-east")?.fallen ?? 0;
+        expect(Math.abs(west - southEast)).toBeGreaterThan(20);
     }, 60_000);
 
     it("rains on the water at the real rate of a hurricane, and not at all in its eye", async () => {

@@ -82,6 +82,11 @@ export interface TreeFireStepInput {
      * down in step).
      */
     windAt?: (x: number, y: number) => { gust: number; from: number } | undefined;
+    /**
+     * The wind at a point of the map (pixels) that pushes a fire, where it differs from place to place (the air of a
+     * hurricane): in place of windFrom and windSpeed at each tree on fire. Absent: the one wind of the room.
+     */
+    fireWindAt?: (x: number, y: number) => { speed: number; from: number } | undefined;
     /** False when no wind anywhere can lay a tree down: the wind at the trees is not looked at. */
     strongWind?: boolean;
     /**
@@ -384,13 +389,19 @@ export class TreeFire {
             tree.fire = Math.min(1, fire);
             if (tree.fire < TREE_FULL_FIRE) continue;
             ground.ignite(tree.tileX, tree.tileY, 1);
+            // The wind where this tree burns, where it differs from place to place.
+            const local = input.fireWindAt?.(tree.x, tree.y);
+            const localFrom = local ? (local.from * Math.PI) / 180 : from;
+            const pushX = local ? -Math.sin(localFrom) : windX;
+            const pushY = local ? Math.cos(localFrom) : windY;
+            const pushSpeed = local ? Math.max(0, local.speed) : speed;
             for (const other of this.treesNear(tree.x, tree.y, NEIGHBOUR_TILES * TILE_PX)) {
                 if (other === tree || other.fire > 0 || other.damage > 0) continue;
                 const far = Math.hypot(other.x - tree.x, other.y - tree.y);
-                const along = far === 0 ? 0 : ((other.x - tree.x) * windX + (other.y - tree.y) * windY) / far;
+                const along = far === 0 ? 0 : ((other.x - tree.x) * pushX + (other.y - tree.y) * pushY) / far;
                 const push = Math.min(
                     NEIGHBOUR_WIND_BOUNDS[1],
-                    Math.max(NEIGHBOUR_WIND_BOUNDS[0], fireWindPush(along, speed)),
+                    Math.max(NEIGHBOUR_WIND_BOUNDS[0], fireWindPush(along, pushSpeed)),
                 );
                 other.gained += (seconds / NEIGHBOUR_HEAT_SECONDS) * push;
             }
@@ -400,7 +411,7 @@ export class TreeFire {
                 random() < (EMBER_CHANCE * seconds) / EMBER_STEP_SECONDS
             ) {
                 tree.embers++;
-                embers.push(this.ember(tree, speed, windX, windY, seconds, random));
+                embers.push(this.ember(tree, pushSpeed, pushX, pushY, seconds, random));
             }
         }
 

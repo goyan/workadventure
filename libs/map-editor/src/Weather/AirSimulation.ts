@@ -224,9 +224,12 @@ export class AirSimulation {
         const share = storm?.share ?? 0;
         const spin = forcing.hurricane?.southern ? -1 : 1;
         const f = AIR_CORIOLIS * spin;
-        // The low: Holland in pressure, p = pc + Δp exp(−(R/r)^B); its force per kilogram, towards the eye.
+        // The low: Holland in pressure, p = pc + Δp exp(−(R/r)^B); its force per kilogram, towards the eye. It deepens
+        // and fills with the storm (its share), as the low the water feels (hurricanePressure).
         const dropOverRho =
-            storm && forcing.hurricane ? hurricanePressureDrop(forcing.hurricane.category) / AIR_DENSITY : 0;
+            storm && forcing.hurricane
+                ? (hurricanePressureDrop(forcing.hurricane.category) * Math.max(0, storm.share)) / AIR_DENSITY
+                : 0;
         const b = HURRICANE_HOLLAND_B;
         const rb = Math.pow(HURRICANE_RMAX_M, b);
         const cell = AIR_CELL_M;
