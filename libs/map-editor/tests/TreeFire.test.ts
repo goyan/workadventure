@@ -9,6 +9,8 @@ import {
 } from "../src/Terrain/TreeFire";
 import type { TreeFireStepInput, TreeGround } from "../src/Terrain/TreeFire";
 import { TILE_PX } from "../src/types";
+import { HURRICANE_RMAX_PX, hurricaneHere } from "../src/Catastrophe/Hurricane";
+import type { Hurricane } from "../src/Catastrophe/Hurricane";
 import type { WAMFileFormat } from "../src/types";
 
 const STEP = 2;
@@ -535,4 +537,56 @@ describe("a tree the wind lays down", () => {
         });
         expect(asked).toBe(0);
     });
+});
+
+describe("the trees a hurricane lays down round its eye", () => {
+    const EYE = { x: 4000, y: 4000 };
+    /** A hurricane whose eye stays put over EYE (from and to the same point), at the middle of its passage. */
+    const still = (southern: boolean): Hurricane => ({
+        id: 1,
+        category: 5,
+        durationMs: 600_000,
+        heading: 0,
+        southern,
+        startedAt: 0,
+        fromX: EYE.x,
+        fromY: EYE.y,
+        toX: EYE.x,
+        toY: EYE.y,
+        anchorX: EYE.x,
+        anchorY: EYE.y,
+    });
+    /** Four trees at the radius of the strongest winds: east, north, west and south of the eye. */
+    const around = [
+        { id: "east", x: EYE.x + HURRICANE_RMAX_PX, y: EYE.y, out: 90 },
+        { id: "north", x: EYE.x, y: EYE.y - HURRICANE_RMAX_PX, out: 0 },
+        { id: "west", x: EYE.x - HURRICANE_RMAX_PX, y: EYE.y, out: 270 },
+        { id: "south", x: EYE.x, y: EYE.y + HURRICANE_RMAX_PX, out: 180 },
+    ];
+
+    for (const southern of [false, true]) {
+        it(`lies across the radius, turned the way the storm turns (${southern ? "south" : "north"})`, () => {
+            const hurricane = still(southern);
+            const fire = new TreeFire(
+                around.map(({ id, x, y }) => ({ id, x, y })),
+                ground().meadow,
+            );
+            run(fire, 4, {
+                ...calm,
+                windAt: (x, y) => {
+                    const here = hurricaneHere(hurricane, 300_000, x, y);
+                    return here && { gust: here.gust * here.share, from: here.windFrom };
+                },
+            });
+            for (const tree of around) {
+                const fallenFrom = fire.stateOf(tree.id).fallenFrom;
+                expect(fallenFrom, tree.id).toBeDefined();
+                // Where it lies, from the way out from the eye: a quarter turn the way the storm turns (anticlockwise
+                // in the north: 270 on the compass, clockwise in the south: 90), within 25 degrees.
+                const toward = ((fallenFrom ?? 0) + 180) % 360;
+                const across = (toward - tree.out + 360) % 360;
+                expect(Math.abs(across - (southern ? 90 : 270)), tree.id).toBeLessThanOrEqual(25);
+            }
+        });
+    }
 });
