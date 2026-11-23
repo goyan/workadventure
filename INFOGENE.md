@@ -2426,8 +2426,20 @@ référence et le repli) et en C compilé en WebAssembly. **Éteint par défaut*
 
 - **Mesure** (carte d'Antoine inondée, 480 × 320, finesse 3, médiane de 300 pas, trois passes alternées) : un pas
   de la grille 10,5 → 6,6 ms (×1,6) ; les passes seules 9,7 → 5,8 ms (×1,67). `-O3` et le SIMD n'apportent rien.
-- **Mémoire** : les tableaux que le noyau lit et écrit sont découpés dans la mémoire WebAssembly de la grille,
-  dimensionnée une fois ; le reste du code les lit comme des `Float32Array` ordinaires, sans copie.
+- **Mémoire** : le noyau compilé EST l'allocateur des tableaux de sa grille (`WaterArrays`) : ils sont découpés
+  dans sa mémoire WebAssembly, faite une fois au premier tableau ; le reste du code les lit comme des
+  `Float32Array` ordinaires, sans copie. `setWaterKernel(noyau, partagé)` choisit où les grilles d'un fil gardent
+  leurs tableaux.
+- **Avec les bandes** (`GROUND_BANDS`) : la mémoire de la grille est partagée, elle part avec ses tableaux vers
+  les fils d'appoint, qui y chargent chacun leur propre instance du module et appellent les mêmes passes sur
+  leurs tranches de lignes (`InertiaMove.compiled`). Le module est construit deux fois du même source, pour une
+  mémoire propre et pour une mémoire partagée. Chaque fil a sa pile à lui dans cette mémoire (le pointeur de pile
+  du module est réglé par instance), et le script de construction refuse un noyau qui aurait des données ou des
+  variables globales : rien du module n'est partagé à l'insu des fils.
+- **Mesure du pas entier dans le montage du fil de calcul** (carte d'Antoine inondée, apports, passes et envoi
+  compris, médiane de 300 pas, deux passes alternées, machine chargée à 10) : TypeScript 11,5 ms sur une bande et
+  7,0 ms sur deux ; noyau compilé 6,5 ms sur une bande et 4,0 ms sur deux. Processeur consommé par pas, tous fils
+  compris : 11,9 et 12,8 ms en TypeScript, 6,9 et 7,5 ms avec le noyau compilé. Même eau dans les quatre cas.
 - **Mêmes bits** : doubles entre la lecture et l'écriture d'un flottant simple, opérations dans l'ordre du
   TypeScript, `f64.max`/`f64.min` de WebAssembly (qui traitent NaN et les deux zéros comme JavaScript), table des
   puissances calculée par le TypeScript, ni `-ffast-math` ni contraction. Juge : `tests/WaterKernelWasm.test.ts`
@@ -2436,15 +2448,15 @@ référence et le repli) et en C compilé en WebAssembly. **Éteint par défaut*
 - **Construction** : `libs/map-editor/kernel/build.sh` (Docker seul : `clang` 19 de Debian 13), binaire de 3,9 Ko
   commité en base64 dans `WaterKernelWasm.generated.ts` avec l'empreinte de son source. Le job « Noyau de l'eau
   reconstruit » de `pr-checks` le reconstruit et compare, hors du contrôle exigé.
-- **Pour la suite** : le noyau n'a pas d'état et chaque passe prend une plage de lignes ; relié avec
-  `--shared-memory`, plusieurs fils pourront l'appeler sur la même mémoire (essayé en compilant, pas branché).
-  Si le chargement échoue, la grille calcule en TypeScript, la même eau.
+- **Repli** : si le chargement échoue, la grille calcule en TypeScript, la même eau, et le journal dit pourquoi.
 
 **Où une grille d'eau garde ses tableaux** (`Terrain/WaterArrays.ts`). Les tableaux que les quatre passes lisent et
 écrivent (profondeurs, sol, niveau de débordement, frottement, creux, côtés fermés, flux, ce que chaque cellule peut
 donner, vitesses, eau perdue par ligne) sont demandés à un allocateur `WaterArrays` : mémoire ordinaire par défaut,
 comme avant ; mémoire partagée entre fils (`sharedWaterArrays`, un `SharedArrayBuffer` par tableau) quand on le
-demande, pour la grille (dernier paramètre de `WaterGrid`) ou pour toutes celles du fil (`setWaterArrays`). C'est la
+demande, pour la grille (dernier paramètre de `WaterGrid`) ou pour toutes celles du fil (`setWaterArrays`). On peut
+aussi donner une fabrique `(cellules, lignes) => WaterArrays`, appelée une fois par grille avec sa taille : pour une
+mémoire dimensionnée une fois et qui ne grandit pas (celle d'un noyau compilé). C'est la
 seule façon d'allouer : un découpage du pas sur plusieurs fils, ou un noyau compilé qui garde les tableaux dans sa
 mémoire, en sont d'autres implémentations, et la grille ne sait pas où vivent ses tableaux. Rien ne le demande
 encore : aucun comportement ne change. `WaterFingerprints.test.ts` rejoue ses 19 scénarios en mémoire partagée,

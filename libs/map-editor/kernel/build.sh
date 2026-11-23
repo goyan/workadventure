@@ -14,7 +14,7 @@ set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 out="$here/../src/Terrain/WaterKernelWasm.generated.ts"
 flags="--target=wasm32 -O2 -nostdlib -ffp-contract=off -fno-builtin -mnontrapping-fptoint -Wall -Wextra -Werror"
-link="-Wl,--no-entry -Wl,--import-memory -Wl,--strip-all -Wl,--export=__heap_base"
+link="-Wl,--no-entry -Wl,--import-memory -Wl,--strip-all -Wl,--export=__heap_base -Wl,--export=__stack_pointer"
 shared="-matomics -mbulk-memory -Wl,--shared-memory -Wl,--max-memory=2147483648"
 if [ "${WATER_KERNEL_CLANG:-}" = "1" ]; then
     clang $flags $link -o "$here/water_kernel.wasm" "$here/water_kernel.c"

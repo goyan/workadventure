@@ -122,6 +122,10 @@ describe("the kernel of the water compiled to WebAssembly", () => {
         const memory = kernel.threadMemory();
         if (!memory) throw new Error("no shared memory");
         const kernels = [kernel, WasmWaterKernel.join(memory)];
+        // Each has a stack of its own in that memory: 4 KiB apart, never the same.
+        const stacks = kernels.map((one) => one.stackTop() ?? -1);
+        expect(stacks[0]).toBeGreaterThan(0);
+        expect(Math.abs(stacks[1] - stacks[0])).toBeGreaterThanOrEqual(4096);
         const reference: InertiaMove = { ...figures, ...plain, powers, compiled: undefined };
         const compiled: InertiaMove = { ...figures, ...inMemory, powers: kernel.table(powers), compiled: kernel };
         const same = (pass: string): void => {

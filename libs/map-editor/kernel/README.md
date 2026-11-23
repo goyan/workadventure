@@ -4,6 +4,10 @@
 `../src/Terrain/WaterKernel.ts` (la référence), au bit près. Il est compilé en WebAssembly et commité, en base64, dans
 `../src/Terrain/WaterKernelWasm.generated.ts` : ni l'image de `back` ni Vite n'ont d'étape de compilation.
 
+Il est construit deux fois du même source : pour une mémoire propre à la grille, et pour une mémoire que plusieurs fils
+partagent (les bandes de l'eau). Le noyau ne garde rien à lui dans la mémoire : ni données ni variables globales, et
+chaque fil y a sa propre pile. Le script de construction le vérifie sur les octets produits et échoue sinon.
+
 Après toute modification de `water_kernel.c` :
 
 ```sh

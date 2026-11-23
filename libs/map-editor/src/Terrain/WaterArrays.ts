@@ -31,16 +31,28 @@ export const sharedWaterArrays: WaterArrays = {
     shared: true,
 };
 
-let usual: WaterArrays | (() => WaterArrays) = ordinaryWaterArrays;
-
 /**
- * Where the grids made from now on, on this thread, keep their arrays, unless they are told another place: one
- * place for all, or what makes a place for each grid (a compiled kernel has a memory for each grid, sized for it).
+ * What gives a grid the place of its arrays, once its size is known: `cells` cells in `rows` rows. For a memory that
+ * is sized once and never grows (that of a compiled kernel), which must know how much the grid will ask for before
+ * its first array.
  */
-export function setWaterArrays(arrays: WaterArrays | (() => WaterArrays)): void {
+export type WaterArraysMaker = (cells: number, rows: number) => WaterArrays;
+
+/** A place for the arrays of a grid, or what makes one for its size. */
+export type WaterArraysSource = WaterArrays | WaterArraysMaker;
+
+/** The place of the arrays of a grid of `cells` cells in `rows` rows, from what it was given. */
+export function waterArraysFor(source: WaterArraysSource, cells: number, rows: number): WaterArrays {
+    return typeof source === "function" ? source(cells, rows) : source;
+}
+
+let usual: WaterArraysSource = ordinaryWaterArrays;
+
+/** Where the grids made from now on, on this thread, keep their arrays, unless they are told another place. */
+export function setWaterArrays(arrays: WaterArraysSource): void {
     usual = arrays;
 }
 
-export function waterArrays(): WaterArrays {
-    return typeof usual === "function" ? usual() : usual;
+export function waterArrays(): WaterArraysSource {
+    return usual;
 }

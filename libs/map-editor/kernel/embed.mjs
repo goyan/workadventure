@@ -6,8 +6,43 @@ import { readFileSync, writeFileSync } from "node:fs";
 
 const [source, wasm, shared, out] = process.argv.slice(2);
 const sha = createHash("sha256").update(readFileSync(source)).digest("hex");
+/**
+ * The kernel keeps nothing of its own in the memory: no data, and no global but the pointer of its stack, which
+ * each thread sets on a stack of its own (WaterKernelWasm). Several threads run it on one memory: a datum of the
+ * module there would be shared by all of them without their knowing. Checked on the bytes built.
+ */
+const checkStateless = (file, bytes) => {
+    const sections = [];
+    let at = 8;
+    const leb = () => {
+        let value = 0;
+        let shift = 0;
+        for (;;) {
+            const byte = bytes[at++];
+            value |= (byte & 127) << shift;
+            if (byte < 128) return value >>> 0;
+            shift += 7;
+        }
+    };
+    let globals = 0;
+    while (at < bytes.length) {
+        const id = bytes[at++];
+        const size = leb();
+        if (id === 6) {
+            const from = at;
+            globals = leb();
+            at = from;
+        }
+        sections.push(id);
+        at += size;
+    }
+    if (sections.includes(11) || sections.includes(12)) throw new Error(`${file}: the kernel has data in the memory`);
+    // The pointer of the stack, and where the heap starts (a constant).
+    if (globals > 2) throw new Error(`${file}: the kernel has ${globals} globals, two are expected`);
+};
 const constant = (name, file, what) => {
     const bytes = readFileSync(file);
+    checkStateless(file, bytes);
     const lines = bytes.toString("base64").match(/.{1,100}/g) ?? [];
     return `/** The kernel of the water, compiled to WebAssembly ${what} (${bytes.length} bytes), in base64. */
 // prettier-ignore

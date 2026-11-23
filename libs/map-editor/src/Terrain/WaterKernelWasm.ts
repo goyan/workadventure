@@ -22,10 +22,18 @@ const PAGE_BYTES = 65_536;
 /** The Move of water_kernel.c: its size, and where its figures start (after its three sizes and its arrays). */
 const MOVE_BYTES = 152;
 const MOVE_FIGURES_AT = 72;
-/** What each thread keeps for itself in the memory: a Move, and the place `moved` is written at. */
-const SLOT_BYTES = 168;
+/**
+ * What each thread keeps for itself in the memory: a Move, the place `moved` is written at, and a stack. The
+ * module has one pointer of stack an instance, which starts at the same place for all: each thread sets its own on
+ * its slot, so that no two threads ever share a stack, whatever the compiler puts there.
+ */
+const SLOT_HEAD_BYTES = 168;
+const STACK_BYTES = 4096;
+const SLOT_BYTES = SLOT_HEAD_BYTES + STACK_BYTES;
 /** The most threads that work in one memory: who leads and who follows. */
 const MOST_SLOTS = 64;
+/** The pages kept at the start of the memory for the module and for the slots of the threads. */
+const RESERVED_PAGES = 6;
 /** The arrays of floats and of bytes a grid cuts out of the memory, one cell each (see WaterGrid). */
 const FLOAT_ARRAYS = 12;
 const BYTE_ARRAYS = 2;
@@ -37,6 +45,7 @@ const SHARED_MOST_PAGES = 32_768;
 
 interface KernelExports {
     __heap_base: WebAssembly.Global;
+    __stack_pointer: WebAssembly.Global;
     flux(move: number, rowFrom: number, rowTo: number): void;
     afford(move: number, rowFrom: number, rowTo: number): void;
     scale(move: number, rowFrom: number, rowTo: number): number;
@@ -67,6 +76,8 @@ interface Loaded {
     move: number;
     moved: number;
     movedView: Int32Array;
+    /** Where the stack of this thread starts (it goes down from there, within its slot). */
+    stack: number;
     /** Where the next array is cut. */
     next: number;
     end: number;
@@ -86,8 +97,12 @@ function load(memory: WebAssembly.Memory, shared: boolean): Loaded {
     if (slot >= MOST_SLOTS) throw new Error("too many threads share the memory of a kernel of the water");
     const move = slots + SLOT_BYTES * slot;
     const moved = move + MOVE_BYTES + 8;
-    const next = slots + SLOT_BYTES * MOST_SLOTS;
-    if (next > 2 * PAGE_BYTES) throw new Error("the memory of the kernel is not laid out as expected");
+    if (slots + SLOT_BYTES * MOST_SLOTS > RESERVED_PAGES * PAGE_BYTES) {
+        throw new Error("the memory of the kernel is not laid out as expected");
+    }
+    // The stack of this thread: the end of its slot, going down.
+    const stack = move + SLOT_BYTES;
+    kernel.__stack_pointer.value = stack;
     return {
         memory,
         kernel,
@@ -95,7 +110,8 @@ function load(memory: WebAssembly.Memory, shared: boolean): Loaded {
         move,
         moved,
         movedView: new Int32Array(memory.buffer, moved, 1),
-        next: 2 * PAGE_BYTES,
+        stack,
+        next: RESERVED_PAGES * PAGE_BYTES,
         end: memory.buffer.byteLength,
     };
 }
@@ -131,6 +147,11 @@ export class WasmWaterKernel implements WaterArrays, CompiledPasses {
     /** Whether the compiled passes are to be had: false where the kernel could not be loaded. */
     public ready(): boolean {
         return this.loaded !== undefined && this.loaded !== false;
+    }
+
+    /** Where the stack of this thread starts in the memory: its own, whoever else works there. */
+    public stackTop(): number | undefined {
+        return this.loaded ? this.loaded.stack : undefined;
     }
 
     /** The memory the threads that follow the passes of this grid join; undefined when it is not shared. */
@@ -228,7 +249,11 @@ export class WasmWaterKernel implements WaterArrays, CompiledPasses {
         try {
             // The stack of the module and the slots of the threads, then the tables and the arrays of the grid.
             const bytes =
-                2 * PAGE_BYTES + 4 * MOST_POWERS + 8 * MOST_ROWS + (4 * FLOAT_ARRAYS + BYTE_ARRAYS) * cells + 256;
+                RESERVED_PAGES * PAGE_BYTES +
+                4 * MOST_POWERS +
+                8 * MOST_ROWS +
+                (4 * FLOAT_ARRAYS + BYTE_ARRAYS) * cells +
+                256;
             const pages = Math.ceil(bytes / PAGE_BYTES);
             if (this.shared && pages > SHARED_MOST_PAGES) throw new Error("the grid is too large for a shared memory");
             const memory = new WebAssembly.Memory(
