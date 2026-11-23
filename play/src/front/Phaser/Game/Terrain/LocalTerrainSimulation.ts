@@ -21,6 +21,7 @@ import type {
     SeededMeadow,
     WAMFileFormat,
     WaterGridBounds,
+    WaterKernelKind,
     WaterSettings,
     WeatherLocation,
 } from "@workadventure/map-editor";
@@ -48,6 +49,8 @@ export interface LocalTerrainStart {
     place: WeatherLocation | undefined;
     slots: readonly RealWeatherSlot[];
     fast: boolean;
+    /** What computes the water with inertia (the TypeScript kernel when absent): a setting of the developers. */
+    kernel?: WaterKernelKind;
     water?: { depths: Uint8Array; bounds: WaterGridBounds };
     meadow?: SeededMeadow;
 }

@@ -37,6 +37,7 @@ function move(): InertiaMove {
         damping: 0.02,
         breaking: 4,
         carried: 1,
+        compiled: undefined,
     };
 }
 

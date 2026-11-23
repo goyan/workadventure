@@ -2410,6 +2410,45 @@ est sommée ligne par ligne, puis les lignes dans l'ordre : la somme ne dépend 
 Ce bilan a changé une fois dans ses derniers chiffres (3 pour cent mille milliards au plus) ; l'eau, elle, est
 identique : `WaterFingerprints.test.ts` garde deux empreintes par scénario, celle de l'eau seule (inchangée depuis
 `eb17d9b92`) et celle de tout, réenregistrée pour les huit scénarios qui perdent de l'eau.
+**Noyau de l'eau compilé en WebAssembly** (`libs/map-editor/kernel/water_kernel.c`, `Terrain/WaterKernel.ts`,
+`Terrain/WaterKernelWasm.ts`). Les quatre passes d'un mouvement de l'eau à inertie (flux, ce qu'une cellule peut
+donner, mise à l'échelle, profondeurs) existent deux fois, au bit près : en TypeScript (`WaterKernel.ts`, la
+référence et le repli) et en C compilé en WebAssembly. **Éteint par défaut**, et allumé sans toucher au code :
+
+- **serveur** : variable d'environnement `WATER_KERNEL=wasm` de `back` (`Ground/ServerWaterKernel.ts`). Elle vaut
+  pour le fil des salles et pour les fils de calcul (`GROUND_THREADS`), qui héritent de l'environnement. Le journal
+  le dit au démarrage de la première salle : « The water of the rooms is computed by the WebAssembly kernel », ou
+  « … by the TypeScript kernel », suivi de la raison si le noyau compilé n'a pas pu être chargé ; chaque fil de
+  calcul ajoute sa ligne ;
+- **navigateur** (eau de la météo locale, eau rapide) : `localStorage.setItem("waterKernel", "wasm")` dans la
+  console, puis recharger ; lu au démarrage de l'eau locale, transmis à son worker, qui l'écrit dans la console ;
+- **code** : `setWaterKernel("wasm")` pour les grilles créées ensuite, ou le sixième paramètre de `WaterGrid`.
+
+- **Mesure** (carte d'Antoine inondée, 480 × 320, finesse 3, médiane de 300 pas, trois passes alternées) : un pas
+  de la grille 10,5 → 6,6 ms (×1,6) ; les passes seules 9,7 → 5,8 ms (×1,67). `-O3` et le SIMD n'apportent rien.
+- **Mémoire** : le noyau compilé EST l'allocateur des tableaux de sa grille (`WaterArrays`) : ils sont découpés
+  dans sa mémoire WebAssembly, faite une fois au premier tableau ; le reste du code les lit comme des
+  `Float32Array` ordinaires, sans copie. `setWaterKernel(noyau, partagé)` choisit où les grilles d'un fil gardent
+  leurs tableaux.
+- **Avec les bandes** (`GROUND_BANDS`) : la mémoire de la grille est partagée, elle part avec ses tableaux vers
+  les fils d'appoint, qui y chargent chacun leur propre instance du module et appellent les mêmes passes sur
+  leurs tranches de lignes (`InertiaMove.compiled`). Le module est construit deux fois du même source, pour une
+  mémoire propre et pour une mémoire partagée. Chaque fil a sa pile à lui dans cette mémoire (le pointeur de pile
+  du module est réglé par instance), et le script de construction refuse un noyau qui aurait des données ou des
+  variables globales : rien du module n'est partagé à l'insu des fils.
+- **Mesure du pas entier dans le montage du fil de calcul** (carte d'Antoine inondée, apports, passes et envoi
+  compris, médiane de 300 pas, deux passes alternées, machine chargée à 10) : TypeScript 11,5 ms sur une bande et
+  7,0 ms sur deux ; noyau compilé 6,5 ms sur une bande et 4,0 ms sur deux. Processeur consommé par pas, tous fils
+  compris : 11,9 et 12,8 ms en TypeScript, 6,9 et 7,5 ms avec le noyau compilé. Même eau dans les quatre cas.
+- **Mêmes bits** : doubles entre la lecture et l'écriture d'un flottant simple, opérations dans l'ordre du
+  TypeScript, `f64.max`/`f64.min` de WebAssembly (qui traitent NaN et les deux zéros comme JavaScript), table des
+  puissances calculée par le TypeScript, ni `-ffast-math` ni contraction. Juge : `tests/WaterKernelWasm.test.ts`
+  joue les 19 scénarios et une carte accélérée sur les deux noyaux côte à côte, compare tout à chaque pas, et
+  vérifie les passes par plage de lignes ; il tourne aussi dans les tests de `play`, donc dans la CI de PR.
+- **Construction** : `libs/map-editor/kernel/build.sh` (Docker seul : `clang` 19 de Debian 13), binaire de 3,9 Ko
+  commité en base64 dans `WaterKernelWasm.generated.ts` avec l'empreinte de son source. Le job « Noyau de l'eau
+  reconstruit » de `pr-checks` le reconstruit et compare, hors du contrôle exigé.
+- **Repli** : si le chargement échoue, la grille calcule en TypeScript, la même eau, et le journal dit pourquoi.
 
 **Où une grille d'eau garde ses tableaux** (`Terrain/WaterArrays.ts`). Les tableaux que les quatre passes lisent et
 écrivent (profondeurs, sol, niveau de débordement, frottement, creux, côtés fermés, flux, ce que chaque cellule peut

@@ -131,6 +131,7 @@ import { SwitchTriggerEvaluator } from "./SwitchTriggerEvaluator";
 import { FireConditionsManager } from "./FireConditionsManager";
 import { InlineRoomGround } from "./Ground/InlineRoomGround";
 import { groundThreads } from "./Ground/ServerGroundThreads";
+import "./Ground/ServerWaterKernel";
 import { RemoteRoomGround } from "./Ground/RemoteRoomGround";
 import type { RoomGround, RoomGroundInputs } from "./Ground/RoomGround";
 import { AquaticLifeManager } from "./AquaticLifeManager";

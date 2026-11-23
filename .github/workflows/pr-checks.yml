@@ -135,6 +135,26 @@ jobs:
       - name: Notes à paraître dans « Nouveautés »
         run: node play/scripts/check-release-note.mjs "HEAD^1..HEAD^2"
 
+  # Le noyau de l'eau compilé en WebAssembly est commité (libs/map-editor/src/Terrain/WaterKernelWasm.generated.ts) :
+  # il est reconstruit ici depuis son source C, dans le conteneur Debian du script, et doit redonner les mêmes octets.
+  # Hors du contrôle exigé « Contrôles play » : une mise à jour de clang dans Debian 13 peut changer les octets sans
+  # que personne n'ait rien cassé ; le test `WaterKernelWasm.test.ts` (lancé avec les tests de play) vérifie de son
+  # côté que le binaire commité vient du source commité et donne la même eau que le noyau TypeScript.
+  kernel:
+    name: Noyau de l'eau reconstruit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Reconstruction du noyau
+        run: libs/map-editor/kernel/build.sh
+
+      - name: Mêmes octets que le noyau commité
+        run: git diff --exit-code -- libs/map-editor/src/Terrain/WaterKernelWasm.generated.ts
+
   # Seul contrôle exigé par la protection de `infogene` : vert seulement si les quatre jobs le sont (la note de
   # nouveautés ne se contrôle que sur une pull request : ignorée après fusion).
   checks:

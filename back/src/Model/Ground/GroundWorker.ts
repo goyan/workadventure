@@ -1,10 +1,11 @@
 import { parentPort, workerData } from "node:worker_threads";
 import {
-    setWaterArrays,
+    setWaterKernel,
     setWaterPassRunner,
-    sharedWaterArrays,
     threadWaterLoads,
     WaterBandsLead,
+    waterKernelInUse,
+    waterKernelNamed,
 } from "@workadventure/map-editor";
 import { GroundBands } from "./GroundBands";
 import type { GroundCommand, GroundTold } from "./GroundProtocol";
@@ -69,8 +70,19 @@ if (bands > 1) {
         undefined,
         patient,
     );
-    setWaterArrays(sharedWaterArrays);
     setWaterPassRunner(group);
+}
+// The kernel of the water of the server (ServerWaterKernel), read here from the environment this thread inherits:
+// the variables of the server are checked on its own thread, not here. With bands, the arrays of the grids are in
+// a memory the threads share, whatever computes their passes.
+setWaterKernel(waterKernelNamed(process.env.WATER_KERNEL), bands > 1);
+if (process.env.WATER_KERNEL === "wasm") {
+    const inUse = waterKernelInUse();
+    console.info(
+        inUse.kernel === "wasm"
+            ? "A thread of the ground computes its water with the WebAssembly kernel"
+            : `A thread of the ground computes its water with the TypeScript kernel: the WebAssembly one could not be loaded (${inUse.fallback ?? "unknown"})`,
+    );
 }
 
 const grounds = new Map<number, { ground: HostedGround; last: Promise<void> }>();
