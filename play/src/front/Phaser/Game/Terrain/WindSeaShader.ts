@@ -368,6 +368,36 @@ vec2 gSeaSlope;
 vec3 gSeaWind;
 float gSeaScale;
 
+// Under a hurricane, where a point lies in the frame of its flow, map px at the radius of the strongest winds: along
+// the wind (x) and across it (y), on its streamlines, logarithmic spirals turned in by the inflow
+// (ln r + spin tan(inflow) theta is the same all along one). Twice: with an angle in (-pi, pi] and one in [0, 2 pi),
+// mixed by gFlowMix away from where each wraps, so that no seam shows. Noise laid in it follows the wind round the eye.
+vec2 gFlowA;
+vec2 gFlowB;
+float gFlowMix;
+
+void seaFlowHere(vec2 d, float r) {
+    float theta = atan(-d.y, d.x);
+    float theta2 = theta < 0.0 ? theta + 6.2831853 : theta;
+    float lnr = log(max(r, 1.0) / uHurEye.z);
+    float spin = uHurEye.w;
+    float turnIn = spin * uHurMix.z / uHurMix.y;
+    // Along and across the wind, at the radius of the strongest winds; downwind, the foam drifts.
+    float drift = uSeaDir.w * ${glsl(FOAM_LINE_ALONG_PX)};
+    gFlowA = vec2(spin * theta * uHurEye.z - drift, (lnr + turnIn * theta) * uHurEye.z * uHurMix.y);
+    gFlowB = vec2(spin * theta2 * uHurEye.z - drift, (lnr + turnIn * theta2) * uHurEye.z * uHurMix.y);
+    gFlowMix = smoothstep(1.5707963, 2.8274334, abs(theta));
+}
+
+float seaNoise(vec2 p);
+
+// seaNoise of (across / acrossPx, along / alongPx) + offset in the frame of the flow (seaFlowHere).
+float seaFlowNoise(float acrossPx, float alongPx, vec2 offset) {
+    float a = seaNoise(vec2(gFlowA.y / acrossPx, gFlowA.x / alongPx) + offset);
+    float b = seaNoise(vec2(gFlowB.y / acrossPx, gFlowB.x / alongPx) + offset);
+    return mix(a, b, gFlowMix);
+}
+
 // The wind at a map point: that of the sea (uSeaDir, uSea.x) without a hurricane; under one, its wind there, mixed
 // with that of the map at the ends of its passage, the waves as high as the square of its speed over the wind they
 // are drawn for (none in the eye). The twin of hurricaneHere.
@@ -392,6 +422,7 @@ void seaWindHere(vec2 world) {
     gSeaWind = vec3(speed > 0.0001 ? wind / speed : uSeaDir.xy, speed);
     float ratio = speed / max(uHurMix.w, 0.1);
     gSeaScale = min(1.0, ratio * ratio);
+    seaFlowHere(d, r);
 }
 
 // The slope the light reads: the waves of a few pixels count less in it (LIGHT_FROM_PX).
@@ -468,6 +499,12 @@ float seaNoise(vec2 p) {
 
 // How much higher or lower the waves are drawn by their groups at a map point (groupAt).
 float seaGroup(vec2 p) {
+    // Under a hurricane, groups of waves along its flow round the eye.
+    if (uHurEye.w != 0.0) {
+        return ${glsl(GROUP_LOWEST)} + ${glsl(GROUP_RANGE)}
+            * (0.65 * seaFlowNoise(1.0 / uSeaGroup.y, 1.0 / uSeaGroup.x, vec2(51.0, 0.0))
+                + 0.35 * seaFlowNoise(0.5 / uSeaGroup.y, 0.5 / uSeaGroup.x, vec2(17.0, 3.0)));
+    }
     float along = dot(p, gSeaWind.xy);
     float across = dot(p, vec2(-gSeaWind.y, gSeaWind.x));
     vec2 q = vec2(along * uSeaGroup.x - uSeaGroup.z, across * uSeaGroup.y + 51.0);
@@ -490,7 +527,11 @@ float seaBreaking(vec2 world) {
     float breaking = smoothstep(slope * ${glsl(1 - BREAKING_EDGE)}, slope * ${glsl(1 + BREAKING_EDGE)}, length(gSeaSlope))
         * (gSeaEta >= 0.0 ? 1.0 : 0.0) * front;
     if (breaking <= 0.0) return 0.0;
-    // Along part of the crest only (crestAt).
+    // Along part of the crest only (crestAt); under a hurricane, in the frame of its flow.
+    if (uHurEye.w != 0.0) {
+        return breaking * smoothstep(uSeaGroup.w, uSeaGroup.w + 0.2,
+            seaFlowNoise(${glsl(CREST_ALONG_PX)}, ${glsl(CREST_DOWN_PX)}, vec2(71.0, 13.0)));
+    }
     vec2 crest = vec2(dot(world, vec2(-gSeaWind.y, gSeaWind.x)) / ${glsl(CREST_ALONG_PX)} + 71.0,
         dot(world, gSeaWind.xy) / ${glsl(CREST_DOWN_PX)} + 13.0);
     return breaking * smoothstep(uSeaGroup.w, uSeaGroup.w + 0.2, seaNoise(crest));
@@ -520,8 +561,12 @@ float seaSpume(vec2 world) {
     vec2 heading = gSeaWind.xy;
     float down = dot(world, heading) - uSeaDir.w * ${glsl(FOAM_LINE_ALONG_PX)};
     float side = dot(world, vec2(-heading.y, heading.x));
-    float streaks = 0.6 * seaNoise(vec2(side / ${glsl(SPUME_ACROSS_PX)}, down / ${glsl(SPUME_ALONG_PX)}))
-        + 0.4 * seaNoise(vec2(side / ${glsl(SPUME_ACROSS_PX / 2)} + 5.0, down / ${glsl(SPUME_ALONG_PX / 3)} + 11.0));
+    float streaks = uHurEye.w != 0.0
+        // Under a hurricane, along its flow round the eye.
+        ? 0.6 * seaFlowNoise(${glsl(SPUME_ACROSS_PX)}, ${glsl(SPUME_ALONG_PX)}, vec2(0.0))
+            + 0.4 * seaFlowNoise(${glsl(SPUME_ACROSS_PX / 2)}, ${glsl(SPUME_ALONG_PX / 3)}, vec2(5.0, 11.0))
+        : 0.6 * seaNoise(vec2(side / ${glsl(SPUME_ACROSS_PX)}, down / ${glsl(SPUME_ALONG_PX)}))
+            + 0.4 * seaNoise(vec2(side / ${glsl(SPUME_ACROSS_PX / 2)} + 5.0, down / ${glsl(SPUME_ALONG_PX / 3)} + 11.0));
     // Few streaks at first, then most of the water: between them the white of the sheet itself.
     float cut = mix(0.8, 0.25, share);
     float streak = smoothstep(cut, cut + 0.2, streaks);
@@ -572,12 +617,16 @@ void main() {
     float down = dot(world, heading) - uSeaDir.w * ${glsl(FOAM_LINE_ALONG_PX)};
     float side = dot(world, vec2(-heading.y, heading.x));
     vec2 trail = vec2(side / ${glsl(TRAIL_ACROSS_PX)}, down / ${glsl(TRAIL_DOWN_PX)});
+    // Under a hurricane, its trails and lines follow its flow round the eye (seaFlowNoise).
+    bool flowing = uHurEye.w != 0.0;
     // Where the foam here was a step ago: upwind by the drift.
     vec2 uv = (world - heading * uSeaDir.z * (gSeaWind.z / max(uSea.x, 0.1)) * dt - uFoamBeforeArea.xy)
         / uFoamBeforeArea.zw;
     float kept = 0.0;
     if (uFoamStep.w < 0.5 && uv.x > 0.0 && uv.y > 0.0 && uv.x < 1.0 && uv.y < 1.0) {
-        float life = mix(${glsl(FOAM_LIFE[0])}, ${glsl(FOAM_LIFE[1])}, seaNoise(trail + vec2(29.0, 17.0)));
+        float life = mix(${glsl(FOAM_LIFE[0])}, ${glsl(FOAM_LIFE[1])}, flowing
+            ? seaFlowNoise(${glsl(TRAIL_ACROSS_PX)}, ${glsl(TRAIL_DOWN_PX)}, vec2(29.0, 17.0))
+            : seaNoise(trail + vec2(29.0, 17.0)));
         kept = texture2D(uFoamBefore, uv).r * exp(-dt / (${glsl(FOAM_DECAY_S)} * uFoamLife * life));
         // Rounded at random to the bytes of the picture: no foam stuck at its last step.
         kept += (hashWide(gl_FragCoord.xy + vec2(uFoamStep.y * 7.0, uFoamStep.y * 13.0)) - 0.5) / 255.0;
@@ -588,14 +637,19 @@ void main() {
         seaAmplitudes(seaFetchM(world), depthPx * ${glsl(MAP_PX_METRES)});
         float breaking = seaBreaking(world);
         if (breaking > 0.0) {
-            float width = mix(${glsl(FOAM_LINE_ACROSS_PX[0])}, ${glsl(FOAM_LINE_ACROSS_PX[1])},
-                seaNoise(trail + vec2(13.0, 7.0)));
+            float width = mix(${glsl(FOAM_LINE_ACROSS_PX[0])}, ${glsl(FOAM_LINE_ACROSS_PX[1])}, flowing
+                ? seaFlowNoise(${glsl(TRAIL_ACROSS_PX)}, ${glsl(TRAIL_DOWN_PX)}, vec2(13.0, 7.0))
+                : seaNoise(trail + vec2(13.0, 7.0)));
             float along = down / ${glsl(FOAM_LINE_ALONG_PX)};
             float across = side / width;
-            float lines = 0.65 * seaNoise(vec2(across, along))
-                + 0.35 * seaNoise(vec2(across * 2.0 + 9.0, along * 2.0));
+            float lines = flowing
+                ? 0.65 * seaFlowNoise(width, ${glsl(FOAM_LINE_ALONG_PX)}, vec2(0.0))
+                    + 0.35 * seaFlowNoise(width * 0.5, ${glsl(FOAM_LINE_ALONG_PX / 2)}, vec2(9.0, 0.0))
+                : 0.65 * seaNoise(vec2(across, along)) + 0.35 * seaNoise(vec2(across * 2.0 + 9.0, along * 2.0));
             float cut = ${glsl(FOAM_LINE_CUT)} - uFoamStep.z;
-            float white = mix(${glsl(FOAM_LAID_FAINTEST)}, 1.0, seaNoise(trail + vec2(61.0, 3.0)));
+            float white = mix(${glsl(FOAM_LAID_FAINTEST)}, 1.0, flowing
+                ? seaFlowNoise(${glsl(TRAIL_ACROSS_PX)}, ${glsl(TRAIL_DOWN_PX)}, vec2(61.0, 3.0))
+                : seaNoise(trail + vec2(61.0, 3.0)));
             laid = breaking * white * mix(${glsl(FOAM_OFF_LINE)}, 1.0, smoothstep(cut, cut + 0.15, lines));
         }
     }
