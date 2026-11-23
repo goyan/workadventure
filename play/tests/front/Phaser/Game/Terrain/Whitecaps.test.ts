@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import * as Whitecaps from "../../../../../src/front/Phaser/Game/Terrain/Whitecaps";
 import { whitecapShare, windHeading } from "../../../../../src/front/Phaser/Game/Terrain/Whitecaps";
 
 describe("whitecapShare", () => {
@@ -82,6 +83,44 @@ describe("the whitecaps drawn by the water shader (GroundSplat)", () => {
             }
             expect(broken / cells, `turn ${turn} at ${x0}, ${y0}`).toBeGreaterThan(target * 0.75);
             expect(broken / cells, `turn ${turn} at ${x0}, ${y0}`).toBeLessThan(target * 1.25);
+        }
+    });
+});
+
+describe("the whitecaps in a strong wind, up to a hurricane", () => {
+    const source = readFileSync(
+        resolve(dirname(fileURLToPath(import.meta.url)), "../../../../../src/front/Phaser/Game/Terrain/GroundSplat.ts"),
+        "utf8",
+    );
+    const whitecaps = source.slice(source.indexOf("float whitecapsAt("), source.indexOf("const vec3 SHALLOW"));
+    const kmhs = Array.from({ length: 31 }, (_, at) => at * 5);
+
+    it("never lets every cell break: the grid of the cells would show (the 82 and 138 km/h captures)", () => {
+        // Before, the shader let min(1, share * 10) of the cells break: all of them from about 75 km/h.
+        expect(whitecaps).not.toMatch(/min\(1\.0, share \* 10\.0\)/);
+        expect(whitecaps).toMatch(/< uCaps\.x/);
+        expect(typeof Whitecaps.whitecapDrawing).toBe("function");
+        for (const kmh of kmhs) {
+            expect(Whitecaps.whitecapDrawing(whitecapShare(kmh)).cells, `${kmh} km/h`).toBeLessThanOrEqual(
+                Whitecaps.WHITECAP_MOST_CELLS,
+            );
+        }
+        expect(Whitecaps.WHITECAP_MOST_CELLS).toBeLessThanOrEqual(0.5);
+    });
+
+    it("whitens as much water as the law asks, from a calm to 150 km/h", () => {
+        // The white the crests and the streaks draw, from the shares measured on the GPU: a crest whitens a tenth of
+        // its cell, as much more as it is thicker; the streaks whiten their share of the rest of the water.
+        expect(typeof Whitecaps.whitecapDrawing).toBe("function");
+        for (const kmh of kmhs) {
+            const law = whitecapShare(kmh);
+            const drawing = Whitecaps.whitecapDrawing(law);
+            const crests = drawing.cells * 0.1 * drawing.thickness;
+            const streaks = Whitecaps.streakShareOf(drawing.streakCut);
+            const white = crests + (1 - crests) * streaks;
+            expect(Math.abs(white - law), `${kmh} km/h: ${white} against ${law}`).toBeLessThanOrEqual(
+                Math.max(0.002, law * 0.05),
+            );
         }
     });
 });
