@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import { billowDrift, NOISE_GLSL, shaderSeconds } from "../ShaderNoise";
+import { billowDrift, CLOUD_BILLOW_PERIOD_PX, NOISE_GLSL, shaderSeconds, shaderWrap } from "../ShaderNoise";
 import type { FogPatch, WeatherView } from "./WeatherFrame";
 
 /**
@@ -395,7 +395,12 @@ export class CloudLayer {
         const shadow = clouds?.shadow;
         setUniform("uShadow", shadow ? [shadow.x, shadow.y, shadow.alpha] : [0, 0, 0]);
         setUniform("uVeil", premultipliedVeil(frame?.veils ?? []));
-        setUniform("uSky", frame ? [frame.sky.x, frame.sky.y] : [0, 0]);
+        setUniform(
+            "uSky",
+            frame
+                ? [shaderWrap(frame.sky.x, CLOUD_BILLOW_PERIOD_PX), shaderWrap(frame.sky.y, CLOUD_BILLOW_PERIOD_PX)]
+                : [0, 0],
+        );
         setUniform("uTime", frame?.still ? 0 : shaderSeconds(this.scene.time.now));
         const billows = frame?.still ? { first: [0, 0, 0, 0], third: [0, 0] } : billowDrift(this.scene.time.now);
         setUniform("uBillowA", billows.first);

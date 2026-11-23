@@ -86,6 +86,42 @@ export function iceGrowthMmPerDay(thicknessMm: number, weather: SnowWeather, sno
     );
 }
 
+/**
+ * From this many hours a step (a fast clock: the speed of the freeze and the thaw), the ice that takes in it is the
+ * exact solution of Stefan's law over those hours (iceAfterHours), not one step of its rate: a step of a day would
+ * otherwise give the growth of the first instant all day long. Under it the steps go as they always did.
+ */
+export const ICE_EXACT_FROM_HOURS = 1;
+
+/**
+ * The ice that took after `hours` of the real clock on an ice `thicknessMm` thick under `snowMm` of snow, as
+ * iceGrowthMmPerDay integrated exactly (ICE_GROWTH_TIMES faster, by the `share` the current leaves): straight up to
+ * the first ice (FIRST_ICE_MM), then thickness² growing with the time. The air and the snow are taken as they are
+ * over the whole step.
+ */
+export function iceAfterHours(
+    thicknessMm: number,
+    weather: SnowWeather,
+    snowMm: number,
+    hours: number,
+    share = 1,
+): number {
+    const start = Number.isFinite(thicknessMm) ? Math.max(0, thicknessMm) : 0;
+    // The growth a day of a film, times its thickness: what the law divides by the thickness (mm² an hour here).
+    const rate = (iceGrowthMmPerDay(0, weather, snowMm) * FIRST_ICE_MM * ICE_GROWTH_TIMES * share) / 24;
+    if (!(rate > 0) || !(hours > 0)) return start;
+    let left = hours;
+    let thick = start;
+    if (thick < FIRST_ICE_MM) {
+        // A film grows as an ice FIRST_ICE_MM thick: at a steady rate up to it.
+        const toFirst = ((FIRST_ICE_MM - thick) * FIRST_ICE_MM) / rate;
+        if (left <= toFirst) return thick + (rate / FIRST_ICE_MM) * left;
+        left -= toFirst;
+        thick = FIRST_ICE_MM;
+    }
+    return Math.sqrt(thick * thick + 2 * rate * left);
+}
+
 /** How fast the ice thaws, in mm an hour of the real clock: as the snow melts under the same air. */
 export function iceThawMmPerHour(weather: SnowWeather): number {
     return snowMeltMmPerHour(weather);

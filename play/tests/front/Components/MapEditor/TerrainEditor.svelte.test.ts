@@ -20,6 +20,7 @@ const { executeUpdateTerrain, executeUpdateWAMSettings, mapSettings } = vi.hoist
         updates: 1,
         flowPace: 1,
         impactReach: 2.5,
+        freezeThawSpeed: 10,
         meadow: { enabled: true, growMinutes: 10, thirstMinutes: 20, moistureHold: 1 },
         life: {
             enabled: false,
@@ -215,11 +216,26 @@ describe("TerrainEditor", () => {
                 updates: 5,
                 flowPace: 1,
                 impactReach: 2.5,
+                freezeThawSpeed: 1,
             },
         });
         // The sliders follow, those of the waves now shown.
         expect(byTestId("terrain-speed").querySelector<HTMLInputElement>('input[type="range"]')?.value).toBe("1");
         expect(target.querySelector('[data-testid="terrain-wave-roughness"]')).not.toBeNull();
+    });
+
+    it("sets the speed of the freeze and the thaw of the map by its steps, the one of the map pressed", () => {
+        render();
+        expect(byTestId("terrain-freeze-thaw-speed-10").getAttribute("aria-pressed")).toBe("true");
+        expect(byTestId("terrain-freeze-thaw-speed-60").getAttribute("aria-pressed")).toBe("false");
+        expect(byTestId("terrain-freeze-thaw-speed").textContent).toContain("mapEditor.terrain.real.freezeThawSpeed");
+        byTestId("terrain-freeze-thaw-speed-60").click();
+        flushSync();
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: expect.objectContaining({ freezeThawSpeed: 60, speed: 60 }),
+        });
+        expect(byTestId("terrain-freeze-thaw-speed-60").getAttribute("aria-pressed")).toBe("true");
     });
 
     it("sets how often the players are told the water, and how finely the water with inertia is computed", () => {
@@ -415,6 +431,7 @@ describe("TerrainEditor", () => {
                 inertia: false,
                 updates: 1,
                 impactReach: 2.5,
+                freezeThawSpeed: 10,
             },
         });
         setRange("terrain-evaporation", 1);
@@ -431,6 +448,7 @@ describe("TerrainEditor", () => {
                 inertia: false,
                 updates: 1,
                 impactReach: 2.5,
+                freezeThawSpeed: 10,
             },
         });
         setRange("terrain-speed", 300);
@@ -447,6 +465,7 @@ describe("TerrainEditor", () => {
                 inertia: false,
                 updates: 1,
                 impactReach: 2.5,
+                freezeThawSpeed: 10,
             },
         });
         setRange("terrain-absorption", 20);
@@ -463,6 +482,7 @@ describe("TerrainEditor", () => {
                 inertia: false,
                 updates: 1,
                 impactReach: 2.5,
+                freezeThawSpeed: 10,
             },
         });
     });
@@ -486,6 +506,7 @@ describe("TerrainEditor", () => {
                 inertia: false,
                 updates: 1,
                 impactReach: 2.5,
+                freezeThawSpeed: 10,
             },
         });
     });
@@ -509,6 +530,7 @@ describe("TerrainEditor", () => {
                 inertia: false,
                 updates: 1,
                 impactReach: 2.5,
+                freezeThawSpeed: 10,
             },
         });
     });
@@ -532,6 +554,7 @@ describe("TerrainEditor", () => {
                 inertia: false,
                 updates: 1,
                 impactReach: 2.5,
+                freezeThawSpeed: 10,
             },
         });
     });

@@ -16,6 +16,8 @@ import {
 import type { PrecipitationAir } from "@workadventure/map-editor";
 import { DEEP_ICE_PX, frostOf, iceAt, iceOf, isFrozen, POOL_ICE_DEPTH_PX } from "./Frost";
 import type { AirNow } from "./Frost";
+import { explainKeptIce, explainKeptSnow } from "./KeptCover";
+import type { KeptIce, KeptSnow } from "./KeptCover";
 
 /**
  * Why this player sees the weather they see, said in values a board can show (the "Weather explained" board of the
@@ -74,6 +76,11 @@ export interface WeatherBoardInput {
     snow: { map: number; here: number } | undefined;
     /** The wind of the conditions of the room (km/h): the one the server melts the snow by. */
     roomWind: number | undefined;
+    /**
+     * The thickest ice (mm) and the thickest snow (mm of water) the server told for the map. Undefined until it told
+     * the ground of the map.
+     */
+    peaks?: { iceMm: number; snowMm: number };
     /** How many times faster than reality the snow of the map goes: the speed of its water (1 when absent). */
     snowTimes?: number;
 }
@@ -224,6 +231,11 @@ export interface WeatherBoard {
     ice: IceExplained & AgainstMap<IceExplained>;
     soil: SoilExplained;
     snow: SnowExplained;
+    /**
+     * The ice and the snow the server keeps on the map, at their thickest, and where they are going under the air of
+     * the room: what is there now, whatever the air of the instant would form. Undefined until the server told.
+     */
+    kept: { ice: KeptIce; snow: KeptSnow } | undefined;
 }
 
 /**
@@ -426,6 +438,21 @@ export function explainWeather(input: WeatherBoardInput): WeatherBoard {
     const frostOnMap =
         ground === "own" ? explainFrost(input.mapFrostAir, "map", "serverFollowers", undefined) : undefined;
     const iceOnMap = ground === "own" ? explainIce(input.mapFrostAir, "map", "serverFollowers", undefined) : undefined;
+    const snow = explainSnow(input);
+    // What the server melts and freezes by: the air of the room and the wind of its conditions (GameRoom, snowUnder).
+    const roomWeather =
+        input.roomAir && input.roomWind !== undefined ? { ...input.roomAir, windSpeed: input.roomWind } : undefined;
+    const kept = input.peaks
+        ? {
+              ice: explainKeptIce({ mm: input.peaks.iceMm, weather: roomWeather, times: snow.times }),
+              snow: explainKeptSnow({
+                  mm: input.peaks.snowMm,
+                  weather: roomWeather,
+                  times: snow.times,
+                  building: snow.trend === "building",
+              }),
+          }
+        : undefined;
     return {
         follows: !followsCity ? "server" : input.drawsOwnWeather ? "city" : "trial",
         city: input.city,
@@ -441,8 +468,16 @@ export function explainWeather(input: WeatherBoardInput): WeatherBoard {
         // The server lets the downpour fall, through the air of the room, for everyone.
         downpour: explainForm(input.roomAir, "map", "everyone"),
         frost: { ...frost, onMap: frostOnMap, differs: frostOnMap !== undefined && frostOnMap.level !== frost.level },
-        ice: { ...ice, onMap: iceOnMap, differs: iceOnMap !== undefined && iceOnMap.stage !== ice.stage },
+        // The ice of who follows the server is the one it keeps, with its past: against it, when it told one.
+        ice: {
+            ...ice,
+            onMap: iceOnMap,
+            differs:
+                iceOnMap !== undefined &&
+                (kept ? kept.ice.mm > 0 !== (ice.stage !== "none") : iceOnMap.stage !== ice.stage),
+        },
         soil: explainSoil(input.roomAir),
-        snow: explainSnow(input),
+        snow,
+        kept,
     };
 }

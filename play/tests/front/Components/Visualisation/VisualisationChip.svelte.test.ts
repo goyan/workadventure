@@ -14,7 +14,10 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 chipShown: ({ count }: { count: number }) => `${count} shown`,
                 chipHint: label("Visualisation: what to show"),
                 infoLabel: label("What is shown"),
-                weather: { button: label("Weather explained") },
+                weather: {
+                    button: label("Weather explained"),
+                    pipette: { button: label("Pipette"), hint: label("Aim at the map") },
+                },
             },
         },
     });
@@ -26,6 +29,7 @@ import {
     visualisationPanelStore,
     waterFlowOverlayStore,
     weatherExplainedStore,
+    weatherPipetteStore,
 } from "../../../../src/front/Stores/VisualisationStore";
 
 let target: HTMLElement;
@@ -56,6 +60,7 @@ afterEach(async () => {
     visualisationPanelStore.set(false);
     waterFlowOverlayStore.set(false);
     weatherExplainedStore.set(false);
+    weatherPipetteStore.set(false);
 });
 
 describe("VisualisationChip", () => {
@@ -126,6 +131,41 @@ describe("VisualisationChip", () => {
         flushSync();
         expect(find("visualisation-chip-popover")).toBeNull();
         expect(get(waterFlowOverlayStore)).toBe(true);
+    });
+
+    it("takes the pipette out and puts it away, told on the chip", () => {
+        render();
+        openChip();
+        expect(find("visualisation-weather-pipette")?.getAttribute("aria-pressed")).toBe("false");
+        find("visualisation-weather-pipette")?.click();
+        flushSync();
+        expect(get(weatherPipetteStore)).toBe(true);
+        expect(find("visualisation-weather-pipette")?.getAttribute("aria-pressed")).toBe("true");
+        expect(find("visualisation-chip")?.textContent).toContain("Pipette");
+        find("visualisation-weather-pipette")?.click();
+        flushSync();
+        expect(get(weatherPipetteStore)).toBe(false);
+    });
+
+    it("puts the pipette away on Escape first, the tiles closed or open, then closes the tiles", () => {
+        render();
+        weatherPipetteStore.set(true);
+        flushSync();
+        // The tiles closed: Escape is still listened to while the pipette is out.
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", cancelable: true }));
+        flushSync();
+        expect(get(weatherPipetteStore)).toBe(false);
+        // The tiles open: the pipette first, the tiles at the next press.
+        openChip();
+        weatherPipetteStore.set(true);
+        flushSync();
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", cancelable: true }));
+        flushSync();
+        expect(get(weatherPipetteStore)).toBe(false);
+        expect(find("visualisation-chip-popover")).not.toBeNull();
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", cancelable: true }));
+        flushSync();
+        expect(find("visualisation-chip-popover")).toBeNull();
     });
 
     it("tells what to do behind an i, and what is shown once something is", () => {

@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { ordinaryWaterArrays, sharedWaterArrays } from "../src/Terrain/WaterArrays";
 import {
+    BAND_ALONE_MS,
+    BAND_SLOW_WAIT_MS,
     runWaterPass,
     setWaterPassRunner,
     WaterBandsFollower,
@@ -355,5 +357,92 @@ describe("the passes of the water shared between threads (WaterBands)", () => {
         expect(failed).toBeInstanceOf(TypeError);
         lead.stop();
         expect(follower.workOnce()).toBe(false);
+    });
+
+    it("computes alone for a while once the others made it wait too long, then shares again: the same water", () => {
+        const reference = alone(12);
+        const { move, rowLost } = basin();
+        let now = 0;
+        // A thread that claims a slice as a pass opens, loses its core, and computes it `late` ms later: who leads
+        // finds it claimed, and sleeps until it is done.
+        let late = 0;
+        let claimed: number | undefined;
+        const told: [number, boolean][] = [];
+        const lead: WaterBandsLead = new WaterBandsLead(
+            1,
+            (words) => {
+                now += late;
+                if (claimed === undefined) throw new Error("Who leads slept, and nobody had claimed a slice");
+                const pass = words[3] as WaterPass;
+                runWaterPass(
+                    pass,
+                    move,
+                    Math.round((claimed * HEIGHT) / 8),
+                    Math.round(((claimed + 1) * HEIGHT) / 8),
+                    rowLost,
+                );
+                claimed = undefined;
+                Atomics.add(words, 2, 1);
+            },
+            1000,
+            () => now,
+            () => {
+                // Only where the pass is shared: who follows is woken by the turn, which a pass kept alone leaves.
+                if (lead.alone() || late === 0) return;
+                claimed = Atomics.add(lead.board.words, CLAIM, 1) & 1023;
+            },
+        );
+        lead.watchedBy((waitedMs, slow) => told.push([waitedMs, slow]));
+        const key = {};
+        const turnOf = (): number => Atomics.load(lead.board.words, 0);
+        const step = (): void => {
+            live(move, rowLost, 1, (pass) => {
+                if (pass === 0 && stepBegun !== steps) {
+                    stepBegun = steps;
+                    lead.begin(key, move, rowLost);
+                }
+                lead.run(pass);
+            });
+            steps++;
+        };
+        let steps = 0;
+        let stepBegun = -1;
+
+        // The other thread is a little late at each pass: 1 ms, twelve passes a step, under the wait that is too long.
+        late = 1;
+        step();
+        step();
+        expect(lead.alone()).toBe(false);
+        // Late by 3 ms a pass: 36 ms in the step, over BAND_SLOW_WAIT_MS. Told when the next step begins.
+        late = 3;
+        step();
+        const turn = turnOf();
+        late = 1;
+        step();
+        expect(told).toEqual([
+            [12, false],
+            [12, false],
+            [36, true],
+        ]);
+        expect(36).toBeGreaterThan(BAND_SLOW_WAIT_MS);
+        // Alone: no turn is opened for who follows (they sleep), nothing is waited for, nothing more is told.
+        expect(lead.alone()).toBe(true);
+        expect(turnOf()).toBe(turn);
+        const others = lead.computed().others;
+        step();
+        step();
+        expect(turnOf()).toBe(turn);
+        expect(lead.computed().others).toBe(others);
+        expect(told).toHaveLength(3);
+        // Ten seconds later the passes are shared again.
+        now += BAND_ALONE_MS;
+        expect(lead.alone()).toBe(false);
+        for (let more = 0; more < 6; more++) step();
+        expect(turnOf()).not.toBe(turn);
+        expect(lead.computed().others).toBeGreaterThan(others);
+        expect(told.slice(3).every(([waitedMs, slow]) => waitedMs === 12 && !slow)).toBe(true);
+        expect(steps).toBe(12);
+        // The same water as one thread alone, whatever was shared and whatever was not.
+        same(move, reference.move);
     });
 });
