@@ -176,8 +176,9 @@ describe("the kernel of the water compiled to WebAssembly", () => {
             expect(grid.kernelName()).toBe("wasm");
         }
         const buffer = (grid: WaterGrid, name: string): unknown => (Reflect.get(grid, name) as Float32Array).buffer;
-        expect(buffer(own, "depth")).toBeInstanceOf(ArrayBuffer);
-        expect(buffer(shared, "depth")).toBeInstanceOf(SharedArrayBuffer);
+        // By their tag, not by their class: this test also runs where the page has classes of its own (play).
+        expect(Object.prototype.toString.call(buffer(own, "depth"))).toBe("[object ArrayBuffer]");
+        expect(Object.prototype.toString.call(buffer(shared, "depth"))).toBe("[object SharedArrayBuffer]");
         for (const name of ["ground", "next", "spill", "closed", "flowEast", "nextSpeedSouth", "rowLost"]) {
             expect(buffer(own, name), name).toBe(buffer(own, "depth"));
             expect(buffer(shared, name), name).toBe(buffer(shared, "depth"));
