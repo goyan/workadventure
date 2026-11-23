@@ -2806,7 +2806,8 @@ partir de ce qu'il reçoit déjà (profondeurs, vent) :
   que 4 px. Elles sont choisies par pas de 5 km/h et de 10° : un vent qui hésite garde les mêmes vagues, sans saut,
   seule leur hauteur le suit. Sur les hauts-fonds, elles ne dépassent pas 0,8 fois la profondeur.
   Une crête **déferle** quand sa pente dépasse celle de la vague la plus raide possible (H/L = 0,142, Michell 1893,
-  Miche 1944) : les moutons naissent sur ces crêtes, plus de tirage au hasard. Les **groupes de vagues** viennent à
+  Miche 1944) : les moutons naissent sur ces crêtes, plus de tirage au hasard ; une crête ne casse que sur une partie
+  de sa longueur, qui change à mesure qu'elle avance (de courts moutons en brise, presque toute la crête en tempête). Les **groupes de vagues** viennent à
   des places et des tailles aléatoires (un champ lisse, de moyenne quadratique 1, qui monte ou baisse la hauteur, et
   qui avance à la vitesse des groupes) : quelques vagues sommées battraient en motif régulier, ce qu'une vraie mer ne
   fait pas. La **lumière** (pente tournée vers la lumière ou non) lit surtout les vagues de plus de 8 à 24 px : les
@@ -2816,16 +2817,19 @@ partir de ce qu'il reçoit déjà (profondeurs, vent) :
   carte graphique, deux textures en alternance. Chaque crête qui déferle y dépose son écume, en fines lignes dans le
   sens du vent ; l'écume dérive à 3 % du vent (Wu 1983) et s'efface en 3 s (Callaghan et al. 2012). La crête avance
   plus vite que son écume : elle laisse derrière elle une traînée aussi longue qu'elle a déferlé, irrégulière, qui
-  pâlit, sans motif d'ensemble. Translucide en brise, plus opaque par grand vent, selon l'échelle de Beaufort (OMM :
-  traînées à force 7, bien marquées à 8, denses à 9, la mer blanche à 10). L'écume est un état de la page : elle part
+  pâlit, sans motif d'ensemble ; chaque traînée a sa largeur, sa blancheur et sa durée (de la moitié à une fois et
+  demie de la durée moyenne), tirées d'un bruit lent qui dérive avec l'écume. Translucide en brise, plus opaque par grand vent, selon l'échelle de Beaufort (OMM :
+  traînées à force 7, bien marquées à 8, denses à 9, la mer blanche à 10) ; plus épaisse par grand vent, elle dure plus
+  longtemps (jusqu'à 1,6 fois au-delà de 89 km/h). L'écume est un état de la page : elle part
   de rien au chargement ou après un saut de caméra et se forme en quelques secondes ; elle est ensuite la même chez
   tous, les crêtes étant les mêmes.
   La part blanchie suit la loi usuelle des moutons (Monahan et O'Muircheartaigh, 1980), mesurée sur le GPU avec les
   vrais shaders (sonde de l'étude : passe d'écume et eau sur 1024 x 640 px d'eau ouverte au fetch de 200 m, 12 s de
-  mise en route, moyenne des 3 dernières secondes) : le seuil de pente est le seuil physique à 13 % près de 20 à
-  82 km/h (table `BREAKING_FACTORS`). Au-delà de 90 km/h, où les mesures de cette loi s'arrêtent, le blanc tend vers
-  45 % au plus (`whitecapWhite`) : l'eau reste visible. Mesuré : 0,13 % à 20 km/h (loi 0,13 %), 1,42 % à 40 (1,41),
-  5,64 % à 60 (5,63), 16,4 % à 82 (16,3), 34,2 % à 110 (visée 34,2). Sur un fetch plus court, moins de moutons.
+  mise en route, moyenne des 3 dernières secondes) : le seuil de pente est le seuil physique à 11 % près de 20 à
+  60 km/h (table `BREAKING_FACTORS`) ; au-delà, la loi demande plus de blanc que les crêtes plus raides que Michell
+  n'en donnent (seuil 25 % plus bas à 82 km/h) : le vent arrache l'écume de crêtes pas encore assez raides. Au-delà de 90 km/h, où les mesures de cette loi s'arrêtent, le blanc tend vers
+  45 % au plus (`whitecapWhite`) : l'eau reste visible. Mesuré : 0,13 % à 20 km/h (loi 0,13 %), 1,41 % à 40 (1,41),
+  5,66 % à 60 (5,63), 16,3 % à 82 (16,3), 34,2 % à 110 (visée 34,2). Sur un fetch plus court, moins de moutons.
   Rien ne change sous 10 km/h. Seulement dehors, sur une eau d'au moins 8 px, non gelée. Le vent est celui que le
   joueur voit (carte, réglé à la main, ou météo réelle).
   Qualité graphique : **Basse**, pas de mer du vent ; **Moyenne**, image de l'écume deux fois plus grossière (un texel

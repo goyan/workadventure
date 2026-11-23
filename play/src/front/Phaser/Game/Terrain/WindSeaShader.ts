@@ -33,59 +33,52 @@ import type { SeaComponent } from "./WindSea";
  * The breaking slope is the physical one (BREAKING_SLOPE) times this factor, measured on the GPU (the probe of the
  * study: the real shaders, the pass of the foam and the water over 1024 x 640 px of open water 1.4 m deep at
  * REFERENCE_FETCH_M, after 12 s for the foam to build up, averaged over its last 3 s) so that the foam of a wind
- * whitens the share of the water of the law (whitecapWhite of whitecapShare): [km/h, factor]. From 20 to 82 km/h it
- * stays within 13 % of the physical slope; past 90 km/h, where the measures of the law end, the slope comes down to
- * 55 % of it and the white creeps towards 45 % (whitecapWhite): the wind tears foam off crests not yet steep enough to
- * break. Under 20 km/h it stays at its value of 20 km/h: a lower slope would not be physical, and the law asks for a
- * few hundredths of a percent there, which no one sees.
+ * whitens the share of the water of the law (whitecapWhite of whitecapShare): [km/h, factor]. From 20 to 60 km/h it
+ * stays within 11 % of the physical slope; over, the law asks more white than the crests steeper than Michell give
+ * (25 % under at 82 km/h): the wind tears foam off crests not yet steep enough to break. Past 90 km/h, where the
+ * measures of the law end, the white creeps towards 45 % (whitecapWhite). Under 20 km/h it stays at its value of
+ * 20 km/h: a lower slope would not be physical, and the law asks for a few hundredths of a percent there.
  */
 export const BREAKING_FACTORS: readonly (readonly [number, number])[] = [
-    [20, 0.985],
-    [30, 1.088],
-    [40, 1.114],
-    [50, 1.127],
-    [60, 1.097],
-    [70, 1.011],
-    [82, 0.887],
-    [90, 0.839],
-    [100, 0.758],
-    [110, 0.642],
-    [125, 0.56],
-    [150, 0.547],
+    [20, 0.896],
+    [30, 0.965],
+    [40, 0.965],
+    [50, 0.965],
+    [60, 0.937],
+    [70, 0.845],
+    [82, 0.749],
+    [90, 0.694],
+    [100, 0.63],
+    [110, 0.441],
+    [125, 0.244],
+    [150, 0.267],
 ];
 
 /**
- * How opaque the foam a crest left is (a crest breaking now: 1), and how much more densely it is laid (the cut of the
- * lines it is laid in lowered by this), by the wind (km/h), after the descriptions of the Beaufort scale (WMO): a few
- * white horses whose foam soon goes under force 6; from force 7 (50 km/h) foam blown in streaks along the wind,
- * well-marked at force 8 (62), dense at force 9 (75); from force 10 (89) great patches, the sea white on the whole.
- * Translucent below: the water is seen through the foam left.
+ * How opaque the foam a crest left is (a crest breaking now: 1), how much more densely it is laid (the cut of the lines
+ * it is laid in lowered by this), and how much longer it lasts (FOAM_DECAY_S times this, on the mean), by the wind
+ * (km/h), after the descriptions of the Beaufort scale (WMO): a few white horses whose foam soon goes under force 6;
+ * from force 7 (50 km/h) foam blown in streaks along the wind, well-marked at force 8 (62), dense at force 9 (75); from
+ * force 10 (89) great patches, the sea white on the whole. Translucent below: the water is seen through the foam left.
+ * The thicker foam of a gale lasts longer (Callaghan et al. 2012: 2 to 5 s, and more for the largest breakers).
  */
-export const LEFT_FOAM: readonly (readonly [number, number, number])[] = [
-    [40, 0.55, 0],
-    [50, 0.65, 0.03],
-    [62, 0.75, 0.06],
-    [75, 0.85, 0.1],
-    [89, 0.92, 0.15],
+export const LEFT_FOAM: readonly (readonly [number, number, number, number])[] = [
+    [40, 0.55, 0, 1],
+    [50, 0.65, 0.03, 1],
+    [62, 0.75, 0.06, 1.15],
+    [75, 0.85, 0.1, 1.35],
+    [89, 0.92, 0.15, 1.6],
 ];
 
-/** The foam left by the crests for a wind (km/h): its opacity and how much more densely it is laid (LEFT_FOAM). */
-export function leftFoamFor(windKmh: number): { opacity: number; cutShift: number } {
-    const table = LEFT_FOAM;
-    if (!(windKmh > table[0][0])) return { opacity: table[0][1], cutShift: table[0][2] };
-    for (let at = 1; at < table.length; at++) {
-        const [upTo, opacity, shift] = table[at];
-        if (windKmh <= upTo) {
-            const [from, opacityBefore, shiftBefore] = table[at - 1];
-            const share = (windKmh - from) / (upTo - from);
-            return {
-                opacity: opacityBefore + (opacity - opacityBefore) * share,
-                cutShift: shiftBefore + (shift - shiftBefore) * share,
-            };
-        }
-    }
-    const [, opacity, cutShift] = table[table.length - 1];
-    return { opacity, cutShift };
+/** The foam left by the crests for a wind (km/h): its opacity, how densely it is laid, how long it lasts (LEFT_FOAM). */
+export function leftFoamFor(windKmh: number): { opacity: number; cutShift: number; life: number } {
+    const column = (at: number): readonly (readonly [number, number])[] =>
+        LEFT_FOAM.map((row) => [row[0], row[at]] as const);
+    return {
+        opacity: between(column(1), windKmh),
+        cutShift: between(column(2), windKmh),
+        life: between(column(3), windKmh),
+    };
 }
 
 /**
@@ -98,6 +91,38 @@ export function leftFoamFor(windKmh: number): { opacity: number; cutShift: numbe
 const GROUP_WAVES = 2.5;
 const GROUP_LOWEST = 0.3;
 const GROUP_RANGE = 1.4;
+/** The cells of the groups are this many times wider across the wind than long down it. */
+const GROUP_ACROSS = 1.25;
+/** How far (cells of the field) the field of the groups is bent by a slower noise: no rows, no bands of calm. */
+const GROUP_WARP = 0.8;
+/**
+ * A crest breaks along part of its length only, the part changing as it runs: a noise fixed on the map, this many map
+ * pixels a cell along the crest (across the wind) and down the wind (a crest runs through a cell in about a second, the
+ * life of a whitecap), lets it break where it is over a cut (CREST_CUTS, by the wind in km/h): short whitecaps in a
+ * breeze, crests breaking over most of their length in a gale.
+ */
+const CREST_ALONG_PX = 18;
+const CREST_DOWN_PX = 40;
+export const CREST_CUTS: readonly (readonly [number, number])[] = [
+    [40, 0.35],
+    [60, 0.3],
+    [82, 0.25],
+    [110, 0.2],
+    [150, 0.15],
+];
+
+/** A value of a table [x, value] read straight between its rows, held at its ends. */
+function between(table: readonly (readonly [number, number])[], x: number): number {
+    if (!(x > table[0][0])) return table[0][1];
+    for (let at = 1; at < table.length; at++) {
+        const [upTo, value] = table[at];
+        if (x <= upTo) {
+            const [from, before] = table[at - 1];
+            return before + ((value - before) * (x - from)) / (upTo - from);
+        }
+    }
+    return table[table.length - 1][1];
+}
 /**
  * The light on the waves comes from their slopes; but the waves of a few pixels, which carry as much slope as the long
  * ones, read as a fine hatching: their share of the light grows from this wavelength (map px) to the next. They keep
@@ -111,10 +136,20 @@ const BREAKING_EDGE = 0.1;
  * The foam a crest lays is laid in fine lines along the wind (map px a cell of their noise, across and along it): whole
  * on them, at FOAM_OFF_LINE between them. The lines drift with the foam.
  */
-const FOAM_LINE_ACROSS_PX = 4;
 const FOAM_LINE_ALONG_PX = 60;
 const FOAM_LINE_CUT = 0.55;
 const FOAM_OFF_LINE = 0.1;
+/**
+ * The trails differ one from the next: a slow noise drifting with the foam, this many map pixels a cell across the
+ * wind and down it, gives each its width (its lines FOAM_LINE_ACROSS_PX across, from the narrowest to the widest), how
+ * white it is laid (from FOAM_LAID_FAINTEST to whole), and how long it lasts (FOAM_DECAY_S times FOAM_LIFE: a mean of
+ * FOAM_DECAY_S).
+ */
+const TRAIL_ACROSS_PX = 20;
+const TRAIL_DOWN_PX = 240;
+const FOAM_LINE_ACROSS_PX = [2.5, 7] as const;
+const FOAM_LAID_FAINTEST = 0.45;
+const FOAM_LIFE = [0.5, 1.5] as const;
 /** The light on the slopes of the waves comes from the north-west, as on the relief (TerrainShading). */
 const LIGHT = { x: -Math.SQRT1_2, y: -Math.SQRT1_2 };
 /** The noises go round every this many of their cells: the hash without sine repeats exactly there. */
@@ -124,16 +159,7 @@ export const WIND_SEA_UNIFORM_VECTORS = 128;
 
 /** The factor of the breaking slope for a wind (km/h), read between the measures of BREAKING_FACTORS. */
 export function breakingFactorFor(windKmh: number): number {
-    const table = BREAKING_FACTORS;
-    if (!(windKmh > table[0][0])) return table[0][1];
-    for (let at = 1; at < table.length; at++) {
-        const [upTo, factor] = table[at];
-        if (windKmh <= upTo) {
-            const [from, before] = table[at - 1];
-            return before + ((factor - before) * (windKmh - from)) / (upTo - from);
-        }
-    }
-    return table[table.length - 1][1];
+    return between(BREAKING_FACTORS, windKmh);
 }
 
 /** What the shader draws for a wind: its waves, where it blows, and the slope at which their crests break. */
@@ -146,7 +172,9 @@ export interface SeaDrawing {
     /** The groups of waves: the length of a cell of their field (map px) and how fast they go downwind (map px a s). */
     group: { lengthPx: number; speedPx: number };
     /** The foam the crests leave: its opacity, and how much more densely it is laid (leftFoamFor). */
-    left: { opacity: number; cutShift: number };
+    left: { opacity: number; cutShift: number; life: number };
+    /** The cut of the noise along the crests under which they do not break (CREST_CUTS). */
+    crestCut: number;
 }
 
 /**
@@ -176,6 +204,7 @@ export function seaDrawing(windKmh: number | undefined, heading: { x: number; y:
         breakingSlope: white > 0 ? BREAKING_SLOPE * breakingFactorFor(windKmh) : Number.POSITIVE_INFINITY,
         group: { lengthPx: (GROUP_WAVES * peak.lp) / MAP_PX_METRES, speedPx: groupSpeed / MAP_PX_METRES },
         left: leftFoamFor(windKmh),
+        crestCut: between(CREST_CUTS, windKmh),
     };
 }
 
@@ -228,9 +257,21 @@ export function groupAt(sea: SeaDrawing, drift: number, x: number, y: number): n
     const { heading, group } = sea;
     const along = x * heading.x + y * heading.y;
     const across = -x * heading.y + y * heading.x;
-    const p = along / group.lengthPx - drift;
-    const q = across / (2 * group.lengthPx) + 51;
+    let p = along / group.lengthPx - drift;
+    let q = across / (GROUP_ACROSS * group.lengthPx) + 51;
+    const bendP = seaNoise(p * 0.5 + 5, q * 0.5 + 9);
+    const bendQ = seaNoise(p * 0.5 + 23, q * 0.5 + 41);
+    p += GROUP_WARP * (bendP - 0.5);
+    q += GROUP_WARP * (bendQ - 0.5);
     return GROUP_LOWEST + GROUP_RANGE * (0.65 * seaNoise(p, q) + 0.35 * seaNoise(2 * p + 17, 2 * q + 3));
+}
+
+/** How much of a crest breaks at a map point, 0 to 1 (CREST_ALONG_PX): the twin of seaCrest. */
+export function crestAt(sea: SeaDrawing, x: number, y: number): number {
+    const { heading } = sea;
+    const down = (x * heading.x + y * heading.y) / CREST_DOWN_PX;
+    const along = (-x * heading.y + y * heading.x) / CREST_ALONG_PX;
+    return smoothstep(sea.crestCut, sea.crestCut + 0.2, seaNoise(along + 71, down + 13));
 }
 
 /** The drift of the lines the foam is laid in, along the wind, in cells of their noise, brought round its period. */
@@ -258,7 +299,8 @@ export function breakingAt(
     return (
         smoothstep(slope * (1 - BREAKING_EDGE), slope * (1 + BREAKING_EDGE), here * Math.hypot(now.sx, now.sy)) *
         (now.eta >= 0 ? 1 : 0) *
-        front
+        front *
+        crestAt(sea, x, y)
     );
 }
 
@@ -281,7 +323,8 @@ export const WIND_SEA_GLSL = `
 uniform vec4 uSea;
 // Where the wind goes (x, y), how fast the foam drifts (map px a second), the drift of its lines (cells, wrapped).
 uniform vec4 uSeaDir;
-// The field of the groups: 1 / its cell down the wind and across it (map px), its drift (cells, wrapped), unused.
+// The field of the groups: 1 / its cell down the wind and across it (map px), its drift (cells, wrapped); the cut of
+// the noise along the crests under which they do not break.
 uniform vec4 uSeaGroup;
 // Each wave: cycles a map pixel (x, y), its phase now (cycles, in [0, 1)), its frequency (Hz).
 ${range(SEA_COMPONENTS)
@@ -377,6 +420,8 @@ float seaGroup(vec2 p) {
     float along = dot(p, uSeaDir.xy);
     float across = dot(p, vec2(-uSeaDir.y, uSeaDir.x));
     vec2 q = vec2(along * uSeaGroup.x - uSeaGroup.z, across * uSeaGroup.y + 51.0);
+    vec2 bend = vec2(seaNoise(q * 0.5 + vec2(5.0, 9.0)), seaNoise(q * 0.5 + vec2(23.0, 41.0)));
+    q += ${glsl(GROUP_WARP)} * (bend - 0.5);
     return ${glsl(GROUP_LOWEST)} + ${glsl(GROUP_RANGE)}
         * (0.65 * seaNoise(q) + 0.35 * seaNoise(q * 2.0 + vec2(17.0, 3.0)));
 }
@@ -391,8 +436,13 @@ float seaBreaking(vec2 world) {
     gSeaLight *= here;
     float slope = uSea.y;
     float front = dot(gSeaSlope, uSeaDir.xy) <= 0.0 ? 1.0 : 0.0;
-    return smoothstep(slope * ${glsl(1 - BREAKING_EDGE)}, slope * ${glsl(1 + BREAKING_EDGE)}, length(gSeaSlope))
+    float breaking = smoothstep(slope * ${glsl(1 - BREAKING_EDGE)}, slope * ${glsl(1 + BREAKING_EDGE)}, length(gSeaSlope))
         * (gSeaEta >= 0.0 ? 1.0 : 0.0) * front;
+    if (breaking <= 0.0) return 0.0;
+    // Along part of the crest only (crestAt).
+    vec2 crest = vec2(dot(world, vec2(-uSeaDir.y, uSeaDir.x)) / ${glsl(CREST_ALONG_PX)} + 71.0,
+        dot(world, uSeaDir.xy) / ${glsl(CREST_DOWN_PX)} + 13.0);
+    return breaking * smoothstep(uSeaGroup.w, uSeaGroup.w + 0.2, seaNoise(crest));
 }
 
 // How a slope of the wind sea faces the light (north-west): -1 to 1.
@@ -436,15 +486,23 @@ uniform vec2 uFoamTexels;
 // The seconds since the picture before, a count of the pictures (to vary the rounding), the cut of the lines (lowered
 // by grand winds), 1 to start from nothing.
 uniform vec4 uFoamStep;
+// How much longer the foam lasts than FOAM_DECAY_S, on the mean (leftFoamFor).
+uniform float uFoamLife;
 
 void main() {
     vec2 world = uFoamArea.xy + gl_FragCoord.xy / uFoamTexels * uFoamArea.zw;
     float dt = uFoamStep.x;
+    // Where this point is in the frame of the foam, which drifts down the wind (map px): each trail keeps its kind.
+    vec2 heading = uSeaDir.xy;
+    float down = dot(world, heading) - uSeaDir.w * ${glsl(FOAM_LINE_ALONG_PX)};
+    float side = dot(world, vec2(-heading.y, heading.x));
+    vec2 trail = vec2(side / ${glsl(TRAIL_ACROSS_PX)}, down / ${glsl(TRAIL_DOWN_PX)});
     // Where the foam here was a step ago: upwind by the drift.
     vec2 uv = (world - uSeaDir.xy * uSeaDir.z * dt - uFoamBeforeArea.xy) / uFoamBeforeArea.zw;
     float kept = 0.0;
     if (uFoamStep.w < 0.5 && uv.x > 0.0 && uv.y > 0.0 && uv.x < 1.0 && uv.y < 1.0) {
-        kept = texture2D(uFoamBefore, uv).r * exp(-dt / ${glsl(FOAM_DECAY_S)});
+        float life = mix(${glsl(FOAM_LIFE[0])}, ${glsl(FOAM_LIFE[1])}, seaNoise(trail + vec2(29.0, 17.0)));
+        kept = texture2D(uFoamBefore, uv).r * exp(-dt / (${glsl(FOAM_DECAY_S)} * uFoamLife * life));
         // Rounded at random to the bytes of the picture: no foam stuck at its last step.
         kept += (hashWide(gl_FragCoord.xy + vec2(uFoamStep.y * 7.0, uFoamStep.y * 13.0)) - 0.5) / 255.0;
     }
@@ -454,13 +512,15 @@ void main() {
         seaAmplitudes(seaFetchM(world), depthPx * ${glsl(MAP_PX_METRES)});
         float breaking = seaBreaking(world);
         if (breaking > 0.0) {
-            vec2 heading = uSeaDir.xy;
-            float along = dot(world, heading) / ${glsl(FOAM_LINE_ALONG_PX)} - uSeaDir.w;
-            float across = dot(world, vec2(-heading.y, heading.x)) / ${glsl(FOAM_LINE_ACROSS_PX)};
+            float width = mix(${glsl(FOAM_LINE_ACROSS_PX[0])}, ${glsl(FOAM_LINE_ACROSS_PX[1])},
+                seaNoise(trail + vec2(13.0, 7.0)));
+            float along = down / ${glsl(FOAM_LINE_ALONG_PX)};
+            float across = side / width;
             float lines = 0.65 * seaNoise(vec2(across, along))
                 + 0.35 * seaNoise(vec2(across * 2.0 + 9.0, along * 2.0));
             float cut = ${glsl(FOAM_LINE_CUT)} - uFoamStep.z;
-            laid = breaking * mix(${glsl(FOAM_OFF_LINE)}, 1.0, smoothstep(cut, cut + 0.15, lines));
+            float white = mix(${glsl(FOAM_LAID_FAINTEST)}, 1.0, seaNoise(trail + vec2(61.0, 3.0)));
+            laid = breaking * white * mix(${glsl(FOAM_OFF_LINE)}, 1.0, smoothstep(cut, cut + 0.15, lines));
         }
     }
     gl_FragColor = vec4(clamp(max(kept, laid), 0.0, 1.0), 0.0, 0.0, 1.0);
@@ -480,7 +540,10 @@ export function windSeaUniforms(sea: SeaDrawing | undefined, seconds: number): [
     uniforms.push(
         ["uSea", [sea.windMs, slope, 1, sea.left.opacity]],
         ["uSeaDir", [sea.heading.x, sea.heading.y, foamDriftPx(sea.windMs), lineDrift(sea.windMs, seconds)]],
-        ["uSeaGroup", [1 / sea.group.lengthPx, 1 / (2 * sea.group.lengthPx), groupDrift(sea, seconds), 0]],
+        [
+            "uSeaGroup",
+            [1 / sea.group.lengthPx, 1 / (GROUP_ACROSS * sea.group.lengthPx), groupDrift(sea, seconds), sea.crestCut],
+        ],
     );
     sea.components.forEach((component, at) => {
         uniforms.push([`uSeaA${at}`, [component.cx, component.cy, seaPhase(component, seconds), component.f]]);
