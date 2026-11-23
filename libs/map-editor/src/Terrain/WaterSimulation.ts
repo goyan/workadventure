@@ -21,6 +21,8 @@ import { meteorShape } from "../Catastrophe/Meteor";
 import { liquidRainRate, snowShareOf } from "../Weather/Precipitation";
 import type { PrecipitationAir } from "../Weather/Precipitation";
 import { rainRateAt } from "../Weather/RainRate";
+import { hurricanePressure, skyRainUnder } from "../Catastrophe/Hurricane";
+import type { Hurricane } from "../Catastrophe/Hurricane";
 import type { MapPlace, RealWeatherSlot } from "../Weather/RealWeather";
 import { waterPassRunner } from "./WaterBands";
 import { BallLevels } from "./BallLevels";
@@ -189,6 +191,8 @@ export class WaterSimulation {
     private rainRate = 0;
     /** The air the rain of the map falls through: the conditions of the room, once it gives them. */
     private air: () => PrecipitationAir | undefined = () => undefined;
+    /** The hurricane crossing the map, whose rain takes the place of that of the map (none on a ground of one's own). */
+    private hurricane: () => Hurricane | undefined = () => undefined;
     /** What the room was last told, to send only what changed since. */
     private sentBytes: Uint8Array | undefined;
     private sentRates = false;
@@ -383,6 +387,11 @@ export class WaterSimulation {
         this.air = air;
     }
 
+    /** The catastrophes of the room say which hurricane crosses the map: its rain falls in place of that of the map. */
+    public skyUnder(hurricane: () => Hurricane | undefined): void {
+        this.hurricane = hurricane;
+    }
+
     /** One step of the water (ten a second), and once a second the room is told. */
     public step(): void {
         const grid = this.grid;
@@ -417,7 +426,10 @@ export class WaterSimulation {
             const slots =
                 settings?.weather === WeatherType.Real ? this.rain.slotsFor(settings.weatherLocation) : undefined;
             // What falls as snow lies where it fell: only the rain runs to the hollows and soaks the soil.
-            this.rainRate = liquidRainRate(rainRateAt(settings, this.now(), slots), this.air());
+            // Under a hurricane, its rain: the total of a real passage, over the `inflow` times reality this water lives.
+            const now = this.now();
+            const falling = skyRainUnder(rainRateAt(settings, now, slots), this.hurricane(), now, inflow);
+            this.rainRate = liquidRainRate(falling, this.air());
         }
         this.steps++;
         this.swingDoors(grid);
@@ -430,7 +442,12 @@ export class WaterSimulation {
         const waving = this.waves.length > 0 || raining || draining || displacing || this.steps < this.stirredUntilStep;
         if (this.waves.length > 0) this.advanceWaves(grid);
         const pouring = this.rainRate > 0 || this.objects.some((object) => object.litresPerMinute > 0);
-        if (this.moving || pouring) {
+        // Under the low of a hurricane the water stands higher, and follows it as it goes (the inverted barometer):
+        // the grid is kept moving while it crosses the map.
+        const pressure = hurricanePressure(this.hurricane(), this.now());
+        grid.setPressure(pressure);
+        const pressing = pressure !== undefined;
+        if (this.moving || pouring || pressing) {
             const input = stepInputOf(stepWater, this.rainRate, this.objects, WATER_STEP_MS / 1000);
             // The water with inertia runs as it really does at each step of its time: no move more towards the sinks,
             // no exchange from far (they made up for inflows faster than the flow, and would now distort it).
@@ -448,7 +465,7 @@ export class WaterSimulation {
                 this.sums.absorptionPx += tally.absorptionPx;
                 this.sums.lostPx += tally.lostPx;
                 // Still water with nothing coming in: the steps left would change nothing.
-                if (!tally.moved && !pouring) break;
+                if (!tally.moved && !pouring && !pressing) break;
             }
         }
         // As often as the map asks while the water moves, less while the server or the network is loaded, and at least

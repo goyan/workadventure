@@ -15,6 +15,8 @@ import { ballColumn, ballHalfHeight } from "./WaterBall";
 import type { WaterBall } from "./WaterBall";
 import { affordPass, depthsPass, DRY_PX, fluxPass, scalePass } from "./WaterKernel";
 import type { InertiaMove } from "./WaterKernel";
+import { pressureHeads, windPushes } from "./AirPressure";
+import type { AirPressure } from "./AirPressure";
 import { ordinaryWaterArrays, setWaterArrays, sharedWaterArrays, waterArrays, waterArraysFor } from "./WaterArrays";
 import { WasmWaterKernel } from "./WaterKernelWasm";
 import { waterPassRunner } from "./WaterBands";
@@ -249,6 +251,8 @@ const FASTEST_CELLS_PER_MOVE = 0.5;
  * the computation rocks by itself (measured: a small basin never calms down); at a third it calms down.
  */
 const WAVE_CELLS_PER_MOVE = 0.35;
+/** The heights of the pressure and the push of the wind over the water are made again at least this often (steps). */
+const FILL_HEADS_STEPS = 10;
 /**
  * The speed of the water with inertia is told to the browsers by blocks of this many cells a side, one byte for
  * each of its two parts (east, south), in this many units a cell a second: within about 32 cells a second, to a
@@ -587,6 +591,18 @@ export class WaterGrid implements WaterView {
     /** The same speeds as this move makes them: they take the place of the others when it ends. */
     private nextSpeedEast: Float32Array = new Float32Array(0);
     private nextSpeedSouth: Float32Array = new Float32Array(0);
+    /**
+     * The pressure of the air over each cell as a height of water (AirPressure.pressureHeads), for the water with
+     * inertia; and the low it was made for (undefined: none, the flows as without it).
+     */
+    private head: Float32Array = new Float32Array(0);
+    /** How hard the wind over the water pushes it over each cell (AirPressure.windPushes), east and south. */
+    private windEast: Float32Array = new Float32Array(0);
+    private windSouth: Float32Array = new Float32Array(0);
+    private pressure: AirPressure | undefined;
+    private headFor:
+        | { pressure: AirPressure; x: number; y: number; width: number; height: number; steps: number }
+        | undefined;
     /** The friction of the ground of each cell: the square of the roughness of its soil, times MANNING. */
     private readonly rough: Float32Array;
     /**
@@ -849,6 +865,24 @@ export class WaterGrid implements WaterView {
      * height nor over the highest a map may set (the usual one for a height that is not a number). What stands over
      * a height that was lowered is lost at the next step.
      */
+    /**
+     * The low of the air over the water (a hurricane) and its wind, or none: the water with inertia runs down the
+     * slope of its surface plus the height of water the pressure holds (the inverted barometer), and the wind pushes
+     * it (its stress on the surface). Read at the next step.
+     */
+    public setPressure(pressure: AirPressure | undefined): void {
+        this.pressure =
+            pressure &&
+            Number.isFinite(pressure.x) &&
+            Number.isFinite(pressure.y) &&
+            pressure.dropPx >= 0 &&
+            (pressure.dropPx > 0 || pressure.wind !== undefined) &&
+            pressure.radiusPx > 0 &&
+            pressure.b > 0
+                ? pressure
+                : undefined;
+    }
+
     public setMaxSurface(px: number): void {
         this.highest = Number.isFinite(px)
             ? Math.min(MAX_WATER_MAX_SURFACE, Math.max(MAX_WATER_SURFACE_PX, px))
@@ -2018,7 +2052,13 @@ export class WaterGrid implements WaterView {
             this.speedSouth = this.arrays.floats(size);
             this.nextSpeedEast = this.arrays.floats(size);
             this.nextSpeedSouth = this.arrays.floats(size);
+            this.head = this.arrays.floats(size);
+            this.windEast = this.arrays.floats(size);
+            this.windSouth = this.arrays.floats(size);
+            this.headFor = undefined;
         }
+        const pressed = this.pressure !== undefined;
+        if (this.pressure) this.fillHeads(this.pressure);
         const figure = (value: number | undefined, fallback: number): number =>
             value !== undefined && Number.isFinite(value) && value >= 0 ? value : fallback;
         const roughness = figure(waves?.roughness, DEFAULT_WAVE_SETTINGS.roughness);
@@ -2092,6 +2132,10 @@ export class WaterGrid implements WaterView {
             damping,
             breaking,
             carried,
+            head: this.head,
+            pressed: pressed ? 1 : 0,
+            windEast: this.windEast,
+            windSouth: this.windSouth,
             compiled: this.wasm,
         };
         if (this.rowLost.length !== height) this.rowLost = this.arrays.doubles(height);
@@ -2140,6 +2184,38 @@ export class WaterGrid implements WaterView {
         this.nextSpeedEast = nextSpeedEast;
         this.nextSpeedSouth = nextSpeedSouth;
         return moved;
+    }
+
+    /**
+     * The heights the pressure holds over the cells, made again when the low has moved by half a cell, its drop
+     * changed by a hundredth, or the grid changed: the low of a hurricane crosses a cell in about half a second, so
+     * every third step or so, and every FILL_HEADS_STEPS steps whatever (1.5 ms for the heights, 1.2 ms for the
+     * wind, on 480 x 320 cells, measured on the Mac of the study).
+     */
+    private fillHeads(pressure: AirPressure): void {
+        const { x, y, width, height } = this.bounds;
+        const last = this.headFor;
+        if (last) last.steps++;
+        if (
+            last &&
+            // Made again every second at least: the wind over the water may turn while the low stays (its eye passing).
+            last.steps < FILL_HEADS_STEPS &&
+            last.x === x &&
+            last.y === y &&
+            last.width === width &&
+            last.height === height &&
+            last.pressure.radiusPx === pressure.radiusPx &&
+            last.pressure.b === pressure.b &&
+            last.pressure.windGain === pressure.windGain &&
+            Math.abs(last.pressure.x - pressure.x) < TERRAIN_CELL / 2 &&
+            Math.abs(last.pressure.y - pressure.y) < TERRAIN_CELL / 2 &&
+            Math.abs(last.pressure.dropPx - pressure.dropPx) <= 0.01 * last.pressure.dropPx
+        ) {
+            return;
+        }
+        pressureHeads(pressure, x, y, width, height, TERRAIN_CELL, this.head);
+        windPushes(pressure, x, y, width, height, TERRAIN_CELL, this.windEast, this.windSouth);
+        this.headFor = { pressure, x, y, width, height, steps: 0 };
     }
 
     /** Moves the water one step. Returns whether any moved. */

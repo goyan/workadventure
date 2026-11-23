@@ -267,9 +267,19 @@ const roomManager = {
                             break;
                         }
                         case "launchCatastropheMessage": {
-                            const { kind, x, y, radiusTiles, wholeMap, release, temperature } =
+                            const { kind, x, y, radiusTiles, wholeMap, release, temperature, hurricane } =
                                 message.message.launchCatastropheMessage;
-                            room.launchCatastrophe(user, kind, x, y, radiusTiles, wholeMap, release, temperature);
+                            room.launchCatastrophe(
+                                user,
+                                kind,
+                                x,
+                                y,
+                                radiusTiles,
+                                wholeMap,
+                                release,
+                                temperature,
+                                hurricane,
+                            );
                             break;
                         }
                         default: {

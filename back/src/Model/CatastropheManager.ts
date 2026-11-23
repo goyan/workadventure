@@ -18,13 +18,18 @@ import {
     FIRE_PATCH_LASTS_MS,
     FIRE_PATCHES_PER_SECOND,
     fireTiles,
+    HURRICANE_TELL_MS,
+    hurricaneCrossing,
+    hurricaneSpedUp,
+    hurricaneTrack,
     METEOR_FALL_MS,
     meteorShape,
     METEORS_PER_ROOM,
     TILE_PX,
 } from "@workadventure/map-editor";
-import type { Ball, ColdMass, Downpour, Drain } from "@workadventure/map-editor";
+import type { Ball, ColdMass, Downpour, Drain, Hurricane } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
+import type { HurricaneTrackMessage } from "@workadventure/messages";
 import type { GameRoom } from "./GameRoom";
 
 /** The ice broken around a player who goes through it, in tiles: the hole they fall into. */
@@ -94,6 +99,13 @@ export class CatastropheManager {
     /** When each player last broke the ice: once a second at most. */
     private readonly iceBreaks = new Map<number, number>();
     private readonly inFlight = new Set<ReturnType<typeof setTimeout>>();
+    /** The hurricane crossing the map, one a room, and what tells the room about it once a second. */
+    private storm: Hurricane | undefined;
+    private stormTimer: ReturnType<typeof setInterval> | undefined;
+    /** Whether the map lies in the southern hemisphere (its hurricanes turn clockwise): given by the room. */
+    private southern: () => boolean = () => false;
+    /** How many times faster the hurricane goes (the speed of the map, hurricaneTimesOf): given by the room. */
+    private hurricaneTimes: () => number = () => 1;
 
     constructor(
         private readonly room: Pick<GameRoom, "sendSubMessageToRoom">,
@@ -478,6 +490,128 @@ export class CatastropheManager {
         return true;
     }
 
+    /** The speed of the map is read from its settings, made with the room: it is given here. */
+    public hurricaneTimesWith(times: () => number): void {
+        this.hurricaneTimes = times;
+    }
+
+    /** Where the map lies is read from its settings, made with the room: it is given here. */
+    public southernWith(southern: () => boolean): void {
+        this.southern = southern;
+    }
+
+    /**
+     * A player sends a hurricane across the map, its eye over the point (x, y) (the middle of the map when outside it),
+     * the way they chose (kept within what a hurricane may be): it begins now, its eye coming in at the edge of the map,
+     * and lasts the time asked for its eye to cross the map. The room is told at once, then once a second
+     * while it goes on, and once more when it ends; every browser computes its weather from that and the time of the
+     * server, as the ground of the room does. One a room: false while one goes on, or once the room stopped.
+     */
+    public startHurricane(asked: HurricaneTrackMessage, x = -1, y = -1): boolean {
+        if (this.stopped || this.hurricane()) return false;
+        const size = this.mapSize();
+        if (!size) return false;
+        let southern = false;
+        try {
+            southern = this.southern();
+        } catch (error) {
+            console.error("The hemisphere of the map could not be read", error);
+        }
+        const track = hurricaneTrack(asked, southern);
+        this.storm = {
+            id: this.nextId++,
+            startedAt: this.now(),
+            ...track,
+            ...hurricaneCrossing(size.width, size.height, x, y, track.heading),
+        };
+        this.speedUp();
+        this.tellHurricane();
+        if (!this.stormTimer) {
+            this.stormTimer = setInterval(() => {
+                try {
+                    this.speedUp();
+                    this.tellHurricane();
+                } catch (error) {
+                    console.error("The hurricane of the room could not be told", error);
+                }
+            }, HURRICANE_TELL_MS);
+            // A hurricane must never keep the process alive.
+            this.stormTimer.unref?.();
+        }
+        return true;
+    }
+
+    /** A player stops the hurricane of the room: it is gone at once, and the room is told. False when there is none. */
+    public stopHurricane(): boolean {
+        const storm = this.hurricane();
+        if (!storm || this.stopped) return false;
+        this.tellHurricane(storm, 0);
+        this.endHurricane();
+        return true;
+    }
+
+    /** The hurricane crossing the map now; undefined once it ended. */
+    public hurricane(): Hurricane | undefined {
+        const storm = this.storm;
+        if (storm && this.now() >= storm.startedAt + storm.durationMs) return undefined;
+        return storm;
+    }
+
+    /** The hurricane at the speed the map asks now: its eye goes on from where it is (hurricaneSpedUp). */
+    private speedUp(): void {
+        if (!this.storm) return;
+        let times = 1;
+        try {
+            times = this.hurricaneTimes();
+        } catch (error) {
+            console.error("The speed of the map could not be read", error);
+        }
+        this.storm = hurricaneSpedUp(this.storm, times, this.now());
+    }
+
+    private endHurricane(): void {
+        this.storm = undefined;
+        if (this.stormTimer) clearInterval(this.stormTimer);
+        this.stormTimer = undefined;
+    }
+
+    /** Tells the room the hurricane, and how long it still lasts: 0 once it ended, and then it is forgotten. */
+    private tellHurricane(storm = this.storm, lastsMs?: number): void {
+        if (!storm) return this.endHurricane();
+        const left = lastsMs ?? Math.max(0, storm.startedAt + storm.durationMs - this.now());
+        this.room.sendSubMessageToRoom({
+            message: {
+                $case: "catastropheMessage",
+                catastropheMessage: {
+                    id: storm.id,
+                    kind: CatastropheKind.CATASTROPHE_HURRICANE,
+                    x: 0,
+                    y: 0,
+                    impactInMs: left,
+                    radiusTiles: 0,
+                    wholeMap: true,
+                    hurricane: {
+                        category: storm.category,
+                        minutes: Math.round((storm.durationMs * (storm.times ?? 1)) / 60_000),
+                        heading: storm.heading,
+                        southern: storm.southern,
+                        startedAt: storm.startedAt,
+                        fromX: storm.fromX,
+                        fromY: storm.fromY,
+                        toX: storm.toX,
+                        toY: storm.toY,
+                        anchorX: storm.anchorX,
+                        anchorY: storm.anchorY,
+                        durationMs: storm.durationMs,
+                        times: storm.times ?? 1,
+                        waterEffect: storm.waterEffect ?? 1,
+                    },
+                },
+            },
+        });
+        if (left <= 0) this.endHurricane();
+    }
+
     /** What a player asks for: the downpour, the drain or the ball that follows them, or a catastrophe thrown once. */
     public request(
         userId: number,
@@ -488,10 +622,12 @@ export class CatastropheManager {
         wholeMap: boolean,
         release = false,
         temperature?: number,
+        hurricane?: HurricaneTrackMessage,
     ): boolean {
-        // A ball is let go, and a cold snap is stopped: the others end by themselves.
+        // A ball is let go, a cold snap and a hurricane are stopped: the others end by themselves.
         if (release) {
             if (kind === CatastropheKind.CATASTROPHE_COLD) return this.calm();
+            if (kind === CatastropheKind.CATASTROPHE_HURRICANE) return this.stopHurricane();
             return kind === CatastropheKind.CATASTROPHE_BALL && this.release(userId);
         }
         if (kind === CatastropheKind.CATASTROPHE_DOWNPOUR) return this.rain(userId, x, y, radiusTiles, wholeMap);
@@ -500,6 +636,8 @@ export class CatastropheManager {
         if (kind === CatastropheKind.CATASTROPHE_BALL) return this.ball(userId, x, y, radiusTiles);
         if (kind === CatastropheKind.CATASTROPHE_ICE_BREAK) return this.iceBreak(userId, x, y);
         if (kind === CatastropheKind.CATASTROPHE_COLD) return this.cold(userId, x, y, radiusTiles, temperature);
+        if (kind === CatastropheKind.CATASTROPHE_HURRICANE)
+            return hurricane ? this.startHurricane(hurricane, x, y) : false;
         return this.launch(kind, x, y, radiusTiles);
     }
 
@@ -556,5 +694,6 @@ export class CatastropheManager {
         this.draining.clear();
         this.chilling.clear();
         this.holding.clear();
+        this.endHurricane();
     }
 }

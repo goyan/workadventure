@@ -20,9 +20,9 @@ describe("charDegree", () => {
 describe("TreeFireState", () => {
     it("keeps the fire and the damage of the trees the server names, and says which ones to draw again", () => {
         const state = new TreeFireState();
-        expect(state.receive({ trees: [{ id: "oak", fire: 255, damage: 6 }], whole: false, embers: [] }, 0)).toEqual([
-            "oak",
-        ]);
+        expect(
+            state.receive({ trees: [{ id: "oak", fire: 255, damage: 6, fallen: 0 }], whole: false, embers: [] }, 0),
+        ).toEqual(["oak"]);
         expect(state.fireOf("oak")).toBe(1);
         expect(state.degreeOf("oak")).toBe(2);
         expect(state.burning()).toEqual([{ id: "oak", fire: 1 }]);
@@ -34,19 +34,22 @@ describe("TreeFireState", () => {
 
     it("forgets a tree told green again", () => {
         const state = new TreeFireState();
-        state.receive({ trees: [{ id: "oak", fire: 0, damage: 16 }], whole: false, embers: [] }, 0);
+        state.receive({ trees: [{ id: "oak", fire: 0, damage: 16, fallen: 0 }], whole: false, embers: [] }, 0);
         expect(state.degreeOf("oak")).toBe(4);
         expect(state.isBurning()).toBe(false);
-        expect(state.receive({ trees: [{ id: "oak", fire: 0, damage: 0 }], whole: false, embers: [] }, 0)).toEqual([
-            "oak",
-        ]);
+        expect(
+            state.receive({ trees: [{ id: "oak", fire: 0, damage: 0, fallen: 0 }], whole: false, embers: [] }, 0),
+        ).toEqual(["oak"]);
         expect(state.degreeOf("oak")).toBe(0);
     });
 
     it("takes a whole state in place of what it knew: the trees not named are green again", () => {
         const state = new TreeFireState();
-        state.receive({ trees: [{ id: "oak", fire: 100, damage: 4 }], whole: false, embers: [] }, 0);
-        const touched = state.receive({ trees: [{ id: "pine", fire: 0, damage: 16 }], whole: true, embers: [] }, 0);
+        state.receive({ trees: [{ id: "oak", fire: 100, damage: 4, fallen: 0 }], whole: false, embers: [] }, 0);
+        const touched = state.receive(
+            { trees: [{ id: "pine", fire: 0, damage: 16, fallen: 0 }], whole: true, embers: [] },
+            0,
+        );
         expect(touched.sort()).toEqual(["oak", "pine"]);
         expect(state.degreeOf("oak")).toBe(0);
         expect(state.degreeOf("pine")).toBe(4);
@@ -62,7 +65,7 @@ describe("TreeFireState", () => {
 
     it("forgets everything when cleared, and says which trees to draw green", () => {
         const state = new TreeFireState();
-        state.receive({ trees: [{ id: "oak", fire: 100, damage: 4 }], whole: false, embers: [ember] }, 0);
+        state.receive({ trees: [{ id: "oak", fire: 100, damage: 4, fallen: 0 }], whole: false, embers: [ember] }, 0);
         expect(state.clear()).toEqual(["oak"]);
         expect(state.isBurning()).toBe(false);
         expect(state.embers(1)).toEqual([]);
@@ -74,9 +77,9 @@ describe("TreeFireState", () => {
         state.receive(
             {
                 trees: [
-                    { id: "oak", fire: 255, damage: 6 },
-                    { id: "pine", fire: 0, damage: 16 },
-                    { id: "elm", fire: 0, damage: 0 },
+                    { id: "oak", fire: 255, damage: 6, fallen: 0 },
+                    { id: "pine", fire: 0, damage: 16, fallen: 0 },
+                    { id: "elm", fire: 0, damage: 0, fallen: 0 },
                 ],
                 whole: false,
                 embers: [],
@@ -89,7 +92,7 @@ describe("TreeFireState", () => {
     it("lets a tree smoulder for thirty seconds after its fire went out, not a tree that never burnt", () => {
         const state = new TreeFireState();
         const told = (fire: number, damage: number, now: number): void => {
-            state.receive({ trees: [{ id: "oak", fire, damage }], whole: false, embers: [] }, now);
+            state.receive({ trees: [{ id: "oak", fire, damage, fallen: 0 }], whole: false, embers: [] }, now);
         };
         told(255, 6, 0);
         expect(state.smouldering(1000)).toEqual([]);
@@ -103,7 +106,7 @@ describe("TreeFireState", () => {
         expect(state.smouldering(50_000)).toEqual([]);
         // A charred tree told to who joins the room never burnt before their eyes.
         const joined = new TreeFireState();
-        joined.receive({ trees: [{ id: "pine", fire: 0, damage: 16 }], whole: true, embers: [] }, 0);
+        joined.receive({ trees: [{ id: "pine", fire: 0, damage: 16, fallen: 0 }], whole: true, embers: [] }, 0);
         expect(joined.smouldering(0)).toEqual([]);
         // It burns again: no more smouldering.
         told(255, 8, 60_000);

@@ -5,6 +5,7 @@ import {
     DEFAULT_FIRE_THRESHOLDS,
     NEUTRAL_FIRE_CONDITIONS,
     GameMapProperties,
+    hurricaneTimesOf,
     LISTENING_ZONE_JAM_VARIABLE,
     parseListeningZoneJams,
     parseListeningZoneJamsUpdate,
@@ -45,6 +46,7 @@ import type {
     SetFireConditionsMessage,
     AquaticLifeMessage,
     CatastropheKind,
+    HurricaneTrackMessage,
     FishingMessage,
     IceShackAction,
     IceShacksMessage,
@@ -380,6 +382,7 @@ export class GameRoom implements BrothersFinder {
             drains: () => groundParts.catastrophes?.drains() ?? [],
             balls: () => groundParts.catastrophes?.balls() ?? [],
             colds: () => groundParts.catastrophes?.colds() ?? [],
+            hurricane: () => groundParts.catastrophes?.hurricane(),
             // The antelopes of the life of the land graze the meadow.
             grazers: () => groundParts.aquaticLife?.grazers() ?? [],
             // In the cold of the room the rain of the map falls as snow; the weather is not known until it is read.
@@ -403,6 +406,10 @@ export class GameRoom implements BrothersFinder {
         );
         groundParts.catastrophes = catastrophes;
         catastrophes.levelWith(ground.ballLevelAt.bind(ground));
+        // A hurricane turns clockwise over a map in the southern hemisphere.
+        catastrophes.southernWith(gameRoom.inSouthernHemisphere.bind(gameRoom));
+        // The widget of the speed of the map speeds the hurricane up too.
+        catastrophes.hurricaneTimesWith(gameRoom.hurricaneTimes.bind(gameRoom));
         gameRoom.catastrophes = catastrophes;
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => catastrophes.stop());
@@ -1360,6 +1367,16 @@ export class GameRoom implements BrothersFinder {
         return anglersOf(this.users.values());
     }
 
+    /** How many times faster the hurricane goes, by the speed of the freeze and the thaw of the map. */
+    public hurricaneTimes(): number {
+        return hurricaneTimesOf(this.getWam()?.settings?.water?.freezeThawSpeed);
+    }
+
+    /** Whether the place of the map is in the southern hemisphere (Paris, in the north, without a place). */
+    public inSouthernHemisphere(): boolean {
+        return (this.getWam()?.settings?.weatherLocation?.latitude ?? 48.86) < 0;
+    }
+
     /** A player launches a catastrophe at a point of the map: a meteor, or the downpour that follows their pointer. */
     public launchCatastrophe(
         user: User,
@@ -1370,8 +1387,9 @@ export class GameRoom implements BrothersFinder {
         wholeMap: boolean,
         release = false,
         temperature?: number,
+        hurricane?: HurricaneTrackMessage,
     ): void {
-        this.catastrophes?.request(user.id, kind, x, y, radiusTiles, wholeMap, release, temperature);
+        this.catastrophes?.request(user.id, kind, x, y, radiusTiles, wholeMap, release, temperature, hurricane);
     }
 
     /** A player casts their fishing line at a point of the map. */

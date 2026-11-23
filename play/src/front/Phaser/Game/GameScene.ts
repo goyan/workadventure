@@ -36,6 +36,7 @@ import {
     GameMapProperties,
     GRAZING_COVER,
     heightAt,
+    hurricaneHere,
     type LifeFire,
     lifeFireOf,
     listeningZoneJamKey,
@@ -185,7 +186,13 @@ import {
     mapEditorWamSettingsEditorToolCurrentMenuItemStore,
     WAM_SETTINGS_EDITOR_TOOL_MENU_ITEM,
 } from "@wa/front/Stores/MapEditorStore";
-import { coldLyingStore, heldBallStore } from "@wa/front/Stores/CatastropheStore";
+import {
+    coldLyingStore,
+    heldBallStore,
+    hurricaneHighestRiseStore,
+    hurricaneShownStore,
+    pointerFloodRiseStore,
+} from "@wa/front/Stores/CatastropheStore";
 import { refreshPromptStore } from "@wa/front/Stores/RefreshPromptStore";
 import { mapDeletedPromptStore } from "@wa/front/Stores/MapDeletedPromptStore";
 import { SpaceRegistry } from "@wa/front/Space/SpaceRegistry/SpaceRegistry";
@@ -326,6 +333,7 @@ import {
     weatherPipetteCellStore,
 } from "../../Stores/VisualisationStore";
 import { fastWaterActiveNow, setFastWaterResynchronize, sharedWaterBackStore } from "../../Stores/FastWaterStore";
+import { HurricaneFloodView } from "./Terrain/HurricaneFloodView";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -339,6 +347,9 @@ import { weatherAtTime } from "./Weather/WeatherFrame";
 import {
     mapPlaceSlotsNow,
     setRoomConditions,
+    getRoomHurricane,
+    setHurricaneViewpoint,
+    setRoomHurricane,
     showsChosenPlaceWeather,
     shownWeatherSettings,
 } from "./Weather/RealWeatherClient";
@@ -489,11 +500,18 @@ import { groundWind } from "./Weather/Snowfall";
 import { MeteorView } from "./Catastrophe/MeteorView";
 import { FireView } from "./Fire/FireView";
 import { TreeFireState } from "./Fire/TreeFireState";
+import { FallenTreeView } from "./Nature/FallenTreeView";
+import { lyingVector } from "./Nature/FallenTreeShape";
+import type { TreePose } from "./SkyShadows/SkyShadowGeometry";
+import { growShare, growStep } from "./Nature/FallenTreeTexture";
 import { TreeFireView } from "./Fire/TreeFireView";
 import { DownpourView } from "./Catastrophe/DownpourView";
 import { DrainView } from "./Catastrophe/DrainView";
 import { BallView } from "./Catastrophe/BallView";
 import { ColdView } from "./Catastrophe/ColdView";
+import { HurricaneReceiver } from "./Catastrophe/HurricaneReceiver";
+import { HurricaneDebris } from "./Catastrophe/HurricaneDebris";
+import { HurricaneView, seaHurricaneOf } from "./Catastrophe/HurricaneView";
 import { FireTorchView } from "./Catastrophe/FireTorchView";
 import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
 import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
@@ -741,10 +759,19 @@ export class GameScene extends DirtyScene {
     private meteorView: MeteorView | undefined;
     private fireView: FireView | undefined;
     private treeFireView: TreeFireView | undefined;
+    /** The trees the wind laid down, lying on the ground (made at the first one). */
+    private fallenTreeView: FallenTreeView | undefined;
     private downpourView: DownpourView | undefined;
     private drainView: DrainView | undefined;
     private ballView: BallView | undefined;
     private coldView: ColdView | undefined;
+    private hurricaneReceiver: HurricaneReceiver | undefined;
+    private hurricaneView: HurricaneView | undefined;
+    /** The debris the wind of a hurricane (or a wind of the map strong enough) carries, drawn here alone. */
+    private hurricaneDebris: HurricaneDebris | undefined;
+    /** The flood of the hurricane as this browser sees it: the rise of the water, the marks it leaves. */
+    private hurricaneFlood: HurricaneFloodView | undefined;
+    private shownFloodRise: number | undefined;
     private fireTorchView: FireTorchView | undefined;
     private catastropheSubscription: Subscription | undefined;
     /** The animals of the water of the relief, as the server tells them. */
@@ -1966,6 +1993,8 @@ export class GameScene extends DirtyScene {
         this.fireView = undefined;
         this.treeFireView?.destroy();
         this.treeFireView = undefined;
+        this.fallenTreeView?.destroy();
+        this.fallenTreeView = undefined;
         this.downpourView?.destroy();
         this.downpourView = undefined;
         this.drainView?.destroy();
@@ -1975,6 +2004,16 @@ export class GameScene extends DirtyScene {
         this.coldView?.destroy();
         this.coldView = undefined;
         coldLyingStore.set(undefined);
+        this.hurricaneReceiver?.destroy();
+        this.hurricaneReceiver = undefined;
+        this.hurricaneView?.destroy();
+        this.hurricaneView = undefined;
+        this.hurricaneDebris?.destroy();
+        this.hurricaneDebris = undefined;
+        this.hurricaneFlood?.destroy();
+        this.hurricaneFlood = undefined;
+        setRoomHurricane(undefined);
+        hurricaneShownStore.set(undefined);
         this.fireTorchView?.destroy();
         this.fireTorchView = undefined;
         rodEquippedStore.set(false);
@@ -2563,12 +2602,31 @@ export class GameScene extends DirtyScene {
             this.gameMapFrontWrapper
                 .getEntitiesManager()
                 .updateSeason(time, serverDate, forcedTreeSeason(this.getSeasonalTheme()));
+            // Under a hurricane, the weather drawn is that of where this player looks.
+            const look = this.cameras.main.midPoint;
+            setHurricaneViewpoint(look.x, look.y);
             this.weatherManager?.update(
                 time,
                 serverDate,
                 this.nightManager?.isNight(),
                 this.nightManager?.sunPosition(),
             );
+            // The trees the wind is laying down fall on, before their shadows are drawn.
+            this.fallenTreeView?.update(time);
+            this.hurricaneView?.update(
+                serverDate,
+                this.nightManager?.sunPosition()?.elevation,
+                window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+            );
+            {
+                const weather = this.shownWeather();
+                this.hurricaneDebris?.update(
+                    delta,
+                    serverDate?.getTime(),
+                    { speed: weather?.windSpeed, from: weather?.windFrom },
+                    get(weatherEffectsEnabledStore) && !isBasicActive() && !get(mapEditorModeStore),
+                );
+            }
             // After the weather: the textures of the clouds it drew this time (one may have just been made again).
             if (this.weatherManager) {
                 this.terrainView?.setWaterReflection(
@@ -2594,6 +2652,15 @@ export class GameScene extends DirtyScene {
                     isOnFrozenWater(this, point),
                 ),
             );
+            // The flood of a hurricane: its marks, and how much higher the water stands under the pointer than before
+            // it (to the decimetre, told only when that changes).
+            this.hurricaneFlood?.update(time);
+            const risen = pointed && this.hurricaneFlood?.riseAt(pointed.x, pointed.y);
+            const shownRise = risen === undefined ? undefined : Math.round(risen * 10) / 10;
+            if (shownRise !== this.shownFloodRise) {
+                this.shownFloodRise = shownRise;
+                pointerFloodRiseStore.set(shownRise);
+            }
             // The weather pipette: the cell under the pointer explained, while it is on.
             this.stepWeatherPipette(pointed, time);
             // Their own ground, for a player who follows the weather of a place they chose.
@@ -3367,6 +3434,31 @@ export class GameScene extends DirtyScene {
         return this.treeFire;
     }
 
+    /** How the tree `id` stands for its shadow when the wind laid it down (falling, lying, growing back). */
+    private fallenTreePose(id: string): TreePose | undefined {
+        const fallen = this.treeFire.fallenOf(id);
+        if (!fallen) return undefined;
+        // Along the ground as the tree lying is drawn: its shadow lies under it.
+        const way = lyingVector(fallen.toward);
+        if (fallen.lying) {
+            return {
+                towardX: way.x,
+                towardY: way.y,
+                tilt: this.fallenTreeView?.tiltOf(id) ?? Math.PI / 2,
+                size: 1,
+                // Bare branches, the fronds of a palm: their own shadow, as drawn.
+                limbs: this.fallenTreeView?.limbsOf(id),
+            };
+        }
+        return { towardX: way.x, towardY: way.y, tilt: 0, size: growShare(growStep(fallen.grown)) };
+    }
+
+    /** The trees the wind laid down, lying on the ground: the objects of the map show them there. */
+    public getFallenTreeView(): FallenTreeView {
+        this.fallenTreeView ??= new FallenTreeView(this);
+        return this.fallenTreeView;
+    }
+
     /** The server said how the trees burn: the ones it named show the image of their state. */
     private receiveTreeFire(message: TreeFireMessage): void {
         this.showTreeFireImages(this.treeFire.receive(message, this.time.now));
@@ -3796,6 +3888,17 @@ export class GameScene extends DirtyScene {
      */
     public mapDaylightAt(at: number): number {
         return mapDaylightAt(this.getGameMap().getWamFile()?.getWam().settings, new Date(at));
+    }
+
+    /** The wind of the hurricane of the room at a map point now; undefined while none crosses the map. */
+    private hurricaneWindAt(x: number, y: number): { speed: number; from: number } | undefined {
+        const hurricane = getRoomHurricane();
+        const at = hurricane ? this.nightManager?.serverDate()?.getTime() : undefined;
+        if (!hurricane || at === undefined) return undefined;
+        const here = hurricaneHere(hurricane, at, x, y);
+        // Past half of its fade, as the weather shown (withHurricane).
+        if (!here || here.share < 0.5) return undefined;
+        return { speed: here.windSpeed, from: here.windFrom };
     }
 
     /** The map weather as it is shown now, with its wind. */
@@ -4592,6 +4695,10 @@ export class GameScene extends DirtyScene {
                         isFlatAt: (x, y) => this.seenRelief?.isFlatAt(x, y) ?? false,
                     },
                 );
+                // Under a hurricane, the wind sea takes its wind at each point (seaWindHere).
+                this.terrainView.seaHurricaneWith(() =>
+                    seaHurricaneOf(getRoomHurricane(), this.nightManager?.serverDate()),
+                );
                 // What is built stays flat where the relief is seen in 3/4: paved, indoors, a pool.
                 this.seenRelief = new SeenRelief({
                     terrain: () => this.terrainWater.relief(),
@@ -4725,6 +4832,9 @@ export class GameScene extends DirtyScene {
                     treeBend: (id) =>
                         (this.treeSway?.poseOf(id) ?? 0) *
                         (this.gameMapFrontWrapper.getEntitiesManager().getEntities().get(id)?.scaleX ?? 1),
+                    // A tree the wind laid down: its shadow falls, lies and grows back with it.
+                    treePose: (id) => this.fallenTreePose(id),
+                    fallenVersion: () => this.fallenTreeView?.version ?? 0,
                 });
                 // And under what walks: the silhouette of the avatars, an oval under the animals.
                 this.unsubscribeSkyShadowCategories?.();
@@ -4765,6 +4875,8 @@ export class GameScene extends DirtyScene {
                     trees: () => this.swayingTrees(),
                     windSpeed: () => this.shownWeather()?.windSpeed,
                     windFrom: () => this.shownWeather()?.windFrom,
+                    // Under a hurricane each tree sways in its own wind: still in the eye.
+                    windAt: (x, y) => this.hurricaneWindAt(x, y),
                     poseTexture: (key, pose) => treePoses.key(key, pose),
                     enabled: () =>
                         !get(mapEditorModeStore) && get(weatherEffectsEnabledStore) && isEffectShown("treeSway"),
@@ -5221,6 +5333,36 @@ export class GameScene extends DirtyScene {
             (x, y) => this.surfaceDropAt(x, y),
         );
         this.fireTorchView = fireTorchView;
+        this.hurricaneReceiver?.destroy();
+        this.hurricaneView?.destroy();
+        this.hurricaneDebris?.destroy();
+        const hurricaneDebris = new HurricaneDebris(this);
+        this.hurricaneDebris = hurricaneDebris;
+        this.hurricaneFlood?.destroy();
+        const hurricaneFlood = new HurricaneFloodView(this, this.terrainWater, (metres) =>
+            hurricaneHighestRiseStore.set(metres),
+        );
+        this.hurricaneFlood = hurricaneFlood;
+        // The hurricane of the room, reduced to the map: its weather (wind, rain) where this player looks takes the
+        // place of the weather of the map, and its spiral of clouds that of the clouds of the sky, computed here from
+        // it and the time of the server, as the server computes it for its ground.
+        const hurricaneView = HurricaneView.create(this);
+        this.hurricaneView = hurricaneView;
+        const hurricaneReceiver = new HurricaneReceiver(
+            () => this.nightManager?.serverDate()?.getTime(),
+            (hurricane) => {
+                setRoomHurricane(hurricane);
+                hurricaneView?.setHurricane(hurricane);
+                hurricaneDebris.setHurricane(hurricane);
+                hurricaneFlood.setHurricane(hurricane, this.time.now);
+                const at = this.nightManager?.serverDate()?.getTime();
+                const look = this.cameras.main.midPoint;
+                const here = at === undefined ? undefined : hurricaneHere(hurricane, at, look.x, look.y);
+                hurricaneShownStore.set(hurricane ? { hurricane, here } : undefined);
+                this.markDirty();
+            },
+        );
+        this.hurricaneReceiver = hurricaneReceiver;
         this.catastropheSubscription = this.connection?.catastropheMessageStream.subscribe((message) => {
             // The water of this player, when it is their own, lives the catastrophes of the room too.
             this.localTerrain.fromCatastrophe(message);
@@ -5228,6 +5370,7 @@ export class GameScene extends DirtyScene {
             else if (message.kind === CatastropheKind.CATASTROPHE_DRAIN) drainView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_BALL) ballView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_COLD) coldView.report(message, this.time.now);
+            else if (message.kind === CatastropheKind.CATASTROPHE_HURRICANE) hurricaneReceiver.report(message);
             else if (message.kind === CatastropheKind.CATASTROPHE_FIRE) fireTorchView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_ICE_BREAK) {
                 // The ice another player broke (or ours, told back): the same hole for everyone.

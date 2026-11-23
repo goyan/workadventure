@@ -117,9 +117,9 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
     mapClock: {
         freezeThaw: {
             title: "Vitesse du gel et de la fonte",
-            what: "La glace qui prend et dégèle, la neige qui fond : pour toute la carte. L'eau garde sa vitesse.",
-            real: "×1 : comme en vrai, une heure de gel ou de fonte dure une heure.",
-            faster: "×{speed} : une heure de gel ou de fonte dure {duration}.",
+            what: "La glace qui prend et dégèle, la neige qui fond, et le passage d'un ouragan : pour toute la carte. L'eau garde sa vitesse.",
+            real: "×1 : comme en vrai, une heure de gel ou de fonte dure une heure ; l'ouragan traverse la carte dans le temps choisi.",
+            faster: "×{speed} : une heure de gel ou de fonte dure {duration} ; l'ouragan va {hurricane} fois plus vite (jamais moins de 30 s).",
             badge: "Gel ×{speed}",
             badgeHint:
                 "Sur cette carte, le gel et la fonte vont {speed} fois plus vite que dans la réalité (l'eau, non).",
@@ -498,6 +498,34 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         coldLeftMinutes: "{minutes} min {seconds} s",
         coldLeftSeconds: "{seconds} s",
         coldStop: "Arrêter le coup de froid",
+        hurricane: "Ouragan",
+        hurricaneCategoryLabel: "Catégorie de l'ouragan, sur l'échelle de Saffir-Simpson",
+        hurricaneCategory: "Catégorie {category} : vent jusqu'à {wind} km/h",
+        hurricaneMinutesLabel: "Temps que met l'œil pour traverser la carte, en minutes",
+        hurricaneMinutes: "{minutes} min pour traverser la carte",
+        hurricaneWaterEffectLabel: "Effet sur l'eau (pression et vent)",
+        hurricaneWaterRealistic: "Réaliste",
+        hurricaneWaterExaggerated: "Exagéré ×{times}",
+        hurricaneWaterEffectHelp:
+            "Le dôme d'eau sous l'œil ne se forme qu'aux vitesses lentes du widget « > » : un œil plus rapide que les vagues du lac va trop vite pour lui.",
+        hurricaneRise: "Eau : +{rise} m au plus haut depuis le début",
+        hurricaneHeadingLabel: "Vers où va l'ouragan",
+        hurricaneHeading: "Il va vers {point} ({degrees}°)",
+        hurricaneStart: "Lancer l'ouragan",
+        hurricaneStop: "Arrêter l'ouragan",
+        hurricaneHelp:
+            "Un ouragan RÉDUIT À LA TAILLE DE LA CARTE (un choix, comme la comète : un vrai fait des centaines de kilomètres) : son œil d'une trentaine de mètres traverse la carte, entouré de sa spirale de nuages. Le vent tourne autour de l'œil, le plus fort au mur, calme dans l'œil sous un ciel dégagé, puis de l'autre côté une fois l'œil passé ; pluie en bandes spirales, mer blanche d'embruns sous les vents les plus forts. Son vent, sa pluie et ses nuages remplacent la météo de la salle pour tous. Tout joueur peut l'arrêter.",
+        hurricaneGoing:
+            "Ouragan de catégorie {category} : {phase}, vent {wind} km/h, rafales {gust}, pluie {rain} mm/h, encore {left}",
+        hurricanePhase: {
+            bands: "bandes de pluie",
+            wall: "mur de l'œil",
+            eye: "œil",
+            bandsAfter: "bandes de pluie, il s'éloigne",
+            wallAfter: "second mur de l'œil",
+        },
+        hurricaneOverWind:
+            "Un ouragan traverse la carte : son vent remplace celui de la salle jusqu'à la fin du passage.",
         ball: "Boule",
         ballSizeLabel: "Taille de la boule : son diamètre, en cases",
         ballArmedHelp:

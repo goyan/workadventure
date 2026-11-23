@@ -12,11 +12,15 @@
         DRAIN_MIN_TILES,
         FIRE_MAX_TILES,
         FIRE_MIN_TILES,
+        HURRICANE_MAX_MINUTES,
+        HURRICANE_MIN_MINUTES,
+        HURRICANE_WATER_EFFECTS,
+        hurricaneMaxWind,
         METEOR_MAX_TILES,
         METEOR_MIN_TILES,
     } from "@workadventure/map-editor";
     import { onDestroy, untrack } from "svelte";
-    import { LL } from "../../../i18n/i18n-svelte";
+    import { LL, locale } from "../../../i18n/i18n-svelte";
     import {
         armedCatastropheStore,
         ballDiameterTilesStore,
@@ -29,13 +33,21 @@
         drainRadiusTilesStore,
         downpourWholeMapStore,
         fireRadiusTilesStore,
+        hurricaneCategoryStore,
+        hurricaneHeadingStore,
+        hurricaneHighestRiseStore,
+        hurricaneMinutesStore,
+        hurricaneShownStore,
+        hurricaneWaterEffectStore,
         meteorRadiusTilesStore,
         toggleArmedCatastrophe,
     } from "../../Stores/CatastropheStore";
+    import { compassPointOf } from "../../Phaser/Game/Weather/WindDirection";
     import PixelIcon from "../ActionsMenu/PixelIcon.svelte";
     import ChipPopover from "../ClockLine/ChipPopover.svelte";
     import InfoTip from "../Input/InfoTip.svelte";
     import { stopColdSnap } from "./coldSnapActions";
+    import { startHurricane, stopHurricane } from "./hurricaneActions";
     import WeatherTab from "./WeatherTab.svelte";
 
     const shown = $derived($catastrophePanelStore);
@@ -56,8 +68,60 @@
     // The size shown is that of the armed catastrophe, and stays that of the last one armed.
     let sized = $state<"meteor" | "fireball" | "downpour" | "fire" | "drain" | "ball" | "cold">("meteor");
     $effect(() => {
-        if ($armedCatastropheStore !== undefined) sized = $armedCatastropheStore;
+        if ($armedCatastropheStore !== undefined) {
+            sized = $armedCatastropheStore;
+            hurricaneOpen = false;
+        }
     });
+    /**
+     * The settings of the hurricane are shown in place of the size of a disaster: a hurricane is not thrown at a
+     * point, it crosses the whole map once launched.
+     */
+    let hurricaneOpen = $state(false);
+    function toggleHurricane(): void {
+        hurricaneOpen = !hurricaneOpen;
+        if (hurricaneOpen) disarmCatastrophe();
+    }
+
+    /** What the panel says of the hurricane crossing the map, as the server last told it. */
+    const hurricaneGoing = $derived.by((): string | undefined => {
+        const going = $hurricaneShownStore;
+        if (!going?.here) return undefined;
+        const { hurricane, here: now } = going;
+        const secondsLeft = Math.max(0, Math.round((1 - now.progress) * (hurricane.durationMs / 1000)));
+        const phases = $LL.actionbar.catastrophe.hurricanePhase;
+        const phase =
+            now.phase === "eye"
+                ? phases.eye()
+                : now.phase === "wall"
+                  ? now.after
+                      ? phases.wallAfter()
+                      : phases.wall()
+                  : now.after
+                    ? phases.bandsAfter()
+                    : phases.bands();
+        return $LL.actionbar.catastrophe.hurricaneGoing({
+            category: hurricane.category,
+            phase,
+            wind: Math.round(now.windSpeed),
+            gust: Math.round(now.gust),
+            rain: now.rainRate < 10 ? now.rainRate.toFixed(1) : Math.round(now.rainRate),
+            left:
+                secondsLeft >= 60
+                    ? $LL.actionbar.catastrophe.coldLeftMinutes({
+                          minutes: Math.floor(secondsLeft / 60),
+                          seconds: secondsLeft % 60,
+                      })
+                    : $LL.actionbar.catastrophe.coldLeftSeconds({ seconds: secondsLeft }),
+        });
+    });
+    /** The highest the water rose since the hurricane began, to the decimetre; undefined while it is not worth a line. */
+    const hurricaneRise = $derived.by((): string | undefined => {
+        const rise = $hurricaneHighestRiseStore;
+        if (rise === undefined || rise < 0.05) return undefined;
+        return new Intl.NumberFormat($locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(rise);
+    });
+    const hurricanePoint = $derived(compassPointOf(Number($hurricaneHeadingStore)) ?? "n");
 
     interface Props {
         /** Only the icon of the chip is drawn: the clock line is short of room. */
@@ -126,15 +190,17 @@
               }),
     );
     const help = $derived(
-        ballArmed
-            ? $LL.actionbar.catastrophe.ballArmedHelp()
-            : coldArmed
-              ? $LL.actionbar.catastrophe.coldArmedHelp()
-              : downpourArmed || drainArmed
-                ? $LL.actionbar.catastrophe.downpourArmedHelp()
-                : meteorArmed || fireballArmed || fireArmed
-                  ? $LL.actionbar.catastrophe.armedHelp()
-                  : $LL.actionbar.catastrophe.idleHelp(),
+        hurricaneOpen
+            ? $LL.actionbar.catastrophe.hurricaneHelp()
+            : ballArmed
+              ? $LL.actionbar.catastrophe.ballArmedHelp()
+              : coldArmed
+                ? $LL.actionbar.catastrophe.coldArmedHelp()
+                : downpourArmed || drainArmed
+                  ? $LL.actionbar.catastrophe.downpourArmedHelp()
+                  : meteorArmed || fireballArmed || fireArmed
+                    ? $LL.actionbar.catastrophe.armedHelp()
+                    : $LL.actionbar.catastrophe.idleHelp(),
     );
 
     /** What the panel says of the cold air lying on the map: its temperature, and how long it still has. */
@@ -292,7 +358,111 @@
                         <PixelIcon name="cold" size={16} />
                         <span>{$LL.actionbar.catastrophe.cold()}</span>
                     </button>
-                    {#if sized === "downpour"}
+                    <button
+                        type="button"
+                        class="flex items-center gap-1 rounded-full px-2 py-1 {hurricaneOpen
+                            ? 'bg-white/30 ring-1 ring-white'
+                            : 'bg-white/10 hover:bg-white/20'}"
+                        aria-pressed={hurricaneOpen}
+                        data-testid="catastrophe-hurricane"
+                        onclick={toggleHurricane}
+                    >
+                        <PixelIcon name="hurricane" size={16} />
+                        <span>{$LL.actionbar.catastrophe.hurricane()}</span>
+                    </button>
+                    {#if hurricaneOpen}
+                        <span class="flex basis-full flex-wrap items-center gap-x-3 gap-y-1.5">
+                            <label class="flex items-center gap-2">
+                                <input
+                                    type="range"
+                                    class="w-20"
+                                    min="1"
+                                    max="5"
+                                    step="1"
+                                    aria-label={$LL.actionbar.catastrophe.hurricaneCategoryLabel()}
+                                    data-testid="catastrophe-hurricane-category"
+                                    bind:value={$hurricaneCategoryStore}
+                                />
+                                <span class="whitespace-nowrap tabular-nums"
+                                    >{$LL.actionbar.catastrophe.hurricaneCategory({
+                                        category: $hurricaneCategoryStore,
+                                        wind: hurricaneMaxWind(Number($hurricaneCategoryStore)),
+                                    })}</span
+                                >
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input
+                                    type="range"
+                                    class="w-24"
+                                    min={HURRICANE_MIN_MINUTES}
+                                    max={HURRICANE_MAX_MINUTES}
+                                    step="1"
+                                    aria-label={$LL.actionbar.catastrophe.hurricaneMinutesLabel()}
+                                    data-testid="catastrophe-hurricane-minutes"
+                                    bind:value={$hurricaneMinutesStore}
+                                />
+                                <span class="whitespace-nowrap tabular-nums"
+                                    >{$LL.actionbar.catastrophe.hurricaneMinutes({
+                                        minutes: $hurricaneMinutesStore,
+                                    })}</span
+                                >
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input
+                                    type="range"
+                                    class="w-24"
+                                    min="0"
+                                    max="355"
+                                    step="5"
+                                    aria-label={$LL.actionbar.catastrophe.hurricaneHeadingLabel()}
+                                    data-testid="catastrophe-hurricane-heading"
+                                    bind:value={$hurricaneHeadingStore}
+                                />
+                                <span class="whitespace-nowrap tabular-nums"
+                                    >{$LL.actionbar.catastrophe.hurricaneHeading({
+                                        point: $LL.actionbar.weatherBanner.windPoint[hurricanePoint](),
+                                        degrees: $hurricaneHeadingStore,
+                                    })}</span
+                                >
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <span class="whitespace-nowrap"
+                                    >{$LL.actionbar.catastrophe.hurricaneWaterEffectLabel()}</span
+                                >
+                                <select
+                                    class="rounded bg-white/10 px-1 py-0.5"
+                                    aria-label={$LL.actionbar.catastrophe.hurricaneWaterEffectLabel()}
+                                    data-testid="catastrophe-hurricane-water-effect"
+                                    value={String($hurricaneWaterEffectStore)}
+                                    onchange={(event) =>
+                                        hurricaneWaterEffectStore.set(Number(event.currentTarget.value))}
+                                >
+                                    {#each HURRICANE_WATER_EFFECTS as effect (effect)}
+                                        <option value={String(effect)}>
+                                            {effect === 1
+                                                ? $LL.actionbar.catastrophe.hurricaneWaterRealistic()
+                                                : $LL.actionbar.catastrophe.hurricaneWaterExaggerated({
+                                                      times: effect,
+                                                  })}
+                                        </option>
+                                    {/each}
+                                </select>
+                            </label>
+                            <p class="m-0 basis-full text-xs opacity-70">
+                                {$LL.actionbar.catastrophe.hurricaneWaterEffectHelp()}
+                            </p>
+                            {#if hurricaneGoing === undefined}
+                                <button
+                                    type="button"
+                                    class="rounded-full bg-white/10 px-2 py-1 hover:bg-white/20"
+                                    data-testid="catastrophe-hurricane-start"
+                                    onclick={startHurricane}
+                                >
+                                    {$LL.actionbar.catastrophe.hurricaneStart()}
+                                </button>
+                            {/if}
+                        </span>
+                    {:else if sized === "downpour"}
                         <label class="flex items-center gap-1 whitespace-nowrap">
                             <input
                                 type="checkbox"
@@ -413,6 +583,25 @@
                                 >{$LL.actionbar.catastrophe.size({ tiles: $meteorRadiusTilesStore })}</span
                             >
                         </label>
+                    {/if}
+                    {#if hurricaneGoing !== undefined}
+                        <!-- A hurricane crosses the map: where it is, how hard it blows and rains, how to stop it. -->
+                        <span class="flex basis-full items-center gap-2">
+                            <span class="tabular-nums" data-testid="catastrophe-hurricane-going">{hurricaneGoing}</span>
+                            {#if hurricaneRise !== undefined}
+                                <span class="tabular-nums text-sky-300" data-testid="catastrophe-hurricane-rise">
+                                    {$LL.actionbar.catastrophe.hurricaneRise({ rise: hurricaneRise })}
+                                </span>
+                            {/if}
+                            <button
+                                type="button"
+                                class="rounded-full bg-white/10 px-2 py-1 hover:bg-white/20"
+                                data-testid="catastrophe-hurricane-stop"
+                                onclick={stopHurricane}
+                            >
+                                {$LL.actionbar.catastrophe.hurricaneStop()}
+                            </button>
+                        </span>
                     {/if}
                     {#if coldLying !== undefined}
                         <!-- Cold air lies on the map: how cold, for how long, and how to stop it. -->

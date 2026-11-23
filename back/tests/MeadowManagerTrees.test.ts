@@ -1,5 +1,5 @@
-import { TILE_PX, WeatherType } from "@workadventure/map-editor";
-import type { WAMFileFormat } from "@workadventure/map-editor";
+import { HURRICANE_RMAX_PX, TILE_PX, WeatherType } from "@workadventure/map-editor";
+import type { Hurricane, WAMFileFormat } from "@workadventure/map-editor";
 import type { SubToPusherRoomMessage, TreeFireMessage } from "@workadventure/messages";
 import { describe, expect, it, vi } from "vitest";
 import { MeadowManager } from "../src/Model/MeadowManager";
@@ -17,7 +17,15 @@ function createHarness({
     saved = {},
     random = () => 1,
     wind = { windFrom: 0, windSpeed: 0 },
-}: { saved?: Record<string, string>; random?: () => number; wind?: { windFrom: number; windSpeed: number } } = {}) {
+    clock = () => Date.UTC(2026, 6, 14, 10),
+    growMinutes,
+}: {
+    saved?: Record<string, string>;
+    random?: () => number;
+    wind?: { windFrom: number; windSpeed: number };
+    clock?: () => number;
+    growMinutes?: number;
+} = {}) {
     const told: TreeFireMessage[] = [];
     const store: Record<string, string> = { ...saved };
     const repository = {
@@ -34,7 +42,7 @@ function createHarness({
         entityCollections: [],
         entities: { oak: treeAt(10, 10), far: treeAt(30, 30) },
         // A clear sky: the ground stays dry, a tree can burn.
-        settings: { weather: WeatherType.Clear },
+        settings: { weather: WeatherType.Clear, ...(growMinutes ? { meadow: { growMinutes } } : {}) },
     } as unknown as WAMFileFormat;
     const room = {
         getWam: () => wam,
@@ -47,7 +55,7 @@ function createHarness({
         { slotsFor: vi.fn(() => undefined) },
         () => undefined,
         { repository, roomUrl: "room" },
-        () => Date.UTC(2026, 6, 14, 10),
+        clock,
         () => ({ width: 80, height: 80 }),
         undefined,
         () => ({ danger: 0, ...wind }),
@@ -151,7 +159,7 @@ describe("MeadowManager and the trees", () => {
         wam.settings = { ...wam.settings, meadow: { enabled: false } } as WAMFileFormat["settings"];
         steps(1);
         expect(told).toHaveLength(1);
-        expect(told[0].trees).toEqual([{ id: "oak", fire: 0, damage: 0 }]);
+        expect(told[0].trees).toEqual([{ id: "oak", fire: 0, damage: 0, fallen: 0 }]);
         expect(manager.treeSnapshot()).toBeUndefined();
         expect(manager.ignite(x, y, 1)).toBe(0);
     });
@@ -172,5 +180,50 @@ describe("MeadowManager and the trees", () => {
         // Twenty tiles away: nothing to run from.
         expect(fire?.near(x + 20 * TILE_PX, y)).toBeUndefined();
         expect(fire?.burning(x + 20 * TILE_PX, y)).toBe(false);
+    });
+
+    it("keeps the trees a hurricane laid down lying until a player stops it, then as long as the map says", () => {
+        let now = Date.UTC(2026, 6, 14, 10);
+        // A map whose meadow grows in a minute: a tree laid down lies 30 s, then grows back in 30 s.
+        const { manager, steps } = createHarness({ clock: () => now, growMinutes: 1 });
+        const oak = foot(10, 10);
+        // A category 4 whose eye stays put, the oak at the radius of its strongest winds, half way through its
+        // passage of ten minutes: it blows there all along.
+        let hurricane: Hurricane | undefined = {
+            id: 1,
+            category: 4,
+            durationMs: 600_000,
+            heading: 0,
+            southern: false,
+            startedAt: now - 300_000,
+            fromX: oak.x + HURRICANE_RMAX_PX,
+            fromY: oak.y,
+            toX: oak.x + HURRICANE_RMAX_PX,
+            toY: oak.y,
+            anchorX: oak.x + HURRICANE_RMAX_PX,
+            anchorY: oak.y,
+        };
+        manager.skyUnder(() => hurricane);
+        manager.start();
+        const run = (seconds: number): void => {
+            for (let step = 0; step < seconds / 2; step++) {
+                now += 2000;
+                steps(1);
+            }
+        };
+        const oakState = () => manager.treeSnapshot()?.trees.find((tree) => tree.id === "oak");
+        run(6);
+        expect(oakState()).toMatchObject({ fire: 0, damage: 16 });
+        // Four minutes of hurricane: still lying.
+        run(240);
+        expect(oakState()).toMatchObject({ fire: 0, damage: 16 });
+        // A player stops it: 30 s lying from now, then 30 s growing back.
+        hurricane = undefined;
+        run(28);
+        expect(oakState()).toMatchObject({ fire: 0, damage: 16 });
+        run(4);
+        expect(oakState()?.damage).toBeLessThan(16);
+        run(30);
+        expect(oakState()).toBeUndefined();
     });
 });

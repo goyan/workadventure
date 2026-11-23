@@ -5,6 +5,7 @@ import type {
     Drain,
     FireConditions,
     FireThresholds,
+    Hurricane,
     LifeFire,
     PrecipitationAir,
     WaterView,
@@ -32,6 +33,8 @@ export interface RoomGroundInputs {
     balls(): readonly Ball[];
     /** The masses of cold air the players hold (the cold snap of the catastrophes). None when absent. */
     colds?(): readonly ColdMass[];
+    /** The hurricane crossing the map: its wind, its air and its rain take the place of those of the room. */
+    hurricane?(): Hurricane | undefined;
     /** Where the animals that graze are (map pixels). */
     grazers(): readonly { x: number; y: number }[];
     /** The air the precipitation of the room falls through; undefined while it is not known. */

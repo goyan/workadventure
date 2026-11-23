@@ -11,6 +11,8 @@ import type { LifeFire } from "../Life/FireFear";
 import { liquidRainRate, snowRainRate, snowShareOf } from "../Weather/Precipitation";
 import type { PrecipitationAir } from "../Weather/Precipitation";
 import { rainRateAt } from "../Weather/RainRate";
+import { HURRICANE_GUST_FACTOR, hurricaneAt, hurricaneHere, skyRainUnder } from "../Catastrophe/Hurricane";
+import type { Hurricane } from "../Catastrophe/Hurricane";
 import { REAL_WEATHER_SLOT_MS } from "../Weather/RealWeather";
 import type { MapPlace, RealWeatherSlot } from "../Weather/RealWeather";
 import { seasonAt } from "../Weather/SeasonClock";
@@ -21,7 +23,7 @@ import { landWallsOf } from "./LandWalls";
 import { FIRE_THAW_MM_PER_SECOND, Meadow, MEADOW_STEP_SECONDS, pavedTilesOf } from "./Meadow";
 import type { MeadowStepInput } from "./Meadow";
 import type { SnowWeather } from "./Snow";
-import { TreeFire } from "./TreeFire";
+import { TREE_FALL_GUST_KMH, TreeFire } from "./TreeFire";
 import type { Ember, ToldTree } from "./TreeFire";
 import type { WaterGrid } from "./WaterGrid";
 import { freezeThawSpeedOf, PX_PER_MM, waterTimesOf } from "./WaterInputs";
@@ -125,6 +127,8 @@ export class MeadowSimulation {
     /** The clock of the snow and the ice, as the water lives it (timesWith); undefined: the speed of the map. */
     private livedTimes: (() => number) | undefined;
     private air: () => PrecipitationAir | undefined = () => undefined;
+    /** The hurricane crossing the map, whose rain takes the place of that of the map (none on a ground of one's own). */
+    private hurricane: () => Hurricane | undefined = () => undefined;
     /** The part of the rain of the map that falls as snow now, in mm of water an hour. */
     private snowRate = 0;
     /** The air over the snow lying on the ground (temperature, humidity, wind): unknown until the room gives it. */
@@ -368,6 +372,11 @@ export class MeadowSimulation {
 
     public fallThrough(air: () => PrecipitationAir | undefined): void {
         this.air = air;
+    }
+
+    /** The catastrophes of the room say which hurricane crosses the map: its rain falls in place of that of the map. */
+    public skyUnder(hurricane: () => Hurricane | undefined): void {
+        this.hurricane = hurricane;
     }
 
     /** The catastrophes of the room say which masses of cold air its players hold. */
@@ -615,10 +624,17 @@ export class MeadowSimulation {
                   ? this.rain.slotsFor(settings.weatherLocation)
                   : undefined;
             // What falls as snow lies where it fell: only the rain runs to the hollows and soaks the soil.
-            const falling = rainRateAt(settings, this.clock(), slots);
+            const mapRain = rainRateAt(settings, this.clock(), slots);
+            // Under a hurricane, its rain in place of that of the map: the total of a real passage, over the real
+            // time of the meadow; its snow over the clock of the snow (snowInput), as fast as the water.
+            const storm = replaying ? undefined : this.hurricane();
+            const falling = skyRainUnder(mapRain, storm, this.clock());
             this.rainRate = liquidRainRate(falling, this.airNow());
             // ...and the snow lies on the ground, until it melts.
-            this.snowRate = snowRainRate(falling, this.airNow());
+            this.snowRate = snowRainRate(
+                skyRainUnder(mapRain, storm, this.clock(), this.livedTimes?.() ?? waterTimesOf(settings?.water)),
+                this.airNow(),
+            );
             // ...and in the same cold the soil freezes: its water stays, its grass lies dormant.
             this.frost = soilFrostOf(this.airNow());
         }
@@ -713,7 +729,13 @@ export class MeadowSimulation {
         // An ice that thickens or thaws is seen moving, as a snow is.
         if (meadow.iceMoved()) this.snowMoved = true;
         if (!replaying) for (const grazer of this.grazers()) meadow.graze(grazer.x, grazer.y, seconds);
-        // The trees after the ground they stand on: what they set on fire is told with this step.
+        // The trees after the ground they stand on: what they set on fire is told with this step. The wind at each of
+        // them lays it down in its strongest gusts: the wind of the hurricane where it blows (it depends on where a
+        // tree is from the eye), that of the room elsewhere.
+        const crossing = replaying ? undefined : this.hurricane();
+        const at = this.clock();
+        const roomGust = weather.windSpeed * HURRICANE_GUST_FACTOR;
+        const stormy = hurricaneAt(crossing, at) !== undefined;
         const trees = this.trees.step({
             seconds: seconds,
             rainMmPerHour: this.rainRate,
@@ -722,6 +744,15 @@ export class MeadowSimulation {
             growSeconds: set.growMinutes * 60,
             groundBurning: meadow.burning() > 0,
             random: replaying ? NO_LUCK : this.random,
+            strongWind: stormy || roomGust >= TREE_FALL_GUST_KMH,
+            // The trees it laid down lie until it is over.
+            stormy,
+            windAt: (x, y) => {
+                const here = hurricaneHere(crossing, at, x, y);
+                return here
+                    ? { gust: here.gust * Math.min(1, Math.max(0, here.share)), from: here.windFrom }
+                    : { gust: roomGust, from: weather.windFrom };
+            },
         });
         if (!replaying) this.tellTrees(trees.changed, trees.embers);
         // A fire is seen running: the room is told at every step while one burns, and once more when it is out.
@@ -837,7 +868,7 @@ export class MeadowSimulation {
 
     /** Every tree that burns or is charred, for a player who joins the room. Undefined when every tree is green. */
     public treeSnapshot(): TreeFireMessage | undefined {
-        const trees = this.trees.damaged();
+        const trees = this.trees.damaged().map(treeOnWire);
         return trees.length > 0 ? { trees, whole: true, embers: [] } : undefined;
     }
 
@@ -865,7 +896,7 @@ export class MeadowSimulation {
             message: {
                 $case: "treeFireMessage",
                 treeFireMessage: {
-                    trees: changed.map((tree) => ({ id: tree.id, fire: tree.fire, damage: tree.damage })),
+                    trees: changed.map(treeOnWire),
                     whole: false,
                     embers: embers.map((ember) => ({
                         fromX: Math.round(ember.fromX),
@@ -947,4 +978,9 @@ export class MeadowSimulation {
 /** The snow or the ice of the meadow as the room is told it: nothing at all where none lies. */
 function snowField(snow: Uint8Array, zip: (bytes: Uint8Array) => Uint8Array): Uint8Array {
     return snow.some((value) => value > 0) ? zip(snow) : new Uint8Array(0);
+}
+
+/** A tree as it is told to the browsers: standing (fallen 0) unless the wind laid it down. */
+function treeOnWire(tree: ToldTree): { id: string; fire: number; damage: number; fallen: number } {
+    return { id: tree.id, fire: tree.fire, damage: tree.damage, fallen: tree.fallen ?? 0 };
 }

@@ -112,9 +112,9 @@ const actionbar = {
     mapClock: {
         freezeThaw: {
             title: "Speed of the freeze and the thaw",
-            what: "The ice that takes and thaws, the snow that melts: for the whole map. The water keeps its own speed.",
-            real: "×1: as in reality, an hour of frost or thaw lasts an hour.",
-            faster: "×{speed}: an hour of frost or thaw lasts {duration}.",
+            what: "The ice that takes and thaws, the snow that melts, and the passage of a hurricane: for the whole map. The water keeps its own speed.",
+            real: "×1: as in reality, an hour of frost or thaw lasts an hour; the hurricane crosses the map in the time chosen.",
+            faster: "×{speed}: an hour of frost or thaw lasts {duration}; the hurricane goes {hurricane} times faster (never under 30 s).",
             badge: "Frost ×{speed}",
             badgeHint: "On this map, the freeze and the thaw go {speed} times faster than in reality (not the water).",
             reset: "Back to ×1, as in reality",
@@ -493,6 +493,34 @@ const actionbar = {
         coldLeftMinutes: "{minutes} min {seconds} s",
         coldLeftSeconds: "{seconds} s",
         coldStop: "Stop the cold snap",
+        hurricane: "Hurricane",
+        hurricaneCategoryLabel: "Category of the hurricane, on the Saffir-Simpson scale",
+        hurricaneCategory: "Category {category}: wind up to {wind} km/h",
+        hurricaneMinutesLabel: "Time the eye takes to cross the map, in minutes",
+        hurricaneMinutes: "{minutes} min to cross the map",
+        hurricaneWaterEffectLabel: "Effect on the water (pressure and wind)",
+        hurricaneWaterRealistic: "Realistic",
+        hurricaneWaterExaggerated: "Exaggerated ×{times}",
+        hurricaneWaterEffectHelp:
+            "The dome of water under the eye only forms at the slow speeds of the « > » widget: an eye faster than the waves of the lake outruns it.",
+        hurricaneRise: "Water: +{rise} m at the highest since it began",
+        hurricaneHeadingLabel: "Where the hurricane goes",
+        hurricaneHeading: "It goes towards {point} ({degrees}°)",
+        hurricaneStart: "Launch the hurricane",
+        hurricaneStop: "Stop the hurricane",
+        hurricaneHelp:
+            "A hurricane REDUCED TO THE SIZE OF THE MAP (a choice, as the comet is: a real one is hundreds of kilometres wide): its eye, some thirty metres across, crosses the map within its spiral of clouds. The wind turns round the eye, strongest at the wall, calm in the eye under a clear sky, then the other way once the eye has passed; rain in spiral bands, a sea white with spray under the strongest winds. Its wind, its rain and its clouds take the place of the weather of the room for everyone. Any player can stop it.",
+        hurricaneGoing:
+            "Category {category} hurricane: {phase}, wind {wind} km/h, gusts {gust}, rain {rain} mm/h, {left} left",
+        hurricanePhase: {
+            bands: "rain bands",
+            wall: "eyewall",
+            eye: "eye",
+            bandsAfter: "rain bands, going away",
+            wallAfter: "second eyewall",
+        },
+        hurricaneOverWind:
+            "A hurricane crosses the map: its wind takes the place of that of the room until the passage ends.",
         ball: "Ball",
         ballSizeLabel: "Size of the ball: its diameter, in tiles",
         ballArmedHelp:

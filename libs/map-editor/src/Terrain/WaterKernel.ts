@@ -64,6 +64,20 @@ export interface InertiaMove {
     damping: WaveSettings["damping"];
     breaking: number;
     carried: number;
+    /**
+     * The pressure of the air over the water, as a height of water (map pixels; WaterGrid.setPressure): the water
+     * runs down the slope of its surface plus this, not of its surface alone (the inverted barometer). Read only when
+     * `pressed` is 1; 0 leaves the flows exactly as without it.
+     */
+    head: Float32Array;
+    pressed: number;
+    /**
+     * How hard the wind pushes the water over each cell, towards the east and the south (map pixels of water over a
+     * cell a second, a second: AirPressure.windPush): read only when `pressed` is 1, the push of a face the mean of
+     * those of its two cells.
+     */
+    windEast: Float32Array;
+    windSouth: Float32Array;
     /** The compiled kernel that runs the passes of this grid, when it has one (its arrays live in its memory). */
     compiled: CompiledPasses | undefined;
 }
@@ -72,7 +86,8 @@ export interface InertiaMove {
 export function fluxPass(move: InertiaMove, rowFrom: number, rowTo: number): void {
     const { width, height, depth, ground, closed, hollow, rough, powers, east, south } = move;
     const { speedEast, speedSouth, nextSpeedEast, nextSpeedSouth } = move;
-    const { dt, swiftest, pull, pulled, roughness, damping, breaking, carried } = move;
+    const { dt, swiftest, pull, pulled, roughness, damping, breaking, carried, head, windEast, windSouth } = move;
+    const pressed = move.pressed === 1;
     const lastPower = powers.length - 1;
     for (let row = rowFrom; row < rowTo; row++) {
         for (let column = 0; column < width; column++) {
@@ -94,7 +109,11 @@ export function fluxPass(move: InertiaMove, rowFrom: number, rowTo: number): voi
                     else {
                         const drop = surface - otherSurface;
                         const inWater = hollow[index] === 1 && hollow[other] === 1;
-                        let flow = east[index] + pull * Math.min(passing, pulled) * drop;
+                        // Pushed down the slope of the surface, and of the pressure of the air over it.
+                        const drive = pressed ? drop + (head[index] - head[other]) : drop;
+                        let flow = east[index] + pull * Math.min(passing, pulled) * drive;
+                        // And by the wind over it.
+                        if (pressed) flow += dt * 0.5 * (windEast[index] + windEast[other]);
                         if (carried > 0 && inWater) {
                             // The water brings the speed it had upstream, along the row and across it.
                             const along = speedEast[index];
@@ -147,7 +166,9 @@ export function fluxPass(move: InertiaMove, rowFrom: number, rowTo: number): voi
                     else {
                         const drop = surface - otherSurface;
                         const inWater = hollow[index] === 1 && hollow[other] === 1;
-                        let flow = south[index] + pull * Math.min(passing, pulled) * drop;
+                        const drive = pressed ? drop + (head[index] - head[other]) : drop;
+                        let flow = south[index] + pull * Math.min(passing, pulled) * drive;
+                        if (pressed) flow += dt * 0.5 * (windSouth[index] + windSouth[other]);
                         if (carried > 0 && inWater) {
                             const along = speedSouth[index];
                             const alongChange =

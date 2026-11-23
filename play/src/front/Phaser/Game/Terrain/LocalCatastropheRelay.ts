@@ -1,5 +1,6 @@
 import { ballRadiusPx, coldCelsius, coldTiles } from "@workadventure/map-editor";
-import type { Ball, ColdMass, Downpour, Drain } from "@workadventure/map-editor";
+import { hurricaneTrack } from "@workadventure/map-editor";
+import type { Ball, ColdMass, Downpour, Drain, Hurricane } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
 import type { CatastropheMessage } from "@workadventure/messages";
 import type { LocalTerrainCommand } from "./LocalTerrainSimulation";
@@ -25,6 +26,8 @@ export class LocalCatastropheRelay {
     private readonly drains = new Map<number, { drain: Drain; until: number }>();
     private readonly balls = new Map<number, { ball: Ball; until: number }>();
     private readonly colds = new Map<number, { cold: ColdMass; until: number }>();
+    /** The hurricane crossing the map, until it ends or is stopped (its weather is computed from it). */
+    private hurricane: { hurricane: Hurricane; until: number } | undefined;
     private falls: { at: number; command: LocalCatastropheCommand }[] = [];
     private changed = false;
 
@@ -76,6 +79,32 @@ export class LocalCatastropheRelay {
                 this.changed = true;
                 return [];
             }
+            case CatastropheKind.CATASTROPHE_HURRICANE: {
+                const track = message.hurricane;
+                if (message.impactInMs <= 0 || !track) {
+                    if (this.hurricane) this.changed = true;
+                    this.hurricane = undefined;
+                    return [];
+                }
+                const known = this.hurricane?.hurricane;
+                const hurricane = {
+                    id,
+                    startedAt: track.startedAt,
+                    ...hurricaneTrack(track, track.southern),
+                    fromX: track.fromX,
+                    fromY: track.fromY,
+                    toX: track.toX,
+                    toY: track.toY,
+                    anchorX: track.anchorX,
+                    anchorY: track.anchorY,
+                    // The crossing as the server runs it now (the speed of the map).
+                    ...(track.durationMs > 0 ? { durationMs: track.durationMs, times: track.times || 1 } : {}),
+                };
+                // Told again each second: the local ground is told only when it is another one.
+                if (!known || known.id !== id || known.startedAt !== hurricane.startedAt) this.changed = true;
+                this.hurricane = { hurricane, until };
+                return [];
+            }
             default:
                 return [];
         }
@@ -95,6 +124,10 @@ export class LocalCatastropheRelay {
                 }
             }
         }
+        if (this.hurricane && this.hurricane.until <= now) {
+            this.hurricane = undefined;
+            this.changed = true;
+        }
         if (this.changed) {
             this.changed = false;
             commands.push(this.state());
@@ -111,6 +144,7 @@ export class LocalCatastropheRelay {
             balls: [...this.balls.values()].map(({ ball }) => ball),
             // The masses of cold air held; the local ground keeps those let go while they warm, as the server does.
             ...(this.colds.size > 0 ? { colds: [...this.colds.values()].map(({ cold }) => cold) } : {}),
+            ...(this.hurricane ? { hurricane: this.hurricane.hurricane } : {}),
         };
     }
 }

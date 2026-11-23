@@ -55,6 +55,7 @@ export * from "./Catastrophe/Downpour";
 export * from "./Catastrophe/Drain";
 export * from "./Catastrophe/Ball";
 export * from "./Catastrophe/Cold";
+export * from "./Catastrophe/Hurricane";
 export * from "./Life/WaterBodies";
 export * from "./Life/LandPlaces";
 export * from "./Terrain/LandTrees";

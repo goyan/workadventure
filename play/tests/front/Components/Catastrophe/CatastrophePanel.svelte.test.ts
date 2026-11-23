@@ -6,6 +6,18 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
     const label = (text: string) => () => text;
     const LL = readable({
         actionbar: {
+            weatherBanner: {
+                windPoint: {
+                    n: label("N"),
+                    ne: label("NE"),
+                    e: label("E"),
+                    se: label("SE"),
+                    s: label("S"),
+                    sw: label("SW"),
+                    w: label("W"),
+                    nw: label("NW"),
+                },
+            },
             catastrophe: {
                 label: label("Disaster"),
                 meteor: label("Comet"),
@@ -35,6 +47,32 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                     `${minutes} min ${seconds} s`,
                 coldLeftSeconds: ({ seconds }: { seconds: number }) => `${seconds} s`,
                 coldStop: label("Stop the cold snap"),
+                hurricane: label("Hurricane"),
+                hurricaneCategoryLabel: label("Category of the hurricane"),
+                hurricaneCategory: ({ category, wind }: { category: number; wind: number }) =>
+                    `Category ${category}: wind up to ${wind} km/h`,
+                hurricaneMinutesLabel: label("Time the eye takes to cross the map"),
+                hurricaneMinutes: ({ minutes }: { minutes: number }) => `${minutes} min to cross the map`,
+                hurricaneHeadingLabel: label("Where the hurricane goes"),
+                hurricaneHeading: ({ point, degrees }: { point: string; degrees: number }) =>
+                    `It goes towards ${point} (${degrees}°)`,
+                hurricaneWaterEffectLabel: label("Effect on the water (pressure and wind)"),
+                hurricaneWaterRealistic: label("Realistic"),
+                hurricaneWaterExaggerated: ({ times }: { times: number }) => `Exaggerated ×${times}`,
+                hurricaneWaterEffectHelp: label("The dome of water under the eye only forms at the slow speeds"),
+                hurricaneRise: ({ rise }: { rise: string }) => `Water: +${rise} m at the highest since it began`,
+                hurricaneStart: label("Launch the hurricane"),
+                hurricaneStop: label("Stop the hurricane"),
+                hurricaneHelp: label("A hurricane reduced to the size of the map"),
+                hurricaneGoing: ({ category, phase, wind, gust, rain, left }: Record<string, string | number>) =>
+                    `Category ${category} hurricane: ${phase}, wind ${wind} km/h, gusts ${gust}, rain ${rain} mm/h, ${left} left`,
+                hurricanePhase: {
+                    bands: label("rain bands"),
+                    wall: label("eyewall"),
+                    eye: label("eye"),
+                    bandsAfter: label("rain bands, going away"),
+                    wallAfter: label("second eyewall"),
+                },
                 ball: label("Ball"),
                 ballSizeLabel: label("Size of the ball: its diameter"),
                 ballArmedHelp: label("Hold the click: a solid ball, half in the water under the pointer"),
@@ -45,11 +83,13 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
             },
         },
     });
-    return { default: LL, LL };
+    return { default: LL, LL, locale: readable("en-US") };
 });
 
 const stopColdSnap = vi.hoisted(() => vi.fn());
 vi.mock("../../../../src/front/Components/Catastrophe/coldSnapActions", () => ({ stopColdSnap }));
+const { startHurricane, stopHurricane } = vi.hoisted(() => ({ startHurricane: vi.fn(), stopHurricane: vi.fn() }));
+vi.mock("../../../../src/front/Components/Catastrophe/hurricaneActions", () => ({ startHurricane, stopHurricane }));
 
 vi.mock("../../../../src/front/Components/Catastrophe/WeatherTab.svelte", async () => ({
     default: ((await import("./WeatherTabStub.svelte")) as { default: unknown }).default,
@@ -63,6 +103,9 @@ import {
     coldLyingStore,
     coldRadiusTilesStore,
     fireRadiusTilesStore,
+    hurricaneHighestRiseStore,
+    hurricaneShownStore,
+    hurricaneWaterEffectStore,
     downpourWholeMapStore,
     drainRadiusTilesStore,
     meteorRadiusTilesStore,
@@ -277,6 +320,133 @@ describe("CatastrophePanel", () => {
         coldLyingStore.set(undefined);
         flushSync();
         expect(target.querySelector('[data-testid="catastrophe-cold-stop"]')).toBeNull();
+    });
+
+    it("sets a hurricane out (category, crossing, heading), launches it, says it and stops it", () => {
+        renderOpen();
+        const tile = target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-hurricane"]');
+        expect(tile?.textContent).toContain("Hurricane");
+        tile?.click();
+        flushSync();
+        // Not thrown at a point: nothing is armed, its settings show.
+        expect(get(armedCatastropheStore)).toBeUndefined();
+        expect(target.textContent).toContain("Category 4: wind up to 214 km/h");
+        expect(target.textContent).toContain("5 min to cross the map");
+        expect(target.textContent).toContain("It goes towards W (290°)");
+        expect(help()?.textContent).toContain("reduced to the size of the map");
+        target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-hurricane-start"]')?.click();
+        expect(startHurricane).toHaveBeenCalledTimes(1);
+        hurricaneShownStore.set({
+            hurricane: {
+                id: 1,
+                startedAt: 0,
+                category: 4,
+                durationMs: 300_000,
+                heading: 290,
+                southern: false,
+                fromX: 0,
+                fromY: 0,
+                toX: 1,
+                toY: 1,
+                anchorX: 0,
+                anchorY: 0,
+            },
+            here: {
+                progress: 0.5,
+                share: 1,
+                eyeX: 0,
+                eyeY: 0,
+                speedKmh: 3,
+                after: false,
+                phase: "wall",
+                distanceM: 30,
+                windSpeed: 213.6,
+                gust: 262.7,
+                windFrom: 90,
+                rainRate: 12,
+                cloudCover: 1,
+            },
+        });
+        flushSync();
+        const going = target.querySelector('[data-testid="catastrophe-hurricane-going"]');
+        expect(going?.textContent).toContain("eyewall, wind 214 km/h, gusts 263, rain 12 mm/h, 2 min 30 s left");
+        // While it goes on, no second one.
+        expect(target.querySelector('[data-testid="catastrophe-hurricane-start"]')).toBeNull();
+        target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-hurricane-stop"]')?.click();
+        expect(stopHurricane).toHaveBeenCalledTimes(1);
+        hurricaneShownStore.set(undefined);
+        flushSync();
+        expect(target.querySelector('[data-testid="catastrophe-hurricane-stop"]')).toBeNull();
+    });
+
+    it("tells how high the water rose since the hurricane began, only while one goes and the water has risen", () => {
+        renderOpen();
+        hurricaneShownStore.set({
+            hurricane: {
+                id: 1,
+                startedAt: 0,
+                category: 4,
+                durationMs: 300_000,
+                heading: 290,
+                southern: false,
+                fromX: 0,
+                fromY: 0,
+                toX: 1,
+                toY: 1,
+                anchorX: 0,
+                anchorY: 0,
+            },
+            here: {
+                progress: 0.5,
+                share: 1,
+                eyeX: 0,
+                eyeY: 0,
+                speedKmh: 3,
+                after: false,
+                phase: "wall",
+                distanceM: 30,
+                windSpeed: 213.6,
+                gust: 262.7,
+                windFrom: 90,
+                rainRate: 12,
+                cloudCover: 1,
+            },
+        });
+        hurricaneHighestRiseStore.set(0.7);
+        flushSync();
+        const rise = target.querySelector('[data-testid="catastrophe-hurricane-rise"]');
+        expect(rise?.textContent).toContain("Water: +0.7 m at the highest since it began");
+        hurricaneHighestRiseStore.set(0.02);
+        flushSync();
+        expect(target.querySelector('[data-testid="catastrophe-hurricane-rise"]')).toBeNull();
+        hurricaneHighestRiseStore.set(undefined);
+        flushSync();
+        expect(target.querySelector('[data-testid="catastrophe-hurricane-rise"]')).toBeNull();
+        hurricaneShownStore.set(undefined);
+        flushSync();
+    });
+
+    it("chooses how much the hurricane acts on the water, realistic by default, and keeps it a number", () => {
+        hurricaneWaterEffectStore.set(1);
+        renderOpen();
+        target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-hurricane"]')?.click();
+        flushSync();
+        const select = target.querySelector<HTMLSelectElement>('[data-testid="catastrophe-hurricane-water-effect"]');
+        expect(select).not.toBeNull();
+        expect(select?.selectedOptions[0]?.textContent?.trim()).toBe("Realistic");
+        expect(Array.from(select?.options ?? []).map((option) => option.textContent?.trim())).toEqual([
+            "Realistic",
+            "Exaggerated ×5",
+            "Exaggerated ×10",
+            "Exaggerated ×20",
+        ]);
+        if (select) {
+            select.value = "10";
+            select.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        flushSync();
+        expect(get(hurricaneWaterEffectStore)).toBe(10);
+        hurricaneWaterEffectStore.set(1);
     });
 
     it("arms the ball, and chooses its diameter from 1 to 16 tiles, with a help that says where its centre is", () => {

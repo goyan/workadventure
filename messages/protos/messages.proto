@@ -894,6 +894,39 @@ enum CatastropheKind {
   // telling. The server freezes what its meadow keeps there (water, snow, soil) by the rules of any frost; let go,
   // the mass stays where it was and comes back to the air of the map.
   CATASTROPHE_COLD = 7;
+  // A hurricane crosses the map, for the length a player chose: its wind, its rain and its sky take the place of the
+  // weather of the map. The server tells the room what it is once a second, every player computes the same weather
+  // from it and the time of the server. One a room; anyone stops it.
+  CATASTROPHE_HURRICANE = 8;
+}
+
+// How a hurricane crosses the map, as a player asks for it (the server keeps each value within bounds) and as the
+// server tells it. The hurricane is reduced to the size of the map: its eye crosses it.
+message HurricaneTrackMessage {
+  // Saffir-Simpson, 1 to 5.
+  int32 category = 1;
+  // How long the eye takes to cross the map, minutes.
+  int32 minutes = 2;
+  reserved 3;
+  // Where the storm goes, degrees (0 north, 90 east).
+  double heading = 4;
+  // Told by the server only: it turns clockwise (a map in the southern hemisphere), when it began (ms, the time of
+  // the server), where its eye comes in and goes out (map pixels), and the point it was sent over.
+  bool southern = 5;
+  double startedAt = 6;
+  double fromX = 7;
+  double fromY = 8;
+  double toX = 9;
+  double toY = 10;
+  double anchorX = 11;
+  double anchorY = 12;
+  // Told by the server only: how long the crossing lasts now (ms) and how many times faster than asked it goes (the
+  // speed of the map); `startedAt` is moved with them so that the eye goes on from where it is.
+  double durationMs = 13;
+  double times = 14;
+  // How many times stronger than in reality its low and its wind act on the water, to see it better: 1 (or absent:
+  // the real effect), 5, 10 or 20 (Hurricane.HURRICANE_WATER_EFFECTS). Asked by the player, kept by the server.
+  int32 waterEffect = 15;
 }
 
 // Browser to server: a player sets the conditions the fire of the room goes by (heat, humidity of the air, wind) by
@@ -938,6 +971,9 @@ message LaunchCatastropheMessage {
   bool release = 6;
   // A cold snap: the temperature of its air, in °C. The server keeps it within what a cold snap may be.
   optional double temperature = 7;
+  // A hurricane: how it crosses the map, its eye over `x`, `y` (the middle of the map when outside it). `release`
+  // stops it.
+  optional HurricaneTrackMessage hurricane = 8;
 }
 
 // Server to room: a catastrophe is on its way.
@@ -962,6 +998,9 @@ message CatastropheMessage {
   // A cold snap: the temperature of its air, in °C, as the server kept it. `impactInMs` is how long it is still
   // held when no other message comes; it then warms where it lies. 0: the cold air of the room was dispelled.
   optional double temperature = 13;
+  // A hurricane: how it crosses the map, told once a second while it goes on; `impactInMs` is how long it still
+  // lasts, 0 when it was stopped or ended.
+  optional HurricaneTrackMessage hurricane = 14;
 }
 
 // A player casts their fishing line: where the float lands, in map pixels. The server decides whether it does
@@ -1122,8 +1161,10 @@ message TreeFireStateMessage {
   string id = 1;
   // Its fire, from 0 (none) to 255 (at its height).
   uint32 fire = 2;
-  // What burnt of it, from 0 (green) to 16 (charred).
+  // What burnt of it, from 0 (green) to 16 (charred); for a tree laid down by the wind, what is still to grow back.
   uint32 damage = 3;
+  // Laid down by the wind: where that wind came from, in degrees (0 north, 90 east), plus 1; 0: standing.
+  uint32 fallen = 4;
 }
 
 // An ember on its way, in map pixels: where it left, where it falls, and how long it flies.

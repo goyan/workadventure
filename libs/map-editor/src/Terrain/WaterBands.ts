@@ -113,6 +113,7 @@ const FIGURES = [
     "damping",
     "breaking",
     "carried",
+    "pressed",
 ] as const;
 
 /** What the threads of a pass share: made by who leads, given to who follows. */
@@ -147,6 +148,9 @@ export type WaterBandsArrays = Pick<
     | "speedSouth"
     | "nextSpeedEast"
     | "nextSpeedSouth"
+    | "head"
+    | "windEast"
+    | "windSouth"
 > & {
     rowLost: Float64Array;
     /** The memory of the compiled kernel of the grid, when it has one: who follows joins it to run its passes. */
@@ -159,7 +163,21 @@ export interface WaterBandsNews {
     arrays: WaterBandsArrays | undefined;
 }
 
-const ARRAYS = ["depth", "ground", "spill", "closed", "hollow", "rough", "powers", "east", "south", "afford"] as const;
+const ARRAYS = [
+    "depth",
+    "ground",
+    "spill",
+    "closed",
+    "hollow",
+    "rough",
+    "powers",
+    "east",
+    "south",
+    "afford",
+    "head",
+    "windEast",
+    "windSouth",
+] as const;
 
 /** The slice `slice` of `slices` of the rows of a grid: where it starts. */
 function sliceStart(slice: number, slices: number, height: number): number {
@@ -383,6 +401,9 @@ export class WaterBandsLead {
                 speedSouth: move.speedSouth,
                 nextSpeedEast: move.nextSpeedEast,
                 nextSpeedSouth: move.nextSpeedSouth,
+                head: move.head,
+                windEast: move.windEast,
+                windSouth: move.windSouth,
                 rowLost,
                 memory: move.compiled?.threadMemory(),
             };
@@ -503,6 +524,10 @@ export class WaterBandsFollower {
             damping: 0,
             breaking: 0,
             carried: 0,
+            head: shared.head,
+            pressed: 0,
+            windEast: shared.windEast,
+            windSouth: shared.windSouth,
             // The compiled kernel of the grid, on its memory: this thread has its own instance of it there.
             compiled: memory ? WasmWaterKernel.join(memory) : undefined,
         };

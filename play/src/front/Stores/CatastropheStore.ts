@@ -5,9 +5,12 @@ import {
     DOWNPOUR_DEFAULT_TILES,
     DRAIN_DEFAULT_TILES,
     FIRE_DEFAULT_TILES,
+    HURRICANE_DEFAULT_CATEGORY,
+    HURRICANE_DEFAULT_HEADING,
+    HURRICANE_DEFAULT_MINUTES,
     METEOR_DEFAULT_TILES,
 } from "@workadventure/map-editor";
-import type { WaterBall } from "@workadventure/map-editor";
+import type { Hurricane, HurricaneHere, WaterBall } from "@workadventure/map-editor";
 import { derived, get, writable } from "svelte/store";
 
 /** "meteor" is the comet, which brings water; "fireball" is the burning meteor, which sets its crater on fire. */
@@ -45,6 +48,34 @@ export const coldCelsiusStore = writable<number>(COLD_DEFAULT_CELSIUS);
  * cold air lies on the map. Written by the view of the cold snap, read by the panel, which offers to stop it.
  */
 export const coldLyingStore = writable<{ celsius: number; secondsLeft: number | undefined } | undefined>(undefined);
+
+/**
+ * How the next hurricane crosses the map: its category, how long its eye takes to cross the map (minutes) and where it
+ * goes (degrees). Kept for the session.
+ */
+export const hurricaneCategoryStore = writable<number>(HURRICANE_DEFAULT_CATEGORY);
+export const hurricaneMinutesStore = writable<number>(HURRICANE_DEFAULT_MINUTES);
+export const hurricaneHeadingStore = writable<number>(HURRICANE_DEFAULT_HEADING);
+/**
+ * How many times stronger than in reality the next hurricane acts on the water (its low and its wind): 1 the real
+ * effect, 2 to 8 an exaggeration to see it better (HURRICANE_WATER_EFFECTS). Sent with the hurricane, for everyone.
+ */
+export const hurricaneWaterEffectStore = writable<number>(1);
+/**
+ * The flood of the hurricane as this browser saw it (Terrain/HurricaneFloodView): the most the water has risen over
+ * a cell of the map since the hurricane began (m), and how much higher than before it the water stands under the
+ * pointer (m). Undefined while there is no hurricane (nor its marks) to tell.
+ */
+export const hurricaneHighestRiseStore = writable<number | undefined>(undefined);
+export const pointerFloodRiseStore = writable<number | undefined>(undefined);
+
+/**
+ * The hurricane crossing the map, and what it is where this player looks, as of the last word of the server (once a
+ * second): the panel says it and offers to stop it. Undefined while none crosses the map.
+ */
+export const hurricaneShownStore = writable<{ hurricane: Hurricane; here: HurricaneHere | undefined } | undefined>(
+    undefined,
+);
 
 /** How wide the patch of fire set under the pointer is, in tiles: kept for the session. */
 export const fireRadiusTilesStore = writable<number>(FIRE_DEFAULT_TILES);

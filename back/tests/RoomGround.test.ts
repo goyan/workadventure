@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HURRICANE_RMAX_PX, hurricaneHere } from "@workadventure/map-editor";
+import type { Hurricane } from "@workadventure/map-editor";
 import { InlineRoomGround } from "../src/Model/Ground/InlineRoomGround";
 import type { RoomGround } from "../src/Model/Ground/RoomGround";
 import { byHand, groundWam, GROUND_NOW, happenAt, world } from "./helpers/GroundScenario";
@@ -63,6 +65,80 @@ describe("the ground of a room behind its door (RoomGround)", () => {
         // The map of these grounds goes six times faster than reality, and its steps cost nothing on their clock:
         // its water lives six steps of its time in each.
     }, 60_000);
+
+    it("lays down each tree the way the wind blows at that tree", async () => {
+        const hand = world(groundWam());
+        const reference = await byHand(hand.inputs);
+        await live(reference, hand.state);
+        reference.stop();
+        const trees = reference.treeSnapshot()?.trees ?? [];
+        // Both trees stood in gusts over 130 km/h while the hurricane blew, each from where the wind came at its
+        // foot (hurricaneHere): from 57 to 58 degrees at the tree west of the lake (40, 100), from 122 to 127 degrees
+        // at the one of the south-east corner (700, 700). Each lies its own way, still lying a minute later.
+        const west = trees.find((tree) => tree.id === "oak-west");
+        expect(west).toMatchObject({ fire: 0, damage: 16 });
+        expect(west?.fallen).toBeGreaterThanOrEqual(57 + 1);
+        expect(west?.fallen).toBeLessThanOrEqual(58 + 1);
+        const southEast = trees.find((tree) => tree.id === "oak-south-east");
+        expect(southEast).toMatchObject({ fire: 0, damage: 16 });
+        expect(southEast?.fallen).toBeGreaterThanOrEqual(122 + 1);
+        expect(southEast?.fallen).toBeLessThanOrEqual(127 + 1);
+    }, 60_000);
+
+    it("rains on the water at the real rate of a hurricane, and not at all in its eye", async () => {
+        /** The rain the water of the room last said it reads (mm an hour of its own time), and how fast it lives. */
+        const rainUnder = async (
+            hurricane: ReturnType<typeof world>["state"]["hurricane"],
+        ): Promise<{ rate: number; inflow: number }> => {
+            const { state, inputs, seen } = world(groundWam());
+            state.hurricane = hurricane;
+            // A warm air: what falls is rain.
+            state.air = { temperature: 26, humidity: 80 };
+            const ground = new InlineRoomGround(inputs);
+            await ground.startWater();
+            for (let tenth = 0; tenth < 30; tenth++) {
+                // eslint-disable-next-line no-await-in-loop
+                await vi.advanceTimersByTimeAsync(100);
+            }
+            const inflow = ground.water.livedTimes().inflow;
+            ground.stop();
+            const told = seen.told
+                .map(
+                    (line) =>
+                        JSON.parse(line) as {
+                            message?: { $case?: string; terrainWaterMessage?: { stats?: { rainRate?: number } } };
+                        },
+                )
+                .filter((message) => message.message?.$case === "terrainWaterMessage");
+            return { rate: told[told.length - 1]?.message?.terrainWaterMessage?.stats?.rainRate ?? NaN, inflow };
+        };
+        // Northwards over the point (200, 200) of the map, 3600 px in 5 min: at 0.5 its eye is there.
+        const storm = (progress: number): Hurricane => ({
+            id: 1,
+            startedAt: Date.now() - progress * 300_000,
+            category: 4,
+            durationMs: 300_000,
+            heading: 0,
+            southern: false,
+            fromX: 200,
+            fromY: 2000,
+            toX: 200,
+            toY: -1600,
+            anchorX: 200,
+            anchorY: 200,
+        });
+        // Its wall over the point: the eye a radius of the strongest winds (876 px) south of it.
+        const wall = storm((2000 - 200 - HURRICANE_RMAX_PX) / 3600);
+        const under = await rainUnder(wall);
+        // What the storm rains there, at its real rate, over the speed this water already lives at: not counted twice.
+        const falling = hurricaneHere(wall, Date.now(), 200, 200)?.rainRate ?? NaN;
+        expect(falling).toBeGreaterThan(5);
+        // Read within the last second: the storm went on meanwhile.
+        expect((under.rate * under.inflow) / falling).toBeCloseTo(1, 1);
+        // In the eye no rain falls, whatever the map says (30 mm/h).
+        expect((await rainUnder(undefined)).rate).toBeCloseTo(30, 6);
+        expect((await rainUnder(storm(0.5))).rate).toBe(0);
+    });
 
     it("keeps the floor of a building dry through its drain, as before (the sinks that dry a floor)", async () => {
         const { inputs, state } = world(groundWam());

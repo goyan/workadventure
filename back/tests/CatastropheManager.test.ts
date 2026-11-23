@@ -11,6 +11,7 @@ import {
     DRAIN_LASTS_MS,
     DRAINS_PER_ROOM,
     FIRE_PATCH_LASTS_MS,
+    HURRICANE_TELL_MS,
     METEOR_FALL_MS,
     METEORS_PER_ROOM,
 } from "@workadventure/map-editor";
@@ -657,5 +658,156 @@ describe("ice that gives way", () => {
             { kind: ICE, x: 330, radiusTiles: 1 },
             { kind: ICE, x: 340, radiusTiles: 1 },
         ]);
+    });
+});
+
+describe("CatastropheManager, hurricanes", () => {
+    const HURRICANE = CatastropheKind.CATASTROPHE_HURRICANE;
+    const track = {
+        category: 4,
+        minutes: 10,
+        heading: 290,
+        southern: false,
+        startedAt: 0,
+        fromX: 0,
+        fromY: 0,
+        toX: 0,
+        toY: 0,
+        anchorX: 0,
+        anchorY: 0,
+        durationMs: 0,
+        times: 0,
+        waterEffect: 0,
+    };
+
+    it("lets a hurricane cross the map, told to the room once a second until it ends", () => {
+        const { manager, sent } = harness();
+        expect(manager.request(1, HURRICANE, -1, -1, 0, true, false, undefined, track)).toBe(true);
+        expect(sent).toHaveLength(1);
+        expect(sent[0]).toMatchObject({ kind: HURRICANE, impactInMs: 10 * 60_000 });
+        expect(sent[0].hurricane).toMatchObject({
+            category: 4,
+            minutes: 10,
+            heading: 290,
+            startedAt: 0,
+            anchorX: 320,
+            anchorY: 240,
+        });
+        expect(manager.hurricane()).toMatchObject({ category: 4, durationMs: 600_000, startedAt: 0 });
+        vi.advanceTimersByTime(HURRICANE_TELL_MS);
+        expect(sent).toHaveLength(2);
+        expect(sent[1]).toMatchObject({ id: sent[0].id, impactInMs: 10 * 60_000 - HURRICANE_TELL_MS });
+        vi.advanceTimersByTime(10 * 60_000);
+        expect(sent[sent.length - 1]).toMatchObject({ id: sent[0].id, impactInMs: 0 });
+        expect(manager.hurricane()).toBeUndefined();
+        const told = sent.length;
+        vi.advanceTimersByTime(5 * HURRICANE_TELL_MS);
+        expect(sent).toHaveLength(told);
+    });
+
+    it("keeps one hurricane a room, which anyone may stop", () => {
+        const { manager, sent } = harness();
+        expect(manager.request(1, HURRICANE, 0, 0, 0, true, false, undefined, track)).toBe(true);
+        expect(manager.request(2, HURRICANE, 0, 0, 0, true, false, undefined, track)).toBe(false);
+        expect(manager.request(2, HURRICANE, 0, 0, 0, true, true)).toBe(true);
+        expect(sent[sent.length - 1]).toMatchObject({ kind: HURRICANE, impactInMs: 0 });
+        expect(manager.hurricane()).toBeUndefined();
+        expect(manager.request(2, HURRICANE, 0, 0, 0, true, false, undefined, track)).toBe(true);
+    });
+
+    it("keeps what is asked within bounds, and turns it the way of the hemisphere of the map", () => {
+        const { manager } = harness();
+        manager.southernWith(() => true);
+        manager.request(1, HURRICANE, 160, 120, 0, true, false, undefined, {
+            ...track,
+            category: 9,
+            minutes: 500,
+            heading: 90,
+        });
+        // Eastwards over (160, 120) of a map of 640 x 480: in at its west edge, out at its east edge.
+        expect(manager.hurricane()).toMatchObject({
+            category: 5,
+            durationMs: 30 * 60_000,
+            southern: true,
+            fromX: 0,
+            toX: 640,
+            anchorX: 160,
+            anchorY: 120,
+        });
+    });
+
+    it("refuses a hurricane without its track, and forgets it when the room stops", () => {
+        const { manager, sent } = harness();
+        expect(manager.request(1, HURRICANE, 0, 0, 0, true)).toBe(false);
+        manager.request(1, HURRICANE, 0, 0, 0, true, false, undefined, track);
+        manager.stop();
+        const told = sent.length;
+        vi.advanceTimersByTime(5 * HURRICANE_TELL_MS);
+        expect(sent).toHaveLength(told);
+        expect(manager.hurricane()).toBeUndefined();
+    });
+});
+
+describe("CatastropheManager, a hurricane sped up by the speed of the map", () => {
+    it("keeps the effect on the water a player asked for, one of real, ×5, ×10, ×20, and tells it to the room", () => {
+        const { manager, sent } = harness();
+        const track = {
+            category: 4,
+            minutes: 5,
+            heading: 0,
+            southern: false,
+            startedAt: 0,
+            fromX: 0,
+            fromY: 0,
+            toX: 0,
+            toY: 0,
+            anchorX: 0,
+            anchorY: 0,
+            durationMs: 0,
+            times: 0,
+            waterEffect: 0,
+        };
+        manager.request(1, CatastropheKind.CATASTROPHE_HURRICANE, -1, -1, 0, true, false, undefined, {
+            ...track,
+            waterEffect: 12,
+        });
+        expect(sent[0].hurricane?.waterEffect).toBe(10);
+        expect(manager.hurricane()?.waterEffect).toBe(10);
+        manager.stopHurricane();
+        manager.request(1, CatastropheKind.CATASTROPHE_HURRICANE, -1, -1, 0, true, false, undefined, track);
+        // Not said (an older browser): the real effect.
+        expect(sent[sent.length - 1].hurricane?.waterEffect).toBe(1);
+    });
+
+    it("shortens its crossing when the map goes faster, its eye going on from where it is", () => {
+        const { manager, sent } = harness();
+        let times = 1;
+        manager.hurricaneTimesWith(() => times);
+        const asked = {
+            category: 4,
+            minutes: 5,
+            heading: 0,
+            southern: false,
+            startedAt: 0,
+            fromX: 0,
+            fromY: 0,
+            toX: 0,
+            toY: 0,
+            anchorX: 0,
+            anchorY: 0,
+            durationMs: 0,
+            times: 0,
+            waterEffect: 0,
+        };
+        manager.request(1, CatastropheKind.CATASTROPHE_HURRICANE, -1, -1, 0, true, false, undefined, asked);
+        expect(sent[0].hurricane).toMatchObject({ durationMs: 300_000, times: 1, minutes: 5 });
+        vi.advanceTimersByTime(100_000);
+        times = 5;
+        vi.advanceTimersByTime(HURRICANE_TELL_MS);
+        const told = sent[sent.length - 1].hurricane;
+        expect(told).toMatchObject({ durationMs: 60_000, times: 5, minutes: 5 });
+        // A third of the passage was gone when it sped up: a third of the new one is.
+        expect((101_000 - (told?.startedAt ?? NaN)) / 60_000).toBeCloseTo(101_000 / 300_000, 2);
+        expect(sent[sent.length - 1].impactInMs).toBeCloseTo(60_000 * (1 - 101_000 / 300_000), -2);
     });
 });
