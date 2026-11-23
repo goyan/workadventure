@@ -493,7 +493,9 @@ import { groundWind } from "./Weather/Snowfall";
 import { MeteorView } from "./Catastrophe/MeteorView";
 import { FireView } from "./Fire/FireView";
 import { TreeFireState } from "./Fire/TreeFireState";
-import { FallenTreeView } from "./Nature/FallenTreeView";
+import { FallenTreeView, fallVector } from "./Nature/FallenTreeView";
+import type { TreePose } from "./SkyShadows/SkyShadowGeometry";
+import { growShare, growStep } from "./Nature/FallenTreeTexture";
 import { TreeFireView } from "./Fire/TreeFireView";
 import { DownpourView } from "./Catastrophe/DownpourView";
 import { DrainView } from "./Catastrophe/DrainView";
@@ -2596,6 +2598,8 @@ export class GameScene extends DirtyScene {
                 this.nightManager?.isNight(),
                 this.nightManager?.sunPosition(),
             );
+            // The trees the wind is laying down fall on, before their shadows are drawn.
+            this.fallenTreeView?.update(time);
             this.hurricaneView?.update(
                 serverDate,
                 this.nightManager?.sunPosition()?.elevation,
@@ -3401,6 +3405,17 @@ export class GameScene extends DirtyScene {
     /** The fire of the trees of the map as the server tells it, for the trees that pick their image by it. */
     public getTreeFire(): TreeFireState {
         return this.treeFire;
+    }
+
+    /** How the tree `id` stands for its shadow when the wind laid it down (falling, lying, growing back). */
+    private fallenTreePose(id: string): TreePose | undefined {
+        const fallen = this.treeFire.fallenOf(id);
+        if (!fallen) return undefined;
+        const way = fallVector(fallen.toward);
+        if (fallen.lying) {
+            return { towardX: way.x, towardY: way.y, tilt: this.fallenTreeView?.tiltOf(id) ?? Math.PI / 2, size: 1 };
+        }
+        return { towardX: way.x, towardY: way.y, tilt: 0, size: growShare(growStep(fallen.grown)) };
     }
 
     /** The trees the wind laid down, lying on the ground: the objects of the map show them there. */
@@ -4782,6 +4797,9 @@ export class GameScene extends DirtyScene {
                     treeBend: (id) =>
                         (this.treeSway?.poseOf(id) ?? 0) *
                         (this.gameMapFrontWrapper.getEntitiesManager().getEntities().get(id)?.scaleX ?? 1),
+                    // A tree the wind laid down: its shadow falls, lies and grows back with it.
+                    treePose: (id) => this.fallenTreePose(id),
+                    fallenVersion: () => this.fallenTreeView?.version ?? 0,
                 });
                 // And under what walks: the silhouette of the avatars, an oval under the animals.
                 this.unsubscribeSkyShadowCategories?.();

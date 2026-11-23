@@ -230,6 +230,7 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
                       footY: this.y + TREE_FOOT.y,
                       toward: fallen.toward,
                       depth: this.depth,
+                      fellAt: scene.getTreeFire?.().fellAt(this.entityId),
                   }
                 : undefined,
         );

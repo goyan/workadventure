@@ -4,8 +4,8 @@ import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import type { WeatherView } from "../Weather/WeatherFrame";
 import { readShadowCasters } from "./SkyShadowCasters";
 import type { ShadowCategories, ShadowSourceEntity } from "./SkyShadowCasters";
-import { insidePolygon, shadowPolygons } from "./SkyShadowGeometry";
-import type { Point, ShadowCasters, ShadowTree } from "./SkyShadowGeometry";
+import { insidePolygon, posedTree, shadowPolygons } from "./SkyShadowGeometry";
+import type { Point, ShadowCasters, ShadowTree, TreePose } from "./SkyShadowGeometry";
 import { indoorRuns, SHADOW_COLOR, shadowAlpha, shadowArea, shadowRedraw, shadowResolution } from "./SkyShadowFrame";
 import type { DrawnShadows, ShadowFrame } from "./SkyShadowFrame";
 import { SkyShadowLayer } from "./SkyShadowLayer";
@@ -32,6 +32,10 @@ export interface SkyShadowManagerOptions {
     treeBend?: (id: string) => number;
     /** Changes whenever a tree takes another pose (TreeSway.version); undefined when the shadows stand still. */
     swayVersion?: () => number | undefined;
+    /** How the tree `id` stands when the wind laid it down (falling, lying, growing back); undefined standing. */
+    treePose?: (id: string) => TreePose | undefined;
+    /** Changes whenever a tree laid down by the wind takes another pose. */
+    fallenVersion?: () => number;
     /** False in the map editor, or with the shadows turned off by this person. */
     enabled: () => boolean;
     /** Whether the door that is this object of the map is open now: the light of the sky comes in through it then. */
@@ -118,6 +122,7 @@ export class SkyShadowManager {
             view: { x: view.x, y: view.y, width: view.width, height: view.height },
             zoom: shadowResolution(camera.zoom),
             sway: this.options.swayVersion?.(),
+            fallen: this.options.fallenVersion?.(),
         };
         const action = shadowRedraw(this.drawn, frame);
         if (action === "none") return;
@@ -216,6 +221,9 @@ export class SkyShadowManager {
             {
                 boxes: this.casters.boxes.filter((box) => near(box.x, box.y, box.width, box.height)),
                 trees: this.casters.trees.filter(nearTree).map((tree) => {
+                    const pose = tree.id === undefined ? undefined : this.options.treePose?.(tree.id);
+                    // A tree the wind laid down does not sway: its shadow follows how it falls, lies, grows back.
+                    if (pose) return posedTree(tree, pose);
                     const bend = tree.id === undefined ? 0 : this.bendOf(tree.id);
                     return bend === 0 ? tree : { ...tree, bend };
                 }),

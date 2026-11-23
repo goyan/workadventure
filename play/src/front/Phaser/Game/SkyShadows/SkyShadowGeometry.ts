@@ -46,6 +46,38 @@ export interface ShadowTree {
     id?: string;
     /** How far its top stands to the right, bent by the wind (map pixels): its shadow bends with it. */
     bend?: number;
+    /** How far the centre of its crown stands from its foot along the ground, leaning (map pixels): see posedTree. */
+    lean?: Point;
+}
+
+/**
+ * A tree as it stands now, when the wind lays it down (FallenTreeView): the way it falls (a unit vector on the map),
+ * how far it leans from upright (radians, 0 standing, pi / 2 lying), and its size against its own (growing back).
+ */
+export interface TreePose {
+    towardX: number;
+    towardY: number;
+    tilt: number;
+    size: number;
+}
+
+/**
+ * The tree as its shadow sees it in a pose: its crown leant the way it falls, as far along the ground as its height
+ * leans over, and as much lower; lying, the centre of its crown rests a radius above the ground. Its trunk and its
+ * crown at its size while it grows back.
+ */
+export function posedTree(tree: ShadowTree, pose: TreePose): ShadowTree {
+    const size = Math.min(1, Math.max(0, pose.size));
+    const height = tree.crownHeight * size;
+    const radius = tree.crownRadius * size;
+    const lean = Math.sin(pose.tilt);
+    return {
+        ...tree,
+        crownRadius: radius,
+        trunkWidth: tree.trunkWidth * size,
+        crownHeight: height * Math.cos(pose.tilt) + radius * lean,
+        lean: { x: pose.towardX * height * lean, y: pose.towardY * height * lean },
+    };
 }
 
 /** Something whose shadow is its own picture laid on the ground: its foot (bottom middle) and its size as shown. */
@@ -194,8 +226,12 @@ function treeShadow(tree: ShadowTree, light: ShadowLight): Point[][] {
     const direction = shadowDirection(light.azimuth);
     const across = { x: -direction.y, y: direction.x };
     const stretch = Math.min(CROWN_MAX_STRETCH, 1 / Math.sin(light.elevation * DEG));
-    // A top bent to the right by the wind throws its shadow as far to the right.
-    const centre = { x: tree.x + offset.x + (tree.bend ?? 0), y: tree.y + offset.y };
+    // A top bent to the right by the wind throws its shadow as far to the right; a tree leaning (falling, lying) from
+    // where its crown is.
+    const centre = {
+        x: tree.x + offset.x + (tree.bend ?? 0) + (tree.lean?.x ?? 0),
+        y: tree.y + offset.y + (tree.lean?.y ?? 0),
+    };
     const crown: Point[] = [];
     for (let step = 0; step < CROWN_POINTS; step++) {
         const angle = (step / CROWN_POINTS) * 2 * Math.PI;

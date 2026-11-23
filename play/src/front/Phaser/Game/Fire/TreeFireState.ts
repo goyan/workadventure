@@ -44,6 +44,8 @@ export class TreeFireState {
     private flying: FlyingEmber[] = [];
     /** When the fire of a tree went out before the eyes of this browser: it smoulders a while. */
     private readonly outAt = new Map<string, number>();
+    /** When the wind laid a tree down before the eyes of this browser: its fall is seen (FallenTreeView). */
+    private readonly fell = new Map<string, number>();
 
     /** Takes a message of the server. Returns the trees whose image may have to change. */
     public receive(message: TreeFireMessage, now: number): string[] {
@@ -52,9 +54,14 @@ export class TreeFireState {
             for (const id of this.trees.keys()) touched.add(id);
             this.trees.clear();
         }
-        if (message.whole) this.outAt.clear();
+        if (message.whole) {
+            this.outAt.clear();
+            // A tree found lying as one comes is not seen falling.
+            this.fell.clear();
+        }
         for (const tree of message.trees) {
             touched.add(tree.id);
+            const lyingBefore = this.fallenOf(tree.id)?.lying === true;
             const burnt = (this.trees.get(tree.id)?.fire ?? 0) > 0;
             if (tree.fire > 0) this.outAt.delete(tree.id);
             else if (burnt && tree.damage > 0) this.outAt.set(tree.id, now);
@@ -66,6 +73,9 @@ export class TreeFireState {
                     fallen: tree.fallen ?? 0,
                 });
             }
+            const lying = this.fallenOf(tree.id)?.lying === true;
+            if (lying && !lyingBefore && !message.whole) this.fell.set(tree.id, now);
+            else if (!lying) this.fell.delete(tree.id);
         }
         for (const ember of message.embers) {
             this.flying.push({ ...ember, leftAt: now, flightMs: Math.max(1, ember.flightMs) });
@@ -82,6 +92,11 @@ export class TreeFireState {
     public degreeOf(id: string): number {
         const tree = this.trees.get(id);
         return tree && tree.fallen === 0 ? charDegree(tree.damage) : 0;
+    }
+
+    /** When the wind laid the tree `id` down before the eyes of this browser (the `now` of receive); else undefined. */
+    public fellAt(id: string): number | undefined {
+        return this.fell.get(id);
     }
 
     /** A tree laid down by the wind, as it is drawn; undefined for a tree standing. */
@@ -134,6 +149,7 @@ export class TreeFireState {
     public clear(): string[] {
         const touched = [...this.trees.keys()];
         this.outAt.clear();
+        this.fell.clear();
         this.trees.clear();
         this.flying = [];
         return touched;
