@@ -6161,8 +6161,22 @@ mailles marge comprise sur la carte d'Antoine).
 - Coût mesuré sur le Mac (M4 Max), encodage compris : 0,32 ms par pas à ×1, 1,5 ms à ×10 avec le plafond de 5
   sous-pas (2,9 ms avec 10). Estimation pour le VPS (×6) : 2 ms (2 % d'un cœur) à ×1, 9 ms (9 %) à ×10, dans le fil
   du sol qui prend déjà 55 ms par pas pour l'eau.
-- Pas encore branché (lot c) : le front lit toujours la formule (`hurricaneHere`), comme les arbres couchés et les
-  conditions du feu du serveur. Le flux `hurricaneAirMessageStream` du navigateur n'a pas encore d'abonné.
+- La dépression de l'air se creuse et se comble avec l'ouragan (`share`), comme la formule et la dépression sur
+  l'eau. À 1 % de la traversée, son vent vaut 0,45 du plein.
+- Qui lit le vent de l'air (lot c), à la place de la formule :
+  - **Serveur** : les arbres couchés, par les rafales de l'air au pied de chacun (vent à 10 m × 1,23). Chaque feu
+    d'herbe ou d'arbre est poussé par le vent de l'air là où il brûle : propagation, braises, chaleur des voisins.
+  - **Navigateur** (`HurricaneAir.ts`) : le balancement des arbres, les débris, la météo et la pluie dessinées au
+    point regardé, le vent du panneau Météo. Le navigateur garde les deux derniers champs reçus et passe de l'un à
+    l'autre en une demi-seconde.
+  - **Mer et écume** : une petite texture lissée (le champ précédent à gauche, le dernier à droite, un octet par
+    composante) que `seaWindHere` lit en chaque point, dans le shader de l'eau et dans la passe d'écume. Le repère en
+    spirale des traînées reste centré sur l'œil. Vérifié sur GPU (Metal et SwiftShader) : le vent lu égale celui du
+    navigateur à 0,08 m/s près, et le shader de l'eau rend les mêmes octets qu'avant sans ouragan et sous un
+    ouragan sans air.
+- La formule reste en repli partout : sans air simulé (carte sans eau, air en échec), et dans le navigateur si le
+  serveur ne dit plus rien depuis 3 s. La pluie et les nuages restent ceux de la formule (l'air ne simule que le
+  vent), comme la poussée du vent sur l'eau du relief.
 
 **Compatibilité.** `play` et `back` se déploient ensemble (protobuf). Le PNJ du dépôt d'infra doit être réaligné sur
 `messages.proto`.
