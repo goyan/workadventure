@@ -540,6 +540,20 @@ describe("WaterGrid, the same water to the bit with its arrays in a memory threa
         );
     }
 
+    it("asks what makes the place of its arrays once, with its cells and its rows", () => {
+        const asked: [number, number][] = [];
+        setWaterArrays((cells, rows) => {
+            asked.push([cells, rows]);
+            return sharedWaterArrays;
+        });
+        const grid = newGrid();
+        fill(grid, 4);
+        grid.step(inertia);
+        setWaterArrays(sharedWaterArrays);
+        expect(asked).toEqual([[WIDTH * HEIGHT, HEIGHT]]);
+        expect((Reflect.get(grid, "flowEast") as Float32Array).buffer).toBeInstanceOf(SharedArrayBuffer);
+    });
+
     it("keeps the arrays of its moves there, and nowhere else unless told", () => {
         const shared = newGrid();
         setWaterArrays(ordinaryWaterArrays);
