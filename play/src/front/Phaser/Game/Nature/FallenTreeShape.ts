@@ -8,9 +8,13 @@ import { treePixelPart } from "./SnowyTreeTexture";
 export const LYING_DEPTH = 0.7;
 /** A crown pressed on the ground spreads a little wider than it stood. */
 const CROWN_SPREAD = 1.15;
-/** How high the side of a crown lying on the ground shows, against its width. */
-const CROWN_THICKNESS = 0.14;
-/** The plate of roots and earth the tree tore up as it fell: against the width of its crown, and of its trunk. */
+/** How high the side of the half crown lying on the ground shows, against its width: flattened. */
+const CROWN_THICKNESS = 0.08;
+/**
+ * The plate of roots and earth the tree tore up as it fell: against the width of its crown, and of its trunk. Uprooted,
+ * not snapped: the gusts that lay a tree down (TREE_FALL_GUST_KMH, 130 km/h) uproot it in the Enhanced Fujita scale
+ * (117 to 151 km/h), its trunk snapping only at 167 to 172 km/h (Texas Tech, 2006, appendix A, DI 27 and 28).
+ */
 const ROOT_PLATE = 0.13;
 const ROOT_PLATE_TRUNKS = 1.3;
 /** The trunk goes on under its crown this far (pixels): no gap between them. */
@@ -144,7 +148,10 @@ export interface LyingLayout {
     /** Its trunk from its foot to under its crown. */
     trunkEnd: Point;
     trunkWidth: number;
-    /** The outline of its crown on the ground: its own outline as it stood, laid the way it fell, a little wider. */
+    /**
+     * The outline of its crown on the ground: the half of its own outline turned to the sky, laid the way it fell, a
+     * little wider (lyingLayout).
+     */
     outline: Point[];
     /** The middle of its crown on the ground. */
     centre: Point;
@@ -168,6 +175,11 @@ export function lyingLayout(body: TreeBody, toward: number): LyingLayout {
         x: along.x * length + across.x * side,
         y: along.y * length + across.y * side,
     });
+    // Only the half of the crown turned to the sky shows, the other half pressed into the ground: cut along the trunk.
+    // Across the screen (east, west), that is the half above the trunk, a half tree; up or down the screen, the half
+    // turned to the sky spans the whole width (seen from above), only flattened.
+    const sky = across.y <= 0 ? 1 : -1;
+    const near = 1 - Math.abs(way.x);
     const height = Math.max(1, body.footY - body.crownTop);
     const left: Point[] = [];
     const right: Point[] = [];
@@ -177,8 +189,8 @@ export function lyingLayout(body: TreeBody, toward: number): LyingLayout {
         const length = body.footY - (body.crownTop + index) - 0.5;
         const centre = (row.left + row.right + 1) / 2 - body.footX;
         const half = ((row.right - row.left + 1) / 2) * CROWN_SPREAD;
-        left.push(at(length, centre - half));
-        right.push(at(length, centre + half));
+        left.push(at(length, centre + sky * half));
+        right.push(at(length, centre - sky * half * near));
         const point = at(length, centre);
         middle = { x: middle.x + point.x, y: middle.y + point.y, count: middle.count + 1 };
     });
