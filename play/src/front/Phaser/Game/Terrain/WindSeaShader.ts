@@ -176,6 +176,8 @@ export function breakingFactorFor(windKmh: number): number {
 /** What the shader draws for a wind: its waves, where it blows, and the slope at which their crests break. */
 export interface SeaDrawing {
     windMs: number;
+    /** A hurricane crosses the map: the wind of the sea is its own at each point (seaWindHere). */
+    hurricane?: SeaHurricane;
     heading: { x: number; y: number };
     components: SeaComponent[];
     /** The slope a crest breaks at; Infinity when the law whitens nothing (no foam at all). */
@@ -337,6 +339,13 @@ uniform vec4 uSeaDir;
 // The field of the groups: 1 / its cell down the wind and across it (map px), its drift (cells, wrapped); the cut of
 // the noise along the crests under which they do not break.
 uniform vec4 uSeaGroup;
+// The hurricane of the room (Hurricane.ts, hurricaneHere), while one crosses the map: its eye (map px), the radius of
+// its strongest winds (map px), the way it turns (1 anticlockwise, -1 clockwise, 0 none); its strongest wind (m/s),
+// Holland's B, the motion it adds where its wind is strongest (m/s, east and south); how much of it has taken over the
+// wind of the map, the cosine and the sine of its inflow, the wind the waves are drawn for (m/s).
+uniform vec4 uHurEye;
+uniform vec4 uHurWind;
+uniform vec4 uHurMix;
 // Each wave: cycles a map pixel (x, y), its phase now (cycles, in [0, 1)), its frequency (Hz).
 ${range(SEA_COMPONENTS)
     .map((at) => `uniform vec4 uSeaA${at};`)
@@ -354,6 +363,37 @@ ${range(SEA_COMPONENTS)
     .join("\n")}
 float gSeaEta;
 vec2 gSeaSlope;
+// The wind here (seaWindHere): where it goes (map px, a unit) and its speed (m/s); how much of the height of the
+// waves drawn it raises (1 without a hurricane).
+vec3 gSeaWind;
+float gSeaScale;
+
+// The wind at a map point: that of the sea (uSeaDir, uSea.x) without a hurricane; under one, its wind there, mixed
+// with that of the map at the ends of its passage, the waves as high as the square of its speed over the wind they
+// are drawn for (none in the eye). The twin of hurricaneHere.
+void seaWindHere(vec2 world) {
+    gSeaWind = vec3(uSeaDir.xy, uSea.x);
+    gSeaScale = 1.0;
+    if (uHurEye.w == 0.0) return;
+    vec2 d = world - uHurEye.xy;
+    float r = length(d);
+    float share = 0.0;
+    vec2 outward = vec2(0.0);
+    if (r > 0.001) {
+        float x = pow(uHurEye.z / r, uHurWind.y);
+        share = sqrt(x * exp(1.0 - x));
+        outward = d / r;
+    }
+    // Round the eye (east, south), turned in towards it, and the motion of the storm where its wind blows.
+    vec2 around = vec2(outward.y, -outward.x) * uHurEye.w;
+    vec2 storm = uHurWind.x * share * (uHurMix.y * around - uHurMix.z * outward) + uHurWind.zw * share;
+    vec2 wind = mix(uSeaDir.xy * uSea.x, storm, uHurMix.x);
+    float speed = length(wind);
+    gSeaWind = vec3(speed > 0.0001 ? wind / speed : uSeaDir.xy, speed);
+    float ratio = speed / max(uHurMix.w, 0.1);
+    gSeaScale = min(1.0, ratio * ratio);
+}
+
 // The slope the light reads: the waves of a few pixels count less in it (LIGHT_FROM_PX).
 vec2 gSeaLight;
 
@@ -388,7 +428,7 @@ ${range(SEA_COMPONENTS)
 ${range(SEA_COMPONENTS)
     .map((at) => {
         const fade = `uSeaB${Math.floor(at / 2)}.${at % 2 === 0 ? "y" : "w"}`;
-        return `    gSeaA${at} = cap * ${fade} * sqrt(gSeaA${at} * scale);
+        return `    gSeaA${at} = gSeaScale * cap * ${fade} * sqrt(gSeaA${at} * scale);
     gSeaV${at} = smoothstep(${glsl(LIGHT_FROM_PX)}, ${glsl(LIGHT_FULL_PX)}, 1.0 / max(length(uSeaA${at}.xy), 0.0001));`;
     })
     .join("\n")}
@@ -428,8 +468,8 @@ float seaNoise(vec2 p) {
 
 // How much higher or lower the waves are drawn by their groups at a map point (groupAt).
 float seaGroup(vec2 p) {
-    float along = dot(p, uSeaDir.xy);
-    float across = dot(p, vec2(-uSeaDir.y, uSeaDir.x));
+    float along = dot(p, gSeaWind.xy);
+    float across = dot(p, vec2(-gSeaWind.y, gSeaWind.x));
     vec2 q = vec2(along * uSeaGroup.x - uSeaGroup.z, across * uSeaGroup.y + 51.0);
     vec2 bend = vec2(seaNoise(q * 0.5 + vec2(5.0, 9.0)), seaNoise(q * 0.5 + vec2(23.0, 41.0)));
     q += ${glsl(GROUP_WARP)} * (bend - 0.5);
@@ -446,13 +486,13 @@ float seaBreaking(vec2 world) {
     gSeaSlope *= here;
     gSeaLight *= here;
     float slope = uSea.y;
-    float front = dot(gSeaSlope, uSeaDir.xy) <= 0.0 ? 1.0 : 0.0;
+    float front = dot(gSeaSlope, gSeaWind.xy) <= 0.0 ? 1.0 : 0.0;
     float breaking = smoothstep(slope * ${glsl(1 - BREAKING_EDGE)}, slope * ${glsl(1 + BREAKING_EDGE)}, length(gSeaSlope))
         * (gSeaEta >= 0.0 ? 1.0 : 0.0) * front;
     if (breaking <= 0.0) return 0.0;
     // Along part of the crest only (crestAt).
-    vec2 crest = vec2(dot(world, vec2(-uSeaDir.y, uSeaDir.x)) / ${glsl(CREST_ALONG_PX)} + 71.0,
-        dot(world, uSeaDir.xy) / ${glsl(CREST_DOWN_PX)} + 13.0);
+    vec2 crest = vec2(dot(world, vec2(-gSeaWind.y, gSeaWind.x)) / ${glsl(CREST_ALONG_PX)} + 71.0,
+        dot(world, gSeaWind.xy) / ${glsl(CREST_DOWN_PX)} + 13.0);
     return breaking * smoothstep(uSeaGroup.w, uSeaGroup.w + 0.2, seaNoise(crest));
 }
 
@@ -475,9 +515,9 @@ uniform vec4 uSeaFoamArea;
 // The white sheet of a hurricane (spumeShare): long streaks of foam and spray along the wind, laid over the waves,
 // which join into a milky white as the wind passes 40 m/s, still streaked. They drift with the foam left.
 float seaSpume(vec2 world) {
-    float share = smoothstep(${glsl(SPUME_FROM_MS)}, ${glsl(SPUME_WHOLE_MS)}, uSea.x);
+    float share = smoothstep(${glsl(SPUME_FROM_MS)}, ${glsl(SPUME_WHOLE_MS)}, gSeaWind.z);
     if (share <= 0.0) return 0.0;
-    vec2 heading = uSeaDir.xy;
+    vec2 heading = gSeaWind.xy;
     float down = dot(world, heading) - uSeaDir.w * ${glsl(FOAM_LINE_ALONG_PX)};
     float side = dot(world, vec2(-heading.y, heading.x));
     float streaks = 0.6 * seaNoise(vec2(side / ${glsl(SPUME_ACROSS_PX)}, down / ${glsl(SPUME_ALONG_PX)}))
@@ -498,7 +538,7 @@ float seaFoam(vec2 world) {
 // The spray the wind tears off the sea: a haze over the water that hides its waves, from 30 m/s on (Beaufort 12:
 // "the air is filled with foam and spray"). 0 to SPRAY_MOST.
 float seaSpray() {
-    return ${glsl(SPRAY_MOST)} * smoothstep(${glsl(SPUME_FROM_MS)}, ${glsl(SPRAY_WHOLE_MS)}, uSea.x);
+    return ${glsl(SPRAY_MOST)} * smoothstep(${glsl(SPUME_FROM_MS)}, ${glsl(SPRAY_WHOLE_MS)}, gSeaWind.z);
 }
 `;
 
@@ -525,13 +565,16 @@ uniform float uFoamLife;
 void main() {
     vec2 world = uFoamArea.xy + gl_FragCoord.xy / uFoamTexels * uFoamArea.zw;
     float dt = uFoamStep.x;
+    // The wind here: under a hurricane, its own (seaWindHere).
+    seaWindHere(world);
     // Where this point is in the frame of the foam, which drifts down the wind (map px): each trail keeps its kind.
-    vec2 heading = uSeaDir.xy;
+    vec2 heading = gSeaWind.xy;
     float down = dot(world, heading) - uSeaDir.w * ${glsl(FOAM_LINE_ALONG_PX)};
     float side = dot(world, vec2(-heading.y, heading.x));
     vec2 trail = vec2(side / ${glsl(TRAIL_ACROSS_PX)}, down / ${glsl(TRAIL_DOWN_PX)});
     // Where the foam here was a step ago: upwind by the drift.
-    vec2 uv = (world - uSeaDir.xy * uSeaDir.z * dt - uFoamBeforeArea.xy) / uFoamBeforeArea.zw;
+    vec2 uv = (world - heading * uSeaDir.z * (gSeaWind.z / max(uSea.x, 0.1)) * dt - uFoamBeforeArea.xy)
+        / uFoamBeforeArea.zw;
     float kept = 0.0;
     if (uFoamStep.w < 0.5 && uv.x > 0.0 && uv.y > 0.0 && uv.x < 1.0 && uv.y < 1.0) {
         float life = mix(${glsl(FOAM_LIFE[0])}, ${glsl(FOAM_LIFE[1])}, seaNoise(trail + vec2(29.0, 17.0)));
@@ -560,9 +603,44 @@ void main() {
 }
 `;
 
+/**
+ * The hurricane over the wind sea (seaWindHere): its eye and the radius of its strongest winds (map px), the way it
+ * turns, its strongest wind (m/s), Holland's B, the motion it adds where its wind is strongest (m/s, east and south),
+ * how much of it has taken over the wind of the map, its inflow (radians).
+ */
+export interface SeaHurricane {
+    eyeX: number;
+    eyeY: number;
+    rmaxPx: number;
+    spin: 1 | -1;
+    maxMs: number;
+    hollandB: number;
+    motionEast: number;
+    motionSouth: number;
+    share: number;
+    inflow: number;
+}
+
+/** The uniforms of the hurricane over the wind sea: none (its eye "turning" 0) without one. */
+function hurricaneUniforms(sea: SeaDrawing | undefined): [string, number[]][] {
+    const storm = sea?.hurricane;
+    if (!sea || !storm || !(storm.share > 0)) {
+        return [
+            ["uHurEye", [0, 0, 1, 0]],
+            ["uHurWind", [0, 1, 0, 0]],
+            ["uHurMix", [0, 1, 0, 1]],
+        ];
+    }
+    return [
+        ["uHurEye", [storm.eyeX, storm.eyeY, storm.rmaxPx, storm.spin]],
+        ["uHurWind", [storm.maxMs, storm.hollandB, storm.motionEast, storm.motionSouth]],
+        ["uHurMix", [storm.share, Math.cos(storm.inflow), Math.sin(storm.inflow), sea.windMs]],
+    ];
+}
+
 /** The uniforms of the wind sea at `seconds` of the clock of the shaders, for `sea` (undefined: none drawn). */
 export function windSeaUniforms(sea: SeaDrawing | undefined, seconds: number): [string, number[]][] {
-    const uniforms: [string, number[]][] = [];
+    const uniforms: [string, number[]][] = hurricaneUniforms(sea);
     if (!sea) {
         uniforms.push(["uSea", [1, 99, 0, 0]], ["uSeaDir", [0, 1, 0, 0]], ["uSeaGroup", [0, 0, 0, 0]]);
         for (let at = 0; at < SEA_COMPONENTS; at++) uniforms.push([`uSeaA${at}`, [0, 0, 0, 1]]);

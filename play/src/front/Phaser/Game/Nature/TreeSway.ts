@@ -16,6 +16,7 @@ export const isSwayingTree = isTreePrefab;
 /** A placed tree as the swaying needs it (an `Entity` fits). */
 export interface SwayingObject {
     x: number;
+    y: number;
     scaleX: number;
     texture: { key: string };
     setTexture(key: string): unknown;
@@ -28,6 +29,11 @@ export interface TreeSwayOptions {
     windSpeed: () => number | undefined;
     /** Where the wind comes from (degrees, 0 north), undefined without a real weather. */
     windFrom: () => number | undefined;
+    /**
+     * The wind where a tree stands, when it is not the same all over the map (a hurricane: its own at each tree);
+     * undefined: the wind of the map.
+     */
+    windAt?: (x: number, y: number) => { speed: number; from: number } | undefined;
     /** False while the map is edited, or the weather effects are hidden: the trees stand still. */
     enabled: () => boolean;
     /** Key of the texture showing an image in a pose (TreePoseTextures.key), undefined when there is none. */
@@ -89,7 +95,10 @@ export class TreeSway {
         const poses = new Map<string, { object: SwayingObject; pose: number }>();
         let changed = false;
         for (const tree of this.options.trees()) {
-            const pose = treePose(seconds, wind, windFrom, phaseOf(tree.id));
+            const here = this.options.windAt?.(tree.object.x, tree.object.y);
+            const pose = here
+                ? treePose(seconds, here.speed, here.from, phaseOf(tree.id))
+                : treePose(seconds, wind, windFrom, phaseOf(tree.id));
             if (pose !== this.poseOf(tree.id)) changed = true;
             if (pose !== 0) poses.set(tree.id, { object: tree.object, pose });
         }

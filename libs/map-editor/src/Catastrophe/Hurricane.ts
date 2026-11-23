@@ -297,7 +297,8 @@ export function hurricaneHere(
     const mapE = (x - storm.eyeX) / PX_PER_METRE;
     const mapN = -(y - storm.eyeY) / PX_PER_METRE;
     const distanceM = Math.hypot(mapE, mapN);
-    const speed = hurricaneMaxWind(hurricane.category) * hollandShare(distanceM);
+    const share = hollandShare(distanceM);
+    const speed = hurricaneMaxWind(hurricane.category) * share;
     // Round the centre (anticlockwise in the north), turned in towards it.
     const spin = hurricane.southern ? -1 : 1;
     const outE = distanceM > 0 ? mapE / distanceM : 0;
@@ -306,7 +307,8 @@ export function hurricaneHere(
     const roundN = outE * spin;
     const inflow = (HURRICANE_INFLOW_DEGREES * Math.PI) / 180;
     const heading = (hurricane.heading * Math.PI) / 180;
-    const motion = HURRICANE_MOTION_SHARE * storm.speedKmh;
+    // The motion of the storm where its wind blows: none in the calm of the eye.
+    const motion = HURRICANE_MOTION_SHARE * storm.speedKmh * share;
     const windE = speed * (Math.cos(inflow) * roundE - Math.sin(inflow) * outE) + motion * Math.sin(heading);
     const windN = speed * (Math.cos(inflow) * roundN - Math.sin(inflow) * outN) + motion * Math.cos(heading);
     const windSpeed = Math.hypot(windE, windN);
