@@ -46,15 +46,20 @@ function loopback(): Pick<GroundThreads, "assign"> {
 }
 
 /** The threads of the server as they are spawned, kept so that a test can lose one. */
-function realThreads(count: number): { threads: GroundThreads; workers: Worker[] } {
+function realThreads(count: number, bands = 1): { threads: GroundThreads; workers: Worker[] } {
     const workers: Worker[] = [];
-    const threads = new GroundThreads(count, (): GroundThread => {
-        const worker = new Worker(new URL("../src/Model/Ground/GroundWorker.ts", import.meta.url), {
-            execArgv: ["--import", "tsx"],
-        });
-        workers.push(worker);
-        return worker;
-    });
+    const threads = new GroundThreads(
+        count,
+        (asked): GroundThread => {
+            const worker = new Worker(new URL("../src/Model/Ground/GroundWorker.ts", import.meta.url), {
+                workerData: { bands: asked },
+                execArgv: ["--import", "tsx"],
+            });
+            workers.push(worker);
+            return worker;
+        },
+        bands,
+    );
     return { threads, workers };
 }
 
@@ -158,6 +163,15 @@ describe("the ground of a room computed elsewhere (RemoteRoomGround)", () => {
 
         it("tells and saves the same, bit for bit, on a real thread", async () => {
             const { threads } = realThreads(1);
+            try {
+                await compare(threads, 1300);
+            } finally {
+                threads.stop();
+            }
+        }, 120_000);
+
+        it("tells and saves the same, bit for bit, on a real thread that shares its water between three bands", async () => {
+            const { threads } = realThreads(1, 3);
             try {
                 await compare(threads, 1300);
             } finally {

@@ -1,4 +1,5 @@
 import { Worker } from "node:worker_threads";
+import { WATER_BANDS_ERROR } from "@workadventure/map-editor";
 import type { GroundCommand, GroundPort, GroundTold } from "./GroundProtocol";
 
 /** A thread as the grounds use it: a Worker, or what stands for one in a test. */
@@ -11,11 +12,17 @@ export interface GroundThread {
 }
 
 /** Starts the thread that computes grounds (GroundWorker), under the same TypeScript loader as this process. */
-function spawnGroundWorker(): GroundThread {
+function spawnGroundWorker(bands: number): GroundThread {
     // The server runs under tsx, whose loader the threads it starts inherit; elsewhere (the tests) it is asked for.
     const underTsx = process.execArgv.some((argument) => argument.includes("tsx"));
-    return new Worker(new URL("./GroundWorker.ts", import.meta.url), underTsx ? {} : { execArgv: ["--import", "tsx"] });
+    return new Worker(new URL("./GroundWorker.ts", import.meta.url), {
+        workerData: { bands },
+        ...(underTsx ? {} : { execArgv: ["--import", "tsx"] }),
+    });
 }
+
+/** Threads of the bands lost this many times by a thread of the grounds: its water is computed without bands. */
+export const BAND_LOSSES_BEFORE_NONE = 3;
 
 /** One thread and the rooms whose ground it computes. */
 class Lane implements GroundPort {
@@ -24,9 +31,13 @@ class Lane implements GroundPort {
 
     /** How many times its thread was started: once, and once more after each loss. */
     private starts = 0;
+    /** How many times a thread of the bands of its water was lost, asleep or in the middle of a step. */
+    private bandLosses = 0;
 
     constructor(
-        private readonly spawn: () => GroundThread,
+        private readonly spawn: (bands: number) => GroundThread,
+        /** On how many bands the water of its rooms is computed: 1, this thread alone. */
+        private readonly bands: number,
         /** Its place among the threads of the server, from 1, and how many they are: for the logs. */
         private readonly place: number,
         private readonly of: number,
@@ -59,17 +70,24 @@ class Lane implements GroundPort {
     /** The thread of this lane, started when first needed and again after it was lost. */
     private running(): GroundThread {
         if (this.thread) return this.thread;
-        const thread = this.spawn();
+        // A thread of the bands lost is not started again: one band less each time, then none.
+        const bands = this.bandLosses >= BAND_LOSSES_BEFORE_NONE ? 1 : Math.max(1, this.bands - this.bandLosses);
+        const thread = this.spawn(bands);
         this.thread = thread;
         this.starts++;
         // Said once a thread: the server computes the ground of rooms away from the thread of the rooms from now on.
         console.info(
             `Ground thread ${this.place} of ${this.of} ${this.starts === 1 ? "starts for its first room" : `starts again after a loss (start ${this.starts})`}`,
         );
-        thread.on("message", (told) => this.rooms.get(told.room)?.told(told));
+        thread.on("message", (told) => {
+            if (told.kind === "band") this.bandLost();
+            else this.rooms.get(told.room)?.told(told);
+        });
         const lost = (reason: unknown): void => {
             if (this.thread !== thread) return;
             this.thread = undefined;
+            // A step lost to the bands of the water: the thread that starts again has one band less.
+            if (reason instanceof Error && reason.message.includes(WATER_BANDS_ERROR)) this.bandLost();
             console.error("A thread that computes the ground of rooms was lost: its rooms start again", reason);
             // Each room starts its ground again, on a thread started for the first that asks.
             for (const room of [...this.rooms.values()]) room.lost();
@@ -77,6 +95,15 @@ class Lane implements GroundPort {
         thread.on("error", lost);
         thread.on("exit", (code) => lost(`exit ${code}`));
         return thread;
+    }
+
+    private bandLost(): void {
+        this.bandLosses++;
+        if (this.bands > 1 && this.bandLosses === BAND_LOSSES_BEFORE_NONE) {
+            console.error(
+                `Ground thread ${this.place} of ${this.of} lost threads of the bands of its water ${BAND_LOSSES_BEFORE_NONE} times: its water is computed without bands from now on`,
+            );
+        }
     }
 }
 
@@ -88,9 +115,13 @@ export class GroundThreads {
     private readonly lanes: Lane[];
     private rooms = 0;
 
-    constructor(count: number, spawn: () => GroundThread = spawnGroundWorker) {
+    /** On how many bands each thread computes the water of its rooms: 1, the thread alone. */
+    public readonly bands: number;
+
+    constructor(count: number, spawn: (bands: number) => GroundThread = spawnGroundWorker, bands = 1) {
         const lanes = Math.max(0, Math.floor(count));
-        this.lanes = Array.from({ length: lanes }, (_, at) => new Lane(spawn, at + 1, lanes));
+        this.bands = Math.max(1, Math.floor(bands));
+        this.lanes = Array.from({ length: lanes }, (_, at) => new Lane(spawn, this.bands, at + 1, lanes));
     }
 
     /** How many threads the grounds may use: none, they are computed on the thread of the rooms. */

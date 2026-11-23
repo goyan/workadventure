@@ -104,7 +104,9 @@ export type GroundTold =
     | { kind: "started"; room: number; part: "water" | "meadow" }
     | { kind: "stepped"; room: number; reply: number }
     | { kind: "closed"; room: number }
-    | { kind: "error"; room: number; message: string };
+    | { kind: "error"; room: number; message: string }
+    /** A thread of the bands of the water of this thread was left out (no room: said to who started the thread). */
+    | { kind: "band"; room: 0; reason: string; remaining: number };
 
 /** Where the commands of a room go and where what it is told comes from: a thread, or the same thread in a test. */
 export interface GroundPort {

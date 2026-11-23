@@ -16,6 +16,7 @@ import type { WaterBall } from "./WaterBall";
 import { affordPass, depthsPass, DRY_PX, fluxPass, scalePass } from "./WaterKernel";
 import type { InertiaMove } from "./WaterKernel";
 import { waterArrays } from "./WaterArrays";
+import { waterPassRunner } from "./WaterBands";
 import type { WaterArrays } from "./WaterArrays";
 import { LAND_DEPTH_BITS, lifeDepthClass, restLevelOf, SWIM_DEPTH_BITS, WATER_FILM_PX } from "./WaterView";
 import type {
@@ -2037,8 +2038,12 @@ export class WaterGrid implements WaterView {
         if (this.rowLost.length !== height) this.rowLost = this.arrays.doubles(height);
         const rowLost = this.rowLost;
         let moved = false;
+        // Several threads share the passes when this thread has what runs them and the arrays are theirs too.
+        const runner = this.arrays.shared ? waterPassRunner() : undefined;
+        runner?.begin(this, move, rowLost);
         for (let step = 0; step < moves; step++) {
-            fluxPass(move, 0, height);
+            if (runner) runner.run(0);
+            else fluxPass(move, 0, height);
             // The speeds of this move are those the next one carries along.
             const wasEast = speedEast;
             const wasSouth = speedSouth;
@@ -2046,9 +2051,15 @@ export class WaterGrid implements WaterView {
             speedSouth = move.speedSouth = nextSpeedSouth;
             nextSpeedEast = move.nextSpeedEast = wasEast;
             nextSpeedSouth = move.nextSpeedSouth = wasSouth;
-            affordPass(move, 0, height);
-            if (scalePass(move, 0, height)) moved = true;
-            if (depthsPass(move, 0, height, rowLost)) moved = true;
+            if (runner) {
+                runner.run(1);
+                if (runner.run(2)) moved = true;
+                if (runner.run(3)) moved = true;
+            } else {
+                affordPass(move, 0, height);
+                if (scalePass(move, 0, height)) moved = true;
+                if (depthsPass(move, 0, height, rowLost)) moved = true;
+            }
             // The water lost, row after row: the same sum whoever computed which rows.
             for (let row = 0; row < height; row++) tally.lostPx += rowLost[row];
         }

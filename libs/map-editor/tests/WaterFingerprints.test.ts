@@ -1,10 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { cellKey, withHeights, withSoils } from "../src/Terrain/TerrainGrid";
 import { ordinaryWaterArrays, setWaterArrays, sharedWaterArrays } from "../src/Terrain/WaterArrays";
+import { setWaterPassRunner } from "../src/Terrain/WaterBands";
 import { WaterGrid } from "../src/Terrain/WaterGrid";
 import type { WaterStepInput, WaterTally, WaterWallSides } from "../src/Terrain/WaterGrid";
 import { DEFAULT_WAVE_SETTINGS, TERRAIN_CELL } from "../src/types";
 import type { TerrainData } from "../src/types";
+import { bandsOnOneThread } from "./helpers/BandsOnOneThread";
 
 /**
  * The water of a whole map, fingerprinted: each scenario below ends on a fingerprint of everything the grid holds
@@ -554,5 +556,37 @@ describe("WaterGrid, the same water to the bit with its arrays in a memory threa
             expect(where(shared), name).toBeInstanceOf(SharedArrayBuffer);
             expect(where(ordinary), name).toBeInstanceOf(ArrayBuffer);
         }
+    });
+});
+
+describe("WaterGrid, the same water to the bit with its passes shared in slices of rows (WaterBands)", () => {
+    const bands = bandsOnOneThread(3, 20261123);
+    beforeAll(() => {
+        setWaterArrays(sharedWaterArrays);
+        setWaterPassRunner(bands);
+    });
+    afterAll(() => {
+        setWaterArrays(ordinaryWaterArrays);
+        setWaterPassRunner(undefined);
+    });
+
+    for (const scenario of SCENARIOS) {
+        it(
+            `ends on the fingerprint of the water as it was: ${scenario.name}`,
+            () => {
+                const { whole, water } = play(scenario);
+                expect(water).toBe(WATER_ALONE[scenario.name]);
+                expect(whole).toBe(scenario.fingerprint);
+            },
+            SCENARIO_TIMEOUT_MS,
+        );
+    }
+
+    it("shared the passes indeed: slices computed by who leads and by the others, for each grid", () => {
+        const { here, others } = bands.slices();
+        expect(here).toBeGreaterThan(1000);
+        expect(others).toBeGreaterThan(1000);
+        // Each grid was told to who follows, and forgotten when its arrays changed.
+        expect(bands.told.filter((news) => news.arrays).length).toBeGreaterThan(SCENARIOS.length / 2);
     });
 });

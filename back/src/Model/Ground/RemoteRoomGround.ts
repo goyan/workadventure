@@ -395,6 +395,8 @@ export class RemoteRoomGround implements RoomGround {
             case "error":
                 console.error("The ground of the map failed on its thread", told.message);
                 return;
+            case "band":
+                return;
         }
     }
 
