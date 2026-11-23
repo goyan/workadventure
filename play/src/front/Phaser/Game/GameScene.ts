@@ -3415,7 +3415,14 @@ export class GameScene extends DirtyScene {
         // Along the ground as the tree lying is drawn: its shadow lies under it.
         const way = lyingVector(fallen.toward);
         if (fallen.lying) {
-            return { towardX: way.x, towardY: way.y, tilt: this.fallenTreeView?.tiltOf(id) ?? Math.PI / 2, size: 1 };
+            return {
+                towardX: way.x,
+                towardY: way.y,
+                tilt: this.fallenTreeView?.tiltOf(id) ?? Math.PI / 2,
+                size: 1,
+                // Bare branches, the fronds of a palm: their own shadow, as drawn.
+                limbs: this.fallenTreeView?.limbsOf(id),
+            };
         }
         return { towardX: way.x, towardY: way.y, tilt: 0, size: growShare(growStep(fallen.grown)) };
     }

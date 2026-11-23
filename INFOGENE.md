@@ -6114,7 +6114,13 @@ ses couleurs, éclairé d'en haut ; sur le côté de l'écran la moitié au-dess
 largeur ; raccourci à 0,7 vers le haut et le bas de l'écran (`LYING_DEPTH`, la même géométrie pour l'ombre du soleil
 et les feuilles). L'objet de la carte ne montre rien pendant ce temps (`uprootedTexture`). La chute : l'image debout,
 sans son ombre peinte, tourne sur son pied, puis le dessin couché la remplace pendant le rebond (avant qu'elle ne se
-retourne pour une chute vers le joueur). Il repousse en 8 tailles depuis son vrai pied (`growingTreeTexture`).
+retourne pour une chute vers le joueur). Il repousse en 8 tailles depuis son vrai pied (`growingTreeTexture`). Deux
+autres dessins, choisis par la forme de l'image et non par son nom : un **arbre nu** (moins de 35 % de pixels de
+feuillage vert, d'automne vif ou de neige) se couche en branches, une maîtresse et sept de biais avec un rameau chacune ;
+un **palmier** (`isPalm` : feuillu, son tronc visible depuis le pied jusqu'à la moitié de sa hauteur ou plus, ses palmes
+seulement en haut) se couche en palmes arquées depuis le bout du tronc, nervure claire et folioles en dents, la moitié
+tournée vers le ciel. L'ombre du soleil de ces deux-là suit leurs branches ou leurs palmes et leur tronc
+(`ShadowTree.limbs`), pas l'ovale d'un houppier.
 
 **Débris emportés** (même demande). Des feuilles, brindilles et éclats sombres, 150 au plus, arrachés dans la vue là où
 la rafale dépasse 120 km/h (force 12 de Beaufort), d'autant plus que la rafale est forte : ils vont au vent de
