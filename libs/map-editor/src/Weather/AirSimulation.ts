@@ -74,8 +74,18 @@ export function seaDrag(speed: number): number {
 /**
  * The low of the hurricane is the pressure drop of hurricanePressureDrop (Holland 1980, V² = B Δp / (ρ e), the drop
  * the water already feels): the same one. The slab, slightly supergradient at its wall and slowed by the drag, keeps
- * a strongest wind somewhat over that of its category (measured, see the tests): no other calibration.
+ * a strongest wind of the layer somewhat over that of its category; at 10 m (AIR_SURFACE_RATIO) it comes within 10 %
+ * of it in categories 4 and 5 over the sea (measured, see the tests): no other calibration.
  */
+
+/**
+ * The wind of the slab is the mean wind of the boundary layer; what lives at the surface (the sea, its foam, the trees,
+ * the debris, the water, the rain) and what the category of a hurricane is defined on is the wind at 10 m: "This mean
+ * boundary layer (MBL) wind speed is then multiplied by 0.80, the mean ratio of the 10-m speed to the MBL speed
+ * determined from the sample of eyewall dropsondes" (Franklin, Black and Valde 2003, Weather and Forecasting 18,
+ * p. 42; the MBL is the mean over the lowest 500 m). The one place it is applied: surfaceWindAt.
+ */
+export const AIR_SURFACE_RATIO = 0.8;
 
 export interface AirSetup {
     /** The size of the map, map pixels. */
@@ -155,6 +165,12 @@ export class AirSimulation {
         const gx = (x - this.originX) / AIR_CELL_PX;
         const gy = (y - this.originY) / AIR_CELL_PX;
         return { east: this.sample(this.east, gx, gy), north: this.sample(this.north, gx, gy) };
+    }
+
+    /** The wind at 10 m at a map point (pixels): that of the layer times AIR_SURFACE_RATIO. East and north, m/s. */
+    public surfaceWindAt(x: number, y: number): { east: number; north: number } {
+        const layer = this.windAt(x, y);
+        return { east: layer.east * AIR_SURFACE_RATIO, north: layer.north * AIR_SURFACE_RATIO };
     }
 
     private sample(field: Float32Array, gx: number, gy: number): number {
