@@ -20,7 +20,7 @@ import {
     warmedCold,
 } from "../src/Catastrophe/Cold";
 import type { ColdMass } from "../src/Catastrophe/Cold";
-import { ICE_BEARS_MM, ICE_SLIPS_MM } from "../src/Terrain/Ice";
+import { ICE_BEARS_MM, ICE_EXACT_FROM_HOURS, ICE_SLIPS_MM } from "../src/Terrain/Ice";
 import { hoarFrost } from "../src/Weather/HoarFrost";
 import { Meadow, MEADOW_STEP_SECONDS } from "../src/Terrain/Meadow";
 import type { MeadowStepInput } from "../src/Terrain/Meadow";
@@ -162,6 +162,24 @@ describe("the meadow under a mass of cold air", () => {
         const meadow = new Meadow(size, undefined, undefined);
         run(meadow, 10, under({ cold: [mass], currentAt: () => 1.5 }));
         expect(meadow.iceAt(10, 10)).toBe(0);
+    });
+
+    it("goes by the current on a fast clock too, where the ice of a step is the exact one: none, some, all", () => {
+        // An hour of the map for a second: each step is two hours long, over the hour the exact law starts at.
+        expect((MEADOW_STEP_SECONDS * 3600) / 3600).toBeGreaterThan(ICE_EXACT_FROM_HOURS);
+        const iceUnder = (metresPerSecond: number): number => {
+            const meadow = new Meadow(size, undefined, undefined);
+            run(meadow, 3, under({ cold: [mass], snowTimes: 3600, currentAt: () => metresPerSecond }));
+            return meadow.iceAt(10, 10);
+        };
+        const still = iceUnder(0);
+        expect(still).toBeGreaterThan(ICE_BEARS_MM);
+        // Over 1.2 m/s the water stays open under the coldest air; between 0.6 and 1.2 m/s less ice takes.
+        expect(iceUnder(1.5)).toBe(0);
+        expect(iceUnder(7)).toBe(0);
+        expect(iceUnder(0.9)).toBeGreaterThan(0);
+        expect(iceUnder(0.9)).toBeLessThan(still);
+        expect(iceUnder(0.5)).toBe(still);
     });
 
     it("keeps the snow under it from melting, while the snow around melts", () => {
