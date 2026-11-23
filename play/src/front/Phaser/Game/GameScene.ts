@@ -32,6 +32,7 @@ import {
     EntityPermissions,
     type EntityPrefabType,
     GameMap,
+    freezeThawTimesOf,
     GameMapProperties,
     GRAZING_COVER,
     heightAt,
@@ -47,7 +48,6 @@ import {
     type WAMFileFormat,
     WAMSettingsUtils,
     waterHasInertia,
-    waterTimesOf,
     WeatherType,
     bridgesOf,
     pavedTilesOf,
@@ -185,7 +185,7 @@ import {
     mapEditorWamSettingsEditorToolCurrentMenuItemStore,
     WAM_SETTINGS_EDITOR_TOOL_MENU_ITEM,
 } from "@wa/front/Stores/MapEditorStore";
-import { heldBallStore } from "@wa/front/Stores/CatastropheStore";
+import { coldLyingStore, heldBallStore } from "@wa/front/Stores/CatastropheStore";
 import { refreshPromptStore } from "@wa/front/Stores/RefreshPromptStore";
 import { mapDeletedPromptStore } from "@wa/front/Stores/MapDeletedPromptStore";
 import { SpaceRegistry } from "@wa/front/Space/SpaceRegistry/SpaceRegistry";
@@ -1968,6 +1968,7 @@ export class GameScene extends DirtyScene {
         this.ballView = undefined;
         this.coldView?.destroy();
         this.coldView = undefined;
+        coldLyingStore.set(undefined);
         this.fireTorchView?.destroy();
         this.fireTorchView = undefined;
         rodEquippedStore.set(false);
@@ -5121,15 +5122,18 @@ export class GameScene extends DirtyScene {
         const coldView = new ColdView(
             this,
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
-            // A mass let go comes back to the air of the room, at the clock of its water, as on the server; the
-            // frost it lays is the hoar frost of that air, cooled.
-            () =>
-                roomPrecipitationAir(
+            // A mass let go comes back to the air of the room (sooner in its wind), at the clock of its ice and its
+            // snow, as on the server; the frost it lays is the hoar frost of that air, cooled.
+            () => {
+                const air = roomPrecipitationAir(
                     this.getGameMap().getWamFile()?.getWam().settings,
                     this.nightManager?.serverDate(),
-                ),
-            () => waterTimesOf(this.getGameMap().getWamFile()?.getWam().settings?.water),
+                );
+                return air ? { ...air, windSpeed: get(fireConditionsStore)?.windSpeed } : undefined;
+            },
+            () => freezeThawTimesOf(this.getGameMap().getWamFile()?.getWam().settings?.water),
             (x, y) => this.surfaceDropAt(x, y),
+            (lying) => coldLyingStore.set(lying),
         );
         this.coldView = coldView;
         this.fireTorchView?.destroy();

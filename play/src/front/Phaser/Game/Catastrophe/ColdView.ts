@@ -1,4 +1,4 @@
-import { TILE_PX } from "@workadventure/map-editor";
+import { coldGoneInMinutes, TILE_PX } from "@workadventure/map-editor";
 import type { ColdAir, ColdMass } from "@workadventure/map-editor";
 import type { CatastropheMessage } from "@workadventure/messages";
 import { DEPTH_NIGHT_INDEX } from "@wa/front/Phaser/Game/DepthIndexes";
@@ -35,6 +35,12 @@ const MOST_SPARKLES = 110;
 /** The mass follows the pointer of its player this fast: all the way in about a fifth of a second. */
 const FOLLOW_PER_MS = 0.012;
 
+/** The coldest air lying on the map, and how long it still has (seconds of the clock; undefined while it is held). */
+export interface ColdLying {
+    celsius: number;
+    secondsLeft: number | undefined;
+}
+
 interface Shown extends ShownCold {
     /** Where it is drawn: it glides to where the server tells it. */
     drawnX: number;
@@ -54,6 +60,10 @@ export class ColdView {
     private readonly graphics: Phaser.GameObjects.Graphics;
     private readonly shown = new Map<number, Shown>();
     private lastUpdate: number | undefined;
+    /** Whether cold air was dispelled since the last image: its drawing is wiped off then. */
+    private dispelled = false;
+    /** What was last told of the cold air lying on the map. */
+    private said = "";
 
     constructor(
         private readonly scene: Phaser.Scene & { markDirty(): void },
@@ -67,12 +77,24 @@ export class ColdView {
         private readonly times: () => number,
         /** How much lower the ground or the water under a point is drawn (the relief seen in 3/4). */
         private readonly dropAt: (x: number, y: number) => number = () => 0,
+        /**
+         * Told when it changes: the coldest air lying on the map (°C, whole) and how long it still has before it is
+         * the air of the map again (whole seconds of the clock; undefined while a player holds it), or undefined when
+         * no cold air lies on the map. What the panel of the catastrophes says.
+         */
+        private readonly tell: (lying: ColdLying | undefined) => void = () => undefined,
     ) {
         this.graphics = scene.add.graphics().setDepth(DEPTH_NIGHT_INDEX + 2);
     }
 
     /** `receivedAt` in ms of the game: the mass is held `message.impactInMs` more. */
     public report(message: CatastropheMessage, receivedAt: number): void {
+        // The cold snap of the room was stopped: no cold air is left, whoever laid it.
+        if (message.impactInMs <= 0) {
+            if (this.shown.size > 0) this.dispelled = true;
+            this.shown.clear();
+            return;
+        }
         const known = this.shown.get(message.id);
         const told = tellCold(known, message, receivedAt);
         this.shown.set(message.id, { ...told, drawnX: known?.drawnX ?? told.x, drawnY: known?.drawnY ?? told.y });
@@ -85,10 +107,11 @@ export class ColdView {
     public masses(now: number): ColdMass[] {
         if (this.shown.size === 0) return [];
         const air = this.mapAir()?.temperature;
+        const wind = this.mapAir()?.windSpeed;
         const times = this.times();
         const masses: ColdMass[] = [];
         for (const [id, cold] of this.shown) {
-            const temperature = coldAt(cold, now, air, times);
+            const temperature = coldAt(cold, now, air, times, wind);
             if (temperature === undefined) continue;
             masses.push({ id, x: cold.x, y: cold.y, radiusTiles: cold.radiusTiles, temperature });
         }
@@ -98,8 +121,16 @@ export class ColdView {
     public update(now: number): void {
         if (this.shown.size === 0) {
             this.lastUpdate = undefined;
+            // The cold air that was just dispelled is wiped off once.
+            if (this.dispelled) {
+                this.dispelled = false;
+                this.graphics.clear();
+                this.scene.markDirty();
+                this.say(undefined);
+            }
             return;
         }
+        this.dispelled = false;
         const visible = isEffectShown("downpour");
         if (this.graphics.visible !== visible) this.graphics.setVisible(visible);
         const elapsed = this.lastUpdate === undefined ? 0 : Math.max(0, now - this.lastUpdate);
@@ -109,11 +140,20 @@ export class ColdView {
         const times = this.times();
         const reduced = this.reducedMotion();
         this.graphics.clear();
+        let lying: ColdLying | undefined;
         for (const [id, cold] of this.shown) {
-            const temperature = coldAt(cold, now, air?.temperature, times);
+            const temperature = coldAt(cold, now, air?.temperature, times, air?.windSpeed);
             if (temperature === undefined) {
                 this.shown.delete(id);
                 continue;
+            }
+            if (!lying || temperature < lying.celsius) {
+                const held = now < cold.until;
+                const minutes = coldGoneInMinutes(temperature, air?.temperature ?? Number.NaN, air?.windSpeed);
+                lying = {
+                    celsius: Math.round(temperature),
+                    secondsLeft: held ? undefined : Math.ceil((minutes * 60) / (times > 0 ? times : 1)),
+                };
             }
             cold.drawnX += (cold.x - cold.drawnX) * follow;
             cold.drawnY += (cold.y - cold.drawnY) * follow;
@@ -124,7 +164,16 @@ export class ColdView {
                 this.draw(cold, now - cold.beganAt, temperature, air, strength, reduced),
             );
         }
+        this.say(lying);
         this.scene.markDirty();
+    }
+
+    /** Tells what cold air lies on the map, when that changed. */
+    private say(lying: ColdLying | undefined): void {
+        const key = lying ? `${lying.celsius},${lying.secondsLeft ?? "held"}` : "";
+        if (key === this.said) return;
+        this.said = key;
+        this.tell(lying);
     }
 
     private draw(

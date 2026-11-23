@@ -25,12 +25,14 @@ function harness(mapCelsius: number | undefined = 10) {
         destroy: vi.fn(),
     };
     const scene = { add: { graphics: () => graphics }, markDirty: vi.fn() };
+    const lying: ({ celsius: number; secondsLeft: number | undefined } | undefined)[] = [];
     const view = new ColdView(
         scene as unknown as Phaser.Scene & { markDirty(): void },
         () => false,
         () => (mapCelsius === undefined ? undefined : { temperature: mapCelsius, humidity: 50, windSpeed: 0 }),
         () => 60,
         () => 0,
+        (state) => lying.push(state),
     );
     const message = (over: Partial<CatastropheMessage> = {}): CatastropheMessage => ({
         id: 9,
@@ -43,7 +45,7 @@ function harness(mapCelsius: number | undefined = 10) {
         temperature: -80,
         ...over,
     });
-    return { view, scene, graphics, message };
+    return { view, scene, graphics, message, lying };
 }
 
 describe("ColdView", () => {
@@ -73,7 +75,7 @@ describe("ColdView", () => {
     });
 
     it("goes on over a mass let go while it warms, its mist and its crystals fainter, then draws nothing", () => {
-        const { view, graphics, message } = harness();
+        const { view, graphics, message, lying } = harness();
         view.report(message(), 1000);
         view.update(1500);
         // The crystals are drawn as thin lines: how bright the brightest is.
@@ -81,20 +83,41 @@ describe("ColdView", () => {
             Math.max(...graphics.lineStyle.mock.calls.map(([width, , alpha]) => (width === 1 ? alpha : 0)));
         const held = brightest();
         graphics.lineStyle.mockClear();
-        // Twenty seconds after it was let go: more than a time of warming, still colder than the map.
-        view.update(1000 + COLD_LASTS_MS + 20_000);
+        // Two seconds after it was let go, at a minute for an hour: two times of warming, still colder than the map.
+        view.update(1000 + COLD_LASTS_MS + 2000);
         const warming = brightest();
         expect(warming).toBeGreaterThan(0);
         expect(warming).toBeLessThan(held);
-        const [mass] = view.masses(1000 + COLD_LASTS_MS + 20_000);
+        const [mass] = view.masses(1000 + COLD_LASTS_MS + 2000);
         expect(mass.temperature).toBeGreaterThan(-80);
-        expect(mass.temperature).toBeLessThan(0);
-        // Ten minutes later it is the air of the map: forgotten.
+        expect(mass.temperature).toBeLessThan(10);
+        // What the panel says of it: how cold the coldest air lying on the map is, and how long it still has.
+        expect(lying.at(-1)).toMatchObject({ celsius: Math.round(mass.temperature) });
+        expect(lying.at(-1)?.secondsLeft).toBeGreaterThan(1);
+        expect(lying.at(-1)?.secondsLeft).toBeLessThan(6);
+        // A minute later it is the air of the map: forgotten, and the panel is told there is none.
         graphics.clear.mockClear();
-        view.update(1000 + 600_000);
-        view.update(1000 + 600_100);
+        view.update(1000 + 60_000);
+        view.update(1000 + 60_100);
         expect(graphics.clear).toHaveBeenCalledTimes(1);
-        expect(view.masses(1000 + 600_100)).toEqual([]);
+        expect(view.masses(1000 + 60_100)).toEqual([]);
+        expect(lying.at(-1)).toBeUndefined();
+    });
+
+    it("says that a mass is held while its player holds it, and forgets all the cold air when the server says it was dispelled", () => {
+        const { view, graphics, message, lying } = harness();
+        view.report(message(), 1000);
+        view.report(message({ id: 10, x: 600 }), 1000);
+        view.update(1100);
+        expect(lying.at(-1)).toEqual({ celsius: -80, secondsLeft: undefined });
+        expect(view.masses(1100)).toHaveLength(2);
+        // Someone stopped the cold snap: no cold air is left, whoever laid it.
+        graphics.clear.mockClear();
+        view.report(message({ id: 99, impactInMs: 0, x: 0, y: 0, radiusTiles: 0, temperature: undefined }), 1200);
+        view.update(1216);
+        expect(view.masses(1216)).toEqual([]);
+        expect(graphics.clear).toHaveBeenCalledTimes(1);
+        expect(lying.at(-1)).toBeUndefined();
     });
 
     it("draws nothing for a mass no colder than the air of the map", () => {

@@ -65,7 +65,8 @@ export type LocalTerrainCommand =
     | ({ kind: "catastrophes" } & LocalCatastrophes)
     | { kind: "strike" | "shatter" | "ignite"; x: number; y: number; radiusTiles: number }
     | { kind: "burn"; x: number; y: number; radiusTiles: number; id: number }
-    | { kind: "soak"; downpour: Pick<Downpour, "x" | "y" | "radiusTiles" | "wholeMap"> };
+    | { kind: "soak"; downpour: Pick<Downpour, "x" | "y" | "radiusTiles" | "wholeMap"> }
+    | { kind: "calm" };
 
 /**
  * The catastrophes of the room that act on a water at each of its steps: the downpours falling, the drains open and
@@ -248,6 +249,11 @@ export class LocalTerrainSimulation {
     /** A fireball lands: it boils the water of its crater away, then burns the ground it left dry. */
     public burn(x: number, y: number, radiusTiles: number, id: number): void {
         this.ground.burn(x, y, radiusTiles, id);
+    }
+
+    /** The cold air lying on the map is dispelled (the cold snap of the room was stopped). */
+    public calm(): void {
+        this.meadow.calm();
     }
 
     /** The ice breaks around a point of the map. */

@@ -7,7 +7,7 @@ import type { LocalTerrainCommand } from "./LocalTerrainSimulation";
 /** What the relay tells the local ground of the catastrophes of the room. */
 export type LocalCatastropheCommand = Extract<
     LocalTerrainCommand,
-    { kind: "catastrophes" | "strike" | "shatter" | "ignite" | "burn" | "soak" }
+    { kind: "catastrophes" | "strike" | "shatter" | "ignite" | "burn" | "soak" | "calm" }
 >;
 type CatastropheState = Extract<LocalTerrainCommand, { kind: "catastrophes" }>;
 
@@ -59,6 +59,12 @@ export class LocalCatastropheRelay {
                 this.changed = true;
                 return [];
             case CatastropheKind.CATASTROPHE_COLD: {
+                // The cold snap of the room was stopped: the local ground dispels its cold air too.
+                if (message.impactInMs <= 0) {
+                    if (this.colds.size > 0) this.changed = true;
+                    this.colds.clear();
+                    return [{ kind: "calm" }];
+                }
                 const cold = {
                     id,
                     x,

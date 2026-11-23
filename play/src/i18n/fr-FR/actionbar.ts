@@ -369,7 +369,12 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         coldCelsiusLabel: "Température de l'air du coup de froid, en degrés Celsius",
         coldCelsius: "{celsius} °C",
         coldArmedHelp:
-            "Maintenez le clic : l'air gèle sous le pointeur ; l'eau y prend en glace, la neige y tient, le sol y gèle. Relâché, il se réchauffe sur place et la glace fond d'elle-même · Échap pour annuler",
+            "Maintenez le clic : l'air gèle sous le pointeur ; l'eau y prend en glace, la neige y tient, le sol y gèle. Relâché, l'air froid se dissipe sur place en quelques minutes de la carte, et la glace fond d'elle-même. « Arrêter le coup de froid » le dissipe tout de suite · Échap pour annuler",
+        coldLying: "Air froid sur la carte : {celsius} °C, encore {left}",
+        coldHeld: "Air froid sur la carte : {celsius} °C, tenu",
+        coldLeftMinutes: "{minutes} min {seconds} s",
+        coldLeftSeconds: "{seconds} s",
+        coldStop: "Arrêter le coup de froid",
         ball: "Boule",
         ballSizeLabel: "Taille de la boule : son diamètre, en cases",
         ballArmedHelp:

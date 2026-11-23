@@ -39,6 +39,13 @@ export const heldBallStore = writable<WaterBall | undefined>(undefined);
 export const coldRadiusTilesStore = writable<number>(COLD_DEFAULT_TILES);
 export const coldCelsiusStore = writable<number>(COLD_DEFAULT_CELSIUS);
 
+/**
+ * The cold air lying on the map now, as the game shows it: the temperature of the coldest mass (°C) and how long it
+ * still has before it is the air of the map again (seconds; undefined while a player holds it). Undefined while no
+ * cold air lies on the map. Written by the view of the cold snap, read by the panel, which offers to stop it.
+ */
+export const coldLyingStore = writable<{ celsius: number; secondsLeft: number | undefined } | undefined>(undefined);
+
 /** How wide the patch of fire set under the pointer is, in tiles: kept for the session. */
 export const fireRadiusTilesStore = writable<number>(FIRE_DEFAULT_TILES);
 

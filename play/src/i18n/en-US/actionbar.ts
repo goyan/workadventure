@@ -365,7 +365,12 @@ const actionbar = {
         coldCelsiusLabel: "Temperature of the air of the cold snap, in degrees Celsius",
         coldCelsius: "{celsius} °C",
         coldArmedHelp:
-            "Hold the click: the air freezes under the pointer; the water there takes in ice, the snow holds, the soil freezes. Let go, it warms where it lies and the ice thaws by itself · Esc to cancel",
+            "Hold the click: the air freezes under the pointer; the water there takes in ice, the snow holds, the soil freezes. Let go, the cold air clears where it lies within a few minutes of the map, and the ice thaws by itself. “Stop the cold snap” clears it at once · Esc to cancel",
+        coldLying: "Cold air on the map: {celsius} °C, {left} left",
+        coldHeld: "Cold air on the map: {celsius} °C, held",
+        coldLeftMinutes: "{minutes} min {seconds} s",
+        coldLeftSeconds: "{seconds} s",
+        coldStop: "Stop the cold snap",
         ball: "Ball",
         ballSizeLabel: "Size of the ball: its diameter, in tiles",
         ballArmedHelp:

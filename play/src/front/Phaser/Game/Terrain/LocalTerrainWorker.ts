@@ -55,7 +55,11 @@ workerScope.onmessage = (event: MessageEvent<LocalTerrainCommand>): void => {
                 downpours: command.downpours,
                 drains: command.drains,
                 balls: command.balls,
+                ...(command.colds ? { colds: command.colds } : {}),
             });
+            return;
+        case "calm":
+            simulation.calm();
             return;
         case "strike":
             simulation.strike(command.x, command.y, command.radiusTiles);

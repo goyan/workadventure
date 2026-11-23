@@ -100,9 +100,11 @@ describe("the mass of cold air a browser shows", () => {
     it("warms where it lies once it is let go, as on the server, and is gone when it is the air of the map", () => {
         const shown = tellCold(undefined, message, 1000);
         const until = 1000 + COLD_LASTS_MS;
-        // Six seconds later at a minute for an hour: six minutes of the map.
-        expect(coldAt(shown, until + 6000, 10, 60)).toBeCloseTo(warmedCold(-80, 10, 6), 6);
-        expect(coldAt(shown, until + 6000, 10, 1)).toBeCloseTo(warmedCold(-80, 10, 0.1), 6);
+        // Two seconds later at a minute for an hour: two minutes of the map. In real time: a thirtieth of a minute.
+        expect(coldAt(shown, until + 2000, 10, 60)).toBeCloseTo(warmedCold(-80, 10, 2), 6);
+        expect(coldAt(shown, until + 2000, 10, 1)).toBeCloseTo(warmedCold(-80, 10, 2 / 60), 6);
+        // Sooner in the wind, as on the server.
+        expect(coldAt(shown, until + 2000, 10, 60, 10)).toBeCloseTo(warmedCold(-80, 10, 2, 10), 6);
         expect(coldAt(shown, until + 600_000, 10, 60)).toBeUndefined();
         // Under an air that is not known it is gone as soon as it is let go.
         expect(coldAt(shown, until + 1, undefined, 60)).toBeUndefined();

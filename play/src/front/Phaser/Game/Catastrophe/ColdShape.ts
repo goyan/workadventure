@@ -175,17 +175,18 @@ export function tellCold(known: ShownCold | undefined, message: ColdReport, rece
 /**
  * The temperature of a mass at `now` (ms of the game): what the server told while it is held; then it warms where
  * it lies by the rule of the server (warmedCold), `times` minutes of the map for a minute of the clock, towards the
- * air of the map at `mapCelsius`. Undefined once it is that air, or let go under an air that is not known: gone.
+ * air of the map at `mapCelsius`, sooner in its wind (`windSpeed`, km/h). Undefined once it is that air, or let go under an air that is not known: gone.
  */
 export function coldAt(
     shown: ShownCold,
     now: number,
     mapCelsius: number | undefined,
     times: number,
+    windSpeed?: number,
 ): number | undefined {
     if (now < shown.until) return shown.temperature;
     if (mapCelsius === undefined || !Number.isFinite(mapCelsius)) return undefined;
     const pace = Number.isFinite(times) && times > 0 ? times : 1;
-    const warmed = warmedCold(shown.temperature, mapCelsius, ((now - shown.until) / 60_000) * pace);
+    const warmed = warmedCold(shown.temperature, mapCelsius, ((now - shown.until) / 60_000) * pace, windSpeed);
     return warmed < mapCelsius ? warmed : undefined;
 }
