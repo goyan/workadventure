@@ -2827,8 +2827,9 @@ partir de ce qu'il reçoit déjà (profondeurs, vent) :
   vrais shaders (sonde de l'étude : passe d'écume et eau sur 1024 x 640 px d'eau ouverte au fetch de 200 m, 12 s de
   mise en route, moyenne des 3 dernières secondes) : le seuil de pente est le seuil physique à 11 % près de 20 à
   60 km/h (table `BREAKING_FACTORS`) ; au-delà, la loi demande plus de blanc que les crêtes plus raides que Michell
-  n'en donnent (seuil 25 % plus bas à 82 km/h) : le vent arrache l'écume de crêtes pas encore assez raides. Au-delà de 90 km/h, où les mesures de cette loi s'arrêtent, le blanc tend vers
-  45 % au plus (`whitecapWhite`) : l'eau reste visible. Mesuré : 0,13 % à 20 km/h (loi 0,13 %), 1,41 % à 40 (1,41),
+  n'en donnent (seuil 25 % plus bas à 82 km/h) : le vent arrache l'écume de crêtes pas encore assez raides. Au-delà de 90 km/h, où les mesures de cette loi s'arrêtent, le blanc des moutons tend vers
+  45 % au plus (`whitecapWhite`). Au-delà de 30 m/s, la nappe blanche d'un ouragan s'y ajoute et la mer blanchit
+  (`spumeShare`, voir « Catastrophes : l'ouragan »). Mesuré : 0,13 % à 20 km/h (loi 0,13 %), 1,41 % à 40 (1,41),
   5,66 % à 60 (5,63), 16,3 % à 82 (16,3), 34,2 % à 110 (visée 34,2). Sur un fetch plus court, moins de moutons.
   Rien ne change sous 10 km/h. Seulement dehors, sur une eau d'au moins 8 px, non gelée. Le vent est celui que le
   joueur voit (carte, réglé à la main, ou météo réelle).
@@ -5955,7 +5956,8 @@ fois. Avec l'œil qui passe dessus en catégorie 4, cela fait environ 150 mm. La
 nœuds, en pouces) donne 235 mm : c'est une borne haute, Lonfat et al. trouvent des débits 2,5 à 3 fois plus faibles
 que ceux qu'on utilise d'habitude. Pendant un passage de 30 min, l'eau reçoit donc jusqu'à environ 1 000 mm/h dans les bandes les plus fortes (14 mm/h × 72).
 Les creux se remplissent : c'est la crue d'eau douce d'un ouragan. Le pré est trempé et le feu s'éteint sous cette
-pluie.
+pluie : sur un pré sec en feu, au mur, plus rien ne brûle au bout de 6 s, alors que le vent seul l'aurait
+attisé (test `Hurricane.test.ts`, règle d'extinction du pré, 100 mm/h éteignent une flamme en une seconde).
 
 **Ce que tout le monde voit.**
 - Le navigateur reçoit le message (`HurricaneReceiver`) et calcule la météo de l'ouragan à l'heure du serveur, une
@@ -5985,6 +5987,14 @@ driving spray; visibility very seriously affected ».
 - Mesuré sur le banc GPU de l'étude de la houle (moutons et écume d'ouragan, sans l'écume laissée) : 12 % de blanc
   à 110 km/h, 54 % à 130, 90 % à 140, 95 % de 150 à 250 km/h. Les shaders compilent, sur Metal comme sur SwiftShader.
 
+**Coût du serveur** (mesuré le 2026-11-23 sur le Mac, dans un conteneur Linux) :
+- Le banc est le vrai `GroundWorker`, sur un fil de calcul, avec la carte d'Antoine et son eau sauvegardée, noyau
+  TypeScript, une bande. L'ouragan était au mur pendant la mesure : l'eau lisait 842 à 862 mm/h.
+- Le pas de l'eau de 100 ms coûte 11,3 à 13,0 ms sans ouragan (la carte pleut déjà 2 mm/h) et 12,2 à 19,8 ms avec,
+  sur des fenêtres de 10 à 20 s.
+- Ce coût monte avec la surface mouillée. Le passage entier (30 min) n'a pas été mesuré. Sur le VPS, environ 6 fois
+  plus lent, prévoir le fil de calcul (`GROUND_THREADS`) ou le noyau WebAssembly.
+
 **Ce que ça ne modélise pas.**
 - **La surcote** : le modèle d'eau n'a pas de bord ouvert sur une mer, et la carte n'a pas d'océan à son bord. Une eau
   « qui monte par les bords » serait inventée ; une source de bord à niveau cible serait possible plus tard.
@@ -5995,6 +6005,13 @@ driving spray; visibility very seriously affected ».
 - Les rafales dans le rendu : les arbres plafonnent déjà à 80 km/h.
 - Le recalcul du fetch de la mer quand le vent tourne vite dans l'œil : jusqu'à un toutes les 3 s, 12 à 17 ms d'un bloc
   sur la carte d'Antoine.
+- La pluie dessinée plafonne vers 7,6 mm/h (`rainIntensity` de `Rain.ts`) : le mur (12 mm/h et plus) se dessine
+  comme une forte averse ordinaire.
+- Le danger d'incendie de l'onglet Météo et le vent du bandeau ignorent l'ouragan (ils lisent les conditions de la
+  salle, que le sol remplace par celles de l'ouragan).
+- L'ouverture du ciel dans l'œil n'a pas été vérifiée à l'écran contre un éventuel fondu des nuages de `WeatherManager`.
+- Un navigateur d'une version antérieure reçoit un genre inconnu et dessine une comète à chaque annonce, chaque
+  seconde, comme pour le coup de froid.
 - Le sol local d'un joueur lit l'heure de son ordinateur, pas celle du serveur : un décalage d'horloge de quelques
   secondes y décale l'ouragan d'autant.
 

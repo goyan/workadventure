@@ -33,15 +33,18 @@ export function windHeading(windFrom: number | undefined): { x: number; y: numbe
 
 /** The whitecaps follow the law up to this wind (m/s): the measures it comes from go no further. */
 const LAW_UP_TO_MS = 25;
-/** Past it, the white of the sea creeps toward this, never more: the water stays seen. */
+/**
+ * Past it, the white of the whitecaps creeps toward this, never more. The white sheet of a hurricane, past 30 m/s, is
+ * another foam laid over it (spumeShare): with it the sea goes white.
+ */
 export const MOST_WHITE = 0.45;
 /** How fast it creeps there, in share of the law past its end. */
 const CREEP = 0.3;
 
 /**
  * The white the sea is drawn with for a share of white water (whitecapShare): the law up to 25 m/s (90 km/h), where
- * the measures behind it end; past it, the law grows out of hand (96 % at 138 km/h), and the white only creeps toward
- * MOST_WHITE, so that the water is still seen in a hurricane.
+ * the measures behind it end; past it, the law grows out of hand (96 % at 138 km/h), and the white of the whitecaps only
+ * creeps toward MOST_WHITE. Past 30 m/s the streaks of a hurricane whiten the rest (spumeShare).
  */
 export function whitecapWhite(share: number): number {
     const law = Number.isFinite(share) ? Math.max(0, Math.min(1, share)) : 0;

@@ -36,7 +36,8 @@ import type { SeaComponent } from "./WindSea";
  * whitens the share of the water of the law (whitecapWhite of whitecapShare): [km/h, factor]. From 20 to 60 km/h it
  * stays within 11 % of the physical slope; over, the law asks more white than the crests steeper than Michell give
  * (25 % under at 82 km/h): the wind tears foam off crests not yet steep enough to break. Past 90 km/h, where the
- * measures of the law end, the white creeps towards 45 % (whitecapWhite). Under 20 km/h it stays at its value of
+ * measures of the law end, the white of the whitecaps creeps towards 45 % (whitecapWhite); past 30 m/s the white
+ * sheet of a hurricane (seaSpume) is laid over them. Under 20 km/h it stays at its value of
  * 20 km/h: a lower slope would not be physical, and the law asks for a few hundredths of a percent there.
  */
 export const BREAKING_FACTORS: readonly (readonly [number, number])[] = [

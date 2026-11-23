@@ -19,6 +19,8 @@ import {
     skyRainUnder,
 } from "../src/Catastrophe/Hurricane";
 import type { Hurricane } from "../src/Catastrophe/Hurricane";
+import { Meadow, MEADOW_STEP_SECONDS } from "../src/Terrain/Meadow";
+import { Season } from "../src/types";
 
 const START = 1_800_000_000_000;
 
@@ -245,5 +247,35 @@ describe("hurricaneTrack", () => {
             heading: 290,
             southern: false,
         });
+    });
+});
+
+describe("a fire under a hurricane", () => {
+    it("goes out under the rain of the wall, which its wind alone would have spread", () => {
+        const storm = hurricane();
+        /** A dry meadow on fire, stepped for 6 s under the wind of the wall, with its rain or without it. */
+        const burningAfter = (rains: boolean): number => {
+            const meadow = new Meadow({ width: 21, height: 21 }, undefined, undefined);
+            for (let y = 0; y < 21; y++) for (let x = 0; x < 21; x++) meadow.set(x, y, 0.1, 1, 1);
+            meadow.ignite(10, 10, 3);
+            for (let step = 0; step < 3; step++) {
+                const epoch = at(storm, 0.45) + step * MEADOW_STEP_SECONDS * 1000;
+                const now = hurricaneAt(storm, epoch);
+                meadow.step({
+                    seconds: MEADOW_STEP_SECONDS,
+                    rainMmPerHour: rains ? skyRainUnder(0, storm, epoch) : 0,
+                    daylight: true,
+                    season: Season.Summer,
+                    waterAt: () => 0,
+                    random: () => 0.5,
+                    fireDanger: 1,
+                    windSpeed: now?.windSpeed ?? 0,
+                    windFrom: now?.windFrom ?? 0,
+                });
+            }
+            return meadow.burning();
+        };
+        expect(burningAfter(false)).toBeGreaterThan(0);
+        expect(burningAfter(true)).toBe(0);
     });
 });

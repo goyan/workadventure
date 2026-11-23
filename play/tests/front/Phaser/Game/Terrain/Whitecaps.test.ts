@@ -36,7 +36,7 @@ describe("windHeading", () => {
 });
 
 describe("whitecapWhite: the white of the sea past the measures of the law", () => {
-    it("is the law up to 90 km/h, and never more than 45 % beyond: the water stays seen", () => {
+    it("is the law up to 90 km/h, and its whitecaps never more than 45 % beyond (the white sheet is spumeShare)", () => {
         for (let kmh = 0; kmh <= 90; kmh += 5) {
             expect(whitecapWhite(whitecapShare(kmh)), `${kmh} km/h`).toBeCloseTo(whitecapShare(kmh), 9);
         }
