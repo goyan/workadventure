@@ -1,5 +1,4 @@
 import { Worker } from "node:worker_threads";
-import { GROUND_THREADS } from "../../Enum/EnvironmentVariable";
 import type { GroundCommand, GroundPort, GroundTold } from "./GroundProtocol";
 
 /** A thread as the grounds use it: a Worker, or what stands for one in a test. */
@@ -110,11 +109,3 @@ export class GroundThreads {
         for (const lane of this.lanes) lane.stop();
     }
 }
-
-/** The threads of this server for the grounds of its rooms: as many as GROUND_THREADS says, none when it says nothing. */
-export const groundThreads = new GroundThreads(GROUND_THREADS);
-console.info(
-    groundThreads.count > 0
-        ? `The ground of the rooms (water and meadow) is computed on ${groundThreads.count} thread(s) of its own (GROUND_THREADS)`
-        : "The ground of the rooms (water and meadow) is computed on the thread of the rooms (GROUND_THREADS is 0)",
-);

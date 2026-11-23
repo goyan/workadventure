@@ -1,3 +1,4 @@
+import { Worker } from "node:worker_threads";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GroundTold } from "../src/Model/Ground/GroundProtocol";
 import { GroundThreads } from "../src/Model/Ground/GroundThreads";
@@ -64,5 +65,26 @@ describe("the threads that compute the ground of the rooms (GroundThreads)", () 
         first.port.post({ kind: "close", room: first.room });
         expect(info).toHaveBeenLastCalledWith("Ground thread 1 of 2 starts again after a loss (start 2)");
         expect(made.length).toBe(3);
+    });
+
+    it("says why in the logs of the server when a thread dies as it starts, and tells its rooms", async () => {
+        vi.spyOn(console, "info").mockImplementation(() => undefined);
+        const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+        // A real thread whose script fails at once, as one that could not load would.
+        const threads = new GroundThreads(
+            1,
+            () => new Worker('throw new Error("could not start: a setting is missing")', { eval: true }),
+        );
+        const { room, port } = threads.assign();
+        const lost = new Promise<void>((resolve) => {
+            port.listen(room, () => undefined, resolve);
+        });
+        port.post({ kind: "close", room });
+        await lost;
+        expect(errors).toHaveBeenCalledWith(
+            "A thread that computes the ground of rooms was lost: its rooms start again",
+            expect.objectContaining({ message: "could not start: a setting is missing" }),
+        );
+        threads.stop();
     });
 });

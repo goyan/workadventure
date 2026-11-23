@@ -230,6 +230,14 @@ describe("the ground of a room computed elsewhere (RemoteRoomGround)", () => {
             }
         };
 
+        // What a thread does takes the time the machine gives it: wait for it (20 s at most), not for a fixed time.
+        const until = async (reached: () => boolean, most = 20_000): Promise<void> => {
+            for (let waited = 0; waited < most && !reached(); waited += 50) {
+                // eslint-disable-next-line no-await-in-loop
+                await wait(50);
+            }
+        };
+
         it("runs by itself, tells the room, and saves as it stops", async () => {
             const { threads } = realThreads(1);
             const { inputs, seen, state } = world(groundWam());
@@ -238,8 +246,8 @@ describe("the ground of a room computed elsewhere (RemoteRoomGround)", () => {
                 await ground.startWater();
                 await ground.startMeadow();
                 state.downpours = [{ id: 1, x: 0, y: 0, radiusTiles: 4, wholeMap: true }];
-                await wait(1500);
                 await untilWet(ground, 100);
+                await until(() => seen.told.length > 3);
                 expect(seen.told.length).toBeGreaterThan(3);
                 expect(wetCells(ground)).toBeGreaterThan(100);
                 expect(ground.waterSnapshot()?.full).toBe(true);
@@ -264,31 +272,32 @@ describe("the ground of a room computed elsewhere (RemoteRoomGround)", () => {
                 await ground.startWater();
                 await ground.startMeadow();
                 state.downpours = [{ id: 1, x: 0, y: 0, radiusTiles: 4, wholeMap: true }];
-                await wait(1200);
                 await untilWet(ground, 100);
                 state.downpours = [];
                 const wet = wetCells(ground);
                 expect(wet).toBeGreaterThan(100);
 
                 await workers[0].terminate();
-                await wait(1500);
+                await until(() => workers.length === 2);
                 expect(workers.length).toBe(2);
                 // The water it had is still there, and the room is told again.
-                expect(wetCells(ground)).toBeGreaterThan(wet / 2);
                 const told = seen.told.length;
-                await wait(800);
+                await until(() => seen.told.length > told);
                 expect(seen.told.length).toBeGreaterThan(told);
+                expect(wetCells(ground)).toBeGreaterThan(wet / 2);
 
                 await workers[1].terminate();
-                await wait(1200);
+                await until(() => workers.length === 3);
+                const toldAgain = seen.told.length;
+                await until(() => seen.told.length > toldAgain);
                 await workers[2].terminate();
-                await wait(1500);
                 // Three threads lost: no fourth, the ground is computed here, and goes on.
-                expect(workers.length).toBe(3);
-                expect(wetCells(ground)).toBeGreaterThan(0);
+                await until(() => errors.mock.calls.some(([message]) => String(message).includes("too often")));
                 const after = seen.told.length;
-                await wait(800);
+                await until(() => seen.told.length > after);
+                expect(workers.length).toBe(3);
                 expect(seen.told.length).toBeGreaterThan(after);
+                expect(wetCells(ground)).toBeGreaterThan(0);
                 ground.stop();
             } finally {
                 errors.mockRestore();
