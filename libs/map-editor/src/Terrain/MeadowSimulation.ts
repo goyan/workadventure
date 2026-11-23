@@ -869,6 +869,11 @@ export class MeadowSimulation {
         return trees.length > 0 ? { trees, whole: true, embers: [] } : undefined;
     }
 
+    /** Where the trees of the map stand (map pixels). */
+    public treePlaces(): { x: number; y: number }[] {
+        return this.trees.places();
+    }
+
     /** The trees on fire (map pixels): what the animals of the map run from. */
     public treeFires(): { x: number; y: number; fire: number }[] {
         return this.trees.fires();

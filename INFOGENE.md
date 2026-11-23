@@ -6111,6 +6111,44 @@ de l'œil, plus denses et plus rapides au mur, et disparaissent dans l'œil (`De
 de la carte réglé à plus de 98 km/h (rafale de 120) en emporte aussi, en ligne droite. Dessinés par chaque navigateur,
 rien d'envoyé ; masqués avec les effets de météo, en mode Basique et dans l'éditeur.
 
+**L'air de l'ouragan, simulé par le serveur** (lots a et b, 2026-11-23). Le vent n'est plus seulement une formule :
+il émerge d'une simulation de la couche limite (`AirSimulation`, lib) sur une grille de 4 × 4 cases (4,4 m, 80 × 60
+mailles marge comprise sur la carte d'Antoine).
+- Physique : une dalle d'air poussée par la dépression de l'ouragan (la chute de pression de Holland 1980 que l'eau
+  ressent déjà, `hurricanePressureDrop`) et par la pression de grande échelle qui tient le vent de la salle. Y
+  s'ajoutent la force de Coriolis, le frottement du sol selon sa nature et le transport du vent par lui-même. Là où la
+  dalle diverge, l'air du dessus, au vent de gradient, y descend (Smith 2003). Le frottement vaut Large et Pond sur
+  la mer, plafonné à 2,5·10⁻³ ; 5·10⁻³ sur la terre ; 10⁻² en forêt.
+- **Choix**, l'ouragan étant mille fois plus petit qu'un vrai : similitude de Rossby (f* = 0,05 s⁻¹ à R = 30 m) et
+  épaisseur de la dalle h = 2 m (le double de la similitude à 1 m, sans quoi l'air remplit l'œil). Aucun autre
+  réglage : la catégorie sort de la pression.
+- Vent à 10 m = vent de la dalle × 0,80 (Franklin, Black et Valde 2003, Weather and Forecasting 18, p. 42 :
+  rapport moyen du vent à 10 m au vent moyen des 500 m inférieurs, dans le mur), appliqué en un seul endroit
+  (`surfaceWindAt`). Mesuré sur mer à 10 m : 104 km/h pour 126 en catégorie 1 (−17 %), 195 pour 214 en
+  catégorie 4 (−9 %), 235 pour 250 en catégorie 5 (−6 %) ; rayon du maximum de 0,85 à 1,05 Rmax, œil calme,
+  entrée de 15 à 25° sur mer, plus forte sur terre et en forêt.
+- **Défauts connus et non expliqués**, gardés visibles par des tests en échec attendu (`it.fails`) : en forêt, le mur
+  se contracte à 0,55 Rmax et y souffle plus fort que sur mer (223 km/h en catégorie 4), l'œil d'un ouragan mobile
+  n'y est pas calme, et l'asymétrie gauche-droite s'inverse. Le rapport 0,80 est mesuré sur mer, pas en forêt. Lot
+  séparé à venir.
+- Sur le serveur (`MapAir`) : l'air est créé au début d'un ouragan, sa surface lue alors dans la carte (mer là où
+  l'eau du relief a la profondeur d'un poisson sur la moitié d'une maille, forêt là où un arbre occupe le quart des
+  cases, terre ailleurs, deux seuils choisis). Il avance avec chaque pas de l'eau, donc de la même façon avec ou sans
+  fil de calcul (scénario d'identité). Il est jeté à la fin de l'ouragan. Un ouragan accéléré par le widget vit
+  `times` pas de son air dans chaque pas de la salle (1, 2, 5 ou 10). Sans cela, son œil va plus vite que l'air ne
+  tourne : mesuré après 5 s, l'œil de l'air est à 0,12 Rmax de celui de la formule à ×10, à 0,29 Rmax sans les sous-pas.
+- Le message : `HurricaneAirMessage`, le vent à 10 m aux points d'une grille de 128 px sur la carte, un octet signé
+  par composante, envoyé deux fois par seconde pendant un ouragan seulement, et entier au joueur qui arrive
+  (`RoomJoinedMessage.hurricaneAir`). Environ 5 ko par message, soit 10 ko/s par joueur, non compressé (2,8 à 3,6 ko
+  en gzip).
+- Repli : sur une carte sans eau, l'air ne tourne pas (il suit le pas de l'eau). Si l'air échoue, il est abandonné
+  pour cet ouragan, avec une seule erreur au journal. Dans les deux cas, rien n'est envoyé et le vent reste celui
+  de la formule.
+- Coût mesuré sur le Mac (M4 Max), encodage compris : 0,32 ms par pas à ×1, 2,7 ms à ×10. Estimation pour le VPS
+  (×6) : 2 ms (2 % d'un cœur) à ×1, 16 ms (16 %) à ×10, dans le fil du sol qui prend déjà 55 ms par pas pour l'eau.
+- Pas encore branché (lot c) : le front lit toujours la formule (`hurricaneHere`), comme les arbres couchés et les
+  conditions du feu du serveur. Le flux `hurricaneAirMessageStream` du navigateur n'a pas encore d'abonné.
+
 **Compatibilité.** `play` et `back` se déploient ensemble (protobuf). Le PNJ du dépôt d'infra doit être réaligné sur
 `messages.proto`.
 

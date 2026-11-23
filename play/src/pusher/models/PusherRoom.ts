@@ -259,6 +259,19 @@ export class PusherRoom {
                             }
                             break;
                         }
+                        case "hurricaneAirMessage": {
+                            // The wind of a hurricane is the same for every player of the room
+                            const hurricaneAirMessage = message.message.hurricaneAirMessage;
+                            for (const listener of this.listeners) {
+                                listener.emitInBatch({
+                                    message: {
+                                        $case: "hurricaneAirMessage",
+                                        hurricaneAirMessage: hurricaneAirMessage,
+                                    },
+                                });
+                            }
+                            break;
+                        }
                         case "meadowMessage": {
                             // The meadow of the map is the same for every player of the room
                             const meadowMessage = message.message.meadowMessage;

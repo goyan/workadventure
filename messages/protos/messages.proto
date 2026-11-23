@@ -929,6 +929,29 @@ message HurricaneTrackMessage {
   int32 waterEffect = 15;
 }
 
+// The wind at 10 m over the map while a hurricane crosses it, as the air of the server computes it (AirSimulation):
+// sent twice a second to the room, and whole to a player who joins. None outside a hurricane: the browser then has
+// the wind of the formula of the hurricane.
+message HurricaneAirMessage {
+  // The hurricane this wind blows under (HurricaneTrackMessage.id is the catastrophe's): a browser drops the wind of
+  // another one.
+  int32 hurricaneId = 1;
+  // Counts the messages of a hurricane.
+  uint32 seq = 2;
+  // The points of the grid, `cellPx` map pixels apart, the first at the top left corner of the map (the wind between
+  // them is bilinear).
+  uint32 cellPx = 3;
+  uint32 columns = 4;
+  uint32 rows = 5;
+  // The wind at a point, towards the east and towards the north: a signed byte each (−127 to 127), times `step`
+  // (m/s), row by row from the top.
+  float step = 6;
+  bytes east = 7;
+  bytes north = 8;
+  // The time of the room the wind is that of (ms since the epoch).
+  double epoch = 9;
+}
+
 // Browser to server: a player sets the conditions the fire of the room goes by (heat, humidity of the air, wind) by
 // hand, or goes back to the real ones; and from where they light a fire. The server keeps every value within bounds.
 message SetFireConditionsMessage {
@@ -1970,6 +1993,7 @@ message SubMessage {
     FireConditionsMessage fireConditionsMessage = 47;
     TreeFireMessage treeFireMessage = 48;
     IceShacksMessage iceShacksMessage = 59;
+    HurricaneAirMessage hurricaneAirMessage = 60;
   }
 }
 
@@ -2082,6 +2106,8 @@ message RoomJoinedMessage {
   optional TreeFireMessage treeFire = 36;
   // The ice fishing shacks standing on the ice of the room, for a player who joins it. Absent when there is none.
   optional IceShacksMessage iceShacks = 47;
+  // The wind of the hurricane crossing the map, whole; absent outside a hurricane.
+  optional HurricaneAirMessage hurricaneAir = 48;
 }
 
 message WebRtcStartMessage {
@@ -2656,6 +2682,7 @@ message SubToPusherRoomMessage {
     FireConditionsMessage fireConditionsMessage = 27;
     TreeFireMessage treeFireMessage = 28;
     IceShacksMessage iceShacksMessage = 39;
+    HurricaneAirMessage hurricaneAirMessage = 40;
   }
 }
 

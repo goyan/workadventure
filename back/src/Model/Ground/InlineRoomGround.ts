@@ -5,9 +5,10 @@ import {
     hurricaneConditions,
     hurricaneHumidity,
     NEUTRAL_FIRE_CONDITIONS,
+    TERRAIN_CELL,
 } from "@workadventure/map-editor";
 import type { Downpour, LifeFire, RealWeatherSlot, ReplayedWeather, WaterView } from "@workadventure/map-editor";
-import type { MeadowMessage, TerrainWaterMessage, TreeFireMessage } from "@workadventure/messages";
+import type { HurricaneAirMessage, MeadowMessage, TerrainWaterMessage, TreeFireMessage } from "@workadventure/messages";
 import { MeadowManager } from "../MeadowManager";
 import { TerrainWaterManager } from "../TerrainWaterManager";
 import type { RoomGround, RoomGroundInputs } from "./RoomGround";
@@ -110,6 +111,17 @@ export class InlineRoomGround implements RoomGround {
             },
             // A door holds the water while it is closed: it opens for the avatars that stand in its passage.
             walkers: () => inputs.walkers(),
+            // The air of a hurricane crossing the map, in the wind of the room (its own conditions, outside the
+            // hurricane), told to the room twice a second.
+            hurricaneAir: {
+                room: inputs.room,
+                now,
+                roomWind: () => inputs.fire(),
+                mapSize: () => {
+                    const cells = inputs.mapSize();
+                    return cells && { width: cells.width * TERRAIN_CELL, height: cells.height * TERRAIN_CELL };
+                },
+            },
             catastrophes: {
                 downpours: () => inputs.downpours(),
                 drains: () => inputs.drains(),
@@ -206,5 +218,9 @@ export class InlineRoomGround implements RoomGround {
 
     public treeSnapshot(): TreeFireMessage | undefined {
         return this.ground.meadow.treeSnapshot();
+    }
+
+    public airSnapshot(): HurricaneAirMessage | undefined {
+        return this.ground.air?.snapshot();
     }
 }

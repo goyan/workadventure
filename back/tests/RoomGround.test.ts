@@ -43,6 +43,12 @@ describe("the ground of a room behind its door (RoomGround)", () => {
         // The scenario does what it says: water told often, the meadow too, both saved.
         expect(hand.seen.told.length).toBeGreaterThan(100);
         expect(hand.seen.told.some((told) => told.includes("meadowMessage"))).toBe(true);
+        // The air of the hurricane told twice a second while it crosses (11 s), a wind of a hurricane in it.
+        const airs = hand.seen.told
+            .filter((told) => told.includes("hurricaneAirMessage"))
+            .map((told) => (JSON.parse(told) as { message: { hurricaneAirMessage: { step: number } } }).message);
+        expect(airs.length).toBeGreaterThanOrEqual(20);
+        expect(Math.max(...airs.map((air) => air.hurricaneAirMessage.step))).toBeGreaterThan(0.2);
         expect(hand.seen.saved.some((saved) => saved.startsWith("terrain-water:room|grid|"))).toBe(true);
         expect(hand.seen.saved.some((saved) => saved.startsWith("meadow:room|ice|"))).toBe(true);
         expect(levels).toEqual(handLevels);
@@ -51,6 +57,8 @@ describe("the ground of a room behind its door (RoomGround)", () => {
         expect(ground.waterSnapshot()).toEqual(reference.waterSnapshot());
         expect(ground.meadowSnapshot()).toEqual(reference.meadowSnapshot());
         expect(ground.treeSnapshot()).toEqual(reference.treeSnapshot());
+        // The hurricane ended: no wind of its air for who joins.
+        expect(ground.airSnapshot()).toBeUndefined();
         // What the ice fishing shacks read: the ice of each tile, and whether the meadow is made.
         const iceOf = (read: RoomGround): number[] =>
             Array.from({ length: 24 * 24 }, (_, tile) => read.iceAt(tile % 24, Math.floor(tile / 24)));

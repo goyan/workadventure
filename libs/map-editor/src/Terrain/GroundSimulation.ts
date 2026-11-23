@@ -3,11 +3,15 @@ import type { ColdMass } from "../Catastrophe/Cold";
 import type { Downpour } from "../Catastrophe/Downpour";
 import type { Drain } from "../Catastrophe/Drain";
 import type { Hurricane } from "../Catastrophe/Hurricane";
+import { TERRAIN_CELL, TILE_PX } from "../types";
 import type { PrecipitationAir } from "../Weather/Precipitation";
+import type { MapAirSetup } from "../Weather/MapAir";
+import { MapAir, mapSurfaceOf } from "../Weather/MapAir";
 import type { MapPlace, RealWeatherSlot } from "../Weather/RealWeather";
 import type { MeadowSimulation, MeadowWater, ReplayedWeather } from "./MeadowSimulation";
 import type { SnowWeather } from "./Snow";
 import type { WaterSimulation } from "./WaterSimulation";
+import { LIFE_DEPTHS_PX } from "./WaterView";
 
 /** What a ground is made of and what it lives under: the same for the server of a room and for a browser. */
 export interface GroundSetup<W extends WaterSimulation, M extends MeadowSimulation> {
@@ -32,6 +36,11 @@ export interface GroundSetup<W extends WaterSimulation, M extends MeadowSimulati
         hurricane?(): Hurricane | undefined;
     };
     /**
+     * The air of a hurricane crossing the map (MapAir), told to the room: what it reads of the room. Absent: no air is
+     * computed (a ground of one's own, in a browser), the wind of a hurricane is that of its formula.
+     */
+    hurricaneAir?: Pick<MapAirSetup, "room" | "now" | "roomWind" | "mapSize">;
+    /**
      * How a ground left alone lives the time it missed (MeadowSimulation.catchUpWith): the water then lives it along
      * with the meadow. Absent: it never catches up.
      */
@@ -53,6 +62,8 @@ export class GroundSimulation<
 > {
     public readonly water: W;
     public readonly meadow: M;
+    /** The air of a hurricane crossing the map, where the setup asks for it. */
+    public readonly air: MapAir | undefined;
 
     constructor(setup: GroundSetup<W, M>) {
         const water = setup.makeWater();
@@ -77,6 +88,30 @@ export class GroundSimulation<
             const hurricane = catastrophes.hurricane.bind(catastrophes);
             water.skyUnder(hurricane);
             meadow.skyUnder(hurricane);
+        }
+        const hurricaneAir = setup.hurricaneAir;
+        const hurricane = catastrophes?.hurricane?.bind(catastrophes);
+        if (hurricaneAir && hurricane) {
+            const air = new MapAir({
+                ...hurricaneAir,
+                hurricane,
+                // The sea where the water of the relief is deep enough for a fish, the forests where the trees stand.
+                surface: () => {
+                    const grid = water.getGrid();
+                    const size = hurricaneAir.mapSize() ?? { width: 0, height: 0 };
+                    return mapSurfaceOf(
+                        size,
+                        (cellX, cellY) => grid?.depthAt(cellX, cellY) ?? 0,
+                        meadow.treePlaces(),
+                        LIFE_DEPTHS_PX.fish,
+                        TERRAIN_CELL,
+                        TILE_PX,
+                    );
+                },
+            });
+            this.air = air;
+            // One step of the air with each step of the water: the same steps with and without a thread of its own.
+            water.stepAlong(() => air.step());
         }
         const catchUp = setup.catchUp;
         if (catchUp) {

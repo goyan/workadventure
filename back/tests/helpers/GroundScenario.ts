@@ -8,6 +8,11 @@ import {
     NEUTRAL_FIRE_CONDITIONS,
     WeatherType,
     withHeights,
+    LIFE_DEPTHS_PX,
+    MapAir,
+    mapSurfaceOf,
+    TERRAIN_CELL,
+    TILE_PX,
 } from "@workadventure/map-editor";
 import type {
     Ball,
@@ -236,6 +241,28 @@ export async function byHand(
     );
     meadow.fallThrough(() => airNow());
     meadow.skyUnder(() => inputs.hurricane?.());
+    // The air of a hurricane, stepped with the water and told to the room, in the wind of the room.
+    const mapPixels = () => {
+        const cells = inputs.mapSize();
+        return cells && { width: cells.width * TERRAIN_CELL, height: cells.height * TERRAIN_CELL };
+    };
+    const air = new MapAir({
+        room: inputs.room,
+        now,
+        roomWind: () => inputs.fire(),
+        mapSize: mapPixels,
+        hurricane: () => inputs.hurricane?.(),
+        surface: () =>
+            mapSurfaceOf(
+                mapPixels() ?? { width: 0, height: 0 },
+                (cellX, cellY) => water.getGrid()?.depthAt(cellX, cellY) ?? 0,
+                meadow.treePlaces(),
+                LIFE_DEPTHS_PX.fish,
+                TERRAIN_CELL,
+                TILE_PX,
+            ),
+    });
+    water.stepAlong(() => air.step());
     // The snow and the ice go as fast as what comes in to the water, as GroundSimulation wires them.
     meadow.timesWith(() => water.livedTimes().inflow);
     meadow.snowUnder(() => {
@@ -311,6 +338,7 @@ export async function byHand(
         waterSnapshot: () => water.snapshot(),
         meadowSnapshot: () => meadow.snapshot(),
         treeSnapshot: () => meadow.treeSnapshot(),
+        airSnapshot: () => air.snapshot(),
     };
 }
 

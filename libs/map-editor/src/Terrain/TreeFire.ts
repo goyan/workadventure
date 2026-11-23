@@ -231,6 +231,11 @@ export class TreeFire {
         return false;
     }
 
+    /** Where the trees stand (map pixels): the forests the air of a hurricane drags on. */
+    public places(): { x: number; y: number }[] {
+        return [...this.trees.values()].map((tree) => ({ x: tree.x, y: tree.y }));
+    }
+
     /** The trees on fire, with their fire from 0 to 1 (map pixels): what the animals run from. */
     public fires(): { x: number; y: number; fire: number }[] {
         const fires: { x: number; y: number; fire: number }[] = [];

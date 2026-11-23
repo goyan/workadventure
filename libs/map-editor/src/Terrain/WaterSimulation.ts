@@ -153,6 +153,7 @@ export class WaterSimulation {
     /** The water to start from (saved before a restart, or seeded), until the first grid takes it. */
     protected saved: WaterGrid | undefined;
     private timer: ReturnType<typeof setInterval> | undefined;
+    private readonly along: (() => void)[] = [];
     private steps = 0;
     /** The step the room was last told at: the rates it is told are over the time since. */
     private toldAtStep = 0;
@@ -392,8 +393,14 @@ export class WaterSimulation {
         this.hurricane = hurricane;
     }
 
+    /** What steps along with the water, ten times a second, before it (the air of a hurricane, GroundSimulation). */
+    public stepAlong(along: () => void): void {
+        this.along.push(along);
+    }
+
     /** One step of the water (ten a second), and once a second the room is told. */
     public step(): void {
+        for (const along of this.along) along();
         const grid = this.grid;
         if (!grid) {
             // A map that lost its water: the waves running on it have nothing left to move.

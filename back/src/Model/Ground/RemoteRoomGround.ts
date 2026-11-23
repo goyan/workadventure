@@ -1,7 +1,7 @@
 import { gzipSync } from "node:zlib";
 import { BallLevels, lifeFireOf, WaterSnapshot, WaterSnapshotView, WeatherType } from "@workadventure/map-editor";
 import type { Downpour, LifeFire, RealWeatherSlot, WAMFileFormat, WaterView } from "@workadventure/map-editor";
-import type { MeadowMessage, TerrainWaterMessage, TreeFireMessage } from "@workadventure/messages";
+import type { HurricaneAirMessage, MeadowMessage, TerrainWaterMessage, TreeFireMessage } from "@workadventure/messages";
 import { TerrainWaterManager } from "../TerrainWaterManager";
 import type { GroundCommand, GroundPort, GroundRoomState, GroundTold, ToldFire, ToldWater } from "./GroundProtocol";
 import type { GroundThreads } from "./GroundThreads";
@@ -53,6 +53,8 @@ export class RemoteRoomGround implements RoomGround {
     private toldWater: ToldWater | undefined;
     private meadow: MeadowMessage | undefined;
     private trees: TreeFireMessage | undefined;
+    /** The wind of the air of the hurricane the thread last told. */
+    private air: HurricaneAirMessage | undefined;
     private fire: ToldFire | undefined;
     private ice: { width: number; height: number; mm?: Float32Array } | undefined;
     /** Whether the meadow still lives the time the room missed, as it last said. */
@@ -230,6 +232,13 @@ export class RemoteRoomGround implements RoomGround {
         return this.trees;
     }
 
+    public airSnapshot(): HurricaneAirMessage | undefined {
+        if (this.fallback) return this.fallback.airSnapshot();
+        // The thread says nothing when a hurricane ends: the wind it told is that of the hurricane still crossing.
+        const air = this.air;
+        return air && this.inputs.hurricane?.()?.id === air.hurricaneId ? air : undefined;
+    }
+
     /**
      * Driven by hand: the state of the room is sent, then the ground makes these many steps of its water and of its
      * meadow; resolved once all they told and saved has come.
@@ -358,6 +367,8 @@ export class RemoteRoomGround implements RoomGround {
         switch (told.kind) {
             case "told":
                 if (told.water) this.toldWater = told.water;
+                if (told.message.message?.$case === "hurricaneAirMessage")
+                    this.air = told.message.message.hurricaneAirMessage;
                 this.inputs.room.sendSubMessageToRoom(told.message);
                 return;
             case "grid":
