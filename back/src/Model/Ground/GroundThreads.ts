@@ -33,6 +33,8 @@ class Lane implements GroundPort {
     private starts = 0;
     /** How many times a thread of the bands of its water was lost, asleep or in the middle of a step. */
     private bandLosses = 0;
+    /** The slices of rows its thread computed itself, and those the threads of its bands computed, as last told. */
+    public sliced = { here: 0, others: 0 };
 
     constructor(
         private readonly spawn: (bands: number) => GroundThread,
@@ -81,6 +83,7 @@ class Lane implements GroundPort {
         );
         thread.on("message", (told) => {
             if (told.kind === "band") this.bandLost();
+            else if (told.kind === "slices") this.sliced = { here: told.here, others: told.others };
             else this.rooms.get(told.room)?.told(told);
         });
         const lost = (reason: unknown): void => {
@@ -134,6 +137,17 @@ export class GroundThreads {
         if (this.lanes.length === 0) throw new Error("No thread to compute the ground of a room");
         const lane = this.lanes.reduce((least, candidate) => (candidate.size < least.size ? candidate : least));
         return { room: ++this.rooms, port: lane };
+    }
+
+    /**
+     * How the passes of the waters were shared on the threads, as each told when one of its rooms last closed: the
+     * slices of rows the threads of the grounds computed themselves, and those the threads of their bands computed.
+     */
+    public slices(): { here: number; others: number } {
+        return this.lanes.reduce(
+            (sum, lane) => ({ here: sum.here + lane.sliced.here, others: sum.others + lane.sliced.others }),
+            { here: 0, others: 0 },
+        );
     }
 
     public stop(): void {

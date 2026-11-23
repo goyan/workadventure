@@ -46,13 +46,13 @@ function loopback(): Pick<GroundThreads, "assign"> {
 }
 
 /** The threads of the server as they are spawned, kept so that a test can lose one. */
-function realThreads(count: number, bands = 1): { threads: GroundThreads; workers: Worker[] } {
+function realThreads(count: number, bands = 1, patientBands = 0): { threads: GroundThreads; workers: Worker[] } {
     const workers: Worker[] = [];
     const threads = new GroundThreads(
         count,
         (asked): GroundThread => {
             const worker = new Worker(new URL("../src/Model/Ground/GroundWorker.ts", import.meta.url), {
-                workerData: { bands: asked },
+                workerData: { bands: asked, patientBands },
                 execArgv: ["--import", "tsx"],
             });
             workers.push(worker);
@@ -171,9 +171,15 @@ describe("the ground of a room computed elsewhere (RemoteRoomGround)", () => {
         }, 120_000);
 
         it("tells and saves the same, bit for bit, on a real thread that shares its water between three bands", async () => {
-            const { threads } = realThreads(1, 3);
+            // The thread of the grounds waits for its bands one pass in fifty: they take their part whatever the
+            // machine does.
+            const { threads } = realThreads(1, 3, 50);
             try {
                 await compare(threads, 1300);
+                // The water was shared indeed: slices of rows computed by the thread of the grounds and by its bands.
+                const { here, others } = threads.slices();
+                expect(others).toBeGreaterThan(500);
+                expect(here).toBeGreaterThan(500);
             } finally {
                 threads.stop();
             }
