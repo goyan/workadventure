@@ -514,11 +514,12 @@ float seaNoise(vec2 p) {
 
 // How much higher or lower the waves are drawn by their groups at a map point (groupAt).
 float seaGroup(vec2 p) {
-    // Under a hurricane, groups of waves along its flow round the eye.
+    // Under a hurricane, groups of waves in round patches that drift with nothing: laid along its flow, their bands
+    // read as regular dark arcs over the water (the light of the waves follows them).
     if (uHurEye.w != 0.0) {
+        vec2 r = p * uSeaGroup.x + vec2(uSeaGroup.z, 51.0);
         return ${glsl(GROUP_LOWEST)} + ${glsl(GROUP_RANGE)}
-            * (0.65 * seaFlowNoise(1.0 / uSeaGroup.y, 1.0 / uSeaGroup.x, vec2(51.0, 0.0))
-                + 0.35 * seaFlowNoise(0.5 / uSeaGroup.y, 0.5 / uSeaGroup.x, vec2(17.0, 3.0)));
+            * (0.65 * seaNoise(r) + 0.35 * seaNoise(r * 2.0 + vec2(17.0, 3.0)));
     }
     float along = dot(p, gSeaWind.xy);
     float across = dot(p, vec2(-gSeaWind.y, gSeaWind.x));

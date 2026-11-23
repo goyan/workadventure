@@ -5941,7 +5941,7 @@ ses nuages et ne module plus la pluie par eux). Elle se compose ainsi :
 
 L'ensemble tourne d'un tour en 90 s (un choix : à la vitesse de ses vents, un tourbillon de cette taille tournerait
 en quelques secondes) et suit l'œil. Vue de haut, elle est presque opaque (92 %), comme sur une photo satellite. En
-zoom proche, elle descend à 30 % pour qu'on voie les avatars sous l'orage (`cloudZoomFade`). La nuit, elle prend le
+zoom proche, elle descend à 18 % pour qu'on voie l'eau et les avatars sous l'orage (`cloudZoomFade`). La nuit, elle prend le
 gris-bleu des nuages de nuit. Elle est immobile en mouvement réduit. Rendu vérifié par le vrai shader dans un
 Chromium sans écran, sur la carte entière ; pas encore vu en jeu.
 
@@ -6005,9 +6005,14 @@ vent manuel ou météo réelle. Holthuijsen, Powell et Pietrzak (2012, *JGR* 117
 - l'OMM, pour la force 12 : « Sea completely white with driving spray; visibility very seriously affected ».
 
 Rendu :
-- de longues traînées parallèles au vent (8 px de large, 360 px de long, des choix), qui dérivent avec l'écume laissée
-  et se rejoignent en un blanc laiteux encore strié (78 % entre les traînées) ;
-- un voile d'embruns gris-blanc (45 % au plus, atteint à 55 m/s) estompe la lumière des vagues et leurs reflets.
+- de longues traînées BLANCHES parallèles au vent (8 px de large, 360 px de long, des choix), de largeur, longueur et
+  blancheur variables, par plaques, qui dérivent avec l'écume laissée ; entre elles, un film laiteux (30 % au plus) ;
+  la nappe ne dépasse pas 72 % : l'eau et son relief restent visibles dessous (retour de l'utilisateur : un aplat
+  opaque à rayures sombres cachait l'eau) ;
+- un voile d'embruns gris-blanc (30 % au plus, atteint à 55 m/s), en bouffées qui courent sous le vent à 420 px/s ;
+- rien sur l'eau peu profonde : nappe et embruns montent de 12 à 45 px de fond (0,4 à 1,5 m) ;
+- sous l'ouragan, les groupes de vagues sont des plaques rondes (posés le long de l'écoulement, leurs bandes se
+  lisaient comme des arcs sombres réguliers).
 
 Banc GPU de l'étude de la houle (vrai shader de l'eau, M4 Max, avant/après avec la mer du vent des deux côtés) :
 - l'image est **identique à l'octet** à 60, 90 et 107 km/h : rien ne change sous le seuil, et l'écume validée par

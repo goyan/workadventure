@@ -19,7 +19,7 @@ import type { SeaHurricane } from "../Terrain/WindSeaShader";
  * How opaque the spiral is over what it covers: whole seen from high above (the spiral reads as on a satellite
  * picture), down to this when one plays close in, so that the avatars stay seen under the storm (cloudZoomFade).
  */
-const CLOSE_OPACITY = 0.3;
+const CLOSE_OPACITY = 0.18;
 const FAR_OPACITY = 0.92;
 /** The view is drawn with this margin around it (map pixels): the spiral does not end at its edges as one moves. */
 const MARGIN_PX = 64;
