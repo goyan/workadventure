@@ -3217,6 +3217,11 @@ export class GameScene extends DirtyScene {
         return this.nightManager?.serverDate();
     }
 
+    /** The time of the sky this player sees: the server's, ahead of it while they speed the day up (FastDayClock). */
+    public getSkyDate(): Date | undefined {
+        return this.nightManager?.skyDate();
+    }
+
     /**
      * A state of the water from the server: unzipped (that takes a moment), then shown. The states are taken one
      * after the other, in the order they came: a change applies to the state just before it.

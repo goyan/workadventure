@@ -627,11 +627,12 @@ export class LampManager {
 
     /**
      * Whether the energy saving puts the lamps outdoors out now: the map asks for it and its daylight is enough, at the
-     * time of the server (no lamp is put out until the server told it).
+     * time of the server (no lamp is put out until the server told it), ahead of it as the sky while this player speeds
+     * the day up.
      */
     private energySavingAt(): boolean {
         if (this.scene.getGameMap().getWamFile()?.getWam().settings?.lighting?.energySaving !== true) return false;
-        const serverDate = this.scene.getServerDate();
+        const serverDate = this.scene.getSkyDate();
         return serverDate !== undefined && this.energySaving.savingAt(serverDate.getTime());
     }
 

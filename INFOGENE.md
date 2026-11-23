@@ -1740,6 +1740,13 @@ Limites :
 - Une zone ajoutée par un autre éditeur ne s'allume qu'après rechargement.
 - En marchant, les trous du voile peuvent suivre la caméra avec une image de retard.
 
+**Jour et nuit accélérés** (pour soi seul) : dans la barre d'actions, à gauche du widget « > >> >>> », un bouton
+soleil et lune fait défiler le ciel de 1 à 10 minutes par seconde (curseur ×1 à ×10), avec l'heure du ciel vu à
+côté. Il n'agit qu'à un endroit, l'instant du ciel de `NightManager` (`FastDayClock`) : soleil, lune, nuit, ombres
+du ciel et des objets, lampes qui s'éteignent par économie d'énergie le suivent ; l'heure de la carte, sa météo, la
+glace, l'eau et tout ce que calcule le serveur restent réels, et rien n'est envoyé. Coupé, le ciel revient à l'heure
+réelle ; une page rechargée le montre réel aussi. En mode Basique, ce bouton et le widget « > >> >>> » sont masqués.
+
 ### Coucou et notifications système
 
 Pour faire revenir sur la carte un collègue dont l'onglet est en arrière-plan.

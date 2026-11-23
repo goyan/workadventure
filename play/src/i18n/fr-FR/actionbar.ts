@@ -129,6 +129,12 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         minutes: "{count} min",
         seconds: "{count} s",
     },
+    fastDay: {
+        start: "Accélérer le jour et la nuit, pour toi seul : le soleil, la lune et leurs ombres défilent",
+        stop: "Revenir au ciel réel",
+        speed: "Vitesse du jour et de la nuit : {speed} minutes de ciel par seconde",
+        sky: "Heure du ciel que tu vois : {time}",
+    },
     basicMode: {
         label: "Basique",
         switch: "Mode basique : aucun effet",
