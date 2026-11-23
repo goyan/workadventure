@@ -499,6 +499,7 @@ import { DrainView } from "./Catastrophe/DrainView";
 import { BallView } from "./Catastrophe/BallView";
 import { ColdView } from "./Catastrophe/ColdView";
 import { HurricaneReceiver } from "./Catastrophe/HurricaneReceiver";
+import { HurricaneDebris } from "./Catastrophe/HurricaneDebris";
 import { HurricaneView } from "./Catastrophe/HurricaneView";
 import { FireTorchView } from "./Catastrophe/FireTorchView";
 import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
@@ -755,6 +756,8 @@ export class GameScene extends DirtyScene {
     private coldView: ColdView | undefined;
     private hurricaneReceiver: HurricaneReceiver | undefined;
     private hurricaneView: HurricaneView | undefined;
+    /** The debris the wind of a hurricane (or a wind of the map strong enough) carries, drawn here alone. */
+    private hurricaneDebris: HurricaneDebris | undefined;
     private fireTorchView: FireTorchView | undefined;
     private catastropheSubscription: Subscription | undefined;
     /** The animals of the water of the relief, as the server tells them. */
@@ -1991,6 +1994,8 @@ export class GameScene extends DirtyScene {
         this.hurricaneReceiver = undefined;
         this.hurricaneView?.destroy();
         this.hurricaneView = undefined;
+        this.hurricaneDebris?.destroy();
+        this.hurricaneDebris = undefined;
         setRoomHurricane(undefined);
         hurricaneShownStore.set(undefined);
         this.fireTorchView?.destroy();
@@ -2595,6 +2600,15 @@ export class GameScene extends DirtyScene {
                 this.nightManager?.sunPosition()?.elevation,
                 window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
             );
+            {
+                const weather = this.shownWeather();
+                this.hurricaneDebris?.update(
+                    delta,
+                    serverDate?.getTime(),
+                    { speed: weather?.windSpeed, from: weather?.windFrom },
+                    get(weatherEffectsEnabledStore) && !isBasicActive() && !get(mapEditorModeStore),
+                );
+            }
             // After the weather: the textures of the clouds it drew this time (one may have just been made again).
             if (this.weatherManager) {
                 this.terrainView?.setWaterReflection(
@@ -5250,6 +5264,9 @@ export class GameScene extends DirtyScene {
         this.fireTorchView = fireTorchView;
         this.hurricaneReceiver?.destroy();
         this.hurricaneView?.destroy();
+        this.hurricaneDebris?.destroy();
+        const hurricaneDebris = new HurricaneDebris(this);
+        this.hurricaneDebris = hurricaneDebris;
         // The hurricane of the room, reduced to the map: its weather (wind, rain) where this player looks takes the
         // place of the weather of the map, and its spiral of clouds that of the clouds of the sky, computed here from
         // it and the time of the server, as the server computes it for its ground.
@@ -5260,6 +5277,7 @@ export class GameScene extends DirtyScene {
             (hurricane) => {
                 setRoomHurricane(hurricane);
                 hurricaneView?.setHurricane(hurricane);
+                hurricaneDebris.setHurricane(hurricane);
                 const at = this.nightManager?.serverDate()?.getTime();
                 const look = this.cameras.main.midPoint;
                 const here = at === undefined ? undefined : hurricaneHere(hurricane, at, look.x, look.y);
