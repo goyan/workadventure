@@ -1,4 +1,5 @@
 import type { Ball } from "../Catastrophe/Ball";
+import type { ColdMass } from "../Catastrophe/Cold";
 import type { Downpour } from "../Catastrophe/Downpour";
 import type { Drain } from "../Catastrophe/Drain";
 import type { PrecipitationAir } from "../Weather/Precipitation";
@@ -24,6 +25,8 @@ export interface GroundSetup<W extends WaterSimulation, M extends MeadowSimulati
         downpours(): readonly Downpour[];
         drains(): readonly Drain[];
         balls(): readonly Ball[];
+        /** The masses of cold air the players hold: they act on the meadow (its snow, its ice, its soil). */
+        colds?(): readonly ColdMass[];
     };
     /**
      * How a ground left alone lives the time it missed (MeadowSimulation.catchUpWith): the water then lives it along
@@ -66,6 +69,7 @@ export class GroundSimulation<
         meadow.timesWith(() => water.livedTimes().inflow);
         meadow.snowUnder(() => setup.snow());
         meadow.pourWith(water.pour.bind(water));
+        if (catastrophes?.colds) meadow.coldUnder(catastrophes.colds.bind(catastrophes));
         const catchUp = setup.catchUp;
         if (catchUp) {
             meadow.liveAlong(water.liveAgain.bind(water));

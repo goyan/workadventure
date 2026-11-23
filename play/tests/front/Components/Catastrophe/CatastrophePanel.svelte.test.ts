@@ -23,6 +23,18 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 downpourArmedHelp: label("Hold the click on the map · Esc to cancel"),
                 drain: label("Drain"),
                 drainSizeLabel: label("Size of the drain"),
+                cold: label("Cold snap"),
+                coldSizeLabel: label("Size of the cold snap"),
+                coldCelsiusLabel: label("Temperature of the cold snap"),
+                coldCelsius: ({ celsius }: { celsius: number }) => `${celsius} °C`,
+                coldArmedHelp: label("Hold the click: the air freezes under the pointer"),
+                coldLying: ({ celsius, left }: { celsius: number; left: string }) =>
+                    `Cold air on the map: ${celsius} °C, ${left} left`,
+                coldHeld: ({ celsius }: { celsius: number }) => `Cold air on the map: ${celsius} °C, held`,
+                coldLeftMinutes: ({ minutes, seconds }: { minutes: number; seconds: number }) =>
+                    `${minutes} min ${seconds} s`,
+                coldLeftSeconds: ({ seconds }: { seconds: number }) => `${seconds} s`,
+                coldStop: label("Stop the cold snap"),
                 ball: label("Ball"),
                 ballSizeLabel: label("Size of the ball: its diameter"),
                 ballArmedHelp: label("Hold the click: a solid ball, half in the water under the pointer"),
@@ -36,6 +48,9 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
     return { default: LL, LL };
 });
 
+const stopColdSnap = vi.hoisted(() => vi.fn());
+vi.mock("../../../../src/front/Components/Catastrophe/coldSnapActions", () => ({ stopColdSnap }));
+
 vi.mock("../../../../src/front/Components/Catastrophe/WeatherTab.svelte", async () => ({
     default: ((await import("./WeatherTabStub.svelte")) as { default: unknown }).default,
 }));
@@ -44,6 +59,9 @@ import CatastrophePanel from "../../../../src/front/Components/Catastrophe/Catas
 import {
     armedCatastropheStore,
     ballDiameterTilesStore,
+    coldCelsiusStore,
+    coldLyingStore,
+    coldRadiusTilesStore,
     fireRadiusTilesStore,
     downpourWholeMapStore,
     drainRadiusTilesStore,
@@ -208,6 +226,57 @@ describe("CatastrophePanel", () => {
         expect(target.textContent).toContain("10 tiles");
         drainRadiusTilesStore.set(3);
         expect(help()?.textContent).toContain("Hold the click on the map");
+    });
+
+    it("arms the cold snap, and chooses its size from 1 to 16 tiles and its air from -120 to -5 °C", () => {
+        renderOpen();
+        const cold = target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-cold"]');
+        expect(cold?.textContent).toContain("Cold snap");
+        cold?.click();
+        flushSync();
+        expect(cold?.getAttribute("aria-pressed")).toBe("true");
+        expect(get(armedCatastropheStore)).toBe("cold");
+        const size = target.querySelector<HTMLInputElement>('[data-testid="catastrophe-cold-size"]');
+        expect([size?.min, size?.max]).toEqual(["1", "16"]);
+        expect(size?.getAttribute("aria-label")).toBe("Size of the cold snap");
+        expect(target.textContent).toContain("3 tiles");
+        const celsius = target.querySelector<HTMLInputElement>('[data-testid="catastrophe-cold-celsius"]');
+        expect([celsius?.min, celsius?.max]).toEqual(["-120", "-5"]);
+        expect(celsius?.getAttribute("aria-label")).toBe("Temperature of the cold snap");
+        expect(target.textContent).toContain("-80 °C");
+        if (!celsius || !size) throw new Error("no slider");
+        celsius.value = "-40";
+        celsius.dispatchEvent(new Event("input", { bubbles: true }));
+        size.value = "9";
+        size.dispatchEvent(new Event("input", { bubbles: true }));
+        flushSync();
+        expect(get(coldCelsiusStore)).toBe(-40);
+        expect(get(coldRadiusTilesStore)).toBe(9);
+        expect(target.textContent).toContain("-40 °C");
+        expect(help()?.textContent).toContain("Hold the click: the air freezes under the pointer");
+        coldCelsiusStore.set(-80);
+        coldRadiusTilesStore.set(3);
+    });
+
+    it("says the cold air that lies on the map and how long it still has, with a button that stops it", () => {
+        renderOpen();
+        expect(target.querySelector('[data-testid="catastrophe-cold-stop"]')).toBeNull();
+        coldLyingStore.set({ celsius: -37, secondsLeft: 125 });
+        flushSync();
+        const lying = target.querySelector('[data-testid="catastrophe-cold-lying"]');
+        expect(lying?.textContent).toContain("-37 °C");
+        expect(lying?.textContent).toContain("2 min 5 s");
+        const stop = target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-cold-stop"]');
+        expect(stop?.textContent).toContain("Stop the cold snap");
+        stop?.click();
+        expect(stopColdSnap).toHaveBeenCalledTimes(1);
+        // Held by a player: no time left to say.
+        coldLyingStore.set({ celsius: -80, secondsLeft: undefined });
+        flushSync();
+        expect(target.querySelector('[data-testid="catastrophe-cold-lying"]')?.textContent).toContain("held");
+        coldLyingStore.set(undefined);
+        flushSync();
+        expect(target.querySelector('[data-testid="catastrophe-cold-stop"]')).toBeNull();
     });
 
     it("arms the ball, and chooses its diameter from 1 to 16 tiles, with a help that says where its centre is", () => {

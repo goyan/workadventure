@@ -145,6 +145,11 @@ export class RemoteRoomGround implements RoomGround {
         this.act({ kind: "shatter", room: this.room, x, y, radiusTiles });
     }
 
+    public calm(): void {
+        if (this.fallback) return this.fallback.calm();
+        this.act({ kind: "calm", room: this.room });
+    }
+
     public soak(downpour: Pick<Downpour, "x" | "y" | "radiusTiles" | "wholeMap">): void {
         if (this.fallback) return this.fallback.soak(downpour);
         const { x, y, radiusTiles, wholeMap } = downpour;
@@ -309,6 +314,7 @@ export class RemoteRoomGround implements RoomGround {
             downpours: inputs.downpours(),
             drains: inputs.drains(),
             balls,
+            ...(inputs.colds && inputs.colds().length > 0 ? { colds: inputs.colds() } : {}),
             grazers: inputs.grazers(),
             air: inputs.air(),
             fire: inputs.fire(),

@@ -12,6 +12,7 @@ import {
 } from "@workadventure/map-editor";
 import type {
     Ball,
+    ColdMass,
     Downpour,
     Drain,
     FireConditions,
@@ -64,7 +65,8 @@ export type LocalTerrainCommand =
     | ({ kind: "catastrophes" } & LocalCatastrophes)
     | { kind: "strike" | "shatter" | "ignite"; x: number; y: number; radiusTiles: number }
     | { kind: "burn"; x: number; y: number; radiusTiles: number; id: number }
-    | { kind: "soak"; downpour: Pick<Downpour, "x" | "y" | "radiusTiles" | "wholeMap"> };
+    | { kind: "soak"; downpour: Pick<Downpour, "x" | "y" | "radiusTiles" | "wholeMap"> }
+    | { kind: "calm" };
 
 /**
  * The catastrophes of the room that act on a water at each of its steps: the downpours falling, the drains open and
@@ -74,6 +76,8 @@ export interface LocalCatastrophes {
     downpours: readonly Downpour[];
     drains: readonly Drain[];
     balls: readonly Ball[];
+    /** The masses of cold air the players hold (a cold snap); absent while there is none. */
+    colds?: readonly ColdMass[];
 }
 
 /** What the local ground tells its player: a state of its water or of its meadow, its bytes as they are (unzipped). */
@@ -180,6 +184,7 @@ export class LocalTerrainSimulation {
                 downpours: () => this.catastrophes.downpours,
                 drains: () => this.catastrophes.drains,
                 balls: () => this.catastrophes.balls,
+                colds: () => this.catastrophes.colds ?? [],
             },
         });
         if (start.water) this.water.seed(start.water.depths, start.water.bounds);
@@ -244,6 +249,11 @@ export class LocalTerrainSimulation {
     /** A fireball lands: it boils the water of its crater away, then burns the ground it left dry. */
     public burn(x: number, y: number, radiusTiles: number, id: number): void {
         this.ground.burn(x, y, radiusTiles, id);
+    }
+
+    /** The cold air lying on the map is dispelled (the cold snap of the room was stopped). */
+    public calm(): void {
+        this.meadow.calm();
     }
 
     /** The ice breaks around a point of the map. */

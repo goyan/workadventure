@@ -35,6 +35,8 @@ import { ENABLE_TILE_SNAP, WOKA_SPEED } from "@wa/front/Enum/EnvironmentVariable
 import {
     armedCatastropheStore,
     ballDiameterTilesStore,
+    coldCelsiusStore,
+    coldRadiusTilesStore,
     heldBallStore,
     downpourRadiusTilesStore,
     downpourWholeMapStore,
@@ -107,7 +109,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     /** While the click of an armed downpour is held: tells the server where the pointer is, a few times a second. */
     private downpourReports: Phaser.Time.TimerEvent | undefined;
     /** The catastrophe a held click is throwing: a downpour that follows the pointer, or fire painted along it. */
-    private heldKind: "downpour" | "fire" | "drain" | "ball" | undefined;
+    private heldKind: "downpour" | "fire" | "drain" | "ball" | "cold" | undefined;
     /** The ball held under the pointer: the pointer that holds it, and what the server was last told of it. */
     private ballPointer: Pointer | undefined;
     private ballTold: { x: number; y: number; tiles: number; ticksAgo: number } | undefined;
@@ -377,10 +379,15 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         );
     }
 
-    /** The catastrophe a held click throws, when one of those is armed: the downpour, the fire, the drain, the ball. */
-    private heldCatastrophe(): "downpour" | "fire" | "drain" | "ball" | undefined {
+    /**
+     * The catastrophe a held click throws, when one of those is armed: the downpour, the fire, the drain, the ball,
+     * the cold snap.
+     */
+    private heldCatastrophe(): "downpour" | "fire" | "drain" | "ball" | "cold" | undefined {
         const armed = get(armedCatastropheStore);
-        return armed === "downpour" || armed === "fire" || armed === "drain" || armed === "ball" ? armed : undefined;
+        return armed === "downpour" || armed === "fire" || armed === "drain" || armed === "ball" || armed === "cold"
+            ? armed
+            : undefined;
     }
 
     /**
@@ -429,6 +436,19 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 }
                 this.ballTold = { x, y, tiles, ticksAgo: 0 };
                 this.gameScene.connection?.emitLaunchCatastrophe(CatastropheKind.CATASTROPHE_BALL, x, y, tiles);
+                return;
+            }
+            if (kind === "cold") {
+                // The server lays the cold air there, and alone freezes what lies under it.
+                this.gameScene.connection?.emitLaunchCatastrophe(
+                    CatastropheKind.CATASTROPHE_COLD,
+                    x,
+                    y,
+                    get(coldRadiusTilesStore),
+                    false,
+                    false,
+                    get(coldCelsiusStore),
+                );
                 return;
             }
             this.gameScene.connection?.emitLaunchCatastrophe(
@@ -794,7 +814,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     private canDragMap(): boolean {
         // The other editor tools use the left drag themselves; they pan with MapPanShortcut instead.
         const armed = get(armedCatastropheStore);
-        if (armed === "downpour" || armed === "drain" || armed === "ball") return false;
+        if (armed === "downpour" || armed === "drain" || armed === "ball" || armed === "cold") return false;
         // While the pipette aims, the left drag moves the view in the map editor too: only a click takes a level.
         return (
             this.canMoveView() &&

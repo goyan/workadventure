@@ -104,6 +104,7 @@ export class InlineRoomGround implements RoomGround {
                 downpours: () => inputs.downpours(),
                 drains: () => inputs.drains(),
                 balls: () => inputs.balls(),
+                colds: () => inputs.colds?.() ?? [],
             },
             // A room left empty lives the time it missed: with the weather of the past at the place of a map in real
             // weather, each quarter hour read as the conditions of the room read the quarter hour of now.
@@ -142,6 +143,10 @@ export class InlineRoomGround implements RoomGround {
 
     public shatter(x: number, y: number, radiusTiles: number): void {
         this.ground.meadow.shatter(x, y, radiusTiles);
+    }
+
+    public calm(): void {
+        this.ground.meadow.calm();
     }
 
     public soak(downpour: Pick<Downpour, "x" | "y" | "radiusTiles" | "wholeMap">): void {

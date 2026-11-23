@@ -2,6 +2,10 @@
     import {
         BALL_MAX_TILES,
         BALL_MIN_TILES,
+        COLD_MAX_CELSIUS,
+        COLD_MAX_TILES,
+        COLD_MIN_CELSIUS,
+        COLD_MIN_TILES,
         DOWNPOUR_MAX_TILES,
         DOWNPOUR_MIN_TILES,
         DRAIN_MAX_TILES,
@@ -17,6 +21,9 @@
         armedCatastropheStore,
         ballDiameterTilesStore,
         catastrophePanelStore,
+        coldCelsiusStore,
+        coldLyingStore,
+        coldRadiusTilesStore,
         disarmCatastrophe,
         downpourRadiusTilesStore,
         drainRadiusTilesStore,
@@ -28,6 +35,7 @@
     import PixelIcon from "../ActionsMenu/PixelIcon.svelte";
     import ChipPopover from "../ClockLine/ChipPopover.svelte";
     import InfoTip from "../Input/InfoTip.svelte";
+    import { stopColdSnap } from "./coldSnapActions";
     import WeatherTab from "./WeatherTab.svelte";
 
     const shown = $derived($catastrophePanelStore);
@@ -44,8 +52,9 @@
     const fireArmed = $derived($armedCatastropheStore === "fire");
     const drainArmed = $derived($armedCatastropheStore === "drain");
     const ballArmed = $derived($armedCatastropheStore === "ball");
+    const coldArmed = $derived($armedCatastropheStore === "cold");
     // The size shown is that of the armed catastrophe, and stays that of the last one armed.
-    let sized = $state<"meteor" | "fireball" | "downpour" | "fire" | "drain" | "ball">("meteor");
+    let sized = $state<"meteor" | "fireball" | "downpour" | "fire" | "drain" | "ball" | "cold">("meteor");
     $effect(() => {
         if ($armedCatastropheStore !== undefined) sized = $armedCatastropheStore;
     });
@@ -73,6 +82,7 @@
         fire: $LL.actionbar.catastrophe.fire(),
         drain: $LL.actionbar.catastrophe.drain(),
         ball: $LL.actionbar.catastrophe.ball(),
+        cold: $LL.actionbar.catastrophe.cold(),
     });
     const icons = {
         meteor: "comet",
@@ -81,6 +91,7 @@
         fire: "fire",
         drain: "drain",
         ball: "ball",
+        cold: "cold",
     } as const;
     /** The size of the armed disaster, in tiles; none for a downpour on the whole map. */
     const armedTiles = $derived.by((): number | undefined => {
@@ -96,6 +107,8 @@
                 return $drainRadiusTilesStore;
             case "ball":
                 return $ballDiameterTilesStore;
+            case "cold":
+                return $coldRadiusTilesStore;
             default:
                 return undefined;
         }
@@ -115,12 +128,31 @@
     const help = $derived(
         ballArmed
             ? $LL.actionbar.catastrophe.ballArmedHelp()
-            : downpourArmed || drainArmed
-              ? $LL.actionbar.catastrophe.downpourArmedHelp()
-              : meteorArmed || fireballArmed || fireArmed
-                ? $LL.actionbar.catastrophe.armedHelp()
-                : $LL.actionbar.catastrophe.idleHelp(),
+            : coldArmed
+              ? $LL.actionbar.catastrophe.coldArmedHelp()
+              : downpourArmed || drainArmed
+                ? $LL.actionbar.catastrophe.downpourArmedHelp()
+                : meteorArmed || fireballArmed || fireArmed
+                  ? $LL.actionbar.catastrophe.armedHelp()
+                  : $LL.actionbar.catastrophe.idleHelp(),
     );
+
+    /** What the panel says of the cold air lying on the map: its temperature, and how long it still has. */
+    const coldLying = $derived.by((): string | undefined => {
+        const lying = $coldLyingStore;
+        if (!lying) return undefined;
+        if (lying.secondsLeft === undefined) return $LL.actionbar.catastrophe.coldHeld({ celsius: lying.celsius });
+        return $LL.actionbar.catastrophe.coldLying({
+            celsius: lying.celsius,
+            left:
+                lying.secondsLeft >= 60
+                    ? $LL.actionbar.catastrophe.coldLeftMinutes({
+                          minutes: Math.floor(lying.secondsLeft / 60),
+                          seconds: lying.secondsLeft % 60,
+                      })
+                    : $LL.actionbar.catastrophe.coldLeftSeconds({ seconds: lying.secondsLeft }),
+        });
+    });
 
     // Escape disarms first (the panel open or not); with nothing armed, it closes the panel.
     function onEscape(): boolean {
@@ -248,6 +280,18 @@
                         <PixelIcon name="ball" size={16} />
                         <span>{$LL.actionbar.catastrophe.ball()}</span>
                     </button>
+                    <button
+                        type="button"
+                        class="flex items-center gap-1 rounded-full px-2 py-1 {coldArmed
+                            ? 'bg-white/30 ring-1 ring-white'
+                            : 'bg-white/10 hover:bg-white/20'}"
+                        aria-pressed={coldArmed}
+                        data-testid="catastrophe-cold"
+                        onclick={() => toggleArmedCatastrophe("cold")}
+                    >
+                        <PixelIcon name="cold" size={16} />
+                        <span>{$LL.actionbar.catastrophe.cold()}</span>
+                    </button>
                     {#if sized === "downpour"}
                         <label class="flex items-center gap-1 whitespace-nowrap">
                             <input
@@ -288,6 +332,37 @@
                             />
                             <span class="whitespace-nowrap"
                                 >{$LL.actionbar.catastrophe.size({ tiles: $drainRadiusTilesStore })}</span
+                            >
+                        </label>
+                    {:else if sized === "cold"}
+                        <label class="flex items-center gap-2">
+                            <input
+                                type="range"
+                                class="w-24"
+                                min={COLD_MIN_TILES}
+                                max={COLD_MAX_TILES}
+                                step="1"
+                                aria-label={$LL.actionbar.catastrophe.coldSizeLabel()}
+                                data-testid="catastrophe-cold-size"
+                                bind:value={$coldRadiusTilesStore}
+                            />
+                            <span class="whitespace-nowrap"
+                                >{$LL.actionbar.catastrophe.size({ tiles: $coldRadiusTilesStore })}</span
+                            >
+                        </label>
+                        <label class="flex items-center gap-2">
+                            <input
+                                type="range"
+                                class="w-24"
+                                min={COLD_MIN_CELSIUS}
+                                max={COLD_MAX_CELSIUS}
+                                step="5"
+                                aria-label={$LL.actionbar.catastrophe.coldCelsiusLabel()}
+                                data-testid="catastrophe-cold-celsius"
+                                bind:value={$coldCelsiusStore}
+                            />
+                            <span class="whitespace-nowrap tabular-nums"
+                                >{$LL.actionbar.catastrophe.coldCelsius({ celsius: $coldCelsiusStore })}</span
                             >
                         </label>
                     {:else if sized === "ball"}
@@ -338,6 +413,20 @@
                                 >{$LL.actionbar.catastrophe.size({ tiles: $meteorRadiusTilesStore })}</span
                             >
                         </label>
+                    {/if}
+                    {#if coldLying !== undefined}
+                        <!-- Cold air lies on the map: how cold, for how long, and how to stop it. -->
+                        <span class="flex basis-full items-center gap-2">
+                            <span class="tabular-nums" data-testid="catastrophe-cold-lying">{coldLying}</span>
+                            <button
+                                type="button"
+                                class="rounded-full bg-white/10 px-2 py-1 hover:bg-white/20"
+                                data-testid="catastrophe-cold-stop"
+                                onclick={stopColdSnap}
+                            >
+                                {$LL.actionbar.catastrophe.coldStop()}
+                            </button>
+                        </span>
                     {/if}
                     <!-- How to throw the disaster chosen: behind an i, out of the way of the map. -->
                     <InfoTip label={$LL.actionbar.catastrophe.infoLabel()} text={help} testid="catastrophe-info" />

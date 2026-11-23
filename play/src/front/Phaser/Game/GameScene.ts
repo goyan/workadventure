@@ -32,6 +32,7 @@ import {
     EntityPermissions,
     type EntityPrefabType,
     GameMap,
+    freezeThawTimesOf,
     GameMapProperties,
     GRAZING_COVER,
     heightAt,
@@ -51,7 +52,7 @@ import {
     bridgesOf,
     pavedTilesOf,
 } from "@workadventure/map-editor";
-import type { Bridges, TerrainData, WeatherLocation } from "@workadventure/map-editor";
+import type { Bridges, ColdMass, TerrainData, WeatherLocation } from "@workadventure/map-editor";
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
 import Debug from "debug";
 import { asError } from "catch-unknown";
@@ -184,7 +185,7 @@ import {
     mapEditorWamSettingsEditorToolCurrentMenuItemStore,
     WAM_SETTINGS_EDITOR_TOOL_MENU_ITEM,
 } from "@wa/front/Stores/MapEditorStore";
-import { heldBallStore } from "@wa/front/Stores/CatastropheStore";
+import { coldLyingStore, heldBallStore } from "@wa/front/Stores/CatastropheStore";
 import { refreshPromptStore } from "@wa/front/Stores/RefreshPromptStore";
 import { mapDeletedPromptStore } from "@wa/front/Stores/MapDeletedPromptStore";
 import { SpaceRegistry } from "@wa/front/Space/SpaceRegistry/SpaceRegistry";
@@ -492,6 +493,7 @@ import { TreeFireView } from "./Fire/TreeFireView";
 import { DownpourView } from "./Catastrophe/DownpourView";
 import { DrainView } from "./Catastrophe/DrainView";
 import { BallView } from "./Catastrophe/BallView";
+import { ColdView } from "./Catastrophe/ColdView";
 import { FireTorchView } from "./Catastrophe/FireTorchView";
 import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
 import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
@@ -742,6 +744,7 @@ export class GameScene extends DirtyScene {
     private downpourView: DownpourView | undefined;
     private drainView: DrainView | undefined;
     private ballView: BallView | undefined;
+    private coldView: ColdView | undefined;
     private fireTorchView: FireTorchView | undefined;
     private catastropheSubscription: Subscription | undefined;
     /** The animals of the water of the relief, as the server tells them. */
@@ -1969,6 +1972,9 @@ export class GameScene extends DirtyScene {
         this.drainView = undefined;
         this.ballView?.destroy();
         this.ballView = undefined;
+        this.coldView?.destroy();
+        this.coldView = undefined;
+        coldLyingStore.set(undefined);
         this.fireTorchView?.destroy();
         this.fireTorchView = undefined;
         rodEquippedStore.set(false);
@@ -2540,6 +2546,7 @@ export class GameScene extends DirtyScene {
             this.downpourView?.update(time);
             this.drainView?.update(time);
             this.ballView?.update(time);
+            this.coldView?.update(time);
             this.fireTorchView?.update(time);
             this.nightManager?.update(time);
             this.lampManager?.update(time);
@@ -3738,6 +3745,15 @@ export class GameScene extends DirtyScene {
     /** Whether the water of this object (a pool) is frozen for this player: one walks onto its ice. */
     public isPoolEntityFrozen(entityId: string): boolean {
         return getFrozenPoolRectangles(this).some((pool) => pool.entityId === entityId);
+    }
+
+    /**
+     * The masses of cold air lying on the map now (the cold snap of the catastrophes), as the server told them, those
+     * let go warmed as the server warms them: what reads the air of a point gives them to coldAirOver. None while no
+     * cold air lies on the map.
+     */
+    public coldMasses(): ColdMass[] {
+        return this.coldView?.masses(this.time.now) ?? [];
     }
 
     public isDrainCalm(x: number, y: number): boolean {
@@ -5165,6 +5181,24 @@ export class GameScene extends DirtyScene {
                 this.pixelReliefShown() && !this.seenRelief?.isFlatAt(ball.x, ball.y) ? shiftOfHeight(ball.levelPx) : 0,
         );
         this.ballView = ballView;
+        this.coldView?.destroy();
+        const coldView = new ColdView(
+            this,
+            () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+            // A mass let go comes back to the air of the room (sooner in its wind), at the clock of its ice and its
+            // snow, as on the server; the frost it lays is the hoar frost of that air, cooled.
+            () => {
+                const air = roomPrecipitationAir(
+                    this.getGameMap().getWamFile()?.getWam().settings,
+                    this.nightManager?.serverDate(),
+                );
+                return air ? { ...air, windSpeed: get(fireConditionsStore)?.windSpeed } : undefined;
+            },
+            () => freezeThawTimesOf(this.getGameMap().getWamFile()?.getWam().settings?.water),
+            (x, y) => this.surfaceDropAt(x, y),
+            (lying) => coldLyingStore.set(lying),
+        );
+        this.coldView = coldView;
         this.fireTorchView?.destroy();
         const fireTorchView = new FireTorchView(
             this,
@@ -5178,6 +5212,7 @@ export class GameScene extends DirtyScene {
             if (message.kind === CatastropheKind.CATASTROPHE_DOWNPOUR) downpourView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_DRAIN) drainView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_BALL) ballView.report(message, this.time.now);
+            else if (message.kind === CatastropheKind.CATASTROPHE_COLD) coldView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_FIRE) fireTorchView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_ICE_BREAK) {
                 // The ice another player broke (or ours, told back): the same hole for everyone.

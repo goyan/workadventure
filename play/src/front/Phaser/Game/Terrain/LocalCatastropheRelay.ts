@@ -1,5 +1,5 @@
-import { ballRadiusPx } from "@workadventure/map-editor";
-import type { Ball, Downpour, Drain } from "@workadventure/map-editor";
+import { ballRadiusPx, coldCelsius, coldTiles } from "@workadventure/map-editor";
+import type { Ball, ColdMass, Downpour, Drain } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
 import type { CatastropheMessage } from "@workadventure/messages";
 import type { LocalTerrainCommand } from "./LocalTerrainSimulation";
@@ -7,7 +7,7 @@ import type { LocalTerrainCommand } from "./LocalTerrainSimulation";
 /** What the relay tells the local ground of the catastrophes of the room. */
 export type LocalCatastropheCommand = Extract<
     LocalTerrainCommand,
-    { kind: "catastrophes" | "strike" | "shatter" | "ignite" | "burn" | "soak" }
+    { kind: "catastrophes" | "strike" | "shatter" | "ignite" | "burn" | "soak" | "calm" }
 >;
 type CatastropheState = Extract<LocalTerrainCommand, { kind: "catastrophes" }>;
 
@@ -16,7 +16,7 @@ type CatastropheState = Extract<LocalTerrainCommand, { kind: "catastrophes" }>;
  * local ground of the player does with them (LocalTerrainSimulation): the server acts on its own water as it tells
  * them (CatastropheManager), the local ground the same, on its water. What falls lands after its fall
  * (`impactInMs`): the meteor strikes, the fireball burns. The ice breaks and the fire is set at once; a downpour
- * soaks the meadow each time it is told. The downpours, the drains and the balls go on as long as the server tells
+ * soaks the meadow each time it is told. The downpours, the drains, the balls and the cold snaps go on as long as the server tells
  * them (`impactInMs` more each time; a ball let go: 0), and the local ground is told their list when it changes.
  * `now`: a clock in ms, the game's.
  */
@@ -24,6 +24,7 @@ export class LocalCatastropheRelay {
     private readonly downpours = new Map<number, { downpour: Downpour; until: number }>();
     private readonly drains = new Map<number, { drain: Drain; until: number }>();
     private readonly balls = new Map<number, { ball: Ball; until: number }>();
+    private readonly colds = new Map<number, { cold: ColdMass; until: number }>();
     private falls: { at: number; command: LocalCatastropheCommand }[] = [];
     private changed = false;
 
@@ -57,6 +58,24 @@ export class LocalCatastropheRelay {
                 else this.balls.set(id, { ball: { id, x, y, radiusPx: ballRadiusPx(radiusTiles) }, until });
                 this.changed = true;
                 return [];
+            case CatastropheKind.CATASTROPHE_COLD: {
+                // The cold snap of the room was stopped: the local ground dispels its cold air too.
+                if (message.impactInMs <= 0) {
+                    if (this.colds.size > 0) this.changed = true;
+                    this.colds.clear();
+                    return [{ kind: "calm" }];
+                }
+                const cold = {
+                    id,
+                    x,
+                    y,
+                    radiusTiles: coldTiles(radiusTiles),
+                    temperature: coldCelsius(message.temperature),
+                };
+                this.colds.set(id, { cold, until });
+                this.changed = true;
+                return [];
+            }
             default:
                 return [];
         }
@@ -67,7 +86,8 @@ export class LocalCatastropheRelay {
         const landed = this.falls.filter((fall) => fall.at <= now);
         if (landed.length > 0) this.falls = this.falls.filter((fall) => fall.at > now);
         const commands = landed.map((fall) => fall.command);
-        for (const kept of [this.downpours, this.drains, this.balls] as Map<number, { until: number }>[]) {
+        const going = [this.downpours, this.drains, this.balls, this.colds] as Map<number, { until: number }>[];
+        for (const kept of going) {
             for (const [id, { until }] of kept) {
                 if (until <= now) {
                     kept.delete(id);
@@ -89,6 +109,8 @@ export class LocalCatastropheRelay {
             downpours: [...this.downpours.values()].map(({ downpour }) => downpour),
             drains: [...this.drains.values()].map(({ drain }) => drain),
             balls: [...this.balls.values()].map(({ ball }) => ball),
+            // The masses of cold air held; the local ground keeps those let go while they warm, as the server does.
+            ...(this.colds.size > 0 ? { colds: [...this.colds.values()].map(({ cold }) => cold) } : {}),
         };
     }
 }

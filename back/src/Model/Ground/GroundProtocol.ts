@@ -1,5 +1,6 @@
 import type {
     Ball,
+    ColdMass,
     Downpour,
     Drain,
     FireConditions,
@@ -24,6 +25,8 @@ export interface GroundRoomState {
     downpours: readonly Downpour[];
     drains: readonly Drain[];
     balls: readonly Ball[];
+    /** The masses of cold air the players hold; absent while there is none. */
+    colds?: readonly ColdMass[];
     grazers: readonly { x: number; y: number }[];
     air: PrecipitationAir | undefined;
     fire: FireConditions;
@@ -82,6 +85,7 @@ export type GroundCommand =
     | { kind: "burn"; room: number; x: number; y: number; radiusTiles: number; id: number }
     | { kind: "soak"; room: number; downpour: Pick<Downpour, "x" | "y" | "radiusTiles" | "wholeMap"> }
     | { kind: "ballAt"; room: number; id: number; x: number; y: number }
+    | { kind: "calm"; room: number }
     | { kind: "history"; room: number; request: number; slots: RealWeatherSlot[] | undefined }
     | { kind: "step"; room: number; reply: number; water: number; meadow: number; state: GroundRoomState }
     | { kind: "close"; room: number };
