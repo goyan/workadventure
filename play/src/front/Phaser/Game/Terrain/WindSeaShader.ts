@@ -1,3 +1,4 @@
+import { HURRICANE_MOTION_SHARE } from "@workadventure/map-editor";
 import { shaderWrap } from "../ShaderNoise";
 import { SPUME_FROM_MS, SPUME_WHOLE_MS, whitecapShare, whitecapWhite } from "./Whitecaps";
 import {
@@ -148,6 +149,11 @@ const SPUME_ALONG_PX = 360;
 const SPUME_SHEET = 0.78;
 const SPRAY_MOST = 0.45;
 const SPRAY_WHOLE_MS = 55;
+/**
+ * The pace of the eye of a hurricane (m/s) under which the foam it leaves lasts as long as any (a crossing of the map
+ * in 5 min goes at about 0.9 m/s); faster (the widget of the speed of the map), it lasts the less.
+ */
+const HURRICANE_FOAM_PACE_MS = 1.2;
 const FOAM_LINE_CUT = 0.55;
 const FOAM_OFF_LINE = 0.1;
 /**
@@ -627,6 +633,10 @@ void main() {
         float life = mix(${glsl(FOAM_LIFE[0])}, ${glsl(FOAM_LIFE[1])}, flowing
             ? seaFlowNoise(${glsl(TRAIL_ACROSS_PX)}, ${glsl(TRAIL_DOWN_PX)}, vec2(29.0, 17.0))
             : seaNoise(trail + vec2(29.0, 17.0)));
+        // Under a hurricane that goes fast (the speed of the map), its eye would leave behind it trails laid round
+        // where it was: they last the less, the faster it goes (as they do at 1 m/s, its pace over 5 min).
+        if (flowing) life *= clamp(${glsl(HURRICANE_FOAM_PACE_MS)} * ${glsl(HURRICANE_MOTION_SHARE)}
+            / max(length(uHurWind.zw), 0.001), 0.12, 1.0);
         kept = texture2D(uFoamBefore, uv).r * exp(-dt / (${glsl(FOAM_DECAY_S)} * uFoamLife * life));
         // Rounded at random to the bytes of the picture: no foam stuck at its last step.
         kept += (hashWide(gl_FragCoord.xy + vec2(uFoamStep.y * 7.0, uFoamStep.y * 13.0)) - 0.5) / 255.0;
