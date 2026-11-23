@@ -5,10 +5,11 @@
         visualisationPanelStore,
         waterFlowOverlayStore,
         weatherExplainedStore,
+        weatherPipetteStore,
     } from "../../Stores/VisualisationStore";
     import ChipPopover from "../ClockLine/ChipPopover.svelte";
     import InfoTip from "../Input/InfoTip.svelte";
-    import { IconCloud, IconDroplet, IconEye } from "@wa-icons";
+    import { IconCloud, IconColorPicker, IconDroplet, IconEye } from "@wa-icons";
 
     interface Props {
         /** Only the icon of the chip is drawn: the clock line is short of room. */
@@ -19,6 +20,7 @@
     const shown = $derived($visualisationPanelStore);
     const flowing = $derived($waterFlowOverlayStore);
     const explaining = $derived($weatherExplainedStore);
+    const probing = $derived($weatherPipetteStore);
 
     /** Whether the tiles are open under the chip; what they show stays when they close. */
     let open = $state(false);
@@ -35,11 +37,19 @@
         const on = [
             ...(flowing ? [$LL.actionbar.visualisation.waterFlow()] : []),
             ...(explaining ? [$LL.actionbar.visualisation.weather.button()] : []),
+            ...(probing ? [$LL.actionbar.visualisation.weather.pipette.button()] : []),
         ];
         if (on.length === 0) return $LL.actionbar.visualisation.label();
         if (on.length === 1) return on[0];
         return $LL.actionbar.visualisation.chipShown({ count: on.length });
     });
+
+    // Escape puts the pipette away first, the tiles open or not; with it away, it closes the tiles.
+    function onEscape(): boolean {
+        if (!probing) return false;
+        weatherPipetteStore.set(false);
+        return true;
+    }
 </script>
 
 {#if shown}
@@ -47,7 +57,9 @@
         label={chipLabel}
         hint={$LL.actionbar.visualisation.chipHint()}
         {compact}
-        active={flowing || explaining}
+        active={flowing || explaining || probing}
+        {onEscape}
+        listenEscape={probing}
         bind:open
         testid="visualisation-chip"
     >
@@ -83,6 +95,19 @@
             >
                 <IconCloud width="16" height="16" />
                 <span>{$LL.actionbar.visualisation.weather.button()}</span>
+            </button>
+            <button
+                type="button"
+                class="flex items-center gap-1 rounded-full px-2 py-1 {probing
+                    ? 'bg-white/30 ring-1 ring-white'
+                    : 'bg-white/10 hover:bg-white/20'}"
+                aria-pressed={probing}
+                title={$LL.actionbar.visualisation.weather.pipette.hint()}
+                data-testid="visualisation-weather-pipette"
+                onclick={() => weatherPipetteStore.update((on) => !on)}
+            >
+                <IconColorPicker width="16" height="16" />
+                <span>{$LL.actionbar.visualisation.weather.pipette.button()}</span>
             </button>
             <InfoTip
                 label={$LL.actionbar.visualisation.infoLabel()}

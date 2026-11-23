@@ -66,10 +66,12 @@ function now(): Date {
     nightDateStore.set(date);
     return date;
 }
-const told = (map_: number, here: number, version = 1) => ({
+const told = (map_: number, here: number, version = 1, peaks = { iceMm: 0, snowMm: 0 }) => ({
     version: () => version,
     meanSnowCover: () => map_,
     snowCoverAt: () => here,
+    peakSnowMm: () => peaks.snowMm,
+    peakIceMm: () => peaks.iceMm,
 });
 
 beforeEach(() => {

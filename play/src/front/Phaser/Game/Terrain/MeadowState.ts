@@ -89,6 +89,8 @@ export class MeadowState {
     /** The ice over the water of each tile (iceByte); empty when no water of the map is frozen. */
     private ice: Uint8Array = new Uint8Array(0);
     private anyIce = false;
+    private thickestIceMm = 0;
+    private thickestSnowMm = 0;
     private anyMoisture = false;
     private anyFire = false;
     private any = false;
@@ -128,13 +130,19 @@ export class MeadowState {
         this.anyMoisture = state.moisture.some((byte) => byte > 0);
         let covered = 0;
         let peak = 0;
+        let thickestSnow = 0;
         for (const byte of this.snow) {
             const cover = snowCoverOf(snowMmOfByte(byte));
             covered += cover;
             peak = Math.max(peak, cover);
+            thickestSnow = Math.max(thickestSnow, byte);
         }
         this.meanSnow = tiles > 0 ? covered / tiles : 0;
         this.peakSnow = peak;
+        this.thickestSnowMm = snowMmOfByte(thickestSnow);
+        let thickestIce = 0;
+        for (const byte of this.ice) thickestIce = Math.max(thickestIce, byte);
+        this.thickestIceMm = iceMmOfByte(thickestIce);
         this.anyFire = this.fire.some((fire) => fire > 0);
         this.any = state.grass.some((cover) => cover > 0);
         // A ground gone dry, burning or burnt is drawn even where no grass is left.
@@ -200,6 +208,16 @@ export class MeadowState {
     /** The cover of the snowiest tile, 0 to 1. */
     public peakSnowCover(): number {
         return this.peakSnow;
+    }
+
+    /** The snow of the snowiest tile, in mm of water. */
+    public peakSnowMm(): number {
+        return this.thickestSnowMm;
+    }
+
+    /** The ice of the tile where it is the thickest, in mm. */
+    public peakIceMm(): number {
+        return this.thickestIceMm;
     }
 
     /** The ice over the water of a tile, as the server tells it (iceByte): 0 without ice. */
