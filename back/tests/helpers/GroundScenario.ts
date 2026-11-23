@@ -3,11 +3,22 @@ import {
     cellKey,
     DEFAULT_FIRE_THRESHOLDS,
     fireDanger,
+    HURRICANE_HUMIDITY,
+    hurricaneAt,
+    hurricaneConditions,
     NEUTRAL_FIRE_CONDITIONS,
     WeatherType,
     withHeights,
 } from "@workadventure/map-editor";
-import type { Ball, ColdMass, Downpour, Drain, RealWeatherSlot, WAMFileFormat } from "@workadventure/map-editor";
+import type {
+    Ball,
+    ColdMass,
+    Downpour,
+    Drain,
+    Hurricane,
+    RealWeatherSlot,
+    WAMFileFormat,
+} from "@workadventure/map-editor";
 import { luckOf } from "../../src/Model/Ground/GroundProtocol";
 import type { RoomGround, RoomGroundInputs } from "../../src/Model/Ground/RoomGround";
 import { MeadowManager } from "../../src/Model/MeadowManager";
@@ -121,6 +132,7 @@ export function world(wam: WAMFileFormat, stored: Record<string, Record<string, 
         drains: [] as Drain[],
         balls: [] as Ball[],
         colds: [] as ColdMass[],
+        hurricane: undefined as Hurricane | undefined,
         air: { temperature: 1, humidity: 85 } as { temperature: number; humidity: number } | undefined,
         /** The conditions of the fire of the room: a cold rain until the test says a heat wave. */
         fire: { temperature: 1, humidity: 85, windSpeed: 20, windFrom: 270 },
@@ -155,6 +167,7 @@ export function world(wam: WAMFileFormat, stored: Record<string, Record<string, 
         drains: () => state.drains,
         balls: () => state.balls,
         colds: () => state.colds,
+        hurricane: () => state.hurricane,
         grazers: () => [{ x: 100, y: 600 }],
         air: () => state.air,
         fire,
@@ -185,9 +198,20 @@ export async function byHand(
     water.setDrains(() => inputs.drains());
     water.setBalls(() => inputs.balls());
     water.setWalkers(() => inputs.walkers());
+    water.skyUnder(() => inputs.hurricane?.());
     await water.restore();
     water.start();
-    water.fallThrough(() => inputs.air());
+    // Under a hurricane, its wind and its air, from the hurricane and the time of the room.
+    const now = (): number => inputs.now?.() ?? Date.now();
+    const conditionsNow = () => hurricaneConditions(inputs.fire(), inputs.hurricane?.(), now());
+    const airNow = () => {
+        const air = inputs.air();
+        const storm = hurricaneAt(inputs.hurricane?.(), now());
+        if (!air || !storm || storm.share <= 0) return air;
+        const humid = Math.max(air.humidity, HURRICANE_HUMIDITY);
+        return { ...air, humidity: air.humidity + (humid - air.humidity) * storm.share };
+    };
+    water.fallThrough(() => airNow());
     const meadow = new MeadowManager(
         inputs.room,
         inputs.rain,
@@ -197,7 +221,7 @@ export async function byHand(
         () => inputs.mapSize(),
         () => inputs.grazers(),
         () => {
-            const conditions = inputs.fire();
+            const conditions = conditionsNow();
             return {
                 danger: fireDanger(conditions, inputs.thresholds()),
                 windFrom: conditions.windFrom,
@@ -206,12 +230,13 @@ export async function byHand(
         },
         inputs.random,
     );
-    meadow.fallThrough(() => inputs.air());
+    meadow.fallThrough(() => airNow());
+    meadow.skyUnder(() => inputs.hurricane?.());
     // The snow and the ice go as fast as what comes in to the water, as GroundSimulation wires them.
     meadow.timesWith(() => water.livedTimes().inflow);
     meadow.snowUnder(() => {
-        const air = inputs.air();
-        return air ? { ...air, windSpeed: inputs.fire().windSpeed } : undefined;
+        const air = airNow();
+        return air ? { ...air, windSpeed: conditionsNow().windSpeed } : undefined;
     });
     meadow.pourWith(water.pour.bind(water));
     meadow.coldUnder(() => inputs.colds?.() ?? []);
@@ -299,6 +324,25 @@ export function happenAt(
     if (tenth === 100) state.downpours = [{ id: 1, x: 200, y: 200, radiusTiles: 4, wholeMap: false }];
     if (tenth === 110) ground.soak(state.downpours[0]);
     if (tenth === 200) state.downpours = [];
+    // A hurricane of five minutes, its wall over the map (its rain the total of a real passage, compressed): it
+    // rains and blows, then someone stops it.
+    if (tenth === 180) {
+        // A tropical air: the storm rains, it does not snow.
+        state.air = { temperature: 26, humidity: 80 };
+        state.hurricane = {
+            id: 30,
+            startedAt: GROUND_NOW + 18_000 - 0.44 * 300_000,
+            category: 4,
+            durationMs: 300_000,
+            offsetKm: 10,
+            heading: 290,
+            southern: false,
+        };
+    }
+    if (tenth === 290) {
+        state.hurricane = undefined;
+        state.air = { temperature: 1, humidity: 85 };
+    }
     if (tenth === 220) ground.strike(190, 190, 2);
     if (tenth === 300) state.balls = [{ id: 7, x: 180, y: 180, radiusPx: 40 }];
     if (tenth > 300 && tenth < 400) {

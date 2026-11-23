@@ -2,6 +2,9 @@ import {
     boundedFireConditions,
     fireDanger,
     GroundSimulation,
+    HURRICANE_HUMIDITY,
+    hurricaneAt,
+    hurricaneConditions,
     NEUTRAL_FIRE_CONDITIONS,
 } from "@workadventure/map-editor";
 import type { Downpour, LifeFire, RealWeatherSlot, ReplayedWeather, WaterView } from "@workadventure/map-editor";
@@ -59,6 +62,17 @@ export class InlineRoomGround implements RoomGround {
     }
 
     constructor(inputs: RoomGroundInputs) {
+        // The conditions of the room, under its hurricane when one crosses the map: computed here at each step, from
+        // the hurricane and the time of the room, on whichever thread the ground lives.
+        const now = (): number => inputs.now?.() ?? Date.now();
+        const conditionsNow = () => hurricaneConditions(inputs.fire(), inputs.hurricane?.(), now());
+        const airNow = () => {
+            const air = inputs.air();
+            const storm = hurricaneAt(inputs.hurricane?.(), now());
+            if (!air || !storm || storm.share <= 0) return air;
+            const humid = Math.max(air.humidity, HURRICANE_HUMIDITY);
+            return { ...air, humidity: air.humidity + (humid - air.humidity) * storm.share };
+        };
         this.ground = new GroundSimulation({
             makeWater: () =>
                 new TerrainWaterManager(
@@ -80,7 +94,7 @@ export class InlineRoomGround implements RoomGround {
                     () => inputs.grazers(),
                     // The grass dries by the conditions of the room, and their wind pushes its fire.
                     () => {
-                        const conditions = inputs.fire();
+                        const conditions = conditionsNow();
                         return {
                             danger: fireDanger(conditions, inputs.thresholds()),
                             windFrom: conditions.windFrom,
@@ -91,12 +105,12 @@ export class InlineRoomGround implements RoomGround {
                 ),
             // In the cold of the room the rain of the map falls as snow: it brings no water to the relief, nor does it
             // soak the soil of the meadow.
-            air: () => inputs.air(),
+            air: () => airNow(),
             // The snow that fell lies on the ground: it melts by the heat, the wind and the humidity of the room, and
             // its water runs to the water of the relief.
             snow: () => {
-                const air = inputs.air();
-                return air ? { ...air, windSpeed: inputs.fire().windSpeed } : undefined;
+                const air = airNow();
+                return air ? { ...air, windSpeed: conditionsNow().windSpeed } : undefined;
             },
             // A door holds the water while it is closed: it opens for the avatars that stand in its passage.
             walkers: () => inputs.walkers(),
@@ -105,6 +119,7 @@ export class InlineRoomGround implements RoomGround {
                 drains: () => inputs.drains(),
                 balls: () => inputs.balls(),
                 colds: () => inputs.colds?.() ?? [],
+                hurricane: () => inputs.hurricane?.(),
             },
             // A room left empty lives the time it missed: with the weather of the past at the place of a map in real
             // weather, each quarter hour read as the conditions of the room read the quarter hour of now.

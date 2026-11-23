@@ -11,6 +11,7 @@ import {
     DRAIN_LASTS_MS,
     DRAINS_PER_ROOM,
     FIRE_PATCH_LASTS_MS,
+    HURRICANE_TELL_MS,
     METEOR_FALL_MS,
     METEORS_PER_ROOM,
 } from "@workadventure/map-editor";
@@ -657,5 +658,61 @@ describe("ice that gives way", () => {
             { kind: ICE, x: 330, radiusTiles: 1 },
             { kind: ICE, x: 340, radiusTiles: 1 },
         ]);
+    });
+});
+
+describe("CatastropheManager, hurricanes", () => {
+    const HURRICANE = CatastropheKind.CATASTROPHE_HURRICANE;
+    const track = { category: 4, minutes: 10, offsetKm: 0, heading: 290, southern: false, startedAt: 0 };
+
+    it("lets a hurricane cross the map, told to the room once a second until it ends", () => {
+        const { manager, sent } = harness();
+        expect(manager.request(1, HURRICANE, 0, 0, 0, true, false, undefined, track)).toBe(true);
+        expect(sent).toHaveLength(1);
+        expect(sent[0]).toMatchObject({ kind: HURRICANE, impactInMs: 10 * 60_000 });
+        expect(sent[0].hurricane).toMatchObject({ category: 4, minutes: 10, offsetKm: 0, heading: 290, startedAt: 0 });
+        expect(manager.hurricane()).toMatchObject({ category: 4, durationMs: 600_000, startedAt: 0 });
+        vi.advanceTimersByTime(HURRICANE_TELL_MS);
+        expect(sent).toHaveLength(2);
+        expect(sent[1]).toMatchObject({ id: sent[0].id, impactInMs: 10 * 60_000 - HURRICANE_TELL_MS });
+        vi.advanceTimersByTime(10 * 60_000);
+        expect(sent[sent.length - 1]).toMatchObject({ id: sent[0].id, impactInMs: 0 });
+        expect(manager.hurricane()).toBeUndefined();
+        const told = sent.length;
+        vi.advanceTimersByTime(5 * HURRICANE_TELL_MS);
+        expect(sent).toHaveLength(told);
+    });
+
+    it("keeps one hurricane a room, which anyone may stop", () => {
+        const { manager, sent } = harness();
+        expect(manager.request(1, HURRICANE, 0, 0, 0, true, false, undefined, track)).toBe(true);
+        expect(manager.request(2, HURRICANE, 0, 0, 0, true, false, undefined, track)).toBe(false);
+        expect(manager.request(2, HURRICANE, 0, 0, 0, true, true)).toBe(true);
+        expect(sent[sent.length - 1]).toMatchObject({ kind: HURRICANE, impactInMs: 0 });
+        expect(manager.hurricane()).toBeUndefined();
+        expect(manager.request(2, HURRICANE, 0, 0, 0, true, false, undefined, track)).toBe(true);
+    });
+
+    it("keeps what is asked within bounds, and turns it the way of the hemisphere of the map", () => {
+        const { manager } = harness();
+        manager.southernWith(() => true);
+        manager.request(1, HURRICANE, 0, 0, 0, true, false, undefined, {
+            ...track,
+            category: 9,
+            minutes: 500,
+            offsetKm: -1000,
+        });
+        expect(manager.hurricane()).toMatchObject({ category: 5, durationMs: 60 * 60_000, offsetKm: -60, southern: true });
+    });
+
+    it("refuses a hurricane without its track, and forgets it when the room stops", () => {
+        const { manager, sent } = harness();
+        expect(manager.request(1, HURRICANE, 0, 0, 0, true)).toBe(false);
+        manager.request(1, HURRICANE, 0, 0, 0, true, false, undefined, track);
+        manager.stop();
+        const told = sent.length;
+        vi.advanceTimersByTime(5 * HURRICANE_TELL_MS);
+        expect(sent).toHaveLength(told);
+        expect(manager.hurricane()).toBeUndefined();
     });
 });

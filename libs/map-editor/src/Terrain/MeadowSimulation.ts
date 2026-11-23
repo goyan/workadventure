@@ -11,6 +11,8 @@ import type { LifeFire } from "../Life/FireFear";
 import { liquidRainRate, snowRainRate, snowShareOf } from "../Weather/Precipitation";
 import type { PrecipitationAir } from "../Weather/Precipitation";
 import { rainRateAt } from "../Weather/RainRate";
+import { skyRainUnder } from "../Catastrophe/Hurricane";
+import type { Hurricane } from "../Catastrophe/Hurricane";
 import { REAL_WEATHER_SLOT_MS } from "../Weather/RealWeather";
 import type { MapPlace, RealWeatherSlot } from "../Weather/RealWeather";
 import { seasonAt } from "../Weather/SeasonClock";
@@ -125,6 +127,8 @@ export class MeadowSimulation {
     /** The clock of the snow and the ice, as the water lives it (timesWith); undefined: the speed of the map. */
     private livedTimes: (() => number) | undefined;
     private air: () => PrecipitationAir | undefined = () => undefined;
+    /** The hurricane crossing the map, whose rain takes the place of that of the map (none on a ground of one's own). */
+    private hurricane: () => Hurricane | undefined = () => undefined;
     /** The part of the rain of the map that falls as snow now, in mm of water an hour. */
     private snowRate = 0;
     /** The air over the snow lying on the ground (temperature, humidity, wind): unknown until the room gives it. */
@@ -368,6 +372,11 @@ export class MeadowSimulation {
 
     public fallThrough(air: () => PrecipitationAir | undefined): void {
         this.air = air;
+    }
+
+    /** The catastrophes of the room say which hurricane crosses the map: its rain falls in place of that of the map. */
+    public skyUnder(hurricane: () => Hurricane | undefined): void {
+        this.hurricane = hurricane;
     }
 
     /** The catastrophes of the room say which masses of cold air its players hold. */
@@ -615,10 +624,17 @@ export class MeadowSimulation {
                   ? this.rain.slotsFor(settings.weatherLocation)
                   : undefined;
             // What falls as snow lies where it fell: only the rain runs to the hollows and soaks the soil.
-            const falling = rainRateAt(settings, this.clock(), slots);
+            const mapRain = rainRateAt(settings, this.clock(), slots);
+            // Under a hurricane, its rain in place of that of the map: the total of a real passage, over the real
+            // time of the meadow; its snow over the clock of the snow (snowInput), as fast as the water.
+            const storm = replaying ? undefined : this.hurricane();
+            const falling = skyRainUnder(mapRain, storm, this.clock());
             this.rainRate = liquidRainRate(falling, this.airNow());
             // ...and the snow lies on the ground, until it melts.
-            this.snowRate = snowRainRate(falling, this.airNow());
+            this.snowRate = snowRainRate(
+                skyRainUnder(mapRain, storm, this.clock(), this.livedTimes?.() ?? waterTimesOf(settings?.water)),
+                this.airNow(),
+            );
             // ...and in the same cold the soil freezes: its water stays, its grass lies dormant.
             this.frost = soilFrostOf(this.airNow());
         }

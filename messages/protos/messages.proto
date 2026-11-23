@@ -894,6 +894,27 @@ enum CatastropheKind {
   // telling. The server freezes what its meadow keeps there (water, snow, soil) by the rules of any frost; let go,
   // the mass stays where it was and comes back to the air of the map.
   CATASTROPHE_COLD = 7;
+  // A hurricane crosses the map, for the length a player chose: its wind, its rain and its sky take the place of the
+  // weather of the map. The server tells the room what it is once a second, every player computes the same weather
+  // from it and the time of the server. One a room; anyone stops it.
+  CATASTROPHE_HURRICANE = 8;
+}
+
+// How a hurricane crosses the map, as a player asks for it (the server keeps each value within bounds) and as the
+// server tells it.
+message HurricaneTrackMessage {
+  // Saffir-Simpson, 1 to 5.
+  int32 category = 1;
+  // The length of the passage in the time of the map, minutes.
+  int32 minutes = 2;
+  // How far from the map the eye passes, km: positive with the map on the right of the track.
+  double offsetKm = 3;
+  // Where the storm goes, degrees (0 north, 90 east).
+  double heading = 4;
+  // Told by the server only: it turns clockwise (a map in the southern hemisphere), and when it began (ms, the time
+  // of the server).
+  bool southern = 5;
+  double startedAt = 6;
 }
 
 // Browser to server: a player sets the conditions the fire of the room goes by (heat, humidity of the air, wind) by
@@ -938,6 +959,8 @@ message LaunchCatastropheMessage {
   bool release = 6;
   // A cold snap: the temperature of its air, in °C. The server keeps it within what a cold snap may be.
   optional double temperature = 7;
+  // A hurricane: how it crosses the map. `release` stops it.
+  optional HurricaneTrackMessage hurricane = 8;
 }
 
 // Server to room: a catastrophe is on its way.
@@ -962,6 +985,9 @@ message CatastropheMessage {
   // A cold snap: the temperature of its air, in °C, as the server kept it. `impactInMs` is how long it is still
   // held when no other message comes; it then warms where it lies. 0: the cold air of the room was dispelled.
   optional double temperature = 13;
+  // A hurricane: how it crosses the map, told once a second while it goes on; `impactInMs` is how long it still
+  // lasts, 0 when it was stopped or ended.
+  optional HurricaneTrackMessage hurricane = 14;
 }
 
 // A player casts their fishing line: where the float lands, in map pixels. The server decides whether it does

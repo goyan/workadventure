@@ -45,6 +45,7 @@ import type {
     SetFireConditionsMessage,
     AquaticLifeMessage,
     CatastropheKind,
+    HurricaneTrackMessage,
     FishingMessage,
     IceShackAction,
     IceShacksMessage,
@@ -380,6 +381,7 @@ export class GameRoom implements BrothersFinder {
             drains: () => groundParts.catastrophes?.drains() ?? [],
             balls: () => groundParts.catastrophes?.balls() ?? [],
             colds: () => groundParts.catastrophes?.colds() ?? [],
+            hurricane: () => groundParts.catastrophes?.hurricane(),
             // The antelopes of the life of the land graze the meadow.
             grazers: () => groundParts.aquaticLife?.grazers() ?? [],
             // In the cold of the room the rain of the map falls as snow; the weather is not known until it is read.
@@ -403,6 +405,8 @@ export class GameRoom implements BrothersFinder {
         );
         groundParts.catastrophes = catastrophes;
         catastrophes.levelWith(ground.ballLevelAt.bind(ground));
+        // A hurricane turns clockwise over a map in the southern hemisphere (Paris without a place).
+        catastrophes.southernWith(() => (gameRoom.getWam()?.settings?.weatherLocation?.latitude ?? 48.86) < 0);
         gameRoom.catastrophes = catastrophes;
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => catastrophes.stop());
@@ -1370,8 +1374,9 @@ export class GameRoom implements BrothersFinder {
         wholeMap: boolean,
         release = false,
         temperature?: number,
+        hurricane?: HurricaneTrackMessage,
     ): void {
-        this.catastrophes?.request(user.id, kind, x, y, radiusTiles, wholeMap, release, temperature);
+        this.catastrophes?.request(user.id, kind, x, y, radiusTiles, wholeMap, release, temperature, hurricane);
     }
 
     /** A player casts their fishing line at a point of the map. */

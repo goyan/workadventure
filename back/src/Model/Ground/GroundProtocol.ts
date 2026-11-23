@@ -5,6 +5,7 @@ import type {
     Drain,
     FireConditions,
     FireThresholds,
+    Hurricane,
     MapPlace,
     PrecipitationAir,
     RealWeatherSlot,
@@ -27,6 +28,8 @@ export interface GroundRoomState {
     balls: readonly Ball[];
     /** The masses of cold air the players hold; absent while there is none. */
     colds?: readonly ColdMass[];
+    /** The hurricane crossing the map; absent while there is none. Its weather is computed from it at each step. */
+    hurricane?: Hurricane;
     grazers: readonly { x: number; y: number }[];
     air: PrecipitationAir | undefined;
     fire: FireConditions;
