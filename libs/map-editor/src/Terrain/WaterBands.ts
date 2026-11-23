@@ -1,5 +1,6 @@
 import { affordPass, depthsPass, fluxPass, scalePass } from "./WaterKernel";
 import type { InertiaMove } from "./WaterKernel";
+import { WasmWaterKernel } from "./WaterKernelWasm";
 
 /**
  * A pass of a move of the water with inertia, shared between several threads: the rows of the grid are cut in
@@ -31,16 +32,20 @@ export function runWaterPass(
     rowTo: number,
     rowLost: Float64Array,
 ): boolean {
+    // The passes of the compiled kernel of the grid, when it has one: the same figures, to the bit.
+    const compiled = move.compiled;
     if (pass === 0) {
-        fluxPass(move, rowFrom, rowTo);
+        if (compiled) compiled.fluxPass(move, rowFrom, rowTo);
+        else fluxPass(move, rowFrom, rowTo);
         return false;
     }
     if (pass === 1) {
-        affordPass(move, rowFrom, rowTo);
+        if (compiled) compiled.affordPass(move, rowFrom, rowTo);
+        else affordPass(move, rowFrom, rowTo);
         return false;
     }
-    if (pass === 2) return scalePass(move, rowFrom, rowTo);
-    return depthsPass(move, rowFrom, rowTo, rowLost);
+    if (pass === 2) return compiled ? compiled.scalePass(move, rowFrom, rowTo) : scalePass(move, rowFrom, rowTo);
+    return compiled ? compiled.depthsPass(move, rowFrom, rowTo, rowLost) : depthsPass(move, rowFrom, rowTo, rowLost);
 }
 
 /**
@@ -142,7 +147,11 @@ export type WaterBandsArrays = Pick<
     | "speedSouth"
     | "nextSpeedEast"
     | "nextSpeedSouth"
-> & { rowLost: Float64Array };
+> & {
+    rowLost: Float64Array;
+    /** The memory of the compiled kernel of the grid, when it has one: who follows joins it to run its passes. */
+    memory?: WebAssembly.Memory;
+};
 
 /** What who follows must be told before the next pass: the arrays of a grid, or that a grid is gone (no arrays). */
 export interface WaterBandsNews {
@@ -264,11 +273,12 @@ export class WaterBandsLead {
 
     /**
      * Sleeps until a slice of the pass that is open is claimed, `ms` at most: called as a pass opens (`opened`), it
-     * lets the threads that follow take their part whatever the machine does. For the tests.
+     * lets the threads that follow take their part whatever the machine does. For the tests. Returns whether a
+     * slice was claimed: when none was, no thread follows, and who asked had better not wait again.
      */
-    public waitForAClaim(ms: number): void {
+    public waitForAClaim(ms: number): boolean {
         const { words } = this.board;
-        Atomics.wait(words, CLAIM, Atomics.load(words, CLAIM), ms);
+        return Atomics.wait(words, CLAIM, Atomics.load(words, CLAIM), ms) !== "timed-out";
     }
 
     /** A grid is gone: who follows is told to forget its arrays at the next step of any grid. */
@@ -332,6 +342,7 @@ export class WaterBandsLead {
                 nextSpeedEast: move.nextSpeedEast,
                 nextSpeedSouth: move.nextSpeedSouth,
                 rowLost,
+                memory: move.compiled?.threadMemory(),
             };
             if (known) {
                 known.grid = grid;
@@ -418,7 +429,7 @@ export class WaterBandsFollower {
             this.grids.delete(grid);
             return;
         }
-        const { rowLost, ...shared } = arrays;
+        const { rowLost, memory, ...shared } = arrays;
         // Written at once, with all its fields in the order of the move of WaterGrid: the passes read it fast.
         const move: InertiaMove = {
             width: 0,
@@ -447,6 +458,8 @@ export class WaterBandsFollower {
             damping: 0,
             breaking: 0,
             carried: 0,
+            // The compiled kernel of the grid, on its memory: this thread has its own instance of it there.
+            compiled: memory ? WasmWaterKernel.join(memory) : undefined,
         };
         this.grids.set(grid, {
             move,

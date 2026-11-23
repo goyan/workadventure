@@ -3,6 +3,7 @@ import { MeadowSimulation } from "@workadventure/map-editor";
 import type { MeadowWater } from "@workadventure/map-editor";
 import type { VariablesRepositoryInterface } from "../Services/Repository/VariablesRepositoryInterface";
 import type { GameRoom } from "./GameRoom";
+import { threadGroundTimings } from "./Ground/GroundTimings";
 import type { RainTimelineService } from "./Services/RainTimelineService";
 
 export type { ReplayedWeather } from "@workadventure/map-editor";
@@ -105,8 +106,11 @@ export class MeadowManager extends MeadowSimulation {
     public stepped: () => void = () => undefined;
 
     public override step(): void {
+        const started = performance.now();
         super.step();
         this.stepped();
+        // For the metrics of the server: what the meadow took of its thread.
+        threadGroundTimings.took(performance.now() - started);
     }
 
     /**

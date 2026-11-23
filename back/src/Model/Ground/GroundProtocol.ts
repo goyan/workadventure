@@ -12,6 +12,7 @@ import type {
     WaterSnapshotBuffers,
 } from "@workadventure/map-editor";
 import type { MeadowMessage, SubToPusherRoomMessage, TreeFireMessage } from "@workadventure/messages";
+import type { GroundTimingsBatch } from "./GroundTimings";
 
 /**
  * What the ground of a room reads of its room, as it is sent to the thread that computes it: the same things as
@@ -111,7 +112,9 @@ export type GroundTold =
      * How the passes of the waters of this thread were shared since it started, told each time a room closes: the
      * slices of rows it computed itself, and those the threads of its bands computed.
      */
-    | { kind: "slices"; room: 0; here: number; others: number };
+    | { kind: "slices"; room: 0; here: number; others: number }
+    /** How long the steps of this thread took since it last told (no room: for the metrics of the server). */
+    | { kind: "timings"; room: 0; batch: GroundTimingsBatch };
 
 /** Where the commands of a room go and where what it is told comes from: a thread, or the same thread in a test. */
 export interface GroundPort {

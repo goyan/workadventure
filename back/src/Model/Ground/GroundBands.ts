@@ -11,10 +11,10 @@ import type {
 
 /**
  * What a thread of the bands is told of the grids, before a pass: their arrays, in a memory the threads share, and
- * what computes their passes (the passes written in TypeScript; a compiled kernel would come with its memory and
- * its module).
+ * what computes their passes: the passes written in TypeScript, or the compiled kernel of the grid, whose memory
+ * comes with the arrays (the thread loads its own instance of the module on it).
  */
-export type GroundBandNews = WaterBandsNews & { kernel: "typescript" };
+export type GroundBandNews = WaterBandsNews & { kernel: "typescript" | "wasm" };
 
 /** What a thread of the bands is started with. */
 export interface GroundBandStart {
@@ -97,7 +97,10 @@ export class GroundBands implements WaterPassRunner {
     public begin(key: object, move: InertiaMove, rowLost: Float64Array): void {
         const news = this.lead.begin(key, move, rowLost);
         if (news.length === 0) return;
-        const told: GroundBandNews[] = news.map((one) => ({ ...one, kernel: "typescript" }));
+        const told: GroundBandNews[] = news.map((one) => ({
+            ...one,
+            kernel: one.arrays?.memory ? "wasm" : "typescript",
+        }));
         for (const { news: port } of this.threads) port.postMessage(told);
     }
 

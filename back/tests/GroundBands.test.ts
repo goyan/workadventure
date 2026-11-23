@@ -5,11 +5,12 @@ import {
     ordinaryWaterArrays,
     setWaterPassRunner,
     sharedWaterArrays,
+    WasmWaterKernel,
     WaterBandsLead,
     WaterBandsLost,
     WaterGrid,
 } from "@workadventure/map-editor";
-import type { WaterStepInput } from "@workadventure/map-editor";
+import type { WaterArrays, WaterStepInput } from "@workadventure/map-editor";
 import { GroundBands } from "../src/Model/Ground/GroundBands";
 import type { GroundBandStart, GroundBandThread } from "../src/Model/Ground/GroundBands";
 import type { GroundTold } from "../src/Model/Ground/GroundProtocol";
@@ -40,15 +41,18 @@ const inertia: WaterStepInput = {
     pace: 1,
 };
 
-/** A flat map with a heap of water in a corner and a source: the water spreads, and falls off the edges. */
-function flooded(shared: boolean): WaterGrid {
+/**
+ * A flat map with a heap of water in a corner and a source: the water spreads, and falls off the edges. Its arrays
+ * in ordinary memory, in a memory threads share, or in the shared memory of a compiled kernel.
+ */
+function flooded(shared: boolean | WaterArrays): WaterGrid {
     const grid = new WaterGrid(
         undefined,
         BOUNDS,
         undefined,
         undefined,
         undefined,
-        shared ? sharedWaterArrays : ordinaryWaterArrays,
+        typeof shared === "object" ? shared : shared ? sharedWaterArrays : ordinaryWaterArrays,
     );
     const bytes = new Uint8Array(WIDTH * HEIGHT * 2);
     for (let y = 0; y < HEIGHT; y++) {
@@ -112,6 +116,8 @@ function patientLead(
 ): WaterBandsLead {
     let turn = 0;
     let now = 0;
+    // Once nobody came, it never waits again: threads that never start must not hold a test for minutes.
+    let alone = false;
     const lead: WaterBandsLead = new WaterBandsLead(
         followers,
         sleep ??
@@ -121,9 +127,14 @@ function patientLead(
         1000,
         sleep ? () => (now += 400) : undefined,
         () => {
-            if (turn++ % each !== 0) return;
+            if (alone || turn++ % each !== 0) return;
             const opened = Atomics.load(lead.board.words, CLAIM);
-            for (let tries = 0; tries < 5000 && Atomics.load(lead.board.words, CLAIM) === opened; tries++) nap(1);
+            let tries = 0;
+            while (tries < 5000 && Atomics.load(lead.board.words, CLAIM) === opened) {
+                nap(1);
+                tries++;
+            }
+            alone = tries >= 5000;
         },
     );
     return lead;
@@ -168,6 +179,37 @@ describe("the bands of the water on real threads (GroundBands)", () => {
             expect(here).toBeGreaterThan(40);
             expect(group.bands).toBe(followers + 1);
             // Stopped, its threads end by themselves.
+            const ends = threads.map(exited);
+            group.stop();
+            // eslint-disable-next-line no-await-in-loop -- one group after the other: they share the runner of the thread
+            await Promise.all(ends);
+        }
+    }, 60_000);
+
+    it("gives the same water, to the bit, with the compiled kernel on two and three bands: each thread on the memory of the grid", async () => {
+        const reference = flooded(false);
+        const expected = stateOf(reference, live(reference, 40));
+        for (const followers of [1, 2]) {
+            const threads: Worker[] = [];
+            const group = new GroundBands(
+                followers,
+                () => undefined,
+                () => undefined,
+                (start) => {
+                    const worker = realWorker(start);
+                    threads.push(worker);
+                    return worker;
+                },
+                patientLead(followers, 7),
+            );
+            groups.push(group);
+            setWaterPassRunner(group);
+            const grid = flooded(new WasmWaterKernel({ shared: true }));
+            expect(grid.kernelName()).toBe("wasm");
+            expect(stateOf(grid, live(grid, 40)), `${followers + 1} bands`).toEqual(expected);
+            const { here, others } = group.computed();
+            expect(others).toBeGreaterThan(40);
+            expect(here).toBeGreaterThan(40);
             const ends = threads.map(exited);
             group.stop();
             // eslint-disable-next-line no-await-in-loop -- one group after the other: they share the runner of the thread
