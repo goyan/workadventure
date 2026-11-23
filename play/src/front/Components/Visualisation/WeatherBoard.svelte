@@ -690,13 +690,13 @@
                         <span>{t.seenBy.label()} <b>{audienceName(card.audience)}</b></span>
                     </span>
                 </div>
-                {#each card.why as line (line)}
+                {#each card.why as line, index (index)}
                     <p class="m-0">{line}</p>
                 {/each}
-                {#each card.change as line (line)}
+                {#each card.change as line, index (index)}
                     <p class="m-0 opacity-80" data-testid="weather-board-{card.id}-change">→ {line}</p>
                 {/each}
-                {#each card.notes as line (line)}
+                {#each card.notes as line, index (index)}
                     <p class="m-0 opacity-80">{line}</p>
                 {/each}
             </div>
@@ -709,7 +709,7 @@
                     <p class="m-0 text-sm font-bold" data-testid="weather-board-{card.id}-map-result">
                         {card.onMap.result}
                     </p>
-                    {#each card.onMap.why as line (line)}
+                    {#each card.onMap.why as line, index (index)}
                         <p class="m-0">{line}</p>
                     {/each}
                 </div>
@@ -720,7 +720,7 @@
                     data-testid="weather-board-{card.id}-gap"
                 >
                     <div class="font-bold text-yellow-300">{t.compare.gap()}</div>
-                    {#each card.gap as line (line)}
+                    {#each card.gap as line, index (index)}
                         <p class="m-0">{line}</p>
                     {/each}
                 </div>
@@ -728,7 +728,7 @@
             {#if card.same}
                 <p class="m-0 opacity-80" data-testid="weather-board-{card.id}-same">{card.same}</p>
             {/if}
-            {#each card.server ?? [] as line (line)}
+            {#each card.server ?? [] as line, index (index)}
                 <p class="m-0" data-testid="weather-board-{card.id}-server">{line}</p>
             {/each}
             <details>
