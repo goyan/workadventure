@@ -37,13 +37,15 @@ let group: GroundBands | undefined;
 if (bands > 1) {
     // For the tests that must see the threads of the bands at work whatever the machine does: one pass in
     // `patientBands`, this thread waits at its opening until a slice of it is claimed by another (five seconds at
-    // most: none ever came). Never asked for by the server.
+    // most). Once none came, it never waits again: threads that do not start must not hold the water back, pass
+    // after pass. Never asked for by the server.
     const every = Math.floor(Number(asked?.patientBands ?? 0));
     let passes = 0;
+    let alone = false;
     const patient: WaterBandsLead | undefined =
         every > 0
             ? new WaterBandsLead(bands - 1, undefined, undefined, undefined, () => {
-                  if (passes++ % every === 0) patient?.waitForAClaim(5000);
+                  if (!alone && passes++ % every === 0) alone = patient?.waitForAClaim(5000) === false;
               })
             : undefined;
     group = new GroundBands(
