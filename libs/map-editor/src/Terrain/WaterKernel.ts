@@ -16,6 +16,19 @@ export const DRY_PX = 0.01;
 /** A front whose surface drops less than this share of the water that passes is a swell: it does not break. */
 export const BREAKING_CALM = 0.1;
 
+/**
+ * The four passes as a compiled kernel runs them (WaterKernelWasm): the same figures, to the bit, on arrays that
+ * live in its memory.
+ */
+export interface CompiledPasses {
+    fluxPass(move: InertiaMove, rowFrom: number, rowTo: number): void;
+    affordPass(move: InertiaMove, rowFrom: number, rowTo: number): void;
+    scalePass(move: InertiaMove, rowFrom: number, rowTo: number): boolean;
+    depthsPass(move: InertiaMove, rowFrom: number, rowTo: number, rowLost: Float64Array): boolean;
+    /** The memory the threads that follow the passes of this grid join; undefined when it is not shared. */
+    threadMemory(): WebAssembly.Memory | undefined;
+}
+
 /** What the passes of a move read and write: the arrays of the grid, and the figures of the step. */
 export interface InertiaMove {
     width: number;
@@ -51,6 +64,8 @@ export interface InertiaMove {
     damping: WaveSettings["damping"];
     breaking: number;
     carried: number;
+    /** The compiled kernel that runs the passes of this grid, when it has one (its arrays live in its memory). */
+    compiled: CompiledPasses | undefined;
 }
 
 /** The flows pick up and slow down, over the rows from `rowFrom` to `rowTo` (left out). */

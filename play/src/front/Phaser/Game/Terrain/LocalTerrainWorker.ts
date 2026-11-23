@@ -1,3 +1,4 @@
+import { setWaterKernel, waterKernelInUse } from "@workadventure/map-editor";
 import { LocalTerrainSimulation } from "./LocalTerrainSimulation";
 import type { LocalTerrainCommand, LocalTerrainTold } from "./LocalTerrainSimulation";
 
@@ -21,6 +22,16 @@ workerScope.onmessage = (event: MessageEvent<LocalTerrainCommand>): void => {
     const command = event.data;
     if (command.kind === "start") {
         simulation?.stop();
+        // The kernel of the water of this worker: the TypeScript one unless the page asks for the compiled one.
+        setWaterKernel(command.start.kernel ?? "typescript");
+        if (command.start.kernel === "wasm") {
+            const inUse = waterKernelInUse();
+            console.info(
+                inUse.kernel === "wasm"
+                    ? "The local water is computed by the WebAssembly kernel (localStorage waterKernel)"
+                    : `The local water is computed by the TypeScript kernel: the WebAssembly one could not be loaded (${inUse.fallback ?? "unknown"})`,
+            );
+        }
         simulation = new LocalTerrainSimulation(command.start, (told) => workerScope.postMessage(told));
         simulation.start();
         return;
