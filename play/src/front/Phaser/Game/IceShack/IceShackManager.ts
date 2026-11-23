@@ -93,6 +93,13 @@ export class IceShackManager {
     private enterAsked: number | undefined;
     /** The shack the local player was seated in by this browser once it was up (who put it up sits in it). */
     private seatedOnce: number | undefined;
+    /**
+     * The shack the local player sits in now, the server agreeing: the rod came in hand and the help was shown for this
+     * sitting. Forgotten once they got up, so that sitting again (or after being sat there as it went up) gives both
+     * again; it was one with `seatedOnce`, and who put a shack up, or sat again in the same one, sat without a rod:
+     * SPACE then did nothing.
+     */
+    private sittingIn: number | undefined;
     /** The shack the local player was told to leave. */
     private leaveAsked: number | undefined;
     private lightsKey = "";
@@ -351,13 +358,15 @@ export class IceShackManager {
         }
         if (seated && seated.occupantUserId === ownId) {
             this.leaveAsked = undefined;
-            if (this.seatedOnce !== seated.id) {
-                this.seatedOnce = seated.id;
+            // Seated there: not sat again by this browser once they walk off.
+            this.seatedOnce = seated.id;
+            if (this.sittingIn !== seated.id) {
+                this.sittingIn = seated.id;
                 // In the shack the rod is in hand: SPACE lets the line down the hole (FishingManager).
                 if (!get(rodEquippedStore)) toggleHandTool("rod");
                 showFishingCard({ kind: "iceShack", own: true, text: get(LL).actionbar.iceShack.help() });
             }
-        }
+        } else this.sittingIn = undefined;
         for (const shack of this.shacks.values()) {
             if (shack.occupantUserId !== ownId || seated?.id === shack.id) continue;
             if (now - shack.builtAt < ICE_SHACK_READY_MS) continue;
