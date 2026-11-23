@@ -1,10 +1,19 @@
 import * as Phaser from "phaser";
-import { HURRICANE_RMAX_PX, HURRICANE_SPIN_SECONDS, hurricaneAt } from "@workadventure/map-editor";
+import {
+    HURRICANE_HOLLAND_B,
+    HURRICANE_INFLOW_DEGREES,
+    HURRICANE_MOTION_SHARE,
+    HURRICANE_RMAX_PX,
+    HURRICANE_SPIN_SECONDS,
+    hurricaneAt,
+    hurricaneMaxWind,
+} from "@workadventure/map-editor";
 import type { Hurricane } from "@workadventure/map-editor";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import { NOISE_GLSL } from "../ShaderNoise";
 import { cloudSunlight, cloudZoomFade } from "../Weather/Clouds";
 import { screenScale } from "../Weather/ScreenScale";
+import type { SeaHurricane } from "../Terrain/WindSeaShader";
 
 /**
  * How opaque the spiral is over what it covers: whole seen from high above (the spiral reads as on a satellite
@@ -150,4 +159,30 @@ export class HurricaneView {
     public destroy(): void {
         this.shader.destroy();
     }
+}
+
+/**
+ * The hurricane over the wind sea at `serverDate` (seaWindHere, the twin of hurricaneHere): where its eye is, how it
+ * blows, how much of it has taken over the wind of the map. Undefined outside its passage.
+ */
+export function seaHurricaneOf(
+    hurricane: Hurricane | undefined,
+    serverDate: Date | undefined,
+): SeaHurricane | undefined {
+    const storm = serverDate ? hurricaneAt(hurricane, serverDate.getTime()) : undefined;
+    if (!hurricane || !storm || !(storm.share > 0)) return undefined;
+    const heading = (hurricane.heading * Math.PI) / 180;
+    const motionMs = (HURRICANE_MOTION_SHARE * storm.speedKmh) / 3.6;
+    return {
+        eyeX: storm.eyeX,
+        eyeY: storm.eyeY,
+        rmaxPx: HURRICANE_RMAX_PX,
+        spin: hurricane.southern ? -1 : 1,
+        maxMs: hurricaneMaxWind(hurricane.category) / 3.6,
+        hollandB: HURRICANE_HOLLAND_B,
+        motionEast: motionMs * Math.sin(heading),
+        motionSouth: -motionMs * Math.cos(heading),
+        share: storm.share,
+        inflow: (HURRICANE_INFLOW_DEGREES * Math.PI) / 180,
+    };
 }

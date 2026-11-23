@@ -67,7 +67,7 @@ import type { ClosedSide } from "./BreakingFoam";
 import { windHeading } from "./Whitecaps";
 import { SeaFetch } from "./WindSea";
 import { seaDrawing } from "./WindSeaShader";
-import type { SeaDrawing } from "./WindSeaShader";
+import type { SeaDrawing, SeaHurricane } from "./WindSeaShader";
 import { depthsSeen } from "./BuiltGround";
 import { heightsOver, nextDrawnArea, OBLIQUE_REACH_PX } from "./ObliqueView";
 import { classicPoolsShown, imagePoolCells, imagePoolsOf, signatureOf } from "./ImagePools";
@@ -239,6 +239,8 @@ export class TerrainView {
     private foam = new Uint8Array(0);
     /** The sea the wind raises (WindSeaShader), for the wind it was made for, and the fetch of that wind. */
     private sea: SeaDrawing | undefined;
+    /** The hurricane crossing the map, over the wind sea (seaWindHere); none while there is none. */
+    private seaHurricane: (() => SeaHurricane | undefined) | undefined;
     private seaKey = "";
     private readonly seaFetch = new SeaFetch();
     /** The quality of the graphics this player chose: no wind sea in Low, fewer looks back for its foam in Medium. */
@@ -287,6 +289,11 @@ export class TerrainView {
     }
 
     /** Whether this engine can draw the relief in 3/4 (its shaders run, with what the 3/4 needs of the graphics card). */
+    /** Where the hurricane of the room is read for the wind sea, at each image. */
+    public seaHurricaneWith(read: () => SeaHurricane | undefined): void {
+        this.seaHurricane = read;
+    }
+
     public canProject(): boolean {
         return this.splat?.projects() === true;
     }
@@ -434,13 +441,19 @@ export class TerrainView {
             this.breaking.begin(this.water.settled(), this.water.relief(), now, this.closedSides());
         }
         if (shown) this.breaking.advance(FOAM_VISITS_PER_FRAME, now);
-        const wind = shown && this.splat.drawsSea() && this.quality !== GraphicsQuality.Low ? this.wind?.() : undefined;
+        const drawn = shown && this.splat.drawsSea() && this.quality !== GraphicsQuality.Low;
+        // Under a hurricane the waves are drawn for its strongest wind, each point raising them to its own wind.
+        const hurricane = drawn ? this.seaHurricane?.() : undefined;
+        const asked = drawn ? this.wind?.() : undefined;
+        const wind = hurricane && asked ? { speed: hurricane.maxMs * 3.6, from: asked.from } : asked;
         // Made again when the wind changes by a tenth of a km/h or a degree: its waves, and where they go.
         const key = wind?.speed === undefined ? "" : `${Math.round(wind.speed * 10)}:${Math.round(wind.from ?? 0)}`;
         if (key !== this.seaKey) {
             this.seaKey = key;
             this.sea = seaDrawing(wind?.speed, windHeading(wind?.from) ?? { x: 0, y: 1 });
         }
+        // The hurricane over the sea, where it is now (its eye moves at each image).
+        if (this.sea && (hurricane || this.sea.hurricane)) this.sea = { ...this.sea, hurricane };
         // The fetch of that wind over the water: the shader is told it when the water is drawn.
         if (this.sea) {
             this.seaFetch.update(this.water.settled(), version, this.sea.heading, now);

@@ -340,6 +340,7 @@ import { weatherAtTime } from "./Weather/WeatherFrame";
 import {
     mapPlaceSlotsNow,
     setRoomConditions,
+    getRoomHurricane,
     setHurricaneViewpoint,
     setRoomHurricane,
     showsChosenPlaceWeather,
@@ -500,7 +501,7 @@ import { BallView } from "./Catastrophe/BallView";
 import { ColdView } from "./Catastrophe/ColdView";
 import { HurricaneReceiver } from "./Catastrophe/HurricaneReceiver";
 import { HurricaneDebris } from "./Catastrophe/HurricaneDebris";
-import { HurricaneView } from "./Catastrophe/HurricaneView";
+import { HurricaneView, seaHurricaneOf } from "./Catastrophe/HurricaneView";
 import { FireTorchView } from "./Catastrophe/FireTorchView";
 import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
 import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
@@ -3839,6 +3840,17 @@ export class GameScene extends DirtyScene {
         return mapDaylightAt(this.getGameMap().getWamFile()?.getWam().settings, new Date(at));
     }
 
+    /** The wind of the hurricane of the room at a map point now; undefined while none crosses the map. */
+    private hurricaneWindAt(x: number, y: number): { speed: number; from: number } | undefined {
+        const hurricane = getRoomHurricane();
+        const at = hurricane ? this.nightManager?.serverDate()?.getTime() : undefined;
+        if (!hurricane || at === undefined) return undefined;
+        const here = hurricaneHere(hurricane, at, x, y);
+        // Past half of its fade, as the weather shown (withHurricane).
+        if (!here || here.share < 0.5) return undefined;
+        return { speed: here.windSpeed, from: here.windFrom };
+    }
+
     /** The map weather as it is shown now, with its wind. */
     private shownWeather(): ReturnType<typeof shownWeatherSettings> {
         return shownWeatherSettings(this.getGameMap().getWamFile()?.getWam().settings, this.nightManager?.serverDate());
@@ -4633,6 +4645,10 @@ export class GameScene extends DirtyScene {
                         isFlatAt: (x, y) => this.seenRelief?.isFlatAt(x, y) ?? false,
                     },
                 );
+                // Under a hurricane, the wind sea takes its wind at each point (seaWindHere).
+                this.terrainView.seaHurricaneWith(() =>
+                    seaHurricaneOf(getRoomHurricane(), this.nightManager?.serverDate()),
+                );
                 // What is built stays flat where the relief is seen in 3/4: paved, indoors, a pool.
                 this.seenRelief = new SeenRelief({
                     terrain: () => this.terrainWater.relief(),
@@ -4806,6 +4822,8 @@ export class GameScene extends DirtyScene {
                     trees: () => this.swayingTrees(),
                     windSpeed: () => this.shownWeather()?.windSpeed,
                     windFrom: () => this.shownWeather()?.windFrom,
+                    // Under a hurricane each tree sways in its own wind: still in the eye.
+                    windAt: (x, y) => this.hurricaneWindAt(x, y),
                     poseTexture: (key, pose) => treePoses.key(key, pose),
                     enabled: () =>
                         !get(mapEditorModeStore) && get(weatherEffectsEnabledStore) && isEffectShown("treeSway"),
