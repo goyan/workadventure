@@ -3374,6 +3374,15 @@ qu'elle ne pouvait couler, et le modèle était faussé (crues trop hautes, flot
   inchangées (k = 1 au temps réel).
 - Le rattrapage d'une salle vide garde la vitesse de la carte en un bloc sans inertie, comme avant.
 
+
+**Partage du fil** (après #497, `WaterLoads`) : à côté d'autres eaux sur son fil, une salle accélérée compte son pas
+réel entier dans la somme du fil. Elle n'accélère que dans ce que les autres lui laissent sous le seuil de retour de
+la finesse, soit la moitié du seuil d'allègement (25 ms sur le fil des salles) : `WaterLoad.quietMs() - othersMs()`.
+Si les autres tiennent déjà le fil, elle reste au temps réel, et elle ne fait jamais alléger les autres. Seule sur
+son fil (une salle seule, le worker du navigateur), elle garde son budget, et sa finesse suit un pas de temps de
+carte comme avant. Preuve : `libs/map-editor/tests/WaterPaceThread.test.ts`. Une salle à 20 ms par pas ne laisse
+que deux pas de 2 ms à la salle accélérée, et une salle à 40 ms ne lui en laisse aucun ; la première n'est jamais
+allégée.
 ## Eau rapide, pour soi seul (« Réglages → Ambiance »)
 
 Un interrupteur personnel, mémorisé dans le navigateur comme Basique (`fastWaterStore`, clé `fastWater`) : l'eau du
