@@ -155,7 +155,7 @@ const SPUME_PATCH_PX = 90;
 const SPRAY_MOST = 0.3;
 const SPRAY_WHOLE_MS = 55;
 /** The drifts of spray: across and along the wind (map px), and how fast they race downwind (map px a second). */
-const SPRAY_ACROSS_PX = 40;
+const SPRAY_ACROSS_PX = 140;
 const SPRAY_ALONG_PX = 260;
 const SPRAY_RUN_PX_S = 420;
 /**
@@ -631,7 +631,7 @@ float seaSpray(vec2 world) {
         drift = seaNoise(vec2(dot(world, vec2(-heading.y, heading.x)) / ${glsl(SPRAY_ACROSS_PX)},
             (dot(world, heading) - run) / ${glsl(SPRAY_ALONG_PX)}) + 7.0);
     }
-    return amount * mix(0.35, 1.0, smoothstep(0.3, 0.75, drift));
+    return amount * mix(0.55, 1.0, smoothstep(0.3, 0.75, drift));
 }
 `;
 
