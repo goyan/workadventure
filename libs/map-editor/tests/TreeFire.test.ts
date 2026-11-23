@@ -499,6 +499,50 @@ describe("a tree the wind lays down", () => {
         expect(fire.damaged()).toEqual([]);
     });
 
+    it("lies while a hurricane crosses the room, however long, and only once it is over waits, then grows back", () => {
+        const fire = two();
+        run(fire, 4, { ...blowing(300, 180), stormy: true });
+        const laid = fire.stateOf("west");
+        expect(laid).toMatchObject({ damage: 1, fallenFrom: 180, wait: 150 });
+        // Four minutes more of the hurricane: nothing moves, not even its wait.
+        run(fire, 240, { ...calm, stormy: true });
+        expect(fire.stateOf("west")).toEqual(laid);
+        expect(fire.damaged()).toContainEqual({ id: "west", fire: 0, damage: 16, fallen: 181 });
+        // It is over: the same times as a tree laid down by a wind that then fell, from now.
+        run(fire, 148);
+        expect(fire.stateOf("west").damage).toBe(1);
+        run(fire, 4);
+        expect(fire.stateOf("west").damage).toBeLessThan(1);
+        run(fire, 150);
+        expect(fire.stateOf("west")).toMatchObject({ damage: 0, fallenFrom: undefined });
+    });
+
+    it("holds back under a hurricane a tree already growing back, not a charred one", () => {
+        const { meadow, burnAround } = ground();
+        const fire = new TreeFire([tree("down", 2, 5), tree("charred", 20, 5)], meadow);
+        burnAround(20, 5);
+        // The wind lays one down, the fire takes the other.
+        run(
+            fire,
+            8,
+            blowing(300, 90, (x) => x < 10 * TILE_PX),
+        );
+        burnAround(20, 5, false);
+        // A third of its growing back done, the other one burnt out and black.
+        run(fire, 200);
+        const growing = fire.stateOf("down");
+        expect(growing.damage).toBeGreaterThan(0);
+        expect(growing.damage).toBeLessThan(1);
+        const charred = fire.stateOf("charred");
+        expect(charred.fire).toBe(0);
+        expect(charred.damage).toBeGreaterThan(0);
+        run(fire, 60, { ...calm, stormy: true });
+        expect(fire.stateOf("down")).toEqual(growing);
+        expect(fire.stateOf("charred").damage + fire.stateOf("charred").wait).toBeLessThan(
+            charred.damage + charred.wait,
+        );
+    });
+
     it("does not burn while it lies, and a tree on fire is not laid down", () => {
         const { meadow, burnAround } = ground();
         const fire = new TreeFire([tree("down", 2, 5), tree("burning", 8, 5)], meadow);
