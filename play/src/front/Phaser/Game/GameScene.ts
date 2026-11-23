@@ -418,7 +418,7 @@ import { WeatherManager } from "./Weather/WeatherManager";
 import { TerrainWater } from "./Terrain/TerrainWater";
 import { AquaticLife } from "./Life/AquaticLife";
 import { AquaticLifeView } from "./Life/AquaticLifeView";
-import { iceUnderfoot, isOnFrozenWater, isPoolFrozen, poolIceState } from "./Ice/FrozenWater";
+import { iceUnderfoot, isOnFrozenWater, isPoolFrozen, poolIceState, poolStyleUnder } from "./Ice/FrozenWater";
 import { cellProbeNow } from "./Weather/CellProbeNow";
 import { IceBreaks } from "./Ice/IceBreaks";
 import { FrozenPoolsView } from "./Ice/FrozenPoolsView";
@@ -3589,9 +3589,16 @@ export class GameScene extends DirtyScene {
                     outdoorAt: (x, y) => this.getOutdoorGrid()?.isOutdoorAt(x, y) !== false,
                     iceUnderfoot: (at) => iceUnderfoot(this, at),
                     sunElevation: this.nightManager?.sunPosition()?.elevation,
+                    poolAt: (at) => {
+                        const pool = poolStyleUnder(wam, at);
+                        return pool ? { hot: pool.hot === true } : undefined;
+                    },
+                    floorsOver: (seen) => this.floorSpike?.floorsOver(seen.x, seen.y) ?? [],
+                    shadedAt: (at) => this.skyShadowManager?.shadedAt(at.x, at.y),
                 },
                 point,
                 date,
+                pointed,
             ),
         );
     }

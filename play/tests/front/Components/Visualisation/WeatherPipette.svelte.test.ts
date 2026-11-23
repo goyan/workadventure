@@ -61,11 +61,12 @@ describe("WeatherPipette", () => {
         expect(find("weather-pipette-ice")).toBeNull();
     });
 
-    it("says the cell in the order one asks: the ground, the water, the ice, the snow, the frost, the grass, the sun", () => {
+    it("says the cell in the order one asks: the ground, the water, the ice, the snow, the frost, the sun", () => {
         render(explainCell(ICE));
         const shown = [...target.querySelectorAll("article")].map((section) => section.getAttribute("data-testid"));
         expect(shown).toEqual(
-            ["relief", "water", "ice", "snow", "frost", "meadow", "sun"].map((id) => `weather-pipette-${id}`),
+            // Under water there is no grass to tell: no meadow.
+            ["relief", "water", "ice", "snow", "frost", "sun"].map((id) => `weather-pipette-${id}`),
         );
         expect(text("weather-pipette-ground")).toContain("Sol du serveur : le même pour tous ceux qui le suivent.");
         expect(text("weather-pipette-ice")).toContain("Glace de 10 cm d'épaisseur.");

@@ -44,7 +44,7 @@ export function iceUnderfoot(scene: IceScene, point: { x: number; y: number }): 
 }
 
 /** The style of the pool painted under a point, undefined out of any pool. */
-function poolStyleUnder(
+export function poolStyleUnder(
     wam: { terrain?: TerrainData; settings?: { pools?: readonly PoolStyle[] } } | undefined,
     point: { x: number; y: number },
 ): PoolStyle | undefined {
