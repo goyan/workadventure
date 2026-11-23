@@ -533,8 +533,11 @@ float seaBreaking(vec2 world) {
     float breaking = smoothstep(slope * ${glsl(1 - BREAKING_EDGE)}, slope * ${glsl(1 + BREAKING_EDGE)}, length(gSeaSlope))
         * (gSeaEta >= 0.0 ? 1.0 : 0.0) * front;
     if (breaking <= 0.0) return 0.0;
-    // Along part of the crest only (crestAt); under a hurricane, in the frame of its flow.
+    // Along part of the crest only (crestAt); under a hurricane, in the frame of its flow, and only where the waves
+    // drawn (one direction for the whole view) go the way the wind blows here: elsewhere their crests would stand
+    // across the wind, and the streaks of the wind here take their place.
     if (uHurEye.w != 0.0) {
+        breaking *= smoothstep(0.8, 0.97, dot(uSeaDir.xy, gSeaWind.xy));
         return breaking * smoothstep(uSeaGroup.w, uSeaGroup.w + 0.2,
             seaFlowNoise(${glsl(CREST_ALONG_PX)}, ${glsl(CREST_DOWN_PX)}, vec2(71.0, 13.0)));
     }
