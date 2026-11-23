@@ -10,7 +10,8 @@ const SAPLING_SHARE = 0.15;
 /** A tree lying is drawn in one of these many ways round its foot. */
 const LYING_WAYS = 16;
 /** The earth of the plate of roots, its edge, the roots in it, the grass on its top, and the hole it left. */
-const EARTH = "#7a5a3a";
+const EARTH = "#5e4128";
+const EARTH_TOP = "#94744c";
 const EARTH_EDGE = "#3b2a1a";
 const ROOTS = "#3b2a1a";
 const GRASS = "#55702c";
@@ -284,27 +285,56 @@ function drawTrunk(context: CanvasRenderingContext2D, tree: ReadTree, layout: Ly
     context.restore();
 }
 
-/** The plate of roots and earth standing up at the foot: grass torn up on its top, roots hanging from it. */
+/** The outline of the plate of roots: an oval made uneven, the same for the same plate. */
+function platePath(context: CanvasRenderingContext2D, layout: LyingLayout, shrink: number): void {
+    const { plate } = layout;
+    context.beginPath();
+    for (let corner = 0; corner < 11; corner++) {
+        const angle = (corner / 11) * 2 * Math.PI;
+        const bump = (0.78 + 0.32 * tuftLuck(corner + 7)) * shrink;
+        const x = plate.x + Math.cos(angle) * plate.width * bump;
+        const y = plate.y + Math.sin(angle) * plate.height * bump;
+        if (corner === 0) context.moveTo(x, y);
+        else context.lineTo(x, y);
+    }
+    context.closePath();
+}
+
+/**
+ * The plate of roots and earth standing up at the foot: uneven, its earth darker below, lighter on top where the grass
+ * was torn up with it, roots sticking out of it.
+ */
 function drawPlate(context: CanvasRenderingContext2D, layout: LyingLayout): void {
     const { plate } = layout;
     context.lineWidth = 1;
     context.strokeStyle = ROOTS;
     context.beginPath();
-    for (let root = 0; root < 5; root++) {
-        const x = plate.x + (root / 4 - 0.5) * plate.width * 1.4;
-        const bottom = plate.y + plate.height * (0.75 - Math.abs(root / 4 - 0.5) * 0.6);
-        context.moveTo(x, bottom);
-        context.lineTo(x + (root % 2 ? 1 : -1), bottom + 2 + (root % 3));
+    for (let root = 0; root < 6; root++) {
+        const angle = Math.PI * (0.05 + 0.9 * (root / 5)) + (root % 2 ? 0.2 : -0.2);
+        const reach = 1.15 + 0.35 * tuftLuck(root + 3);
+        context.moveTo(plate.x + Math.cos(angle) * plate.width * 0.6, plate.y + Math.sin(angle) * plate.height * 0.6);
+        context.lineTo(
+            plate.x + Math.cos(angle) * plate.width * reach,
+            plate.y + Math.sin(angle) * plate.height * reach,
+        );
     }
     context.stroke();
-    context.beginPath();
-    context.ellipse(plate.x, plate.y, plate.width, plate.height, 0, 0, 2 * Math.PI);
+    platePath(context, layout, 1);
     context.fillStyle = EARTH;
     context.fill();
     context.strokeStyle = EARTH_EDGE;
     context.stroke();
+    // The top of the plate, lighter: the earth just under the grass.
+    context.save();
+    platePath(context, layout, 1);
+    context.clip();
     context.beginPath();
-    context.ellipse(plate.x, plate.y, plate.width, plate.height, 0, Math.PI * 1.1, Math.PI * 1.9);
+    context.ellipse(plate.x, plate.y - plate.height * 0.55, plate.width * 1.1, plate.height * 0.6, 0, 0, 2 * Math.PI);
+    context.fillStyle = EARTH_TOP;
+    context.fill();
+    context.restore();
+    context.beginPath();
+    context.ellipse(plate.x, plate.y, plate.width * 0.95, plate.height * 0.95, 0, Math.PI * 1.15, Math.PI * 1.85);
     context.lineWidth = 2;
     context.strokeStyle = GRASS;
     context.stroke();

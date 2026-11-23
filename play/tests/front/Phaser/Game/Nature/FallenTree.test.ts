@@ -102,6 +102,11 @@ describe("a tree the wind laid down, as the browser draws it", () => {
         expect(Math.max(...far.map((point) => point.x)) - Math.min(...far.map((point) => point.x))).toBeLessThan(10);
         const north = lyingLayout(body, 0);
         expect(north.centre.y).toBeLessThan(0);
+        // Up the screen, a bit of trunk shows past the plate of roots standing in front of it, before the crown.
+        const crownStart = Math.max(...north.outline.map((point) => point.y));
+        expect(north.plate.y - north.plate.height - crownStart).toBeGreaterThanOrEqual(8);
+        // The plate: about twice and a half as wide as the trunk.
+        expect(2 * north.plate.width).toBeCloseTo(8 * 2.3, 0);
         expect(north.crownFirst).toBe(true);
         const east = lyingLayout(body, 90);
         // Across the screen, a half tree: only the half of its crown above the trunk, the other pressed into the ground.

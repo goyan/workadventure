@@ -15,10 +15,11 @@ const CROWN_THICKNESS = 0.08;
  * not snapped: the gusts that lay a tree down (TREE_FALL_GUST_KMH, 130 km/h) uproot it in the Enhanced Fujita scale
  * (117 to 151 km/h), its trunk snapping only at 167 to 172 km/h (Texas Tech, 2006, appendix A, DI 27 and 28).
  */
-const ROOT_PLATE = 0.13;
-const ROOT_PLATE_TRUNKS = 1.3;
+const ROOT_PLATE_TRUNKS = 1.15;
 /** The trunk goes on under its crown this far (pixels): no gap between them. */
 const TRUNK_UNDER_CROWN = 6;
+/** At least this much of the trunk shows (screen pixels) between the plate of roots and the crown. */
+const TRUNK_SHOWN_PX = 9;
 /** Rows of the root flare skipped above the foot when looking for where the crown starts. */
 const ROOT_FLARE_ROWS = 4;
 
@@ -180,13 +181,27 @@ export function lyingLayout(body: TreeBody, toward: number): LyingLayout {
     // turned to the sky spans the whole width (seen from above), only flattened.
     const sky = across.y <= 0 ? 1 : -1;
     const near = 1 - Math.abs(way.x);
-    const height = Math.max(1, body.footY - body.crownTop);
+    const crownWidth = Math.max(1, body.crownRight - body.crownLeft + 1);
+    const thickness = Math.max(2, crownWidth * CROWN_THICKNESS);
+    const plateSize = body.trunkWidth * ROOT_PLATE_TRUNKS;
+    // Seen face on when the tree lies up or down the screen, edge on when it lies across it.
+    const facing = Math.abs(way.y);
+    const plateWidth = plateSize * (0.4 + 0.6 * facing);
+    const plateHeight = plateSize * (0.8 + 0.2 * facing);
+    // A bit of the trunk always shows between the plate (in front of it, a tree lying up the screen) or the raised
+    // side of the crown (a tree lying down the screen) and the crown: the crown lies that much farther if need be.
+    const speed = Math.max(1e-6, Math.hypot(along.x, along.y));
+    const covered =
+        TRUNK_SHOWN_PX + (way.y < 0 ? 2 * plateHeight * -way.y : thickness * way.y) + plateWidth * Math.abs(way.x);
+    const bare = Math.max(0, body.footY - body.crownBottom);
+    const farther = Math.max(0, covered / speed - bare);
+    const height = Math.max(1, body.footY - body.crownTop) + farther;
     const left: Point[] = [];
     const right: Point[] = [];
     let middle = { x: 0, y: 0, count: 0 };
     body.crownRows.forEach((row, index) => {
         if (!row) return;
-        const length = body.footY - (body.crownTop + index) - 0.5;
+        const length = body.footY - (body.crownTop + index) - 0.5 + farther;
         const centre = (row.left + row.right + 1) / 2 - body.footX;
         const half = ((row.right - row.left + 1) / 2) * CROWN_SPREAD;
         left.push(at(length, centre + sky * half));
@@ -194,25 +209,20 @@ export function lyingLayout(body: TreeBody, toward: number): LyingLayout {
         const point = at(length, centre);
         middle = { x: middle.x + point.x, y: middle.y + point.y, count: middle.count + 1 };
     });
-    const crownWidth = Math.max(1, body.crownRight - body.crownLeft + 1);
-    const plateSize = Math.max(body.trunkWidth * ROOT_PLATE_TRUNKS, crownWidth * ROOT_PLATE);
-    // Seen face on when the tree lies up or down the screen, edge on when it lies across it.
-    const facing = Math.abs(way.y);
-    const plateWidth = plateSize * (0.35 + 0.65 * facing);
-    const plateHeight = plateSize * (0.75 + 0.25 * facing);
     return {
         tip: at(height, 0),
-        trunkEnd: at(Math.max(0, body.footY - body.crownBottom) + TRUNK_UNDER_CROWN, 0),
+        trunkEnd: at(bare + farther + TRUNK_UNDER_CROWN, 0),
         trunkWidth: body.trunkWidth,
         outline: [...left, ...right.reverse()],
         centre: middle.count ? { x: middle.x / middle.count, y: middle.y / middle.count } : at(height / 2, 0),
-        thickness: Math.max(2, crownWidth * CROWN_THICKNESS),
+        thickness,
         plate: { x: -along.x * 2, y: -plateHeight * 0.5 - along.y * 2, width: plateWidth, height: plateHeight },
+        // The hole on the side away from the tree, a little aside: it shows next to the plate.
         pit: {
-            x: -along.x * plateSize * 0.5,
-            y: -along.y * plateSize * 0.5,
-            width: plateSize * 0.9,
-            height: plateSize * 0.45,
+            x: -along.x * plateSize * 1.2 + across.x * plateSize * 0.5,
+            y: -along.y * plateSize * 1.2 + across.y * plateSize * 0.5,
+            width: plateSize * 1.1,
+            height: plateSize * 0.5,
         },
         crownFirst: way.y < -1e-6,
     };
