@@ -600,25 +600,39 @@ vec3 snowOnIce(vec3 ice, vec2 world) {
     return mix(ice, vec3(0.95, 0.97, 1.0) * (0.94 + 0.06 * hash(floor(world))), covered);
 }
 
+// A chance from 0 to 1 for a cell of the whitecaps, without sin: hash() takes the sine of a dot product, which the
+// GPUs compute well only for small numbers. Past about 30 000 (a few thousand cells, or an hour of the clock of the
+// game times 17), Metal on a Mac returns the same value everywhere, and every cell broke at once: the water was
+// covered with a regular grid of crests. Kept to small numbers by the callers, this one stays even on every GPU.
+float capHash(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
 // The whitecaps of the wind at a point of open water, 0 to 1: short crests lying across the wind, each in a cell of
 // a grid laid along it (14 px across the wind, 7 along). A cell breaks for a second and a half, by chance, as
-// often as the wind asks: a crest fills about a third of its cell, so the share of the cells is three times that
-// of the water. They drift slowly downwind.
+// often as the wind asks: a crest whitens about a tenth of its cell over its life (it rises, then fades; measured
+// on the GPU), so the share of the cells is ten times that of the water. They drift slowly downwind. The clock and the cells go round (every two hours, every 4096 cells),
+// so that the chance of a cell is drawn from small numbers however long the game has run and however far the map
+// goes: the crests only change all at once when the clock goes round.
 float whitecapsAt(vec2 world, float t) {
     float share = uWind.z;
     if (share <= 0.0) return 0.0;
+    float tw = mod(t, 7200.0);
     vec2 along = uWind.xy;
     vec2 across = vec2(-along.y, along.x);
-    vec2 p = vec2(dot(world, across) / 14.0, (dot(world, along) - t * 3.0) / 7.0);
+    vec2 p = vec2(dot(world, across) / 14.0, (dot(world, along) - tw * 3.0) / 7.0);
     // Every other row is shifted: no columns of crests.
     p.x += 0.5 * mod(floor(p.y), 2.0);
-    vec2 cell = floor(p);
-    float phase = t / 1.5 + hash(cell + 3.7);
-    float turn = floor(phase);
+    vec2 cell = mod(floor(p), 4096.0);
+    float phase = tw / 1.5 + capHash(cell + 3.7);
+    float turn = mod(floor(phase), 4096.0);
     float life = fract(phase);
-    float breaks = step(hash(cell + turn * 17.0 + 11.0), min(1.0, share * 3.0));
+    float breaks = step(capHash(cell + vec2(turn * 17.0 + 11.0, turn * 29.0 + 5.0)), min(1.0, share * 10.0));
     if (breaks <= 0.0) return 0.0;
-    vec2 q = fract(p) - 0.5 - (vec2(hash(cell + turn + 1.3), hash(cell + turn + 2.9)) - 0.5) * 0.3;
+    vec2 q =
+        fract(p) - 0.5 - (vec2(capHash(cell + turn + 1.3), capHash(cell + turn + 2.9)) - 0.5) * 0.3;
     // A crest: long across the wind, thin along it, its edge torn by a fine noise.
     float shape = 1.0 - smoothstep(0.5, 1.0, length(q * vec2(2.6, 5.0)) + (vnoise(world / 2.0) - 0.5) * 0.7);
     return breaks * shape * smoothstep(0.0, 0.15, life) * (1.0 - smoothstep(0.55, 1.0, life));
