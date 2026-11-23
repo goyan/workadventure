@@ -117,9 +117,9 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
     mapClock: {
         freezeThaw: {
             title: "Vitesse du gel et de la fonte",
-            what: "La glace qui prend et dégèle, la neige qui fond : pour toute la carte. L'eau garde sa vitesse.",
-            real: "×1 : comme en vrai, une heure de gel ou de fonte dure une heure.",
-            faster: "×{speed} : une heure de gel ou de fonte dure {duration}.",
+            what: "La glace qui prend et dégèle, la neige qui fond, et le passage d'un ouragan : pour toute la carte. L'eau garde sa vitesse.",
+            real: "×1 : comme en vrai, une heure de gel ou de fonte dure une heure ; l'ouragan traverse la carte dans le temps choisi.",
+            faster: "×{speed} : une heure de gel ou de fonte dure {duration} ; l'ouragan va {hurricane} fois plus vite (jamais moins de 30 s).",
             badge: "Gel ×{speed}",
             badgeHint:
                 "Sur cette carte, le gel et la fonte vont {speed} fois plus vite que dans la réalité (l'eau, non).",

@@ -13,6 +13,8 @@ import {
     hurricaneHere,
     hurricaneMaxWind,
     hurricaneMeanRain,
+    hurricaneSpedUp,
+    hurricaneTimesOf,
     hurricaneTrack,
     saffirSimpsonRange,
     skyRainUnder,
@@ -269,5 +271,52 @@ describe("a fire under a hurricane", () => {
             ),
         ).toBe(0);
         expect(mostBurning(true)).toBeLessThan(0.8 * mostBurning(false));
+    });
+});
+
+describe("the speed of the map", () => {
+    it("speeds the hurricane up by its own steps: ×1, ×5 at ×60, ×10 at ×600", () => {
+        expect(hurricaneTimesOf(undefined)).toBe(1);
+        expect(hurricaneTimesOf(1)).toBe(1);
+        expect(hurricaneTimesOf(60)).toBeCloseTo(5, 9);
+        expect(hurricaneTimesOf(600)).toBeCloseTo(10, 9);
+        expect(hurricaneTimesOf(6000)).toBe(10);
+    });
+
+    it("shortens the crossing, never under 30 s, its eye where it was when the step changes", () => {
+        const storm = hurricane();
+        const now = START + 100_000;
+        const faster = hurricaneSpedUp(storm, 5, now);
+        expect(faster.durationMs).toBe(60_000);
+        expect(faster.times).toBe(5);
+        const before = hurricaneAt(storm, now);
+        const after = hurricaneAt(faster, now);
+        expect(after?.eyeX).toBeCloseTo(before?.eyeX ?? NaN, 6);
+        expect(after?.eyeY).toBeCloseTo(before?.eyeY ?? NaN, 6);
+        // Five times faster from there.
+        expect(hurricaneAt(faster, now + 1000)!.eyeY - after!.eyeY).toBeCloseTo(
+            5 * (hurricaneAt(storm, now + 1000)!.eyeY - before!.eyeY),
+            6,
+        );
+        expect(hurricaneSpedUp(storm, 10, now).durationMs).toBe(30_000);
+        expect(hurricaneSpedUp(storm, 600, now).durationMs).toBe(30_000);
+        // Back to the speed asked, and the same hurricane when nothing changes.
+        expect(hurricaneSpedUp(faster, 1, now + 1000).durationMs).toBe(300_000);
+        expect(hurricaneSpedUp(storm, 1, now)).toBe(storm);
+        // A crossing asked shorter than 30 s is not lengthened.
+        const short = hurricane({ durationMs: 20_000 });
+        expect(hurricaneSpedUp(short, 10, START).durationMs).toBe(20_000);
+    });
+
+    it("rains as much over a passage sped up: harder for a shorter time", () => {
+        const total = (storm: Hurricane): number => {
+            let mm = 0;
+            for (let t = storm.startedAt; t < storm.startedAt + storm.durationMs; t += 100) {
+                mm += (skyRainUnder(0, storm, t) * 100) / 3_600_000;
+            }
+            return mm;
+        };
+        const storm = hurricane();
+        expect(total(hurricaneSpedUp(storm, 5, START))).toBeCloseTo(total(storm), 3);
     });
 });

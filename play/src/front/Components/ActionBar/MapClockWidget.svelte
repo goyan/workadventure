@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { hurricaneTimesOf } from "@workadventure/map-editor";
     import { onMount } from "svelte";
     import { LL } from "../../../i18n/i18n-svelte";
     import { mapEditorActivated } from "../../Stores/MenuStore";
@@ -37,7 +38,8 @@
             "seconds" in lasting
                 ? $LL.actionbar.mapClock.seconds({ count: lasting.seconds })
                 : $LL.actionbar.mapClock.minutes({ count: lasting.minutes });
-        return labels.faster({ speed: at, duration });
+        // The hurricane has steps of its own on the same widget (hurricaneTimesOf: ×5 at ×60, ×10 at ×600).
+        return labels.faster({ speed: at, duration, hurricane: Math.round(hurricaneTimesOf(at) * 10) / 10 });
     }
 
     function choose(at: number): void {

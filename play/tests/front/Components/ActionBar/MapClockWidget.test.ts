@@ -75,8 +75,13 @@ describe("the clocks of the map in the action bar", () => {
         expect(byTestId("map-clock-freezeThaw-1")?.textContent?.trim()).toBe(">");
         expect(byTestId("map-clock-freezeThaw-60")?.getAttribute("aria-pressed")).toBe("true");
         expect(byTestId("map-clock-freezeThaw-600")?.textContent?.trim()).toBe(">>>");
-        expect(byTestId("map-clock-freezeThaw-60")?.title).toBe("×60 : une heure de gel ou de fonte dure 1 min.");
-        expect(byTestId("map-clock-freezeThaw-600")?.title).toBe("×600 : une heure de gel ou de fonte dure 6 s.");
+        // The same steps speed the hurricane up by its own (hurricaneTimesOf): ×5, then ×10.
+        expect(byTestId("map-clock-freezeThaw-60")?.title).toBe(
+            "×60 : une heure de gel ou de fonte dure 1 min ; l'ouragan va 5 fois plus vite (jamais moins de 30 s).",
+        );
+        expect(byTestId("map-clock-freezeThaw-600")?.title).toBe(
+            "×600 : une heure de gel ou de fonte dure 6 s ; l'ouragan va 10 fois plus vite (jamais moins de 30 s).",
+        );
         expect(byTestId("map-clock-freezeThaw")?.title).toContain("L'eau garde sa vitesse");
     });
 

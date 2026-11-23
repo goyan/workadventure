@@ -20,6 +20,7 @@ import {
     fireTiles,
     HURRICANE_TELL_MS,
     hurricaneCrossing,
+    hurricaneSpedUp,
     hurricaneTrack,
     METEOR_FALL_MS,
     meteorShape,
@@ -103,6 +104,8 @@ export class CatastropheManager {
     private stormTimer: ReturnType<typeof setInterval> | undefined;
     /** Whether the map lies in the southern hemisphere (its hurricanes turn clockwise): given by the room. */
     private southern: () => boolean = () => false;
+    /** How many times faster the hurricane goes (the speed of the map, hurricaneTimesOf): given by the room. */
+    private hurricaneTimes: () => number = () => 1;
 
     constructor(
         private readonly room: Pick<GameRoom, "sendSubMessageToRoom">,
@@ -487,6 +490,11 @@ export class CatastropheManager {
         return true;
     }
 
+    /** The speed of the map is read from its settings, made with the room: it is given here. */
+    public hurricaneTimesWith(times: () => number): void {
+        this.hurricaneTimes = times;
+    }
+
     /** Where the map lies is read from its settings, made with the room: it is given here. */
     public southernWith(southern: () => boolean): void {
         this.southern = southern;
@@ -516,10 +524,12 @@ export class CatastropheManager {
             ...track,
             ...hurricaneCrossing(size.width, size.height, x, y, track.heading),
         };
+        this.speedUp();
         this.tellHurricane();
         if (!this.stormTimer) {
             this.stormTimer = setInterval(() => {
                 try {
+                    this.speedUp();
                     this.tellHurricane();
                 } catch (error) {
                     console.error("The hurricane of the room could not be told", error);
@@ -547,6 +557,18 @@ export class CatastropheManager {
         return storm;
     }
 
+    /** The hurricane at the speed the map asks now: its eye goes on from where it is (hurricaneSpedUp). */
+    private speedUp(): void {
+        if (!this.storm) return;
+        let times = 1;
+        try {
+            times = this.hurricaneTimes();
+        } catch (error) {
+            console.error("The speed of the map could not be read", error);
+        }
+        this.storm = hurricaneSpedUp(this.storm, times, this.now());
+    }
+
     private endHurricane(): void {
         this.storm = undefined;
         if (this.stormTimer) clearInterval(this.stormTimer);
@@ -570,7 +592,7 @@ export class CatastropheManager {
                     wholeMap: true,
                     hurricane: {
                         category: storm.category,
-                        minutes: storm.durationMs / 60_000,
+                        minutes: Math.round((storm.durationMs * (storm.times ?? 1)) / 60_000),
                         heading: storm.heading,
                         southern: storm.southern,
                         startedAt: storm.startedAt,
@@ -580,6 +602,8 @@ export class CatastropheManager {
                         toY: storm.toY,
                         anchorX: storm.anchorX,
                         anchorY: storm.anchorY,
+                        durationMs: storm.durationMs,
+                        times: storm.times ?? 1,
                     },
                 },
             },
