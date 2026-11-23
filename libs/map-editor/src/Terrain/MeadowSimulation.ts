@@ -373,6 +373,14 @@ export class MeadowSimulation {
         this.coldHeld = held;
     }
 
+    /**
+     * The cold air lying on the map is dispelled (a player stops the cold snap): the masses let go are the air of the
+     * map at once. What they froze stays, and thaws by the air of the map as any ice does.
+     */
+    public calm(): void {
+        this.coldMasses.clear();
+    }
+
     /** The masses of cold air lying on the map now, those let go that are still warming included. */
     public colds(): ColdMass[] {
         return [...this.coldMasses.values()].map((mass) => ({ ...mass }));
@@ -380,10 +388,16 @@ export class MeadowSimulation {
 
     /**
      * The masses of cold air of a step of `seconds`: those the players hold, at the temperature they ask; those let
-     * go, warmed towards the air of the map by the time of the map that went by (`times` faster than the clock),
+     * go, warmed towards the air of the map by the time of the map that went by (`times` faster than the clock: the
+     * clock of the ice and the snow, snowInput), sooner in the wind,
      * and forgotten once they are that air, or when that air is not known. Undefined when there is none.
      */
-    private coldNow(seconds: number, times: number, mapCelsius: number | undefined): ColdMass[] | undefined {
+    private coldNow(
+        seconds: number,
+        times: number,
+        mapCelsius: number | undefined,
+        windSpeed: number | undefined,
+    ): ColdMass[] | undefined {
         const held = this.coldHeld();
         if (held.length === 0 && this.coldMasses.size === 0) return undefined;
         const kept = new Set<number>();
@@ -393,7 +407,7 @@ export class MeadowSimulation {
         }
         for (const [id, mass] of this.coldMasses) {
             if (kept.has(id)) continue;
-            const warmed = warmedCold(mass.temperature, mapCelsius ?? Number.NaN, (seconds * times) / 60);
+            const warmed = warmedCold(mass.temperature, mapCelsius ?? Number.NaN, (seconds * times) / 60, windSpeed);
             if (!(warmed < (mapCelsius ?? Number.NaN))) this.coldMasses.delete(id);
             else mass.temperature = warmed;
         }
@@ -627,7 +641,9 @@ export class MeadowSimulation {
         const snow = this.snowInput(seconds);
         if (snow.snowfallMm) this.snowMoved = true;
         // The cold air the players lay on the map: not while the room lives the time it missed, nobody was there.
-        const cold = replaying ? undefined : this.coldNow(seconds, snow.snowTimes ?? 1, snow.weather?.temperature);
+        const cold = replaying
+            ? undefined
+            : this.coldNow(seconds, snow.snowTimes ?? 1, snow.weather?.temperature, snow.weather?.windSpeed);
         // The trees on fire melt the snow around their foot.
         if (meadow.snowy() || meadow.icy()) {
             for (const tree of this.trees.fires()) {

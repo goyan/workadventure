@@ -444,6 +444,23 @@ describe("CatastropheManager, cold snaps", () => {
         expect(sent).toHaveLength(COLDS_PER_ROOM);
     });
 
+    it("stops the cold snap of the room when a player asks: nobody holds any, the ground is told, and so is the room", () => {
+        const { manager, sent } = harness();
+        const calmed = vi.fn();
+        manager.calmWith(calmed);
+        manager.cold(7, 100, 80, 3, -80);
+        manager.cold(8, 300, 80, 3, -80);
+        // Anyone may stop it, as anyone may lay it: the same rights as the other catastrophes.
+        expect(manager.request(9, COLD, 0, 0, 0, false, true)).toBe(true);
+        expect(manager.colds()).toEqual([]);
+        expect(calmed).toHaveBeenCalledTimes(1);
+        expect(sent.at(-1)).toMatchObject({ kind: COLD, impactInMs: 0 });
+        // A player still holding their click lays a new mass at their next message.
+        vi.advanceTimersByTime(200);
+        expect(manager.cold(7, 100, 80, 3, -80)).toBe(true);
+        expect(manager.colds()).toHaveLength(1);
+    });
+
     it("holds no cold air once the room stops", () => {
         const { manager } = harness();
         manager.cold(7, 100, 80, 3, -80);

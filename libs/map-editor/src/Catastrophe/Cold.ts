@@ -20,10 +20,15 @@ export const COLDS_PER_ROOM = 8;
 export const COLD_CORE_SHARE = 0.5;
 /**
  * A mass of cold air nobody holds any more stays where it is and comes back to the air of the map: what parts it
- * from that air is divided by e every this many minutes of the time of the map (the clock of its water, its snow and
- * its ice: fifteen seconds at a minute for an hour).
+ * from that air is divided by e every this many minutes of the time of the map, in a calm (the clock of its ice and
+ * its snow, so that the cold goes as fast as what it froze). A pool of cold air that nothing feeds does not last: it
+ * is heavier than the air around it and pours away along the ground at about the square root of g x its depth x
+ * its share of density in excess (a few metres a second for a pool a couple of metres deep, a hundred degrees
+ * colder), and mixes with the warm air it runs under. Minutes, not hours: an order of magnitude, not a law measured.
  */
-export const COLD_WARMS_MINUTES = 15;
+export const COLD_WARMS_MINUTES = 1;
+/** The wind (km/h) that halves that time: it stirs the cold air into the air of the map. */
+export const COLD_MIXING_WIND_KMH = 10;
 /** Within this of the air of the map (°C) a mass of cold air is that air: it is gone. */
 export const COLD_GONE_DEGREES = 0.5;
 
@@ -110,14 +115,31 @@ export function coldAirOver<A extends ColdAir>(masses: Iterable<ColdMass>, x: nu
     return airBroughtTo(air, coldAirAt(masses, x, y, air.temperature));
 }
 
+/** The time a mass of cold air let go takes to come e times nearer the air of the map, in minutes of the map, in that wind. */
+export function coldWarmsMinutes(windSpeed = 0): number {
+    const wind = Number.isFinite(windSpeed) && windSpeed > 0 ? windSpeed : 0;
+    return COLD_WARMS_MINUTES / (1 + wind / COLD_MIXING_WIND_KMH);
+}
+
 /**
  * The air of a mass nobody holds, `mapMinutes` of the time of the map later, under an air of the map at
- * `mapCelsius`: it mixes with it, what parts them divided by e every COLD_WARMS_MINUTES. The air of the map itself
- * once it is within COLD_GONE_DEGREES of it; not a number under an air that is not known.
+ * `mapCelsius` and a wind of `windSpeed` km/h: it mixes with it, what parts them divided by e every
+ * coldWarmsMinutes. The air of the map itself once it is within COLD_GONE_DEGREES of it; not a number under an air
+ * that is not known.
  */
-export function warmedCold(temperature: number, mapCelsius: number, mapMinutes: number): number {
+export function warmedCold(temperature: number, mapCelsius: number, mapMinutes: number, windSpeed = 0): number {
     if (!Number.isFinite(mapCelsius) || !Number.isFinite(temperature)) return Number.NaN;
     const minutes = Number.isFinite(mapMinutes) && mapMinutes > 0 ? mapMinutes : 0;
-    const warmed = mapCelsius + (temperature - mapCelsius) * Math.exp(-minutes / COLD_WARMS_MINUTES);
+    const warmed = mapCelsius + (temperature - mapCelsius) * Math.exp(-minutes / coldWarmsMinutes(windSpeed));
     return mapCelsius - warmed <= COLD_GONE_DEGREES ? mapCelsius : warmed;
+}
+
+/**
+ * How long a mass of cold air let go still lies on the map before it is the air of the map again, in minutes of
+ * the map: none for one that is no colder than that air, or under an air that is not known.
+ */
+export function coldGoneInMinutes(temperature: number, mapCelsius: number, windSpeed = 0): number {
+    if (!Number.isFinite(mapCelsius) || !Number.isFinite(temperature)) return 0;
+    const apart = mapCelsius - temperature;
+    return apart <= COLD_GONE_DEGREES ? 0 : coldWarmsMinutes(windSpeed) * Math.log(apart / COLD_GONE_DEGREES);
 }

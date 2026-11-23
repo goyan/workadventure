@@ -89,6 +89,8 @@ export class CatastropheManager {
     private burn: (x: number, y: number, radiusTiles: number, id: number) => void = () => undefined;
     /** What breaks the ice under a player: given by the room (the ice the meadow keeps), as for the comets. */
     private breakIce: (x: number, y: number, radiusTiles: number) => void = () => undefined;
+    /** What dispels the cold air lying on the map: given by the room (its ground), as what breaks the ice. */
+    private calmGround: () => void = () => undefined;
     /** When each player last broke the ice: once a second at most. */
     private readonly iceBreaks = new Map<number, number>();
     private readonly inFlight = new Set<ReturnType<typeof setTimeout>>();
@@ -350,6 +352,41 @@ export class CatastropheManager {
         this.burn = burn;
     }
 
+    /** What dispels the cold air of the map is made after the catastrophes of a room (the meadow): it is given here. */
+    public calmWith(calmGround: () => void): void {
+        this.calmGround = calmGround;
+    }
+
+    /**
+     * A player stops the cold snap of the room: nobody holds a mass of cold air any more (one still holding their
+     * click lays a new one at their next message), the masses let go are dispelled, and the room is told. What they
+     * froze stays, and thaws by itself. Anyone may stop it, as anyone may lay it. False once the room stopped.
+     */
+    public calm(): boolean {
+        if (this.stopped) return false;
+        this.chilling.clear();
+        try {
+            this.calmGround();
+        } catch (error) {
+            console.error("The cold air of the map could not be dispelled", error);
+        }
+        this.room.sendSubMessageToRoom({
+            message: {
+                $case: "catastropheMessage",
+                catastropheMessage: {
+                    id: this.nextId++,
+                    kind: CatastropheKind.CATASTROPHE_COLD,
+                    x: 0,
+                    y: 0,
+                    impactInMs: 0,
+                    radiusTiles: 0,
+                    wholeMap: false,
+                },
+            },
+        });
+        return true;
+    }
+
     /** What breaks the ice is made after the catastrophes of a room (the meadow): it is given here. */
     public breakIceWith(breakIce: (x: number, y: number, radiusTiles: number) => void): void {
         this.breakIce = breakIce;
@@ -452,8 +489,11 @@ export class CatastropheManager {
         release = false,
         temperature?: number,
     ): boolean {
-        // Only a ball is let go: the others end by themselves.
-        if (release) return kind === CatastropheKind.CATASTROPHE_BALL && this.release(userId);
+        // A ball is let go, and a cold snap is stopped: the others end by themselves.
+        if (release) {
+            if (kind === CatastropheKind.CATASTROPHE_COLD) return this.calm();
+            return kind === CatastropheKind.CATASTROPHE_BALL && this.release(userId);
+        }
         if (kind === CatastropheKind.CATASTROPHE_DOWNPOUR) return this.rain(userId, x, y, radiusTiles, wholeMap);
         if (kind === CatastropheKind.CATASTROPHE_FIRE) return this.fire(userId, x, y, radiusTiles);
         if (kind === CatastropheKind.CATASTROPHE_DRAIN) return this.drain(userId, x, y, radiusTiles);

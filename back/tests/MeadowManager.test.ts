@@ -1,5 +1,5 @@
 import { gunzipSync } from "node:zlib";
-import { DEFAULT_WATER_SETTINGS, WeatherType } from "@workadventure/map-editor";
+import { DEFAULT_WATER_SETTINGS, warmedCold, WeatherType } from "@workadventure/map-editor";
 import type { PrecipitationAir, SnowWeather, WAMFileFormat } from "@workadventure/map-editor";
 import type { MeadowMessage, SubToPusherRoomMessage } from "@workadventure/messages";
 import { describe, expect, it, vi } from "vitest";
@@ -742,6 +742,26 @@ describe("the snow of the MeadowManager", () => {
         manager.stop();
     });
 
+    it("dispels the cold air of the map when it is asked to: the masses are gone at once, the ice stays and thaws by itself", () => {
+        const water = () => ({ depthAt: () => 16 });
+        const { manager, steps, air } = snowHarness({ water, waterSpeed: 60 });
+        air.now = warm;
+        let held = [{ id: 5, x: 48, y: 48, radiusTiles: 1, temperature: -80 }];
+        manager.coldUnder(() => held);
+        manager.mapChanged();
+        steps(10);
+        const frozen = manager.iceAt(1, 1);
+        held = [];
+        manager.calm();
+        expect(manager.colds()).toEqual([]);
+        steps(1);
+        expect(manager.colds()).toEqual([]);
+        // The ice did not go with the cold air: it thaws at the pace of the air of the map.
+        expect(manager.iceAt(1, 1)).toBeGreaterThan(frozen * 0.9);
+        expect(manager.iceAt(1, 1)).toBeLessThan(frozen);
+        manager.stop();
+    });
+
     it("keeps a mass of cold air where it was let go, warming to the air of the map, and its ice thaws by itself", () => {
         const water = () => ({ depthAt: () => 16 });
         const { manager, steps, air } = snowHarness({ water, waterSpeed: 60 });
@@ -757,13 +777,13 @@ describe("the snow of the MeadowManager", () => {
         steps(1);
         const [first] = manager.colds();
         expect(first).toMatchObject({ id: 5, x: 48, y: 48 });
-        expect(first.temperature).toBeGreaterThan(-80);
-        expect(first.temperature).toBeLessThan(-60);
+        // Two seconds at a minute for an hour: two minutes of the map, two times of warming in a calm.
+        expect(first.temperature).toBeCloseTo(warmedCold(-80, 10, 2), 3);
         expect(manager.iceAt(1, 1)).toBeGreaterThanOrEqual(frozen);
-        steps(5);
+        steps(1);
         expect(manager.colds()[0].temperature).toBeGreaterThan(first.temperature);
-        // Two minutes later it is the air of the map again: forgotten, and the ice thaws at the pace of that air.
-        steps(60);
+        // Ten seconds later it is the air of the map again: forgotten, and the ice thaws at the pace of that air.
+        steps(5);
         expect(manager.colds()).toEqual([]);
         const left = manager.iceAt(1, 1);
         expect(left).toBeGreaterThan(0);

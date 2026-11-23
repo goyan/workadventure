@@ -9,6 +9,8 @@ import {
     COLD_MIN_CELSIUS,
     COLD_MIN_TILES,
     COLD_WARMS_MINUTES,
+    coldGoneInMinutes,
+    coldWarmsMinutes,
     airBroughtTo,
     coldAirAt,
     coldAirOver,
@@ -102,10 +104,24 @@ describe("a mass of cold air", () => {
     });
 
     it("comes back to the air of the map little by little once it is let go", () => {
-        expect(COLD_WARMS_MINUTES).toBe(15);
+        // A pool of cold air with no source mixes away in minutes: what parts it from the air of the map is divided
+        // by e every minute of the map in a calm, faster in the wind.
+        expect(COLD_WARMS_MINUTES).toBe(1);
         expect(warmedCold(-80, 10, 0)).toBe(-80);
-        expect(warmedCold(-80, 10, 15)).toBeCloseTo(10 - 90 / Math.E, 6);
-        expect(warmedCold(-80, 10, 2)).toBeLessThan(warmedCold(-80, 10, 4));
+        expect(warmedCold(-80, 10, 1)).toBeCloseTo(10 - 90 / Math.E, 6);
+        expect(coldWarmsMinutes(0)).toBe(1);
+        expect(coldWarmsMinutes(10)).toBeCloseTo(0.5, 9);
+        expect(coldWarmsMinutes(Number.NaN)).toBe(1);
+        expect(warmedCold(-80, 10, 0.5, 10)).toBeCloseTo(10 - 90 / Math.E, 6);
+        // How long it still has: from -80 °C under 24 °C, about five minutes and a half of the map in a calm.
+        expect(coldGoneInMinutes(-80, 24)).toBeCloseTo(Math.log(104 / 0.5), 6);
+        expect(coldGoneInMinutes(-80, 24)).toBeGreaterThan(5);
+        expect(coldGoneInMinutes(-80, 24)).toBeLessThan(6);
+        expect(coldGoneInMinutes(-80, 24, 10)).toBeCloseTo(Math.log(104 / 0.5) / 2, 6);
+        expect(coldGoneInMinutes(24, 24)).toBe(0);
+        expect(coldGoneInMinutes(-80, Number.NaN)).toBe(0);
+        expect(warmedCold(-80, 24, coldGoneInMinutes(-80, 24) + 0.001)).toBe(24);
+        expect(warmedCold(-80, 10, 0.2)).toBeLessThan(warmedCold(-80, 10, 0.4));
         // Close enough to the air of the map, it is that air.
         expect(COLD_GONE_DEGREES).toBe(0.5);
         expect(warmedCold(-80, 10, 600)).toBe(10);

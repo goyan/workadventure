@@ -933,7 +933,8 @@ message LaunchCatastropheMessage {
   int32 radiusTiles = 4;
   // A downpour: it falls on the whole map instead of a disc.
   bool wholeMap = 5;
-  // A ball: its player lets it go. It is gone at once.
+  // A ball: its player lets it go. It is gone at once. A cold snap: the cold air of the room is dispelled, whoever
+  // laid it; what it froze stays, and thaws.
   bool release = 6;
   // A cold snap: the temperature of its air, in °C. The server keeps it within what a cold snap may be.
   optional double temperature = 7;
@@ -959,7 +960,7 @@ message CatastropheMessage {
   // water, or the ground under it where there is no water. The server alone decides it.
   optional double ballLevel = 12;
   // A cold snap: the temperature of its air, in °C, as the server kept it. `impactInMs` is how long it is still
-  // held when no other message comes; it then warms where it lies.
+  // held when no other message comes; it then warms where it lies. 0: the cold air of the room was dispelled.
   optional double temperature = 13;
 }
 

@@ -5581,10 +5581,23 @@ froid suit l'horloge de la glace et de la neige (`snowTimes`), sans horloge à l
 accélère le coup de froid d'autant.
 
 **Quand on relâche.** La masse n'est plus tenue par personne : `MeadowSimulation` la garde et la réchauffe à chaque
-pas (`warmedCold`) : ce qui la sépare de l'air de la carte est divisé par e toutes les **15 minutes du temps de la
-carte** (15 min réelles à la vitesse 1, 15 s à 60 : l'horloge de la glace et de la neige) ; à moins de 0,5 °C de
-cet air, elle est oubliée. Elle continue donc de geler un moment, puis la glace **fond par la règle de dégel**, pas
-d'un coup : à 10 °C, 60 mm de glace mettent une trentaine d'heures de la carte à partir.
+pas (`warmedCold`) : ce qui la sépare de l'air de la carte est divisé par e **toutes les minutes du temps de la
+carte par temps calme**, deux fois plus vite sous 10 km/h de vent (`coldWarmsMinutes`) ; à moins de 0,5 °C de cet
+air, elle est oubliée. De −80 °C sous un air à 24 °C : 5 min 20 s du temps de la carte par temps calme
+(`coldGoneInMinutes`). Une mare d'air froid que rien n'alimente ne tient pas : plus lourde que l'air autour, elle
+s'écoule au sol à quelques mètres par seconde et se mélange à l'air chaud ; des minutes, pas des heures (un ordre de
+grandeur, pas une loi mesurée ; la première version, 15 minutes, laissait la masse 80 minutes sur la carte). Ce
+temps est celui de l'horloge du gel et de la fonte (`snowTimes` côté serveur, `freezeThawTimesOf` côté navigateur) :
+réel à la vitesse 1, soixante fois plus court à 60, et accéléré d'autant par « Vitesse du gel et de la fonte ». La
+glace, elle, **fond par la règle de dégel**, pas d'un coup : à 10 °C, 60 mm mettent une trentaine d'heures de la
+carte à partir.
+
+**L'arrêter.** Relâcher le clic arrête la source : la masse se dissipe seule en quelques minutes de la carte. Tant
+qu'un air froid est posé sur la carte, le panneau Catastrophes dit sa température et le temps qu'il lui reste
+(« Air froid sur la carte : −37 °C, encore 2 min 5 s », `coldLyingStore`) et offre **« Arrêter le coup de froid »** :
+le serveur dissipe alors tout l'air froid de la salle, de qui qu'il vienne (`LaunchCatastropheMessage.release`,
+`CatastropheManager.calm`, `RoomGround.calm`, `MeadowSimulation.calm`), et l'annonce (`impactInMs` = 0). La glace
+déjà prise reste et fond d'elle-même. Tout joueur peut l'arrêter, comme tout joueur peut le poser.
 
 **Protocole.** `CatastropheKind.CATASTROPHE_COLD = 7` ; `LaunchCatastropheMessage.temperature = 7` et
 `CatastropheMessage.temperature = 13` (facultatifs). `CatastropheManager.cold` borne le rayon (`coldTiles`) et la

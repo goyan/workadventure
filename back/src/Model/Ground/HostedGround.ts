@@ -130,6 +130,9 @@ export class HostedGround {
             case "ignite":
                 this.ground.ignite(command.x, command.y, command.radiusTiles);
                 break;
+            case "calm":
+                this.ground.calm();
+                break;
             case "burn":
                 this.ground.burn(command.x, command.y, command.radiusTiles, command.id);
                 break;

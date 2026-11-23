@@ -145,6 +145,10 @@ export class InlineRoomGround implements RoomGround {
         this.ground.meadow.shatter(x, y, radiusTiles);
     }
 
+    public calm(): void {
+        this.ground.meadow.calm();
+    }
+
     public soak(downpour: Pick<Downpour, "x" | "y" | "radiusTiles" | "wholeMap">): void {
         this.ground.meadow.soak(downpour);
     }

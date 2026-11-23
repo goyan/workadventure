@@ -267,6 +267,7 @@ export async function byHand(
             meadow.scorch(x, y, radiusTiles, id);
         },
         shatter: meadow.shatter.bind(meadow),
+        calm: meadow.calm.bind(meadow),
         soak: meadow.soak.bind(meadow),
         ignite: (x, y, radiusTiles) => {
             meadow.ignite(x, y, radiusTiles);
@@ -319,6 +320,8 @@ export function happenAt(
     if (tenth === 720) state.colds = [{ id: 20, x: 43 * 16, y: 9 * 16, radiusTiles: 3, temperature: -80 }];
     if (tenth === 780) state.colds = [{ id: 20, x: 44 * 16, y: 9 * 16, radiusTiles: 3, temperature: -80 }];
     if (tenth === 840) state.colds = [];
+    // And someone stops the cold snap while it warms.
+    if (tenth === 850) ground.calm();
     if (tenth === 760) ground.mapChanged();
     // A heat wave: the rain stops, the grass dries, and a fire a player sets takes.
     if (tenth === 900) {
