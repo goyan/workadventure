@@ -76,7 +76,34 @@ export interface TreeFireStepInput {
     groundBurning?: boolean;
     /** The luck of the embers, from 0 to 1 at each draw. Math.random when absent. */
     random?: () => number;
+    /**
+     * The wind at a point of the map (pixels): its gusts (km/h) and where it comes from (degrees, 0 north, 90 east);
+     * undefined where it is not known. A tree standing in gusts of TREE_FALL_GUST_KMH falls (see the wind laying trees
+     * down in step).
+     */
+    windAt?: (x: number, y: number) => { gust: number; from: number } | undefined;
+    /** False when no wind anywhere can lay a tree down: the wind at the trees is not looked at. */
+    strongWind?: boolean;
 }
+
+/**
+ * The gusts that lay a tree down (3 s gusts, km/h): 130, a value for every tree, its species unknown (the trees of the
+ * catalogue are images, "Nature:tree-2-10"). It lies between the lowest and the expected gusts that uproot a tree in
+ * the Enhanced Fujita scale: 73 to 87 mph (117 to 140 km/h) for a softwood (pine, spruce, fir), 76 to 94 mph (122 to
+ * 151 km/h) for a hardwood (oak, maple, birch, ash); trunks snap at 104 and 107 mph (167, 172 km/h) expected (Wind
+ * Science and Engineering Center, Texas Tech University, "A Recommendation for an Enhanced Fujita Scale", 2006,
+ * appendix A, DI 27 and 28, pp. A-67 to A-69, read). Models of windthrow give critical gusts of 90 to 145 km/h by
+ * species and stand (ForestGALES, HWIND: Peltola et al. 1999, Gardiner et al. 2008; summed up by Gemini, to be
+ * checked), and Beaufort 10 (89 to 102 km/h of mean wind) "trees uprooted". Reached at the eyewall of a category 1
+ * (gusts of 155 km/h), and by a wind of the room of 106 km/h (mean) and more, over the whole map.
+ */
+export const TREE_FALL_GUST_KMH = 130;
+/**
+ * How long a tree stands in those gusts before it falls: two steps of the meadow. A gust is a 3 s peak, and the storm is
+ * reduced to the map (its eyewall passes over a tree in seconds, faster still when the hurricane is sped up): one step
+ * of strong wind alone does not lay a tree down, two do.
+ */
+export const TREE_FALL_SECONDS = 4;
 
 /** An ember on its way, in map pixels: where it left, where it falls, how long it flies. */
 export interface Ember {
@@ -92,6 +119,8 @@ export interface ToldTree {
     id: string;
     fire: number;
     damage: number;
+    /** Laid down by the wind: where that wind came from, in degrees, plus 1 (absent: standing). */
+    fallen?: number;
 }
 
 /** The state of a tree as it is kept across a restart: what burnt of it, and how long it still stays black. */
@@ -99,6 +128,8 @@ export interface KeptTree {
     id: string;
     damage: number;
     wait: number;
+    /** Laid down by the wind coming from there (degrees): it lies, then grows back, as long as a charred tree. */
+    fallenFrom?: number;
 }
 
 interface Tree extends BurnableTree {
@@ -110,15 +141,19 @@ interface Tree extends BurnableTree {
     fire: number;
     /** What burnt of it, from 0 (green) to 1 (charred). */
     damage: number;
-    /** Seconds it still stays black before greening back. */
+    /** Seconds it still stays black (or lies) before greening (or growing) back. */
     wait: number;
+    /** Laid down by the wind: where that wind came from (degrees, 0 north, 90 east). Its damage is how much is still to grow back. */
+    fallenFrom?: number;
+    /** Seconds it stood in gusts strong enough to lay it down, one after the other. */
+    strain: number;
     embers: number;
     /** What it gained of heat at this step: it only cools when it gained nothing. */
     gained: number;
     told: string;
 }
 
-const HEALTHY = "0:0";
+const HEALTHY = "0:0:0";
 
 /**
  * The fire of the trees of a map, kept by the server beside the meadow and stepped with it. A tree heats up from
@@ -156,6 +191,7 @@ export class TreeFire {
                 fire: 0,
                 damage: 0,
                 wait: 0,
+                strain: 0,
                 embers: 0,
                 gained: 0,
                 told: HEALTHY,
@@ -174,10 +210,10 @@ export class TreeFire {
         }
     }
 
-    public stateOf(id: string): { heat: number; fire: number; damage: number; wait: number } {
+    public stateOf(id: string): { heat: number; fire: number; damage: number; wait: number; fallenFrom?: number } {
         const tree = this.trees.get(id);
         return tree
-            ? { heat: tree.heat, fire: tree.fire, damage: tree.damage, wait: tree.wait }
+            ? { heat: tree.heat, fire: tree.fire, damage: tree.damage, wait: tree.wait, fallenFrom: tree.fallenFrom }
             : { heat: 0, fire: 0, damage: 0, wait: 0 };
     }
 
@@ -254,7 +290,10 @@ export class TreeFire {
      */
     public step(input: TreeFireStepInput): { changed: ToldTree[]; embers: Ember[] } {
         const seconds = Number.isFinite(input.seconds) && input.seconds > 0 ? input.seconds : 0;
-        if (seconds === 0 || (input.groundBurning === false && !this.active())) return { changed: [], embers: [] };
+        const windAt = input.strongWind === false ? undefined : input.windAt;
+        if (seconds === 0 || (input.groundBurning === false && !this.active() && !windAt)) {
+            return { changed: [], embers: [] };
+        }
         const rain = Number.isFinite(input.rainMmPerHour) && input.rainMmPerHour > 0 ? input.rainMmPerHour : 0;
         const grow =
             input.growSeconds !== undefined && Number.isFinite(input.growSeconds) && input.growSeconds > 0
@@ -271,6 +310,29 @@ export class TreeFire {
         const windY = Math.cos(from);
         const { ground } = this;
         for (const tree of this.trees.values()) tree.gained = 0;
+
+        // The wind lays down the trees standing in its strongest gusts, the way it blows: each lies as long as a
+        // charred tree stays black, then grows back in the time a charred tree greens back (the same clock).
+        if (windAt) {
+            for (const tree of this.trees.values()) {
+                if (tree.fire > 0 || tree.damage > 0) {
+                    tree.strain = 0;
+                    continue;
+                }
+                const wind = windAt(tree.x, tree.y);
+                if (!wind || !Number.isFinite(wind.gust) || wind.gust < TREE_FALL_GUST_KMH) {
+                    tree.strain = 0;
+                    continue;
+                }
+                tree.strain += seconds;
+                if (tree.strain < TREE_FALL_SECONDS - 1e-9) continue;
+                tree.strain = 0;
+                tree.heat = 0;
+                tree.damage = 1;
+                tree.wait = BLACK_SHARE * afterFire;
+                tree.fallenFrom = ((Math.round(Number.isFinite(wind.from) ? wind.from : 0) % 360) + 360) % 360;
+            }
+        }
 
         // The embers of the last step land: a small fire on the ground, and heat for the trees next to it.
         for (const ember of this.flying) {
@@ -342,6 +404,7 @@ export class TreeFire {
                     if (tree.damage <= 1e-9) {
                         tree.damage = 0;
                         tree.embers = 0;
+                        tree.fallenFrom = undefined;
                     }
                 }
                 continue;
@@ -397,11 +460,13 @@ export class TreeFire {
     }
 
     private static told(tree: Tree): ToldTree {
-        return {
+        const told: ToldTree = {
             id: tree.id,
             fire: tree.fire > 0 ? Math.max(1, Math.round(tree.fire * FIRE_DEGREES)) : 0,
             damage: tree.damage > 0 ? Math.max(1, Math.round(tree.damage * DAMAGE_DEGREES)) : 0,
         };
+        if (tree.fallenFrom !== undefined) told.fallen = tree.fallenFrom + 1;
+        return told;
     }
 
     /** The trees whose told state is not the one told last. */
@@ -409,7 +474,7 @@ export class TreeFire {
         const changed: ToldTree[] = [];
         for (const tree of this.trees.values()) {
             const told = TreeFire.told(tree);
-            const key = `${told.fire}:${told.damage}`;
+            const key = `${told.fire}:${told.damage}:${told.fallen ?? 0}`;
             if (key === tree.told) continue;
             tree.told = key;
             changed.push(told);
@@ -432,7 +497,12 @@ export class TreeFire {
         for (const tree of this.trees.values()) {
             if (tree.damage <= 0) continue;
             const wait = tree.fire > 0 ? BLACK_SHARE * AFTER_FIRE_SECONDS * tree.damage : tree.wait;
-            kept.push({ id: tree.id, damage: tree.damage, wait });
+            kept.push({
+                id: tree.id,
+                damage: tree.damage,
+                wait,
+                ...(tree.fallenFrom === undefined ? {} : { fallenFrom: tree.fallenFrom }),
+            });
         }
         return kept;
     }
@@ -442,7 +512,7 @@ export class TreeFire {
         if (!Array.isArray(kept)) return;
         for (const each of kept as unknown[]) {
             if (typeof each !== "object" || each === null) continue;
-            const { id, damage, wait } = each as Partial<Record<keyof KeptTree, unknown>>;
+            const { id, damage, wait, fallenFrom } = each as Partial<Record<keyof KeptTree, unknown>>;
             const tree = typeof id === "string" ? this.trees.get(id) : undefined;
             if (!tree || typeof damage !== "number" || typeof wait !== "number") continue;
             if (!Number.isFinite(damage) || !Number.isFinite(wait) || damage <= 0) continue;
@@ -450,6 +520,10 @@ export class TreeFire {
             tree.heat = 0;
             tree.damage = Math.min(1, damage);
             tree.wait = Math.max(0, wait);
+            tree.fallenFrom =
+                typeof fallenFrom === "number" && Number.isFinite(fallenFrom)
+                    ? ((Math.round(fallenFrom) % 360) + 360) % 360
+                    : undefined;
         }
     }
 
@@ -462,6 +536,8 @@ export class TreeFire {
             tree.damage = 0;
             tree.heat = 0;
             tree.wait = 0;
+            tree.strain = 0;
+            tree.fallenFrom = undefined;
             tree.embers = 0;
             tree.told = HEALTHY;
         }

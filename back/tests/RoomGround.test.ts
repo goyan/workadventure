@@ -66,6 +66,25 @@ describe("the ground of a room behind its door (RoomGround)", () => {
         // its water lives six steps of its time in each.
     }, 60_000);
 
+    it("lays down each tree the way the wind blows at that tree", async () => {
+        const hand = world(groundWam());
+        const reference = await byHand(hand.inputs);
+        await live(reference, hand.state);
+        reference.stop();
+        const trees = reference.treeSnapshot()?.trees ?? [];
+        // Both trees stood in gusts over 130 km/h while the hurricane blew, each from where the wind came at its
+        // foot (hurricaneHere): from 57 to 58 degrees at the tree west of the lake (40, 100), from 122 to 127 degrees
+        // at the one of the south-east corner (700, 700). Each lies its own way, still lying a minute later.
+        const west = trees.find((tree) => tree.id === "oak-west");
+        expect(west).toMatchObject({ fire: 0, damage: 16 });
+        expect(west?.fallen).toBeGreaterThanOrEqual(57 + 1);
+        expect(west?.fallen).toBeLessThanOrEqual(58 + 1);
+        const southEast = trees.find((tree) => tree.id === "oak-south-east");
+        expect(southEast).toMatchObject({ fire: 0, damage: 16 });
+        expect(southEast?.fallen).toBeGreaterThanOrEqual(122 + 1);
+        expect(southEast?.fallen).toBeLessThanOrEqual(127 + 1);
+    }, 60_000);
+
     it("rains on the water at the real rate of a hurricane, and not at all in its eye", async () => {
         /** The rain the water of the room last said it reads (mm an hour of its own time), and how fast it lives. */
         const rainUnder = async (

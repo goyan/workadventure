@@ -8,6 +8,16 @@ const TOLD_FIRE = 255;
 /** A tree whose fire went out smoulders this long. */
 export const SMOULDER_MS = 30_000;
 
+/** A tree laid down by the wind, as it is drawn: lying the way the wind blew, or growing back from its foot. */
+export interface FallenTree {
+    /** Where it lies, from its foot: the way the wind that laid it down blew (degrees, 0 north, 90 east). */
+    toward: number;
+    /** Lying (the time a charred tree stays black), or growing back. */
+    lying: boolean;
+    /** How far it grew back, from 0 (just risen) to 1 (as before); 0 while it lies. */
+    grown: number;
+}
+
 /** How charred a tree is drawn for what burnt of it as the server tells it (0 to 16): 0 green, 4 black and thinned. */
 export function charDegree(damage: number): number {
     if (!Number.isFinite(damage) || damage <= 0) return 0;
@@ -30,7 +40,7 @@ export interface FlyingEmber {
  * what it said, for the objects that pick their image and the views that draw the flames.
  */
 export class TreeFireState {
-    private readonly trees = new Map<string, { fire: number; damage: number }>();
+    private readonly trees = new Map<string, { fire: number; damage: number; fallen: number }>();
     private flying: FlyingEmber[] = [];
     /** When the fire of a tree went out before the eyes of this browser: it smoulders a while. */
     private readonly outAt = new Map<string, number>();
@@ -49,7 +59,13 @@ export class TreeFireState {
             if (tree.fire > 0) this.outAt.delete(tree.id);
             else if (burnt && tree.damage > 0) this.outAt.set(tree.id, now);
             if (tree.fire <= 0 && tree.damage <= 0) this.trees.delete(tree.id);
-            else this.trees.set(tree.id, { fire: Math.min(1, tree.fire / TOLD_FIRE), damage: tree.damage });
+            else {
+                this.trees.set(tree.id, {
+                    fire: Math.min(1, tree.fire / TOLD_FIRE),
+                    damage: tree.damage,
+                    fallen: tree.fallen ?? 0,
+                });
+            }
         }
         for (const ember of message.embers) {
             this.flying.push({ ...ember, leftAt: now, flightMs: Math.max(1, ember.flightMs) });
@@ -62,9 +78,20 @@ export class TreeFireState {
         return this.trees.get(id)?.fire ?? 0;
     }
 
-    /** How charred a tree is drawn, from 0 (green) to CHAR_DEGREES. */
+    /** How charred a tree is drawn, from 0 (green) to CHAR_DEGREES. A tree laid down by the wind is not charred. */
     public degreeOf(id: string): number {
-        return charDegree(this.trees.get(id)?.damage ?? 0);
+        const tree = this.trees.get(id);
+        return tree && tree.fallen === 0 ? charDegree(tree.damage) : 0;
+    }
+
+    /** A tree laid down by the wind, as it is drawn; undefined for a tree standing. */
+    public fallenOf(id: string): FallenTree | undefined {
+        const tree = this.trees.get(id);
+        if (!tree || tree.fallen <= 0) return undefined;
+        const toward = (tree.fallen - 1 + 180) % 360;
+        // It lies while all of it is still to grow back.
+        const lying = tree.damage >= TOLD_DAMAGE;
+        return { toward, lying, grown: lying ? 0 : Math.min(1, Math.max(0, 1 - tree.damage / TOLD_DAMAGE)) };
     }
 
     /** The trees on fire, with their fire. */

@@ -151,7 +151,7 @@ describe("MeadowManager and the trees", () => {
         wam.settings = { ...wam.settings, meadow: { enabled: false } } as WAMFileFormat["settings"];
         steps(1);
         expect(told).toHaveLength(1);
-        expect(told[0].trees).toEqual([{ id: "oak", fire: 0, damage: 0 }]);
+        expect(told[0].trees).toEqual([{ id: "oak", fire: 0, damage: 0, fallen: 0 }]);
         expect(manager.treeSnapshot()).toBeUndefined();
         expect(manager.ignite(x, y, 1)).toBe(0);
     });

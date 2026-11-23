@@ -81,6 +81,14 @@ export function groundWam(): WAMFileFormat {
         prefabRef: { collectionName: "eau", id: "siphon" },
         properties: [{ id: "d", type: "waterSinkPropertyData", flow: 10 }],
     };
+    // Two trees (their foot 32 px right of and 64 px under the object), west of the lake and at the south-east corner:
+    // the gusts of the hurricane of the scenario lay each down, the way its wind blows there.
+    entities["oak-west"] = { x: 8, y: 36, prefabRef: { collectionName: "Nature", id: "Nature:tree-oak:Down" } };
+    entities["oak-south-east"] = {
+        x: 668,
+        y: 636,
+        prefabRef: { collectionName: "Nature", id: "Nature:tree-oak:Down" },
+    };
     return {
         version: "2.1.0",
         mapUrl: "map.tmj",
