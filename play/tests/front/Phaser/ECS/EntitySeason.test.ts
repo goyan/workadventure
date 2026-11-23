@@ -16,7 +16,12 @@ describe("seasonal entity texture", () => {
             scene: {
                 textures: { exists: () => true },
                 // Burnt to the second of the four degrees.
-                getTreeFire: () => ({ degreeOf: (id: string) => (id === "oak" ? 2 : 0) }),
+                getTreeFire: () => ({
+                    degreeOf: (id: string) => (id === "oak" ? 2 : 0),
+                    // Standing: no wind laid it down.
+                    fallenOf: () => undefined,
+                    fellAt: () => undefined,
+                }),
             },
             setTexture,
         }) as unknown as Entity;
