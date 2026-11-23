@@ -12,6 +12,7 @@
         WATER_PACE_BOUNDS,
         WAVE_BOUNDS,
         MAX_WATER_SPEED,
+        FREEZE_THAW_SPEED_STEPS,
         MAX_POOL_STYLES,
         MEADOW_BOUNDS,
         DEFAULT_POOL_STYLE,
@@ -74,6 +75,13 @@
     let updates = $state(saved.updates);
     let flowPace = $state(saved.flowPace);
     let impactReach = $state(saved.impactReach);
+    let freezeThawSpeed = $state(saved.freezeThawSpeed);
+
+    /** The speed of the freeze and the thaw, one of the steps the editor offers; saved at once. */
+    function chooseFreezeThawSpeed(speed: number): void {
+        freezeThawSpeed = speed;
+        saveWater();
+    }
 
     // The styles of the pools of the map: a pool is painted as a soil of its style (Terrain/Pools.ts).
     let pools = $state(saved.pools);
@@ -167,6 +175,8 @@
         updates = REALISTIC_WATER_SETTINGS.updates;
         flowPace = REALISTIC_WATER_SETTINGS.flowPace;
         impactReach = REALISTIC_WATER_SETTINGS.impactReach;
+        // The cold as in reality too: no faster than the water.
+        freezeThawSpeed = 1;
         saveWater();
     }
 
@@ -189,6 +199,7 @@
                 inertia,
                 updates,
                 impactReach,
+                freezeThawSpeed,
                 // The waves only matter to the water with inertia: a map without it keeps what it had.
                 ...(inertia ? { waveRoughness, waveDamping, waveBreaking, waveMomentum, precision, flowPace } : {}),
             },
@@ -632,6 +643,23 @@
             </p>
         {/if}
         <p class="retro-hint m-0">{$LL.mapEditor.terrain.real.speed()}</p>
+    </div>
+    <div data-testid="terrain-freeze-thaw-speed" class="flex flex-col gap-1">
+        <span class="text-sm">{$LL.mapEditor.terrain.freezeThawSpeed()}</span>
+        <div class="grid grid-cols-4 gap-2" role="group" aria-label={$LL.mapEditor.terrain.freezeThawSpeed()}>
+            {#each FREEZE_THAW_SPEED_STEPS as step (step)}
+                <button
+                    type="button"
+                    class="btn btn-sm {freezeThawSpeed === step ? 'btn-secondary' : 'btn-light btn-ghost'}"
+                    aria-pressed={freezeThawSpeed === step}
+                    data-testid="terrain-freeze-thaw-speed-{step}"
+                    onclick={() => chooseFreezeThawSpeed(step)}
+                >
+                    ×{step}
+                </button>
+            {/each}
+        </div>
+        <p class="retro-hint m-0">{$LL.mapEditor.terrain.real.freezeThawSpeed()}</p>
     </div>
     <div data-testid="terrain-current">
         <RangeSlider

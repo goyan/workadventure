@@ -4143,6 +4143,16 @@ Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus
     2026-11-22 ; `THAW_SPEED` ×600 retiré) : temps réel par défaut, 60 fois plus vite à « Vitesse de l'eau » 60.
     15 mm fondent en 11 h 30 à +5 °C et 5 h 50 à +10 °C (80 % d'humidité, sans vent) en temps réel ; 11 min 30 et
     5 min 50 à 60 (avant : 69 s et 35 s).
+  - **Vitesse du gel et de la fonte** (2026-11-23, demande de l'utilisateur : « un paramètre pour accélérer spécifiquement gel et fonte »). C'est un réglage de la carte, `settings.water.freezeThawSpeed`, absent par défaut ce qui vaut ×1. On le choisit dans les réglages de l'eau de l'outil relief, par crans : ×1, ×10, ×60, ×600 (`FREEZE_THAW_SPEED_STEPS`, borne `MAX_FREEZE_THAW_SPEED` = 600).
+    - **Ce qu'il accélère :** la glace qui prend et dégèle, la neige qui fond et part, et la fonte de la neige de sa ville en météo personnelle. Il se multiplie avec « Vitesse de l'eau » : `freezeThawTimesOf` = `waterTimesOf` × le facteur.
+    - **Ce qui garde l'horloge de l'eau :** l'eau, la pluie et la neige qui tombe. Une neige pèse donc toujours ce qu'aurait pesé la même pluie.
+    - **Ce qu'il ne touche pas :**
+      - le givre et la glace dessinés en météo personnelle, qui suivent l'air avec un fondu de une à deux minutes, sans horloge de l'eau ;
+      - le sol gelé, qui se déduit de l'air à l'instant (`soilFrostOf`) ;
+      - la casse de la glace, la cabane et l'eau.
+    - **Stabilité :** au-delà d'une heure de temps de jeu par pas (`ICE_EXACT_FROM_HOURS`), la glace pousse par la solution exacte de la loi de Stefan (`iceAfterHours`), sans sous-pas : le coût reste le même. En dessous, rien ne change au bit près.
+    - **À chaud :** la valeur voyage avec les réglages de la carte et vaut dès le pas suivant de la prairie, dans le fil des salles comme dans le fil de calcul, qui reçoit le WAM. Le rattrapage d'une salle vide l'applique à ses tranches, dans sa limite de durée habituelle.
+    - **Déploiement :** il ajoute le champ `freezeThawSpeed` (17) à `UpdateWaterSettingMessage`, donc `play`, `back` et `map-storage` doivent être déployés ensemble.
   - Le feu fait fondre la neige autour de lui, même par temps de gel (`Meadow.warm`) : une case en feu chauffe sa
     case et les huit voisines (15 mm par seconde à pleine flamme), un arbre en feu deux cases autour de son pied, la
     catastrophe « feu » 60 mm par touche sous son disque. Cette fonte ne mouille pas le sol (le feu le sèche) ; son

@@ -7,6 +7,7 @@ import {
     DEFAULT_WATER_PACE,
     DEFAULT_WATER_SETTINGS,
     DEFAULT_WAVE_SETTINGS,
+    freezeThawSpeedOf,
     waterHasInertia,
 } from "@workadventure/map-editor";
 import type { LifeSettings, MeadowSettings, PoolStyle, WaveSettings } from "@workadventure/map-editor";
@@ -28,6 +29,8 @@ export function readTerrainMapSettings(): {
     updates: number;
     flowPace: number;
     impactReach: number;
+    /** How many times faster than the water the cold does its work (WaterSettings.freezeThawSpeed). */
+    freezeThawSpeed: number;
     life: LifeSettings;
     meadow: MeadowSettings;
     /** The styles of the pools painted on the map (Terrain/Pools.ts). */
@@ -49,6 +52,7 @@ export function readTerrainMapSettings(): {
         updates: wam?.settings?.water?.updates ?? DEFAULT_WATER_PACE.updates,
         flowPace: wam?.settings?.water?.flowPace ?? DEFAULT_FLOW_PACE,
         impactReach: wam?.settings?.water?.impactReach ?? DEFAULT_IMPACT_REACH,
+        freezeThawSpeed: freezeThawSpeedOf(wam?.settings?.water),
         life: { ...DEFAULT_LIFE_SETTINGS, ...wam?.settings?.life },
         meadow: { ...DEFAULT_MEADOW_SETTINGS, ...wam?.settings?.meadow },
         pools: [...(wam?.settings?.pools ?? [])],
