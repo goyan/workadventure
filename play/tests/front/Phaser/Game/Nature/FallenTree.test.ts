@@ -213,7 +213,7 @@ describe("a tree the wind laid down, as the browser draws it", () => {
         expect(turnedShare(0, Math.PI / 2)).toBe(0);
     });
 
-    it("tells a palm by its shape: its trunk seen up to half its height and more, its fronds at its top", () => {
+    it("tells a palm by its shape: its trunk seen up to 60 % of its height and more, its fronds at its top", () => {
         const palm = treeBodyOf(palmImage(), 106, 144);
         expect(isPalm(palm)).toBe(true);
         expect(isPalm(treeBodyOf(treeImage(), 76, 126))).toBe(false);

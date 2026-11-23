@@ -23,7 +23,7 @@ const TRUNK_SHOWN_PX = 9;
 /** A bare crown lying is drawn with this many branches. */
 const BARE_BRANCHES = 7;
 /** A palm: its trunk shows from its foot up to this share of its height at least, its fronds only at its top. */
-const PALM_TRUNK_SHARE = 0.5;
+const PALM_TRUNK_SHARE = 0.6;
 /** The fronds of a palm lying, their ways on the ground from the way it fell (degrees), and their arch. */
 const PALM_FRONDS = [0, 40, -40, 80, -80, 120, -120];
 const PALM_FRONDS_ACROSS = [0, 35, 70, 105, 140];
@@ -33,8 +33,9 @@ const FROND_ARCH = 0.18;
 export type CrownKind = "leafy" | "bare" | "palm";
 
 /**
- * A palm by its shape, whatever its name: a leafy crown on a trunk seen from its foot up to half its height or more
- * (its fronds hang round it only at its top); a tree with a crown down its trunk shows a third of it at most.
+ * A palm by its shape, whatever its name: a leafy crown on a trunk seen from its foot up to 60 % of its height or more
+ * (its fronds hang round it only at its top). Measured on the trees of the map: the palm (nature-4) 0.64; the others
+ * 0.57 at most (winter-auto-6), most of them under 0.36; the bare ones (more) are told apart before, by their colour.
  */
 export function isPalm(body: TreeBody): boolean {
     const height = body.footY - body.crownTop;
