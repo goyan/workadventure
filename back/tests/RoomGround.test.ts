@@ -55,8 +55,8 @@ describe("the ground of a room behind its door (RoomGround)", () => {
         expect(iceOf(ground)).toEqual(iceOf(reference));
         expect(ground.hasMeadow()).toBe(true);
         expect(ground.catchingUp()).toBe(reference.catchingUp());
-        // The map of these grounds goes sixty times faster than reality, and its steps cost nothing on their clock:
-        // its water lives sixty steps of its time in each.
+        // The map of these grounds goes six times faster than reality, and its steps cost nothing on their clock:
+        // its water lives six steps of its time in each.
     }, 60_000);
 
     it("keeps the floor of a building dry through its drain, as before (the sinks that dry a floor)", async () => {
@@ -104,7 +104,7 @@ describe("the ground of a room behind its door (RoomGround)", () => {
         expect(hand.seen.told.length).toBeGreaterThan(5);
         expect(inline.seen.told).toEqual(hand.seen.told);
         expect(inline.seen.saved).toEqual(hand.seen.saved);
-        // The map of these grounds goes sixty times faster than reality, and its steps cost nothing on their clock:
-        // its water lives sixty steps of its time in each.
+        // The map of these grounds goes six times faster than reality, and its steps cost nothing on their clock:
+        // its water lives six steps of its time in each.
     }, 60_000);
 });
