@@ -1,5 +1,5 @@
 import type { MeadowMessage, TreeFireMessage } from "@workadventure/messages";
-import { DEFAULT_MEADOW_SETTINGS, TERRAIN_CELL, TILE_PX, WeatherType } from "../types";
+import { DEFAULT_MEADOW_SETTINGS, TERRAIN_CELL, TILE_PX, waterHasInertia, WeatherType } from "../types";
 import type { TerrainData } from "../types";
 import { DOWNPOUR_PX_PER_SECOND, DOWNPOUR_REPORT_MS } from "../Catastrophe/Downpour";
 import type { Downpour } from "../Catastrophe/Downpour";
@@ -83,6 +83,9 @@ const FIRE_PATCH_THAW_MM = 60;
  * Nothing runs until the size of the map is read. A meadow where nothing changes any more (a dry map, no rain) costs
  * one pass over its tiles every two seconds.
  */
+/** The water of the relief as the meadow reads it: its depth, and how fast it runs when the grid tells it. */
+export type MeadowWater = Pick<WaterGrid, "depthAt"> & Partial<Pick<WaterGrid, "tileSpeedAt">>;
+
 export class MeadowSimulation {
     private meadow: Meadow | undefined;
     /** The fire of the trees of the map, on the meadow of the moment (it is made again when the map changes). */
@@ -171,8 +174,11 @@ export class MeadowSimulation {
     constructor(
         private readonly room: SimulationRoom,
         private readonly rain: RainSlots,
-        /** The water of the relief: the soil under it is soaked, and its grass drowns. */
-        private readonly water: () => Pick<WaterGrid, "depthAt"> | undefined,
+        /**
+         * The water of the relief: the soil under it is soaked, and its grass drowns; the ice takes less where it
+         * runs (tileSpeedAt, when the grid tells it).
+         */
+        private readonly water: () => MeadowWater | undefined,
         /** Packs the bytes told to the room (gzip on the server; as they are where nothing travels). */
         private readonly zip: (bytes: Uint8Array) => Uint8Array,
         private readonly now: () => number = Date.now,
@@ -569,6 +575,11 @@ export class MeadowSimulation {
                   return deepest;
               }
             : () => 0;
+        // How fast the water runs over a tile: the ice takes less on running water. Only a water with inertia keeps a
+        // speed; while the room lives the time it missed its water goes without inertia: still, as before.
+        const speedAt = grid?.tileSpeedAt?.bind(grid);
+        const currentAt: MeadowStepInput["currentAt"] =
+            speedAt && !replaying && waterHasInertia(settings?.water) ? speedAt : undefined;
         const snow = this.snowInput(seconds);
         if (snow.snowfallMm) this.snowMoved = true;
         // The trees on fire melt the snow around their foot.
@@ -600,6 +611,7 @@ export class MeadowSimulation {
                     daylight: false,
                     season: seasonAt(date, settings?.weatherLocation),
                     waterAt,
+                    currentAt,
                     ...snow,
                 });
                 this.pourMelted(meadow, thawed?.meltedMm);
@@ -626,6 +638,7 @@ export class MeadowSimulation {
             random: replaying ? NO_LUCK : this.random,
             soilFrost: this.frost,
             waterAt,
+            currentAt,
             ...snow,
         });
         this.pourMelted(meadow, thawed?.meltedMm);

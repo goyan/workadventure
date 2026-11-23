@@ -2513,6 +2513,15 @@ ne l'est pas).
   même 60 s après l'arrêt des sources (30 relectures d'étendues et 6 de terres en 30 s, comme avant) ; les pas
   de 10 à 15 ms toutes les 5 s restent. Pour une eau qui coule, la suite est de calculer ces lieux dans le fil de
   calcul et de les publier.
+- **Rattrapage de la vie aquatique borné en temps** (`AquaticLifeManager.stepCatchUp`, `hurryCatchUp`). Une salle
+  vide depuis plus d'une minute fait revivre à sa vie le temps manqué (30 minutes au plus), par paquets de 120 pas à
+  chaque tour, sur le fil des salles. Prévu pour 90 ms par tour ; sur la carte d'entrée inondée, où un pas coûte des
+  millisecondes et relit ses lieux pendant que l'eau coule, un tour tenait le fil jusqu'à 2,4 s (13 s sur les 25
+  premières secondes d'une salle rouverte après une demi-heure) : c'est le blocage vu à l'arrivée du premier joueur.
+  Les pas sont maintenant vécus par tranches de 8 ms au plus (`CATCH_UP_BUDGET_MS`), avec 8 ms de pause
+  (`CATCH_UP_PAUSE_MS`), comme la prairie depuis #489 : mêmes pas, même ordre, même état final
+  (`AquaticLifeManagerCatchUp.test.ts`). Mesuré, même salle : tour le plus long 2 431 → 24 ms, rattrapage fini en
+  6 s.
 - **Catastrophes dans le sol d'un joueur** (`LocalTerrainSimulation`, `LocalTerrainWorker`). Le sol d'un joueur
   (météo d'un lieu choisi) ignorait les catastrophes de la salle : il les voyait sans que son eau en soit touchée.
   Il sait maintenant les recevoir, par le sol commun : `setCatastrophes` (averses, drains, boules du moment, qui
@@ -4112,6 +4121,14 @@ Ce qui tombe en neige (part `snowShare` de l'air de la salle) ne disparaît plus
 Le gel de #392 était calculé par chaque navigateur d'après sa température, avec une seule valeur pour toute la carte :
 deux joueurs pouvaient ne pas voir la même glace, et rien (feu, météore) ne pouvait la trouer. Pour qui suit le temps
 du serveur, la glace est maintenant tenue par le serveur, case par case.
+
+- **Le courant empêche la glace de prendre** (2026-11-23, sur décision de l'utilisateur). Sur une eau qui court, le froid fait du frasil, des cristaux emportés et brassés par le courant, pas une plaque qui grandit sur place.
+  - **Source.** Gosink et Osterkamp, 1983, *Annals of Glaciology* 4, p. 79 (https://doi.org/10.3189/S0260305500005279). Ils citent la règle des rivières de Norvège (Carstens 1971) : « moving frazil slush if the water velocity is >0.6 and <1.2 m s-1, and open if the water velocity is >1.2 m s-1 ». Pour le Saint-Laurent (Starosolszky 1971), la surface « usually remains free of ice » au-delà de 1,0 m/s. Ils ajoutent que ces vitesses sont imprécises : elles varient avec la profondeur, la rugosité du fond et la météo.
+  - **Règle.** Jusqu'à 0,6 m/s (`ICE_CURRENT_SHEET_MS`), la glace prend comme sur une eau calme. À partir de 1,2 m/s (`ICE_CURRENT_OPEN_MS`), elle ne prend plus. Entre les deux, sa croissance diminue en ligne droite (`iceCurrentShare`). La droite est un choix : les sources donnent les bornes des régimes, pas de loi entre elles. Le courant ne fait ni fondre ni partir une glace déjà prise : la chaleur de l'eau et la débâcle ne sont pas modélisées.
+  - **Vitesse.** Elle est lue par tuile de 32 px (`WaterGrid.tileSpeedAt`) : ce que portent ses quatre cellules, rapporté à l'eau qu'elles tiennent, comme un bloc des vitesses envoyées aux navigateurs, mais sur un carré plus fin. Elle est exprimée en m/s du temps de la carte.
+  - **Quand la règle ne s'applique pas.** Elle ne vaut qu'avec l'inertie de l'eau. Sans inertie, l'eau ne garde pas de vitesse, et la glace prend comme avant, au bit près. Pendant le rattrapage d'une salle vide, l'eau va sans inertie : la glace prend donc comme avant.
+  - **Où elle s'applique.** Le calcul est dans `MeadowSimulation`, qui lit la grille d'eau qu'elle a déjà. Il vaut donc aussi dans le fil de calcul et pour le sol local d'un joueur.
+  - **Carte d'entrée.** Mesure hors jeu de son eau après 30 min d'inertie, sur 12 744 tuiles mouillées : 815 tuiles (6,4 %) vont à 1,2 m/s ou plus, et n'ont donc plus de glace ; 722 (5,7 %) sont entre 0,6 et 1,2 m/s, et y ont une glace plus mince. Le reste, lacs et mares, est inchangé.
 
 - **Modèle** (`libs/map-editor/src/Terrain/Ice.ts`, champ `ice` de `Meadow`). Une épaisseur en millimètres sur l'eau
   de chaque case (au moins 0,5 px d'eau), jamais plus épaisse que cette eau : une flaque gèle entièrement.
