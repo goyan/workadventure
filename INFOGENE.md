@@ -6072,6 +6072,24 @@ une catégorie 4 creuse un dôme de 6 m (pentes d'un dixième) : le modèle tien
 qui le contient, vitesses bornées, au repos ensuite, dôme conforme à 10 % près) ; sur la carte, un tel dôme déborde des
 rives et inonde les terres basses, ce qui est voulu par l'exagération.
 
+**Similitude du fetch : le vent pousse l'eau comme sur une baie** (`Hurricane.HURRICANE_FETCH_SIMILITUDE`, un
+choix, comme la réduction de l'ouragan à la carte ; décidé le 2026-11-23 après « je voudrais voir descendre l'eau
+beaucoup plus »). Le vent tient l'eau d'un bassin fermé penchée de dh/dx = τ / (ρ g h) : quelques centimètres sur un
+lac de 150 m, quand un vrai ouragan sur une baie de dizaines de kilomètres retire l'eau de mètres et laisse le fond à
+sec. Référence : Irma (2017) à Tampa, l'eau à St. Petersburg « about 5 ft below normal » (Cangialosi, Latto et Berg,
+rapport NHC AL112017, 2018, relu dans le PDF), pour une baie de 3,7 m de fond moyen (USGS, Britannica [Gemini, non
+relu]) : un retrait de 0,41 de la profondeur. Le facteur est dérivé, pas tapé : pour le lac de référence (150 m dans
+le vent, 1,5 m de fond, vent maximal d'une catégorie 4), l'équilibre exact d'un canal fermé, h(x)² = h(0)² + 2 k x
+avec la profondeur moyenne gardée, donne le k qui retire l'eau de 0,41 h au vent (`drawdownSlope`, environ 0,7), et
+F = k ρ g h² / (τ L) ≈ 10 sur la contrainte du vent seule ; l'eau monte d'environ un tiers de la profondeur sous le
+vent. Le simple rapport des longueurs (×100 à ×400) viderait le lac : une vraie baie n'atteint jamais son équilibre
+sous un vent de quelques heures qui tourne. Les crans d'effet sur l'eau se multiplient par-dessus. Tests : canal du
+lac de référence (retrait 0,41 h à 10 % près, montée en face à 15 %, volume gardé) ; vent qui s'inverse au passage
+de l'œil, le mascaret revient, volume gardé ; au cran ×20 (vent ×200) le mascaret monte de 10 m contre la rive d'en
+face et passe par-dessus les plus hauts murs du relief : l'eau perdue est comptée, rien ne casse ; identité au bit
+TypeScript/WebAssembly à ×20. Le vent et la pression sur l'eau sont refaits au moins chaque seconde (le vent tourne au
+passage de l'œil même quand la dépression bouge peu).
+
 **La crue se lit** (`Terrain/HurricaneFlood.ts`, `HurricaneFloodView.ts`). Chaque navigateur garde l'eau telle
 qu'elle était au début de l'ouragan, cellule par cellule, et la plus haute depuis : le badge des niveaux sous le
 pointeur dit « +0,7 m » (l'eau plus haute qu'avant l'ouragan), le panneau de l'ouragan « Eau : +0,7 m au plus haut
