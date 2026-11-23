@@ -9,7 +9,7 @@ import { MAX_SHOWN_BREAKS } from "../Ice/IceBreaks";
 import type { IceBreak } from "../Ice/IceBreaks";
 import { groundDrifts, NOISE_GLSL, shaderSeconds } from "../ShaderNoise";
 import { SHORE_PX } from "./TerrainShading";
-import { WHITECAP_MIN_DEPTH_PX, whitecapDrawing } from "./Whitecaps";
+import { STREAK_OPACITY, WHITECAP_MIN_DEPTH_PX, whitecapDrawing } from "./Whitecaps";
 import { HEIGHT_OFFSET, HEIGHT_SCALE, OBLIQUE_HALVINGS, OBLIQUE_STEPS, writeHeights } from "./ObliqueView";
 import { DROP_SCALE, MAX_DROP, MAX_RISE } from "./Pixel/ColumnPainter";
 import { GROUND_TEXTURES } from "./TexturedGround";
@@ -540,6 +540,8 @@ uniform vec3 uWind;
 // How the whitecaps are drawn for that wind (Whitecaps.whitecapDrawing): share of the cells, length and thickness of
 // the crests, cut of the streaks (1: none).
 uniform vec4 uCaps;
+// The veil of foam of a storm, 0 to 1 (Whitecaps.whitecapDrawing).
+uniform float uVeil;
 // The fronts of the waves of the comets fallen into the water (x, y, radius in map pixels, strength 0 to 1).
 uniform vec4 uRing0;
 uniform vec4 uRing1;
@@ -620,14 +622,15 @@ float capHash(vec2 p) {
     return fract((p3.x + p3.y) * p3.z);
 }
 
-// The whitecaps of the wind at a point of open water, 0 to 1 (Whitecaps.whitecapDrawing says how, uCaps): short
-// crests lying across the wind, each in a cell of a grid laid along it (14 px across the wind, times uCaps.y in a
-// gale, 7 along). A cell breaks for a second and a half, by chance, for uCaps.x of the cells: never all of them, so
-// the grid never shows; past that, the crests grow thicker (uCaps.z) and longer, and from a gale streaks of foam lie
-// along the wind (uCaps.w: their cut, 1 for none), as the sea whitens. They drift slowly downwind. The clock and the
-// cells go round (every two hours, every 4096 cells), so that the chance of a cell is drawn from small numbers
-// however long the game has run and however far the map goes: the crests only change all at once when the clock
-// goes round.
+// The whitecaps of the wind at a point of open water, 0 to 1 (Whitecaps.whitecapDrawing says how: uCaps, uVeil).
+// Short crests lying across the wind, each in a cell of a grid laid along it (14 px across the wind, times uCaps.y in
+// a gale, 7 along). A cell breaks for a second and a half, by chance, for uCaps.x of the cells: never all of them, so
+// the grid never shows; past that, the crests grow thicker (uCaps.z) and longer. From a gale, thin and long streaks of
+// foam lie along the wind, translucent, more of them as it rises (uCaps.w: the cut of their noise, 1 for none); in a
+// storm a translucent veil, streaked along the wind, whitens the rest (uVeil), the water still seen through it. The
+// crests stay drawn over both. They drift slowly downwind. The clock and the cells go round (every two hours, every
+// 4096 cells), so that the chance of a cell is drawn from small numbers however long the game has run and however
+// far the map goes: the crests only change all at once when the clock goes round.
 float whitecapsAt(vec2 world, float t) {
     float share = uWind.z;
     if (share <= 0.0) return 0.0;
@@ -649,15 +652,18 @@ float whitecapsAt(vec2 world, float t) {
         float shape = 1.0 - smoothstep(0.5, 1.0, length(q * vec2(2.6, 5.0 / uCaps.z)) + (vnoise(world / 2.0) - 0.5) * 0.7);
         crest = shape * smoothstep(0.0, 0.15, life) * (1.0 - smoothstep(0.55, 1.0, life));
     }
-    // The streaks of foam a gale lays along the wind: long and thin, drifting slowly downwind.
+    if (uCaps.w >= 1.0 && uVeil <= 0.0) return crest;
+    float down = dot(world, along) - tw * 6.0;
+    float side = dot(world, across);
+    // The streaks: a few pixels wide, a hundred and more long, soft edged, half seen through.
     float streak = 0.0;
     if (uCaps.w < 1.0) {
-        float down = dot(world, along) - t * 6.0;
-        float side = dot(world, across);
-        float n = 0.7 * vnoise(vec2(side / 7.0, down / 70.0)) + 0.3 * vnoise(vec2(side / 3.0, down / 30.0) + 5.0);
-        streak = smoothstep(uCaps.w, uCaps.w + 0.12, n);
+        float n = 0.65 * vnoise(vec2(side / 2.5, down / 140.0)) + 0.35 * vnoise(vec2(side / 1.2, down / 60.0) + 5.0);
+        streak = smoothstep(uCaps.w, uCaps.w + 0.25, n) * ${STREAK_OPACITY.toFixed(2)};
     }
-    return max(crest, streak);
+    // The veil of a storm, streaked along the wind.
+    float veil = uVeil * (0.55 + 0.45 * vnoise(vec2(side / 6.0, down / 220.0) + 11.0));
+    return 1.0 - (1.0 - crest) * (1.0 - streak) * (1.0 - veil);
 }
 
 const vec3 SHALLOW = vec3(0.1, 0.48, 0.52);
@@ -1028,6 +1034,7 @@ export class GroundSplat {
                         setUniform("uWind", [this.wind.x, this.wind.y, this.wind.share]);
                         const caps = whitecapDrawing(this.wind.share);
                         setUniform("uCaps", [caps.cells, caps.length, caps.thickness, caps.streakCut]);
+                        setUniform("uVeil", caps.veil);
                         this.setReflectionUniforms(setUniform);
                         for (let index = 0; index < MAX_ICE_BREAKS; index++) {
                             const shown = this.breaks[index];
