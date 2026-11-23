@@ -1,4 +1,4 @@
-import { waterTimesOf, WeatherType } from "@workadventure/map-editor";
+import { freezeThawTimesOf, WeatherType } from "@workadventure/map-editor";
 import type { FireConditionsMessage } from "@workadventure/messages";
 import { get } from "svelte/store";
 import { fireConditionsStore } from "@wa/front/Stores/FireConditionsStore";
@@ -104,6 +104,7 @@ export function weatherBoardNow(
                 : undefined,
         roomWind: conditions?.windSpeed,
         peaks: ground && ground.version() > 0 ? { iceMm: ground.peakIceMm(), snowMm: ground.peakSnowMm() } : undefined,
-        snowTimes: waterTimesOf(settings?.water),
+        // The clock the snow melts and the ice takes and thaws by: the water of the map times its freeze and thaw speed.
+        snowTimes: freezeThawTimesOf(settings?.water),
     });
 }

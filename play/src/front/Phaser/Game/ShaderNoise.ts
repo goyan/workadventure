@@ -63,6 +63,12 @@ float vnoise(vec2 p) {
 float fbm(vec2 p) {
     return 0.5 * vnoise(p) + 0.3 * vnoise(p * 2.03 + 17.0) + 0.2 * vnoise(p * 4.01 + 31.0);
 }
+
+// fbm(p + drift), its drift given octave by octave from the processor (ShaderNoise.octaveDrifts): the first two in
+// d12, the third in d3.
+float fbmDrift(vec2 p, vec4 d12, vec2 d3) {
+    return 0.5 * vnoise(p + d12.xy) + 0.3 * vnoise(p * 2.03 + 17.0 + d12.zw) + 0.2 * vnoise(p * 4.01 + 31.0 + d3);
+}
 `;
 
 /**
@@ -79,4 +85,75 @@ export function shaderWrap(value: number, period: number): number {
     if (!Number.isFinite(value)) return 0;
     const wrapped = value % period;
     return wrapped < 0 ? wrapped + period : wrapped;
+}
+
+/**
+ * A drift of a noise (cells of its noise) runs as it is up to this, then goes round in a band of 4096 cells above it,
+ * where the hash without sine repeats exactly (it reads its inputs modulo 4096): no jump, ever, and few enough digits
+ * for the 32 bits of the GPU. Far past the bound of the sine (a drift this large on one axis reads over 30 million).
+ * A drift that runs negative goes round in the same band, above: measured on Metal, a noise read at large negative
+ * numbers did not repeat (12/255 on most pixels), at large positive ones it does to the bit.
+ */
+export const DRIFT_BAND_FROM = 4096 * 64;
+
+/** A drift of a noise after `seconds` at `perSecond` cells a second, in 64 bits, as the shaders read it. */
+export function driftPhase(seconds: number, perSecond: number): number {
+    const phase = seconds * perSecond;
+    if (!Number.isFinite(phase)) return 0;
+    const size = Math.abs(phase);
+    if (size < DRIFT_BAND_FROM) return phase;
+    return DRIFT_BAND_FROM + (((phase % 4096) + 4096) % 4096);
+}
+
+/**
+ * The drift of each octave of fbm (x 1, x 2.03, x 4.01), as fbmDrift reads it: fbm(p + v t) is the sum of its octaves
+ * at (p + v t) x m, so each octave drifts at v x m, and goes round on its own.
+ */
+export function octaveDrifts(seconds: number, vx: number, vy: number): { first: number[]; third: number[] } {
+    return {
+        first: [
+            driftPhase(seconds, vx),
+            driftPhase(seconds, vy),
+            driftPhase(seconds, vx * 2.03),
+            driftPhase(seconds, vy * 2.03),
+        ],
+        third: [driftPhase(seconds, vx * 4.01), driftPhase(seconds, vy * 4.01)],
+    };
+}
+
+/** The drifts of the noises of the ground and the water (GroundSplat), at a time of the clock of the game (ms). */
+export function groundDrifts(nowMs: number): {
+    fire: number[];
+    poolNear: { first: number[]; third: number[] };
+    poolFar: { first: number[]; third: number[] };
+    waterNear: { first: number[]; third: number[] };
+    waterFar: { first: number[]; third: number[] };
+    ice: { first: number[]; third: number[] };
+    froth: { first: number[]; third: number[] };
+    boil: { first: number[]; third: number[] };
+    glint: number;
+    wave: number;
+} {
+    const t = Number.isFinite(nowMs) ? nowMs / 1000 : 0;
+    return {
+        // The tint of the fire drifts backwards: given as it is, so that the shader adds it.
+        fire: [driftPhase(t, 2), driftPhase(t, -3)],
+        poolNear: octaveDrifts(t, 0.09, 0.05),
+        poolFar: octaveDrifts(t, -0.06, 0.08),
+        waterNear: octaveDrifts(t, 0.06, 0.035),
+        waterFar: octaveDrifts(t, -0.045, 0.07),
+        ice: octaveDrifts(t, 0.05, -0.04),
+        froth: octaveDrifts(t, 0.25, 0),
+        boil: octaveDrifts(t, 0.35, -0.25),
+        // The glints change three times a second: a whole number, drawn from the hash.
+        glint: driftPhase(Math.floor(t * 3), 1),
+        // The waves at the shore: a sine, taken here round its period.
+        wave: (t * 1.6) % (2 * Math.PI),
+    };
+}
+
+/** The drift of the billows of the clouds (CloudLayer), octave by octave. */
+export function billowDrift(nowMs: number): { first: number[]; third: number[] } {
+    const t = Number.isFinite(nowMs) ? nowMs / 1000 : 0;
+    return octaveDrifts(t, 0.012, -0.008);
 }

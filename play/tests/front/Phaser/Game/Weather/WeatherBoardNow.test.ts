@@ -194,4 +194,24 @@ describe("weatherBoardNow", () => {
         expect(board.follows).toBe("trial");
         expect(board.precipitation).toMatchObject({ air: "map", form: "rain" });
     });
+
+    it("goes by the clock of the freeze and the thaw of the map: its water times its freeze and thaw speed", () => {
+        map.timeline = timeline(24, 49, 10);
+        fireConditionsStore.set({
+            manual: false,
+            temperature: 20,
+            humidity: 60,
+            windSpeed: 10,
+            windFrom: 0,
+            ...thresholds,
+        });
+        const peaks = { iceMm: 100, snowMm: 0 };
+        const goneIn = (water: { speed?: number; freezeThawSpeed?: number } | undefined): number =>
+            weatherBoardNow({ ...settings, water }, now(), told(0, 0, 1, peaks), undefined).kept?.ice.goneIn ??
+            Number.NaN;
+        const real = goneIn(undefined);
+        expect(goneIn({ speed: 2 })).toBeCloseTo(real / 2, 6);
+        expect(goneIn({ freezeThawSpeed: 60 })).toBeCloseTo(real / 60, 6);
+        expect(goneIn({ speed: 2, freezeThawSpeed: 10 })).toBeCloseTo(real / 20, 6);
+    });
 });

@@ -294,6 +294,18 @@ export class FloorSpike {
     }
 
     /**
+     * The altitudes (pixels) of the raised floors drawn over a point of the map as it is seen (a floor is drawn its
+     * altitude higher than the ground under it), the highest first: what covers the ground under the pointer.
+     */
+    public floorsOver(x: number, y: number): number[] {
+        const column = Math.floor(x / TILE);
+        return this.levels
+            .filter((level) => level.cells.has(`${column}:${Math.floor((y + level.elevation) / TILE)}`))
+            .map((level) => level.elevation)
+            .sort((a, b) => b - a);
+    }
+
+    /**
      * The raised floor a point of the screen stands on at this altitude: its key and the rectangle it covers on the
      * screen. Undefined over no slab of that altitude.
      */

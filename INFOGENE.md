@@ -5673,6 +5673,25 @@ réduit.
 à chaque pas du pré (toutes les 2 s) ; sur un pré de 300 × 300 cases, 8 masses de 16 cases ne changent pas le coût
 du pas à la mesure près (5,6 à 6,1 ms sur le Mac, bruit compris).
 
+**Où la glace prend.** Les règles d'avant, inchangées sous une masse : la glace ne prend que **dehors** (`outdoor`
+dans `Meadow.stepIce`) : l'eau à l'intérieur d'un bâtiment reste liquide sous le coup de froid ; l'eau qui court à
+plus de 1,2 m/s reste ouverte, entre 0,6 et 1,2 m/s il en prend moins (`iceCurrentShare`), à l'horloge rapide aussi
+(`iceAfterHours`, testé dans `MeadowCold.test.ts`). Sur la terre sèche rien ne change dans le pré : seul le rendu
+se voit.
+
+**Essais en jeu** (2026-11-23, dev local, carte d'Antoine, air 18 °C, vent 6 km/h, masse à −80 °C de 4 cases, deux
+navigateurs sans écran) :
+
+| Où | Horloge | Durée | Glace |
+|---|---|---|---|
+| Mare | ×1 | 150 s | 1,5 → 12,9 mm, même valeur chez le second joueur |
+| Large, eau calme | ×60 | 12 s | 0 → 35,4 mm |
+| Eau à 0,80 m/s, stable | ×60 | 12 s | 0 → 28,4 mm |
+| Eau à 1,84 à 2,14 m/s | ×60 | 12 s | 0 mm |
+| Eau à 7,1 m/s | ×60 | 12 s | 0 mm |
+| Eau à l'intérieur d'un bâtiment | ×60 | 12 s | 0 mm |
+| Herbe sèche dehors | ×60 | 12 s | glace, herbe, humidité, neige inchangées |
+
 **Ce que ça ne modélise pas.** La pluie et l'averse ne tombent pas en neige dans la zone (elles lisent l'air de la
 carte) ; le givre du sol que le navigateur dessine pour toute la carte (un seul réglage du shader du sol) ne suit
 pas la masse : dans la zone c'est la vue de la catastrophe qui pose le givre, par la même règle et le même air ; le
