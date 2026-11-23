@@ -2833,7 +2833,10 @@ leurs voisins, et seules les régions de 1024 px dans la vue sont tracées (Phas
 chaque image). Mesuré le 2026-11-23 sur la carte d'Antoine en dev local (113 000 morceaux de lignes) : 7 ms par
 image et environ 100 ms par coup avant, l'outil Relief ouvert ; 59 à 62 images/s en creusant après. Le flou du sol
 (`smoothWeights`), refait à chaque coup sur toute la zone dessinée, passe en deux passes (même résultat à l'octet
-près) : 280 ms avant, 30 ms après, la carte entière en vue.
+près) : 280 ms avant, 30 ms après, la carte entière en vue. Le sol n'est plus dessiné qu'au-dessus de la carte et de
+deux cases autour (`nextDrawnArea`) : la carte entière en vue, il couvrait 16 000 × 7 600 px ; et rezoomé, il se
+redessine à la taille de la vue (avant, 60 à 75 ms à chaque mise à jour de l'humidité, même au zoom 1). Hors de la
+carte, le shader du sol ne peignait que le givre par temps de gel : il n'y est plus.
 
 **Sols.** L'outil Relief a un mode « Sol » : le pinceau peint un des six sols sur tout son disque (terre,
 prairie, argile, sable, rocher, gravier), « Sol d'origine » efface. Le sol d'une case est gardé à côté de sa hauteur

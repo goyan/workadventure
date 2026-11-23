@@ -65,7 +65,7 @@ import { BreakingFoam, closedSidesOf, FOAM_VISITS_PER_FRAME } from "./BreakingFo
 import type { ClosedSide } from "./BreakingFoam";
 import { whitecapShare, windHeading } from "./Whitecaps";
 import { depthsSeen } from "./BuiltGround";
-import { drawnArea, heightsOver, stillCovers } from "./ObliqueView";
+import { heightsOver, nextDrawnArea, OBLIQUE_REACH_PX } from "./ObliqueView";
 import { classicPoolsShown, imagePoolCells, imagePoolsOf, signatureOf } from "./ImagePools";
 import { PoolLadders, topEdgesOf } from "./PoolLadders";
 import type { ImagePool, PlacedPool } from "./ImagePools";
@@ -74,6 +74,11 @@ import type { ImagePool, PlacedPool } from "./ImagePools";
 const TERRAIN_DEPTH = 0.65;
 /** Relief drawn beyond each edge of the screen, in a share of its size: a scroll rarely asks for a new drawing. */
 const DRAW_MARGIN = 0.25;
+/**
+ * The ground is drawn this many cells past the edges of the map: the blur of the soils (GroundSplat.smoothWeights) and
+ * the colours of the pools read one cell around each, so the cells of the map are drawn as if nothing were cut.
+ */
+const GROUND_BORDER_CELLS = 2;
 const NO_SHIFT = { columns: 0, rows: 0 };
 /** The textured grounds, under the relief canvas (its slopes, straw, ashes and water are drawn over them). */
 const SOIL_GROUND_DEPTH = TERRAIN_DEPTH - 0.04;
@@ -329,16 +334,43 @@ export class TerrainView {
             this.seenChanges++;
         }
         const key = `${foamKey}:${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}:${this.imagePools.signature}:${this.poolSettingsVersion()}:${meadowHoldsSnow()}:${this.ownSnow()}:${oblique}:${this.snowEverywhere?.() === true}:${this.seenChanges}`;
-        const inside = this.drawn !== undefined && stillCovers(this.drawn, screen, oblique, DRAW_MARGIN / 5);
-        if (key === this.lastKey && inside) return;
-        this.lastKey = key;
         // What was drawn reaches beyond the screen: while a scroll stays inside it, the same part of the map is
         // drawn again (the water alone changed), so the relief read for it is kept. Reading the relief again at
         // every drawing made the game stutter whenever the avatar walked.
-        if (!inside || !this.drawn) this.drawn = drawnArea(screen, oblique, DRAW_MARGIN);
-        this.draw(this.drawn, now);
+        const drawn = nextDrawnArea(
+            this.drawn,
+            screen,
+            oblique,
+            DRAW_MARGIN,
+            DRAW_MARGIN / 5,
+            this.groundBounds(oblique),
+        );
+        if (key === this.lastKey && drawn === this.drawn) return;
+        this.lastKey = key;
+        this.drawn = drawn;
+        this.draw(drawn, now);
         this.visible = true;
         this.scene.markDirty();
+    }
+
+    /**
+     * The part of the world the ground is drawn within: the map and a few cells around it. Past them nothing of the
+     * relief, the soils, the meadow nor the water is held, and painting the ground there cost as much as the map itself
+     * once the view was zoomed out. Undefined while the size of the map is not known.
+     */
+    private groundBounds(oblique: boolean): WeatherView | undefined {
+        // Not there in a scene still loading.
+        const map: { widthInPixels: number; heightInPixels: number } | undefined = this.scene.Map;
+        if (!map) return undefined;
+        const side = GROUND_BORDER_CELLS * TERRAIN_CELL;
+        // In 3/4 the shaders read the heights up to the reach above and under a pixel.
+        const reach = oblique ? OBLIQUE_REACH_PX : 0;
+        return {
+            x: -side,
+            y: -side - reach,
+            width: map.widthInPixels + 2 * side,
+            height: map.heightInPixels + 2 * (side + reach),
+        };
     }
 
     /** A number that changes whenever the styles or the hand ladders of the pools of the map change: drawn again then. */

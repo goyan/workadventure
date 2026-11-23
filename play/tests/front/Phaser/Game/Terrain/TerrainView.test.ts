@@ -131,6 +131,22 @@ describe("TerrainView", () => {
         expect(surface.begin).toHaveBeenCalledTimes(2);
     });
 
+    it("draws the ground within the map and two cells around it, and smaller again once zoomed back in", () => {
+        const { view, surface, scene, worldView } = fixture();
+        Object.assign(scene, { Map: { widthInPixels: 3200, heightInPixels: 1600 } });
+        // Zoomed out: the whole map and far around it in view.
+        Object.assign(worldView, { x: -4000, y: -2000, width: 11200, height: 5600 });
+        view.update(0);
+        expect(surface.begin.mock.calls[0][0]).toEqual({ x: -32, y: -32, width: 3264, height: 1664 });
+        view.update(16);
+        expect(surface.begin).toHaveBeenCalledTimes(1);
+        // Zoomed back in on the middle of the map: drawn again around the view only.
+        Object.assign(worldView, { x: 1200, y: 600, width: 640, height: 480 });
+        view.update(32);
+        expect(surface.begin).toHaveBeenCalledTimes(2);
+        expect(surface.begin.mock.calls[1][0]).toEqual({ x: 1040, y: 480, width: 960, height: 720 });
+    });
+
     it("hides itself while the other engine of the ground draws (the relief in 3/4), and draws again after", () => {
         const { water, surface, scene } = fixture();
         const hidden = { value: false };

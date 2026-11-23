@@ -96,6 +96,57 @@ export function drawnArea(screen: WeatherView, oblique: boolean, margin: number)
     return { x: drawn.x, y: screen.y - reach, width: drawn.width, height: screen.height + 2 * reach };
 }
 
+/**
+ * A drawing this many times larger than the one the view asks for is made again at the size of the view: zoomed back in
+ * after the whole map was seen, the ground is no longer painted over the whole map at each change.
+ */
+const OVERSIZED = 4;
+
+/** The part of `area` inside `bounds`; undefined when they do not meet. */
+function within(area: WeatherView, bounds: WeatherView): WeatherView | undefined {
+    const x = Math.max(area.x, bounds.x);
+    const y = Math.max(area.y, bounds.y);
+    const right = Math.min(area.x + area.width, bounds.x + bounds.width);
+    const bottom = Math.min(area.y + area.height, bounds.y + bounds.height);
+    return right > x && bottom > y ? { x, y, width: right - x, height: bottom - y } : undefined;
+}
+
+/**
+ * The part of the map to draw the ground over for this screen: `drawn` while it still covers the screen, else the screen
+ * and `margin` of it around (drawnArea). Within `bounds` (the map and a few cells around it), when given: nothing is
+ * drawn further, and a side of the drawing on the edge of the bounds covers the screen whatever its slack. A drawing
+ * much larger than the screen needs (left by a view zoomed out) is made again smaller.
+ */
+export function nextDrawnArea(
+    drawn: WeatherView | undefined,
+    screen: WeatherView,
+    oblique: boolean,
+    margin: number,
+    slack: number,
+    bounds?: WeatherView,
+): WeatherView {
+    const seen = (bounds && within(screen, bounds)) ?? screen;
+    const wanted = drawnArea(seen, oblique, margin);
+    const area = (bounds && within(wanted, bounds)) ?? wanted;
+    if (!drawn || drawn.width * drawn.height > OVERSIZED * area.width * area.height) return area;
+    const left = bounds !== undefined && drawn.x <= bounds.x;
+    const top = bounds !== undefined && drawn.y <= bounds.y;
+    const right = bounds !== undefined && drawn.x + drawn.width >= bounds.x + bounds.width;
+    const bottom = bounds !== undefined && drawn.y + drawn.height >= bounds.y + bounds.height;
+    const reachY = oblique ? OBLIQUE_REACH_PX : 0;
+    const covers =
+        (left || seen.x - drawn.x >= seen.width * slack) &&
+        (top || seen.y - drawn.y >= Math.max(seen.height * slack, reachY)) &&
+        (right || drawn.x + drawn.width - (seen.x + seen.width) >= seen.width * slack) &&
+        (bottom || drawn.y + drawn.height - (seen.y + seen.height) >= Math.max(seen.height * slack, reachY)) &&
+        // Every side within the drawing, even on the edge of the bounds.
+        seen.x >= drawn.x &&
+        seen.y >= drawn.y &&
+        seen.x + seen.width <= drawn.x + drawn.width &&
+        seen.y + seen.height <= drawn.y + drawn.height;
+    return covers ? drawn : area;
+}
+
 /** Whether what was drawn still covers the screen (`slack` of the view on each side), and in 3/4 what it reads. */
 export function stillCovers(drawn: WeatherView, screen: WeatherView, oblique: boolean, slack: number): boolean {
     if (!wellInside(drawn, screen, slack)) return false;
