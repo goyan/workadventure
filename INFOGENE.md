@@ -2496,6 +2496,15 @@ le fil seul, comme avant. À N, le fil de calcul démarre N − 1 fils d'appoint
     Node 23.9 et plus ; à défaut, le processus comme avant). Même seuil (`CPU_OVERHEAT_THRESHOLD`, 80 % par
     défaut), même sens. Sans fil de calcul, la mesure baisse seulement de ce que V8 fait dans ses propres fils
     (ramasse-miettes, compilation).
+  - **Repli quand la machine n'a pas de cœur pour les bandes** : un fil d'appoint qui a réclamé une tranche puis
+    perd son cœur fait attendre le fil de calcul à la fin de la passe ; personne ne peut reprendre sa tranche (elle
+    est à moitié écrite). Le fil de calcul chronomètre cette attente, pas après pas : au-delà de 20 ms dans un pas
+    (`BAND_SLOW_WAIT_MS` ; moins d'1 ms en temps normal, 14 ms au pire mesurés sur une machine saturée), il calcule
+    seul pendant dix secondes (`BAND_ALONE_MS`), fils d'appoint endormis, puis réessaie, et le dit dans le journal.
+    La borne d'une seconde reste le dernier recours. Même eau au bit près, noyau TypeScript ou compilé. Sur
+    `/metrics` : `workadventure_water_band_steps` (pas partagés depuis la dernière lecture),
+    `workadventure_water_band_wait_p99_seconds` et `_max_seconds` (attente du fil de calcul par pas),
+    `workadventure_water_bands_left_alone` (replis).
   - **Compte des tranches** : à la fermeture d'une salle, le fil de calcul dit à qui l'a démarré combien de
     tranches il a calculées lui-même et combien ses fils d'appoint (`GroundThreads.slices()`). Le test du sol entier
     à 3 bandes s'en sert pour prouver que les fils d'appoint ont travaillé : il demande au fil de calcul d'attendre,

@@ -1,6 +1,6 @@
 import { MessageChannel, Worker } from "node:worker_threads";
 import type { MessagePort } from "node:worker_threads";
-import { WaterBandsLead } from "@workadventure/map-editor";
+import { BAND_ALONE_MS, BAND_SLOW_WAIT_MS, WaterBandsLead } from "@workadventure/map-editor";
 import type {
     InertiaMove,
     WaterBandsBoard,
@@ -8,6 +8,7 @@ import type {
     WaterPass,
     WaterPassRunner,
 } from "@workadventure/map-editor";
+import { threadGroundTimings } from "./GroundTimings";
 
 /**
  * What a thread of the bands is told of the grids, before a pass: their arrays, in a memory the threads share, and
@@ -66,6 +67,15 @@ export class GroundBands implements WaterPassRunner {
     ) {
         const count = Math.max(0, Math.floor(followers));
         this.lead = lead ?? new WaterBandsLead(count);
+        // The wait of this thread for its bands, step after step: for the metrics, and said when it is too long.
+        this.lead.watchedBy((waitedMs, alone) => {
+            threadGroundTimings.bandsWaited(waitedMs, alone);
+            if (alone) {
+                console.info(
+                    `The water waited ${Math.round(waitedMs)} ms for its bands in one step (over ${BAND_SLOW_WAIT_MS} ms: no core for them): computed on one thread for ${BAND_ALONE_MS / 1000} s`,
+                );
+            }
+        });
         for (let index = 0; index < count; index++) {
             const channel = new MessageChannel();
             const thread = spawn({ board: this.lead.board, news: channel.port2 });

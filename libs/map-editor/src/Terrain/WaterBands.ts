@@ -217,6 +217,16 @@ export class WaterBandsLost extends Error {
     }
 }
 
+/**
+ * The wait of who leads, over the passes of one step, beyond which the machine has no core for the bands (ms): a
+ * thread that claimed a slice and lost its core is waited for at the end of the pass, and nothing can take its slice
+ * in its place (it is half written). Who leads then computes alone for BAND_ALONE_MS, and tries the bands again.
+ * A step waits under a millisecond in all when the threads have their cores (measured: 14 ms at most over 1 800
+ * steps on a saturated machine).
+ */
+export const BAND_SLOW_WAIT_MS = 20;
+export const BAND_ALONE_MS = 10_000;
+
 /** How long who leads waits for a slice another thread claimed before it gives the step up (ms). */
 export const BAND_PATIENCE_MS = 1000;
 
@@ -238,6 +248,12 @@ export class WaterBandsLead {
     private readonly gone: number[] = [];
     /** The slices computed here and by the others, since the beginning. */
     private readonly counts = { here: 0, others: 0 };
+    /** Whether the passes of the step that runs are shared, and how long this thread has waited for the others in it. */
+    private sharing = false;
+    private stepWaitMs = 0;
+    /** Until when this thread computes alone, the others having made it wait (on its clock). */
+    private aloneUntil = -Infinity;
+    private watch: ((waitedMs: number, alone: boolean) => void) | undefined;
 
     constructor(
         /** How many threads follow: a pass is cut in four slices for each thread, who leads being one. */
@@ -257,6 +273,28 @@ export class WaterBandsLead {
         /** Called once a pass is opened, before this thread works at it (where who follows is on this thread). */
         private readonly opened?: () => void,
     ) {}
+
+    /**
+     * Told after each step whose passes were shared: how long this thread waited in it for slices the others had
+     * claimed, and whether that was too long, so that it computes alone for a while.
+     */
+    public watchedBy(watch: (waitedMs: number, alone: boolean) => void): void {
+        this.watch = watch;
+    }
+
+    /** Whether this thread computes alone for now, the others having made it wait. */
+    public alone(): boolean {
+        return this.clock() < this.aloneUntil;
+    }
+
+    /** The step that ran is over: its wait is told, and decides whether the next ones are shared. */
+    private closeStep(): void {
+        if (!this.sharing) return;
+        this.sharing = false;
+        const slow = this.stepWaitMs > BAND_SLOW_WAIT_MS;
+        if (slow) this.aloneUntil = this.clock() + BAND_ALONE_MS;
+        this.watch?.(this.stepWaitMs, slow);
+    }
 
     /** How many threads follow from now on (one of them was lost, or came back). */
     public followedBy(followers: number): void {
@@ -301,6 +339,10 @@ export class WaterBandsLead {
      */
     public begin(key: object, move: InertiaMove, rowLost: Float64Array): WaterBandsNews[] {
         const { words, figures } = this.board;
+        this.closeStep();
+        this.stepWaitMs = 0;
+        // Shared unless nobody follows, or the others made this thread wait not long ago: they sleep meanwhile.
+        this.sharing = this.followers > 0 && !this.alone();
         // Nobody claims any more before the figures change: who read them for a turn of the past finds it over.
         Atomics.store(words, CLAIM, NO_CLAIM);
         for (let index = 0; index < FIGURES.length; index++) figures[index] = move[FIGURES[index]];
@@ -366,7 +408,8 @@ export class WaterBandsLead {
         const rowLost = this.rowLost;
         if (!move || !rowLost) throw new Error("A pass of the water was asked before its step began");
         const { words } = this.board;
-        const slices = Math.max(1, Math.min(move.height, MOST_SLICES - 1, (this.followers + 1) * 4));
+        const followers = this.sharing ? this.followers : 0;
+        const slices = Math.max(1, Math.min(move.height, MOST_SLICES - 1, (followers + 1) * 4));
         this.turn = (this.turn + 1) % TURNS;
         const turn = this.turn;
         // The claim first: nobody works for the pass before, and its words may change.
@@ -377,7 +420,8 @@ export class WaterBandsLead {
         Atomics.store(words, MOVED, 0);
         Atomics.store(words, DONE, 0);
         Atomics.store(words, CLAIM, turn << CLAIM_BITS);
-        if (this.followers > 0) {
+        // Who follows wakes on the turn: left as it was, they sleep, and this thread claims every slice.
+        if (followers > 0) {
             Atomics.store(words, TURN, turn);
             Atomics.notify(words, TURN);
         }
@@ -397,6 +441,7 @@ export class WaterBandsLead {
                 throw new WaterBandsLost(this.patienceMs);
             }
             this.sleep(words, DONE, done, Math.max(1, this.patienceMs - (now - waited)));
+            this.stepWaitMs += this.clock() - now;
         }
         Atomics.store(words, CLAIM, NO_CLAIM);
         if (Atomics.load(words, FAILED) !== 0)
