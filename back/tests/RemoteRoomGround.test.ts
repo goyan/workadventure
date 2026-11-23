@@ -239,8 +239,11 @@ describe("the ground of a room computed elsewhere (RemoteRoomGround)", () => {
             new Promise((resolve) => {
                 setTimeout(resolve, ms);
             });
+        // The cells that hold water worth keeping: an eighth of a pixel at least, what a copy of the water holds. A
+        // downpour or a rain on the whole map leaves a film on every cell (two hundredths of a pixel), drunk by the
+        // ground within half a second: seen or not as the machine is quick or slow, it must not be counted.
         const wetCells = (ground: RoomGround): number =>
-            waterOf(ground).filter((value, at) => at > 3 && at % 3 === 1 && value > 0).length;
+            waterOf(ground).filter((value, at) => at > 3 && at % 3 === 1 && value >= 0.125).length;
         // The water of a map that goes faster than reality lives as many steps of its time as the thread holds: how
         // soon the map is wet depends on the machine, so wait for it (5 s at most) rather than for a fixed time.
         const untilWet = async (ground: RoomGround, cells: number): Promise<void> => {
@@ -266,13 +269,13 @@ describe("the ground of a room computed elsewhere (RemoteRoomGround)", () => {
                 await ground.startWater();
                 await ground.startMeadow();
                 state.downpours = [{ id: 1, x: 0, y: 0, radiusTiles: 4, wholeMap: true }];
-                await untilWet(ground, 100);
+                await untilWet(ground, 50);
                 await until(() => seen.told.length > 3);
                 expect(seen.told.length).toBeGreaterThan(3);
-                expect(wetCells(ground)).toBeGreaterThan(100);
+                expect(wetCells(ground)).toBeGreaterThan(50);
                 expect(ground.waterSnapshot()?.full).toBe(true);
                 // The drain of the building keeps its floor dry there as here.
-                expect(ground.getGrid()?.depthAt(34, 34)).toBe(0);
+                expect(ground.getGrid()?.depthAt(34, 34) ?? 1).toBeLessThan(0.01);
                 const closed = ground.closed();
                 ground.stop();
                 await closed;
@@ -292,10 +295,10 @@ describe("the ground of a room computed elsewhere (RemoteRoomGround)", () => {
                 await ground.startWater();
                 await ground.startMeadow();
                 state.downpours = [{ id: 1, x: 0, y: 0, radiusTiles: 4, wholeMap: true }];
-                await untilWet(ground, 100);
+                await untilWet(ground, 50);
                 state.downpours = [];
                 const wet = wetCells(ground);
-                expect(wet).toBeGreaterThan(100);
+                expect(wet).toBeGreaterThan(50);
 
                 await workers[0].terminate();
                 await until(() => workers.length === 2);

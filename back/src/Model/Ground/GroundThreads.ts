@@ -1,6 +1,8 @@
 import { Worker } from "node:worker_threads";
 import { WATER_BANDS_ERROR } from "@workadventure/map-editor";
 import type { GroundCommand, GroundPort, GroundTold } from "./GroundProtocol";
+import { groundTimingsBoard } from "./GroundTimings";
+import type { GroundTimingsBoard } from "./GroundTimings";
 
 /** A thread as the grounds use it: a Worker, or what stands for one in a test. */
 export interface GroundThread {
@@ -43,6 +45,8 @@ class Lane implements GroundPort {
         /** Its place among the threads of the server, from 1, and how many they are: for the logs. */
         private readonly place: number,
         private readonly of: number,
+        /** Where the durations of the steps of its thread are gathered, for the metrics. */
+        private readonly timings: GroundTimingsBoard = groundTimingsBoard,
     ) {}
 
     public get size(): number {
@@ -84,6 +88,7 @@ class Lane implements GroundPort {
         thread.on("message", (told) => {
             if (told.kind === "band") this.bandLost();
             else if (told.kind === "slices") this.sliced = { here: told.here, others: told.others };
+            else if (told.kind === "timings") this.timings.add(String(this.place), told.batch);
             else this.rooms.get(told.room)?.told(told);
         });
         const lost = (reason: unknown): void => {
@@ -121,10 +126,16 @@ export class GroundThreads {
     /** On how many bands each thread computes the water of its rooms: 1, the thread alone. */
     public readonly bands: number;
 
-    constructor(count: number, spawn: (bands: number) => GroundThread = spawnGroundWorker, bands = 1) {
+    constructor(
+        count: number,
+        spawn: (bands: number) => GroundThread = spawnGroundWorker,
+        bands = 1,
+        /** Where the durations of the steps of the threads are gathered, for the metrics of the server. */
+        timings: GroundTimingsBoard = groundTimingsBoard,
+    ) {
         const lanes = Math.max(0, Math.floor(count));
         this.bands = Math.max(1, Math.floor(bands));
-        this.lanes = Array.from({ length: lanes }, (_, at) => new Lane(spawn, this.bands, at + 1, lanes));
+        this.lanes = Array.from({ length: lanes }, (_, at) => new Lane(spawn, this.bands, at + 1, lanes, timings));
     }
 
     /** How many threads the grounds may use: none, they are computed on the thread of the rooms. */

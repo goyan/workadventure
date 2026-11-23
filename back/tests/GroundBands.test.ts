@@ -112,6 +112,8 @@ function patientLead(
 ): WaterBandsLead {
     let turn = 0;
     let now = 0;
+    // Once nobody came, it never waits again: threads that never start must not hold a test for minutes.
+    let alone = false;
     const lead: WaterBandsLead = new WaterBandsLead(
         followers,
         sleep ??
@@ -121,9 +123,14 @@ function patientLead(
         1000,
         sleep ? () => (now += 400) : undefined,
         () => {
-            if (turn++ % each !== 0) return;
+            if (alone || turn++ % each !== 0) return;
             const opened = Atomics.load(lead.board.words, CLAIM);
-            for (let tries = 0; tries < 5000 && Atomics.load(lead.board.words, CLAIM) === opened; tries++) nap(1);
+            let tries = 0;
+            while (tries < 5000 && Atomics.load(lead.board.words, CLAIM) === opened) {
+                nap(1);
+                tries++;
+            }
+            alone = tries >= 5000;
         },
     );
     return lead;
