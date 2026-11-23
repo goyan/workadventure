@@ -29,6 +29,10 @@ export function registerGroundMetrics(
             steps.set(read.steps);
             busy.reset();
             for (const [thread, share] of read.busy) busy.set({ thread }, share);
+            bandSteps.set(read.bandSteps);
+            bandWaitP99.set(read.bandWaitP99Ms / 1000);
+            bandWaitMax.set(read.longestBandWaitMs / 1000);
+            bandsAlone.set(read.bandsLeftAlone);
         },
     );
     const p90 = gauge(
@@ -41,6 +45,22 @@ export function registerGroundMetrics(
     );
     const longest = gauge("workadventure_water_step_max_seconds", "Longest step of the water since the last reading.");
     const steps = gauge("workadventure_water_steps", "Number of steps of the water since the last reading.");
+    const bandSteps = gauge(
+        "workadventure_water_band_steps",
+        "Number of steps of the water whose passes were shared between bands (GROUND_BANDS) since the last reading.",
+    );
+    const bandWaitP99 = gauge(
+        "workadventure_water_band_wait_p99_seconds",
+        "Time under which, in 99 % of the steps shared between bands, a thread of the grounds waited for slices its bands had claimed, since the last reading.",
+    );
+    const bandWaitMax = gauge(
+        "workadventure_water_band_wait_max_seconds",
+        "Longest time a thread of the grounds waited, in a step, for slices its bands had claimed, since the last reading.",
+    );
+    const bandsAlone = gauge(
+        "workadventure_water_bands_left_alone",
+        "Number of times, since the last reading, a thread of the grounds waited too long for its bands and computed alone for ten seconds.",
+    );
     const busy = new Gauge({
         name: "workadventure_ground_busy_ratio",
         help: 'Share of its time (0 to 1) a thread gave the steps of the water and of the meadow since the last reading. thread="rooms": the thread of the rooms; a number: a thread of the grounds (GROUND_THREADS).',

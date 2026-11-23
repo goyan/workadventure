@@ -51,6 +51,7 @@ import {
     waterLevelPipetteStore,
 } from "@wa/front/Stores/WaterLevelPipetteStore";
 import { cameraDetachedStore } from "@wa/front/Stores/CameraStore";
+import { weatherPipetteStore } from "@wa/front/Stores/VisualisationStore";
 import { isKeyFromInteractiveElement } from "@wa/front/Utils/isKeyFromInteractiveElement";
 import { findShortcutAction } from "@wa/front/Stores/ShortcutsStore";
 import { spaceClimbs } from "../Vehicle/AirplaneAltitudeKeys";
@@ -157,6 +158,10 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             wasArmed = armed !== undefined;
             this.gameScene.input.setDefaultCursor(this.aiming() ? "crosshair" : this.idleCursor());
         });
+        // The weather pipette only reads under the pointer: its own cursor, and no click of the map taken.
+        const unsubscribeWeatherPipette = weatherPipetteStore.subscribe(() => {
+            this.gameScene.input.setDefaultCursor(this.aiming() ? "crosshair" : this.idleCursor());
+        });
         // The pipette of the level of a source aims with the same crosshair.
         let wasAiming = false;
         const unsubscribePipette = waterLevelPipetteStore.subscribe((take) => {
@@ -167,6 +172,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         gameScene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
             unsubscribeArmed();
             unsubscribePipette();
+            unsubscribeWeatherPipette();
             this.stopDownpour();
             this.pointerCapture.destroy();
             this.panShortcut.destroy();
@@ -504,6 +510,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     }
 
     private idleCursor(): string {
+        if (get(weatherPipetteStore)) return "help";
         return get(mapExplorationModeStore) ? "grab" : "auto";
     }
 

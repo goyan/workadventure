@@ -26,6 +26,9 @@ export interface ToldGround {
     version(): number;
     meanSnowCover(): number;
     snowCoverAt(x: number, y: number): number;
+    /** The thickest snow (mm of water) and the thickest ice (mm) of the map. */
+    peakSnowMm(): number;
+    peakIceMm(): number;
 }
 
 /** A place without its region and country, as the weather banner names it. */
@@ -34,7 +37,7 @@ function townOf(name: string | undefined): string | undefined {
 }
 
 /** Whether these weather settings are a precipitation at `date`, as the sky draws it (WeatherManager). */
-function fallsUnder(settings: MapSnowSettings | undefined, date: Date): boolean {
+export function fallsUnder(settings: MapSnowSettings | undefined, date: Date): boolean {
     const weather = weatherAtTime(
         settings?.weather ?? WeatherType.Clear,
         date,
@@ -100,6 +103,7 @@ export function weatherBoardNow(
                 ? { map: ground.meanSnowCover(), here: avatar ? ground.snowCoverAt(avatar.x, avatar.y) : 0 }
                 : undefined,
         roomWind: conditions?.windSpeed,
+        peaks: ground && ground.version() > 0 ? { iceMm: ground.peakIceMm(), snowMm: ground.peakSnowMm() } : undefined,
         snowTimes: waterTimesOf(settings?.water),
     });
 }

@@ -8,8 +8,11 @@
         waterFlowMeasuredStore,
         waterFlowOverlayStore,
         weatherExplainedStore,
+        weatherPipetteCellStore,
+        weatherPipetteStore,
     } from "../../Stores/VisualisationStore";
     import WeatherBoardLive from "./WeatherBoardLive.svelte";
+    import WeatherPipette from "./WeatherPipette.svelte";
 
     const css = (color: number): string => `#${color.toString(16).padStart(6, "0")}`;
     // The scale of the speeds, as the arrows are coloured: evenly spread along the bar.
@@ -19,12 +22,13 @@
     const stats = $derived($terrainWaterStatsStore);
     const flowing = $derived($waterFlowOverlayStore);
     const explaining = $derived($weatherExplainedStore);
+    const probing = $derived($weatherPipetteStore);
 </script>
 
 <!-- What is shown over the map, read here: the legend of the flows of the water and the weather board. Their tiles are
      in the Visualisation chip of the clock line (VisualisationChip); this stays in the column under it, so that
      closing the tiles keeps them open. -->
-{#if $visualisationPanelStore && (flowing || explaining)}
+{#if $visualisationPanelStore && (flowing || explaining || probing)}
     <div class="pointer-events-auto flex flex-col items-start gap-1 text-xs" data-testid="visualisation-shown">
         {#if flowing}
             <div
@@ -74,7 +78,12 @@
                 </div>
             </div>
         {/if}
-        {#if explaining}
+        {#if probing}
+            <!-- What goes on in the cell of the ground under the pointer: read only while this is on. The weather
+                 board, which lays itself over the panels when short of room, waits until the pipette is put away. -->
+            <WeatherPipette cell={$weatherPipetteCellStore} />
+        {/if}
+        {#if explaining && !probing}
             <!-- Why this player sees the rain, the snow, the frost and the ice they see. -->
             <WeatherBoardLive />
         {/if}

@@ -2496,6 +2496,15 @@ le fil seul, comme avant. À N, le fil de calcul démarre N − 1 fils d'appoint
     Node 23.9 et plus ; à défaut, le processus comme avant). Même seuil (`CPU_OVERHEAT_THRESHOLD`, 80 % par
     défaut), même sens. Sans fil de calcul, la mesure baisse seulement de ce que V8 fait dans ses propres fils
     (ramasse-miettes, compilation).
+  - **Repli quand la machine n'a pas de cœur pour les bandes** : un fil d'appoint qui a réclamé une tranche puis
+    perd son cœur fait attendre le fil de calcul à la fin de la passe ; personne ne peut reprendre sa tranche (elle
+    est à moitié écrite). Le fil de calcul chronomètre cette attente, pas après pas : au-delà de 20 ms dans un pas
+    (`BAND_SLOW_WAIT_MS` ; moins d'1 ms en temps normal, 14 ms au pire mesurés sur une machine saturée), il calcule
+    seul pendant dix secondes (`BAND_ALONE_MS`), fils d'appoint endormis, puis réessaie, et le dit dans le journal.
+    La borne d'une seconde reste le dernier recours. Même eau au bit près, noyau TypeScript ou compilé. Sur
+    `/metrics` : `workadventure_water_band_steps` (pas partagés depuis la dernière lecture),
+    `workadventure_water_band_wait_p99_seconds` et `_max_seconds` (attente du fil de calcul par pas),
+    `workadventure_water_bands_left_alone` (replis).
   - **Compte des tranches** : à la fermeture d'une salle, le fil de calcul dit à qui l'a démarré combien de
     tranches il a calculées lui-même et combien ses fils d'appoint (`GroundThreads.slices()`). Le test du sol entier
     à 3 bandes s'en sert pour prouver que les fils d'appoint ont travaillé : il demande au fil de calcul d'attendre,
@@ -3792,6 +3801,42 @@ frises Open-Meteo des deux sont relevées à des moments différents) ; la neige
 (toutes les dix secondes quand elle change), sa tendance (s'épaissit, fond, tient) est déduite de l'air de la carte
 et du vent des conditions de la salle. Non couverts : sol mouillé et flaques, eau apportée par la pluie en chiffres,
 soleil et lumière, herbe, feu, saison.
+
+
+### Glace et neige du serveur dans « Météo expliquée », et pipette
+
+**Tableau.** Pour qui suit le serveur, la carte « Glace sur l'eau » ne dit plus ce que l'air du moment formerait
+(ancienne règle du navigateur, `Frost.iceAt`) mais la glace que le serveur tient, avec son passé : l'épaisseur la
+plus forte de la carte (`MeadowState.peakIceMm`), si elle fond ou épaissit, de combien de millimètres par heure, et
+quand elle aura disparu. La neige de même (`peakSnowMm`). Les chiffres viennent de `Weather/KeptCover.ts`
+(`explainKeptIce`, `explainKeptSnow`), qui assemble les règles du serveur comme `Meadow.stepIce` et `stepSnow` :
+`iceGrowthMmPerDay × ICE_GROWTH_TIMES`, `iceCurrentShare`, `iceThawMmPerHour`, `snowMeltMmPerHour`,
+`snowSublimationMmPerHour`, à l'horloge de l'eau de la carte (`waterTimesOf`). Pour qui suit une ville, sa propre
+glace (règle du navigateur) est mise en regard de celle du serveur.
+
+À savoir sur la fonte : seul l'air de la carte compte (température, vent, humidité) ; le même nombre de millimètres
+est retiré partout, donc la plus mince part d'abord (bords, eau qui courait pendant le gel) ; ni le soleil, ni
+l'ombre, ni la profondeur, ni le courant ne la changent ; à vitesse d'eau 1 elle est en temps réel (10 cm à 24 °C,
+10 km/h, 49 % : environ 14 h).
+
+**Pipette.** Troisième tuile de la pastille Visualisation (`weatherPipetteStore`). Tant qu'elle est sortie, un
+panneau (`WeatherPipette.svelte`, phrases dans `pipetteText.ts` et `coverText.ts`) dit ce qui se passe dans la case
+du sol sous la souris : relief et sol ; eau (profondeur, surface, vitesse et sens du courant) ; glace (épaisseur,
+fonte ou prise en mm par heure, temps avant disparition, avant de porter ou de céder, seuils de 50 mm pour un
+marcheur et 102 mm pour une cabane, eau qui court trop vite pour geler, intérieur) ; neige ; givre et sol gelé ;
+herbe, humidité, feu, cendres ; soleil. Pastilles « Décidé par / Vu par » comme le tableau.
+
+`GameScene.stepWeatherPipette` lit la case (`Weather/CellProbeNow.ts`, par les lecteurs du jeu : `groundReadingAt`,
+`TerrainWater.settledDepthAt` et `speedAt`, `iceUnderfoot`, `MeadowState`, `waterCycleNow`, `roomPrecipitationAir`)
+au point du sol dessiné sous la souris (`groundPointUnder`, donc juste en vue 3/4), quand la souris change de case
+et quatre fois par seconde au plus ; `Weather/CellExplained.ts` (pur) en fait l'explication. Rien n'est envoyé au
+serveur, aucun clic n'est pris (on marche et on édite comme avant), rien n'est lu pipette rangée. Échap ou la croix
+la rangent ; le curseur devient « aide ».
+
+Limites : pour un joueur qui suit une ville avec son sol local, la tendance de sa glace et de sa neige est calculée
+avec l'air de sa ville (température, humidité, vent) : non vérifié contre le calcul du sol local ; une piscine
+chauffée est dite comme une eau ordinaire ; le palier (étage) sous la souris n'est pas dit ; soleil : sa hauteur
+seulement, pas l'ombre portée sur la case (elle ne change rien à la fonte).
 
 ## Vie aquatique (poissons et dauphins)
 

@@ -4,16 +4,18 @@ import {
     DEFAULT_WAVE_SETTINGS,
     ordinaryWaterArrays,
     setWaterPassRunner,
+    runWaterPass,
     sharedWaterArrays,
     WasmWaterKernel,
     WaterBandsLead,
     WaterBandsLost,
     WaterGrid,
 } from "@workadventure/map-editor";
-import type { WaterArrays, WaterStepInput } from "@workadventure/map-editor";
+import type { InertiaMove, WaterArrays, WaterPass, WaterStepInput } from "@workadventure/map-editor";
 import { GroundBands } from "../src/Model/Ground/GroundBands";
 import type { GroundBandStart, GroundBandThread } from "../src/Model/Ground/GroundBands";
 import type { GroundTold } from "../src/Model/Ground/GroundProtocol";
+import { threadGroundTimings } from "../src/Model/Ground/GroundTimings";
 import { BAND_LOSSES_BEFORE_NONE, GroundThreads } from "../src/Model/Ground/GroundThreads";
 import type { GroundThread } from "../src/Model/Ground/GroundThreads";
 
@@ -247,6 +249,72 @@ describe("the bands of the water on real threads (GroundBands)", () => {
         lost += live(grid, 15);
         expect(stateOf(grid, lost)).toEqual(expected);
     }, 60_000);
+
+    it("goes on alone for ten seconds when it waited too long for its bands, tells the metrics, and keeps the same water", () => {
+        const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+        const reference = flooded(false);
+        const expected = stateOf(reference, live(reference, 2) + live(reference, 2) + live(reference, 2));
+        threadGroundTimings.take();
+        // A band that claims a slice as each pass opens, loses its core, and computes it 3 ms later (on a clock of the
+        // test): this thread waits for it at the end of the pass.
+        let now = 0;
+        let claimed: number | undefined;
+        let shared: { move: InertiaMove; rowLost: Float64Array } | undefined;
+        let late = 3;
+        const lead: WaterBandsLead = new WaterBandsLead(
+            1,
+            (words) => {
+                now += late;
+                if (claimed === undefined || !shared) throw new Error("Slept, and nobody had claimed a slice");
+                const { move, rowLost } = shared;
+                const from = Math.round((claimed * HEIGHT) / 8);
+                runWaterPass(words[3] as WaterPass, move, from, Math.round(((claimed + 1) * HEIGHT) / 8), rowLost);
+                claimed = undefined;
+                Atomics.add(words, 2, 1);
+            },
+            1000,
+            () => now,
+            () => {
+                if (!lead.alone()) claimed = Atomics.add(lead.board.words, CLAIM, 1) & 1023;
+            },
+        );
+        const group = new GroundBands(
+            1,
+            () => undefined,
+            () => undefined,
+            () => ({ on: () => undefined, terminate: () => undefined }),
+            lead,
+        );
+        groups.push(group);
+        setWaterPassRunner({
+            begin: (key, move, rowLost) => {
+                shared = { move, rowLost };
+                group.begin(key, move, rowLost);
+            },
+            run: (pass) => group.run(pass),
+            forget: (key) => group.forget(key),
+        });
+        const grid = flooded(true);
+        let lost = live(grid, 2);
+        // The first step waited 24 ms (two moves of four passes, 3 ms each), over the 20 ms it bears: said as the second begins,
+        // which is computed alone, like those of the ten seconds that follow.
+        expect(info).toHaveBeenCalledWith(
+            "The water waited 24 ms for its bands in one step (over 20 ms: no core for them): computed on one thread for 10 s",
+        );
+        expect(lead.alone()).toBe(true);
+        lost += live(grid, 2);
+        const batch = threadGroundTimings.take();
+        expect(batch.bandWaits?.reduce((steps, [, count]) => steps + count, 0)).toBe(1);
+        expect(batch.longestBandWaitMs).toBe(24);
+        expect(batch.bandsLeftAlone).toBe(1);
+        // Ten seconds later it shares again, with a band that is on time: no more is said.
+        now += 10_000;
+        late = 0.5;
+        lost += live(grid, 2);
+        expect(info).toHaveBeenCalledTimes(1);
+        expect(threadGroundTimings.take().bandsLeftAlone).toBe(0);
+        expect(stateOf(grid, lost)).toEqual(expected);
+    });
 
     it("ends right, on this thread alone, a step whose other threads never wake", () => {
         const reference = flooded(false);

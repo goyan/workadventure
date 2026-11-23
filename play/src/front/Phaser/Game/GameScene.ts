@@ -319,7 +319,12 @@ import { jungleEnabledStore } from "../../Stores/JungleStore";
 import { isEffectShown, pixelReliefStore } from "../../Stores/EffectsStore";
 import { fireConditionsStore } from "../../Stores/FireConditionsStore";
 import { isBasicActive } from "../../Stores/BasicModeStore";
-import { waterFlowMeasuredStore, waterFlowOverlayStore } from "../../Stores/VisualisationStore";
+import {
+    isWeatherPipetteOn,
+    waterFlowMeasuredStore,
+    waterFlowOverlayStore,
+    weatherPipetteCellStore,
+} from "../../Stores/VisualisationStore";
 import { fastWaterActiveNow, setFastWaterResynchronize, sharedWaterBackStore } from "../../Stores/FastWaterStore";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
@@ -414,6 +419,7 @@ import { TerrainWater } from "./Terrain/TerrainWater";
 import { AquaticLife } from "./Life/AquaticLife";
 import { AquaticLifeView } from "./Life/AquaticLifeView";
 import { iceUnderfoot, isOnFrozenWater, isPoolFrozen, poolIceState } from "./Ice/FrozenWater";
+import { cellProbeNow } from "./Weather/CellProbeNow";
 import { IceBreaks } from "./Ice/IceBreaks";
 import { FrozenPoolsView } from "./Ice/FrozenPoolsView";
 import { BODY_CENTER_OFFSET_Y, getFrozenPoolRectangles, isPointInWater } from "./Water/WaterZones";
@@ -2589,6 +2595,8 @@ export class GameScene extends DirtyScene {
                     isOnFrozenWater(this, point),
                 ),
             );
+            // The weather pipette: the cell under the pointer explained, while it is on.
+            this.stepWeatherPipette(pointed, time);
             // Their own ground, for a player who follows the weather of a place they chose.
             this.localTerrain.update();
             // One engine draws the ground: the relief in 3/4 where the player chose it (never in the editor nor in
@@ -3538,6 +3546,53 @@ export class GameScene extends DirtyScene {
             (x, y) => this.terrainWater.isBridgeAt(x, y),
             // On the water where it is drawn: one swims at its surface.
             (x, y) => waterDepthAtPoint((pointX, pointY) => this.seenDepthAt(pointX, pointY, now), x, y),
+        );
+    }
+
+    /** When the weather pipette last read a cell (ms of the scene), and where (map pixels). */
+    private pipetteReadAt = -Infinity;
+    private pipettePoint: { x: number; y: number } | undefined;
+
+    /**
+     * The weather pipette (Weather/CellProbeNow): while it is on, what goes on in the cell of the ground under the
+     * pointer, read again when the pointer goes to another cell and four times a second at most. One cell is read,
+     * nothing is sent; off, nothing is read.
+     */
+    private stepWeatherPipette(pointed: { x: number; y: number } | undefined, now: number): void {
+        if (!isWeatherPipetteOn() || !pointed) {
+            if (this.pipettePoint) {
+                this.pipettePoint = undefined;
+                weatherPipetteCellStore.set(undefined);
+            }
+            return;
+        }
+        const date = this.nightManager?.serverDate();
+        if (!date) return;
+        // On the ground drawn there: down in a hollow when the relief is seen in 3/4, as the figures under the clock.
+        const point = this.groundPointUnder(pointed);
+        const last = this.pipettePoint;
+        const sameCell =
+            last !== undefined &&
+            Math.floor(last.x / TERRAIN_CELL) === Math.floor(point.x / TERRAIN_CELL) &&
+            Math.floor(last.y / TERRAIN_CELL) === Math.floor(point.y / TERRAIN_CELL);
+        if (sameCell && now - this.pipetteReadAt < 250) return;
+        this.pipettePoint = point;
+        this.pipetteReadAt = now;
+        const wam = this.getGameMap().getWamFile()?.getWam();
+        weatherPipetteCellStore.set(
+            cellProbeNow(
+                {
+                    terrain: wam?.terrain,
+                    settings: wam?.settings,
+                    water: this.terrainWater,
+                    meadow: this.meadow,
+                    outdoorAt: (x, y) => this.getOutdoorGrid()?.isOutdoorAt(x, y) !== false,
+                    iceUnderfoot: (at) => iceUnderfoot(this, at),
+                    sunElevation: this.nightManager?.sunPosition()?.elevation,
+                },
+                point,
+                date,
+            ),
         );
     }
 

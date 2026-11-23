@@ -8,6 +8,7 @@
     } from "@wa/front/Phaser/Game/Weather/WeatherExplained";
     import { LL, locale } from "../../../i18n/i18n-svelte";
     import { fastWaterStore } from "../../Stores/FastWaterStore";
+    import { coverClockLine, coverFigures, iceTrendLine, snowTrendLine } from "./coverText";
     import { IconMap, IconUser, IconUsers } from "@wa-icons";
 
     /**
@@ -32,6 +33,7 @@
         value === undefined ? $LL.actionbar.visualisation.weather.airs.unknown() : degrees(value);
 
     const t = $derived($LL.actionbar.visualisation.weather);
+    const figures = $derived(coverFigures(t, $locale));
 
     // The air of the map in blue, the player's own in yellow: on the airs at the top and on every card.
     const OWNER_PILL: Record<AirOwner, string> = {
@@ -284,6 +286,31 @@
         }
     });
 
+    // The ice and the snow the server keeps, at their thickest: the state of now and where it goes.
+    const keptIce = $derived(board.kept?.ice);
+    const keptSnow = $derived(board.kept?.snow);
+    const keptIceResult = $derived.by(() => {
+        if (!keptIce) return t.kept.iceUnknown();
+        return keptIce.mm > 0 ? t.kept.iceUpTo({ thickness: figures.thickness(keptIce.mm) }) : t.kept.iceNone();
+    });
+    const keptIceShort = $derived(
+        keptIce && keptIce.mm > 0
+            ? t.compare.short.keptIce({ thickness: figures.thickness(keptIce.mm) })
+            : t.compare.short.noIce(),
+    );
+    const keptIceWhy = $derived(keptIce ? [iceTrendLine(t, figures, keptIce, true)] : []);
+    const keptIceNotes = $derived(
+        keptIce && keptIce.mm > 0 ? [t.kept.onlyAir(), coverClockLine(t, $locale, board.snow.times)] : [],
+    );
+    /** The snow: what falls on it first (the old sentence, with its share of flakes), else where the thickest goes. */
+    const snowWhy = $derived.by(() => {
+        if (board.snow.trend === "building" || !keptSnow || keptSnow.mm <= 0) {
+            return snowTrend === undefined ? [] : [snowTrend];
+        }
+        const trend = snowTrendLine(t, figures, keptSnow, true);
+        return [t.kept.snowPeak({ mm: figures.mm(keptSnow.mm) }), ...(trend === undefined ? [] : [trend])];
+    });
+
     /** Whether this player follows a city of their own: their screen is then set against the map of the server. */
     const apart = $derived(board.follows !== "server" && board.city !== undefined);
 
@@ -399,23 +426,26 @@
                 title: t.ice.title(),
                 owner: ice.air,
                 audience: ice.audience,
-                result: iceResult(ice),
-                why: [iceWhy(ice)],
-                change: [
-                    t.ice.ladder({
-                        shallows: under(ice.thresholds.shallows),
-                        pools: under(ice.thresholds.pools),
-                        all: under(ice.thresholds.all),
-                    }),
-                ],
-                notes: lags(ice.drawn, ice.ice) ? [t.ice.drawn()] : [],
-                more: t.ice.more(),
-                onMap:
-                    ice.differs && ice.onMap ? { result: iceResult(ice.onMap), why: [iceWhy(ice.onMap)] } : undefined,
-                gap:
-                    ice.differs && ice.onMap
-                        ? [t.compare.seen({ map: iceShort(ice.onMap), own: iceShort(ice) }), t.compare.iceOnlyDrawn()]
-                        : undefined,
+                // Who follows the server stands on the ice it keeps, with its past: what is there, not what the air
+                // of the instant would form.
+                result: ice.air === "map" ? keptIceResult : iceResult(ice),
+                why: ice.air === "map" ? keptIceWhy : [iceWhy(ice)],
+                change:
+                    ice.air === "map"
+                        ? []
+                        : [
+                              t.ice.ladder({
+                                  shallows: under(ice.thresholds.shallows),
+                                  pools: under(ice.thresholds.pools),
+                                  all: under(ice.thresholds.all),
+                              }),
+                          ],
+                notes: ice.air === "map" ? keptIceNotes : lags(ice.drawn, ice.ice) ? [t.ice.drawn()] : [],
+                more: ice.air === "map" ? t.kept.iceMore() : t.ice.more(),
+                onMap: ice.differs ? { result: keptIceResult, why: keptIceWhy } : undefined,
+                gap: ice.differs
+                    ? [t.compare.seen({ map: keptIceShort, own: iceShort(ice) }), t.compare.iceOnlyDrawn()]
+                    : undefined,
                 same: sameLine(ice.air, ice.differs),
             },
             {
@@ -443,9 +473,9 @@
                 owner: board.snow.air,
                 audience: board.snow.audience,
                 result: snowResult,
-                why: snowTrend === undefined ? [] : [snowTrend],
+                why: snowWhy,
                 change: [],
-                notes: [t.snow.water()],
+                notes: keptSnow && keptSnow.mm > 0 ? [t.kept.onlyAir(), t.snow.water()] : [t.snow.water()],
                 more:
                     board.snow.times === 1
                         ? t.snow.honestReal()
@@ -496,7 +526,7 @@
             {
                 id: "ice",
                 name: t.ice.title(),
-                text: against(iceShort(ice), ice.onMap && iceShort(ice.onMap)),
+                text: against(iceShort(ice), ice.onMap && keptIceShort),
                 differs: ice.differs,
                 compared: ice.onMap !== undefined,
             },
