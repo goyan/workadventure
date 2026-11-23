@@ -2,74 +2,171 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { whitecapShare, whitecapWhite } from "@wa/front/Phaser/Game/Terrain/Whitecaps";
 import {
     BREAKING_SLOPE,
     effectiveFetchGrid,
-    ENVELOPE_COMPONENTS,
     fetchByte,
     FETCH_REFRESH_MS,
+    FOAM_DECAY_S,
     REFERENCE_FETCH_M,
     SEA_COMPONENTS,
     SeaFetch,
+    seaAmplitudes,
+    seaPhase,
+    seaSurface,
 } from "@wa/front/Phaser/Game/Terrain/WindSea";
 import {
+    breakingAt,
     breakingFactorFor,
     foamDriftPx,
+    groupAt,
+    groupDrift,
+    leftFoamFor,
+    lineDrift,
     seaDrawing,
-    seaWhite,
-    streakDrift,
+    WIND_SEA_FOAM_GLSL,
     WIND_SEA_GLSL,
+    WIND_SEA_WATER_GLSL,
     windSeaUniforms,
 } from "@wa/front/Phaser/Game/Terrain/WindSeaShader";
+import {
+    COARSE_FOAM_HZ,
+    FOAM_HZ,
+    FOAM_STEPS_PX,
+    FOAM_TEXELS,
+    foamArea,
+    foamIsDue,
+    foamStepSeconds,
+} from "@wa/front/Phaser/Game/Terrain/WindSeaFoam";
 
 const EAST = { x: 1, y: 0 };
 
-describe("the white of the wind sea against the law of the whitecaps", () => {
-    // The CPU twin of the shader, on a coarser grid than the measure of the table (every 16 px, three instants).
-    const white = (kmh: number): number => {
-        const sea = seaDrawing(kmh, EAST);
-        return sea ? seaWhite(sea, REFERENCE_FETCH_M, 2048, 16, 3) : 0;
-    };
+describe("where a crest of the wind sea breaks", () => {
+    const sea = seaDrawing(82, EAST);
+    if (!sea) throw new Error("A wind of 82 km/h raises a sea");
+    const amplitudes = seaAmplitudes(sea.components, sea.windMs, REFERENCE_FETCH_M, 10);
+    const phases = sea.components.map((component) => seaPhase(component, 40));
+    const groups = groupDrift(sea, 40);
 
-    it("whitens the share of the law from 25 to 90 km/h (within a fifth, or 0.1 % of the water)", () => {
-        for (const kmh of [25, 40, 60, 82, 90]) {
-            const wanted = whitecapShare(kmh);
-            expect(Math.abs(white(kmh) - wanted), `${kmh} km/h: ${white(kmh)} against ${wanted}`).toBeLessThanOrEqual(
-                Math.max(0.001, wanted * 0.2),
-            );
+    it("only on the upper front of a wave steeper than the breaking slope, give or take 10 %", () => {
+        let broke = 0;
+        for (let y = 0; y < 400; y += 3) {
+            for (let x = 0; x < 400; x += 3) {
+                const at = breakingAt(sea, amplitudes, phases, groups, x, y);
+                const point = seaSurface(sea.components, amplitudes, phases, x, y);
+                const slope = groupAt(sea, groups, x, y) * Math.hypot(point.sx, point.sy);
+                const front = point.sx * sea.heading.x + point.sy * sea.heading.y <= 0;
+                if (slope < sea.breakingSlope * 0.9 || point.eta < 0 || !front) expect(at).toBe(0);
+                if (slope > sea.breakingSlope * 1.1 && point.eta >= 0 && front) expect(at).toBe(1);
+                if (at > 0) broke++;
+            }
         }
-    }, 60_000);
+        // Some crests break at 82 km/h; most of the water does not.
+        expect(broke).toBeGreaterThan(0);
+        expect(broke / (134 * 134)).toBeLessThan(0.3);
+    });
 
-    it("never more than 45 % past the law, the water seen through", () => {
-        for (const kmh of [110, 150, 200]) {
-            const wanted = whitecapWhite(whitecapShare(kmh));
-            expect(white(kmh), `${kmh} km/h`).toBeLessThanOrEqual(0.45 * 1.05);
-            expect(Math.abs(white(kmh) - wanted), `${kmh} km/h`).toBeLessThanOrEqual(wanted * 0.2);
-        }
-    }, 60_000);
-
-    it("breaks the crests at the physical slope, give or take 10 %, from 20 to 82 km/h", () => {
+    it("at the physical slope of Michell, within 15 % from 20 to 82 km/h, by the measure of the white on the GPU", () => {
         for (let kmh = 20; kmh <= 82; kmh += 1) {
-            expect(breakingFactorFor(kmh), `${kmh} km/h`).toBeGreaterThan(0.9);
-            expect(breakingFactorFor(kmh), `${kmh} km/h`).toBeLessThan(1.1);
+            expect(breakingFactorFor(kmh), `${kmh} km/h`).toBeGreaterThan(0.85);
+            expect(breakingFactorFor(kmh), `${kmh} km/h`).toBeLessThan(1.15);
+        }
+        for (let kmh = 82; kmh <= 200; kmh += 1) {
+            expect(breakingFactorFor(kmh), `${kmh} km/h`).toBeGreaterThan(0.45);
+            expect(breakingFactorFor(kmh), `${kmh} km/h`).toBeLessThan(1.5);
         }
         // Never lower than at 20 km/h in a breeze: no foam where the waves are not steep.
         expect(breakingFactorFor(11)).toBe(breakingFactorFor(20));
         expect(seaDrawing(30, EAST)?.breakingSlope).toBeCloseTo(BREAKING_SLOPE * breakingFactorFor(30), 9);
     });
 
-    it("draws no foam where the law has none, and no sea at all under 10 km/h", () => {
+    it("nowhere where the law has no foam, and no sea at all under 10 km/h", () => {
         expect(seaDrawing(9, EAST)).toBeUndefined();
-        expect(seaDrawing(10.5, EAST)?.breakingSlope).toBe(Number.POSITIVE_INFINITY);
-        expect(white(10.5)).toBe(0);
+        const calm = seaDrawing(10.5, EAST);
+        expect(calm?.breakingSlope).toBe(Number.POSITIVE_INFINITY);
+        if (calm) expect(breakingAt(calm, amplitudes, phases, 0, 10, 10)).toBe(0);
     });
 
-    it("makes the foam patches larger and the streaks longer as the wind rises", () => {
-        // The foam drifts at 3 % of the wind: the streak an aging foam leaves grows with it.
+    it("draws the waves higher or lower by their groups, the sea of the law on the whole", () => {
+        let sum = 0;
+        let lowest = Infinity;
+        let highest = 0;
+        const count = 200 * 50;
+        for (let at = 0; at < count; at++) {
+            const value = groupAt(sea, groups, (at % 200) * 37, Math.floor(at / 200) * 53);
+            sum += value * value;
+            lowest = Math.min(lowest, value);
+            highest = Math.max(highest, value);
+        }
+        expect(Math.sqrt(sum / count)).toBeGreaterThan(0.9);
+        expect(Math.sqrt(sum / count)).toBeLessThan(1.15);
+        // Calmer and wilder groups, never a sea flat nor twice its height.
+        expect(lowest).toBeGreaterThanOrEqual(0.3);
+        expect(highest).toBeLessThanOrEqual(1.7);
+    });
+});
+
+describe("the foam the crests leave", () => {
+    it("drifts with the wind, faster as it rises, more opaque and laid more densely past force 7", () => {
+        // The foam drifts at 3 % of the wind: the trail a breaking crest leaves behind it grows with it.
         expect(foamDriftPx(80 / 3.6)).toBeGreaterThan(foamDriftPx(40 / 3.6) * 1.9);
-        expect(white(60)).toBeGreaterThan(white(40) * 2);
-    }, 60_000);
+        expect(leftFoamFor(30).opacity).toBeLessThan(leftFoamFor(60).opacity);
+        expect(leftFoamFor(60).opacity).toBeLessThan(leftFoamFor(100).opacity);
+        expect(leftFoamFor(100).opacity).toBeLessThan(1);
+        expect(leftFoamFor(40).cutShift).toBe(0);
+        expect(leftFoamFor(100).cutShift).toBeGreaterThan(leftFoamFor(60).cutShift);
+    });
+
+    it("is kept moved upwind by the drift, faded in FOAM_DECAY_S, and laid only where a crest breaks", () => {
+        expect(WIND_SEA_FOAM_GLSL).toMatch(/world - uSeaDir\.xy \* uSeaDir\.z \* dt/);
+        expect(WIND_SEA_FOAM_GLSL).toContain(`exp(-dt / ${FOAM_DECAY_S.toPrecision(8)})`);
+        expect(WIND_SEA_FOAM_GLSL).toMatch(/float breaking = seaBreaking\(world\);\n\s*if \(breaking > 0\.0\)/);
+        expect(WIND_SEA_FOAM_GLSL).toMatch(/max\(kept, laid\)/);
+        // Rounded at random to the bytes of its picture: a fading foam never sticks at its last step.
+        expect(WIND_SEA_FOAM_GLSL).toMatch(/kept \+= \(hashWide\(/);
+        // Starts from nothing when told to, and reads nothing off the picture before.
+        expect(WIND_SEA_FOAM_GLSL).toMatch(/uFoamStep\.w < 0\.5 && uv\.x > 0\.0/);
+    });
+
+    it("is read by the water, over the crest breaking at the pixel", () => {
+        expect(WIND_SEA_WATER_GLSL).toMatch(/texture2D\(uSeaFoam, uv\)/);
+        expect(WIND_SEA_WATER_GLSL).toMatch(/max\(breaking, left \* uSea\.w\)/);
+    });
+});
+
+describe("the picture of the foam around the camera", () => {
+    const view = { x: 1000.3, y: 4000.7, width: 1097, height: 617 };
+
+    it("holds the view and a margin, at the finest step that can, on whole texels of that step", () => {
+        const area = foamArea(view, false);
+        expect(area.step).toBe(2);
+        expect(area.x).toBeLessThanOrEqual(view.x - 64);
+        expect(area.y).toBeLessThanOrEqual(view.y - 64);
+        expect(area.x + area.width).toBeGreaterThanOrEqual(view.x + view.width + 64);
+        expect(area.y + area.height).toBeGreaterThanOrEqual(view.y + view.height + 64);
+        expect(area.x % area.step).toBe(0);
+        expect(area.y % area.step).toBe(0);
+        expect(area.width).toBe(area.step * FOAM_TEXELS.across);
+        // Zoomed out: coarser, never more texels.
+        const wide = foamArea({ x: 0, y: 0, width: 4000, height: 2500 }, false);
+        expect(wide.step).toBeGreaterThan(4);
+        expect(wide.width).toBeGreaterThanOrEqual(4000 + 128);
+        expect(FOAM_STEPS_PX).toContain(wide.step);
+    });
+
+    it("is coarser and made less often on a modest graphics card (Medium)", () => {
+        expect(foamArea(view, true).step).toBeGreaterThanOrEqual(4);
+        expect(foamIsDue(1000 + 1000 / FOAM_HZ, 1000, false)).toBe(true);
+        expect(foamIsDue(1000 + 1000 / FOAM_HZ, 1000, true)).toBe(false);
+        expect(foamIsDue(1000 + 1000 / COARSE_FOAM_HZ, 1000, true)).toBe(true);
+        expect(foamIsDue(5, undefined, true)).toBe(true);
+    });
+
+    it("moves and fades the foam over the real time between two pictures, a stall counting as a second", () => {
+        expect(foamStepSeconds(1000, undefined)).toBe(0);
+        expect(foamStepSeconds(1100, 1000)).toBeCloseTo(0.1, 9);
+        expect(foamStepSeconds(60_000, 1000)).toBe(1);
+    });
 });
 
 describe("a wind that wavers", () => {
@@ -91,12 +188,14 @@ describe("the uniforms of the wind sea", () => {
         const uniforms = new Map(windSeaUniforms(sea, 10));
         expect(uniforms.get("uSea")?.[2]).toBe(1);
         expect(uniforms.get("uSea")?.[0]).toBeCloseTo(40 / 3.6, 9);
+        expect(uniforms.get("uSea")?.[3]).toBeCloseTo(leftFoamFor(40).opacity, 9);
         for (let at = 0; at < SEA_COMPONENTS; at++) expect(uniforms.has(`uSeaA${at}`)).toBe(true);
         for (let at = 0; at < SEA_COMPONENTS / 2; at++) expect(uniforms.has(`uSeaB${at}`)).toBe(true);
     });
 
-    it("keep the phases and the drift of the streaks small after days of an open page", () => {
+    it("keep the phases and the drifts small after days of an open page", () => {
         const sea = seaDrawing(60, EAST);
+        if (!sea) throw new Error("A wind of 60 km/h raises a sea");
         for (const seconds of [0, 86_399, 40 * 86_400]) {
             const uniforms = new Map(windSeaUniforms(sea, seconds));
             for (let at = 0; at < SEA_COMPONENTS; at++) {
@@ -104,9 +203,10 @@ describe("the uniforms of the wind sea", () => {
                 expect(phase).toBeGreaterThanOrEqual(0);
                 expect(phase).toBeLessThan(1);
             }
-            const drift = streakDrift(60 / 3.6, seconds);
-            expect(drift).toBeGreaterThanOrEqual(0);
-            expect(drift).toBeLessThan(4096);
+            for (const drift of [lineDrift(60 / 3.6, seconds), groupDrift(sea, seconds)]) {
+                expect(drift).toBeGreaterThanOrEqual(0);
+                expect(drift).toBeLessThan(4096);
+            }
         }
     });
 });
@@ -116,30 +216,32 @@ describe("the GLSL of the wind sea", () => {
         resolve(dirname(fileURLToPath(import.meta.url)), "../../../../../src/front/Phaser/Game/Terrain/GroundSplat.ts"),
         "utf8",
     );
+    const all = `${WIND_SEA_GLSL}${WIND_SEA_WATER_GLSL}${WIND_SEA_FOAM_GLSL}`;
 
     it("takes the sine and cosine of 2 pi x fract only: under 2 pi, however far the map and however long the page", () => {
-        const trig = WIND_SEA_GLSL.match(/\b(sin|cos)\(([^()]*)\)/g) ?? [];
-        const sums = SEA_COMPONENTS + ENVELOPE_COMPONENTS.length;
-        expect(trig.length).toBe(2 * sums);
+        const trig = all.match(/\b(sin|cos)\(([^()]*)\)/g) ?? [];
+        expect(trig.length).toBe(2 * SEA_COMPONENTS);
         for (const call of trig) expect(call).toMatch(/^(sin|cos)\(turn\)$/);
-        const turns = WIND_SEA_GLSL.match(/turn = [^;]*;/g) ?? [];
-        expect(turns).toHaveLength(sums);
+        const turns = all.match(/turn = [^;]*;/g) ?? [];
+        expect(turns).toHaveLength(SEA_COMPONENTS);
         for (const turn of turns) expect(turn).toMatch(/^turn = 6\.2831853 \* fract\(/);
     });
 
     it("draws its noise with the hash without sine only", () => {
-        expect(WIND_SEA_GLSL).not.toMatch(/[^a-zA-Z]hash\(/);
-        expect(WIND_SEA_GLSL).not.toMatch(/vnoise|fbm/);
-        expect(WIND_SEA_GLSL).toMatch(/hashWide\(/);
+        expect(all).not.toMatch(/[^a-zA-Z]hash\(/);
+        expect(all).not.toMatch(/vnoise|fbm/);
+        expect(all).toMatch(/hashWide\(/);
     });
 
     it("replaces the grid of whitecaps drawn by chance, compiled only where the graphics card can", () => {
         expect(splat).not.toMatch(/whitecapsAt|capHash|uniform vec3 uWind/);
-        expect(splat).toMatch(/#ifdef WIND_SEA\n\$\{WIND_SEA_GLSL\}\n#endif/);
+        expect(splat).toMatch(/#ifdef WIND_SEA\n\$\{WIND_SEA_GLSL\}\n\$\{WIND_SEA_WATER_GLSL\}\n#endif/);
         expect(splat).toMatch(/seaWhite = seaFoam\(world\)/);
         expect(splat).toMatch(/MAX_FRAGMENT_UNIFORM_VECTORS/);
-        // Only on open water outdoors, at least 8 px deep, as the whitecaps were.
+        // Only on open water outdoors, at least 8 px deep, as the whitecaps were; the foam pass reads the same.
         expect(splat).toMatch(/if \(uSea\.z > 0\.5 && open > 0\.5\)/);
+        expect(splat).toMatch(/return outdoors \* step\(\$\{WHITECAP_MIN_DEPTH_PX\}\.0, depthPx\) \* depthPx;/);
+        expect(splat).toMatch(/if \(canSea\) \{\n\s*this\.seaFoam = new WindSeaFoam\(/);
     });
 });
 

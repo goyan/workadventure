@@ -145,16 +145,6 @@ describe("breaking", () => {
         expect(count(40)).toBeLessThan(count(82));
         expect(count(82)).toBeGreaterThan(0.005);
     });
-
-    it("the envelope of the slope is never under the slope itself", () => {
-        const components = seaComponents(60, EAST);
-        const amplitudes = seaAmplitudes(components, 60 / 3.6, 120, 10);
-        const phases = components.map((component) => seaPhase(component, 7));
-        for (let x = 0; x < 300; x += 7) {
-            const point = seaSurface(components, amplitudes, phases, x, x * 0.37, 1.5);
-            expect(point.envelope + 1e-12).toBeGreaterThanOrEqual(Math.hypot(point.sx, point.sy));
-        }
-    });
 });
 
 describe("fetchGrid: how far the wind has blown over the water", () => {

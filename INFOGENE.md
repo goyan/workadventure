@@ -2810,20 +2810,27 @@ partir de ce qu'il reçoit déjà (profondeurs, vent) :
   des places et des tailles aléatoires (un champ lisse, de moyenne quadratique 1, qui monte ou baisse la hauteur, et
   qui avance à la vitesse des groupes) : quelques vagues sommées battraient en motif régulier, ce qu'une vraie mer ne
   fait pas. La **lumière** (pente tournée vers la lumière ou non) lit surtout les vagues de plus de 8 à 24 px : les
-  plus courtes faisaient des hachures ; elles comptent entières dans le déferlement. L'**écume** laissée dure quelques
-  secondes (s'efface en 3 s, Callaghan et al. 2012), dérive à 3 % du vent (Wu 1983) et se déchire en filaments dans
-  le sens du vent ; translucide en brise, plus dense et plus opaque par grand vent, selon l'échelle de Beaufort (OMM :
-  traînées à force 7, bien marquées à 8, denses à 9, la mer blanche à 10).
-  La part blanchie suit la loi usuelle des moutons (Monahan et O'Muircheartaigh, 1980) : le seuil de pente est le
-  seuil physique à 7 % près de 20 à 82 km/h, 14 % sous lui à 90 km/h (table `BREAKING_FACTORS`, mesurée sur 2048 px).
-  Au-delà de 90 km/h, où les mesures de cette loi s'arrêtent, le blanc tend vers 45 % au plus (`whitecapWhite`) :
-  l'eau reste visible. Mesuré sur le GPU (Metal, sonde de l'étude, 2048 px, six instants) : 0,13 % à 20 km/h (loi
-  0,13 %), 1,31 % à 40 (1,41), 4,95 % à 60 (5,63), 14,6 % à 82 (16,3), 34,8 % à 110 (visée 34,2) ; 30 et 50 km/h
-  sont 27 % sous la loi sur le GPU (hachage calculé autrement par Metal que par le jumeau processeur). Sur un fetch
-  plus court, moins de moutons. Rien ne change sous 10 km/h (image identique à l'octet). Seulement dehors, sur une
-  eau d'au moins 8 px, non gelée. Le vent est celui que le joueur voit (carte, réglé à la main, ou météo réelle).
-  Qualité graphique : **Basse**, pas de mer du vent ; **Moyenne**, deux regards en arrière pour l'écume laissée au lieu
-  de trois. Coût mesuré (Mac M4 Max, 1920 x 1080 couvert d'eau) : 1,1 → 1,7 ms par image sans écume, 2,4 à 2,6 ms avec.
+  plus courtes faisaient des hachures ; elles comptent entières dans le déferlement. L'**écume** laissée est une
+  **mémoire** (`Terrain/WindSeaFoam.ts`) : une image de l'écume autour de la caméra (768 x 512 texels, un texel pour
+  2 px de jeu au zoom habituel, plus gros quand on dézoome), refaite 15 fois par seconde à partir d'elle-même sur la
+  carte graphique, deux textures en alternance. Chaque crête qui déferle y dépose son écume, en fines lignes dans le
+  sens du vent ; l'écume dérive à 3 % du vent (Wu 1983) et s'efface en 3 s (Callaghan et al. 2012). La crête avance
+  plus vite que son écume : elle laisse derrière elle une traînée aussi longue qu'elle a déferlé, irrégulière, qui
+  pâlit, sans motif d'ensemble. Translucide en brise, plus opaque par grand vent, selon l'échelle de Beaufort (OMM :
+  traînées à force 7, bien marquées à 8, denses à 9, la mer blanche à 10). L'écume est un état de la page : elle part
+  de rien au chargement ou après un saut de caméra et se forme en quelques secondes ; elle est ensuite la même chez
+  tous, les crêtes étant les mêmes.
+  La part blanchie suit la loi usuelle des moutons (Monahan et O'Muircheartaigh, 1980), mesurée sur le GPU avec les
+  vrais shaders (sonde de l'étude : passe d'écume et eau sur 1024 x 640 px d'eau ouverte au fetch de 200 m, 12 s de
+  mise en route, moyenne des 3 dernières secondes) : le seuil de pente est le seuil physique à 13 % près de 20 à
+  82 km/h (table `BREAKING_FACTORS`). Au-delà de 90 km/h, où les mesures de cette loi s'arrêtent, le blanc tend vers
+  45 % au plus (`whitecapWhite`) : l'eau reste visible. Mesuré : 0,13 % à 20 km/h (loi 0,13 %), 1,42 % à 40 (1,41),
+  5,64 % à 60 (5,63), 16,4 % à 82 (16,3), 34,2 % à 110 (visée 34,2). Sur un fetch plus court, moins de moutons.
+  Rien ne change sous 10 km/h. Seulement dehors, sur une eau d'au moins 8 px, non gelée. Le vent est celui que le
+  joueur voit (carte, réglé à la main, ou météo réelle).
+  Qualité graphique : **Basse**, pas de mer du vent ; **Moyenne**, image de l'écume deux fois plus grossière (un texel
+  pour 4 px au moins) et refaite 10 fois par seconde. Coût mesuré (Mac M4 Max, 1920 x 1080 couvert d'eau) : shader de
+  l'eau 1,0 → 1,4 ms par image ; passe de l'écume environ 0,1 ms, 15 fois par seconde.
 
 Le déferlement des vagues du serveur et la mer du vent sont dessinés par le **shader de l'eau**
 (`Terrain/GroundSplat.ts`), comme l'écume de rive : l'écume des vagues lui arrive par cellule (rouge du paquet 9),
