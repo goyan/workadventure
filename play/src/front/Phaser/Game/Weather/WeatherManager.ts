@@ -13,6 +13,7 @@ import {
     rainAmountStore,
     rainCloudsStore,
     rainLeanStore,
+    rainPerspectiveStore,
     rainPuddlesStore,
     rainSplashesStore,
     weatherEffectsEnabledStore,
@@ -89,7 +90,8 @@ import type { CloudSky } from "./CloudLayer";
 import { screenScale, seenFromFar } from "./ScreenScale";
 import type { BlockCanvasArea, BlockSurface } from "./BlockSurface";
 import { WeatherSounds } from "./WeatherSounds";
-import { drawFlake, flakeMix, groundWind, snowflakes, snowLevel, snowTones } from "./Snowfall";
+import { drawFlake, FLAKE_KINDS, flakeMix, groundWind, snowflakes, snowLevel, snowTones } from "./Snowfall";
+import { perspectiveCamera, perspectiveDrops, perspectiveFlakes } from "./PerspectiveFall";
 import type { SnowFall } from "./Snowfall";
 
 /** The system asks for less motion: the fog patches stand still. */
@@ -140,6 +142,12 @@ const PUDDLE_COLOR = 0x4f7ba6;
 const PUDDLE_EDGE_COLOR = 0x26384d;
 /** Opacity of a splash as the drop hits, spreads and fades. */
 const SPLASH_ALPHAS = [0.75, 0.55, 0.3];
+/** The drops in perspective: their width on the screen on the ground for each size (1.4, 3, 5 mm), at most this wide. */
+const PERSPECTIVE_DROP_WIDTHS = [1, 1.3, 1.6];
+const PERSPECTIVE_DROP_WIDEST = 6;
+const PERSPECTIVE_DROP_ALPHAS = [0.55, 0.75, 0.9];
+/** A flake in perspective is drawn at most this many times its size on the ground. */
+const PERSPECTIVE_FLAKE_BIGGEST = 4;
 
 export interface WeatherManagerOptions {
     /** Outdoor cells of the map: weather is only drawn there. Without a grid, it covers the whole view. */
@@ -218,6 +226,10 @@ export class WeatherManager {
     private readonly skyDrift = new SkyDrift();
     /** Where the air near the ground has carried the snow, with the real wind (map pixels): the flakes go with it. */
     private readonly snowDrift = new SkyDrift();
+    /** The air the drops ride, drawn in perspective (PerspectiveFall): where it has gone since the start of the clock. */
+    private readonly rainDrift = new SkyDrift();
+    /** Whether this player sees the rain and the snow in perspective (rainPerspectiveStore). */
+    private perspective = false;
     /** The wind the drops go with, and when it was last read (ms): it follows the real one within a second. */
     private rainWind: { wind: RainWind; at: number } | undefined;
     private readonly reducedMotion: boolean;
@@ -269,6 +281,7 @@ export class WeatherManager {
             rainSplashesStore.subscribe((value) => (this.rainSettings.splashes = value)),
             rainPuddlesStore.subscribe((value) => (this.rainSettings.puddles = value)),
             rainCloudsStore.subscribe((value) => (this.rainSettings.clouds = value)),
+            rainPerspectiveStore.subscribe((value) => (this.perspective = value)),
         ];
         this.puddleGraphics = scene.add.graphics().setDepth(PUDDLE_DEPTH).setVisible(false);
         this.graphics = scene.add
@@ -950,6 +963,11 @@ export class WeatherManager {
         local: RainLocal | undefined,
     ): void {
         const amount = intensity * this.rainSettings.amount;
+        if (this.perspective) {
+            this.drawRainInPerspective(epoch, view, amount, wind, isOutdoor, local);
+            this.drawSplashes(epoch, view, 1, intensity, isOutdoor, local);
+            return;
+        }
         // Seen from very close the rain is worked out on a finer grid than the map, then brought back to it: the
         // drops keep on screen the size and the number they have at a usual zoom.
         const fine = rainFineness(this.screenScale());
@@ -989,6 +1007,19 @@ export class WeatherManager {
                 this.graphics.strokePath();
             }
         }
+        this.drawSplashes(epoch, finer, fine, intensity, isOutdoor, localFine);
+    }
+
+    /** The splashes of the drops reaching the ground (none when motion is reduced), worked out on a grid `fine` times
+     * finer than the map (`finer`: the view on it). */
+    private drawSplashes(
+        epoch: number,
+        finer: WeatherView,
+        fine: number,
+        intensity: number,
+        isOutdoor: ((x: number, y: number) => boolean) | undefined,
+        localFine: RainLocal | undefined,
+    ): void {
         if (this.reducedMotion) return;
         const splashing = intensity * this.rainSettings.splashes;
         const lakes = this.scene.getTerrainWater?.();
@@ -1045,6 +1076,10 @@ export class WeatherManager {
                 : { x: view.x * fine, y: view.y * fine, width: view.width * fine, height: view.height * fine };
         const localFine: RainLocal | undefined = local && fine !== 1 ? (x, y) => local(x / fine, y / fine) : local;
         const tones = snowTones(night);
+        if (this.perspective) {
+            this.drawSnowInPerspective(epoch, view, fall, air, tones, isOutdoor, local);
+            return;
+        }
         const pixel = 1 / fine;
         for (const flake of snowflakes(epoch, finer, fall, air, localFine, this.reducedMotion)) {
             const x = flake.x / fine;
@@ -1052,6 +1087,89 @@ export class WeatherManager {
             if (isOutdoor && !isOutdoor(x, y)) continue;
             drawFlake(this.graphics, x, y, flake.size, flake.alpha * tones.alpha, tones, pixel);
         }
+    }
+
+    /**
+     * The rain seen from a camera above the map (PerspectiveFall): each drop a streak along the line to the middle of
+     * the screen, thicker and fainter near the camera, as many as the flat rain at the same intensity. Its splashes
+     * as the flat rain's. Outdoors only: where a drop lands.
+     */
+    private drawRainInPerspective(
+        epoch: number,
+        view: WeatherView,
+        amount: number,
+        wind: RainWind,
+        isOutdoor: ((x: number, y: number) => boolean) | undefined,
+        local: RainLocal | undefined,
+    ): void {
+        const camera = perspectiveCamera(this.screenView());
+        const still = this.reducedMotion;
+        const air = { shift: still ? { x: 0, y: 0 } : this.rainDrift.at(epoch, wind), wind };
+        const drops = perspectiveDrops(still ? 0 : epoch, view, camera, amount, air, local).filter(
+            (drop) => !isOutdoor || isOutdoor(drop.landX, drop.landY),
+        );
+        // Screen pixels a map pixel: the widths are set on the screen.
+        const pixel = 1 / this.screenScale();
+        // Grouped by how they are drawn: a few lines styles for the whole rain.
+        const groups = new Map<string, { width: number; alpha: number; drops: typeof drops }>();
+        for (const drop of drops) {
+            const width = Math.min(PERSPECTIVE_DROP_WIDEST, PERSPECTIVE_DROP_WIDTHS[drop.size] * drop.scale);
+            // Near the camera a drop is out of focus: fainter as it grows.
+            const alpha = PERSPECTIVE_DROP_ALPHAS[drop.size] * Math.min(1, Math.sqrt(2.5 / drop.scale));
+            const roundedWidth = Math.max(1, Math.round(width * 2) / 2);
+            const roundedAlpha = Math.round(alpha * 10) / 10;
+            const key = `${roundedWidth}|${roundedAlpha}`;
+            const group = groups.get(key) ?? { width: roundedWidth, alpha: roundedAlpha, drops: [] };
+            group.drops.push(drop);
+            groups.set(key, group);
+        }
+        for (const group of groups.values()) {
+            // The whole streak faint, then its lower half again: a bright head with a trail.
+            for (const [share, fade] of [
+                [1, 0.45],
+                [0.5, 1],
+            ] as const) {
+                this.graphics.lineStyle(group.width * pixel, RAIN_COLOR, group.alpha * fade);
+                this.graphics.beginPath();
+                for (const drop of group.drops) {
+                    this.graphics.moveTo(
+                        drop.headX + (drop.tailX - drop.headX) * share,
+                        drop.headY + (drop.tailY - drop.headY) * share,
+                    );
+                    this.graphics.lineTo(drop.headX, drop.headY);
+                }
+                this.graphics.strokePath();
+            }
+        }
+    }
+
+    /** The snow seen from a camera above the map (PerspectiveFall): pixel flakes, bigger near the camera. */
+    private drawSnowInPerspective(
+        epoch: number,
+        view: WeatherView,
+        fall: SnowFall,
+        air: { shift: { x: number; y: number }; velocity: { x: number; y: number } },
+        tones: { light: number; shade: number; alpha: number },
+        isOutdoor: ((x: number, y: number) => boolean) | undefined,
+        local: RainLocal | undefined,
+    ): void {
+        const camera = perspectiveCamera(this.screenView());
+        // The pixel of a flake on the ground, as the flat snow draws it (finer seen from very close).
+        const pixel = 1 / rainFineness(this.screenScale());
+        for (const flake of perspectiveFlakes(epoch, view, camera, fall, air, local, this.reducedMotion)) {
+            if (isOutdoor && !isOutdoor(flake.landX, flake.landY)) continue;
+            const kind = FLAKE_KINDS[flake.kind];
+            // The shape of the flake as on the ground, its pixels as many times bigger as the flake is near.
+            const grown = Math.min(PERSPECTIVE_FLAKE_BIGGEST, flake.scale);
+            const alpha = flake.alpha * tones.alpha * Math.min(1, Math.sqrt(3 / flake.scale));
+            drawFlake(this.graphics, flake.x, flake.y, kind.sizes[0], alpha, tones, pixel * grown);
+        }
+    }
+
+    /** The part of the map on the screen now. */
+    private screenView(): WeatherView {
+        const camera = this.scene.cameras.main.worldView;
+        return { x: camera.x, y: camera.y, width: camera.width, height: camera.height };
     }
 
     /**

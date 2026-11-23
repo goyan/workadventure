@@ -4147,6 +4147,22 @@ de 0 à 100 %, avec sauvegarde personnelle. Les appels et les Jams conservent le
 « Outils → Cycle jour/nuit » ouvre directement le choix personnel serveur / ordinateur / désactivé.
 Cette première version couvre toute la carte, sans accumulation de neige ni distinction entre intérieur et extérieur.
 
+**Pluie et neige vues de dessus, en perspective** (expérimentation, 2026-11-23, `Weather/PerspectiveFall.ts`). Réglage
+personnel « Pluie et neige vues de dessus, en perspective », dans les réglages de la pluie, mémorisé par le navigateur,
+**éteint par défaut** : rien ne change pour qui ne l'allume pas. Allumé, la pluie et la neige sont vues d'une caméra
+au-dessus du milieu de l'écran, à la hauteur d'un champ de 60° sur la largeur de la vue (≈ 33 m au zoom habituel ; elle
+monte quand on dézoome). Une goutte à la hauteur z est dessinée à c + (p − c)·H/(H − z) : grosse et rapide près de la
+caméra, elle rétrécit en tombant, glisse vers le milieu de l'écran (le nadir, où les verticales se rejoignent) et
+touche le sol à sa vraie position ; sa traînée (ce qu'elle parcourt en 0,1 s, le temps d'intégration de l'œil) suit la
+droite qui mène au milieu : un point au nadir, un trait vers les bords. Elles tombent de 0,8·H (dessinées jusqu'à 5 fois
+plus grosses) à leur vitesse terminale (Atlas 1973), portées par l'air. Part de chaque taille selon Marshall et Palmer
+(1948, Λ = 4,1 R^−0,21 mm⁻¹) : presque toutes petites, les grosses avec les averses. Autant de gouttes à l'écran que la
+pluie plate à la même intensité (`rainDropsExpected`), autant de flocons que la neige plate. Neige : mêmes flocons
+(Locatelli et Hobbs), à environ 1 m/s, en tourbillon, leurs pixels grossis près de la caméra (au plus 4 fois).
+Éclaboussures, flaques et voile inchangés. Vue 3/4 : le nadir reste au milieu de l'écran (à recaler). Coût mesuré
+(dessin de la météo, Mac M4 Max, averse et vent de 40 km/h) : 1,6 ms par dessin contre 1,1 ; neige 0,54 contre 0,46.
+Non validé à l'œil par l'utilisateur.
+
 **Pluie au vent réel** (2026-11-22, `Weather/Rain.ts` `rainSlant`, `followWind`). Les gouttes suivent le même vent
 que la neige (`groundWind` : vent réel près du sol, ≈ 0,8 du vent à 10 m, ses deux composantes ; nord-ouest à
 10 km/h quand il n'est pas connu ; réglage personnel « inclinaison » appliqué). Pour chaque pixel de chute, une goutte
