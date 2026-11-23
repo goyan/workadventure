@@ -2449,6 +2449,14 @@ le fil seul, comme avant. À N, le fil de calcul démarre N − 1 fils d'appoint
     de calcul attend une seconde au plus (`BAND_PATIENCE_MS`), puis s'arrête, et ses salles repartent du dernier
     instantané de leur eau par le mécanisme de perte d'un fil ; le fil relancé a une bande de moins, et plus aucune
     après trois pertes (`BAND_LOSSES_BEFORE_NONE`, dit dans le journal).
+  - **Surchauffe du serveur** (`back/src/Services/CpuTracker.ts`, code d'origine WorkAdventure modifié) : le mode
+    « overheat », où `SocketManager.handleUserMovesMessage` ne relaie plus les déplacements intermédiaires des
+    joueurs, jugeait le processeur de tout le processus (`process.cpuUsage()`), fils de calcul compris. Avec le fil
+    de calcul, l'eau le déclenchait alors que le fil des joueurs était au repos (beta : 60 % d'un cœur pour l'eau,
+    9 % pour les joueurs). Il juge maintenant le fil qui l'appelle, celui des joueurs (`process.threadCpuUsage()`,
+    Node 23.9 et plus ; à défaut, le processus comme avant). Même seuil (`CPU_OVERHEAT_THRESHOLD`, 80 % par
+    défaut), même sens. Sans fil de calcul, la mesure baisse seulement de ce que V8 fait dans ses propres fils
+    (ramasse-miettes, compilation).
   - **Compte des tranches** : à la fermeture d'une salle, le fil de calcul dit à qui l'a démarré combien de
     tranches il a calculées lui-même et combien ses fils d'appoint (`GroundThreads.slices()`). Le test du sol entier
     à 3 bandes s'en sert pour prouver que les fils d'appoint ont travaillé : il demande au fil de calcul d'attendre,
