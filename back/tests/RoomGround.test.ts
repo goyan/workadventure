@@ -55,6 +55,9 @@ describe("the ground of a room behind its door (RoomGround)", () => {
         expect(iceOf(ground)).toEqual(iceOf(reference));
         // The cold snap of the scenario froze water: what breaks the ice had ice to break.
         expect(iceOf(ground).some((mm) => mm > 0)).toBe(true);
+        // The mass of cold air a player laid on the pond of the east froze it in a mild air, and it still holds ice
+        // six seconds after it was let go.
+        expect(ground.iceAt(21, 4)).toBeGreaterThan(0);
         expect(ground.hasMeadow()).toBe(true);
         expect(ground.catchingUp()).toBe(reference.catchingUp());
         // The map of these grounds goes six times faster than reality, and its steps cost nothing on their clock:

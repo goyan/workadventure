@@ -1,5 +1,6 @@
 import type {
     Ball,
+    ColdMass,
     Downpour,
     Drain,
     FireConditions,
@@ -23,6 +24,8 @@ export interface GroundRoomState {
     downpours: readonly Downpour[];
     drains: readonly Drain[];
     balls: readonly Ball[];
+    /** The masses of cold air the players hold; absent while there is none. */
+    colds?: readonly ColdMass[];
     grazers: readonly { x: number; y: number }[];
     air: PrecipitationAir | undefined;
     fire: FireConditions;

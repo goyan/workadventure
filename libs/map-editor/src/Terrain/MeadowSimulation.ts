@@ -3,6 +3,8 @@ import { DEFAULT_MEADOW_SETTINGS, TERRAIN_CELL, TILE_PX, waterHasInertia, Weathe
 import type { TerrainData } from "../types";
 import { DOWNPOUR_PX_PER_SECOND, DOWNPOUR_REPORT_MS } from "../Catastrophe/Downpour";
 import type { Downpour } from "../Catastrophe/Downpour";
+import { warmedCold } from "../Catastrophe/Cold";
+import type { ColdMass } from "../Catastrophe/Cold";
 import { FIREBALL_EMBER_PATCH_TILES, fireballEmbers } from "../Catastrophe/Fireball";
 import { lifeFireOf } from "../Life/FireFear";
 import type { LifeFire } from "../Life/FireFear";
@@ -127,6 +129,13 @@ export class MeadowSimulation {
     private snowRate = 0;
     /** The air over the snow lying on the ground (temperature, humidity, wind): unknown until the room gives it. */
     private snowWeather: () => SnowWeather | undefined = () => undefined;
+    /** The masses of cold air the players hold on the map now: none until the catastrophes of the room say. */
+    private coldHeld: () => readonly ColdMass[] = () => [];
+    /**
+     * The masses of cold air lying on the map: those held, and those let go, which stay where they were and come
+     * back to the air of the map (warmedCold) until they are that air.
+     */
+    private readonly coldMasses = new Map<number, ColdMass>();
     /** Where the water of a melted snow goes: the mm poured on a tile are returned. Nowhere until the room says. */
     private pour: (tileX: number, tileY: number, mm: number) => number = () => 0;
     /** Whether snow fell or melted since the room was last told: it is told at the next step. */
@@ -359,6 +368,38 @@ export class MeadowSimulation {
         this.air = air;
     }
 
+    /** The catastrophes of the room say which masses of cold air its players hold. */
+    public coldUnder(held: () => readonly ColdMass[]): void {
+        this.coldHeld = held;
+    }
+
+    /** The masses of cold air lying on the map now, those let go that are still warming included. */
+    public colds(): ColdMass[] {
+        return [...this.coldMasses.values()].map((mass) => ({ ...mass }));
+    }
+
+    /**
+     * The masses of cold air of a step of `seconds`: those the players hold, at the temperature they ask; those let
+     * go, warmed towards the air of the map by the time of the map that went by (`times` faster than the clock),
+     * and forgotten once they are that air, or when that air is not known. Undefined when there is none.
+     */
+    private coldNow(seconds: number, times: number, mapCelsius: number | undefined): ColdMass[] | undefined {
+        const held = this.coldHeld();
+        if (held.length === 0 && this.coldMasses.size === 0) return undefined;
+        const kept = new Set<number>();
+        for (const mass of held) {
+            kept.add(mass.id);
+            this.coldMasses.set(mass.id, { ...mass });
+        }
+        for (const [id, mass] of this.coldMasses) {
+            if (kept.has(id)) continue;
+            const warmed = warmedCold(mass.temperature, mapCelsius ?? Number.NaN, (seconds * times) / 60);
+            if (!(warmed < (mapCelsius ?? Number.NaN))) this.coldMasses.delete(id);
+            else mass.temperature = warmed;
+        }
+        return this.coldMasses.size > 0 ? [...this.coldMasses.values()] : undefined;
+    }
+
     /** The air over the snow of the map (the conditions of the room): it melts by its heat, its wind and its humidity. */
     public snowUnder(weather: () => SnowWeather | undefined): void {
         this.snowWeather = weather;
@@ -582,6 +623,8 @@ export class MeadowSimulation {
             speedAt && !replaying && waterHasInertia(settings?.water) ? speedAt : undefined;
         const snow = this.snowInput(seconds);
         if (snow.snowfallMm) this.snowMoved = true;
+        // The cold air the players lay on the map: not while the room lives the time it missed, nobody was there.
+        const cold = replaying ? undefined : this.coldNow(seconds, snow.snowTimes ?? 1, snow.weather?.temperature);
         // The trees on fire melt the snow around their foot.
         if (meadow.snowy() || meadow.icy()) {
             for (const tree of this.trees.fires()) {
@@ -604,7 +647,7 @@ export class MeadowSimulation {
             }
             // The snow and the ice are not of the meadow: the snow goes on falling and melting, the water freezing.
             const freezing = snow.weather !== undefined && snow.weather.temperature < 0;
-            if (meadow.snowy() || meadow.icy() || snow.snowfallMm || freezing) {
+            if (meadow.snowy() || meadow.icy() || snow.snowfallMm || freezing || cold) {
                 const thawed = meadow.stepSnowAlone({
                     seconds: seconds,
                     rainMmPerHour: this.rainRate,
@@ -613,6 +656,7 @@ export class MeadowSimulation {
                     waterAt,
                     currentAt,
                     ...snow,
+                    ...(cold ? { cold } : {}),
                 });
                 this.pourMelted(meadow, thawed?.meltedMm);
                 if (meadow.iceMoved()) this.snowMoved = true;
@@ -640,6 +684,7 @@ export class MeadowSimulation {
             waterAt,
             currentAt,
             ...snow,
+            ...(cold ? { cold } : {}),
         });
         this.pourMelted(meadow, thawed?.meltedMm);
         // An ice that thickens or thaws is seen moving, as a snow is.

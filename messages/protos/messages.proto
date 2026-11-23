@@ -887,6 +887,10 @@ enum CatastropheKind {
   // Ice that gives way under a player: too thin to bear them over deep water, it cracks, then breaks around the
   // point. The server breaks the ice it keeps there (as a meteor does) and tells the room, which sees the hole.
   CATASTROPHE_ICE_BREAK = 6;
+  // A cold snap: a mass of very cold air laid on a disc under the pointer of a player, for as long as they keep
+  // telling. The server freezes what its meadow keeps there (water, snow, soil) by the rules of any frost; let go,
+  // the mass stays where it was and comes back to the air of the map.
+  CATASTROPHE_COLD = 7;
 }
 
 // Browser to server: a player sets the conditions the fire of the room goes by (heat, humidity of the air, wind) by
@@ -928,6 +932,8 @@ message LaunchCatastropheMessage {
   bool wholeMap = 5;
   // A ball: its player lets it go. It is gone at once.
   bool release = 6;
+  // A cold snap: the temperature of its air, in °C. The server keeps it within what a cold snap may be.
+  optional double temperature = 7;
 }
 
 // Server to room: a catastrophe is on its way.
@@ -949,6 +955,9 @@ message CatastropheMessage {
   // A ball: the altitude of its centre, in pixels: the level of the water it stands in, where it is half in the
   // water, or the ground under it where there is no water. The server alone decides it.
   optional double ballLevel = 12;
+  // A cold snap: the temperature of its air, in °C, as the server kept it. `impactInMs` is how long it is still
+  // held when no other message comes; it then warms where it lies.
+  optional double temperature = 13;
 }
 
 // A player casts their fishing line: where the float lands, in map pixels. The server decides whether it does

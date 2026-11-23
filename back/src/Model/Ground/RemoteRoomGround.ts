@@ -309,6 +309,7 @@ export class RemoteRoomGround implements RoomGround {
             downpours: inputs.downpours(),
             drains: inputs.drains(),
             balls,
+            ...(inputs.colds && inputs.colds().length > 0 ? { colds: inputs.colds() } : {}),
             grazers: inputs.grazers(),
             air: inputs.air(),
             fire: inputs.fire(),

@@ -1,5 +1,9 @@
 import {
     BALL_LASTS_MS,
+    COLD_LASTS_MS,
+    coldCelsius,
+    COLDS_PER_ROOM,
+    coldTiles,
     BALL_MIN_REPORT_MS,
     ballRadiusPx,
     BALLS_PER_ROOM,
@@ -19,7 +23,7 @@ import {
     METEORS_PER_ROOM,
     TILE_PX,
 } from "@workadventure/map-editor";
-import type { Ball, Downpour, Drain } from "@workadventure/map-editor";
+import type { Ball, ColdMass, Downpour, Drain } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
 import type { GameRoom } from "./GameRoom";
 
@@ -51,6 +55,11 @@ interface LiveDrain extends Drain {
     toldAt: number;
 }
 
+interface LiveCold extends ColdMass {
+    until: number;
+    toldAt: number;
+}
+
 interface LiveBall extends Ball {
     /** Until when it stands if its player says nothing more. */
     until: number;
@@ -65,6 +74,8 @@ export class CatastropheManager {
     private readonly raining = new Map<number, LiveDownpour>();
     /** The drain of each player, by the id of the player. */
     private readonly draining = new Map<number, LiveDrain>();
+    /** The mass of cold air each player holds, by the id of the player. */
+    private readonly chilling = new Map<number, LiveCold>();
     /** The level the water holds a ball at (see TerrainWaterManager.ballLevelAt): the altitude 0 until it is given. */
     private levelOf: (id: number, x: number, y: number) => number = () => 0;
     private stopped = false;
@@ -201,6 +212,65 @@ export class CatastropheManager {
 
     private forgetClosed(now: number): void {
         for (const [userId, drain] of this.draining) if (drain.until <= now) this.draining.delete(userId);
+    }
+
+    /**
+     * A player lays a mass of cold air around a point of the map (pixels), `radiusTiles` wide, its air at
+     * `temperature` °C (both kept within what a cold snap may be): the mass of that player comes, or moves there
+     * and goes on. The room is told each time. What freezes under it is the business of the meadow, which reads the
+     * masses held (colds) and keeps those let go while they warm. False when it is refused.
+     */
+    public cold(userId: number, x: number, y: number, radiusTiles: number = 0, temperature?: number): boolean {
+        if (this.stopped) return false;
+        const size = this.mapSize();
+        if (!size || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+        if (x < 0 || y < 0 || x >= size.width || y >= size.height) return false;
+        const now = this.now();
+        this.forgetCold(now);
+        const held = this.chilling.get(userId);
+        if (held ? now - held.toldAt < DOWNPOUR_MIN_REPORT_MS : this.chilling.size >= COLDS_PER_ROOM) return false;
+        const mass: LiveCold = {
+            id: held?.id ?? this.nextId++,
+            x,
+            y,
+            radiusTiles: coldTiles(radiusTiles),
+            temperature: coldCelsius(temperature),
+            until: now + COLD_LASTS_MS,
+            toldAt: now,
+        };
+        this.chilling.set(userId, mass);
+        this.room.sendSubMessageToRoom({
+            message: {
+                $case: "catastropheMessage",
+                catastropheMessage: {
+                    id: mass.id,
+                    kind: CatastropheKind.CATASTROPHE_COLD,
+                    x,
+                    y,
+                    impactInMs: COLD_LASTS_MS,
+                    radiusTiles: mass.radiusTiles,
+                    wholeMap: false,
+                    temperature: mass.temperature,
+                },
+            },
+        });
+        return true;
+    }
+
+    /** The masses of cold air the players hold now. */
+    public colds(): ColdMass[] {
+        this.forgetCold(this.now());
+        return [...this.chilling.values()].map(({ id, x, y, radiusTiles, temperature }) => ({
+            id,
+            x,
+            y,
+            radiusTiles,
+            temperature,
+        }));
+    }
+
+    private forgetCold(now: number): void {
+        for (const [userId, mass] of this.chilling) if (mass.until <= now) this.chilling.delete(userId);
     }
 
     /**
@@ -380,6 +450,7 @@ export class CatastropheManager {
         radiusTiles: number,
         wholeMap: boolean,
         release = false,
+        temperature?: number,
     ): boolean {
         // Only a ball is let go: the others end by themselves.
         if (release) return kind === CatastropheKind.CATASTROPHE_BALL && this.release(userId);
@@ -388,6 +459,7 @@ export class CatastropheManager {
         if (kind === CatastropheKind.CATASTROPHE_DRAIN) return this.drain(userId, x, y, radiusTiles);
         if (kind === CatastropheKind.CATASTROPHE_BALL) return this.ball(userId, x, y, radiusTiles);
         if (kind === CatastropheKind.CATASTROPHE_ICE_BREAK) return this.iceBreak(userId, x, y);
+        if (kind === CatastropheKind.CATASTROPHE_COLD) return this.cold(userId, x, y, radiusTiles, temperature);
         return this.launch(kind, x, y, radiusTiles);
     }
 
@@ -442,6 +514,7 @@ export class CatastropheManager {
         this.inFlight.clear();
         this.raining.clear();
         this.draining.clear();
+        this.chilling.clear();
         this.holding.clear();
     }
 }

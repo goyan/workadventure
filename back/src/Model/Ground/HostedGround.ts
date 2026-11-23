@@ -59,6 +59,7 @@ export class HostedGround {
             downpours: () => this.state.downpours,
             drains: () => this.state.drains,
             balls: () => this.state.balls,
+            colds: () => this.state.colds ?? [],
             grazers: () => this.state.grazers,
             air: () => this.state.air,
             fire: () => this.state.fire,

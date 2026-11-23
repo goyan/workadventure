@@ -1,5 +1,6 @@
 import type {
     Ball,
+    ColdMass,
     Downpour,
     Drain,
     FireConditions,
@@ -29,6 +30,8 @@ export interface RoomGroundInputs {
     downpours(): readonly Downpour[];
     drains(): readonly Drain[];
     balls(): readonly Ball[];
+    /** The masses of cold air the players hold (the cold snap of the catastrophes). None when absent. */
+    colds?(): readonly ColdMass[];
     /** Where the animals that graze are (map pixels). */
     grazers(): readonly { x: number; y: number }[];
     /** The air the precipitation of the room falls through; undefined while it is not known. */
