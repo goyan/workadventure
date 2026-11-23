@@ -1,5 +1,12 @@
-import { parentPort } from "node:worker_threads";
-import { setWaterKernel, threadWaterLoads, waterKernelInUse, waterKernelNamed } from "@workadventure/map-editor";
+import { parentPort, workerData } from "node:worker_threads";
+import {
+    setWaterKernel,
+    setWaterPassRunner,
+    threadWaterLoads,
+    waterKernelInUse,
+    waterKernelNamed,
+} from "@workadventure/map-editor";
+import { GroundBands } from "./GroundBands";
 import type { GroundCommand, GroundTold } from "./GroundProtocol";
 import { HostedGround } from "./HostedGround";
 
@@ -19,9 +26,35 @@ const GROUND_THREAD_SHARE = 0.9;
  */
 // Nothing but grounds is computed here: their water may take most of the thread before it eases.
 threadWaterLoads.mayTake(GROUND_THREAD_SHARE);
+
+const port = parentPort;
+if (!port) throw new Error("GroundWorker runs in a worker thread only");
+
+// The bands of the water: threads that share with this one the passes of each move of its waters, when asked for.
+const bands = Math.floor(Number((workerData as { bands?: number } | null)?.bands ?? 1));
+if (bands > 1) {
+    const group = new GroundBands(
+        bands - 1,
+        (reason, remaining) => {
+            console.error(
+                `A thread of the bands of the water was lost (${reason}): the water goes on with ${remaining + 1} band(s)`,
+            );
+            port.postMessage({ kind: "band", room: 0, reason, remaining } satisfies GroundTold);
+        },
+        (error) => {
+            // A step half computed: this thread ends, and its rooms start again from the last copy of their water.
+            console.error("A step of the water was lost to its bands: this thread of the grounds ends", error);
+            setImmediate(() => {
+                throw error;
+            });
+        },
+    );
+    setWaterPassRunner(group);
+}
 // The kernel of the water of the server (ServerWaterKernel), read here from the environment this thread inherits:
-// the variables of the server are checked on its own thread, not here.
-setWaterKernel(waterKernelNamed(process.env.WATER_KERNEL));
+// the variables of the server are checked on its own thread, not here. With bands, the arrays of the grids are in
+// a memory the threads share, whatever computes their passes.
+setWaterKernel(waterKernelNamed(process.env.WATER_KERNEL), bands > 1);
 if (process.env.WATER_KERNEL === "wasm") {
     const inUse = waterKernelInUse();
     console.info(
@@ -30,9 +63,6 @@ if (process.env.WATER_KERNEL === "wasm") {
             : `A thread of the ground computes its water with the TypeScript kernel: the WebAssembly one could not be loaded (${inUse.fallback ?? "unknown"})`,
     );
 }
-
-const port = parentPort;
-if (!port) throw new Error("GroundWorker runs in a worker thread only");
 
 const grounds = new Map<number, { ground: HostedGround; last: Promise<void> }>();
 
