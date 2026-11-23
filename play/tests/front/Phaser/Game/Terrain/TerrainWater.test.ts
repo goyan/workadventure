@@ -49,6 +49,19 @@ describe("TerrainWater", () => {
         expect(water.depthAt(-900, 8, 5000)).toBe(0);
     });
 
+    it("has nothing to draw on a relief filled in again, and follows each relief it is given", () => {
+        const water = new TerrainWater();
+        // A chunk of level ground, as a map may hold one.
+        water.setTerrain({ chunks: { "0,0": new Array<number>(256).fill(0) } });
+        expect(water.hasAnything()).toBe(false);
+        water.setTerrain(withHeights(pit, new Map([[cellKey(40, 40), 12]])));
+        expect(water.hasAnything()).toBe(true);
+        water.setTerrain(withHeights(pit, new Map([[cellKey(0, 0), 0]])));
+        expect(water.hasAnything()).toBe(false);
+        water.setTerrain(withSoils(undefined, new Map([[cellKey(3, 3), 1]])));
+        expect(water.hasAnything()).toBe(true);
+    });
+
     it("shows the water of a source on a map without relief", () => {
         const water = new TerrainWater();
         water.receive(full(1, { "1,1": 2 }), 0);
