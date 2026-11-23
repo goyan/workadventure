@@ -1,7 +1,7 @@
 import type * as Phaser from "phaser";
 import { HURRICANE_GUST_FACTOR, hurricaneHere } from "@workadventure/map-editor";
-import { roomHurricaneAir, windOfAir } from "../Weather/HurricaneAir";
 import type { Hurricane } from "@workadventure/map-editor";
+import { roomHurricaneAir, windOfAir } from "../Weather/HurricaneAir";
 import { DEPTH_OVERLAY_INDEX } from "../DepthIndexes";
 import { DEBRIS_MAX, DEBRIS_MIN_GUST_KMH, DebrisField } from "./DebrisField";
 import type { DebrisWind } from "./DebrisField";
