@@ -1,5 +1,6 @@
 import type { RealWeatherSlot, SeededMeadow, WAMFileFormat, WeatherLocation } from "@workadventure/map-editor";
-import type { TerrainWaterStatsMessage } from "@workadventure/messages";
+import type { CatastropheMessage, TerrainWaterStatsMessage } from "@workadventure/messages";
+import { LocalCatastropheRelay } from "./LocalCatastropheRelay";
 import type { LocalTerrainCommand, LocalTerrainTold } from "./LocalTerrainSimulation";
 import { TerrainWater } from "./TerrainWater";
 import type { WaterState } from "./TerrainWater";
@@ -66,6 +67,8 @@ export class LocalTerrainController {
     private tabHidden = false;
     private sentMap: { key: string; wam: WAMFileFormat } | undefined;
     private walkersAt = -Infinity;
+    /** The catastrophes of the room, as the server tells them: the local ground lives them too. */
+    private readonly catastrophes = new LocalCatastropheRelay();
     /** The ground that could not start (a place, or the map's): not tried again until another is asked. */
     private failedKey: string | undefined;
 
@@ -93,8 +96,17 @@ export class LocalTerrainController {
         return this.running;
     }
 
+    /** A catastrophe the server tells the room: the local ground, if any, takes it too (now, or when it lands). */
+    public fromCatastrophe(message: CatastropheMessage): void {
+        const commands = this.catastrophes.receive(message, this.now());
+        if (this.port) for (const command of commands) this.port.postMessage(command);
+    }
+
     /** At each image: starts or lets go the local ground, and tells it what changed around it. */
     public update(): void {
+        // What lands or ends is followed whether a local ground runs or not: one that starts later is told the rest.
+        const landed = this.catastrophes.due(this.now());
+        if (this.port) for (const command of landed) this.port.postMessage(command);
         const asked = this.tabHidden ? undefined : this.asked();
         if (!asked) {
             this.failedKey = undefined;
@@ -226,6 +238,7 @@ export class LocalTerrainController {
                     },
                 });
                 port.postMessage({ kind: "walkers", walkers: this.scene.walkers() });
+                port.postMessage(this.catastrophes.state());
             })
             .catch((error: unknown) => {
                 // Without its worker the player keeps the ground of the server: the weather of their place still

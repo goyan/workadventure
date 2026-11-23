@@ -210,15 +210,17 @@ __attribute__((export_name("scale"))) int scale(const Move *move, int rowFrom, i
 }
 
 /*
- * The depths follow the flows. `lost` is the water lost so far: what these rows lose is added to it, cell after
- * cell, and the sum is returned. `*moved` is set when any of it moved the water (left alone otherwise).
+ * The depths follow the flows. What each row loses is written in `rowLost`, a sum for each row of the grid, from
+ * nothing: who calls adds the rows up in their order, so the water lost is the same sum whoever computes which
+ * rows. `*moved` is set when any loss moved the water (left alone otherwise).
  */
-__attribute__((export_name("depths"))) double depths(const Move *move, int rowFrom, int rowTo, double lost, int *moved) {
+__attribute__((export_name("depths"))) void depths(const Move *move, int rowFrom, int rowTo, double *rowLost, int *moved) {
     const int width = move->width, height = move->height;
     float *depth = move->depth;
     const float *ground = move->ground, *spill = move->spill, *east = move->east, *south = move->south;
     const double dt = move->dt, edgeShare = move->edgeShare, top = move->top;
     for (int row = rowFrom; row < rowTo; row++) {
+        double lost = 0;
         for (int column = 0; column < width; column++) {
             const int index = row * width + column;
             double net = 0;
@@ -250,16 +252,17 @@ __attribute__((export_name("depths"))) double depths(const Move *move, int rowFr
             }
             depth[index] = (float)held;
         }
+        rowLost[row] = lost;
     }
-    return lost;
 }
 
 /*
  * The `moves` moves of a step over the whole grid, one after the other. The speeds of a move take the place of
  * those of the move before: the two pairs of arrays are swapped in `move` at each move, where who calls reads
- * which is which afterwards. Returns the water lost, added to `lost`; `*moved` as depths.
+ * which is which afterwards. Returns the water lost, the rows of each move added in their order to `lost`;
+ * `*moved` as depths.
  */
-__attribute__((export_name("step"))) double step(Move *move, int moves, double lost, int *moved) {
+__attribute__((export_name("step"))) double step(Move *move, int moves, double lost, double *rowLost, int *moved) {
     for (int at = 0; at < moves; at++) {
         flux(move, 0, move->height);
         float *wasEast = move->speedEast, *wasSouth = move->speedSouth;
@@ -269,7 +272,8 @@ __attribute__((export_name("step"))) double step(Move *move, int moves, double l
         move->nextSpeedSouth = wasSouth;
         afford(move, 0, move->height);
         if (scale(move, 0, move->height)) *moved = 1;
-        lost = depths(move, 0, move->height, lost, moved);
+        depths(move, 0, move->height, rowLost, moved);
+        for (int row = 0; row < move->height; row++) lost += rowLost[row];
     }
     return lost;
 }

@@ -24,8 +24,8 @@ interface KernelExports {
     flux(move: number, rowFrom: number, rowTo: number): void;
     afford(move: number, rowFrom: number, rowTo: number): void;
     scale(move: number, rowFrom: number, rowTo: number): number;
-    depths(move: number, rowFrom: number, rowTo: number, lost: number, moved: number): number;
-    step(move: number, moves: number, lost: number, moved: number): number;
+    depths(move: number, rowFrom: number, rowTo: number, rowLost: number, moved: number): void;
+    step(move: number, moves: number, lost: number, rowLost: number, moved: number): number;
 }
 
 let compiled: WebAssembly.Module | undefined;
@@ -40,6 +40,14 @@ function kernelModule(): WebAssembly.Module {
 }
 
 export class WasmWaterKernel {
+    /** Why the last kernel asked for could not be made, when it could not. */
+    private static failure: string | undefined;
+
+    /** Why the compiled kernel cannot be had here; undefined when it can. */
+    public static unavailable(): string | undefined {
+        return WasmWaterKernel.create(1, 2, 1) ? undefined : (WasmWaterKernel.failure ?? "it could not be loaded");
+    }
+
     private next: number;
     private readonly move: number;
     private readonly moved: number;
@@ -61,24 +69,37 @@ export class WasmWaterKernel {
     }
 
     /**
-     * A kernel for a grid of `cells` cells and a table of `powers` figures. Undefined where WebAssembly is not to
+     * A kernel for a grid of `cells` cells in `rows` rows and a table of `powers` figures. Undefined where WebAssembly is not to
      * be had (an old browser, a page that forbids compiling): the grid then computes in TypeScript, the same water.
      */
-    public static create(cells: number, powers: number): WasmWaterKernel | undefined {
-        if (cells <= 0 || typeof WebAssembly === "undefined") return undefined;
+    public static create(cells: number, powers: number, rows: number): WasmWaterKernel | undefined {
+        if (cells <= 0) return undefined;
+        if (typeof WebAssembly === "undefined") {
+            WasmWaterKernel.failure = "WebAssembly is not available here";
+            return undefined;
+        }
         try {
             const module = kernelModule();
             // What the module asks for at least (its stack), then the Move, the table of powers and the arrays.
             const reserved = 2 * PAGE_BYTES;
-            const bytes = reserved + MOVE_BYTES + 16 + 4 * powers + (4 * FLOAT_ARRAYS + BYTE_ARRAYS) * cells + 64;
+            const bytes =
+                reserved + MOVE_BYTES + 16 + 4 * powers + (4 * FLOAT_ARRAYS + BYTE_ARRAYS) * cells + 8 * rows + 64;
             const memory = new WebAssembly.Memory({ initial: Math.ceil(bytes / PAGE_BYTES) });
             const instance = new WebAssembly.Instance(module, { env: { memory } });
             const kernel = instance.exports as unknown as KernelExports;
             const heapBase = Number(kernel.__heap_base.value);
-            if (!Number.isFinite(heapBase) || heapBase + MOVE_BYTES + 16 > reserved) return undefined;
+            if (!Number.isFinite(heapBase) || heapBase + MOVE_BYTES + 16 > reserved) {
+                WasmWaterKernel.failure = "its memory is not laid out as expected";
+                return undefined;
+            }
             return new WasmWaterKernel(memory, kernel, heapBase);
         } catch (error) {
-            console.warn("The compiled kernel of the water could not be loaded: computing in TypeScript", error);
+            const reason = error instanceof Error ? error.message : String(error);
+            // Said once, not at every grid.
+            if (WasmWaterKernel.failure !== reason) {
+                console.warn("The compiled kernel of the water could not be loaded: computing in TypeScript", error);
+            }
+            WasmWaterKernel.failure = reason;
             return undefined;
         }
     }
@@ -90,6 +111,13 @@ export class WasmWaterKernel {
         return new Float32Array(this.buffer(), at, length);
     }
 
+    /** An array of `length` doubles in the memory of the kernel, all zeros. */
+    public doubles(length: number): Float64Array<ArrayBuffer> {
+        const at = align(this.next, 8);
+        this.next = at + 8 * length;
+        return new Float64Array(this.buffer(), at, length);
+    }
+
     /** An array of `length` bytes in the memory of the kernel, all zeros. */
     public bytes(length: number): Uint8Array<ArrayBuffer> {
         const at = this.next;
@@ -99,14 +127,20 @@ export class WasmWaterKernel {
 
     /**
      * The `moves` moves of a step over the whole grid (the passes of WaterKernel.ts, in their order). `lost` is the
-     * water lost so far; returns it with what these moves lost, and whether any moved the water. The speeds of a
-     * move take the place of those of the move before: after an odd number of moves, `speedEast` and
-     * `nextSpeedEast` (and the south ones) have traded places, which who calls has to follow.
+     * water lost so far; returns it with what these moves lost (the rows of each move, written in `rowLost`, added
+     * in their order), and whether any moved the water. The speeds of a move take the place of those of the move
+     * before: after an odd number of moves, `speedEast` and `nextSpeedEast` (and the south ones) have traded
+     * places, which who calls has to follow.
      */
-    public step(move: InertiaMove, moves: number, lost: number): { lost: number; moved: boolean } {
+    public step(
+        move: InertiaMove,
+        moves: number,
+        lost: number,
+        rowLost: Float64Array,
+    ): { lost: number; moved: boolean } {
         this.write(move);
         this.movedView[0] = 0;
-        const total = this.kernel.step(this.move, moves, lost, this.moved);
+        const total = this.kernel.step(this.move, moves, lost, this.pointer(rowLost), this.moved);
         return { lost: total, moved: this.movedView[0] !== 0 };
     }
 
@@ -126,16 +160,11 @@ export class WasmWaterKernel {
         return this.kernel.scale(this.move, rowFrom, rowTo) !== 0;
     }
 
-    public depthsPass(
-        move: InertiaMove,
-        rowFrom: number,
-        rowTo: number,
-        lost: number,
-    ): { lost: number; moved: boolean } {
+    public depthsPass(move: InertiaMove, rowFrom: number, rowTo: number, rowLost: Float64Array): boolean {
         this.write(move);
         this.movedView[0] = 0;
-        const total = this.kernel.depths(this.move, rowFrom, rowTo, lost, this.moved);
-        return { lost: total, moved: this.movedView[0] !== 0 };
+        this.kernel.depths(this.move, rowFrom, rowTo, this.pointer(rowLost), this.moved);
+        return this.movedView[0] !== 0;
     }
 
     private buffer(): ArrayBuffer {
@@ -144,7 +173,7 @@ export class WasmWaterKernel {
     }
 
     /** Where an array of the grid lies in the memory of the kernel. */
-    private pointer(array: Float32Array | Uint8Array): number {
+    private pointer(array: Float32Array | Float64Array | Uint8Array): number {
         if (array.buffer !== this.memory.buffer)
             throw new Error("An array of the water is not in the memory of its kernel");
         return array.byteOffset;

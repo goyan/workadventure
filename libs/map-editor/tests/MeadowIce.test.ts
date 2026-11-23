@@ -125,6 +125,42 @@ describe("the ice, the snow and the fire", () => {
 });
 
 describe("the ice kept", () => {
+    it("does not take on water that runs fast: a pond and a river side by side at -10 °C", () => {
+        // Three tiles of the same water, 16 px deep: still (a pond), between the two speeds, over the open one.
+        const waterAt = (tileX: number, tileY: number): number => (tileY === 10 && tileX >= 9 && tileX <= 11 ? 16 : 0);
+        const currentAt = (tileX: number): number => (tileX === 9 ? 0 : tileX === 10 ? 0.9 : 1.5);
+        const meadow = new Meadow(size, undefined, undefined);
+        run(meadow, 15, under(frost, { waterAt, currentAt }));
+        const pond = meadow.iceAt(9, 10);
+        expect(pond).toBeGreaterThan(ICE_BEARS_MM);
+        expect(meadow.iceAt(11, 10)).toBe(0);
+        expect(meadow.iceAt(10, 10)).toBeGreaterThan(0);
+        expect(meadow.iceAt(10, 10)).toBeLessThan(pond);
+    });
+
+    it("takes as before, to the bit, on still water", () => {
+        const before = new Meadow(size, undefined, undefined);
+        const still = new Meadow(size, undefined, undefined);
+        for (let step = 0; step < 15; step++) {
+            before.step(under(frost));
+            still.step(under(frost, { currentAt: () => 0 }));
+        }
+        expect(Array.from(still.writeIce())).toEqual(Array.from(before.writeIce()));
+        for (let tileX = 0; tileX < size.width; tileX++) {
+            for (let tileY = 0; tileY < size.height; tileY++) {
+                expect(still.iceAt(tileX, tileY)).toBe(before.iceAt(tileX, tileY));
+            }
+        }
+    });
+
+    it("keeps the ice that took on a water that then runs fast: a current does not melt it", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        run(meadow, 15, under(frost));
+        const before = meadow.iceAt(10, 10);
+        run(meadow, 15, under(frost, { currentAt: () => 2 }));
+        expect(meadow.iceAt(10, 10)).toBe(before);
+    });
+
     it("broken (a hole), freezes again by its law at the pace of the map: hours in real time, never in a thaw", () => {
         const real = (weather: SnowWeather): MeadowStepInput => under(weather, { snowTimes: 1 });
         const minutes = (count: number): number => (count * 60) / MEADOW_STEP_SECONDS;

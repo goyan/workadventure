@@ -8,9 +8,8 @@ import type { TerrainData } from "../../src/types";
 /**
  * The water of a whole map, in scenarios: a lake, a source, rain, a downpour, impacts, a ball, a door, a pool, a
  * drain, an edit of the relief, the time a room missed, a fast map, a deep pit, a water that dries out, a restart,
- * the edge of the grid. Each ends on a fingerprint of everything the grid holds and tells, recorded with the code as
- * it was at the commit eb17d9b92 of the fork (WaterFingerprints.test.ts checks them; WaterKernelWasm.test.ts plays
- * them on the two kernels side by side).
+ * the edge of the grid. Each ends on fingerprints of what the grid holds and tells (WaterFingerprints.test.ts
+ * checks them; WaterKernelWasm.test.ts plays the scenarios on the two kernels side by side).
  */
 
 export const WIDTH = 150;
@@ -136,7 +135,7 @@ export interface Run {
 export interface Scenario {
     name: string;
     steps: number;
-    /** The fingerprint of the run with the code of the commit eb17d9b92. */
+    /** The fingerprint of everything the grid holds and tells along the run. */
     fingerprint: string;
     setup?: (run: Run) => void;
     /** What happens at a step, and what the step is given (undefined: the grid is not stepped, as when at rest). */
@@ -195,7 +194,7 @@ export const SCENARIOS: Scenario[] = [
     {
         name: "a downpour on the whole map, then everything runs",
         steps: 300,
-        fingerprint: "262f17622ce27c4e",
+        fingerprint: "0b3f6db52ddf7b9d",
         each: (run, step) => {
             if (step === 0) run.notes.push(run.grid.rainOn(0, 0, undefined, 20));
             if (step === 100) run.notes.push(run.grid.rainOn(0, 0, undefined, 5));
@@ -205,7 +204,7 @@ export const SCENARIOS: Scenario[] = [
     {
         name: "a rough sea: three impacts in the lake",
         steps: 300,
-        fingerprint: "2300914e22bb6382",
+        fingerprint: "8da4e552f631d00e",
         setup: (run) => fill(run.grid, -6, inLake),
         each: (run, step) => {
             const strike = (cellX: number, cellY: number, radius: number): void => {
@@ -225,7 +224,7 @@ export const SCENARIOS: Scenario[] = [
     {
         name: "a ball dragged through the lake, then taken away",
         steps: 300,
-        fingerprint: "9b4ba0b4b309572e",
+        fingerprint: "83f74706dbe97318",
         setup: (run) => fill(run.grid, -6, inLake),
         each: (run, step) => {
             if (step < 240) {
@@ -275,7 +274,7 @@ export const SCENARIOS: Scenario[] = [
     {
         name: "a drain that takes the lake down and a downpour on the hill",
         steps: 300,
-        fingerprint: "3446764cc4e36250",
+        fingerprint: "fa581073b3fe575f",
         setup: (run) => fill(run.grid, -6, inLake),
         each: (run, step) => {
             if (step < 100) run.notes.push(run.grid.drainDisc(LAKE_CENTRE.cellX, LAKE_CENTRE.cellY, 6, 3, 0.5));
@@ -300,7 +299,7 @@ export const SCENARIOS: Scenario[] = [
     {
         name: "the time a room missed lived again without inertia, then inertia again",
         steps: 330,
-        fingerprint: "010808756b937031",
+        fingerprint: "42e54240528e1cf8",
         each: (_run, step) => {
             const flows = [{ ...HILL_TOP, px: 2 }];
             if (step >= 100 && step < 130) {
@@ -312,7 +311,7 @@ export const SCENARIOS: Scenario[] = [
     {
         name: "a map that goes faster than reality: sinks that ask for more than they find",
         steps: 300,
-        fingerprint: "1ea8b4a07a4bca36",
+        fingerprint: "f0041b166a257e56",
         setup: (run) => fill(run.grid, -6, inLake),
         each: () => ({
             ...inertia,
@@ -363,7 +362,7 @@ export const SCENARIOS: Scenario[] = [
     {
         name: "a restart: the water saved and read back, then a lower ceiling for the floods",
         steps: 300,
-        fingerprint: "4c38ef0143020f51",
+        fingerprint: "5c6b01ea390aba0a",
         setup: (run) => fill(run.grid, 4, (x, y) => x < 75),
         each: (run, step) => {
             if (step === 150) {
@@ -379,7 +378,7 @@ export const SCENARIOS: Scenario[] = [
     {
         name: "a source at the edge of the grid: its water falls off the map",
         steps: 250,
-        fingerprint: "4699699c9f9b7da8",
+        fingerprint: "1353ef1ec71a3172",
         each: () => ({
             ...inertia,
             flows: [
@@ -452,20 +451,57 @@ export function take(print: Fingerprint, grid: WaterGrid): void {
     print.numbers([grid.totalPx(), grid.wetCells()]);
 }
 
-/** Runs a scenario and returns its fingerprint. */
-export function playScenario(scenario: Scenario, kernel?: WaterKernelKind): string {
+/**
+ * Runs a scenario and returns its two fingerprints: `whole`, of everything the grid holds and tells, and `water`,
+ * the same without the water lost at each step (WaterTally.lostPx), a figure for the dashboard that no water
+ * depends on.
+ */
+export function playScenario(scenario: Scenario, kernel?: WaterKernelKind): { whole: string; water: string } {
     const run: Run = { grid: newGrid(false, kernel), notes: [], kernel };
-    const print = new Fingerprint();
+    const whole = new Fingerprint();
+    const water = new Fingerprint();
     scenario.setup?.(run);
     for (let step = 0; step < scenario.steps; step++) {
         const input = scenario.each(run, step);
         const tally = input ? run.grid.step(input) : undefined;
-        print.numbers(tally ? tallyFigures(tally) : [-1]);
-        if (step % 20 === 19 || step === scenario.steps - 1) take(print, run.grid);
+        whole.numbers(tally ? tallyFigures(tally) : [-1]);
+        water.numbers(tally ? tallyFigures({ ...tally, lostPx: 0 }) : [-1]);
+        if (step % 20 === 19 || step === scenario.steps - 1) {
+            take(whole, run.grid);
+            take(water, run.grid);
+        }
     }
-    print.numbers(run.notes);
-    return print.text();
+    whole.numbers(run.notes);
+    water.numbers(run.notes);
+    return { whole: whole.text(), water: water.text() };
 }
+
+/**
+ * The fingerprint of the water alone of each scenario (without the water lost at each step), recorded with the
+ * code of the commit eb17d9b92.
+ */
+export const WATER_ALONE: Record<string, string> = {
+    "a dry grid": "557f65b5196929e7",
+    "a lake at rest": "ea2e42156aadcdaf",
+    "a lake at rest and a source far from it": "853445d7710326db",
+    "a source on a hill from a dry start, a sink and a sink that holds a level in the lake": "08f0168b081112b6",
+    "rain on the whole map, then dry weather": "b7cc0e642bfc4e36",
+    "a downpour on the whole map, then everything runs": "f59e70d1bfd64661",
+    "a rough sea: three impacts in the lake": "ef3eaa2c8cf0edca",
+    "a ball dragged through the lake, then taken away": "d379bda2a5c6e5dc",
+    "a house that floods: its door closed, open, closed again": "f63e124fb663b8b5",
+    "a pool its pump fills, under the rain, and its overflow": "e757910d712b9d2f",
+    "a drain that takes the lake down and a downpour on the hill": "df3b5ebe14777b76",
+    "an edit of the relief: the water is taken to a new grid": "c2c0148b2e3c0c57",
+    "the time a room missed lived again without inertia, then inertia again": "13bd2db1daadae1d",
+    "a map that goes faster than reality: sinks that ask for more than they find": "4fdad9dab3498266",
+    "a deep pit: one move a step, eight, then a flow four times as fast": "a9f9d499f82a9253",
+    "a water that dries out wholly, then comes back there and elsewhere": "9108a7196a8e7f6d",
+    "a puddle taken away while it spreads, a pond that stays, then water again where the puddle was":
+        "3b09d52585108acf",
+    "a restart: the water saved and read back, then a lower ceiling for the floods": "aa9bc747a7218d61",
+    "a source at the edge of the grid: its water falls off the map": "78cf2454bed3730a",
+};
 
 /** A scenario takes a second or two alone; more when the whole suite runs at once on a busy machine. */
 export const SCENARIO_TIMEOUT_MS = 60_000;

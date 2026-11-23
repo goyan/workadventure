@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { stepInputOf } from "../src/Terrain/WaterInputs";
+import { setWaterKernel, waterKernel, waterKernelInUse, waterKernelNamed } from "../src/Terrain/WaterGrid";
 import type { WaterKernelKind } from "../src/Terrain/WaterGrid";
 import { affordPass, depthsPass, fluxPass, scalePass } from "../src/Terrain/WaterKernel";
 import type { InertiaMove } from "../src/Terrain/WaterKernel";
@@ -67,7 +68,7 @@ describe("the kernel of the water compiled to WebAssembly", () => {
             `gives the same water as the TypeScript one, to the bit: ${scenario.name}`,
             () => {
                 sideBySide(scenario);
-                expect(playScenario(scenario, "wasm")).toBe(scenario.fingerprint);
+                expect(playScenario(scenario, "wasm").whole).toBe(scenario.fingerprint);
             },
             SCENARIO_TIMEOUT_MS,
         );
@@ -103,7 +104,7 @@ describe("the kernel of the water compiled to WebAssembly", () => {
         const height = 29;
         const cells = width * height;
         const powers = Float32Array.from({ length: 513 }, (_, eighths) => Math.pow(Math.max(1, eighths) / 8, -4 / 3));
-        const kernel = WasmWaterKernel.create(cells, powers.length);
+        const kernel = WasmWaterKernel.create(cells, powers.length, height);
         if (!kernel) throw new Error("no compiled kernel");
         // The same grid twice, one in plain arrays and one in the memory of the kernel: a rough relief, water in
         // most cells, flows and speeds left by moves before.
@@ -175,18 +176,17 @@ describe("the kernel of the water compiled to WebAssembly", () => {
         }
         expect(movedInBands).toBe(moved);
         same("the flows cut down");
-        const depths = depthsPass(reference, 0, height, 1.25);
-        let lost = 1.25;
-        let depthsMoved = false;
+        const rowLost = new Float64Array(height);
+        const rowLostInBands = kernel.doubles(height);
+        const depthsMoved = depthsPass(reference, 0, height, rowLost);
+        let movedByBands = false;
         for (let band = 0; band + 1 < bands.length; band++) {
-            const done = kernel.depthsPass(compiled, bands[band], bands[band + 1], lost);
-            lost = done.lost;
-            if (done.moved) depthsMoved = true;
+            if (kernel.depthsPass(compiled, bands[band], bands[band + 1], rowLostInBands)) movedByBands = true;
         }
-        // One band after the other, the loss adds up in the order of the cells: the very same sum.
-        expect(lost).toBe(depths.lost);
-        expect(depths.lost).toBeGreaterThan(1.25);
-        expect(depthsMoved).toBe(depths.moved);
+        // Each row has its own sum of what it lost: the very same, whoever computed it.
+        expect(Array.from(rowLostInBands)).toStrictEqual(Array.from(rowLost));
+        expect(rowLost.some((row) => row > 0)).toBe(true);
+        expect(movedByBands).toBe(depthsMoved);
         same("the depths");
     });
 
@@ -201,6 +201,32 @@ describe("the kernel of the water compiled to WebAssembly", () => {
         }
         expect(newGrid(false, "wasm").kernelName()).toBe("wasm");
         // And a grid asks for none unless it is told, or the usual kernel is set.
+        expect(newGrid().kernelName()).toBe("typescript");
+    });
+
+    it("is chosen by a setting that says wasm, and says what really computes", () => {
+        expect(waterKernelNamed("wasm")).toBe("wasm");
+        for (const setting of ["typescript", "", "WASM", "1", null, undefined]) {
+            expect(waterKernelNamed(setting)).toBe("typescript");
+        }
+        expect(waterKernel()).toBe("typescript");
+        expect(waterKernelInUse()).toStrictEqual({ kernel: "typescript" });
+        const kept = globalThis.WebAssembly;
+        try {
+            setWaterKernel("wasm");
+            expect(waterKernelInUse()).toStrictEqual({ kernel: "wasm" });
+            expect(newGrid().kernelName()).toBe("wasm");
+            // Where it cannot be loaded, the grids compute in TypeScript and the reason is told.
+            Reflect.deleteProperty(globalThis, "WebAssembly");
+            expect(waterKernelInUse()).toStrictEqual({
+                kernel: "typescript",
+                fallback: "WebAssembly is not available here",
+            });
+            expect(newGrid().kernelName()).toBe("typescript");
+        } finally {
+            globalThis.WebAssembly = kept;
+            setWaterKernel("typescript");
+        }
         expect(newGrid().kernelName()).toBe("typescript");
     });
 });

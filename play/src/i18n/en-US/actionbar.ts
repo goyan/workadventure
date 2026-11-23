@@ -100,7 +100,7 @@ const actionbar = {
     fastWater: {
         label: "Fast water",
         switch: "Fast water: the water of the relief 60 times faster, for you only",
-        hint: "Rain, springs and snow come in 60 times faster than in reality, and the water flows as fast as your computer allows. It is your own water: the others see the shared water, and a drop over your avatar. It is not saved: it starts again from the shared water at each connection, when you come back to the tab, and with “Resynchronise”. The catastrophes of the room do not reach this water.",
+        hint: "Rain, springs and snow come in 60 times faster than in reality, and the water flows as fast as your computer allows. It is your own water: the others see the shared water, and a drop over your avatar. It is not saved: it starts again from the shared water at each connection, when you come back to the tab, and with “Resynchronise”. The catastrophes of the room (comets, downpours, drains, balls, fire, broken ice) act on this water too, as on the shared water.",
         capped: "When the currents go slower than what comes in, the flowing water is higher than in reality, by a factor (60/k)^0.6: ×{factor} here.",
         resync: "Resynchronise",
         resyncHint: "Start again from the shared water, the server's",

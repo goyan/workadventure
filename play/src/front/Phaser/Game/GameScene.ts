@@ -5110,6 +5110,8 @@ export class GameScene extends DirtyScene {
         );
         this.fireTorchView = fireTorchView;
         this.catastropheSubscription = this.connection?.catastropheMessageStream.subscribe((message) => {
+            // The water of this player, when it is their own, lives the catastrophes of the room too.
+            this.localTerrain.fromCatastrophe(message);
             if (message.kind === CatastropheKind.CATASTROPHE_DOWNPOUR) downpourView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_DRAIN) drainView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_BALL) ballView.report(message, this.time.now);

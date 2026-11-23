@@ -492,6 +492,21 @@ export function waterKernel(): WaterKernelKind {
 }
 
 /**
+ * What the grids made now really compute with: the usual kernel, or the TypeScript one when the compiled one was
+ * asked for and cannot be had here, with the reason (`fallback`).
+ */
+export function waterKernelInUse(): { kernel: WaterKernelKind; fallback?: string } {
+    if (usualKernel !== "wasm") return { kernel: "typescript" };
+    const fallback = WasmWaterKernel.unavailable();
+    return fallback === undefined ? { kernel: "wasm" } : { kernel: "typescript", fallback };
+}
+
+/** The kernel a setting names (an environment variable, a key of the browser): the TypeScript one unless it says "wasm". */
+export function waterKernelNamed(setting: string | null | undefined): WaterKernelKind {
+    return setting === "wasm" ? "wasm" : "typescript";
+}
+
+/**
  * The water of a map, cell by cell: each cell has a depth of water, and at each step water moves from a cell to its
  * neighbours whose surface (ground and water) is lower. So a source makes a pool at its foot that runs down the
  * slope, a full hollow spills over its lowest edge, and a flood rises and advances on flat ground while water comes.
@@ -551,6 +566,8 @@ export class WaterGrid implements WaterView {
     private flowEast = new Float32Array(0);
     private flowSouth = new Float32Array(0);
     private afford = new Float32Array(0);
+    /** The water each row lost at the last move of the water with inertia (see depthsPass). */
+    private rowLost = new Float64Array(0);
     /** The speed of the water through each of those passages at the move before, for the momentum it carries. */
     private speedEast = new Float32Array(0);
     private speedSouth = new Float32Array(0);
@@ -610,7 +627,8 @@ export class WaterGrid implements WaterView {
         this.bounds = bounds ?? { x: 0, y: 0, width: 0, height: 0 };
         const size = this.bounds.width * this.bounds.height;
         // The arrays the compiled kernel reads and writes live in its memory.
-        this.wasm = kernel === "wasm" ? WasmWaterKernel.create(size, DEPTH_POWERS.length) : undefined;
+        this.wasm =
+            kernel === "wasm" ? WasmWaterKernel.create(size, DEPTH_POWERS.length, this.bounds.height) : undefined;
         this.ground = this.floats(size);
         this.blocked = new Uint8Array(size);
         this.depth = this.floats(size);
@@ -1492,6 +1510,40 @@ export class WaterGrid implements WaterView {
     }
 
     /**
+     * How fast the water runs over a tile of the map (TILE_PX, its cells of the relief), in metres a second of the
+     * map: as a block of writeSpeedBytes reads it, what its cells carry over the water they hold, on a finer square.
+     * 0 where it is dry, out of the grid, and for a water without inertia (it keeps no flow). The speed is that of the
+     * water itself, not as it is seen (flowPace).
+     */
+    public tileSpeedAt(tileX: number, tileY: number): number {
+        const { width } = this.bounds;
+        if (this.flowEast.length !== this.depth.length || this.depth.length === 0) return 0;
+        const cells = TILE_PX / TERRAIN_CELL;
+        const depth = this.depth;
+        const east = this.flowEast;
+        const south = this.flowSouth;
+        let held = 0;
+        let towardsEast = 0;
+        let towardsSouth = 0;
+        for (let dy = 0; dy < cells; dy++) {
+            for (let dx = 0; dx < cells; dx++) {
+                const cellX = tileX * cells + dx;
+                const cellY = tileY * cells + dy;
+                const index = this.indexOf(cellX, cellY);
+                if (index === undefined || depth[index] <= DRY_PX) continue;
+                const column = cellX - this.bounds.x;
+                const row = cellY - this.bounds.y;
+                held += depth[index];
+                // What crosses the cell: the mean of what comes in by one side and goes out by the other.
+                towardsEast += (east[index] + (column > 0 ? east[index - 1] : 0)) / 2;
+                towardsSouth += (south[index] + (row > 0 ? south[index - width] : 0)) / 2;
+            }
+        }
+        if (held <= DRY_PX) return 0;
+        return (Math.hypot(towardsEast, towardsSouth) / held) * CELL_METRES;
+    }
+
+    /**
      * The depths as bytes: two for each cell, in eighths of a pixel. For sending: the water as it is seen, without
      * what a ball hides under itself. For saving (`whole`): all the water of each cell, so that the water under a
      * ball is not lost by a restart.
@@ -2025,9 +2077,11 @@ export class WaterGrid implements WaterView {
             breaking,
             carried,
         };
+        if (this.rowLost.length !== height) this.rowLost = this.wasm?.doubles(height) ?? new Float64Array(height);
+        const rowLost = this.rowLost;
         if (this.wasm) {
             // The same passes, compiled: all the moves of the step in one call.
-            const stepped = this.wasm.step(move, moves, tally.lostPx);
+            const stepped = this.wasm.step(move, moves, tally.lostPx, rowLost);
             tally.lostPx = stepped.lost;
             // The speeds of a move take the place of those of the move before: an odd number of moves swaps them.
             if (moves % 2 === 1) {
@@ -2050,9 +2104,9 @@ export class WaterGrid implements WaterView {
             nextSpeedSouth = move.nextSpeedSouth = wasSouth;
             affordPass(move, 0, height);
             if (scalePass(move, 0, height)) moved = true;
-            const depths = depthsPass(move, 0, height, tally.lostPx);
-            tally.lostPx = depths.lost;
-            if (depths.moved) moved = true;
+            if (depthsPass(move, 0, height, rowLost)) moved = true;
+            // The water lost, row after row: the same sum whoever computed which rows.
+            for (let row = 0; row < height; row++) tally.lostPx += rowLost[row];
         }
         this.speedEast = speedEast;
         this.speedSouth = speedSouth;

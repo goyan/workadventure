@@ -26,6 +26,34 @@ export const ICE_SLIPS_MM = 5;
  * thaw keeps the clock of the snow.
  */
 export const ICE_GROWTH_TIMES = 2;
+/**
+ * The current keeps the water from freezing over: in running water the cold makes frazil, crystals carried and mixed
+ * by the flow, not a sheet of ice that grows in place. Gosink and Osterkamp (1983, "Measurements and analyses of
+ * velocity profiles and frazil ice-crystal rise velocities during periods of frazil-ice formation in rivers", Annals
+ * of Glaciology 4, p. 79, https://doi.org/10.3189/S0260305500005279) cite the rule of thumb of the rivers of Norway
+ * (Carstens 1971): "the water surface is usually covered with moving frazil slush if the water velocity is >0.6 and
+ * <1.2 m s-1, and open if the water velocity is >1.2 m s-1"; on the Saint Lawrence (Starosolszky 1971) the surface
+ * "usually remains free of ice" over 1.0 m/s. They add that these empirical velocities "are imprecise as the critical
+ * velocity varies with water depth, bottom roughness and meteorological conditions".
+ *
+ * Up to ICE_CURRENT_SHEET_MS (m/s) the ice takes as on still water; from ICE_CURRENT_OPEN_MS none takes; between the
+ * two the ice that takes in place thins as the water runs faster (a straight line between the two speeds: the sources
+ * give the bounds of the regimes, not a law between them; the slush they describe there bears no one).
+ */
+export const ICE_CURRENT_SHEET_MS = 0.6;
+export const ICE_CURRENT_OPEN_MS = 1.2;
+
+/**
+ * The share of the growth of the ice that takes on water running at `metresPerSecond`: 1 up to ICE_CURRENT_SHEET_MS,
+ * 0 from ICE_CURRENT_OPEN_MS. A speed that is not known counts as still water. The current neither melts nor carries
+ * away an ice that took before it ran (the heat of the water and the break-up of a cover are not modelled).
+ */
+export function iceCurrentShare(metresPerSecond: number): number {
+    if (!(metresPerSecond > ICE_CURRENT_SHEET_MS)) return 1;
+    if (metresPerSecond >= ICE_CURRENT_OPEN_MS) return 0;
+    return (ICE_CURRENT_OPEN_MS - metresPerSecond) / (ICE_CURRENT_OPEN_MS - ICE_CURRENT_SHEET_MS);
+}
+
 /** The thickest ice a tile holds, in mm. */
 export const ICE_MAX_MM = 1000;
 
