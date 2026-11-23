@@ -2415,7 +2415,9 @@ identique : `WaterFingerprints.test.ts` garde deux empreintes par scénario, cel
 écrivent (profondeurs, sol, niveau de débordement, frottement, creux, côtés fermés, flux, ce que chaque cellule peut
 donner, vitesses, eau perdue par ligne) sont demandés à un allocateur `WaterArrays` : mémoire ordinaire par défaut,
 comme avant ; mémoire partagée entre fils (`sharedWaterArrays`, un `SharedArrayBuffer` par tableau) quand on le
-demande, pour la grille (dernier paramètre de `WaterGrid`) ou pour toutes celles du fil (`setWaterArrays`). C'est la
+demande, pour la grille (dernier paramètre de `WaterGrid`) ou pour toutes celles du fil (`setWaterArrays`). On peut
+aussi donner une fabrique `(cellules, lignes) => WaterArrays`, appelée une fois par grille avec sa taille : pour une
+mémoire dimensionnée une fois et qui ne grandit pas (celle d'un noyau compilé). C'est la
 seule façon d'allouer : un découpage du pas sur plusieurs fils, ou un noyau compilé qui garde les tableaux dans sa
 mémoire, en sont d'autres implémentations, et la grille ne sait pas où vivent ses tableaux. Rien ne le demande
 encore : aucun comportement ne change. `WaterFingerprints.test.ts` rejoue ses 19 scénarios en mémoire partagée,

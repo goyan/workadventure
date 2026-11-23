@@ -15,9 +15,9 @@ import { ballColumn, ballHalfHeight } from "./WaterBall";
 import type { WaterBall } from "./WaterBall";
 import { affordPass, depthsPass, DRY_PX, fluxPass, scalePass } from "./WaterKernel";
 import type { InertiaMove } from "./WaterKernel";
-import { waterArrays } from "./WaterArrays";
+import { waterArrays, waterArraysFor } from "./WaterArrays";
 import { waterPassRunner } from "./WaterBands";
-import type { WaterArrays } from "./WaterArrays";
+import type { WaterArrays, WaterArraysSource } from "./WaterArrays";
 import { LAND_DEPTH_BITS, lifeDepthClass, restLevelOf, SWIM_DEPTH_BITS, WATER_FILM_PX } from "./WaterView";
 import type {
     RestLevelFields,
@@ -486,6 +486,8 @@ export interface WaterTally {
  */
 export class WaterGrid implements WaterView {
     public readonly bounds: WaterGridBounds;
+    /** Where the arrays the passes of its moves read and write are kept. */
+    private readonly arrays: WaterArrays;
     private readonly ground: Float32Array;
     /** The level the water of each cell spills at (see spillLevels): a cell under it is in a hollow. */
     private readonly spill: Float32Array;
@@ -589,13 +591,17 @@ export class WaterGrid implements WaterView {
         /** The walls that close the rooms (doors closed): what they close is indoors. No room when absent. */
         rooms?: WaterWallSides,
         /**
-         * Where the arrays the passes of its moves read and write are kept (WaterArrays): where the grids of this
-         * thread usually are (ordinary memory, unless setWaterArrays said otherwise) when absent.
+         * Where the arrays the passes of its moves read and write are kept (WaterArrays), or what makes
+         * that place for the size of the grid: where the grids of this thread usually are (ordinary memory, unless
+         * setWaterArrays said otherwise) when absent.
          */
-        private readonly arrays: WaterArrays = waterArrays(),
+        where: WaterArraysSource = waterArrays(),
     ) {
         this.bounds = bounds ?? { x: 0, y: 0, width: 0, height: 0 };
         const size = this.bounds.width * this.bounds.height;
+        // The place is made for the size of the grid: a memory sized once knows what it will be asked for.
+        const arrays = waterArraysFor(where, size, this.bounds.height);
+        this.arrays = arrays;
         this.ground = arrays.floats(size);
         this.blocked = new Uint8Array(size);
         this.depth = arrays.floats(size);
