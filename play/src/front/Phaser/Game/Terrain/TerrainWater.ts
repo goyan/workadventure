@@ -1,6 +1,5 @@
 import {
     poolBasins,
-    reliefCells,
     SLOW_SPEED_UNITS,
     SPEED_BLOCK_CELLS,
     SPEED_UNITS,
@@ -77,6 +76,14 @@ const SHORTEST_GLIDE_MS = 100;
 const TREND_UNREAD_MS = 30_000;
 
 /**
+ * Whether a cell of the relief is dug or raised: read up to the first one, for each stroke of the relief tool (listing
+ * every cell of a map full of lakes took tens of milliseconds).
+ */
+function hasRelief(terrain: TerrainData | undefined): boolean {
+    return Object.values(terrain?.chunks ?? {}).some((chunk) => chunk.some((height) => height !== 0));
+}
+
+/**
  * The water of the relief as this browser shows it: the depth of the water over each cell of the grid the server
  * simulates. The server alone computes it and tells what changed once a second; between two states the water
  * glides, so a lake never jumps.
@@ -121,7 +128,7 @@ export class TerrainWater {
         if (terrain === this.terrain) return;
         this.terrain = terrain;
         // A map with painted soils has something to draw too.
-        this.dug = reliefCells(terrain).size > 0 || Object.keys(terrain?.soil ?? {}).length > 0;
+        this.dug = hasRelief(terrain) || Object.keys(terrain?.soil ?? {}).length > 0;
         this.changes++;
     }
 

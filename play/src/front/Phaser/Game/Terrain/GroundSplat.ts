@@ -1383,40 +1383,55 @@ export class GroundSplat {
 }
 
 /**
- * Rounds the weights of the grounds over their neighbours (a 1-2-1 blur, within each pack): an edge between two
- * grounds follows a curve, not the stairs of the cells. What is exact is left as it is: the water (it moves on its
- * own), what is outdoors, and the depth, the hot water and the colours of the pools.
+ * The channels of each pack smoothed by smoothWeights. Not the water (it moves on its own), what is outdoors, the depth,
+ * the hot water and the colours of the pools: they stay exact.
  */
-function smoothWeights(data: Uint8ClampedArray, columns: number, rows: number): void {
-    const source = data.slice();
+export const SMOOTHED_CHANNELS: readonly (readonly number[])[] = [
+    [0, 1, 2],
+    [0, 1, 2],
+    [0, 1],
+    [0, 1, 2],
+    [0, 1],
+    [0],
+    [],
+    [],
     // The ice of the server too (pack 8): its edge follows a curve.
-    const channels: readonly (readonly number[])[] = [
-        [0, 1, 2],
-        [0, 1, 2],
-        [0, 1],
-        [0, 1, 2],
-        [0, 1],
-        [0],
-        [],
-        [],
-        [0],
-        // The moisture (green); the foam of the waves (red) is written with the water, after.
-        [1],
-    ];
+    [0],
+    // The moisture (green); the foam of the waves (red) is written with the water, after.
+    [1],
+];
+
+/**
+ * Rounds the weights of the grounds over their neighbours (a 1-2-1 blur, within each pack): an edge between two
+ * grounds follows a curve, not the stairs of the cells. Only the channels of SMOOTHED_CHANNELS. The blur is the same
+ * across and down: each channel is summed across, in whole numbers, then down, and rounded once, which gives the same
+ * bytes as the nine cells around each read one by one, ten times faster (it runs over the whole canvas at each
+ * stroke of the relief tool and each change of the meadow: half a second on a map seen whole).
+ */
+export function smoothWeights(data: Uint8ClampedArray, columns: number, rows: number): void {
+    const across = new Uint16Array(columns * rows);
+    // The bytes of a row of the texture: the packs are laid PACKS_ACROSS wide (see texel).
+    const width = columns * PACKS_ACROSS * 4;
     for (let pack = 0; pack < PACKS; pack++) {
-        for (const channel of channels[pack] ?? []) {
+        const origin = (Math.floor(pack / PACKS_ACROSS) * rows * width) / 4 + (pack % PACKS_ACROSS) * columns;
+        for (const channel of SMOOTHED_CHANNELS[pack] ?? []) {
+            const first = origin * 4 + channel;
             for (let row = 0; row < rows; row++) {
+                const line = first + row * width;
                 for (let column = 0; column < columns; column++) {
-                    let total = 0;
-                    for (let dy = -1; dy <= 1; dy++) {
-                        const y = Math.max(0, Math.min(rows - 1, row + dy));
-                        for (let dx = -1; dx <= 1; dx++) {
-                            const x = Math.max(0, Math.min(columns - 1, column + dx));
-                            const weight = (dx === 0 ? 2 : 1) * (dy === 0 ? 2 : 1);
-                            total += weight * (source[texel(pack, y * columns + x, columns, rows) + channel] ?? 0);
-                        }
-                    }
-                    data[texel(pack, row * columns + column, columns, rows) + channel] = Math.round(total / 16);
+                    const left = data[line + Math.max(0, column - 1) * 4];
+                    const right = data[line + Math.min(columns - 1, column + 1) * 4];
+                    across[row * columns + column] = left + 2 * data[line + column * 4] + right;
+                }
+            }
+            for (let row = 0; row < rows; row++) {
+                const above = Math.max(0, row - 1) * columns;
+                const here = row * columns;
+                const below = Math.min(rows - 1, row + 1) * columns;
+                const line = first + row * width;
+                for (let column = 0; column < columns; column++) {
+                    const total = across[above + column] + 2 * across[here + column] + across[below + column];
+                    data[line + column * 4] = Math.round(total / 16);
                 }
             }
         }

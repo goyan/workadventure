@@ -2826,8 +2826,14 @@ en un passage à 32 px de force). Les deux respectent la profondeur maximale de 
 (`strokeChanges`, modes `flatten` et `smooth`). Tant que l'outil est ouvert, le panneau dit la profondeur du sol
 sous le curseur, et la carte montre les courbes de niveau : une ligne fine tous les 8 px de profondeur, une plus
 marquée par case (`Terrain/TerrainContours.ts`), le long des bords des cases, pour celui qui édite seulement (un
-interrupteur les masque ; au-delà de 30 000 morceaux, seules les lignes marquées sont dessinées). Rien ne change
-dans la carte enregistrée ni sur le fil : un geste envoie toujours des hauteurs par case.
+interrupteur les masque ; au-delà de 30 000 morceaux dans la vue, seules les lignes marquées sont dessinées). Rien ne change
+dans la carte enregistrée ni sur le fil : un geste envoie toujours des hauteurs par case. Les courbes sont gardées
+morceau de carte par morceau de carte (`ContourCache`) : un coup ne recalcule que les morceaux qu'il a changés et
+leurs voisins, et seules les régions de 1024 px dans la vue sont tracées (Phaser retrace un `Graphics` en entier à
+chaque image). Mesuré le 2026-11-23 sur la carte d'Antoine en dev local (113 000 morceaux de lignes) : 7 ms par
+image et environ 100 ms par coup avant, l'outil Relief ouvert ; 59 à 62 images/s en creusant après. Le flou du sol
+(`smoothWeights`), refait à chaque coup sur toute la zone dessinée, passe en deux passes (même résultat à l'octet
+près) : 280 ms avant, 30 ms après, la carte entière en vue.
 
 **Sols.** L'outil Relief a un mode « Sol » : le pinceau peint un des six sols sur tout son disque (terre,
 prairie, argile, sable, rocher, gravier), « Sol d'origine » efface. Le sol d'une case est gardé à côté de sa hauteur

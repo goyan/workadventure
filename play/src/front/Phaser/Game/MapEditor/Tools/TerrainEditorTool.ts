@@ -6,6 +6,7 @@ import {
     poolSoilCode,
     soilAt,
     TERRAIN_CELL,
+    TERRAIN_CHUNK,
     TILE_PX,
 } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
@@ -28,7 +29,7 @@ import { MapDragPointerCapture } from "../../../UserInput/MapDragPointerCapture"
 import { DEPTH_MAP_EDITOR_AREAS_INDEX } from "../../DepthIndexes";
 import type { GameMapFrontWrapper } from "../../GameMap/GameMapFrontWrapper";
 import type { GameScene } from "../../GameScene";
-import { contourSegments } from "../../Terrain/TerrainContours";
+import { ContourCache } from "../../Terrain/TerrainContours";
 import { brushSettingsOf, commitSoils, commitSoilStroke, commitStroke } from "../../Terrain/TerrainStroke";
 import { WaterMarksView } from "../../Terrain/WaterMarksView";
 import { executeUpdateTerrain, executeUpdateWAMSettings } from "../Commands/Facades";
@@ -42,8 +43,27 @@ const SELECTED_POOL_COLOR = 0xffd166;
 /** A contour line every quarter of a tile of depth, a stronger one every tile. */
 const CONTOUR_STEP_PX = 8;
 const CONTOUR_MAJOR_PX = TILE_PX;
-/** Beyond this many pieces of lines, only the stronger ones are drawn. */
+/** Beyond this many pieces of lines in view, only the stronger ones are drawn. */
 const MAX_CONTOUR_SEGMENTS = 30000;
+/**
+ * The contour lines are drawn by regions of this many chunks of the relief a side (1024 px): Phaser draws a graphics
+ * again whole at each frame, so only the regions in view are shown, and a stroke draws again only the regions it
+ * changed.
+ */
+const CONTOUR_REGION_CHUNKS = 4;
+const CONTOUR_REGION_PX = CONTOUR_REGION_CHUNKS * TERRAIN_CHUNK * TERRAIN_CELL;
+/** A region this close to the view is shown too: the view of the camera is read one frame late. */
+const CONTOUR_VIEW_MARGIN_PX = TERRAIN_CHUNK * TERRAIN_CELL;
+
+/** The contour lines of a region of the map: the fine ones and the stronger ones, apart. */
+interface ContourRegion {
+    left: number;
+    top: number;
+    minor: Phaser.GameObjects.Graphics;
+    major: Phaser.GameObjects.Graphics;
+    minorCount: number;
+    majorCount: number;
+}
 
 /**
  * The relief tool of the map editor: a sphere pressed into the ground digs it, the same shape fills it back; the
@@ -62,7 +82,11 @@ export class TerrainEditorTool extends MapEditorTool {
     private unsubscribeBrush: (() => void) | undefined;
     /** The sources and the sinks of the map, pointed out while the tool is open: they are hard to find otherwise. */
     private waterMarks: WaterMarksView | undefined;
-    private contours: Phaser.GameObjects.Graphics | undefined;
+    /** The contour lines, region by region (by the key of the region), while the tool is open. */
+    private contourRegions: Map<string, ContourRegion> | undefined;
+    private contourCache: ContourCache | undefined;
+    /** Whether the panel asks for the contour lines. */
+    private contoursWanted = false;
     /** The relief the contour lines were last drawn from: drawn again when the map holds another one. */
     private contoursOf: TerrainData | null | undefined = null;
     private unsubscribeContours: (() => void) | undefined;
@@ -181,31 +205,118 @@ export class TerrainEditorTool extends MapEditorTool {
         this.waterMarks?.update(time);
         // The relief of the map is another object each time it is edited, here or by someone else.
         if (this.terrain() !== this.contoursOf) this.drawContours();
+        this.showContoursInView();
     }
 
-    /** The contour lines of the relief: thin ones every quarter of a tile of depth, stronger ones every tile. */
+    /**
+     * The contour lines of the relief: thin ones every quarter of a tile of depth, stronger ones every tile. Only the
+     * regions whose relief changed since they were last drawn are drawn again.
+     */
     private drawContours(): void {
-        const graphics = this.contours;
-        if (!graphics) return;
+        const regions = this.contourRegions;
+        if (!regions) return;
         const terrain = this.terrain();
         this.contoursOf = terrain;
-        graphics.clear();
-        if (get(terrainContoursStore)) {
-            const segments = contourSegments(terrain, CONTOUR_STEP_PX, CONTOUR_MAJOR_PX);
-            const crowded = segments.length > MAX_CONTOUR_SEGMENTS;
-            for (const major of [false, true]) {
-                if (!major && crowded) continue;
-                graphics.lineStyle(1, 0xffffff, major ? 0.75 : 0.3);
-                graphics.beginPath();
-                for (const segment of segments) {
-                    if (segment.major !== major) continue;
-                    graphics.moveTo(segment.x1, segment.y1);
-                    graphics.lineTo(segment.x2, segment.y2);
-                }
-                graphics.strokePath();
+        if (this.contoursWanted) {
+            this.contourCache ??= new ContourCache(CONTOUR_STEP_PX, CONTOUR_MAJOR_PX);
+            const drawn = new Set<string>();
+            for (const chunk of this.contourCache.update(terrain)) {
+                const [chunkX, chunkY] = chunk.split(",").map(Number);
+                drawn.add(
+                    `${Math.floor(chunkX / CONTOUR_REGION_CHUNKS)},${Math.floor(chunkY / CONTOUR_REGION_CHUNKS)}`,
+                );
+            }
+            for (const region of drawn) this.drawContourRegion(regions, region);
+        }
+        this.showContoursInView(true);
+    }
+
+    /** Draws the contour lines of a region again, from the lines of its chunks; a region without any is let go. */
+    private drawContourRegion(regions: Map<string, ContourRegion>, key: string): void {
+        const cache = this.contourCache;
+        if (!cache) return;
+        const [regionX, regionY] = key.split(",").map(Number);
+        const segments = [];
+        for (let chunkY = regionY * CONTOUR_REGION_CHUNKS; chunkY < (regionY + 1) * CONTOUR_REGION_CHUNKS; chunkY++) {
+            for (
+                let chunkX = regionX * CONTOUR_REGION_CHUNKS;
+                chunkX < (regionX + 1) * CONTOUR_REGION_CHUNKS;
+                chunkX++
+            ) {
+                segments.push(...cache.segmentsOf(`${chunkX},${chunkY}`));
             }
         }
-        this.scene.markDirty();
+        let region = regions.get(key);
+        if (segments.length === 0) {
+            region?.minor.destroy();
+            region?.major.destroy();
+            regions.delete(key);
+            return;
+        }
+        if (!region) {
+            region = {
+                left: regionX * CONTOUR_REGION_PX,
+                top: regionY * CONTOUR_REGION_PX,
+                minor: this.scene.add.graphics().setDepth(DEPTH_MAP_EDITOR_AREAS_INDEX).setVisible(false),
+                major: this.scene.add.graphics().setDepth(DEPTH_MAP_EDITOR_AREAS_INDEX).setVisible(false),
+                minorCount: 0,
+                majorCount: 0,
+            };
+            regions.set(key, region);
+        }
+        region.minorCount = 0;
+        region.majorCount = 0;
+        for (const major of [false, true]) {
+            const graphics = major ? region.major : region.minor;
+            graphics.clear();
+            graphics.lineStyle(1, 0xffffff, major ? 0.75 : 0.3);
+            graphics.beginPath();
+            for (const segment of segments) {
+                if (segment.major !== major) continue;
+                graphics.moveTo(segment.x1, segment.y1);
+                graphics.lineTo(segment.x2, segment.y2);
+                if (major) region.majorCount++;
+                else region.minorCount++;
+            }
+            graphics.strokePath();
+        }
+    }
+
+    /**
+     * Shows the contour lines of the regions in view only, and only the stronger ones when there are too many lines in
+     * view (a map full of lakes seen whole).
+     */
+    private showContoursInView(changed = false): void {
+        const regions = this.contourRegions;
+        if (!regions) return;
+        const view = this.scene.cameras.main.worldView;
+        const inView = (region: ContourRegion): boolean =>
+            this.contoursWanted &&
+            region.left < view.right + CONTOUR_VIEW_MARGIN_PX &&
+            region.left + CONTOUR_REGION_PX > view.x - CONTOUR_VIEW_MARGIN_PX &&
+            region.top < view.bottom + CONTOUR_VIEW_MARGIN_PX &&
+            region.top + CONTOUR_REGION_PX > view.y - CONTOUR_VIEW_MARGIN_PX;
+        let lines = 0;
+        for (const region of regions.values()) if (inView(region)) lines += region.minorCount + region.majorCount;
+        const crowded = lines > MAX_CONTOUR_SEGMENTS;
+        for (const region of regions.values()) {
+            const shown = inView(region);
+            const minor = shown && !crowded;
+            if (region.major.visible !== shown || region.minor.visible !== minor) changed = true;
+            region.major.setVisible(shown);
+            region.minor.setVisible(minor);
+        }
+        if (changed) this.scene.markDirty();
+    }
+
+    private destroyContours(): void {
+        for (const region of this.contourRegions?.values() ?? []) {
+            region.minor.destroy();
+            region.major.destroy();
+        }
+        this.contourRegions = undefined;
+        this.contourCache = undefined;
+        this.contoursOf = null;
     }
 
     public activate(): void {
@@ -225,9 +336,12 @@ export class TerrainEditorTool extends MapEditorTool {
         this.unsubscribeBrush = terrainBrushStore.subscribe(() => this.redraw());
         this.selection = this.scene.add.graphics().setDepth(DEPTH_MAP_EDITOR_AREAS_INDEX);
         this.unsubscribeSelection = selectedPoolStore.subscribe((pool) => this.drawSelection(pool));
-        this.contours = this.scene.add.graphics().setDepth(DEPTH_MAP_EDITOR_AREAS_INDEX);
+        this.contourRegions = new Map();
         this.contoursOf = null;
-        this.unsubscribeContours = terrainContoursStore.subscribe(() => this.drawContours());
+        this.unsubscribeContours = terrainContoursStore.subscribe((wanted) => {
+            this.contoursWanted = wanted;
+            this.drawContours();
+        });
         this.waterMarks = new WaterMarksView(this.scene, () => this.scene.getGameMap().getWamFile()?.getWam());
         // The bottom of the lakes shows through their water while the relief is edited.
         this.scene.getTerrainView()?.setSeeThrough(true);
@@ -258,8 +372,7 @@ export class TerrainEditorTool extends MapEditorTool {
         this.waterMarks = undefined;
         this.unsubscribeContours?.();
         this.unsubscribeContours = undefined;
-        this.contours?.destroy();
-        this.contours = undefined;
+        this.destroyContours();
         terrainHoverHeightStore.set(undefined);
         this.scene.getTerrainView()?.setSeeThrough(false);
         terrainBlockedStore.set(false);
