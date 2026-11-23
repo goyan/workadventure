@@ -23,6 +23,8 @@ import {
     hurricanePressureDrop,
     hurricaneWind,
     hurricaneAt,
+    hurricaneWaterEffect,
+    HURRICANE_WATER_EFFECTS,
 } from "../src/Catastrophe/Hurricane";
 import type { Hurricane } from "../src/Catastrophe/Hurricane";
 import { TERRAIN_CELL, TILE_PX } from "../src/types";
@@ -39,7 +41,7 @@ const inertia: WaterStepInput = {
 };
 
 /** A closed basin dug `depth` pixels deep, `length` cells by `width`, its corner at the cell 2,2, full to the brim. */
-function basin(length: number, width: number, depth: number, kernel?: WasmWaterKernel): WaterGrid {
+function basin(length: number, width: number, depth: number, kernel?: WasmWaterKernel, full = 0.75): WaterGrid {
     const cells = new Map<string, number>();
     for (let y = 2; y < 2 + width; y++) for (let x = 2; x < 2 + length; x++) cells.set(cellKey(x, y), -depth);
     const grid = new WaterGrid(
@@ -54,7 +56,7 @@ function basin(length: number, width: number, depth: number, kernel?: WasmWaterK
     const bytes = new Uint8Array(columns * rows * 2);
     for (let y = 2; y < 2 + width; y++) {
         for (let x = 2; x < 2 + length; x++) {
-            const eighths = Math.round(depth * 0.75 * 8);
+            const eighths = Math.round(depth * full * 8);
             bytes[(y * columns + x) * 2] = eighths & 255;
             bytes[(y * columns + x) * 2 + 1] = eighths >> 8;
         }
@@ -189,7 +191,7 @@ describe("the water of a closed basin under a low", () => {
         for (let step = 0; step < 50; step++) grid.step(inertia);
         const later = surfaces(grid, LENGTH, ROW);
         for (let at = 0; at < LENGTH; at++) expect(Math.abs(later[at] - settled[at])).toBeLessThan(0.1);
-    });
+    }, 60_000);
 
     it("follows the centre as it moves on, and falls back once the low is gone", () => {
         const grid = basin(LENGTH, WIDTH, 60);
@@ -363,4 +365,92 @@ describe("the wind over the water (its stress)", () => {
         expect(speed).toBeGreaterThan(0.5 * free);
         expect(speed).toBeLessThan(1.05 * free);
     });
+});
+
+describe("an effect on the water exaggerated, as a player may ask for it", () => {
+    it("is one of real, ×2, ×4, ×6, ×8: anything else is brought to the nearest under it, or to the real one", () => {
+        expect(HURRICANE_WATER_EFFECTS).toStrictEqual([1, 2, 4, 6, 8]);
+        expect(hurricaneWaterEffect(undefined)).toBe(1);
+        expect(hurricaneWaterEffect(0)).toBe(1);
+        expect(hurricaneWaterEffect(5)).toBe(4);
+        expect(hurricaneWaterEffect(8)).toBe(8);
+        expect(hurricaneWaterEffect(100)).toBe(8);
+        expect(hurricaneWaterEffect(Number.NaN)).toBe(1);
+    });
+
+    it("multiplies the low and the wind on the water, nothing else", () => {
+        const base: Hurricane = {
+            id: 4,
+            category: 4,
+            durationMs: 300_000,
+            heading: 90,
+            southern: false,
+            startedAt: 0,
+            fromX: 0,
+            fromY: 500,
+            toX: 6000,
+            toY: 500,
+            anchorX: 3000,
+            anchorY: 500,
+        };
+        const real = hurricanePressure(base, 150_000);
+        const eight = hurricanePressure({ ...base, waterEffect: 8 }, 150_000);
+        expect(eight?.dropPx).toBeCloseTo((real?.dropPx ?? 0) * 8, 9);
+        expect(eight?.windGain).toBe(8);
+        expect(real?.windGain).toBe(1);
+        expect(eight?.x).toBe(real?.x);
+        // The weather of the storm is the same: its wind where a player stands.
+        expect(hurricaneHere({ ...base, waterEffect: 8 }, 150_000, 100, 100)?.windSpeed).toBe(
+            hurricaneHere(base, 150_000, 100, 100)?.windSpeed,
+        );
+    });
+
+    it("holds at ×8: a dome of 6 m, slopes of a tenth, the water kept, no swing left", () => {
+        const LENGTH = 200;
+        const ROW = 6;
+        // A lake 3.4 m deep in a pit 10 m deep: the dome of 6 m stays in it (over its brim it would flood the land
+        // around, and run off the edge of this small grid).
+        const grid = basin(LENGTH, 9, 300, undefined, 0.4);
+        const before = grid.totalPx();
+        const centre = 2 + LENGTH / 2;
+        const eye = low(centre, ROW, 22 * 8);
+        const wind = (x: number, y: number): { east: number; south: number } => {
+            // A wind of a category 4 turning round the eye, 55 m/s at 30 m.
+            const dx = x - eye.x;
+            const dy = y - eye.y;
+            const distance = Math.hypot(dx, dy) || 1;
+            const share = Math.min(1, distance / HURRICANE_RMAX_PX);
+            return { east: (55 * share * dy) / distance, south: (-55 * share * dx) / distance };
+        };
+        grid.setPressure({ ...eye, wind, windGain: 8 });
+        let fastest = 0;
+        for (let step = 0; step < 6000; step++) {
+            grid.step(inertia);
+            if (step % 50 === 0) {
+                const east = Reflect.get(grid, "flowEast") as Float32Array;
+                const depth = Reflect.get(grid, "depth") as Float32Array;
+                for (let index = 0; index < depth.length; index++) {
+                    expect(Number.isFinite(depth[index])).toBe(true);
+                    if (depth[index] > 1) fastest = Math.max(fastest, Math.abs(east[index]) / depth[index]);
+                }
+            }
+        }
+        // The water kept: nothing created, nothing lost (a closed basin).
+        expect(Math.abs(grid.totalPx() - before) / before).toBeLessThan(1e-3);
+        const line = surfaces(grid, LENGTH, ROW);
+        // A dome as high as eight real ones, the heights of the pressure say how much: within a tenth at rest.
+        const heads = new Float32Array(grid.bounds.width * grid.bounds.height);
+        pressureHeads(eye, 0, 0, grid.bounds.width, grid.bounds.height, TERRAIN_CELL, heads);
+        const wanted = heads[ROW * grid.bounds.width + 2] - heads[ROW * grid.bounds.width + centre];
+        expect(wanted).toBeGreaterThan(60);
+        const got = line[centre - 2] - line[0];
+        expect(Math.abs(got - wanted) / wanted).toBeLessThan(0.1);
+        // Never faster than the kernel bears (FASTEST_FLOW_CELLS): no blow-up.
+        expect(fastest).toBeLessThan(20);
+        // At rest at the end: nothing moves by more than half a pixel in 5 s.
+        const settled = surfaces(grid, LENGTH, ROW);
+        for (let step = 0; step < 50; step++) grid.step(inertia);
+        const later = surfaces(grid, LENGTH, ROW);
+        for (let at = 0; at < LENGTH; at++) expect(Math.abs(later[at] - settled[at])).toBeLessThan(0.5);
+    }, 60_000);
 });

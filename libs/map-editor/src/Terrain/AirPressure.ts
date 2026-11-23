@@ -23,6 +23,8 @@ export interface AirPressure {
     b: number;
     /** The wind at 10 m over a point of the map (map pixels), m/s towards the east and the south; none: still air. */
     wind?: (x: number, y: number) => { east: number; south: number };
+    /** How many times its stress the wind pushes the water with (an exaggeration asked for): 1 when absent. */
+    windGain?: number;
 }
 
 /** The density of fresh water (kg/m³) and the gravity (m/s²): a pressure as a height of water. */
@@ -149,6 +151,7 @@ export function windPushes(
         outSouth.fill(0, 0, width * height);
         return;
     }
+    const gain = pressure.windGain !== undefined && Number.isFinite(pressure.windGain) ? pressure.windGain : 1;
     const block = WIND_BLOCK_CELLS;
     const across = Math.ceil(width / block) + 1;
     const down = Math.ceil(height / block) + 1;
@@ -158,8 +161,8 @@ export function windPushes(
         for (let column = 0; column < across; column++) {
             const air = wind((x + column * block + 0.5) * cellPx, (y + row * block + 0.5) * cellPx);
             const push = windPush(air.east, air.south, cellPx);
-            cornersEast[row * across + column] = push.east;
-            cornersSouth[row * across + column] = push.south;
+            cornersEast[row * across + column] = push.east * gain;
+            cornersSouth[row * across + column] = push.south * gain;
         }
     }
     for (let row = 0; row < height; row++) {

@@ -2198,6 +2198,7 @@ export class WaterGrid implements WaterView {
             last.height === height &&
             last.pressure.radiusPx === pressure.radiusPx &&
             last.pressure.b === pressure.b &&
+            last.pressure.windGain === pressure.windGain &&
             Math.abs(last.pressure.x - pressure.x) < TERRAIN_CELL / 2 &&
             Math.abs(last.pressure.y - pressure.y) < TERRAIN_CELL / 2 &&
             Math.abs(last.pressure.dropPx - pressure.dropPx) <= 0.01 * last.pressure.dropPx

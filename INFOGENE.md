@@ -6031,6 +6031,14 @@ de l'œil, comme le vent, et prend de l'ordre de 0,2 m/s en une minute au rayon 
 τ t / (ρ_w h)), jusqu'à environ 1 m/s sur la planche de l'étude ; sur un lac étroit le courant longe les rives. Mêmes
 garanties que la pression : rien sans ouragan, TypeScript et C identiques au bit (`Move` : 168 octets).
 
+**Effet sur l'eau exagéré, à la demande** (réglage du panneau de l'ouragan, « Effet sur l'eau (pression et vent) » :
+Réaliste, Exagéré ×2, ×4, ×6, ×8 ; `HurricaneTrackMessage.waterEffect`, champ 15, **le protobuf change**). Multiplie la
+hauteur de pression et la poussée du vent sur l'eau, rien d'autre (le vent, la pluie, le ciel restent ceux d'un vrai
+ouragan). Choisi par le joueur qui lance l'ouragan, gardé par le serveur parmi les cinq valeurs, le même pour tous. À ×8
+une catégorie 4 creuse un dôme de 6 m (pentes d'un dixième) : le modèle tient (test : volume conservé dans un bassin
+qui le contient, vitesses bornées, au repos ensuite, dôme conforme à 10 % près) ; sur la carte, un tel dôme déborde des
+rives et inonde les terres basses, ce qui est voulu par l'exagération.
+
 **Ce que ça ne modélise pas, ou pas encore.**
 - **La pluie par position sur l'eau, le feu par position** : le sol du serveur lit une seule valeur pour la salle, au
   point survolé par l'œil. L'eau ne reçoit donc pas plus de pluie sous le mur qu'ailleurs, et le feu ne sent pas le

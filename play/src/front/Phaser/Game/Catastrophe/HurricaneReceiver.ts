@@ -56,7 +56,8 @@ export class HurricaneReceiver {
             known.toX === told.toX &&
             known.toY === told.toY &&
             known.heading === told.heading &&
-            known.southern === told.southern;
+            known.southern === told.southern &&
+            known.waterEffect === told.waterEffect;
         if (!same) this.hurricane = told;
         const hurricane = this.hurricane ?? told;
         if (this.silence) clearTimeout(this.silence);

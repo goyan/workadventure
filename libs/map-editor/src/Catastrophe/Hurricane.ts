@@ -165,6 +165,22 @@ export interface HurricaneTrack {
     heading: number;
     /** It turns clockwise, as in the southern hemisphere. */
     southern: boolean;
+    /**
+     * How many times stronger than in reality its low and its wind act on the water (HURRICANE_WATER_EFFECTS): 1 is
+     * the real effect, more an exaggeration a player asked for, to see it better. 1 when absent.
+     */
+    waterEffect?: number;
+}
+
+/** The effects on the water a player may ask for: the real one, then exaggerated two to eight times. */
+export const HURRICANE_WATER_EFFECTS: readonly number[] = [1, 2, 4, 6, 8];
+
+/** The effect on the water asked, as one of HURRICANE_WATER_EFFECTS (the nearest under it; the real one otherwise). */
+export function hurricaneWaterEffect(asked: number | undefined): number {
+    if (asked === undefined || !Number.isFinite(asked) || asked < 1) return 1;
+    let kept = 1;
+    for (const effect of HURRICANE_WATER_EFFECTS) if (effect <= asked) kept = effect;
+    return kept;
 }
 
 /**
@@ -232,7 +248,7 @@ export function hurricaneHeading(heading: number | undefined): number {
 
 /** A track as a player asks for it, kept within what a hurricane may be. */
 export function hurricaneTrack(
-    asked: { category?: number; minutes?: number; heading?: number },
+    asked: { category?: number; minutes?: number; heading?: number; waterEffect?: number },
     southern: boolean,
 ): HurricaneTrack {
     return {
@@ -240,6 +256,7 @@ export function hurricaneTrack(
         durationMs: hurricaneMinutes(asked.minutes ?? 0) * 60_000,
         heading: hurricaneHeading(asked.heading),
         southern,
+        waterEffect: hurricaneWaterEffect(asked.waterEffect),
     };
 }
 
@@ -505,12 +522,15 @@ export function hurricanePressure(hurricane: Hurricane | undefined, epoch: numbe
     const storm = hurricaneAt(hurricane, epoch);
     if (!hurricane || !storm || !(storm.share > 0)) return undefined;
     const share = storm.share;
+    // The real effect, or that many times stronger when a player asked for it to be seen better.
+    const effect = hurricaneWaterEffect(hurricane.waterEffect);
     return {
         x: storm.eyeX,
         y: storm.eyeY,
-        dropPx: waterHeightOfPressure(hurricanePressureDrop(hurricane.category) * share) * PX_PER_METRE,
+        dropPx: waterHeightOfPressure(hurricanePressureDrop(hurricane.category) * share) * PX_PER_METRE * effect,
         radiusPx: HURRICANE_RMAX_PX,
         b: HURRICANE_HOLLAND_B,
+        windGain: effect,
         // Its wind pushes the water, fading in and out with the storm (m/s, east and south).
         wind: (x, y) => {
             const wind = hurricaneWind(hurricane, storm, x, y);

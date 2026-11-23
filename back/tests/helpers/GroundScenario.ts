@@ -361,6 +361,9 @@ export function happenAt(
     if (tenth === 570) state.air = { temperature: -25, humidity: 85 };
     if (tenth === 640) ground.shatter(200, 200, 3);
     if (tenth === 700) state.air = { temperature: 12, humidity: 60 };
+    // A shower over the pond of the east first: the wind of the hurricane blew the rain off its shallow hollow.
+    if (tenth === 690) state.downpours = [{ id: 2, x: 43 * 16, y: 9 * 16, radiusTiles: 2, wholeMap: false }];
+    if (tenth === 715) state.downpours = [];
     // A player lays a mass of air at -80 °C on the pond of the east (tiles 20 to 22) in the mild air that came
     // back, drags it, then lets it go: the pond takes, and thaws by itself.
     if (tenth === 720) state.colds = [{ id: 20, x: 43 * 16, y: 9 * 16, radiusTiles: 3, temperature: -80 }];
