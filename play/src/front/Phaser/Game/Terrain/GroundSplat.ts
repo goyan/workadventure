@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import { DEFAULT_POOL_STYLE, poolStyleAt, poolStyleOf } from "@workadventure/map-editor";
+import { DEFAULT_POOL_STYLE, poolStyleAt, poolStyleOf, TERRAIN_CELL } from "@workadventure/map-editor";
 import type { PoolStyle } from "@workadventure/map-editor";
 import { refreshCanvasTexture } from "@wa/front/Phaser/Game/CanvasTextureRefresh";
 import { DEEP_ICE_PX, POOL_ICE_DEPTH_PX } from "@wa/front/Phaser/Game/Weather/Frost";
@@ -69,6 +69,32 @@ export const SHORE_FILM_PX = SHORE_PX;
 export const FETCH_PACK = 11;
 /** How much the slopes of the wind sea light or shade the water, facing the light or turned from it. */
 const SEA_SHADE = 0.45;
+/**
+ * The light goes down into the water and back up, absorbed along the way (Beer-Lambert): the share of the colour of
+ * deep water a water this deep takes is 1 - exp(-depth / this), map pixels: 32 px, 1.1 m. The light goes the depth
+ * twice: a diffuse attenuation coefficient of 1 / (2 x 1.1 m) = 0.45 per metre, a choice among those of lakes (from
+ * some 0.2 per metre in the clearest to several in turbid ones, Kirk, Light and Photosynthesis in Aquatic Ecosystems).
+ * It replaces a straight ramp to 64 px (2.2 m): the shallows a little darker (+0.14 of the way at 16 and 32 px), the
+ * water of 2 m a little lighter (-0.14 at 64 px), and no water however deep darker than DEEP.
+ */
+const WATER_ATTENUATION_PX = 32;
+/**
+ * The light on a surface of water aslant (WATER_FRAG, waterFacing): from the north-west as the relief, this high over
+ * the horizon (degrees): a choice, the sun of the middle of a morning or an afternoon. A face turned 10 % towards the
+ * light takes about 10 % more of it (1 + slope / tan of this). The view from straight above sees the sky reflected
+ * almost the same over a face tilted less than some 40 degrees (Fresnel: 2 % at the normal, 2.4 % at 40 degrees): the
+ * slope of the water is seen by the light it lets in, not by what it reflects.
+ */
+const WATER_LIGHT_ELEVATION_DEG = 45;
+const WATER_LIGHT_ACROSS = Math.cos((WATER_LIGHT_ELEVATION_DEG * Math.PI) / 180) * Math.SQRT1_2;
+const WATER_LIGHT_UP = Math.sin((WATER_LIGHT_ELEVATION_DEG * Math.PI) / 180);
+/** The slope of the water is worked out where a cell and the four around it hold at least this (map px): a shore is
+ * not a slope of the water. */
+const SLOPE_WET_PX = 2;
+/** The pack the slope of the water is told in: green east, blue south, 128 level, SLOPE_UNITS a slope of 1 (to 1 either
+ * way; steeper is told as 1). */
+export const SLOPE_PACK = 11;
+const SLOPE_UNITS = 127;
 /** How far (map pixels) a slope of 1 of the wind sea bends what the water reflects. */
 const SEA_RIPPLE_PX = 24;
 /** A current this fast (cells a second, 0.27 m/s) reads in full on a thin film: its ripples and its tint. */
@@ -630,6 +656,21 @@ ${WIND_SEA_WATER_GLSL}
 
 const vec3 SHALLOW = vec3(0.1, 0.48, 0.52);
 const vec3 DEEP = vec3(0.05, 0.17, 0.34);
+
+// The slope of the surface of the water at a point (map px a map px, east and south): worked out on the processor from
+// the very depths of the water (writeSlopes, the green and blue of SLOPE_PACK), straight between the cells.
+vec2 waterSlopeAt(vec2 world) {
+    return (pack(${SLOPE_PACK}.0, world).gb * 255.0 - 128.0) / ${glsl(SLOPE_UNITS)};
+}
+
+// How much light a face of water of this slope takes, over a level one: the cosine of the light on its normal
+// (Lambert), the light from the north-west as the relief, WATER_LIGHT_ELEVATION_DEG over the horizon. 1 when level.
+float waterFacing(vec2 slope) {
+    vec3 normal = normalize(vec3(-slope, 1.0));
+    vec3 light = vec3(${glsl(-WATER_LIGHT_ACROSS)}, ${glsl(-WATER_LIGHT_ACROSS)}, ${glsl(WATER_LIGHT_UP)});
+    return max(0.0, dot(normal, light)) / ${glsl(WATER_LIGHT_UP)};
+}
+
 const vec3 FOAM = vec3(0.93, 0.97, 1.0);
 
 // Whether the pool goes on d map pixels around a point, in eight directions: false near its rim (its coping).
@@ -795,7 +836,9 @@ void main() {
         float iceAlpha = mix(0.96, mix(0.6, 0.96, thick), uServerIce) * cover;
         outColor = vec4(ice * iceAlpha, iceAlpha) + outColor * (1.0 - iceAlpha);
     } else if (cover > 0.001) {
-        float deep = clamp(depth * ${WATER_SCALE_PX}.0 / 64.0, 0.0, 1.0);
+        // The water takes its own colour as the light goes down through it and back: it is absorbed along the way
+        // (Beer-Lambert), so the colour saturates with the depth instead of going on darkening (WATER_ATTENUATION_PX).
+        float deep = 1.0 - exp(-depth * ${WATER_SCALE_PX}.0 / ${glsl(WATER_ATTENUATION_PX)});
         vec3 water = mix(SHALLOW, DEEP, deep);
         // A film thinner than the shore of the water (SHORE_PX) is clear: a few centimetres of water have no colour,
         // the wet ground shows through it, deepened by the ground shader, under the glints of its surface. The colour
@@ -825,6 +868,12 @@ void main() {
         // The wind sea (WindSeaShader.ts), on open water outdoors: its waves light and shade the water, bend what it
         // reflects, and their crests break into foam.
         float open = outdoors * step(${WHITECAP_MIN_DEPTH_PX}.0, depthPx);
+        // The surface of the water itself aslant (a dome under the low of a hurricane, the water piled up by its
+        // wind, a wave of a flood): the light it lets into the water follows the cosine of the light on its face
+        // (Lambert), from the north-west as the relief, so the colour of the water is lit or shaded as much. A level
+        // water is left exactly as it was.
+        vec2 surfaceSlope = waterSlopeAt(world);
+        water *= waterFacing(surfaceSlope);
         vec2 seaRipple = vec2(0.0);
         float seaWhite = 0.0;
 #ifdef WIND_SEA
@@ -969,6 +1018,8 @@ export class GroundSplat {
     private strength = 1;
     private anyGround = false;
     private anyWater = false;
+    /** The surface of the water over each cell, for its slope (waterLevels, writeSlopes). */
+    private levels = new Float32Array(0);
     private anyPool = false;
 
     public static create(scene: Phaser.Scene, groundDepth: number, waterDepth: number): GroundSplat | undefined {
@@ -1228,6 +1279,8 @@ export class GroundSplat {
         depths?: Float32Array,
         /** The fetch of the wind over each cell (WindSea.fetchByte); undefined: no wind sea. */
         fetch?: Uint8Array,
+        /** The depth of the water over each cell, unrounded (map px): the slope of its surface is lit (writeSlopes). */
+        exact?: Float32Array,
     ): void {
         const area = this.area;
         const pixels = this.pixels;
@@ -1248,6 +1301,14 @@ export class GroundSplat {
         writeFoam(pixels.data, wet, foam, columns, rows);
         writeFlow(pixels.data, flow, columns, rows);
         writeFetch(pixels.data, fetch, columns, rows);
+        // The surface of the water where it holds enough (its ground, dug or raised, and the water over it): its
+        // slope is lit by the water shader.
+        if (exact) {
+            const size = columns * rows;
+            if (this.levels.length !== size) this.levels = new Float32Array(size);
+            waterLevels(pixels.data, exact, this.levels, columns, rows);
+        }
+        writeSlopes(pixels.data, exact ? this.levels : undefined, columns, rows);
         if (!any && !this.anyWater) return;
         this.anyWater = any;
         this.upload();
@@ -1693,6 +1754,66 @@ export function writeFetch(
 ): void {
     for (let cell = 0; cell < columns * rows; cell++) {
         data[texel(FETCH_PACK, cell, columns, rows)] = fetch?.[cell] ?? 0;
+    }
+}
+
+/**
+ * The surface of the water over each cell (map px: its ground, dug or raised, from the relief of pack 3, and the water
+ * over it), NaN where it holds less than SLOPE_WET_PX.
+ */
+export function waterLevels(
+    data: Uint8ClampedArray,
+    exact: Float32Array,
+    levels: Float32Array,
+    columns: number,
+    rows: number,
+): void {
+    for (let cell = 0; cell < columns * rows; cell++) {
+        const held = exact[cell] ?? 0;
+        const at = texel(3, cell, columns, rows);
+        levels[cell] = held >= SLOPE_WET_PX ? data[at + 1] - data[at] + held : Number.NaN;
+    }
+}
+
+/**
+ * The slope of the surface of the water over each cell (map px a map px), across the cells on each side, into the green
+ * (east) and blue (south) of SLOPE_PACK, 128 level, SLOPE_UNITS a slope of 1: from the surface over each cell (`levels`,
+ * NaN where the water is too thin); level where a side is dry or the grid ends, and everywhere without levels.
+ */
+export function writeSlopes(
+    data: Uint8ClampedArray,
+    levels: Float32Array | undefined,
+    columns: number,
+    rows: number,
+): void {
+    const byte = (slope: number): number => Math.max(1, Math.min(255, Math.round(128 + slope * SLOPE_UNITS)));
+    for (let row = 0; row < rows; row++) {
+        for (let column = 0; column < columns; column++) {
+            const cell = row * columns + column;
+            const at = texel(SLOPE_PACK, cell, columns, rows);
+            let east = 128;
+            let south = 128;
+            if (levels && column > 0 && column + 1 < columns && row > 0 && row + 1 < rows) {
+                const here = levels[cell];
+                const west = levels[cell - 1];
+                const eastward = levels[cell + 1];
+                const north = levels[cell - columns];
+                const southward = levels[cell + columns];
+                // NaN on any side (too thin, or no water) leaves it level.
+                if (
+                    here === here &&
+                    west === west &&
+                    eastward === eastward &&
+                    north === north &&
+                    southward === southward
+                ) {
+                    east = byte((eastward - west) / (2 * TERRAIN_CELL));
+                    south = byte((southward - north) / (2 * TERRAIN_CELL));
+                }
+            }
+            data[at + 1] = east;
+            data[at + 2] = south;
+        }
     }
 }
 
