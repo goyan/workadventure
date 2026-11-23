@@ -55,6 +55,12 @@ export interface CellInput {
     soilFrost: number;
     /** The height of the sun over the horizon, in degrees; undefined when not known. */
     sunElevation: number | undefined;
+    /** The pool painted under the cell, and whether its water is heated; undefined out of any pool. */
+    pool?: { hot: boolean };
+    /** The altitudes (pixels) of the raised floors drawn over the cell, the highest first. */
+    floorsOver?: readonly number[];
+    /** Whether a shadow of the sky is drawn over the cell for this player; undefined while none is drawn. */
+    shaded?: boolean;
 }
 
 export type CellIceWhy =
@@ -62,6 +68,8 @@ export type CellIceWhy =
     | "indoor"
     /** No water lies there: no ice. */
     | "noWater"
+    /** The heated water of a pool never freezes. */
+    | "hotPool"
     /** The air is at zero or over and no ice is left. */
     | "warm"
     /** It freezes, but the water runs too fast for a sheet of ice. */
@@ -89,6 +97,12 @@ export interface CellExplained {
     soilFrost: number;
     meadow: { grass: number; moisture: number; dryness: number; fire: number; ash: number } | undefined;
     sunElevation: number | undefined;
+    /** The water of the cell is that of a heated pool: it takes no ice and melts the snow. */
+    hotPool: boolean;
+    /** The altitudes (pixels) of the raised floors drawn over the cell, the highest first: the cell is read under them. */
+    floorsOver: readonly number[];
+    /** Whether a shadow of the sky is drawn over the cell for this player; undefined while none is drawn. */
+    shaded: boolean | undefined;
     /** The air that ground goes by. */
     temperature: number | undefined;
     times: number;
@@ -104,10 +118,11 @@ function runOf(current: CellInput["current"]): WaterRun {
 /** What goes on in a cell: see the head of this file. */
 export function explainCell(input: CellInput): CellExplained {
     const wet = input.reading.depth !== undefined;
-    const iceMm = input.kept?.iceMm ?? 0;
+    const hotPool = wet && input.pool?.hot === true;
+    const iceMm = hotPool ? 0 : (input.kept?.iceMm ?? 0);
     // The ice is never thicker than the water under it (Meadow.stepIce).
     const keptIce =
-        wet && input.outdoor && input.kept
+        wet && input.outdoor && input.kept && !hotPool
             ? explainKeptIce({
                   mm: iceMm,
                   weather: input.weather,
@@ -121,17 +136,19 @@ export function explainCell(input: CellInput): CellExplained {
         ? "noWater"
         : !input.outdoor
           ? "indoor"
-          : input.hold !== "none" || iceMm > 0
-            ? "ice"
-            : !input.weather
-              ? "unknown"
-              : keptIce?.trend === "growing"
-                ? "taking"
-                : input.weather.temperature < 0 && keptIce?.currentShare === 0
-                  ? "current"
-                  : input.weather.temperature < 0
-                    ? "taking"
-                    : "warm";
+          : hotPool
+            ? "hotPool"
+            : input.hold !== "none" || iceMm > 0
+              ? "ice"
+              : !input.weather
+                ? "unknown"
+                : keptIce?.trend === "growing"
+                  ? "taking"
+                  : input.weather.temperature < 0 && keptIce?.currentShare === 0
+                    ? "current"
+                    : input.weather.temperature < 0
+                      ? "taking"
+                      : "warm";
     // The snow of the tile where the ground holds it; else the even snow of this player's own city, outdoors.
     const snowMm = input.kept ? input.kept.snowMm : input.outdoor ? input.own.snowMm : 0;
     return {
@@ -160,16 +177,21 @@ export function explainCell(input: CellInput): CellExplained {
         },
         frost: input.outdoor ? input.own.frost : 0,
         soilFrost: input.soilFrost,
-        meadow: input.kept
-            ? {
-                  grass: input.kept.grass,
-                  moisture: input.kept.moisture,
-                  dryness: input.kept.dryness,
-                  fire: input.kept.fire,
-                  ash: input.kept.ash,
-              }
-            : undefined,
+        // Under water there is no grass to tell.
+        meadow:
+            input.kept && !wet
+                ? {
+                      grass: input.kept.grass,
+                      moisture: input.kept.moisture,
+                      dryness: input.kept.dryness,
+                      fire: input.kept.fire,
+                      ash: input.kept.ash,
+                  }
+                : undefined,
         sunElevation: input.sunElevation,
+        hotPool,
+        floorsOver: input.floorsOver ?? [],
+        shaded: input.outdoor ? input.shaded : undefined,
         temperature: input.weather?.temperature,
         times: input.times,
     };

@@ -1,3 +1,4 @@
+import { metresOf } from "@workadventure/map-editor";
 import type { CellExplained } from "@wa/front/Phaser/Game/Weather/CellExplained";
 import type { AirOwner, Audience } from "@wa/front/Phaser/Game/Weather/WeatherExplained";
 import { metresLabel } from "@wa/front/Phaser/Game/Floors/AvatarAltitude";
@@ -39,6 +40,8 @@ export function pipetteSections(ll: TranslationFunctions, locale: string, cell: 
     const relief: string[] = [
         p.ground({ altitude: metresLabel(reading.ground, locale), soil }),
         cell.outdoor ? p.outdoor() : p.indoor(),
+        // What is drawn over the cell: the pipette reads the ground, not the floor over it.
+        ...cell.floorsOver.map((elevation) => p.floorOver({ altitude: metresLabel(metresOf(elevation), locale) })),
     ];
 
     const wet: string[] = [];
@@ -52,6 +55,7 @@ export function pipetteSections(ll: TranslationFunctions, locale: string, cell: 
             }),
             water.deep ? p.deep() : p.shallow(),
         );
+        if (cell.hotPool) wet.push(p.hotPool());
         if (water.run === "unknown" || water.speed === undefined) wet.push(p.runUnknown());
         else if (water.run === "still") wet.push(p.still());
         else {
@@ -68,6 +72,7 @@ export function pipetteSections(ll: TranslationFunctions, locale: string, cell: 
     const frozen: string[] = [];
     if (ice.why === "noWater") frozen.push(p.iceNoWater());
     else if (ice.why === "indoor") frozen.push(p.iceIndoor());
+    else if (ice.why === "hotPool") frozen.push(p.iceHotPool());
     else if (ice.kept) {
         const kept = ice.kept;
         frozen.push(kept.mm > 0 ? t.kept.iceHere({ thickness: f.thickness(kept.mm) }) : t.kept.iceNone());
@@ -100,8 +105,10 @@ export function pipetteSections(ll: TranslationFunctions, locale: string, cell: 
     ];
 
     const grass: string[] = [];
-    if (!cell.meadow) grass.push(p.meadowNone());
-    else {
+    // Under water there is no grass to tell; a ground not kept tile by tile says so.
+    if (!cell.meadow) {
+        if (!water) grass.push(p.meadowNone());
+    } else {
         grass.push(p.grass({ grass: f.percent(cell.meadow.grass), moisture: f.percent(cell.meadow.moisture) }));
         if (cell.meadow.dryness >= TOLD_SHARE) grass.push(p.dry({ percent: f.percent(cell.meadow.dryness) }));
         if (cell.meadow.fire > 0) grass.push(p.fire());
@@ -115,6 +122,7 @@ export function pipetteSections(ll: TranslationFunctions, locale: string, cell: 
               ? p.sunUp({ degrees: f.percent(cell.sunElevation / 100) })
               : p.sunDown(),
     ];
+    if (cell.shaded !== undefined && (cell.sunElevation ?? 0) > 0) sky.push(cell.shaded ? p.shaded() : p.sunlit());
     // Where something thaws, what the thaw goes by: the air alone, at the clock of the water of the map.
     if ((ice.kept?.mm ?? 0) > 0 || snow.kept.mm > 0) sky.push(t.kept.onlyAir(), coverClockLine(t, locale, cell.times));
 
@@ -124,7 +132,9 @@ export function pipetteSections(ll: TranslationFunctions, locale: string, cell: 
         { id: "ice", title: p.ice(), lines: frozen, owner: cell.ground, audience: cell.audience },
         { id: "snow", title: p.snow(), lines: white, owner: cell.ground, audience: cell.audience },
         { id: "frost", title: p.frostSoil(), lines: cold },
-        { id: "meadow", title: p.meadow(), lines: grass, owner: cell.ground, audience: cell.audience },
+        ...(grass.length > 0
+            ? [{ id: "meadow" as const, title: p.meadow(), lines: grass, owner: cell.ground, audience: cell.audience }]
+            : []),
         { id: "sun", title: p.sun(), lines: sky },
     ];
 }

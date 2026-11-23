@@ -4,7 +4,7 @@ import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import type { WeatherView } from "../Weather/WeatherFrame";
 import { readShadowCasters } from "./SkyShadowCasters";
 import type { ShadowCategories, ShadowSourceEntity } from "./SkyShadowCasters";
-import { shadowPolygons } from "./SkyShadowGeometry";
+import { insidePolygon, shadowPolygons } from "./SkyShadowGeometry";
 import type { Point, ShadowCasters, ShadowTree } from "./SkyShadowGeometry";
 import { indoorRuns, SHADOW_COLOR, shadowAlpha, shadowArea, shadowRedraw, shadowResolution } from "./SkyShadowFrame";
 import type { DrawnShadows, ShadowFrame } from "./SkyShadowFrame";
@@ -191,6 +191,18 @@ export class SkyShadowManager {
     }
 
     /** The shadows that may fall in the area: those of the casters standing in it or less than the longest shadow away. */
+    /**
+     * Whether a shadow of the sky falls on a point of the map (map pixels), as this player has them drawn: the
+     * polygons of what stands within reach of that point only (the pictures of the trees set to a realistic shadow
+     * are not polygons: not told). Undefined while no shadow is drawn (turned off, no light, indoors is not asked).
+     */
+    public shadedAt(x: number, y: number): boolean | undefined {
+        if (this.broken) return undefined;
+        const light = this.options.light();
+        if (!this.options.enabled() || !light || light.intensity < NO_LIGHT) return undefined;
+        return this.polygonsOver({ x, y, width: 0, height: 0 }, light).some((polygon) => insidePolygon(polygon, x, y));
+    }
+
     private polygonsOver(area: WeatherView, light: SkyLight): Point[][] {
         const reach = light.shadowLength.max;
         const near = (x: number, y: number, width: number, height: number): boolean =>

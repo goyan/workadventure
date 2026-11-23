@@ -220,7 +220,59 @@ describe("pipetteSections (fr-FR)", () => {
             "Ta glace suit le froid de ta ville : elle n'a pas d'épaisseur tenue par le serveur.",
         ]);
         expect(own.ice).toMatchObject({ owner: "own", audience: "you" });
-        expect(own.meadow.lines).toEqual(["Le sol de cette case n'est pas tenu case par case chez toi."]);
+    });
+
+    it("says nothing of a grass under water, and that a ground of their own is not kept tile by tile on land", () => {
+        expect(sections(cell(lake())).meadow).toBeUndefined();
+        expect(sections(cell(lake({ ground: "own", city: "Oslo", kept: undefined }))).meadow).toBeUndefined();
+        expect(sections(cell({ ground: "own", city: "Oslo", kept: undefined })).meadow.lines).toEqual([
+            "Le sol de cette case n'est pas tenu case par case chez toi.",
+        ]);
+    });
+
+    it("says a heated pool never freezes, whatever ice the tile was told and however cold", () => {
+        const said = sections(
+            cell(
+                lake({
+                    reading: { ground: -1, surface: 0, depth: 1, soil: "pool", roughness: 0.01 },
+                    pool: { hot: true },
+                    weather: frost,
+                    kept: { ...dry, iceMm: 30 },
+                    hold: "none",
+                }),
+            ),
+        );
+        expect(said.relief.lines[0]).toBe("Sol à -1 m. Piscine.");
+        expect(said.water.lines).toContain(
+            "Piscine chauffée : son eau ne gèle pas et fait fondre la neige qui y tombe.",
+        );
+        expect(said.ice.lines).toEqual(["Piscine chauffée : elle ne gèle jamais."]);
+        // A pool that is not heated freezes as any water.
+        const cold = sections(cell(lake({ pool: { hot: false }, weather: frost, kept: { ...dry, iceMm: 30 } })));
+        expect(cold.ice.lines[0]).toBe("Glace de 30 mm d'épaisseur.");
+    });
+
+    it("says the raised floors drawn over the cell, the highest first: the ground under them is what is read", () => {
+        const said = sections(cell({ floorsOver: [128, 64] }));
+        expect(said.relief.lines).toEqual([
+            "Sol à 0 m. Terre.",
+            "Dehors.",
+            "Un palier à +4,4 m couvre cette case : la pipette lit le sol dessous.",
+            "Un palier à +2,2 m couvre cette case : la pipette lit le sol dessous.",
+        ]);
+    });
+
+    it("says the shade or the light of the cell by day, when the shadows of the sky are drawn, never indoors", () => {
+        expect(sections(cell({ shaded: true })).sun.lines).toEqual([
+            "Le soleil est à 35° au-dessus de l'horizon.",
+            "Cette case est à l'ombre (les ombres du ciel dessinées chez toi).",
+        ]);
+        expect(sections(cell({ shaded: false })).sun.lines).toContain("Cette case est en pleine lumière.");
+        expect(sections(cell({ shaded: true, sunElevation: -5 })).sun.lines).toEqual(["Le soleil est couché."]);
+        expect(sections(cell({ shaded: true, outdoor: false })).sun.lines).toEqual([
+            "Le soleil est à 35° au-dessus de l'horizon.",
+        ]);
+        expect(sections(cell()).sun.lines).toEqual(["Le soleil est à 35° au-dessus de l'horizon."]);
     });
 
     it("goes as fast as the water of the map", () => {
