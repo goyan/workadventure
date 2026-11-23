@@ -127,6 +127,10 @@ async function compare(threads: Pick<GroundThreads, "assign">, tenths: number): 
             expect(plain(ground.meadowSnapshot()), `meadow for who joins at ${tenth}`).toBe(
                 plain(reference.meadowSnapshot()),
             );
+            // Whether the meadow lives its missed time comes through the thread with the rest of its message.
+            expect(ground.meadowSnapshot()?.catchingUp, `catching up at ${tenth}`).toBe(
+                reference.meadowSnapshot()?.catchingUp,
+            );
             expect(plain(ground.treeSnapshot()), `trees for who joins at ${tenth}`).toBe(
                 plain(reference.treeSnapshot()),
             );

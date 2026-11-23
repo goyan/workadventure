@@ -57,6 +57,8 @@ export interface CellInput {
     sunElevation: number | undefined;
     /** The pool painted under the cell, and whether its water is heated; undefined out of any pool. */
     pool?: { hot: boolean };
+    /** The server is living the time the room missed: where its ice and its snow go is not what the air of now says. */
+    catchingUp?: boolean;
     /** The altitudes (pixels) of the raised floors drawn over the cell, the highest first. */
     floorsOver?: readonly number[];
     /** Whether a shadow of the sky is drawn over the cell for this player; undefined while none is drawn. */
@@ -103,6 +105,11 @@ export interface CellExplained {
     floorsOver: readonly number[];
     /** Whether a shadow of the sky is drawn over the cell for this player; undefined while none is drawn. */
     shaded: boolean | undefined;
+    /**
+     * The server is living the time the room missed while it was empty: the thicknesses are true, where they go is
+     * not known. Never for a ground of the player's own.
+     */
+    catchingUp: boolean;
     /** The air that ground goes by. */
     temperature: number | undefined;
     times: number;
@@ -190,6 +197,7 @@ export function explainCell(input: CellInput): CellExplained {
                 : undefined,
         sunElevation: input.sunElevation,
         hotPool,
+        catchingUp: input.ground === "map" && input.kept !== undefined && input.catchingUp === true,
         floorsOver: input.floorsOver ?? [],
         shaded: input.outdoor ? input.shaded : undefined,
         temperature: input.weather?.temperature,

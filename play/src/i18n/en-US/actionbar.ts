@@ -232,6 +232,8 @@ const actionbar = {
             },
             kept: {
                 iceUnknown: "The server has said nothing yet of the ice of this map.",
+                catchingUp:
+                    "The server is catching up on the time that passed while the map was empty: the ice and the snow change by the weather of that time. The trend comes back afterwards.",
                 iceNone: "No ice.",
                 iceUpTo: "Ice on the water: up to {thickness} thick.",
                 iceHere: "Ice {thickness} thick.",
@@ -270,7 +272,7 @@ const actionbar = {
                 real: "On this map, the snow and the ice go in real time.",
                 fast: "On this map, the snow and the ice go {times} times faster than in the real world (the speed of the water of the map, times its freeze and thaw speed).",
                 iceMore:
-                    "Kept by the server, tile by tile, the same for everyone who follows it. It thickens when it freezes, slower and slower, less on running water and under the snow. It thaws as the snow does, by the temperature, the wind and the humidity of the air of the map, by the same millimetres everywhere: the thinnest goes first. Aim at a place with the pipette for its thickness.",
+                    "Kept by the server, tile by tile, the same for everyone who follows it. It thickens when it freezes, slower and slower, less on running water and under the snow. It thaws as the snow does, by the temperature, the wind and the humidity of the air of the map, by the same millimetres everywhere: the thinnest goes first. Aim at a place with the pipette for its thickness. When the server falls behind, it lives slower than the speed asked: these times are longer by as much.",
                 mm: "{value} mm",
                 cm: "{value} cm",
                 days: "{value} d",

@@ -90,6 +90,7 @@ export class MeadowState {
     private ice: Uint8Array = new Uint8Array(0);
     private anyIce = false;
     private thickestIceMm = 0;
+    private livingMissedTime = false;
     private thickestSnowMm = 0;
     private anyMoisture = false;
     private anyFire = false;
@@ -112,6 +113,8 @@ export class MeadowState {
         snow?: Uint8Array;
         /** The ice over the water of each tile; absent or empty when none is frozen, or from a server that keeps none. */
         ice?: Uint8Array;
+        /** Whether the server is living the time the room missed (MeadowMessage.catchingUp); absent: it is not. */
+        catchingUp?: boolean;
     }): void {
         const tiles = state.width * state.height;
         if (!Number.isInteger(tiles) || tiles < 0 || state.grass.length !== tiles || state.moisture.length !== tiles) {
@@ -127,6 +130,7 @@ export class MeadowState {
         this.snow = state.snow?.length === tiles ? state.snow : new Uint8Array(0);
         this.ice = state.ice?.length === tiles ? state.ice : new Uint8Array(0);
         this.anyIce = this.ice.some((byte) => byte > 0);
+        this.livingMissedTime = state.catchingUp === true;
         this.anyMoisture = state.moisture.some((byte) => byte > 0);
         let covered = 0;
         let peak = 0;
@@ -213,6 +217,14 @@ export class MeadowState {
     /** The snow of the snowiest tile, in mm of water. */
     public peakSnowMm(): number {
         return this.thickestSnowMm;
+    }
+
+    /**
+     * Whether the server is living the time the room missed while it was empty: the snow and the ice then change by
+     * the weather of that time, and where they go is not what the air of now says.
+     */
+    public catchingUp(): boolean {
+        return this.livingMissedTime;
     }
 
     /** The ice of the tile where it is the thickest, in mm. */

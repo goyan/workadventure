@@ -298,7 +298,15 @@
             ? t.compare.short.keptIce({ thickness: figures.thickness(keptIce.mm) })
             : t.compare.short.noIce(),
     );
-    const keptIceWhy = $derived(keptIce ? [iceTrendLine(t, figures, keptIce, true)] : []);
+    // While the server lives the time the room missed, where they go is not what the air of now says: said so.
+    const catchingUp = $derived(board.kept?.catchingUp === true);
+    const keptIceWhy = $derived(
+        !keptIce
+            ? []
+            : catchingUp && keptIce.mm > 0
+              ? [t.kept.catchingUp()]
+              : [iceTrendLine(t, figures, keptIce, true)],
+    );
     const keptIceNotes = $derived(
         keptIce && keptIce.mm > 0 ? [t.kept.onlyAir(), coverClockLine(t, $locale, board.snow.times)] : [],
     );
@@ -307,7 +315,7 @@
         if (board.snow.trend === "building" || !keptSnow || keptSnow.mm <= 0) {
             return snowTrend === undefined ? [] : [snowTrend];
         }
-        const trend = snowTrendLine(t, figures, keptSnow, true);
+        const trend = catchingUp ? t.kept.catchingUp() : snowTrendLine(t, figures, keptSnow, true);
         return [t.kept.snowPeak({ mm: figures.mm(keptSnow.mm) }), ...(trend === undefined ? [] : [trend])];
     });
 

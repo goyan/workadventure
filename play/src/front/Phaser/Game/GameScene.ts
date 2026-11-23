@@ -3293,6 +3293,7 @@ export class GameScene extends DirtyScene {
                     ash,
                     snow,
                     ice,
+                    catchingUp: message.catchingUp,
                 };
                 // While this player lives their own ground, the server's is kept aside, not shown.
                 if (this.localTerrain.fromServerMeadow(state)) return;

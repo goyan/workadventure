@@ -111,6 +111,7 @@ export function cellProbeNow(
         soilFrost: soilFrostOf(roomAir),
         sunElevation: scene.sunElevation,
         pool: scene.poolAt(point),
+        catchingUp: server && meadow.catchingUp(),
         floorsOver: scene.floorsOver(seen),
         shaded: scene.shadedAt(point),
     });

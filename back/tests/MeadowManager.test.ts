@@ -560,6 +560,37 @@ describe("MeadowManager", () => {
         }
     });
 
+    it("tells the room while it lives the time missed, and once more when it is done, even if nothing else changed", async () => {
+        const first = createHarness();
+        first.manager.mapChanged();
+        first.steps(30);
+        // Told in its own time: the meadow is not living any missed time.
+        expect(first.sent.length).toBeGreaterThan(0);
+        expect(first.sent.every((message) => message.catchingUp === false)).toBe(true);
+        expect(first.manager.snapshot()?.catchingUp).toBe(false);
+        first.manager.stop();
+        // Three days later, on a clock that says each slice takes 2 ms: many short ticks, the room told now and then.
+        const room = createHarness({ saved: first.store, now: Date.UTC(2026, 6, 17, 10) });
+        let clock = 0;
+        room.manager.timeCatchUpWith(() => (clock += 2));
+        await room.manager.restore();
+        room.manager.mapChanged();
+        expect(room.manager.snapshot()?.catchingUp).toBe(true);
+        let turns = 0;
+        while (room.manager.catchingUp() && turns++ < 10_000) room.steps(1);
+        expect(room.manager.catchingUp()).toBe(false);
+        // Every message of the time missed says so; the last one says it is over, and who joins then reads the same.
+        expect(room.sent.length).toBeGreaterThan(1);
+        expect(room.sent.slice(0, -1).every((message) => message.catchingUp)).toBe(true);
+        expect(room.sent.at(-1)?.catchingUp).toBe(false);
+        expect(room.manager.snapshot()?.catchingUp).toBe(false);
+        // Nothing more is told once it is over and nothing changes.
+        const told = room.sent.length;
+        room.steps(1);
+        expect(room.sent.slice(told).every((message) => message.catchingUp === false)).toBe(true);
+        room.manager.stop();
+    });
+
     it("is not done with the time missed while the water that lives it along comes to rest, a few steps a turn", async () => {
         const first = createHarness();
         first.manager.mapChanged();

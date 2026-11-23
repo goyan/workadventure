@@ -80,7 +80,12 @@ export interface WeatherBoardInput {
      * The thickest ice (mm) and the thickest snow (mm of water) the server told for the map. Undefined until it told
      * the ground of the map.
      */
-    peaks?: { iceMm: number; snowMm: number };
+    peaks?: {
+        iceMm: number;
+        snowMm: number;
+        /** The server is living the time the room missed: where they go is not what the air of now says. */
+        catchingUp?: boolean;
+    };
     /** How many times faster than reality the snow of the map goes: the speed of its water (1 when absent). */
     snowTimes?: number;
 }
@@ -235,7 +240,17 @@ export interface WeatherBoard {
      * The ice and the snow the server keeps on the map, at their thickest, and where they are going under the air of
      * the room: what is there now, whatever the air of the instant would form. Undefined until the server told.
      */
-    kept: { ice: KeptIce; snow: KeptSnow } | undefined;
+    kept:
+        | {
+              ice: KeptIce;
+              snow: KeptSnow;
+              /**
+               * The server is living the time the room missed while it was empty: the thicknesses are true, where
+               * they go is not known (they change by the weather of that time).
+               */
+              catchingUp: boolean;
+          }
+        | undefined;
 }
 
 /**
@@ -451,6 +466,7 @@ export function explainWeather(input: WeatherBoardInput): WeatherBoard {
                   times: snow.times,
                   building: snow.trend === "building",
               }),
+              catchingUp: input.peaks.catchingUp === true,
           }
         : undefined;
     return {

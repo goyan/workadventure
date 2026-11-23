@@ -275,6 +275,24 @@ describe("pipetteSections (fr-FR)", () => {
         expect(sections(cell()).sun.lines).toEqual(["Le soleil est à 35° au-dessus de l'horizon."]);
     });
 
+    it("says no trend nor time while the server lives the time the room missed, but what the ice bears now", () => {
+        const catching =
+            "Le serveur rattrape le temps passé pendant que la carte était vide : la glace et la neige changent selon la météo de ce temps-là. La tendance reprend ensuite.";
+        const said = sections(cell(lake({ kept: { ...dry, iceMm: 100, snowMm: 4 }, hold: "solid", catchingUp: true })));
+        expect(said.ice.lines).toEqual([
+            "Glace de 10 cm d'épaisseur.",
+            catching,
+            "Elle porte un marcheur (il faut 50 mm).",
+            "Pas assez épaisse pour une cabane de pêche (il faut 10,2 cm).",
+        ]);
+        expect(said.snow.lines).toEqual(["Neige : 4 mm d'eau, sol blanc à 27 %.", catching]);
+        // Never for a ground of the player's own: it is not the server's.
+        const own = sections(
+            cell(lake({ ground: "own", city: "Oslo", kept: { ...dry, iceMm: 100 }, hold: "solid", catchingUp: true })),
+        );
+        expect(own.ice.lines).not.toContain(catching);
+    });
+
     it("goes as fast as the water of the map", () => {
         const said = sections(cell(lake({ kept: { ...dry, iceMm: 100 }, hold: "solid", times: 60 })));
         expect(said.ice.lines[1]).toBe("24 °C : elle fond de 428 mm par heure. Elle aura disparu dans environ 14 min.");

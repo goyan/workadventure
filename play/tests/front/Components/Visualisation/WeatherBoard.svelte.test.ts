@@ -378,6 +378,28 @@ describe("WeatherBoard", () => {
         expect(text("weather-board-ice")).toContain("60 fois plus vite qu'en vrai");
     });
 
+    it("says no trend while the server lives the time the room missed: the thicknesses stay, they are true", () => {
+        const warm = { temperature: 24, humidity: 49, windSpeed: 10 };
+        render(
+            input({
+                roomAir: warm,
+                frostAir: warm,
+                mapFrostAir: warm,
+                snow: { map: 0.8, here: 1 },
+                peaks: { iceMm: 100, snowMm: 12, catchingUp: true },
+                roomWind: 10,
+            }),
+        );
+        const catching =
+            "Le serveur rattrape le temps passé pendant que la carte était vide : la glace et la neige changent selon la météo de ce temps-là. La tendance reprend ensuite.";
+        expect(text("weather-board-ice-result")).toBe("De la glace sur l'eau : jusqu'à 10 cm d'épaisseur.");
+        expect(text("weather-board-ice")).toContain(catching);
+        expect(text("weather-board-ice")).not.toContain("elle fond de");
+        expect(text("weather-board-snow")).toContain("Au plus épais : 12 mm d'eau.");
+        expect(text("weather-board-snow")).toContain(catching);
+        expect(text("weather-board-snow")).not.toContain("elle fond de");
+    });
+
     it("says the server told nothing of the ice yet rather than no ice", () => {
         render(input());
         expect(text("weather-board-ice-result")).toBe("Le serveur n'a encore rien dit de la glace de cette carte.");

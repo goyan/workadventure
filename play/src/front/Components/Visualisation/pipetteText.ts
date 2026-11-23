@@ -77,11 +77,19 @@ export function pipetteSections(ll: TranslationFunctions, locale: string, cell: 
         const kept = ice.kept;
         frozen.push(kept.mm > 0 ? t.kept.iceHere({ thickness: f.thickness(kept.mm) }) : t.kept.iceNone());
         // A water running too fast to freeze over says so in place of "the ice begins to take".
-        const current = iceCurrentLine(t, f, kept, water?.speed);
-        if (!(ice.why === "current" && current)) frozen.push(iceTrendLine(t, f, kept));
-        if (current) frozen.push(current);
-        if (kept.trend === "growing" && snow.kept.mm > 0) frozen.push(t.kept.underSnow());
-        frozen.push(...iceBearingLines(t, f, kept, water?.deep ?? false));
+        if (cell.catchingUp && kept.mm > 0) {
+            // The thickness is true; where it goes is not known while the server lives the time the room missed.
+            frozen.push(t.kept.catchingUp());
+            frozen.push(
+                ...iceBearingLines(t, f, { ...kept, givesWayIn: undefined, trend: "unknown" }, water?.deep ?? false),
+            );
+        } else {
+            const current = iceCurrentLine(t, f, kept, water?.speed);
+            if (!(ice.why === "current" && current)) frozen.push(iceTrendLine(t, f, kept));
+            if (current) frozen.push(current);
+            if (kept.trend === "growing" && snow.kept.mm > 0) frozen.push(t.kept.underSnow());
+            frozen.push(...iceBearingLines(t, f, kept, water?.deep ?? false));
+        }
     } else {
         // A ground of their own without ice kept tile by tile: the ice of the cold of their city.
         if (ice.hold === "none") frozen.push(t.kept.iceNone());
@@ -94,7 +102,7 @@ export function pipetteSections(ll: TranslationFunctions, locale: string, cell: 
             ? t.kept.snowHere({ mm: f.mm(snow.kept.mm), percent: f.percent(snow.cover) })
             : t.kept.snowNone(),
     ];
-    const snowTrend = snowTrendLine(t, f, snow.kept);
+    const snowTrend = cell.catchingUp && snow.kept.mm > 0 ? t.kept.catchingUp() : snowTrendLine(t, f, snow.kept);
     if (snowTrend) white.push(snowTrend);
 
     const cold: string[] = [
