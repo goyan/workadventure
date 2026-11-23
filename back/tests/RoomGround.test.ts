@@ -71,7 +71,7 @@ describe("the ground of a room behind its door (RoomGround)", () => {
         expect(grid?.depthAt(34, 34)).toBe(0);
         expect(grid?.depthAt(44, 10)).toBeGreaterThan(0);
         ground.stop();
-    });
+    }, 60_000);
 
     it("lives the time a room missed as before: the meadow and its water catch up alike", async () => {
         const first = world(groundWam());

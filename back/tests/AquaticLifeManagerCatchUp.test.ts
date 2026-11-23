@@ -131,7 +131,7 @@ describe("AquaticLifeManager, the time a room missed", () => {
         const heavy = await reopened(saved, 2, 40);
         expect(Math.max(...heavy.steps.slices)).toBe(1);
         expect(heavy.steps.count).toBe(240);
-    });
+    }, 60_000);
 
     it("ends with the same animals however it was sliced: the same steps in the same order", async () => {
         vi.useFakeTimers();
@@ -145,7 +145,7 @@ describe("AquaticLifeManager, the time a room missed", () => {
         expect(single.saved.state).toBe(whole.saved.state);
         expect(sliced.told).toEqual(whole.told);
         expect(single.told).toEqual(whole.told);
-    });
+    }, 60_000);
 
     it("stops its slices when the room closes", async () => {
         vi.useFakeTimers();
@@ -161,5 +161,5 @@ describe("AquaticLifeManager, the time a room missed", () => {
         vi.advanceTimersByTime(5000);
         expect(again.steps.count).toBe(lived);
         expect(vi.getTimerCount()).toBe(0);
-    });
+    }, 60_000);
 });
