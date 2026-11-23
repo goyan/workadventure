@@ -2449,6 +2449,13 @@ le fil seul, comme avant. À N, le fil de calcul démarre N − 1 fils d'appoint
     de calcul attend une seconde au plus (`BAND_PATIENCE_MS`), puis s'arrête, et ses salles repartent du dernier
     instantané de leur eau par le mécanisme de perte d'un fil ; le fil relancé a une bande de moins, et plus aucune
     après trois pertes (`BAND_LOSSES_BEFORE_NONE`, dit dans le journal).
+  - **Compte des tranches** : à la fermeture d'une salle, le fil de calcul dit à qui l'a démarré combien de
+    tranches il a calculées lui-même et combien ses fils d'appoint (`GroundThreads.slices()`). Le test du sol entier
+    à 3 bandes s'en sert pour prouver que les fils d'appoint ont travaillé : il demande au fil de calcul d'attendre,
+    une passe sur cinquante, qu'un autre ait réclamé une tranche (`patientBands`, jamais demandé par le serveur).
+  - **Eau sans inertie** (rattrapage, pose de l'eau, carte sans inertie) : aucune passe n'est partagée ; ses
+    profondeurs et leur double, qui changent de place à chaque pas, sont tous deux en mémoire partagée, et les fils
+    d'appoint apprennent le changement au pas à inertie suivant (`tests/WaterBands.test.ts`).
   - **Ce que mesurent le budget de l'accélération et le seuil d'allègement** : toujours la durée d'horloge du pas
     dans le fil de calcul. Avec des bandes elle baisse alors que le processeur total monte : ces deux garde-fous ne
     voient pas ce que les fils d'appoint prennent aux autres cœurs.
