@@ -492,6 +492,7 @@ import { groundWind } from "./Weather/Snowfall";
 import { MeteorView } from "./Catastrophe/MeteorView";
 import { FireView } from "./Fire/FireView";
 import { TreeFireState } from "./Fire/TreeFireState";
+import { FallenTreeView } from "./Nature/FallenTreeView";
 import { TreeFireView } from "./Fire/TreeFireView";
 import { DownpourView } from "./Catastrophe/DownpourView";
 import { DrainView } from "./Catastrophe/DrainView";
@@ -746,6 +747,8 @@ export class GameScene extends DirtyScene {
     private meteorView: MeteorView | undefined;
     private fireView: FireView | undefined;
     private treeFireView: TreeFireView | undefined;
+    /** The trees the wind laid down, lying on the ground (made at the first one). */
+    private fallenTreeView: FallenTreeView | undefined;
     private downpourView: DownpourView | undefined;
     private drainView: DrainView | undefined;
     private ballView: BallView | undefined;
@@ -1973,6 +1976,8 @@ export class GameScene extends DirtyScene {
         this.fireView = undefined;
         this.treeFireView?.destroy();
         this.treeFireView = undefined;
+        this.fallenTreeView?.destroy();
+        this.fallenTreeView = undefined;
         this.downpourView?.destroy();
         this.downpourView = undefined;
         this.drainView?.destroy();
@@ -3381,6 +3386,12 @@ export class GameScene extends DirtyScene {
     /** The fire of the trees of the map as the server tells it, for the trees that pick their image by it. */
     public getTreeFire(): TreeFireState {
         return this.treeFire;
+    }
+
+    /** The trees the wind laid down, lying on the ground: the objects of the map show them there. */
+    public getFallenTreeView(): FallenTreeView {
+        this.fallenTreeView ??= new FallenTreeView(this);
+        return this.fallenTreeView;
     }
 
     /** The server said how the trees burn: the ones it named show the image of their state. */

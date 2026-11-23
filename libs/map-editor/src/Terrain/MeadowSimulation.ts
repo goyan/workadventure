@@ -11,7 +11,7 @@ import type { LifeFire } from "../Life/FireFear";
 import { liquidRainRate, snowRainRate, snowShareOf } from "../Weather/Precipitation";
 import type { PrecipitationAir } from "../Weather/Precipitation";
 import { rainRateAt } from "../Weather/RainRate";
-import { skyRainUnder } from "../Catastrophe/Hurricane";
+import { HURRICANE_GUST_FACTOR, hurricaneAt, hurricaneHere, skyRainUnder } from "../Catastrophe/Hurricane";
 import type { Hurricane } from "../Catastrophe/Hurricane";
 import { REAL_WEATHER_SLOT_MS } from "../Weather/RealWeather";
 import type { MapPlace, RealWeatherSlot } from "../Weather/RealWeather";
@@ -23,7 +23,7 @@ import { landWallsOf } from "./LandWalls";
 import { FIRE_THAW_MM_PER_SECOND, Meadow, MEADOW_STEP_SECONDS, pavedTilesOf } from "./Meadow";
 import type { MeadowStepInput } from "./Meadow";
 import type { SnowWeather } from "./Snow";
-import { TreeFire } from "./TreeFire";
+import { TREE_FALL_GUST_KMH, TreeFire } from "./TreeFire";
 import type { Ember, ToldTree } from "./TreeFire";
 import type { WaterGrid } from "./WaterGrid";
 import { freezeThawSpeedOf, PX_PER_MM, waterTimesOf } from "./WaterInputs";
@@ -729,7 +729,12 @@ export class MeadowSimulation {
         // An ice that thickens or thaws is seen moving, as a snow is.
         if (meadow.iceMoved()) this.snowMoved = true;
         if (!replaying) for (const grazer of this.grazers()) meadow.graze(grazer.x, grazer.y, seconds);
-        // The trees after the ground they stand on: what they set on fire is told with this step.
+        // The trees after the ground they stand on: what they set on fire is told with this step. The wind at each of
+        // them lays it down in its strongest gusts: the wind of the hurricane where it blows (it depends on where a
+        // tree is from the eye), that of the room elsewhere.
+        const crossing = replaying ? undefined : this.hurricane();
+        const at = this.clock();
+        const roomGust = weather.windSpeed * HURRICANE_GUST_FACTOR;
         const trees = this.trees.step({
             seconds: seconds,
             rainMmPerHour: this.rainRate,
@@ -738,6 +743,13 @@ export class MeadowSimulation {
             growSeconds: set.growMinutes * 60,
             groundBurning: meadow.burning() > 0,
             random: replaying ? NO_LUCK : this.random,
+            strongWind: hurricaneAt(crossing, at) !== undefined || roomGust >= TREE_FALL_GUST_KMH,
+            windAt: (x, y) => {
+                const here = hurricaneHere(crossing, at, x, y);
+                return here
+                    ? { gust: here.gust * Math.min(1, Math.max(0, here.share)), from: here.windFrom }
+                    : { gust: roomGust, from: weather.windFrom };
+            },
         });
         if (!replaying) this.tellTrees(trees.changed, trees.embers);
         // A fire is seen running: the room is told at every step while one burns, and once more when it is out.
@@ -853,7 +865,7 @@ export class MeadowSimulation {
 
     /** Every tree that burns or is charred, for a player who joins the room. Undefined when every tree is green. */
     public treeSnapshot(): TreeFireMessage | undefined {
-        const trees = this.trees.damaged();
+        const trees = this.trees.damaged().map(treeOnWire);
         return trees.length > 0 ? { trees, whole: true, embers: [] } : undefined;
     }
 
@@ -881,7 +893,7 @@ export class MeadowSimulation {
             message: {
                 $case: "treeFireMessage",
                 treeFireMessage: {
-                    trees: changed.map((tree) => ({ id: tree.id, fire: tree.fire, damage: tree.damage })),
+                    trees: changed.map(treeOnWire),
                     whole: false,
                     embers: embers.map((ember) => ({
                         fromX: Math.round(ember.fromX),
@@ -963,4 +975,9 @@ export class MeadowSimulation {
 /** The snow or the ice of the meadow as the room is told it: nothing at all where none lies. */
 function snowField(snow: Uint8Array, zip: (bytes: Uint8Array) => Uint8Array): Uint8Array {
     return snow.some((value) => value > 0) ? zip(snow) : new Uint8Array(0);
+}
+
+/** A tree as it is told to the browsers: standing (fallen 0) unless the wind laid it down. */
+function treeOnWire(tree: ToldTree): { id: string; fire: number; damage: number; fallen: number } {
+    return { id: tree.id, fire: tree.fire, damage: tree.damage, fallen: tree.fallen ?? 0 };
 }

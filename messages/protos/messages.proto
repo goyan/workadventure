@@ -1154,8 +1154,10 @@ message TreeFireStateMessage {
   string id = 1;
   // Its fire, from 0 (none) to 255 (at its height).
   uint32 fire = 2;
-  // What burnt of it, from 0 (green) to 16 (charred).
+  // What burnt of it, from 0 (green) to 16 (charred); for a tree laid down by the wind, what is still to grow back.
   uint32 damage = 3;
+  // Laid down by the wind: where that wind came from, in degrees (0 north, 90 east), plus 1; 0: standing.
+  uint32 fallen = 4;
 }
 
 // An ember on its way, in map pixels: where it left, where it falls, and how long it flies.

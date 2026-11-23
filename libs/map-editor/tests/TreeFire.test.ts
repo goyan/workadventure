@@ -451,3 +451,88 @@ function sequence(draws: number[]): () => number {
     let next = 0;
     return () => (next < draws.length ? draws[next++] : 1);
 }
+
+describe("a tree the wind lays down", () => {
+    /** A gust of `gust` km/h from `from` degrees over the whole map. */
+    const blowing = (gust: number, from: number, at?: (x: number, y: number) => boolean): TreeFireStepInput => ({
+        ...calm,
+        windAt: (x, y) => (at && !at(x, y) ? undefined : { gust, from }),
+    });
+    const two = (): TreeFire => {
+        return new TreeFire([tree("west", 2, 5), tree("east", 30, 5)], ground().meadow);
+    };
+
+    it("falls after 4 s of gusts of 250 km/h at its place, the way the wind blows, and not under 250", () => {
+        const fire = two();
+        run(fire, 20, blowing(249, 90));
+        expect(fire.stateOf("west").damage).toBe(0);
+        run(fire, 2, blowing(250, 90));
+        expect(fire.stateOf("west").damage).toBe(0);
+        run(fire, 2, blowing(250, 90));
+        // From the east: it lies towards the west.
+        expect(fire.stateOf("west")).toMatchObject({ damage: 1, fallenFrom: 90 });
+        expect(fire.damaged()).toContainEqual({ id: "west", fire: 0, damage: 16, fallen: 91 });
+    });
+
+    it("falls only where the wind is that strong: the wind at the tree, not that of the map", () => {
+        const fire = two();
+        run(
+            fire,
+            6,
+            blowing(300, 0, (x) => x < 10 * TILE_PX),
+        );
+        expect(fire.stateOf("west")).toMatchObject({ damage: 1, fallenFrom: 0 });
+        expect(fire.stateOf("east").damage).toBe(0);
+    });
+
+    it("lies as long as a charred tree stays black, then grows back in the same time, as after a fire", () => {
+        const fire = two();
+        run(fire, 4, blowing(300, 180));
+        run(fire, 148);
+        expect(fire.stateOf("west").damage).toBe(1);
+        run(fire, 4);
+        expect(fire.stateOf("west").damage).toBeLessThan(1);
+        run(fire, 150);
+        expect(fire.stateOf("west")).toMatchObject({ damage: 0, fallenFrom: undefined });
+        expect(fire.damaged()).toEqual([]);
+    });
+
+    it("does not burn while it lies, and a tree on fire is not laid down", () => {
+        const { meadow, burnAround } = ground();
+        const fire = new TreeFire([tree("down", 2, 5), tree("burning", 8, 5)], meadow);
+        burnAround(8, 5);
+        run(fire, 8);
+        expect(fire.stateOf("burning").fire).toBeGreaterThan(0);
+        run(fire, 4, blowing(300, 270));
+        expect(fire.stateOf("down").fallenFrom).toBe(270);
+        expect(fire.stateOf("burning").fallenFrom).toBeUndefined();
+        burnAround(2, 5);
+        run(fire, 20);
+        expect(fire.stateOf("down").fire).toBe(0);
+    });
+
+    it("is kept across a restart, lying the way it fell", () => {
+        const fire = two();
+        run(fire, 4, blowing(300, 45));
+        const kept = fire.write();
+        expect(kept.find((tree) => tree.id === "west")).toMatchObject({ damage: 1, fallenFrom: 45 });
+        const restarted = two();
+        restarted.read(JSON.parse(JSON.stringify(kept)));
+        expect(restarted.stateOf("west")).toMatchObject({ damage: 1, fallenFrom: 45 });
+        expect(restarted.damaged()).toContainEqual({ id: "west", fire: 0, damage: 16, fallen: 46 });
+    });
+
+    it("costs nothing without a strong wind: no wind at the trees, nothing looked at", () => {
+        const fire = two();
+        let asked = 0;
+        run(fire, 20, {
+            ...calm,
+            windAt: () => {
+                asked++;
+                return undefined;
+            },
+            strongWind: false,
+        });
+        expect(asked).toBe(0);
+    });
+});
