@@ -2,6 +2,7 @@ import {
     hoarFrost,
     RAIN_FROM_WET_BULB,
     SNOW_UNDER_WET_BULB,
+    iceThawMmPerHour,
     snowMeltMmPerHour,
     snowShare,
     snowShareOf,
@@ -528,6 +529,56 @@ describe("explainWeather: the player's screen against the map of the server", ()
         expect(board.precipitation.onMap).toBeUndefined();
         expect(board.frost.onMap).toMatchObject({ level: "none" });
         expect(board.frost.differs).toBe(true);
+    });
+});
+
+describe("explainWeather: the ice and the snow the server keeps", () => {
+    const warm = { temperature: 24, humidity: 49 };
+
+    it("says nothing is kept until the server told the ground", () => {
+        expect(explainWeather(input()).kept).toBeUndefined();
+    });
+
+    it("says the thickest ice and snow of the map thaw under a warm air, by the rules of the server", () => {
+        const { kept } = explainWeather(
+            input({ roomAir: warm, roomWind: 10, peaks: { iceMm: 100, snowMm: 12 }, snow: { map: 0.8, here: 1 } }),
+        );
+        const weather = { ...warm, windSpeed: 10 };
+        expect(kept?.ice).toMatchObject({ mm: 100, trend: "thawing", bears: true });
+        expect(kept?.ice.mmPerHour).toBe(iceThawMmPerHour(weather));
+        expect(kept?.snow).toMatchObject({ mm: 12, trend: "thawing" });
+        expect(kept?.snow.meltMmPerHour).toBe(snowMeltMmPerHour(weather));
+    });
+
+    it("goes by the clock of the water of the map", () => {
+        const at = (snowTimes: number) =>
+            explainWeather(input({ roomAir: warm, roomWind: 10, peaks: { iceMm: 100, snowMm: 0 }, snowTimes })).kept
+                ?.ice.goneIn ?? Number.NaN;
+        expect(at(60)).toBeCloseTo(at(1) / 60, 6);
+    });
+
+    it("sets a player's own ice against the ice the server keeps, not against a rule of the instant", () => {
+        // Their own city is warm (no ice of their own); the map is warm too, yet still frozen from the days before.
+        const board = explainWeather(
+            followingCity(
+                { temperature: 20, humidity: 50, windSpeed: 5 },
+                {
+                    roomAir: warm,
+                    roomWind: 10,
+                    mapFrostAir: { ...warm, windSpeed: 10 },
+                    peaks: { iceMm: 60, snowMm: 0 },
+                },
+            ),
+        );
+        expect(board.ice.stage).toBe("none");
+        expect(board.ice.differs).toBe(true);
+        expect(board.kept?.ice.trend).toBe("thawing");
+    });
+
+    it("says it does not know where they go without the air of the room", () => {
+        const { kept } = explainWeather(input({ roomAir: undefined, peaks: { iceMm: 40, snowMm: 5 } }));
+        expect(kept?.ice.trend).toBe("unknown");
+        expect(kept?.snow.trend).toBe("unknown");
     });
 });
 

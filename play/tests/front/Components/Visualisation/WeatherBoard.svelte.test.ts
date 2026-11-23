@@ -38,6 +38,7 @@ const USER_CASE = input({
     roomAir: { temperature: 24, humidity: 55 },
     frostAir: { temperature: -3, humidity: 45, windSpeed: 40 },
     mapFrostAir: { temperature: 24, humidity: 55, windSpeed: 12 },
+    peaks: { iceMm: 0, snowMm: 0 },
 });
 
 const WARM = { temperature: 24, humidity: 55, windSpeed: 12 };
@@ -55,6 +56,7 @@ const WARM_SERVER_COLD_PLAYER = input({
     falling: true,
     mapFalling: true,
     snow: { map: 0, here: 0 },
+    peaks: { iceMm: 0, snowMm: 0 },
 });
 /** A cold server where it snows, and a player who follows a warm city under a clear sky. */
 const COLD_SERVER_WARM_PLAYER = input({
@@ -70,6 +72,7 @@ const COLD_SERVER_WARM_PLAYER = input({
     mapFalling: true,
     snow: { map: 0.6, here: 1 },
     roomWind: 2,
+    peaks: { iceMm: 80, snowMm: 30 },
 });
 
 describe("WeatherBoard", () => {
@@ -196,7 +199,7 @@ describe("WeatherBoard", () => {
         // The edges of my water freeze; the water of the server stays liquid.
         expect(text("weather-board-ice-result")).toBe("Les bords de l'eau sont gelés.");
         expect(text("weather-board-ice-map-result")).toBe("Pas de glace.");
-        expect(text("weather-board-ice-gap")).toContain("pour le serveur l'eau reste liquide");
+        expect(text("weather-board-ice-gap")).toContain("La glace de la carte est tenue par le serveur");
 
         // The soil is the server's: my cold air changes nothing to it.
         expect(find("weather-board-soil-air")?.getAttribute("data-air")).toBe("map");
@@ -269,7 +272,11 @@ describe("WeatherBoard", () => {
         expect(text("weather-board-frost-gap")).toContain("Sur leur écran : givre. Sur le tien : pas de givre.");
 
         expect(text("weather-board-ice-result")).toBe("Pas de glace.");
-        expect(text("weather-board-ice-map-result")).toBe("Les bords de l'eau sont gelés.");
+        expect(text("weather-board-ice-map-result")).toBe("De la glace sur l'eau : jusqu'à 80 mm d'épaisseur.");
+        expect(text("weather-board-ice-map")).toMatch(/-3 °C : elle épaissit de [\d,]+ mm par heure/);
+        expect(text("weather-board-ice-gap")).toContain(
+            "Sur leur écran : de la glace jusqu'à 80 mm. Sur le tien : pas de glace.",
+        );
 
         expect(text("weather-board-downpour-result")).toBe("Elle tombe en neige.");
         expect(text("weather-board-downpour-server")).toContain("Ton air (Dakar, 24 °C) n'y change rien");
@@ -324,6 +331,56 @@ describe("WeatherBoard", () => {
         expect(text("weather-board-frost-own")).toContain("-34 °C et 80 % d'humidité");
         expect(text("weather-board-frost-map-result")).toBe("Pas de givre.");
         expect(text("weather-board-soil")).toContain("Ton air (-34 °C) n'y change rien");
+    });
+
+    it("says the ice and the snow that are there and melting, not what a warm air would form", () => {
+        // The capture that asked for it: a warm air (24 °C, 49 %, 10 km/h) over a map still frozen and white.
+        const warm = { temperature: 24, humidity: 49, windSpeed: 10 };
+        render(
+            input({
+                mapAir: { ...warm, byHand: false, place: "Le Caire" },
+                precipitationAir: warm,
+                roomAir: warm,
+                frostAir: warm,
+                mapFrostAir: warm,
+                snow: { map: 0.8, here: 1 },
+                peaks: { iceMm: 100, snowMm: 12 },
+                roomWind: 10,
+            }),
+        );
+        expect(text("weather-board-ice-result")).toBe("De la glace sur l'eau : jusqu'à 10 cm d'épaisseur.");
+        expect(text("weather-board-ice")).toContain(
+            "24 °C sur la carte : elle fond de 7,1 mm par heure, partout pareil. La plus épaisse aura disparu dans environ 14 h ; la plus mince part d'abord.",
+        );
+        expect(text("weather-board-ice")).toContain("Ni le soleil, ni l'ombre, ni la profondeur ne changent la fonte.");
+        expect(text("weather-board-ice")).toContain("Sur cette carte, la neige et la glace vont en temps réel.");
+        // The rule of a player's own ice (edges under -1.8 °C…) is not the server's: not said here.
+        expect(text("weather-board-ice")).not.toContain("Les bords gèlent sous");
+        expect(text("weather-board-snow")).toContain("Au plus épais : 12 mm d'eau.");
+        expect(text("weather-board-snow")).toMatch(
+            /24 °C sur la carte : elle fond de [\d,]+ mm par heure\. La plus épaisse aura disparu dans environ \d+ (min|h)\./,
+        );
+    });
+
+    it("goes as fast as the water of the map", () => {
+        const warm = { temperature: 24, humidity: 49, windSpeed: 10 };
+        render(
+            input({
+                roomAir: warm,
+                frostAir: warm,
+                mapFrostAir: warm,
+                peaks: { iceMm: 100, snowMm: 0 },
+                roomWind: 10,
+                snowTimes: 60,
+            }),
+        );
+        expect(text("weather-board-ice")).toContain("La plus épaisse aura disparu dans environ 14 min");
+        expect(text("weather-board-ice")).toContain("60 fois plus vite qu'en vrai");
+    });
+
+    it("says the server told nothing of the ice yet rather than no ice", () => {
+        render(input());
+        expect(text("weather-board-ice-result")).toBe("Le serveur n'a encore rien dit de la glace de cette carte.");
     });
 
     it("doubles nothing for a player who follows the server: one line says it is the weather of the map", () => {
