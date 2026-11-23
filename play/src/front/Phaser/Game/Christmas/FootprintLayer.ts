@@ -8,7 +8,7 @@ const PRINT_COLOR = "#b4bedb";
 export const TINTED_PRINTS = "#ffffff";
 const START_ALPHA = 0.5;
 const TRAIL_WIDTH_PX = 4;
-/** Prints sit just below the avatar walking on them (its depth is its y, its feet are 8 px lower). */
+/** Prints sit just below the avatar walking on them (its depth is its y, its feet are 16 px lower). */
 const DEPTH_BELOW_FEET = 16;
 
 /** How a print is laid where it falls: its tint, its strength, and how much lower it is drawn (a hollow seen in 3/4). */
@@ -66,6 +66,10 @@ export class FootprintLayer {
             // Without a style, the print has the colour of its layer, laid where it falls.
             const style = styleAt?.(at.x, at.y);
             const drop = style?.drop ?? Math.round(this.dropAt(at.x, at.y));
+            const endDrop =
+                mark.kind === "trail"
+                    ? (styleAt?.(mark.x2, mark.y2)?.drop ?? Math.round(this.dropAt(mark.x2, mark.y2)))
+                    : drop;
             const strength = style?.alpha ?? START_ALPHA;
             const image =
                 mark.kind === "step"
@@ -74,10 +78,10 @@ export class FootprintLayer {
                           .image(mark.x1, mark.y1 + drop, this.trailTexture)
                           .setOrigin(0, 0.5)
                           .setDisplaySize(
-                              Math.hypot(mark.x2 - mark.x1, mark.y2 - mark.y1),
+                              Math.hypot(mark.x2 - mark.x1, mark.y2 + endDrop - mark.y1 - drop),
                               mark.width ?? TRAIL_WIDTH_PX,
                           )
-                          .setRotation(Math.atan2(mark.y2 - mark.y1, mark.x2 - mark.x1));
+                          .setRotation(Math.atan2(mark.y2 + endDrop - mark.y1 - drop, mark.x2 - mark.x1));
             const feetY = mark.kind === "step" ? mark.y : Math.max(mark.y1, mark.y2);
             // Sorted by its place, as the avatar that left it (whose depth is its place, wherever it is drawn): a
             // print drawn lower in a hollow must not pass over the feet on it.

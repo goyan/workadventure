@@ -1181,7 +1181,14 @@ export class Player extends Character {
                 !isCanoeAfloat(this.vehicleStateForTrail())
             ) {
                 const body = this.getBody();
-                this.runSmokeTrail.emit(this.x, this.y + body.offset.y + body.height / 2, x, y, this.depth - 1);
+                this.runSmokeTrail.emit(
+                    this.x,
+                    this.y + body.offset.y + body.height / 2,
+                    x,
+                    y,
+                    this.depth - 1,
+                    this.getFloorZ(),
+                );
             }
             emit();
         } else if (get(userMovingStore)) {
@@ -1382,6 +1389,7 @@ export class Player extends Character {
                 x - oldX,
                 y - oldY,
                 this.depth - 1,
+                this.getFloorZ(),
             );
         }
     }
