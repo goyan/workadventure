@@ -346,6 +346,12 @@ const actionbar = {
         downpourArmedHelp: "Hold the click on the map · Esc to cancel",
         drain: "Drain",
         drainSizeLabel: "Size of the drain: radius of the disc it empties, in tiles",
+        cold: "Cold snap",
+        coldSizeLabel: "Size of the cold snap: radius of the mass of cold air, in tiles",
+        coldCelsiusLabel: "Temperature of the air of the cold snap, in degrees Celsius",
+        coldCelsius: "{celsius} °C",
+        coldArmedHelp:
+            "Hold the click: the air freezes under the pointer; the water there takes in ice, the snow holds, the soil freezes. Let go, it warms where it lies and the ice thaws by itself · Esc to cancel",
         ball: "Ball",
         ballSizeLabel: "Size of the ball: its diameter, in tiles",
         ballArmedHelp:

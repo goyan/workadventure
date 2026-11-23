@@ -2,6 +2,10 @@
     import {
         BALL_MAX_TILES,
         BALL_MIN_TILES,
+        COLD_MAX_CELSIUS,
+        COLD_MAX_TILES,
+        COLD_MIN_CELSIUS,
+        COLD_MIN_TILES,
         DOWNPOUR_MAX_TILES,
         DOWNPOUR_MIN_TILES,
         DRAIN_MAX_TILES,
@@ -17,6 +21,8 @@
         armedCatastropheStore,
         ballDiameterTilesStore,
         catastrophePanelStore,
+        coldCelsiusStore,
+        coldRadiusTilesStore,
         disarmCatastrophe,
         downpourRadiusTilesStore,
         drainRadiusTilesStore,
@@ -44,8 +50,9 @@
     const fireArmed = $derived($armedCatastropheStore === "fire");
     const drainArmed = $derived($armedCatastropheStore === "drain");
     const ballArmed = $derived($armedCatastropheStore === "ball");
+    const coldArmed = $derived($armedCatastropheStore === "cold");
     // The size shown is that of the armed catastrophe, and stays that of the last one armed.
-    let sized = $state<"meteor" | "fireball" | "downpour" | "fire" | "drain" | "ball">("meteor");
+    let sized = $state<"meteor" | "fireball" | "downpour" | "fire" | "drain" | "ball" | "cold">("meteor");
     $effect(() => {
         if ($armedCatastropheStore !== undefined) sized = $armedCatastropheStore;
     });
@@ -73,6 +80,7 @@
         fire: $LL.actionbar.catastrophe.fire(),
         drain: $LL.actionbar.catastrophe.drain(),
         ball: $LL.actionbar.catastrophe.ball(),
+        cold: $LL.actionbar.catastrophe.cold(),
     });
     const icons = {
         meteor: "comet",
@@ -81,6 +89,7 @@
         fire: "fire",
         drain: "drain",
         ball: "ball",
+        cold: "cold",
     } as const;
     /** The size of the armed disaster, in tiles; none for a downpour on the whole map. */
     const armedTiles = $derived.by((): number | undefined => {
@@ -96,6 +105,8 @@
                 return $drainRadiusTilesStore;
             case "ball":
                 return $ballDiameterTilesStore;
+            case "cold":
+                return $coldRadiusTilesStore;
             default:
                 return undefined;
         }
@@ -115,11 +126,13 @@
     const help = $derived(
         ballArmed
             ? $LL.actionbar.catastrophe.ballArmedHelp()
-            : downpourArmed || drainArmed
-              ? $LL.actionbar.catastrophe.downpourArmedHelp()
-              : meteorArmed || fireballArmed || fireArmed
-                ? $LL.actionbar.catastrophe.armedHelp()
-                : $LL.actionbar.catastrophe.idleHelp(),
+            : coldArmed
+              ? $LL.actionbar.catastrophe.coldArmedHelp()
+              : downpourArmed || drainArmed
+                ? $LL.actionbar.catastrophe.downpourArmedHelp()
+                : meteorArmed || fireballArmed || fireArmed
+                  ? $LL.actionbar.catastrophe.armedHelp()
+                  : $LL.actionbar.catastrophe.idleHelp(),
     );
 
     // Escape disarms first (the panel open or not); with nothing armed, it closes the panel.
@@ -248,6 +261,18 @@
                         <PixelIcon name="ball" size={16} />
                         <span>{$LL.actionbar.catastrophe.ball()}</span>
                     </button>
+                    <button
+                        type="button"
+                        class="flex items-center gap-1 rounded-full px-2 py-1 {coldArmed
+                            ? 'bg-white/30 ring-1 ring-white'
+                            : 'bg-white/10 hover:bg-white/20'}"
+                        aria-pressed={coldArmed}
+                        data-testid="catastrophe-cold"
+                        onclick={() => toggleArmedCatastrophe("cold")}
+                    >
+                        <PixelIcon name="cold" size={16} />
+                        <span>{$LL.actionbar.catastrophe.cold()}</span>
+                    </button>
                     {#if sized === "downpour"}
                         <label class="flex items-center gap-1 whitespace-nowrap">
                             <input
@@ -288,6 +313,37 @@
                             />
                             <span class="whitespace-nowrap"
                                 >{$LL.actionbar.catastrophe.size({ tiles: $drainRadiusTilesStore })}</span
+                            >
+                        </label>
+                    {:else if sized === "cold"}
+                        <label class="flex items-center gap-2">
+                            <input
+                                type="range"
+                                class="w-24"
+                                min={COLD_MIN_TILES}
+                                max={COLD_MAX_TILES}
+                                step="1"
+                                aria-label={$LL.actionbar.catastrophe.coldSizeLabel()}
+                                data-testid="catastrophe-cold-size"
+                                bind:value={$coldRadiusTilesStore}
+                            />
+                            <span class="whitespace-nowrap"
+                                >{$LL.actionbar.catastrophe.size({ tiles: $coldRadiusTilesStore })}</span
+                            >
+                        </label>
+                        <label class="flex items-center gap-2">
+                            <input
+                                type="range"
+                                class="w-24"
+                                min={COLD_MIN_CELSIUS}
+                                max={COLD_MAX_CELSIUS}
+                                step="5"
+                                aria-label={$LL.actionbar.catastrophe.coldCelsiusLabel()}
+                                data-testid="catastrophe-cold-celsius"
+                                bind:value={$coldCelsiusStore}
+                            />
+                            <span class="whitespace-nowrap tabular-nums"
+                                >{$LL.actionbar.catastrophe.coldCelsius({ celsius: $coldCelsiusStore })}</span
                             >
                         </label>
                     {:else if sized === "ball"}

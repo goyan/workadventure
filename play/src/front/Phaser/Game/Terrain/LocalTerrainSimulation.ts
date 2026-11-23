@@ -12,6 +12,7 @@ import {
 } from "@workadventure/map-editor";
 import type {
     Ball,
+    ColdMass,
     Downpour,
     Drain,
     FireConditions,
@@ -71,6 +72,8 @@ export interface LocalCatastrophes {
     downpours: readonly Downpour[];
     drains: readonly Drain[];
     balls: readonly Ball[];
+    /** The masses of cold air the players hold (a cold snap); absent while there is none. */
+    colds?: readonly ColdMass[];
 }
 
 /** What the local ground tells its player: a state of its water or of its meadow, its bytes as they are (unzipped). */
@@ -177,6 +180,7 @@ export class LocalTerrainSimulation {
                 downpours: () => this.catastrophes.downpours,
                 drains: () => this.catastrophes.drains,
                 balls: () => this.catastrophes.balls,
+                colds: () => this.catastrophes.colds ?? [],
             },
         });
         if (start.water) this.water.seed(start.water.depths, start.water.bounds);

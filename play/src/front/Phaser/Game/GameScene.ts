@@ -47,6 +47,7 @@ import {
     type WAMFileFormat,
     WAMSettingsUtils,
     waterHasInertia,
+    waterTimesOf,
     WeatherType,
     bridgesOf,
     pavedTilesOf,
@@ -486,6 +487,7 @@ import { TreeFireView } from "./Fire/TreeFireView";
 import { DownpourView } from "./Catastrophe/DownpourView";
 import { DrainView } from "./Catastrophe/DrainView";
 import { BallView } from "./Catastrophe/BallView";
+import { ColdView } from "./Catastrophe/ColdView";
 import { FireTorchView } from "./Catastrophe/FireTorchView";
 import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
 import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
@@ -736,6 +738,7 @@ export class GameScene extends DirtyScene {
     private downpourView: DownpourView | undefined;
     private drainView: DrainView | undefined;
     private ballView: BallView | undefined;
+    private coldView: ColdView | undefined;
     private fireTorchView: FireTorchView | undefined;
     private catastropheSubscription: Subscription | undefined;
     /** The animals of the water of the relief, as the server tells them. */
@@ -1963,6 +1966,8 @@ export class GameScene extends DirtyScene {
         this.drainView = undefined;
         this.ballView?.destroy();
         this.ballView = undefined;
+        this.coldView?.destroy();
+        this.coldView = undefined;
         this.fireTorchView?.destroy();
         this.fireTorchView = undefined;
         rodEquippedStore.set(false);
@@ -2534,6 +2539,7 @@ export class GameScene extends DirtyScene {
             this.downpourView?.update(time);
             this.drainView?.update(time);
             this.ballView?.update(time);
+            this.coldView?.update(time);
             this.fireTorchView?.update(time);
             this.nightManager?.update(time);
             this.lampManager?.update(time);
@@ -5102,6 +5108,18 @@ export class GameScene extends DirtyScene {
                 this.pixelReliefShown() && !this.seenRelief?.isFlatAt(ball.x, ball.y) ? shiftOfHeight(ball.levelPx) : 0,
         );
         this.ballView = ballView;
+        this.coldView?.destroy();
+        const coldView = new ColdView(
+            this,
+            () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+            // A mass let go comes back to the air of the room, at the clock of its water, as on the server.
+            () =>
+                roomPrecipitationAir(this.getGameMap().getWamFile()?.getWam().settings, this.nightManager?.serverDate())
+                    ?.temperature,
+            () => waterTimesOf(this.getGameMap().getWamFile()?.getWam().settings?.water),
+            (x, y) => this.surfaceDropAt(x, y),
+        );
+        this.coldView = coldView;
         this.fireTorchView?.destroy();
         const fireTorchView = new FireTorchView(
             this,
@@ -5115,6 +5133,7 @@ export class GameScene extends DirtyScene {
             if (message.kind === CatastropheKind.CATASTROPHE_DOWNPOUR) downpourView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_DRAIN) drainView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_BALL) ballView.report(message, this.time.now);
+            else if (message.kind === CatastropheKind.CATASTROPHE_COLD) coldView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_FIRE) fireTorchView.report(message, this.time.now);
             else if (message.kind === CatastropheKind.CATASTROPHE_ICE_BREAK) {
                 // The ice another player broke (or ours, told back): the same hole for everyone.

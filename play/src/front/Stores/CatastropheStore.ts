@@ -1,5 +1,7 @@
 import {
     BALL_DEFAULT_TILES,
+    COLD_DEFAULT_CELSIUS,
+    COLD_DEFAULT_TILES,
     DOWNPOUR_DEFAULT_TILES,
     DRAIN_DEFAULT_TILES,
     FIRE_DEFAULT_TILES,
@@ -9,7 +11,7 @@ import type { WaterBall } from "@workadventure/map-editor";
 import { derived, get, writable } from "svelte/store";
 
 /** "meteor" is the comet, which brings water; "fireball" is the burning meteor, which sets its crater on fire. */
-export type CatastropheChoice = "meteor" | "fireball" | "downpour" | "fire" | "drain" | "ball";
+export type CatastropheChoice = "meteor" | "fireball" | "downpour" | "fire" | "drain" | "ball" | "cold";
 
 /** Whether the catastrophe panel is shown. Session only: closed at each page load. */
 export const catastrophePanelStore = writable<boolean>(false);
@@ -32,6 +34,10 @@ export const ballDiameterTilesStore = writable<number>(BALL_DEFAULT_TILES);
  * once, without waiting for the server, which is told where it is and alone moves the water.
  */
 export const heldBallStore = writable<WaterBall | undefined>(undefined);
+
+/** How wide the mass of cold air of a cold snap is, in tiles, and the temperature of its air (°C): kept for the session. */
+export const coldRadiusTilesStore = writable<number>(COLD_DEFAULT_TILES);
+export const coldCelsiusStore = writable<number>(COLD_DEFAULT_CELSIUS);
 
 /** How wide the patch of fire set under the pointer is, in tiles: kept for the session. */
 export const fireRadiusTilesStore = writable<number>(FIRE_DEFAULT_TILES);

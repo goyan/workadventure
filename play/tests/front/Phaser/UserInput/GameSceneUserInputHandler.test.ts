@@ -35,6 +35,8 @@ import {
 } from "../../../../src/front/Stores/FishingStore";
 import {
     ballDiameterTilesStore,
+    coldCelsiusStore,
+    coldRadiusTilesStore,
     heldBallStore,
     catastrophePanelStore,
     fireRadiusTilesStore,
@@ -1087,6 +1089,37 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 expect(launch).toHaveBeenCalledTimes(2);
                 expect(scene.moveTo.mock.calls).toEqual([]);
                 fireRadiusTilesStore.set(2);
+            });
+
+            it("lays cold air under the pointer while the click is held, as wide and as cold as chosen, without dragging the map", () => {
+                catastrophePanelStore.set(true);
+                toggleArmedCatastrophe("cold");
+                coldRadiusTilesStore.set(5);
+                coldCelsiusStore.set(-60);
+                const press = held();
+                handler.handlePointerDownEvent(press, []);
+                expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_COLD, 480, 640, 5, false, false, -60]]);
+
+                camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(500, 700));
+                handler.handlePointerMoveEvent(press, []);
+                ticks[0]();
+                expect(launch.mock.calls[1]).toEqual([
+                    CatastropheKind.CATASTROPHE_COLD,
+                    500,
+                    700,
+                    5,
+                    false,
+                    false,
+                    -60,
+                ]);
+                expect(cameraManager.startManualPan.mock.calls).toEqual([]);
+
+                handler.handlePointerUpEvent(pointer(0, 1), []);
+                expect(remove).toHaveBeenCalled();
+                expect(launch).toHaveBeenCalledTimes(2);
+                expect(scene.moveTo.mock.calls).toEqual([]);
+                coldRadiusTilesStore.set(3);
+                coldCelsiusStore.set(-80);
             });
 
             it("drains under the pointer while the click is held, without dragging the map, and stops at its release", () => {

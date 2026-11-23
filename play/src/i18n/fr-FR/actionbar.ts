@@ -349,6 +349,12 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         downpourArmedHelp: "Maintenez le clic sur la carte · Échap pour annuler",
         drain: "Drain",
         drainSizeLabel: "Taille du drain : rayon du disque vidé, en cases",
+        cold: "Coup de froid",
+        coldSizeLabel: "Taille du coup de froid : rayon de la masse d'air froid, en cases",
+        coldCelsiusLabel: "Température de l'air du coup de froid, en degrés Celsius",
+        coldCelsius: "{celsius} °C",
+        coldArmedHelp:
+            "Maintenez le clic : l'air gèle sous le pointeur ; l'eau y prend en glace, la neige y tient, le sol y gèle. Relâché, il se réchauffe sur place et la glace fond d'elle-même · Échap pour annuler",
         ball: "Boule",
         ballSizeLabel: "Taille de la boule : son diamètre, en cases",
         ballArmedHelp:

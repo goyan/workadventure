@@ -23,6 +23,11 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 downpourArmedHelp: label("Hold the click on the map · Esc to cancel"),
                 drain: label("Drain"),
                 drainSizeLabel: label("Size of the drain"),
+                cold: label("Cold snap"),
+                coldSizeLabel: label("Size of the cold snap"),
+                coldCelsiusLabel: label("Temperature of the cold snap"),
+                coldCelsius: ({ celsius }: { celsius: number }) => `${celsius} °C`,
+                coldArmedHelp: label("Hold the click: the air freezes under the pointer"),
                 ball: label("Ball"),
                 ballSizeLabel: label("Size of the ball: its diameter"),
                 ballArmedHelp: label("Hold the click: a solid ball, half in the water under the pointer"),
@@ -44,6 +49,8 @@ import CatastrophePanel from "../../../../src/front/Components/Catastrophe/Catas
 import {
     armedCatastropheStore,
     ballDiameterTilesStore,
+    coldCelsiusStore,
+    coldRadiusTilesStore,
     fireRadiusTilesStore,
     downpourWholeMapStore,
     drainRadiusTilesStore,
@@ -208,6 +215,36 @@ describe("CatastrophePanel", () => {
         expect(target.textContent).toContain("10 tiles");
         drainRadiusTilesStore.set(3);
         expect(help()?.textContent).toContain("Hold the click on the map");
+    });
+
+    it("arms the cold snap, and chooses its size from 1 to 16 tiles and its air from -120 to -5 °C", () => {
+        renderOpen();
+        const cold = target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-cold"]');
+        expect(cold?.textContent).toContain("Cold snap");
+        cold?.click();
+        flushSync();
+        expect(cold?.getAttribute("aria-pressed")).toBe("true");
+        expect(get(armedCatastropheStore)).toBe("cold");
+        const size = target.querySelector<HTMLInputElement>('[data-testid="catastrophe-cold-size"]');
+        expect([size?.min, size?.max]).toEqual(["1", "16"]);
+        expect(size?.getAttribute("aria-label")).toBe("Size of the cold snap");
+        expect(target.textContent).toContain("3 tiles");
+        const celsius = target.querySelector<HTMLInputElement>('[data-testid="catastrophe-cold-celsius"]');
+        expect([celsius?.min, celsius?.max]).toEqual(["-120", "-5"]);
+        expect(celsius?.getAttribute("aria-label")).toBe("Temperature of the cold snap");
+        expect(target.textContent).toContain("-80 °C");
+        if (!celsius || !size) throw new Error("no slider");
+        celsius.value = "-40";
+        celsius.dispatchEvent(new Event("input", { bubbles: true }));
+        size.value = "9";
+        size.dispatchEvent(new Event("input", { bubbles: true }));
+        flushSync();
+        expect(get(coldCelsiusStore)).toBe(-40);
+        expect(get(coldRadiusTilesStore)).toBe(9);
+        expect(target.textContent).toContain("-40 °C");
+        expect(help()?.textContent).toContain("Hold the click: the air freezes under the pointer");
+        coldCelsiusStore.set(-80);
+        coldRadiusTilesStore.set(3);
     });
 
     it("arms the ball, and chooses its diameter from 1 to 16 tiles, with a help that says where its centre is", () => {

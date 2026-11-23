@@ -1274,11 +1274,21 @@ export class RoomConnection implements RoomConnection {
         wholeMap = false,
         /** A ball: its player lets it go. */
         release = false,
+        /** A cold snap: the temperature of its air, in °C. */
+        temperature?: number,
     ): void {
         this.send({
             message: {
                 $case: "launchCatastropheMessage",
-                launchCatastropheMessage: { kind, x: Math.round(x), y: Math.round(y), radiusTiles, wholeMap, release },
+                launchCatastropheMessage: {
+                    kind,
+                    x: Math.round(x),
+                    y: Math.round(y),
+                    radiusTiles,
+                    wholeMap,
+                    release,
+                    ...(temperature === undefined ? {} : { temperature }),
+                },
             },
         });
     }
