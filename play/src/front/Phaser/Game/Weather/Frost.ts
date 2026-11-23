@@ -61,7 +61,10 @@ export const OWN_ICE_BEARS_AT = 0.5;
 export function ownIceMm(ice: number): number {
     return (ICE_BEARS_MM * clamp(ice)) / OWN_ICE_BEARS_AT;
 }
-/** How fast it goes towards the weather of now, a share a second of the game clock: about two minutes each way. */
+/**
+ * How fast it goes towards the weather of now, a share a second of the game clock: about two minutes each way for
+ * the ice, one for the frost, at ×1 of the clock of the cold (freezeThawTimesOf); that many times faster above.
+ */
 const ICE_RATE = 1 / 120;
 const FROST_RATE = 1 / 60;
 /** The ground soaks in a few seconds of rain and dries in about five minutes. */
@@ -124,8 +127,8 @@ export function cycleAfterAbsence(
     meltTimes = times,
 ): WaterCycle {
     return {
-        frost: towards(kept.frost, target.frost, seconds, FROST_RATE, FROST_RATE),
-        ice: towards(kept.ice, target.ice, seconds, ICE_RATE, ICE_RATE),
+        frost: towards(kept.frost, target.frost, seconds * meltTimes, FROST_RATE, FROST_RATE),
+        ice: towards(kept.ice, target.ice, seconds * meltTimes, ICE_RATE, ICE_RATE),
         wet: towards(kept.wet, target.wet, seconds, WET_RATE, DRY_RATE),
         snowMm: ownSnowAfter(kept.snowMm, seconds, fallingMmPerHour, air, times, meltTimes),
     };
@@ -230,8 +233,9 @@ export function waterCycleNow(settings: MapSnowSettings | undefined): WaterCycle
     } else {
         restored = undefined;
         cycle = {
-            frost: towards(cycle.frost, target.frost, elapsed, FROST_RATE, FROST_RATE),
-            ice: towards(cycle.ice, target.ice, elapsed, ICE_RATE, ICE_RATE),
+            // The frost and the ice of the cycle on the clock of the cold of the map (its speed of the freeze and the thaw).
+            frost: towards(cycle.frost, target.frost, elapsed * meltTimes, FROST_RATE, FROST_RATE),
+            ice: towards(cycle.ice, target.ice, elapsed * meltTimes, ICE_RATE, ICE_RATE),
             wet: towards(cycle.wet, target.wet, elapsed, WET_RATE, DRY_RATE),
             snowMm: place ? ownSnowAfter(cycle.snowMm, elapsed, falling, air, times, meltTimes) : 0,
         };
