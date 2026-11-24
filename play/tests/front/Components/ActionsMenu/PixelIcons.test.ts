@@ -29,6 +29,7 @@ describe("PixelIcons", () => {
                 "electricUnicycle",
                 "fire",
                 "footsteps",
+                "grenade",
                 "hurricane",
                 "iceShack",
                 "meteor",

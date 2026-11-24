@@ -2,14 +2,16 @@ import { get, type Writable } from "svelte/store";
 import { rodEquippedStore } from "./FishingStore";
 import { nerfEquippedStore } from "./NerfStore";
 import { torchEquippedStore } from "./TorchStore";
+import { grenadeLauncherEquippedStore } from "./ZombieGrenadeStore";
 
 /** What the avatar can hold in its hand: one at a time. */
-export type HandTool = "nerf" | "torch" | "rod";
+export type HandTool = "nerf" | "torch" | "rod" | "grenades";
 
 const stores: Record<HandTool, Writable<boolean>> = {
     nerf: nerfEquippedStore,
     torch: torchEquippedStore,
     rod: rodEquippedStore,
+    grenades: grenadeLauncherEquippedStore,
 };
 
 /**

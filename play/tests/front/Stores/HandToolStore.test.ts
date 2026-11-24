@@ -4,11 +4,13 @@ import { rodEquippedStore } from "../../../src/front/Stores/FishingStore";
 import { toggleHandTool } from "../../../src/front/Stores/HandToolStore";
 import { nerfEquippedStore } from "../../../src/front/Stores/NerfStore";
 import { torchEquippedStore } from "../../../src/front/Stores/TorchStore";
+import { grenadeLauncherEquippedStore } from "../../../src/front/Stores/ZombieGrenadeStore";
 
 afterEach(() => {
     nerfEquippedStore.set(false);
     torchEquippedStore.set(false);
     rodEquippedStore.set(false);
+    grenadeLauncherEquippedStore.set(false);
 });
 
 describe("toggleHandTool", () => {
@@ -69,5 +71,23 @@ describe("toggleHandTool", () => {
         nerfEquippedStore.set(false);
         toggleHandTool("torch", { refuseEquip: true });
         expect(get(torchEquippedStore)).toBe(false);
+    });
+
+    it("puts the other tools away when the grenade launcher is equipped, and the launcher when one of them is", () => {
+        nerfEquippedStore.set(true);
+        torchEquippedStore.set(true);
+        rodEquippedStore.set(true);
+        toggleHandTool("grenades");
+        expect(get(grenadeLauncherEquippedStore)).toBe(true);
+        expect(get(nerfEquippedStore)).toBe(false);
+        expect(get(torchEquippedStore)).toBe(false);
+        expect(get(rodEquippedStore)).toBe(false);
+        toggleHandTool("nerf");
+        expect(get(nerfEquippedStore)).toBe(true);
+        expect(get(grenadeLauncherEquippedStore)).toBe(false);
+        toggleHandTool("grenades");
+        toggleHandTool("grenades");
+        expect(get(grenadeLauncherEquippedStore)).toBe(false);
+        expect(get(nerfEquippedStore)).toBe(false);
     });
 });

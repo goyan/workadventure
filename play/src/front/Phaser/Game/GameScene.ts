@@ -58,6 +58,7 @@ import {
     pavedTilesOf,
 } from "@workadventure/map-editor";
 import type { Bridges, ColdMass, TerrainData, WeatherLocation } from "@workadventure/map-editor";
+import { zombieGrenadeAim } from "@workadventure/map-editor";
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
 import Debug from "debug";
 import { asError } from "catch-unknown";
@@ -317,6 +318,7 @@ import type { TileBarriers } from "../../Utils/TileBarriers";
 import { nerfEquippedStore } from "../../Stores/NerfStore";
 import { torchEquippedStore } from "../../Stores/TorchStore";
 import { rodEquippedStore } from "../../Stores/FishingStore";
+import { grenadeLauncherEquippedStore } from "../../Stores/ZombieGrenadeStore";
 import { aquaticLifeShownStore, cloudsShownStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
 import { skyShadowCategoriesStore } from "../../Stores/SkyLightStore";
 import type { SkyShadowCategories } from "../../Stores/SkyLightStore";
@@ -785,6 +787,8 @@ export class GameScene extends DirtyScene {
     private hurricaneFlood: HurricaneFloodView | undefined;
     /** The horde of zombies of the room: what the server tells of it, and its crowd drawn. */
     private zombieReceiver: ZombieReceiver | undefined;
+    /** When this player shot their last grenade (scene time, ms). */
+    private zombieGrenadeShotAt = -Infinity;
     private zombieView: ZombieView | undefined;
     /** When the panel was last told the horde (ms, the clock of the game). */
     private zombieToldAt = 0;
@@ -2042,6 +2046,7 @@ export class GameScene extends DirtyScene {
         this.zombieView?.destroy();
         this.zombieView = undefined;
         zombieShownStore.set(undefined);
+        grenadeLauncherEquippedStore.set(false);
         this.fireTorchView?.destroy();
         this.fireTorchView = undefined;
         rodEquippedStore.set(false);
@@ -3952,6 +3957,63 @@ export class GameScene extends DirtyScene {
      * At each image, the horde of zombies of the room: stepped to the time of the server and drawn, and told to the
      * panel once a second. Nothing while there is none.
      */
+    /**
+     * Shoots a grenade of the launcher from the feet of this player to the pointer, within its range. The server puts
+     * it in the horde; at most one a second for a player.
+     */
+    public fireZombieGrenade(): void {
+        if (
+            !get(grenadeLauncherEquippedStore) ||
+            !this.zombieReceiver?.current() ||
+            !this.userInputManager.isControlsEnabled ||
+            this.time.now - this.zombieGrenadeShotAt < 1000
+        ) {
+            return;
+        }
+        this.zombieGrenadeShotAt = this.time.now;
+        const pointer = new Phaser.Math.Vector2();
+        this.input.activePointer.positionToCamera(this.cameras.main, pointer);
+        const aim = zombieGrenadeAim({
+            fromX: this.CurrentPlayer.x,
+            fromY: this.CurrentPlayer.y,
+            toX: pointer.x,
+            toY: pointer.y,
+        });
+        this.connection?.emitLaunchZombies(
+            {
+                count: 0,
+                minutes: 0,
+                heading: 0,
+                seed: 0,
+                startedAt: 0,
+                durationMs: 0,
+                dirX: 0,
+                dirY: 0,
+                anchorX: 0,
+                anchorY: 0,
+                widthCells: 0,
+                heightCells: 0,
+                terrain: "",
+                terrainHash: 0,
+                collisions: "",
+                collisionsWidth: 0,
+                collisionsHeight: 0,
+                anchorStep: 0,
+                anchorAt: 0,
+                msPerStep: 0,
+                avatars: "",
+                safeStep: 0,
+                grenade: {
+                    fromX: Math.round(aim.fromX),
+                    fromY: Math.round(aim.fromY),
+                    toX: Math.round(aim.toX),
+                    toY: Math.round(aim.toY),
+                },
+            },
+            false,
+        );
+    }
+
     private updateZombies(time: number, epoch: number | undefined): void {
         const view = this.zombieView;
         if (!view?.active()) return;
@@ -5492,7 +5554,11 @@ export class GameScene extends DirtyScene {
         this.zombieView = zombieView;
         const zombieReceiver = new ZombieReceiver((horde) => {
             zombieView.setHorde(horde, this.time.now);
-            if (!horde) zombieShownStore.set(undefined);
+            if (!horde) {
+                zombieShownStore.set(undefined);
+                // The launcher exists for the horde only.
+                grenadeLauncherEquippedStore.set(false);
+            }
             this.markDirty();
         });
         this.zombieReceiver = zombieReceiver;
