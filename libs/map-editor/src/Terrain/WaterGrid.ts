@@ -620,6 +620,15 @@ export class WaterGrid implements WaterView {
     private readonly sealed: Uint8Array;
     /** How high the water of this map may stand over the level it spills at (see setMaxSurface). */
     private highest: number = MAX_WATER_SURFACE_PX;
+    /** The sea at the east edge (setSea), and the ceiling of the water it raised, which comes down after it. */
+    private sea: { levelPx: number; topPx: number } | undefined;
+    private seaTop = 0;
+    /**
+     * The moves the water with inertia made at its last step, and the share of the real speed of its fastest waves
+     * they bore (1: all of it): fewer moves than the depth asks for bear the waves of `pulled` pixels of water only.
+     */
+    private lastMoves = 0;
+    private lastCelerity = 1;
     private next: Float32Array;
     /**
      * The balls standing in the water (setBalls), and what they changed. A ball is a solid: where it touches the
@@ -881,6 +890,49 @@ export class WaterGrid implements WaterView {
             pressure.b > 0
                 ? pressure
                 : undefined;
+    }
+
+    /**
+     * The sea beyond the east edge of the grid, or none (read by the water with inertia only: the water that creeps
+     * would lose it again by the edge at once): its level (pixels of altitude), and how high the water may
+     * stand over the level it spills at while it is there (`topPx`). The last column of the grid is then the coast:
+     * before each move of the water, each of its cells holds the water the sea puts there (none where its ground
+     * stands over the sea), and the moves carry it inland, or back to the sea, as they carry any water; what crosses
+     * the coast is counted as a source coming in and as a sink going out, not as water lost by the edge. Read at the
+     * next step. Once the sea is gone, the higher ceiling comes down with the water that stands over the usual one,
+     * never under it: nothing is cut that the sea brought.
+     */
+    public setSea(sea: { levelPx: number; topPx: number } | undefined): void {
+        if (sea && Number.isFinite(sea.levelPx) && Number.isFinite(sea.topPx)) {
+            this.sea = { levelPx: sea.levelPx, topPx: Math.max(0, sea.topPx) };
+            this.seaTop = Math.max(this.seaTop, this.sea.topPx);
+        } else this.sea = undefined;
+    }
+
+    /** Whether the sea stands at the east edge (setSea). */
+    /** The moves the water with inertia made at its last step: 0 when it made none. */
+    public movesMade(): number {
+        return this.lastMoves;
+    }
+
+    /**
+     * The share of the real speed of its fastest waves (those of its deepest water) the last step of the water with
+     * inertia bore: under 1 when it made fewer moves than that depth asks for (`pulled`), as on a server that eased.
+     */
+    public celerityShare(): number {
+        return this.lastCelerity;
+    }
+
+    /**
+     * The highest the water may stand over the level it spills at, as the last step of the water with inertia had it
+     * (pixels): the usual ceiling, or the higher one of the sea of a tsunami while the water it brought stands over it.
+     */
+    public ceilingPx(): number {
+        return Math.max(this.highest, MAX_WATER_MAX_SURFACE, this.seaTop);
+    }
+
+    public hasSea(): boolean {
+        return this.sea !== undefined;
     }
 
     public setMaxSurface(px: number): void {
@@ -2073,9 +2125,18 @@ export class WaterGrid implements WaterView {
             asked !== undefined && Number.isFinite(asked) && asked >= 1
                 ? Math.min(MOST_INERTIA_MOVES, Math.round(asked))
                 : USUAL_INERTIA_MOVES;
+        const sea = this.sea;
         let deepest = 0;
         for (let index = 0; index < size; index++) if (this.depth[index] > deepest) deepest = this.depth[index];
-        if (deepest <= DRY_PX) return false;
+        // The water the sea will lay on the coast counts: its bore needs the moves its depth asks for.
+        if (sea) deepest = Math.max(deepest, this.seaDepth(sea.levelPx));
+        this.lastMoves = 0;
+        this.lastCelerity = 1;
+        if (deepest <= DRY_PX) {
+            // Nothing stands over the usual ceiling of a dry grid: the one the sea raised is down again.
+            if (!sea) this.seaTop = 0;
+            return false;
+        }
         const moves = Math.min(
             most,
             Math.max(1, Math.ceil((Math.sqrt(GRAVITY * deepest) * step) / WAVE_CELLS_PER_MOVE)),
@@ -2101,10 +2162,12 @@ export class WaterGrid implements WaterView {
         const pull = dt * GRAVITY;
         // The deepest water whose waves these moves bear: deeper, the slope pulls as on that depth.
         const pulled = (WAVE_CELLS_PER_MOVE / dt) ** 2 / GRAVITY;
+        this.lastMoves = moves;
+        this.lastCelerity = deepest > pulled ? Math.sqrt(pulled / deepest) : 1;
         // What a cell at the edge of the grid loses by each of its open sides, as when the water creeps.
         const edgeShare = FLOW_SHARE / moves;
         // The highest the water may stand: a wave is not cut at the level the map sets for its floods.
-        const top = Math.max(this.highest, MAX_WATER_MAX_SURFACE);
+        const top = Math.max(this.highest, MAX_WATER_MAX_SURFACE, this.seaCeiling(MAX_WATER_MAX_SURFACE));
         const move: InertiaMove = {
             width,
             height,
@@ -2142,7 +2205,7 @@ export class WaterGrid implements WaterView {
         const rowLost = this.rowLost;
         // Several threads share the passes when this thread has what runs them and the arrays are theirs too.
         const runner = this.arrays.shared ? waterPassRunner() : undefined;
-        if (this.wasm && !runner) {
+        if (this.wasm && !runner && !sea) {
             // The same passes, compiled: all the moves of the step in one call.
             const stepped = this.wasm.step(move, moves, tally.lostPx, rowLost);
             tally.lostPx = stepped.lost;
@@ -2158,6 +2221,23 @@ export class WaterGrid implements WaterView {
         let moved = false;
         runner?.begin(this, move, rowLost);
         for (let step = 0; step < moves; step++) {
+            // The sea lays its water on the coast before each move: the move carries it inland, or back.
+            const laid = sea ? this.laySea(sea.levelPx) : undefined;
+            if (sea && this.wasm && !runner) {
+                // The compiled passes, one move at a time, so that the sea is laid between two moves.
+                const stepped = this.wasm.step(move, 1, tally.lostPx, rowLost);
+                tally.lostPx = stepped.lost;
+                if (stepped.moved) moved = true;
+                // The speeds of this move took the place of those of the move before.
+                const wasEast = speedEast;
+                const wasSouth = speedSouth;
+                speedEast = move.speedEast = nextSpeedEast;
+                speedSouth = move.speedSouth = nextSpeedSouth;
+                nextSpeedEast = move.nextSpeedEast = wasEast;
+                nextSpeedSouth = move.nextSpeedSouth = wasSouth;
+                if (laid !== undefined) this.settleSea(laid, dt, tally);
+                continue;
+            }
             if (runner) runner.run(0);
             else fluxPass(move, 0, height);
             // The speeds of this move are those the next one carries along.
@@ -2178,12 +2258,92 @@ export class WaterGrid implements WaterView {
             }
             // The water lost, row after row: the same sum whoever computed which rows.
             for (let row = 0; row < height; row++) tally.lostPx += rowLost[row];
+            if (laid !== undefined) this.settleSea(laid, dt, tally);
         }
         this.speedEast = speedEast;
         this.speedSouth = speedSouth;
         this.nextSpeedEast = nextSpeedEast;
         this.nextSpeedSouth = nextSpeedSouth;
-        return moved;
+        // The sea keeps the water moving for as long as it stands at the coast.
+        return moved || sea !== undefined;
+    }
+
+    /** The deepest water the sea lays on the coast at that level (pixels): none on a grid of one column. */
+    private seaDepth(levelPx: number): number {
+        const { width, height } = this.bounds;
+        if (width < 2) return 0;
+        let deepest = 0;
+        for (let row = 0; row < height; row++) {
+            const index = row * width + width - 1;
+            if (!this.blocked[index]) deepest = Math.max(deepest, levelPx - this.ground[index]);
+        }
+        return deepest;
+    }
+
+    /**
+     * The sea lays its water on the coast (the last column): each cell holds what brings it to the level of the sea,
+     * none where its ground stands over it. Returns the water it gave (taken, when negative) and the water then on
+     * the coast; undefined on a grid of one column, which has no coast.
+     */
+    private laySea(levelPx: number): { givenPx: number; heldPx: number } | undefined {
+        const { width, height } = this.bounds;
+        if (width < 2) return undefined;
+        const depth = this.depth;
+        let givenPx = 0;
+        let heldPx = 0;
+        for (let row = 0; row < height; row++) {
+            const index = row * width + width - 1;
+            if (this.blocked[index]) continue;
+            const held = Math.max(0, levelPx - this.ground[index]);
+            givenPx += held - depth[index];
+            heldPx += held;
+            depth[index] = held;
+        }
+        return { givenPx, heldPx };
+    }
+
+    /**
+     * After a move, what crossed the coast: the move counted as lost what the coast gave away by the edge of the grid
+     * (into the sea); it is the sea's. The sea's give of the move (what it laid, less what came back to it) is
+     * counted as a source, or as a sink when the water goes back to the sea.
+     */
+    private settleSea(laid: { givenPx: number; heldPx: number }, dt: number, tally: WaterTally): void {
+        const { width, height } = this.bounds;
+        const depth = this.depth;
+        let after = 0;
+        let seaward = 0;
+        for (let row = 0; row < height; row++) {
+            const index = row * width + width - 1;
+            if (this.blocked[index]) continue;
+            after += depth[index];
+            // The flow from the land to the coast (eastwards), through the side of the cell before.
+            seaward += this.flowEast[index - 1];
+        }
+        // What the coast lost by the edge of the grid (and over the highest level): its water before the move and
+        // what came from the land, less what it holds now. Its cells give each other only what they take.
+        const toSea = Math.max(0, laid.heldPx + seaward * dt - after);
+        tally.lostPx -= toSea;
+        const given = laid.givenPx - toSea;
+        if (given > 0) tally.sourcesPx += given;
+        else tally.sinksPx -= given;
+    }
+
+    /**
+     * The highest the water may stand over the level it spills at while the sea is there, or after it while the
+     * water it brought stands over `usual`: that ceiling comes down with the water, so that nothing the sea brought
+     * is cut. 0 once the water is under `usual` again.
+     */
+    private seaCeiling(usual: number): number {
+        if (this.sea) return this.seaTop;
+        if (this.seaTop <= 0) return 0;
+        let over = 0;
+        for (let index = 0; index < this.depth.length; index++) {
+            if (this.depth[index] <= 0) continue;
+            const above = this.ground[index] + this.depth[index] - this.spill[index];
+            if (above > over) over = above;
+        }
+        this.seaTop = over > usual ? Math.min(this.seaTop, Math.ceil(over) + 1) : 0;
+        return this.seaTop;
     }
 
     /**

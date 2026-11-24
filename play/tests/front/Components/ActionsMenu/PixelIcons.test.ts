@@ -43,6 +43,7 @@ describe("PixelIcons", () => {
                 "snowflake",
                 "swimwear",
                 "torch",
+                "tsunami",
                 "twoPiece",
                 "weather",
             ].sort(),

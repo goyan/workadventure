@@ -526,6 +526,22 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         },
         hurricaneOverWind:
             "Un ouragan traverse la carte : son vent remplace celui de la salle jusqu'à la fin du passage.",
+        tsunami: "Tsunami",
+        tsunamiMetresLabel: "Hauteur du tsunami à la côte (le bord est de la carte), en mètres",
+        tsunamiMetres: "{metres} m à la côte",
+        tsunamiMinutesLabel: "Temps que la mer reste haute à la côte, en minutes",
+        tsunamiMinutes: "crue de {minutes} min",
+        tsunamiStart: "Lancer le tsunami",
+        tsunamiStop: "Arrêter le tsunami",
+        tsunamiHelp:
+            "La mer arrive par le bord est de la carte : elle y monte d'un coup à la hauteur choisie (le mascaret d'un tsunami qui a déferlé avant la côte), puis redescend pendant la durée choisie. L'eau de la carte fait le reste, à l'échelle réelle : le front d'inondation, la vague dans les lacs, les remontées sur les pentes, puis le reflux vers la mer. Il remplit les creux de la carte, qui restent pleins. Tout joueur peut l'arrêter.",
+        tsunamiGoing: "Tsunami de {metres} m : {phase}, la mer à {level} m à la côte, encore {left}",
+        tsunamiCelerity: "célérité limitée par le serveur : {percent} % de la réelle",
+        tsunamiPhase: {
+            front: "le mascaret arrive",
+            ebb: "la mer redescend",
+            backwash: "reflux vers la mer",
+        },
         ball: "Boule",
         ballSizeLabel: "Taille de la boule : son diamètre, en cases",
         ballArmedHelp:

@@ -521,6 +521,22 @@ const actionbar = {
         },
         hurricaneOverWind:
             "A hurricane crosses the map: its wind takes the place of that of the room until the passage ends.",
+        tsunami: "Tsunami",
+        tsunamiMetresLabel: "Height of the tsunami at the coast (the east edge of the map), in metres",
+        tsunamiMetres: "{metres} m at the coast",
+        tsunamiMinutesLabel: "How long the sea stays high at the coast, in minutes",
+        tsunamiMinutes: "{minutes} min flood",
+        tsunamiStart: "Launch the tsunami",
+        tsunamiStop: "Stop the tsunami",
+        tsunamiHelp:
+            "The sea comes in by the east edge of the map: it jumps there to the height chosen (the bore of a tsunami that broke before the coast), then goes back down over the time chosen. The water of the map does the rest, at the scale of reality: the flood front, the wave across the lakes, the run-up on the slopes, then the backwash to the sea. It fills the hollows of the map, which stay full. Any player can stop it.",
+        tsunamiGoing: "{metres} m tsunami: {phase}, the sea at {level} m at the coast, {left} left",
+        tsunamiCelerity: "speed limited by the server: {percent} % of the real one",
+        tsunamiPhase: {
+            front: "the bore comes in",
+            ebb: "the sea goes down",
+            backwash: "backwash to the sea",
+        },
         ball: "Ball",
         ballSizeLabel: "Size of the ball: its diameter, in tiles",
         ballArmedHelp:

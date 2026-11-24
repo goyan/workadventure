@@ -267,7 +267,7 @@ const roomManager = {
                             break;
                         }
                         case "launchCatastropheMessage": {
-                            const { kind, x, y, radiusTiles, wholeMap, release, temperature, hurricane } =
+                            const { kind, x, y, radiusTiles, wholeMap, release, temperature, hurricane, tsunami } =
                                 message.message.launchCatastropheMessage;
                             room.launchCatastrophe(
                                 user,
@@ -279,6 +279,7 @@ const roomManager = {
                                 release,
                                 temperature,
                                 hurricane,
+                                tsunami,
                             );
                             break;
                         }

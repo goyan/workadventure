@@ -9,6 +9,7 @@ import type { InertiaMove } from "../src/Terrain/WaterKernel";
 import { WasmWaterKernel } from "../src/Terrain/WaterKernelWasm";
 import { WATER_KERNEL_SOURCE_SHA256 } from "../src/Terrain/WaterKernelWasm.generated";
 import { DEFAULT_WATER_SETTINGS } from "../src/types";
+import { tsunamiSea } from "../src/Catastrophe/Tsunami";
 
 /**
  * The kernel of the water compiled to WebAssembly (kernel/water_kernel.c) against the passes written in TypeScript
@@ -67,6 +68,25 @@ describe("the kernel of the water compiled to WebAssembly", () => {
             }
         }
         expect(grids[0].totalPx()).toBeGreaterThan(1000);
+    });
+
+    it("gives the same water under a tsunami: the sea laid on the coast between two moves", () => {
+        const water = { ...DEFAULT_WATER_SETTINGS, inertia: true, precision: 8, maxSurface: 256 };
+        const grids = [lake(), lake(new WasmWaterKernel())];
+        const tsunami = { id: 1, startedAt: 0, metres: 6, durationMs: 60_000 };
+        for (let step = 0; step < 300; step++) {
+            const input = stepInputOf(water, 0, [], 0.1);
+            const tallies = grids.map((grid) => {
+                grid.setSea(tsunamiSea(tsunami, step * 100));
+                return grid.step(input);
+            });
+            expect(tallies[1], `tallies of step ${step}`).toStrictEqual(tallies[0]);
+            for (const name of ["depth", "flowEast", "flowSouth", "speedEast", "speedSouth"]) {
+                const [one, other] = grids.map((grid) => bytesOf(Reflect.get(grid, name) as Float32Array));
+                if (Buffer.compare(one, other) !== 0) expect.fail(`${name} differs after step ${step}`);
+            }
+        }
+        expect(grids[0].totalPx()).toBeGreaterThan(10_000);
     });
 
     it("gives the same figures pass by pass, over ranges of rows: what threads call each on its rows", () => {

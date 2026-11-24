@@ -898,6 +898,22 @@ enum CatastropheKind {
   // weather of the map. The server tells the room what it is once a second, every player computes the same weather
   // from it and the time of the server. One a room; anyone stops it.
   CATASTROPHE_HURRICANE = 8;
+  // A tsunami comes in from the sea by the east edge of the map: for the time a player chose, the sea holds there the
+  // height they chose (its bore, then its fall), and the water of the map carries it inland. The server tells the
+  // room what it is once a second; the water itself comes as always. One a room; anyone stops it.
+  CATASTROPHE_TSUNAMI = 9;
+}
+
+// A tsunami, as a player asks for it (the server keeps each value within bounds) and as the server tells it.
+message TsunamiMessage {
+  // Its height at the coast, over the rest level of the sea, in metres.
+  double metres = 1;
+  // How long the sea stays high at the coast, in minutes.
+  int32 minutes = 2;
+  // Told by the server only: when its front reached the coast (ms, the time of the server), and how long the sea
+  // stays high (ms); its backwash follows.
+  double startedAt = 3;
+  double durationMs = 4;
 }
 
 // How a hurricane crosses the map, as a player asks for it (the server keeps each value within bounds) and as the
@@ -997,6 +1013,8 @@ message LaunchCatastropheMessage {
   // A hurricane: how it crosses the map, its eye over `x`, `y` (the middle of the map when outside it). `release`
   // stops it.
   optional HurricaneTrackMessage hurricane = 8;
+  // A tsunami: how high and for how long. `release` stops it.
+  optional TsunamiMessage tsunami = 9;
 }
 
 // Server to room: a catastrophe is on its way.
@@ -1024,6 +1042,9 @@ message CatastropheMessage {
   // A hurricane: how it crosses the map, told once a second while it goes on; `impactInMs` is how long it still
   // lasts, 0 when it was stopped or ended.
   optional HurricaneTrackMessage hurricane = 14;
+  // A tsunami: what it is, told once a second while it goes on; `impactInMs` is how long it still lasts, its
+  // backwash included, 0 when it was stopped or ended.
+  optional TsunamiMessage tsunami = 15;
 }
 
 // A player casts their fishing line: where the float lands, in map pixels. The server decides whether it does
@@ -1373,6 +1394,9 @@ message TerrainWaterStatsMessage {
   // A map whose water goes faster than reality: how many times faster it really goes now, what the server holds
   // (WaterPace), at most its speed. Absent on a map at the pace of reality.
   optional uint32 reachedSpeed = 12;
+  // While a tsunami comes in: the share of the real speed of its waves the water bears now (1 all of it), under 1
+  // when the server affords fewer moves a step than the depth of its bore asks for. Absent outside a tsunami.
+  optional double seaCelerity = 13;
 }
 
 // A sound attached to an entity was activated and must be played by every player of the map.

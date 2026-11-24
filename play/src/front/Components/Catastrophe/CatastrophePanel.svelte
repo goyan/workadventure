@@ -18,6 +18,14 @@
         hurricaneMaxWind,
         METEOR_MAX_TILES,
         METEOR_MIN_TILES,
+        TSUNAMI_MAX_METRES,
+        TSUNAMI_MAX_MINUTES,
+        TSUNAMI_MIN_METRES,
+        TSUNAMI_MIN_MINUTES,
+        tsunamiLastsMs,
+        tsunamiPhase,
+        tsunamiRiseAt,
+        TSUNAMI_FULL_CELERITY,
     } from "@workadventure/map-editor";
     import { onDestroy, untrack } from "svelte";
     import { LL, locale } from "../../../i18n/i18n-svelte";
@@ -41,13 +49,18 @@
         hurricaneWaterEffectStore,
         meteorRadiusTilesStore,
         toggleArmedCatastrophe,
+        tsunamiMetresStore,
+        tsunamiMinutesStore,
+        tsunamiShownStore,
     } from "../../Stores/CatastropheStore";
+    import { terrainWaterStatsStore } from "../../Stores/TerrainEditorStore";
     import { compassPointOf } from "../../Phaser/Game/Weather/WindDirection";
     import PixelIcon from "../ActionsMenu/PixelIcon.svelte";
     import ChipPopover from "../ClockLine/ChipPopover.svelte";
     import InfoTip from "../Input/InfoTip.svelte";
     import { stopColdSnap } from "./coldSnapActions";
     import { startHurricane, stopHurricane } from "./hurricaneActions";
+    import { startTsunami, stopTsunami } from "./tsunamiActions";
     import WeatherTab from "./WeatherTab.svelte";
 
     const shown = $derived($catastrophePanelStore);
@@ -71,6 +84,7 @@
         if ($armedCatastropheStore !== undefined) {
             sized = $armedCatastropheStore;
             hurricaneOpen = false;
+            tsunamiOpen = false;
         }
     });
     /**
@@ -80,8 +94,55 @@
     let hurricaneOpen = $state(false);
     function toggleHurricane(): void {
         hurricaneOpen = !hurricaneOpen;
-        if (hurricaneOpen) disarmCatastrophe();
+        if (hurricaneOpen) {
+            tsunamiOpen = false;
+            disarmCatastrophe();
+        }
     }
+    /** The settings of the tsunami, in the same place: it comes in by the east edge of the map, not at a point. */
+    let tsunamiOpen = $state(false);
+    function toggleTsunami(): void {
+        tsunamiOpen = !tsunamiOpen;
+        if (tsunamiOpen) {
+            hurricaneOpen = false;
+            disarmCatastrophe();
+        }
+    }
+
+    /**
+     * How much of the real speed of the waves of the tsunami the server bears, in %, when it bears less (it affords
+     * fewer moves a step than the depth of the bore asks for): the panel says so. Undefined at full speed.
+     */
+    const tsunamiCelerity = $derived.by((): number | undefined => {
+        const share = $terrainWaterStatsStore?.seaCelerity;
+        if (tsunamiGoing === undefined || share === undefined || share >= TSUNAMI_FULL_CELERITY) return undefined;
+        return Math.round(share * 100);
+    });
+
+    /** What the panel says of the tsunami coming in, as the server last told it (once a second). */
+    const tsunamiGoing = $derived.by((): string | undefined => {
+        const going = $tsunamiShownStore;
+        if (!going || going.at === undefined) return undefined;
+        const { tsunami, at } = going;
+        const phase = tsunamiPhase(tsunami, at);
+        if (phase === "over") return undefined;
+        const secondsLeft = Math.max(0, Math.round((tsunami.startedAt + tsunamiLastsMs(tsunami) - at) / 1000));
+        const level = new Intl.NumberFormat($locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(
+            tsunamiRiseAt(tsunami, at),
+        );
+        return $LL.actionbar.catastrophe.tsunamiGoing({
+            metres: tsunami.metres,
+            phase: $LL.actionbar.catastrophe.tsunamiPhase[phase](),
+            level,
+            left:
+                secondsLeft >= 60
+                    ? $LL.actionbar.catastrophe.coldLeftMinutes({
+                          minutes: Math.floor(secondsLeft / 60),
+                          seconds: secondsLeft % 60,
+                      })
+                    : $LL.actionbar.catastrophe.coldLeftSeconds({ seconds: secondsLeft }),
+        });
+    });
 
     /** What the panel says of the hurricane crossing the map, as the server last told it. */
     const hurricaneGoing = $derived.by((): string | undefined => {
@@ -192,15 +253,17 @@
     const help = $derived(
         hurricaneOpen
             ? $LL.actionbar.catastrophe.hurricaneHelp()
-            : ballArmed
-              ? $LL.actionbar.catastrophe.ballArmedHelp()
-              : coldArmed
-                ? $LL.actionbar.catastrophe.coldArmedHelp()
-                : downpourArmed || drainArmed
-                  ? $LL.actionbar.catastrophe.downpourArmedHelp()
-                  : meteorArmed || fireballArmed || fireArmed
-                    ? $LL.actionbar.catastrophe.armedHelp()
-                    : $LL.actionbar.catastrophe.idleHelp(),
+            : tsunamiOpen
+              ? $LL.actionbar.catastrophe.tsunamiHelp()
+              : ballArmed
+                ? $LL.actionbar.catastrophe.ballArmedHelp()
+                : coldArmed
+                  ? $LL.actionbar.catastrophe.coldArmedHelp()
+                  : downpourArmed || drainArmed
+                    ? $LL.actionbar.catastrophe.downpourArmedHelp()
+                    : meteorArmed || fireballArmed || fireArmed
+                      ? $LL.actionbar.catastrophe.armedHelp()
+                      : $LL.actionbar.catastrophe.idleHelp(),
     );
 
     /** What the panel says of the cold air lying on the map: its temperature, and how long it still has. */
@@ -370,6 +433,18 @@
                         <PixelIcon name="hurricane" size={16} />
                         <span>{$LL.actionbar.catastrophe.hurricane()}</span>
                     </button>
+                    <button
+                        type="button"
+                        class="flex items-center gap-1 rounded-full px-2 py-1 {tsunamiOpen
+                            ? 'bg-white/30 ring-1 ring-white'
+                            : 'bg-white/10 hover:bg-white/20'}"
+                        aria-pressed={tsunamiOpen}
+                        data-testid="catastrophe-tsunami"
+                        onclick={toggleTsunami}
+                    >
+                        <PixelIcon name="tsunami" size={16} />
+                        <span>{$LL.actionbar.catastrophe.tsunami()}</span>
+                    </button>
                     {#if hurricaneOpen}
                         <span class="flex basis-full flex-wrap items-center gap-x-3 gap-y-1.5">
                             <label class="flex items-center gap-2">
@@ -459,6 +534,51 @@
                                     onclick={startHurricane}
                                 >
                                     {$LL.actionbar.catastrophe.hurricaneStart()}
+                                </button>
+                            {/if}
+                        </span>
+                    {:else if tsunamiOpen}
+                        <span class="flex basis-full flex-wrap items-center gap-x-3 gap-y-1.5">
+                            <label class="flex items-center gap-2">
+                                <input
+                                    type="range"
+                                    class="w-24"
+                                    min={TSUNAMI_MIN_METRES}
+                                    max={TSUNAMI_MAX_METRES}
+                                    step="0.5"
+                                    aria-label={$LL.actionbar.catastrophe.tsunamiMetresLabel()}
+                                    data-testid="catastrophe-tsunami-metres"
+                                    bind:value={$tsunamiMetresStore}
+                                />
+                                <span class="whitespace-nowrap tabular-nums"
+                                    >{$LL.actionbar.catastrophe.tsunamiMetres({ metres: $tsunamiMetresStore })}</span
+                                >
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input
+                                    type="range"
+                                    class="w-24"
+                                    min={TSUNAMI_MIN_MINUTES}
+                                    max={TSUNAMI_MAX_MINUTES}
+                                    step="1"
+                                    aria-label={$LL.actionbar.catastrophe.tsunamiMinutesLabel()}
+                                    data-testid="catastrophe-tsunami-minutes"
+                                    bind:value={$tsunamiMinutesStore}
+                                />
+                                <span class="whitespace-nowrap tabular-nums"
+                                    >{$LL.actionbar.catastrophe.tsunamiMinutes({
+                                        minutes: $tsunamiMinutesStore,
+                                    })}</span
+                                >
+                            </label>
+                            {#if tsunamiGoing === undefined}
+                                <button
+                                    type="button"
+                                    class="rounded-full bg-white/10 px-2 py-1 hover:bg-white/20"
+                                    data-testid="catastrophe-tsunami-start"
+                                    onclick={startTsunami}
+                                >
+                                    {$LL.actionbar.catastrophe.tsunamiStart()}
                                 </button>
                             {/if}
                         </span>
@@ -600,6 +720,25 @@
                                 onclick={stopHurricane}
                             >
                                 {$LL.actionbar.catastrophe.hurricaneStop()}
+                            </button>
+                        </span>
+                    {/if}
+                    {#if tsunamiGoing !== undefined}
+                        <!-- A tsunami comes in: where it is, how high the sea stands at the coast, how to stop it. -->
+                        <span class="flex basis-full items-center gap-2">
+                            <span class="tabular-nums" data-testid="catastrophe-tsunami-going">{tsunamiGoing}</span>
+                            {#if tsunamiCelerity !== undefined}
+                                <span class="tabular-nums text-amber-300" data-testid="catastrophe-tsunami-celerity">
+                                    {$LL.actionbar.catastrophe.tsunamiCelerity({ percent: tsunamiCelerity })}
+                                </span>
+                            {/if}
+                            <button
+                                type="button"
+                                class="rounded-full bg-white/10 px-2 py-1 hover:bg-white/20"
+                                data-testid="catastrophe-tsunami-stop"
+                                onclick={stopTsunami}
+                            >
+                                {$LL.actionbar.catastrophe.tsunamiStop()}
                             </button>
                         </span>
                     {/if}

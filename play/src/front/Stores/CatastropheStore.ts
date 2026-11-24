@@ -9,8 +9,10 @@ import {
     HURRICANE_DEFAULT_HEADING,
     HURRICANE_DEFAULT_MINUTES,
     METEOR_DEFAULT_TILES,
+    TSUNAMI_DEFAULT_METRES,
+    TSUNAMI_DEFAULT_MINUTES,
 } from "@workadventure/map-editor";
-import type { Hurricane, HurricaneHere, WaterBall } from "@workadventure/map-editor";
+import type { Hurricane, HurricaneHere, Tsunami, WaterBall } from "@workadventure/map-editor";
 import { derived, get, writable } from "svelte/store";
 import { basicActiveStore } from "./BasicModeStore";
 
@@ -77,6 +79,15 @@ export const pointerFloodRiseStore = writable<number | undefined>(undefined);
 export const hurricaneShownStore = writable<{ hurricane: Hurricane; here: HurricaneHere | undefined } | undefined>(
     undefined,
 );
+
+/** How high the next tsunami stands at the coast (m), and how long the sea stays high there (minutes): kept for the session. */
+export const tsunamiMetresStore = writable<number>(TSUNAMI_DEFAULT_METRES);
+export const tsunamiMinutesStore = writable<number>(TSUNAMI_DEFAULT_MINUTES);
+/**
+ * The tsunami coming in from the sea, and the time of the server it was last told at (once a second): the panel says
+ * where it is and offers to stop it. Undefined while there is none.
+ */
+export const tsunamiShownStore = writable<{ tsunami: Tsunami; at: number | undefined } | undefined>(undefined);
 
 /** How wide the patch of fire set under the pointer is, in tiles: kept for the session. */
 export const fireRadiusTilesStore = writable<number>(FIRE_DEFAULT_TILES);

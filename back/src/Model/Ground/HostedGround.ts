@@ -61,6 +61,7 @@ export class HostedGround {
             balls: () => this.state.balls,
             colds: () => this.state.colds ?? [],
             hurricane: () => this.state.hurricane,
+            tsunami: () => this.state.tsunami,
             grazers: () => this.state.grazers,
             air: () => this.state.air,
             fire: () => this.state.fire,

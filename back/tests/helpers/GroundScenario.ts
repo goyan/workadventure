@@ -21,6 +21,7 @@ import type {
     Drain,
     Hurricane,
     RealWeatherSlot,
+    Tsunami,
     WAMFileFormat,
 } from "@workadventure/map-editor";
 import { luckOf } from "../../src/Model/Ground/GroundProtocol";
@@ -145,6 +146,7 @@ export function world(wam: WAMFileFormat, stored: Record<string, Record<string, 
         balls: [] as Ball[],
         colds: [] as ColdMass[],
         hurricane: undefined as Hurricane | undefined,
+        tsunami: undefined as Tsunami | undefined,
         air: { temperature: 1, humidity: 85 } as { temperature: number; humidity: number } | undefined,
         /** The conditions of the fire of the room: a cold rain until the test says a heat wave. */
         fire: { temperature: 1, humidity: 85, windSpeed: 20, windFrom: 270 },
@@ -180,6 +182,7 @@ export function world(wam: WAMFileFormat, stored: Record<string, Record<string, 
         balls: () => state.balls,
         colds: () => state.colds,
         hurricane: () => state.hurricane,
+        tsunami: () => state.tsunami,
         grazers: () => [{ x: 100, y: 600 }],
         air: () => state.air,
         fire,
@@ -211,6 +214,7 @@ export async function byHand(
     water.setBalls(() => inputs.balls());
     water.setWalkers(() => inputs.walkers());
     water.skyUnder(() => inputs.hurricane?.());
+    water.seaUnder(() => inputs.tsunami?.());
     await water.restore();
     water.start();
     // Under a hurricane, its wind and its air, from the hurricane and the time of the room.
@@ -386,6 +390,9 @@ export function happenAt(
         state.hurricane = undefined;
         state.air = { temperature: 1, humidity: 85 };
     }
+    // A tsunami of 2 m at the coast (the east edge), its crest of 20 s; someone stops it during its backwash.
+    if (tenth === 230) state.tsunami = { id: 40, startedAt: GROUND_NOW + 23_000, metres: 2, durationMs: 20_000 };
+    if (tenth === 330) state.tsunami = undefined;
     if (tenth === 220) ground.strike(190, 190, 2);
     if (tenth === 300) state.balls = [{ id: 7, x: 180, y: 180, radiusPx: 40 }];
     if (tenth > 300 && tenth < 400) {

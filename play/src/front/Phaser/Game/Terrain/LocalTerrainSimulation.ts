@@ -22,6 +22,7 @@ import type {
     PrecipitationAir,
     RealWeatherSlot,
     SeededMeadow,
+    Tsunami,
     WAMFileFormat,
     WaterGridBounds,
     WaterKernelKind,
@@ -83,6 +84,8 @@ export interface LocalCatastrophes {
     colds?: readonly ColdMass[];
     /** The hurricane crossing the map; absent while there is none. */
     hurricane?: Hurricane;
+    /** The tsunami coming in by the east edge of the map; absent while there is none. */
+    tsunami?: Tsunami;
 }
 
 /** What the local ground tells its player: a state of its water or of its meadow, its bytes as they are (unzipped). */
@@ -191,6 +194,7 @@ export class LocalTerrainSimulation {
                 balls: () => this.catastrophes.balls,
                 colds: () => this.catastrophes.colds ?? [],
                 hurricane: () => this.catastrophes.hurricane,
+                tsunami: () => this.catastrophes.tsunami,
             },
         });
         if (start.water) this.water.seed(start.water.depths, start.water.bounds);

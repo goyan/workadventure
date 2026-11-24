@@ -73,6 +73,23 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                     bandsAfter: label("rain bands, going away"),
                     wallAfter: label("second eyewall"),
                 },
+                tsunami: label("Tsunami"),
+                tsunamiMetresLabel: label("Height of the tsunami at the coast"),
+                tsunamiMetres: ({ metres }: { metres: number }) => `${metres} m at the coast`,
+                tsunamiMinutesLabel: label("How long the sea stays high at the coast"),
+                tsunamiMinutes: ({ minutes }: { minutes: number }) => `${minutes} min flood`,
+                tsunamiStart: label("Launch the tsunami"),
+                tsunamiStop: label("Stop the tsunami"),
+                tsunamiHelp: label("The sea comes in by the east edge of the map"),
+                tsunamiGoing: ({ metres, phase, level, left }: Record<string, string | number>) =>
+                    `${metres} m tsunami: ${phase}, the sea at ${level} m at the coast, ${left} left`,
+                tsunamiCelerity: ({ percent }: { percent: number }) =>
+                    `speed limited by the server: ${percent} % of the real one`,
+                tsunamiPhase: {
+                    front: label("the bore comes in"),
+                    ebb: label("the sea goes down"),
+                    backwash: label("backwash to the sea"),
+                },
                 ball: label("Ball"),
                 ballSizeLabel: label("Size of the ball: its diameter"),
                 ballArmedHelp: label("Hold the click: a solid ball, half in the water under the pointer"),
@@ -90,6 +107,8 @@ const stopColdSnap = vi.hoisted(() => vi.fn());
 vi.mock("../../../../src/front/Components/Catastrophe/coldSnapActions", () => ({ stopColdSnap }));
 const { startHurricane, stopHurricane } = vi.hoisted(() => ({ startHurricane: vi.fn(), stopHurricane: vi.fn() }));
 vi.mock("../../../../src/front/Components/Catastrophe/hurricaneActions", () => ({ startHurricane, stopHurricane }));
+const { startTsunami, stopTsunami } = vi.hoisted(() => ({ startTsunami: vi.fn(), stopTsunami: vi.fn() }));
+vi.mock("../../../../src/front/Components/Catastrophe/tsunamiActions", () => ({ startTsunami, stopTsunami }));
 
 vi.mock("../../../../src/front/Components/Catastrophe/WeatherTab.svelte", async () => ({
     default: ((await import("./WeatherTabStub.svelte")) as { default: unknown }).default,
@@ -106,6 +125,7 @@ import {
     hurricaneHighestRiseStore,
     hurricaneShownStore,
     hurricaneWaterEffectStore,
+    tsunamiShownStore,
     downpourWholeMapStore,
     drainRadiusTilesStore,
     meteorRadiusTilesStore,
@@ -113,6 +133,19 @@ import {
     disarmCatastrophe,
 } from "../../../../src/front/Stores/CatastropheStore";
 import { mapEditorModeStore } from "../../../../src/front/Stores/MapEditorStore";
+import { terrainWaterStatsStore } from "../../../../src/front/Stores/TerrainEditorStore";
+
+const STATS = {
+    rain: 0,
+    sources: 0,
+    sinks: 0,
+    evaporation: 0,
+    absorption: 0,
+    lost: 0,
+    stock: 0,
+    wetArea: 0,
+    rainRate: 0,
+};
 
 let target: HTMLElement;
 let component: ReturnType<typeof mount> | undefined;
@@ -377,6 +410,46 @@ describe("CatastrophePanel", () => {
         hurricaneShownStore.set(undefined);
         flushSync();
         expect(target.querySelector('[data-testid="catastrophe-hurricane-stop"]')).toBeNull();
+    });
+
+    it("sets a tsunami out (height at the coast, duration), launches it, says where it is and stops it", () => {
+        renderOpen();
+        const tile = target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-tsunami"]');
+        expect(tile?.textContent).toContain("Tsunami");
+        tile?.click();
+        flushSync();
+        // It comes in by the edge of the map, not at a point: nothing is armed, its settings show.
+        expect(get(armedCatastropheStore)).toBeUndefined();
+        expect(target.textContent).toContain("8 m at the coast");
+        expect(target.textContent).toContain("3 min flood");
+        expect(help()?.textContent).toContain("east edge of the map");
+        target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-tsunami-start"]')?.click();
+        expect(startTsunami).toHaveBeenCalledTimes(1);
+        // Told by the server 100 s after its front: the sea at the coast went down from 8 m, linearly over 170 s.
+        tsunamiShownStore.set({ tsunami: { id: 1, startedAt: 0, metres: 8, durationMs: 180_000 }, at: 100_000 });
+        flushSync();
+        const going = target.querySelector('[data-testid="catastrophe-tsunami-going"]');
+        expect(going?.textContent).toContain(
+            "8 m tsunami: the sea goes down, the sea at 3.8 m at the coast, 2 min 20 s left",
+        );
+        expect(target.querySelector('[data-testid="catastrophe-tsunami-start"]')).toBeNull();
+        // At full speed nothing more; when the server bears less of it, the panel says so.
+        expect(target.querySelector('[data-testid="catastrophe-tsunami-celerity"]')).toBeNull();
+        terrainWaterStatsStore.set({ ...STATS, seaCelerity: 0.42 });
+        flushSync();
+        expect(target.querySelector('[data-testid="catastrophe-tsunami-celerity"]')?.textContent).toContain(
+            "speed limited by the server: 42 % of the real one",
+        );
+        terrainWaterStatsStore.set(undefined);
+        target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-tsunami-stop"]')?.click();
+        expect(stopTsunami).toHaveBeenCalledTimes(1);
+        tsunamiShownStore.set(undefined);
+        flushSync();
+        expect(target.querySelector('[data-testid="catastrophe-tsunami-stop"]')).toBeNull();
+        // The hurricane and the tsunami share their place: opening one closes the other.
+        target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-hurricane"]')?.click();
+        flushSync();
+        expect(target.querySelector('[data-testid="catastrophe-tsunami-metres"]')).toBeNull();
     });
 
     it("tells how high the water rose since the hurricane began, only while one goes and the water has risen", () => {

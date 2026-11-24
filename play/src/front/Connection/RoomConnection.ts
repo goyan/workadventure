@@ -11,6 +11,7 @@ import {
 } from "@workadventure/shared-utils";
 import type {
     HurricaneTrackMessage,
+    TsunamiMessage,
     AddSpaceFilterMessage,
     AnswerMessage,
     ApplicationMessage,
@@ -1288,6 +1289,8 @@ export class RoomConnection implements RoomConnection {
         temperature?: number,
         /** A hurricane: how it crosses the map. */
         hurricane?: HurricaneTrackMessage,
+        /** A tsunami: how high and for how long. */
+        tsunami?: TsunamiMessage,
     ): void {
         this.send({
             message: {
@@ -1301,6 +1304,7 @@ export class RoomConnection implements RoomConnection {
                     release,
                     ...(temperature === undefined ? {} : { temperature }),
                     ...(hurricane === undefined ? {} : { hurricane }),
+                    ...(tsunami === undefined ? {} : { tsunami }),
                 },
             },
         });
