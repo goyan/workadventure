@@ -1,7 +1,7 @@
 import { TERRAIN_CELL, TILE_PX } from "../types";
 import { cellOf } from "../Terrain/TerrainGrid";
 import type { WaterWallSides } from "../Terrain/WaterGrid";
-import { decodeZombieTerrain, ZOMBIE_PX_PER_METRE, ZOMBIE_WATER_PACE } from "./ZombieHorde";
+import { decodeZombieTerrain, ZOMBIE_DEEP, ZOMBIE_PX_PER_METRE, ZOMBIE_WATER_PACE } from "./ZombieHorde";
 import type { ZombieHorde } from "./ZombieHorde";
 
 /**
@@ -892,6 +892,12 @@ export class ZombieCrowd {
                 if (Math.abs(across) <= frontPx / 2) front.push(cell);
             }
         }
-        return Int32Array.from(front.length > 0 ? front : edge);
+        // Out of the water where it can: a horde whose front lies on a sea at the edge comes in by its shores, not
+        // from under the water; through the water only where the whole edge is deep.
+        const shallow = (cells: number[]): number[] => cells.filter((cell) => this.terrain[cell] < ZOMBIE_DEEP);
+        for (const cells of [shallow(front), front, shallow(edge), edge]) {
+            if (cells.length > 0) return Int32Array.from(cells);
+        }
+        return new Int32Array(0);
     }
 }

@@ -186,6 +186,27 @@ describe("a crowd of zombies", () => {
         expect(under / walked).toBeLessThan(0.005);
     });
 
+    it("comes in by the shore when its edge is half sea, not from under the water", () => {
+        const width = 120;
+        const height = 80;
+        // A sea along the east edge, over its northern half.
+        const water = zombieTerrainOf(width, height, (x, y) => (x >= width - 12 && y < 40 ? 60 : 0));
+        const crowd = new ZombieCrowd(horde({ heading: 270, ...zombieDirection(270) }, water), undefined);
+        let walked = 0;
+        let under = 0;
+        for (let step = 0; step < 100; step++) {
+            crowd.step();
+            for (let zombie = 0; zombie < crowd.count; zombie++) {
+                if (crowd.state[zombie] !== ZOMBIE_WALKING) continue;
+                walked++;
+                if (crowd.waterAt(crowd.x[zombie], crowd.y[zombie]) === ZOMBIE_UNDER) under++;
+            }
+        }
+        expect(crowd.walking).toBeGreaterThan(50);
+        // A few pushed in by the crowd at the shore, no more: half of them would come out of the sea otherwise.
+        expect(under / walked).toBeLessThan(0.03);
+    });
+
     it("packs and jams at a gap in a wall across its way", () => {
         const height = 80;
         // A wall across the map at x = 60, open on four cells (2 tiles) in the middle.
