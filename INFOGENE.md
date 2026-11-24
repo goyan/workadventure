@@ -6646,3 +6646,8 @@ Le schéma de la météo réelle (`RealWeatherSlot`) ne borne pas la températur
 un lieu réel extrême n'est pas rejeté. Rien de ces conditions n'est enregistré ; un ancien `back` ramènerait la
 valeur à ses anciennes bornes (le curseur revient alors sur ce que le serveur annonce) : `play` et `back` vont
 ensemble.
+
+## Zombies de la catastrophe « Zombies »
+
+Les feuilles de `play/public/resources/zombies/` ont été dessinées par l'utilisateur du fork pour ce projet (voir le
+`README.md` de ce dossier).

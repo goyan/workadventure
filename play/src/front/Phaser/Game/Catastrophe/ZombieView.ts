@@ -1,20 +1,15 @@
-import type * as Phaser from "phaser";
+import * as Phaser from "phaser";
 import { ZOMBIE_WALKING, ZombieCrowd } from "@workadventure/map-editor";
 import type { WaterWallSides, ZombieHorde } from "@workadventure/map-editor";
 import {
-    drawZombieSheet,
-    ZOMBIE_DOWN,
-    ZOMBIE_FEET_Y,
-    ZOMBIE_FRAME_HEIGHT,
-    ZOMBIE_FRAME_WIDTH,
-    ZOMBIE_LOOKS,
-    ZOMBIE_SHEET_HEIGHT,
-    ZOMBIE_SHEET_WIDTH,
-    ZOMBIE_SIDE,
-    ZOMBIE_UP,
-    zombieFrame,
-    zombieFrameAt,
-} from "./ZombieSprites";
+    ZOMBIE_DEAD,
+    ZOMBIE_IDLE,
+    ZOMBIE_SHEET_COLUMNS,
+    ZOMBIE_SHEETS,
+    ZOMBIE_WALK,
+    zombieAtlasFrame,
+    zombieAtlasLayout,
+} from "./ZombieSheets";
 
 const TEXTURE = "zombie-horde";
 /**
@@ -25,9 +20,21 @@ const TEXTURE = "zombie-horde";
 const BAND_PX = 32;
 const SUB_BANDS = 4;
 /** A zombie is drawn this far out of the view still: its image overhangs its feet. */
-const VIEW_MARGIN_PX = 48;
-/** A step of the shamble every this many pixels walked. */
-const STRIDE_PX = 7;
+const VIEW_MARGIN_PX = 64;
+/**
+ * The sheets are laid in the atlas at these scales, smoothed: about as tall as an avatar (32 px), some a little
+ * smaller. (A Blitter is not scaled when it is drawn: its images are.)
+ */
+const SCALES: readonly number[] = [0.44, 0.5];
+/** The frames of the atlas at one scale; those of the next scale follow. */
+const FRAMES_A_SCALE = ZOMBIE_SHEETS.length * 5 * ZOMBIE_SHEET_COLUMNS;
+/** An image of the walk every this many pixels of the map walked: a stride of some 3 m runs over its 8 images. */
+const STRIDE_PX = 10;
+/** Under this speed (px/s) a zombie stands, and sways in its idle images, this many a second. */
+const STANDING_PX_S = 9;
+const IDLE_FPS = 7;
+/** The tints of the horde: greys, sallow, greenish, a few of each. */
+const TINTS: readonly number[] = [0xffffff, 0xe6e6e6, 0xd2d2d2, 0xe8f0d0, 0xd8e8c8, 0xf0e0c8, 0xc8d4c0, 0xdadada];
 /** A browser catches up with the horde at most this long an image (ms): a horde joined late shows in a while. */
 const CATCH_UP_MS = 8;
 /** The horde shows once it is at most this many steps behind the time of the server. */
@@ -52,6 +59,8 @@ export class ZombieView {
         number,
         { blitter: Phaser.GameObjects.Blitter; bobs: Phaser.GameObjects.Bob[]; shown: number }
     >();
+    /** Whether the sheets are asked for, and laid in the atlas of the horde. */
+    private requested = false;
     /** The zombies seen, sorted by band then by row, refilled at each image. */
     private order = new Int32Array(0);
     private bandOf = new Int32Array(0);
@@ -73,6 +82,8 @@ export class ZombieView {
         private readonly walls: () => WaterWallSides | undefined,
         /** How much lower a point of the ground is drawn (the relief in 3/4); none when absent. */
         private readonly groundDropAt: (x: number, y: number) => number = () => 0,
+        /** Where each sheet is fetched from: the resources of the game by default. */
+        private readonly urlOf: (sheet: (typeof ZOMBIE_SHEETS)[number]) => string = (sheet) => sheet.url,
     ) {}
 
     /** The horde of the room, as the server tells it: the same one keeps its crowd. Undefined: it falls to dust. */
@@ -99,9 +110,8 @@ export class ZombieView {
         this.drawX = new Float32Array(made.count);
         this.drawY = new Float32Array(made.count);
         for (let zombie = 0; zombie < made.count; zombie++) {
-            // Some a little darker than others: a crowd, not copies.
-            const shade = 200 + ((Math.imul(zombie, 2654435761) >>> 0) % 56);
-            this.tint[zombie] = (shade << 16) | (shade << 8) | shade;
+            // Tinted, a crowd, not copies.
+            this.tint[zombie] = TINTS[(Math.imul(zombie, 2654435761) >>> 0) % TINTS.length];
         }
     }
 
@@ -148,20 +158,86 @@ export class ZombieView {
         return this.crowd?.paceMetres();
     }
 
+    /** The sheets are fetched the first time a horde comes, then laid in one atlas: one texture for every batch. */
     private makeTexture(): void {
+        if (this.requested || this.scene.textures.exists(TEXTURE)) return;
+        this.requested = true;
+        const missing = ZOMBIE_SHEETS.filter((sheet) => !this.scene.textures.exists(sheet.key));
+        for (const sheet of missing) this.scene.load.image(sheet.key, this.urlOf(sheet));
+        if (missing.length === 0) {
+            this.layAtlas();
+            return;
+        }
+        this.scene.load.once("complete", () => this.layAtlas());
+        this.scene.load.start();
+    }
+
+    private frameWidthOf(sheet: (typeof ZOMBIE_SHEETS)[number], size: number): number {
+        return Math.ceil(sheet.frameWidth * SCALES[size]);
+    }
+
+    private frameHeightOf(sheet: (typeof ZOMBIE_SHEETS)[number], size: number): number {
+        return Math.ceil(sheet.frameHeight * SCALES[size]);
+    }
+
+    private layAtlas(): void {
         if (this.scene.textures.exists(TEXTURE)) return;
-        const canvas = this.scene.textures.createCanvas(TEXTURE, ZOMBIE_SHEET_WIDTH, ZOMBIE_SHEET_HEIGHT);
+        if (!ZOMBIE_SHEETS.every((sheet) => this.scene.textures.exists(sheet.key))) return;
+        const { width, height, tops } = zombieAtlasLayout();
+        // The atlas at each scale, side by side.
+        const lefts: number[] = [];
+        let atlasWidth = 0;
+        for (const scale of SCALES) {
+            lefts.push(atlasWidth);
+            atlasWidth += Math.ceil(width * scale) + 2;
+        }
+        const atlasHeight = Math.ceil(height * SCALES[SCALES.length - 1]) + 2;
+        const canvas = this.scene.textures.createCanvas(TEXTURE, atlasWidth, atlasHeight);
         const context = canvas?.getContext();
         if (!canvas || !context) return;
-        const image = context.createImageData(ZOMBIE_SHEET_WIDTH, ZOMBIE_SHEET_HEIGHT);
-        image.data.set(drawZombieSheet());
-        context.putImageData(image, 0, 0);
-        const frames = ZOMBIE_LOOKS * (ZOMBIE_SHEET_WIDTH / ZOMBIE_FRAME_WIDTH);
-        for (let frame = 0; frame < frames; frame++) {
-            const { x, y } = zombieFrameAt(frame);
-            canvas.add(frame, 0, x, y, ZOMBIE_FRAME_WIDTH, ZOMBIE_FRAME_HEIGHT);
-        }
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
+        SCALES.forEach((scale, size) => {
+            ZOMBIE_SHEETS.forEach((sheet, index) => {
+                const image = this.scene.textures.get(sheet.key).getSourceImage();
+                if (!(image instanceof HTMLImageElement || image instanceof HTMLCanvasElement)) {
+                    console.warn("A sheet of the zombies could not be drawn into their atlas", sheet.key);
+                    return;
+                }
+                const frameWidth = this.frameWidthOf(sheet, size);
+                const frameHeight = this.frameHeightOf(sheet, size);
+                sheet.counts.forEach((count, row) => {
+                    for (let column = 0; column < count; column++) {
+                        const x = lefts[size] + column * frameWidth;
+                        const y = Math.round(tops[index] * scale) + row * frameHeight;
+                        // Frame by frame: none bleeds into its neighbour.
+                        context.drawImage(
+                            image,
+                            column * sheet.frameWidth,
+                            row * sheet.frameHeight,
+                            sheet.frameWidth,
+                            sheet.frameHeight,
+                            x,
+                            y,
+                            frameWidth,
+                            frameHeight,
+                        );
+                        canvas.add(
+                            size * FRAMES_A_SCALE + zombieAtlasFrame(index, row, column),
+                            0,
+                            x,
+                            y,
+                            frameWidth,
+                            frameHeight,
+                        );
+                    }
+                });
+            });
+        });
         canvas.refresh();
+        // Halved, smoothly: their pixels are finer than those of the map.
+        canvas.setFilter(Phaser.Textures.FilterMode.LINEAR);
+        this.scene.markDirty();
     }
 
     /**
@@ -178,7 +254,7 @@ export class ZombieView {
                 this.forget();
                 return;
             }
-            this.draw(crowd, 1, left, still);
+            if (this.scene.textures.exists(TEXTURE)) this.draw(crowd, 1, left, still);
             this.scene.markDirty();
             return;
         }
@@ -204,6 +280,7 @@ export class ZombieView {
             return;
         }
         this.shown = true;
+        if (!this.scene.textures.exists(TEXTURE)) return;
         this.draw(crowd, crowd.between(epoch), 1, still);
         this.scene.markDirty();
     }
@@ -216,14 +293,10 @@ export class ZombieView {
             const dx = x[zombie] - lastX[zombie];
             const dy = y[zombie] - lastY[zombie];
             this.stride[zombie] += Math.sqrt(dx * dx + dy * dy) / STRIDE_PX;
-            const ax = Math.abs(dx);
-            const ay = Math.abs(dy);
-            if (ax + ay < 0.2) continue;
-            // It faces the axis it mostly walks along, and turns to the other only once that one clearly wins: no
-            // flicker on a diagonal.
-            const side = this.facing[zombie] >= 2;
-            const turnsSide = side ? ax * 1.15 >= ay : ax > 1.15 * ay;
-            this.facing[zombie] = turnsSide ? (dx > 0 ? 2 : 3) : dy > 0 ? 0 : 1;
+            // Drawn from the side, facing right or left: it turns once it clearly goes the other way, and keeps its
+            // side while it goes up or down the map.
+            if (dx > 0.3) this.facing[zombie] = 0;
+            else if (dx < -0.3) this.facing[zombie] = 1;
         }
     }
 
@@ -232,7 +305,7 @@ export class ZombieView {
         const left = view.x - VIEW_MARGIN_PX;
         const right = view.right + VIEW_MARGIN_PX;
         const top = view.y - VIEW_MARGIN_PX;
-        const bottom = view.bottom + VIEW_MARGIN_PX + ZOMBIE_FRAME_HEIGHT;
+        const bottom = view.bottom + VIEW_MARGIN_PX + 2 * BAND_PX;
         const { x, y, lastX, lastY, state } = crowd;
         // The zombies seen, counted by sub-band, then laid in order.
         const firstBand = Math.max(0, Math.floor(top / BAND_PX));
@@ -278,20 +351,38 @@ export class ZombieView {
             const batch = this.band(band);
             used.add(band);
             let shown = 0;
+            const dying = this.dust ? 1 - alpha : 0;
             for (; at < end; at++) {
                 const zombie = this.order[at];
+                const look = zombie % ZOMBIE_SHEETS.length;
+                const sheet = ZOMBIE_SHEETS[look];
+                const size = (zombie >> 2) % SCALES.length;
                 const bob = shown < batch.bobs.length ? batch.bobs[shown] : this.addBob(batch);
                 shown++;
-                const facing = this.facing[zombie];
-                const way = facing === 0 ? ZOMBIE_DOWN : facing === 1 ? ZOMBIE_UP : ZOMBIE_SIDE;
-                const step = still ? 0 : Math.floor(this.stride[zombie]) & 3;
-                const water = crowd.waterAt(x[zombie], y[zombie]);
-                bob.setFrame(zombieFrame(zombie % ZOMBIE_LOOKS, water, way, step));
-                bob.flipX = facing === 3;
-                bob.x = Math.round(this.drawX[zombie] - ZOMBIE_FRAME_WIDTH / 2);
-                bob.y = Math.round(this.drawY[zombie] - ZOMBIE_FEET_Y);
+                let row = ZOMBIE_WALK;
+                let image: number;
+                if (this.dust) {
+                    // Falling to dust: they collapse, then fade.
+                    row = ZOMBIE_DEAD;
+                    image = Math.min(sheet.counts[ZOMBIE_DEAD] - 1, Math.floor(dying * 2 * sheet.counts[ZOMBIE_DEAD]));
+                } else {
+                    const vx = crowd.vx[zombie];
+                    const vy = crowd.vy[zombie];
+                    if (vx * vx + vy * vy < STANDING_PX_S * STANDING_PX_S) {
+                        row = ZOMBIE_IDLE;
+                        image = still
+                            ? 0
+                            : Math.floor((this.scene.time.now / 1000) * IDLE_FPS + zombie) % sheet.counts[ZOMBIE_IDLE];
+                    } else {
+                        image = still ? 0 : Math.floor(this.stride[zombie]) % sheet.counts[ZOMBIE_WALK];
+                    }
+                }
+                bob.setFrame(size * FRAMES_A_SCALE + zombieAtlasFrame(look, row, image));
+                bob.flipX = this.facing[zombie] === 1;
+                bob.x = Math.round(this.drawX[zombie] - this.frameWidthOf(sheet, size) / 2);
+                bob.y = Math.round(this.drawY[zombie] - this.frameHeightOf(sheet, size) + 1);
                 bob.tint = this.tint[zombie];
-                bob.setAlpha(alpha);
+                bob.setAlpha(this.dust ? Math.min(1, alpha * 2) : 1);
                 bob.setVisible(true);
             }
             for (let hidden = shown; hidden < batch.shown; hidden++) batch.bobs[hidden].setVisible(false);
