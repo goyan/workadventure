@@ -35,6 +35,16 @@ export class WaterSendLoad {
         return Math.max(1, this.ceiling === undefined ? asked : Math.min(asked, this.ceiling));
     }
 
+    /**
+     * How many steps of the water a state waits at least so that the states keep under the budget, the room being
+     * told fewer than one a second if it must: what the sea of a tsunami asks for, a whole map flooded and running for
+     * minutes (WaterSimulation). Never fewer than `steps`; `steps` until a state was told.
+     */
+    public stepsUnderBudget(steps: number, stepsPerSecond: number): number {
+        if (!(this.mean > 0) || !Number.isFinite(this.budget) || !(this.budget > 0)) return steps;
+        return Math.max(steps, Math.ceil((this.mean / this.budget) * stepsPerSecond));
+    }
+
     /** Whether the room is told no more than one state a second though the map asks more: the network is short. */
     public atFloor(asked: number): boolean {
         return asked > 1 && this.updates(asked) <= 1;

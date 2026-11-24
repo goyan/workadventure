@@ -550,7 +550,12 @@ export class WaterSimulation {
         const sendable = this.sendLoad.updates(askedUpdates);
         const between = stepsBetweenUpdates(Math.min(this.load.updates(askedUpdates), sendable));
         const wave = waving && sendable >= askedUpdates;
-        if (this.steps % between === 0 || (wave && this.steps % Math.min(between, WAVE_STEPS_PER_MESSAGE) === 0)) {
+        // Under a tsunami the whole map runs for minutes and its states are big: they keep under the budget of the
+        // network, fewer than one a second if they must (the water glides from one to the next on the screens).
+        const due = sea
+            ? this.steps - this.toldAtStep >= this.sendLoad.stepsUnderBudget(between, 1000 / WATER_STEP_MS)
+            : this.steps % between === 0;
+        if (due || (wave && this.steps % Math.min(between, WAVE_STEPS_PER_MESSAGE) === 0)) {
             this.tell(grid);
         }
         if (this.steps % STEPS_PER_SAVE === 0) this.save();

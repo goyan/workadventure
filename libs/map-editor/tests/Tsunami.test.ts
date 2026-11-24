@@ -1,3 +1,4 @@
+import { gzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import {
     TSUNAMI_BACKWASH_MS,
@@ -421,5 +422,69 @@ describe("the moves a tsunami asks for, within what the thread lets the water ta
         expect(Math.max(...stepsMs)).toBeLessThanOrEqual(50);
         expect(celerities.length).toBeGreaterThan(0);
         expect(Math.min(...celerities)).toBeLessThan(TSUNAMI_FULL_CELERITY);
+    });
+});
+
+describe("the network a tsunami takes", () => {
+    it("keeps the states told under the budget of the network, fewer than one a second if it must", () => {
+        // A plain of 160 x 80 cells flooded by a 4 m sea, its states zipped as on the server, a budget of 6 kB a second.
+        const wam: WAMFileFormat = {
+            version: "2.1.0",
+            mapUrl: "map.tmj",
+            areas: [],
+            entityCollections: [],
+            entities: {},
+            settings: { water: { ...DEFAULT_WATER_SETTINGS, inertia: true, precision: 4, updates: 1 } },
+            // Two pits at opposite corners: the grid covers the whole map.
+            terrain: withHeights(
+                undefined,
+                new Map([
+                    [cellKey(0, 0), -16],
+                    [cellKey(159, 79), -16],
+                ]),
+            ),
+        };
+        threadWaterLoads.clear();
+        let now = 1_000_000;
+        const told: { at: number; bytes: number }[] = [];
+        const budget = 6000;
+        const simulation = new WaterSimulation(
+            {
+                getWam: () => wam,
+                sendSubMessageToRoom: (message) => {
+                    if (message.message?.$case !== "terrainWaterMessage") return;
+                    const state = message.message.terrainWaterMessage;
+                    const bytes = state.depths.length + (state.speeds?.length ?? 0) + (state.slowSpeeds?.length ?? 0);
+                    told.push({ at: now, bytes });
+                },
+            },
+            { slotsFor: () => undefined },
+            (bytes) => gzipSync(bytes),
+            () => now,
+            () => ({ width: 160, height: 80 }),
+            () => 0,
+            WATER_STEP_MS,
+            budget,
+        );
+        simulation.mapChanged();
+        simulation.pause();
+        const grid = simulation.getGrid();
+        if (!grid) throw new Error("no grid");
+        expect(grid.bounds.width).toBeGreaterThan(40);
+        const tsunami: Tsunami = { id: 1, startedAt: now, metres: 4, durationMs: 120_000 };
+        simulation.seaUnder(() => tsunami);
+        for (let step = 0; step < 900; step++) {
+            simulation.step();
+            now += WATER_STEP_MS;
+        }
+        // From the tenth second on (the mean size of a state is known), over the minute that follows.
+        const from = 1_000_000 + 10_000;
+        const to = from + 60_000;
+        const window = told.filter((state) => state.at >= from && state.at < to);
+        const sent = window.reduce((sum, state) => sum + state.bytes, 0);
+        // The states are bigger than the budget: one a second would not hold it.
+        expect(Math.max(...window.map((state) => state.bytes))).toBeGreaterThan(budget);
+        expect(sent / 60).toBeLessThanOrEqual(budget * 1.2);
+        expect(window.length).toBeGreaterThan(5);
     });
 });
