@@ -41,6 +41,7 @@ import {
     doorLeavesOf,
     LIFE_DEPTHS_PX,
     zombieCollisionsOf,
+    zombieMsLeft,
     type LifeFire,
     lifeFireOf,
     listeningZoneJamKey,
@@ -3926,7 +3927,8 @@ export class GameScene extends DirtyScene {
      */
     public zombiePushAt(x: number, y: number): { x: number; y: number } | undefined {
         const view = this.zombieView;
-        if (!view?.active()) return undefined;
+        // In Basique the horde does not exist: nobody shoves the avatar (the server leaves it out of the crowd too).
+        if (!view?.active() || isBasicActive()) return undefined;
         const shove = view.shoveAt(x, y);
         if (shove.x === 0 && shove.y === 0) return undefined;
         const length = Math.sqrt(shove.x * shove.x + shove.y * shove.y);
@@ -3973,7 +3975,8 @@ export class GameScene extends DirtyScene {
                       startedAt: horde.startedAt,
                       heading: horde.heading,
                       walking,
-                      secondsLeft: Math.max(0, Math.round((horde.startedAt + horde.durationMs - epoch) / 1000)),
+                      // By the clock of the horde: a map faster than reality runs it faster too.
+                      secondsLeft: Math.round(zombieMsLeft(horde, epoch) / 1000),
                   }
                 : undefined,
         );

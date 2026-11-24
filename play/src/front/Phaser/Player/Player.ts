@@ -100,6 +100,11 @@ export const hasMovedEventName = "hasMoved";
 export const startMovingEventName = "startMoving";
 export const requestEmoteEventName = "requestEmote";
 
+/**
+ * Whether a horde of zombies shoves an avatar in a conversation too, out of its bubble maybe (the current of the water
+ * does not). The user decided so (2026-11-24): a horde does not stop for a meeting.
+ */
+const ZOMBIES_SHOVE_IN_CONVERSATION = true;
 /** How far from its seat (in tiles) a run aimed at it may end and still slide onto it. */
 const SEAT_RUN_REACH_TILES = 1.5;
 
@@ -1147,8 +1152,13 @@ export class Player extends Character {
             x += push.x * carried;
             y += push.y * carried;
         }
-        // A horde of zombies running over the avatar shoves it, in a call too: the keys are added on top.
-        if (!followMode && !this.isInAirplane() && !this.isSeated()) {
+        // A horde of zombies running over the avatar shoves it: the keys are added on top.
+        if (
+            !followMode &&
+            !this.isInAirplane() &&
+            !this.isSeated() &&
+            (ZOMBIES_SHOVE_IN_CONVERSATION || !get(isInActiveConversationStore))
+        ) {
             const shove = this.scene?.zombiePushAt?.(this.x, this.y + BODY_CENTER_OFFSET_Y);
             if (shove) {
                 x += shove.x;
