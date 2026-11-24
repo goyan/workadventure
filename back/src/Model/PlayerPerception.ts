@@ -1,18 +1,15 @@
-/**
- * The public player variable by which a browser tells the room what its player perceives (see the PerceptionProtocol
- * of the front): "basic" while they play in Basique, which shows nothing of the catastrophes.
- */
-const PERCEPTION_VARIABLE = "_perception";
+import { PERCEPTION_BASIC, PERCEPTION_VARIABLE } from "@workadventure/map-editor";
 
 /**
- * Whether a player plays in Basique, by their player variables (values serialized as JSON, as the front sends them):
+ * Whether a player plays in Basique, by their public player variable PERCEPTION_VARIABLE (values serialized as JSON,
+ * as the front sends them):
  * for them no horde of zombies exists, so it neither runs to them nor bumps into them.
  */
 export function playsBasic(variables: ReadonlyMap<string, { value: string }> | undefined): boolean {
     const told = variables?.get(PERCEPTION_VARIABLE)?.value;
     if (told === undefined) return false;
     try {
-        return JSON.parse(told) === "basic";
+        return JSON.parse(told) === PERCEPTION_BASIC;
     } catch {
         return false;
     }

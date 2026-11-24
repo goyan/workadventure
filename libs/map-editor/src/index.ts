@@ -100,3 +100,4 @@ export * from "./Constants/EntityUploadSupportedFormats";
 export * from "./Constants/FileUploadSupportedFormats";
 export * from "./Permissions/EntityPermissions";
 export * from "./Permissions/AreaPermissions";
+export * from "./PlayerPerception";
