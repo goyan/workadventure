@@ -205,6 +205,28 @@ describe("a tsunami up a channel: what the water of the map makes of the sea at 
     });
 });
 
+describe("the coast that holds the level of the sea", () => {
+    it("does not keep the water between it and a wall swinging: the swing dies down once the sea is at rest", () => {
+        // A basin of 2 m of water, 44 m from the coast to a wall: the sea rises by 1 m, then goes back to rest.
+        const { grid, row } = channel(80, () => -heightOfMetres(2), true);
+        const tsunami: Tsunami = { id: 1, startedAt: 0, metres: 1, durationMs: 60_000 };
+        const input = stepOf(8);
+        const rest = grid.depthAt(2, row);
+        const swing = [0, 0, 0];
+        for (let step = 1; step <= 1200; step++) {
+            grid.setSea(tsunamiSea(tsunami, step * 100));
+            grid.step(input);
+            // While the sea is at rest (its backwash): three windows of 20 s, half a period of the basin each (a
+            // quarter wave between an open end and a wall: 4 L / √(g·h), 40 s).
+            const window = [600, 800, 1000].findIndex((from) => step > from && step <= from + 200);
+            if (window >= 0) swing[window] = Math.max(swing[window], Math.abs(grid.depthAt(2, row) - rest));
+        }
+        expect(swing[0]).toBeGreaterThan(heightOfMetres(0.05));
+        expect(swing[1]).toBeLessThan(swing[0]);
+        expect(swing[2]).toBeLessThan(0.7 * swing[0]);
+    });
+});
+
 describe("a tsunami over a dry coastal plain", () => {
     /** A plain at the altitude 0, `length` cells from the coast, walled north and south and at its west end. */
     function plain(length: number): { grid: WaterGrid; row: number } {

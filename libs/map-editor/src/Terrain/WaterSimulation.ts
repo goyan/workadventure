@@ -458,13 +458,10 @@ export class WaterSimulation {
         const raining = this.pourDownpours(grid);
         this.pumpPools(grid, WATER_STEP_MS / 1000);
         const draining = this.takeDrains(grid);
-        const waving =
-            this.waves.length > 0 ||
-            raining ||
-            draining ||
-            displacing ||
-            sea !== undefined ||
-            this.steps < this.stirredUntilStep;
+        // Not the sea of a tsunami: it lasts minutes, over the whole map, and its states are big (about 170 kB at
+        // 8 m on a map of 480 x 320 cells); five a second would be some 850 kB a second for each player, eight times
+        // what a player may be sent (WaterSendLoad). It is told as often as the map asks, within that.
+        const waving = this.waves.length > 0 || raining || draining || displacing || this.steps < this.stirredUntilStep;
         if (this.waves.length > 0) this.advanceWaves(grid);
         const pouring = this.rainRate > 0 || this.objects.some((object) => object.litresPerMinute > 0);
         // Under the low of a hurricane the water stands higher, and follows it as it goes (the inverted barometer):
