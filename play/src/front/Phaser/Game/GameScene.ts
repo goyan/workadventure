@@ -5373,7 +5373,10 @@ export class GameScene extends DirtyScene {
         // The tsunami of the room: its water comes with the water of the room; the panel says where it is.
         this.tsunamiReceiver?.destroy();
         const tsunamiReceiver = new TsunamiReceiver((tsunami) =>
-            tsunamiShownStore.set(tsunami ? { tsunami, at: this.nightManager?.serverDate()?.getTime() } : undefined),
+            tsunamiShownStore.set(
+                // The time of the server, or of this browser while it is not known.
+                tsunami ? { tsunami, at: this.nightManager?.serverDate()?.getTime() ?? Date.now() } : undefined,
+            ),
         );
         this.tsunamiReceiver = tsunamiReceiver;
         this.catastropheSubscription = this.connection?.catastropheMessageStream.subscribe((message) => {

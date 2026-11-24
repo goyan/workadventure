@@ -116,11 +116,12 @@ describe("LocalCatastropheRelay", () => {
     });
 
     it("gives the local ground the tsunami the server tells, once while it is told again, and lets it end", () => {
-        const relay = new LocalCatastropheRelay();
-        const tsunami = { metres: 8, minutes: 3, startedAt: 5000, durationMs: 180_000 };
+        // The clock of this browser is a minute behind that of the server: the sea is set on its own clock.
+        const relay = new LocalCatastropheRelay(() => 1_000_000 - 60_000);
+        const tsunami = { metres: 8, minutes: 3, startedAt: 1_000_000, durationMs: 180_000 };
         const wave = told({ id: 4, kind: CatastropheKind.CATASTROPHE_TSUNAMI, impactInMs: 240_000, tsunami });
         relay.receive(wave, 0);
-        const going = { id: 4, startedAt: 5000, metres: 8, durationMs: 180_000 };
+        const going = { id: 4, startedAt: 1_000_000 - 60_000, metres: 8, durationMs: 180_000 };
         expect(relay.due(10)).toEqual([{ kind: "catastrophes", downpours: [], drains: [], balls: [], tsunami: going }]);
         // Told again a second later: nothing new for the local ground.
         relay.receive({ ...wave, impactInMs: 239_000 }, 1000);

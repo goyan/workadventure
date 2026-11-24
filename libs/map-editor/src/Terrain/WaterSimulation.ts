@@ -467,7 +467,8 @@ export class WaterSimulation {
         // The sea of a tsunami at the east edge: its bore runs at the square root of g times its depth only with
         // as many moves a step as that depth asks for (WaterGrid.flowWithInertia), the most a map may ask while it
         // goes on; fewer while the steps take too long, as for any water (WaterLoad).
-        const sea = tsunamiSea(this.tsunami(), this.now());
+        // Only the water with inertia carries a sea inland: the water that creeps loses it by the edge of the grid.
+        const sea = inertia ? tsunamiSea(this.tsunami(), this.now()) : undefined;
         grid.setSea(sea);
         const mapAsked = inertia ? (settings?.water?.precision ?? DEFAULT_WATER_PACE.precision) : 1;
         const asked = inertia && sea ? this.seaMoves(mapAsked) : mapAsked;

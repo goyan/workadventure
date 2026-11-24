@@ -17,7 +17,8 @@ import { heightOfMetres } from "../Terrain/Scale";
  * goes down evenly. That is the level held at the coast: the front passing in TSUNAMI_FRONT_SECONDS, then a fall
  * back to the rest level over the time chosen. The map is a couple of hundred metres wide, far less than the length
  * of a tsunami (kilometres): it sees its front and its flood, at the scale of reality, heights, speeds and times
- * alike; no similitude.
+ * alike; no similitude. A map whose water creeps (without inertia) has no tsunami: its water would lose the sea
+ * by the edge of the grid at once.
  */
 
 /** The height of the tsunami at the coast, above the rest level of the sea, in metres: what a player chooses. */

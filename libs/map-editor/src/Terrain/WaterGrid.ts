@@ -893,7 +893,8 @@ export class WaterGrid implements WaterView {
     }
 
     /**
-     * The sea beyond the east edge of the grid, or none: its level (pixels of altitude), and how high the water may
+     * The sea beyond the east edge of the grid, or none (read by the water with inertia only: the water that creeps
+     * would lose it again by the edge at once): its level (pixels of altitude), and how high the water may
      * stand over the level it spills at while it is there (`topPx`). The last column of the grid is then the coast:
      * before each move of the water, each of its cells holds the water the sea puts there (none where its ground
      * stands over the sea), and the moves carry it inland, or back to the sea, as they carry any water; what crosses
@@ -1432,13 +1433,6 @@ export class WaterGrid implements WaterView {
         } else {
             // A map that went back to the water that creeps: its water forgets the way it was going.
             if (this.flowEast.length > 0) this.forgetFlows();
-            // The water that creeps: the sea lays its water on the coast once a step, and it creeps inland from there.
-            const laid = this.sea ? this.laySea(this.sea.levelPx) : undefined;
-            if (laid) {
-                if (laid.givenPx > 0) tally.sourcesPx += laid.givenPx;
-                else tally.sinksPx -= laid.givenPx;
-                tally.moved = true;
-            }
             if (this.flow(tally)) tally.moved = true;
         }
         // On a map that goes faster than reality the water also levels over long distances: a lake would otherwise
@@ -2138,7 +2132,11 @@ export class WaterGrid implements WaterView {
         if (sea) deepest = Math.max(deepest, this.seaDepth(sea.levelPx));
         this.lastMoves = 0;
         this.lastCelerity = 1;
-        if (deepest <= DRY_PX) return false;
+        if (deepest <= DRY_PX) {
+            // Nothing stands over the usual ceiling of a dry grid: the one the sea raised is down again.
+            if (!sea) this.seaTop = 0;
+            return false;
+        }
         const moves = Math.min(
             most,
             Math.max(1, Math.ceil((Math.sqrt(GRAVITY * deepest) * step) / WAVE_CELLS_PER_MOVE)),
