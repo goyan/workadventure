@@ -163,10 +163,15 @@ describe("rainDrops", () => {
         const before = rainDrops(EPOCH, view, 1, westWind(0.5));
         const after = rainDrops(EPOCH, view, 1, westWind(0.51));
         // The same drops at the same height, each a few pixels aside at most (the cells looked at may differ).
-        const byHeight = new Map(after.map((drop) => [`${drop.layer}|${drop.y}`, drop.x]));
+        // Several drops may share a height (the hash keeps the digits of a float of the graphics card).
+        const byHeight = new Map<string, number[]>();
+        for (const drop of after) {
+            const key = `${drop.layer}|${drop.y}`;
+            byHeight.set(key, [...(byHeight.get(key) ?? []), drop.x]);
+        }
         for (const drop of before.filter((one) => one.x > 100 && one.x < 700)) {
-            const moved = byHeight.get(`${drop.layer}|${drop.y}`);
-            expect(moved !== undefined && Math.abs(moved - drop.x) < 4).toBe(true);
+            const moved = byHeight.get(`${drop.layer}|${drop.y}`) ?? [];
+            expect(moved.some((x) => Math.abs(x - drop.x) < 4)).toBe(true);
         }
     });
 

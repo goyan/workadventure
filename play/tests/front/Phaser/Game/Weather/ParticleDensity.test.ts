@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-    boostedAlpha,
-    boostedSize,
+    cellCopies,
     COPY_SALT,
-    densityPlan,
-    MAX_COPIES,
+    copyShown,
+    MAX_DRAWN_COPIES,
     RAIN_AMOUNT_BASE,
+    shownCopiesBound,
 } from "../../../../../src/front/Phaser/Game/Weather/ParticleDensity";
 import { snowflakes, flakeMix } from "../../../../../src/front/Phaser/Game/Weather/Snowfall";
 import { rainDrops } from "../../../../../src/front/Phaser/Game/Weather/Rain";
@@ -23,42 +23,59 @@ const camera = perspectiveCamera(view);
 const stillAir = { shift: { x: 0, y: 0 }, wind: { x: 0, y: 0 } };
 const key = (...parts: number[]): string => parts.map((part) => part.toFixed(6)).join("|");
 
-describe("densityPlan", () => {
-    it("draws ×1 as RAIN_AMOUNT_BASE times the rain of the first version, in at most MAX_COPIES copies", () => {
+describe("cellCopies", () => {
+    it("holds RAIN_AMOUNT_BASE times the drops of the first version a cell at ×1, and the amount times more", () => {
         expect(RAIN_AMOUNT_BASE).toBe(5);
-        const plan = densityPlan(1);
-        expect(plan.copies).toBe(Math.min(MAX_COPIES, RAIN_AMOUNT_BASE));
-        expect(plan.copies * plan.boost).toBeCloseTo(RAIN_AMOUNT_BASE, 9);
+        for (const amount of [1, 2, 4, 8, 16, 32]) expect(cellCopies(amount)).toBe(amount * RAIN_AMOUNT_BASE);
     });
 
-    it("draws the amount over the cap as fewer copies, each thicker, whatever the amount", () => {
-        for (const amount of [1, 2, 4, 8, 16, 32]) {
-            const plan = densityPlan(amount);
-            expect(plan.copies).toBeLessThanOrEqual(MAX_COPIES);
-            expect(plan.copies * plan.boost).toBeCloseTo(amount * RAIN_AMOUNT_BASE, 9);
-        }
-        expect(densityPlan(32).boost).toBeGreaterThan(densityPlan(8).boost);
-    });
-
-    it("never draws less than the rain as it is, whatever it is given", () => {
-        for (const amount of [0, -3, Number.NaN, Number.POSITIVE_INFINITY, 0.25]) {
-            expect(densityPlan(amount)).toEqual(densityPlan(1));
+    it("is bounded on the processor, never under one drop a cell", () => {
+        expect(cellCopies(32, MAX_DRAWN_COPIES)).toBe(MAX_DRAWN_COPIES);
+        expect(cellCopies(1 / RAIN_AMOUNT_BASE)).toBe(1);
+        for (const amount of [0, -3, Number.NaN, Number.POSITIVE_INFINITY]) {
+            expect(cellCopies(amount)).toBe(RAIN_AMOUNT_BASE);
         }
     });
 });
 
-describe("boosted drawing", () => {
-    it("keeps a single layer as it is and fills the screen faster with more layers, never past 1", () => {
-        expect(boostedAlpha(0.45, 1)).toBe(0.45);
-        expect(boostedAlpha(0.45, 2)).toBeCloseTo(1 - 0.55 ** 2, 9);
-        expect(boostedAlpha(0.45, 8)).toBeGreaterThan(boostedAlpha(0.45, 2));
-        expect(boostedAlpha(0.9, 1000)).toBeLessThanOrEqual(1);
+describe("copyShown", () => {
+    it("is the rain of the first version with one copy: a drop shows when its hash is under the share", () => {
+        expect(copyShown(0, 1, 0.3, 0.29)).toBe(true);
+        expect(copyShown(0, 1, 0.3, 0.31)).toBe(false);
+        expect(copyShown(0, 1, 1, 0.999)).toBe(true);
+        expect(copyShown(0, 1, 0, 0)).toBe(false);
     });
 
-    it("draws bigger by at most twice", () => {
-        expect(boostedSize(1)).toBe(1);
-        expect(boostedSize(2)).toBeCloseTo(Math.SQRT2, 9);
-        expect(boostedSize(64)).toBe(2);
+    it("shows the first whole copies, the next one by its hash, none after", () => {
+        // 5 copies at a share of 0.5: 2.5 drops a cell.
+        expect(copyShown(0, 5, 0.5, 0.99)).toBe(true);
+        expect(copyShown(1, 5, 0.5, 0.99)).toBe(true);
+        expect(copyShown(2, 5, 0.5, 0.49)).toBe(true);
+        expect(copyShown(2, 5, 0.5, 0.51)).toBe(false);
+        expect(copyShown(3, 5, 0.5, 0)).toBe(false);
+        expect(shownCopiesBound(5, 0.5)).toBe(3);
+    });
+
+    it("only adds drops as the share grows: a drop shown stays shown", () => {
+        for (const copies of [1, 5, 40]) {
+            for (let copy = 0; copy < copies; copy++) {
+                for (const pick of [0, 0.2, 0.5, 0.9]) {
+                    let shown = false;
+                    for (let share = 0; share <= 1.0001; share += 0.01) {
+                        const now = copyShown(copy, copies, share, pick);
+                        if (shown) expect(now).toBe(true);
+                        shown = now;
+                    }
+                }
+            }
+        }
+    });
+
+    it("never shows a copy past the bound the graphics card reads", () => {
+        for (const share of [0, 0.05, 0.33, 0.7, 1, 1.4]) {
+            const bound = shownCopiesBound(160, share);
+            expect(copyShown(bound, 160, share, 0)).toBe(false);
+        }
     });
 });
 

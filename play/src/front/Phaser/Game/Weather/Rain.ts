@@ -1,7 +1,8 @@
 import { hash01 } from "../Autumn/LeafPalette";
 import type { WeatherView } from "./WeatherFrame";
 import { PX_PER_METRE } from "./Snowfall";
-import { COPY_SALT } from "./ParticleDensity";
+import { COPY_SALT, copyShown, shownCopiesBound } from "./ParticleDensity";
+import { fallHash, fallSeconds } from "./FallHash";
 
 /**
  * How hard the rain falls on the screen, 0 to 1, for a rate in mm an hour: light rain (up to 2.5 mm/h), moderate (up to
@@ -107,7 +108,7 @@ export interface RainDrop {
     layer: number;
 }
 
-interface RainLayer {
+export interface RainLayer {
     /** Cells of this layer for one cell of the base grid, each way. */
     split: number;
     /** Map pixels a second. */
@@ -157,8 +158,12 @@ export type RainLocal = (x: number, y: number) => number;
 
 /** The local factor under a rain cloud of this thickness (0 none, 1 its thickest). */
 export function rainUnderCloud(thickness: number, effect = 1): number {
-    return 1 + effect * (0.9 * Math.max(0, Math.min(1, thickness)) - 0.5);
+    return 1 + effect * (UNDER_CLOUD_THICKEST * Math.max(0, Math.min(1, thickness)) - UNDER_CLOUD_GAP);
 }
+
+/** rainUnderCloud: 1 + effect × (UNDER_CLOUD_THICKEST × thickness − UNDER_CLOUD_GAP), for the graphics card too. */
+export const UNDER_CLOUD_THICKEST = 0.9;
+export const UNDER_CLOUD_GAP = 0.5;
 
 /** Up to this many screen pixels a map pixel, the rain is drawn in map pixels: the size it was set at. */
 const RAIN_NATIVE_SCALE = 2.5;
@@ -175,8 +180,6 @@ export function rainFineness(screenScale: number): number {
     return 2 ** Math.ceil(Math.log2(screenScale / RAIN_NATIVE_SCALE));
 }
 
-const FALL_CYCLES = 100_000;
-
 /** Base cells across the view: the drops are as many on the screen at any zoom, never countless zoomed out. */
 const RAIN_CELLS = 500;
 const SMALLEST_CELL = 16;
@@ -187,28 +190,53 @@ export function rainCell(view: WeatherView): number {
     return Math.max(SMALLEST_CELL, 2 ** Math.ceil(Math.log2(Math.max(1, wanted))));
 }
 
+/** The share of the cells of the plane `layer` that show a drop at this intensity (0 to 1). */
+export function rainLayerShown(layer: number, level: number): number {
+    const { from, full } = RAIN_LAYERS[layer];
+    return Math.min(1, (Math.min(1, level) - from) / (full - from));
+}
+
+/** The constants of a plane of drops (0 far, 1 middle, 2 near), for the graphics card. */
+export function rainLayer(layer: number): Readonly<RainLayer> {
+    return RAIN_LAYERS[layer];
+}
+
 /**
- * The drops of a rain of this intensity (0 to 1) over the view, fixed to the map: each cell of a plane lets one drop
- * fall at a time, a long way down along its slant in the wind, the next one starting from another place of the cell.
- * `copies` (the personal density, see densityPlan): that many drops in each cell instead of one, the first being the
- * drop of the usual rain. The same for everyone at the same server time.
+ * The cells of a plane of drops read for the view: the drops of those around it may fall into it. `copies` drops
+ * are looked at in each (copyShown), the first of them the first to show.
  */
-export function rainDrops(
-    epoch: number,
+export interface RainPlane {
+    layer: number;
+    /** Side of its cells, map pixels. */
+    cell: number;
+    firstColumn: number;
+    firstRow: number;
+    columns: number;
+    rows: number;
+    copies: number;
+    /** Where a drop goes for each pixel it falls (rainSlant): across, and down the screen. */
+    across: number;
+    down: number;
+}
+
+/**
+ * The planes of a rain of this intensity (0 to 1) over the view, `copies` drops a cell at most (cellCopies): those
+ * with a drop to show somewhere, under the thickest cloud with a local factor (`local`).
+ */
+export function rainPlanes(
     view: WeatherView,
     intensity: number,
     wind: RainWind,
-    local?: RainLocal,
-    copies = 1,
-): RainDrop[] {
+    local: boolean,
+    copies: number,
+): RainPlane[] {
     const base = rainCell(view);
-    const time = epoch / 1000;
-    const drops: RainDrop[] = [];
+    const planes: RainPlane[] = [];
     RAIN_LAYERS.forEach((layer, index) => {
-        const shownAt = (level: number): number => (Math.min(1, level) - layer.from) / (layer.full - layer.from);
-        const shown = shownAt(intensity);
         // No drop of this plane anywhere, even under the thickest cloud.
-        if ((local ? shownAt(intensity * rainUnderCloud(1)) : shown) <= 0) return;
+        const most = rainLayerShown(index, intensity * (local ? rainUnderCloud(1) : 1));
+        const looked = most > 0 ? shownCopiesBound(copies, most) : 0;
+        if (looked <= 0) return;
         const cell = base / layer.split;
         // For each pixel it falls a drop goes `slant` along with the wind: across, and down or up the screen.
         const slant = rainSlant(wind, index);
@@ -221,34 +249,91 @@ export function rainDrops(
         const lastRow = Math.ceil((view.y + view.height - Math.min(0, reachY)) / cell) + 1;
         const firstColumn = Math.floor((view.x - Math.max(0, reachX)) / cell) - 1;
         const lastColumn = Math.ceil((view.x + view.width - Math.min(0, reachX)) / cell) + 1;
-        // Each copy is another drop in every cell, drawn apart from the others (copy 0 is the drop of the rain as it was).
-        for (let copy = 0; copy < copies; copy++) {
-            const salt = copy * COPY_SALT;
-            for (let row = firstRow; row <= lastRow; row++) {
-                for (let column = firstColumn; column <= lastColumn; column++) {
-                    // Which drops show is drawn apart from where they are: a light rain is not a corner of a heavy one.
-                    const here = local ? shownAt(intensity * local((column + 0.5) * cell, (row + 0.5) * cell)) : shown;
-                    if (hash01(column, row, 11 + index + salt) >= here) continue;
-                    // Each drop a little faster or slower than its plane: no curtain falling as one.
-                    const falls =
-                        hash01(column, row, 3 + index + salt) +
-                        (time * layer.speed * (0.85 + 0.3 * hash01(column, row, 7 + salt))) / layer.fall;
-                    // Which fall of this cell it is (kept small, so it stays exact in the hash), and how far along.
-                    const cycle = Math.floor(falls) % FALL_CYCLES;
-                    const fallen = (falls - Math.floor(falls)) * layer.fall;
-                    drops.push({
-                        x: (column + hash01(column + cycle, row, 5 + index + salt)) * cell + across * fallen,
-                        y: (row + hash01(column, row + cycle, 13 + index + salt)) * cell + down * fallen,
-                        length: layer.length,
-                        dx: across,
-                        dy: down,
-                        alpha: layer.alpha,
-                        layer: index,
-                    });
+        planes.push({
+            layer: index,
+            cell,
+            firstColumn,
+            firstRow,
+            columns: lastColumn - firstColumn + 1,
+            rows: lastRow - firstRow + 1,
+            copies: looked,
+            across,
+            down,
+        });
+    });
+    return planes;
+}
+
+/**
+ * The drop `copy` of a cell of a plane at `seconds` (fallSeconds), `here` the share of its cells showing one
+ * (rainLayerShown, with the local factor at the middle of the cell), `copies` the most a cell holds: undefined when it
+ * does not show. Each cell lets its drops fall one after the other, a long way down along their slant in the wind,
+ * the next one starting from another place of the cell. What PrecipitationLayer works out on the graphics card.
+ */
+export function rainDropAt(
+    plane: RainPlane,
+    column: number,
+    row: number,
+    copy: number,
+    seconds: number,
+    here: number,
+    copies: number,
+): RainDrop | undefined {
+    const index = plane.layer;
+    const layer = RAIN_LAYERS[index];
+    const salt = copy * COPY_SALT;
+    // Which drops show is drawn apart from where they are: a light rain is not a corner of a heavy one.
+    if (!copyShown(copy, copies, here, fallHash(column, row, 11 + index + salt))) return undefined;
+    // Each drop a little faster or slower than its plane: no curtain falling as one.
+    const falls =
+        fallHash(column, row, 3 + index + salt) +
+        (seconds * layer.speed * (0.85 + 0.3 * fallHash(column, row, 7 + salt))) / layer.fall;
+    // Which fall of this cell it is, and how far along.
+    const cycle = Math.floor(falls);
+    const fallen = (falls - cycle) * layer.fall;
+    return {
+        x: (column + fallHash(column + cycle, row, 5 + index + salt)) * plane.cell + plane.across * fallen,
+        y: (row + fallHash(column, row + cycle, 13 + index + salt)) * plane.cell + plane.down * fallen,
+        length: layer.length,
+        dx: plane.across,
+        dy: plane.down,
+        alpha: layer.alpha,
+        layer: index,
+    };
+}
+
+/**
+ * The drops of a rain of this intensity (0 to 1) over the view, fixed to the map (rainPlanes, rainDropAt).
+ * `copies` (cellCopies): the most drops each cell holds, 1 for the rain of the first version. The same for everyone at
+ * the same server time.
+ */
+export function rainDrops(
+    epoch: number,
+    view: WeatherView,
+    intensity: number,
+    wind: RainWind,
+    local?: RainLocal,
+    copies = 1,
+): RainDrop[] {
+    const seconds = fallSeconds(epoch);
+    const drops: RainDrop[] = [];
+    for (const plane of rainPlanes(view, intensity, wind, local !== undefined, copies)) {
+        const shown = rainLayerShown(plane.layer, intensity);
+        for (let copy = 0; copy < plane.copies; copy++) {
+            for (let row = plane.firstRow; row < plane.firstRow + plane.rows; row++) {
+                for (let column = plane.firstColumn; column < plane.firstColumn + plane.columns; column++) {
+                    const here = local
+                        ? rainLayerShown(
+                              plane.layer,
+                              intensity * local((column + 0.5) * plane.cell, (row + 0.5) * plane.cell),
+                          )
+                        : shown;
+                    const drop = rainDropAt(plane, column, row, copy, seconds, here, copies);
+                    if (drop) drops.push(drop);
                 }
             }
         }
-    });
+    }
     return drops;
 }
 
