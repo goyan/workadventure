@@ -158,8 +158,12 @@ export type RainLocal = (x: number, y: number) => number;
 
 /** The local factor under a rain cloud of this thickness (0 none, 1 its thickest). */
 export function rainUnderCloud(thickness: number, effect = 1): number {
-    return 1 + effect * (0.9 * Math.max(0, Math.min(1, thickness)) - 0.5);
+    return 1 + effect * (UNDER_CLOUD_THICKEST * Math.max(0, Math.min(1, thickness)) - UNDER_CLOUD_GAP);
 }
+
+/** rainUnderCloud: 1 + effect × (UNDER_CLOUD_THICKEST × thickness − UNDER_CLOUD_GAP), for the graphics card too. */
+export const UNDER_CLOUD_THICKEST = 0.9;
+export const UNDER_CLOUD_GAP = 0.5;
 
 /** Up to this many screen pixels a map pixel, the rain is drawn in map pixels: the size it was set at. */
 const RAIN_NATIVE_SCALE = 2.5;

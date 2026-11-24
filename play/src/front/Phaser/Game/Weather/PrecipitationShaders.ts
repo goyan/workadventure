@@ -1,6 +1,11 @@
 import { FALL_HASH_GLSL } from "./FallHash";
-import { COPY_SALT } from "./ParticleDensity";
-import { EXPOSURE_S } from "./PerspectiveFall";
+import { COPY_SALT, LOCAL_MOST } from "./ParticleDensity";
+import { EXPOSURE_S, SWIRL_MIN_S, SWIRL_SPAN_S } from "./PerspectiveFall";
+import { UNDER_CLOUD_GAP, UNDER_CLOUD_THICKEST } from "./Rain";
+import { FADE_IN_S, FALL_MIN_S, FALL_SPAN_S, LIE_S } from "./Snowfall";
+
+/** A number of the processor written as a float of GLSL. */
+const glsl = (value: number): string => (Number.isInteger(value) ? value.toFixed(1) : String(value));
 
 /**
  * The shaders of PrecipitationLayer (GLSL ES 1.00). Each vertex shader works out, for its instance (a copy of a cell
@@ -36,7 +41,8 @@ const vec4 HIDDEN = vec4(2.0, 2.0, 2.0, 1.0);
 bool outdoor(vec2 point) {
     if (uMaskArea.z <= 0.0) return true;
     vec2 uv = (point - uMaskArea.xy) / uMaskArea.zw;
-    if (uv.x < 0.0 || uv.y < 0.0 || uv.x >= 1.0 || uv.y >= 1.0) return false;
+    // Beyond the mask (farther than any drop lands from the view): outdoors.
+    if (uv.x < 0.0 || uv.y < 0.0 || uv.x >= 1.0 || uv.y >= 1.0) return true;
     return texture2D(uMask, uv).r > 0.5;
 }
 
@@ -50,7 +56,7 @@ float underCloud(vec2 point) {
     vec2 uv = (point - uCloudArea.xy) / uCloudArea.zw;
     if (uv.x < 0.0 || uv.y < 0.0 || uv.x >= 1.0 || uv.y >= 1.0) return 1.0;
     float thickness = clamp(texture2D(uClouds, uv).r * 255.0 / uCloudLevel.x, 0.0, 1.0);
-    return 1.0 + uCloudLevel.y * (0.9 * thickness - 0.5);
+    return 1.0 + uCloudLevel.y * (${glsl(UNDER_CLOUD_THICKEST)} * thickness - ${glsl(UNDER_CLOUD_GAP)});
 }
 
 vec4 onScreen(vec2 point) {
@@ -58,11 +64,20 @@ vec4 onScreen(vec2 point) {
 }
 
 // The copy of the instance "within" its group, and the column and row of its cell from the first (grid: columns in z).
+// A whole number divided by another, exactly: the division of a GPU may be a little off, set right by one step.
+float quotient(float value, float divisor) {
+    float result = floor(value / divisor);
+    float rest = value - result * divisor;
+    if (rest < 0.0) result -= 1.0;
+    else if (rest >= divisor) result += 1.0;
+    return result;
+}
+
 vec3 cellOf(float within, vec4 grid) {
     float cells = grid.z * grid.w;
-    float copy = floor((within + 0.5) / cells);
+    float copy = quotient(within, cells);
     float cellIndex = within - copy * cells;
-    float row = floor((cellIndex + 0.5) / grid.z);
+    float row = quotient(cellIndex, grid.z);
     return vec3(copy, cellIndex - row * grid.z, row);
 }
 
@@ -81,7 +96,7 @@ function groupOf(slots: number): string {
     vec4 grid = uGrids[group];
     vec3 at = cellOf(inIndex - uStarts[group], grid);
     float copy = at.x;
-    float salt = copy * ${COPY_SALT.toFixed(1)};
+    float salt = copy * ${glsl(COPY_SALT)};
     // The column and the row as the hash reads them, and the corner of the cell.
     float column = grid.x + at.y;
     float row = grid.y + at.z;
@@ -174,7 +189,7 @@ void main() {
     vec4 a = uSizeA[group];
     float size = a.w;
     float pick = fallHash(column, row, 301.0 + size + salt);
-    if (!copyShown(copy, uCopies, a.y * (hasLocal() ? 1.5 : 1.0), pick)) {
+    if (!copyShown(copy, uCopies, a.y * (hasLocal() ? ${glsl(LOCAL_MOST)} : 1.0), pick)) {
         gl_Position = HIDDEN;
         return;
     }
@@ -188,19 +203,20 @@ void main() {
         fallHash(column + cycle, row, 331.0 + size + salt),
         fallHash(column, row + cycle, 341.0 + size + salt)
     ) * a.x;
-    // Where it lands: the air carries it on until then. It shows where it lands outdoors.
-    vec2 land = point + uWind * z / speed;
-    if ((hasLocal() && !copyShown(copy, uCopies, a.y * underCloud(land), pick)) || !outdoor(land)) {
-        gl_Position = HIDDEN;
-        return;
-    }
     vec3 head = project(point, z);
     if (head.x < uCull.x || head.x > uCull.x + uCull.z || head.y < uCull.y || head.y > uCull.y + uCull.w) {
         gl_Position = HIDDEN;
         return;
     }
+    // Where it lands: the air carries it on until then. It shows where it lands outdoors (read only for a drop in
+    // the view: the textures cost the most).
+    vec2 land = point + uWind * z / speed;
+    if ((hasLocal() && !copyShown(copy, uCopies, a.y * underCloud(land), pick)) || !outdoor(land)) {
+        gl_Position = HIDDEN;
+        return;
+    }
     // Its streak: where it was ${EXPOSURE_S} s before, higher and upwind.
-    vec3 tail = project(point - uWind * ${EXPOSURE_S.toFixed(2)}, min(uCamera.z * 0.99, z + speed * ${EXPOSURE_S.toFixed(2)}));
+    vec3 tail = project(point - uWind * ${glsl(EXPOSURE_S)}, min(uCamera.z * 0.99, z + speed * ${glsl(EXPOSURE_S)}));
     vec2 b = uSizeB[group];
     // Near the camera a drop is out of focus: wider and fainter as it grows (by steps, as the processor drew them).
     float width = max(1.0, floor(min(uLook.y, b.x * head.z) * 2.0 + 0.5) / 2.0);
@@ -248,14 +264,14 @@ void main() {
     float fine = uSnow.x;
     float pick = fallHash(column, row, 101.0 + salt);
     // Never shown, even under the thickest cloud (rainUnderCloud: at most 1.4).
-    if (!copyShown(copy, uCopies, a.y * (hasLocal() ? 1.5 : 1.0), pick)) {
+    if (!copyShown(copy, uCopies, a.y * (hasLocal() ? ${glsl(LOCAL_MOST)} : 1.0), pick)) {
         gl_Position = HIDDEN;
         return;
     }
     // One hash for the length of its falls, the moment they start and how it sways.
     float own = fallHash(column, row, 131.0 + salt);
-    float falls = 9.0 + 6.0 * own;
-    float period = falls + 0.8;
+    float falls = ${glsl(FALL_MIN_S)} + ${glsl(FALL_SPAN_S)} * own;
+    float period = falls + ${glsl(LIE_S)};
     float clock = uSeconds + fallHash(column, row, 137.0 + salt) * period;
     float turn = floor(clock / period);
     float age = clock - turn * period;
@@ -282,8 +298,8 @@ void main() {
         gl_Position = HIDDEN;
         return;
     }
-    float fadeIn = uSnow.y > 0.5 ? 1.0 : min(1.0, max(0.0, age / 0.43));
-    float fadeOut = lying ? 1.0 - (age - falls) / 0.8 : 1.0;
+    float fadeIn = uSnow.y > 0.5 ? 1.0 : min(1.0, max(0.0, age / ${glsl(FADE_IN_S)}));
+    float fadeOut = lying ? 1.0 - (age - falls) / ${glsl(LIE_S)} : 1.0;
     flake(place / fine, b.y, 1.0 / fine, b.z * fadeIn * fadeOut);
 }
 `;
@@ -312,7 +328,7 @@ void main() {
     vec2 b = uKindB[group];
     float kind = b.x;
     float pick = fallHash(column, row, 401.0 + kind + salt);
-    if (!copyShown(copy, uCopies, a.y * (hasLocal() ? 1.5 : 1.0), pick)) {
+    if (!copyShown(copy, uCopies, a.y * (hasLocal() ? ${glsl(LOCAL_MOST)} : 1.0), pick)) {
         gl_Position = HIDDEN;
         return;
     }
@@ -325,25 +341,26 @@ void main() {
     float age = (falls - cycle) * fallS;
     float z = top - speed * age;
     // The swirl: round and round, as wide as the flake flutters, its own pace and way round.
-    float turnS = 2.0 + 2.5 * fallHash(column, row, 415.0 + kind + salt);
+    float turnS = ${glsl(SWIRL_MIN_S)} + ${glsl(SWIRL_SPAN_S)} * fallHash(column, row, 415.0 + kind + salt);
     float way = fallHash(column, row, 417.0 + kind + salt) < 0.5 ? 1.0 : -1.0;
     float angle = 2.0 * PI * (way * (age / turnS) + fallHash(column, row, 419.0 + kind + salt));
     vec2 point = corner + vec2(
         fallHash(column + cycle, row, 421.0 + kind + salt),
         fallHash(column, row + cycle, 431.0 + kind + salt)
     ) * a.x;
-    vec2 land = point + uWind * z / speed;
-    if ((hasLocal() && !copyShown(copy, uCopies, a.y * underCloud(land), pick)) || !outdoor(land)) {
-        gl_Position = HIDDEN;
-        return;
-    }
     vec3 seen = project(point + 2.0 * a.w * vec2(cos(angle), sin(angle)), z);
     if (seen.x < uCull.x || seen.x > uCull.x + uCull.z || seen.y < uCull.y || seen.y > uCull.y + uCull.w) {
         gl_Position = HIDDEN;
         return;
     }
+    // Where it lands, read only for a flake in the view (the textures cost the most): outdoors, under its cloud.
+    vec2 land = point + uWind * z / speed;
+    if ((hasLocal() && !copyShown(copy, uCopies, a.y * underCloud(land), pick)) || !outdoor(land)) {
+        gl_Position = HIDDEN;
+        return;
+    }
     // The shape of the flake as on the ground, its pixels as many times bigger as the flake is near.
-    float fadeIn = uLook.z > 0.5 ? 1.0 : min(1.0, max(0.0, age / 0.43));
+    float fadeIn = uLook.z > 0.5 ? 1.0 : min(1.0, max(0.0, age / ${glsl(FADE_IN_S)}));
     flake(seen.xy, b.y, uLook.x * min(uLook.y, seen.z), fadeIn * min(1.0, sqrt(3.0 / seen.z)));
 }
 `;

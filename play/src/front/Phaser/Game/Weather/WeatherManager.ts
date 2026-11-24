@@ -62,8 +62,8 @@ import {
 import type { RainLocal, RainWind } from "./Rain";
 import { cellCopies, MAX_DRAWN_COPIES } from "./ParticleDensity";
 import { fallSeconds } from "./FallHash";
-import { PrecipitationLayer } from "./PrecipitationLayer";
-import type { CloudLevels } from "./PrecipitationLayer";
+import { offMapRects, PrecipitationLayer } from "./PrecipitationLayer";
+import type { CloudLevels, OutdoorSource } from "./PrecipitationLayer";
 import { mapGroundWetness, PUDDLE_ROW, puddleRows, puddlesIn } from "./Puddles";
 import {
     cloudAlpha,
@@ -443,8 +443,8 @@ export class WeatherManager {
         }
         const grid = this.options.outdoorGrid?.();
         // Veils cover the outdoor runs of the view only, so rooms stay as they are.
-        const cover = grid ? this.options.raisedCover?.() : undefined;
-        const veil = grid ? this.veilOver(view, grid, cover) : [view];
+        const raisedCover = grid ? this.options.raisedCover?.() : undefined;
+        const veil = grid ? this.veilOver(view, grid, raisedCover) : [view];
         if (veil.length === 0) {
             // Nothing outside on the screen: nothing to draw, and no reason to draw the map again.
             if (this.visible) {
@@ -462,7 +462,7 @@ export class WeatherManager {
         }
         this.visible = true;
         const isOutdoor = grid
-            ? (x: number, y: number): boolean => grid.isOutdoorAt(x, y) && cover?.has(x, y) !== true
+            ? (x: number, y: number): boolean => grid.isOutdoorAt(x, y) && raisedCover?.has(x, y) !== true
             : undefined;
         this.graphics.clear().setVisible(true);
         this.particles?.hide();
@@ -590,7 +590,7 @@ export class WeatherManager {
             }
             this.particles?.begin(
                 view,
-                grid ? veil : undefined,
+                grid ? outdoorSource(grid, raisedCover) : undefined,
                 underClouds ? this.cloudLevels(canvas, size) : undefined,
             );
             // The drops go with the wind near the ground, as the flakes do: the same way in a sleet.
@@ -1435,6 +1435,23 @@ export class WeatherManager {
         this.cloudLayer?.destroy();
         this.setRainbowSpot(undefined);
     }
+}
+
+/**
+ * The outdoors for the graphics card: those of isOutdoor (the outdoor cells without what a raised floor covers), and
+ * what is off the map, outdoors as OutdoorGrid.isOutdoorCell says.
+ */
+function outdoorSource(grid: OutdoorGrid, cover: RaisedCover | undefined): OutdoorSource {
+    return {
+        owners: [grid, cover],
+        rectsIn: (area) => {
+            const runs = grid.outdoorRunsInView(area);
+            return [
+                ...(cover ? cover.uncovered(runs) : runs),
+                ...offMapRects(area, grid.cols * grid.cellSize, grid.rows * grid.cellSize),
+            ];
+        },
+    };
 }
 
 /** The colour of the sky the water reflects: blue by fine weather, grey under a covered or rainy sky. */

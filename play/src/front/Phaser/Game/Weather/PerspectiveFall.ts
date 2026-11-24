@@ -1,4 +1,4 @@
-import { COPY_SALT, copyShown, shownCopiesBound } from "./ParticleDensity";
+import { COPY_SALT, copyShown, LOCAL_MOST, shownCopiesBound } from "./ParticleDensity";
 import { fallHash, fallSeconds } from "./FallHash";
 import { RAIN_FALL_SPEEDS, rainCell, rainDropsExpected, rainRateOfLevel } from "./Rain";
 import type { RainLocal, RainWind } from "./Rain";
@@ -156,9 +156,6 @@ export function perspectiveDropPlanes(
     return planes;
 }
 
-/** The local factor of the rain is never over this (rainUnderCloud, at most 1.4): the cells over it are left out. */
-export const LOCAL_MOST = 1.5;
-
 /**
  * The drop `copy` of a cell of a plane of perspectiveDropPlanes at `seconds` (fallSeconds), seen from the camera:
  * undefined when it does not show (`local` the local factor where it lands) or is out of the view. It falls at its
@@ -250,8 +247,8 @@ export interface PerspectiveFlake {
 }
 
 /** A flake goes round its swirl (the air it falls through turning) in this many seconds, its own between them. */
-const SWIRL_MIN_S = 2;
-const SWIRL_SPAN_S = 2.5;
+export const SWIRL_MIN_S = 2;
+export const SWIRL_SPAN_S = 2.5;
 
 /**
  * The kinds of flakes of a snow over the view, seen from the camera, the air moved by `shift` (map pixels): of the

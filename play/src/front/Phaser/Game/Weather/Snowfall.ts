@@ -1,6 +1,6 @@
 import { wetBulbTemperature } from "@workadventure/map-editor";
 import type { PrecipitationAir } from "@workadventure/map-editor";
-import { COPY_SALT, copyShown, shownCopiesBound } from "./ParticleDensity";
+import { COPY_SALT, copyShown, LOCAL_MOST, shownCopiesBound } from "./ParticleDensity";
 import { fallHash, fallSeconds } from "./FallHash";
 import type { WeatherView } from "./WeatherFrame";
 
@@ -203,9 +203,9 @@ const SNOW_PLANES: readonly SnowPlane[] = [
 ];
 
 /** A flake falls this long (seconds, its own between them), so from 9 to 15 m at 1 m/s, then lies a moment. */
-const FALL_MIN_S = 9;
-const FALL_SPAN_S = 6;
-const LIE_S = 0.8;
+export const FALL_MIN_S = 9;
+export const FALL_SPAN_S = 6;
+export const LIE_S = 0.8;
 const SMALLEST_CELL = 8;
 
 /**
@@ -238,9 +238,6 @@ export interface SnowPlaneCells {
     speedX: number;
     speedY: number;
 }
-
-/** The local factor of the snow is never over this (rainUnderCloud, at most 1.4): the cells over it are left out. */
-const LOCAL_MOST = 1.5;
 
 /**
  * The kinds and planes of a snow over the view, `copies` flakes a cell at most (cellCopies). Each kind and plane is a
@@ -440,7 +437,7 @@ export function fallingFlake(flake: FallingFlake): { x: number; y: number } {
 }
 
 /** A flake fades in over this long as it comes out of the sky (seconds): that of the downpour, a sixth of its fall. */
-const FADE_IN_S = 0.43;
+export const FADE_IN_S = 0.43;
 
 /** How much of a flake shows this long after it appeared (seconds). */
 export function flakeFadeIn(seconds: number): number {

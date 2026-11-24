@@ -36,6 +36,12 @@ export function copyShown(copy: number, copies: number, share: number, pick: num
     return copy < whole || (copy === whole && pick < wanted - whole);
 }
 
+/**
+ * The local factor of the rain and the snow under a cloud is never over this (rainUnderCloud: at most 1.4): the drops
+ * and flakes of a cell that would not show even there are not looked at.
+ */
+export const LOCAL_MOST = 1.5;
+
 /** The copies of each cell worth looking at when a cell never shows more than `share` of one drop (copyShown). */
 export function shownCopiesBound(copies: number, share: number): number {
     return Math.min(copies, Math.ceil(copies * Math.max(0, Math.min(1, share))));

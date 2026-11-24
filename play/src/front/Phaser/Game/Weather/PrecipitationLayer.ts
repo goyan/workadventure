@@ -31,8 +31,60 @@ import {
  * the programs, buffers and textures here are its own.
  */
 
-/** The outdoors (map pixel rectangles); undefined: everything is outdoors. */
-export type OutdoorRects = readonly WeatherView[] | undefined;
+/**
+ * Where the outdoors are, read for an area of the map again only when what they are read from changes (the outdoor
+ * grid, the raised cover). Undefined: everything is outdoors.
+ */
+export interface OutdoorSource {
+    /** What the outdoors are read from: the same objects, the same outdoors. */
+    owners: readonly unknown[];
+    /** The outdoor rectangles over an area, map pixels, what is off the map included (outdoors, as isOutdoorCell). */
+    rectsIn(area: WeatherView): readonly WeatherView[];
+}
+
+/** The parts of an area off a map of this size (map pixels): outdoors, as OutdoorGrid.isOutdoorCell says. */
+export function offMapRects(area: WeatherView, mapWidth: number, mapHeight: number): WeatherView[] {
+    const right = area.x + area.width;
+    const bottom = area.y + area.height;
+    const top = Math.max(area.y, 0);
+    const low = Math.min(bottom, mapHeight);
+    const rects: WeatherView[] = [];
+    if (area.y < 0) rects.push({ x: area.x, y: area.y, width: area.width, height: Math.min(bottom, 0) - area.y });
+    if (bottom > mapHeight) {
+        const from = Math.max(area.y, mapHeight);
+        rects.push({ x: area.x, y: from, width: area.width, height: bottom - from });
+    }
+    if (low > top && area.x < 0)
+        rects.push({ x: area.x, y: top, width: Math.min(right, 0) - area.x, height: low - top });
+    if (low > top && right > mapWidth) {
+        const from = Math.max(area.x, mapWidth);
+        rects.push({ x: from, y: top, width: right - from, height: low - top });
+    }
+    return rects.filter((rect) => rect.width > 0 && rect.height > 0);
+}
+
+/**
+ * The outdoor mask of an area: one texel every `texel` map pixels, 255 where its centre is in one of the rectangles
+ * (they lie on whole cells of the map, 8 px or more), 0 elsewhere.
+ */
+export function outdoorTexels(
+    area: WeatherView,
+    rects: readonly WeatherView[],
+    texel: number,
+): { width: number; height: number; texels: Uint8Array } {
+    const width = Math.ceil(area.width / texel);
+    const height = Math.ceil(area.height / texel);
+    const texels = new Uint8Array(width * height);
+    for (const rect of rects) {
+        const left = Math.max(0, Math.round((rect.x - area.x) / texel));
+        const right = Math.min(width, Math.round((rect.x + rect.width - area.x) / texel));
+        const top = Math.max(0, Math.round((rect.y - area.y) / texel));
+        const bottom = Math.min(height, Math.round((rect.y + rect.height - area.y) / texel));
+        if (right <= left) continue;
+        for (let row = top; row < bottom; row++) texels.fill(255, row * width + left, row * width + right);
+    }
+    return { width, height, texels };
+}
 
 /** The clouds the rain falls from (fieldLevels of the cloud patches) and how much they thicken it (rainUnderCloud). */
 export interface CloudLevels {
@@ -76,10 +128,18 @@ export function hashedCell(value: number): number {
 }
 
 const UNUSED_START = 1e9;
-/** Map pixels a texel of the outdoor mask, and how far it reaches beyond the view (redrawn when the view leaves it). */
+/**
+ * Map pixels a texel of the outdoor mask at the finest (coarser when its area would need too large a texture), and how
+ * far it reaches beyond the view and where the drops land (read again when they leave it).
+ */
 const MASK_TEXEL = 4;
 const MASK_MARGIN = 512;
-const MASK_STEP = 64;
+const MASK_MOST_TEXELS = 2048;
+/**
+ * The farthest a drop or a flake in perspective lands from where it is seen (the wind over its fall, map pixels): the
+ * mask reaches that far, and counts what lies beyond as outdoors.
+ */
+const MOST_REACH = 4096;
 const FLAKE_ATLAS_WIDTH = 32;
 const FLAKE_ATLAS_HEIGHT = 8;
 
@@ -106,11 +166,21 @@ export interface FlakeTones {
     alpha: number;
 }
 
+/** A program and where its uniforms and attributes are, read once. */
+interface LinkedProgram {
+    program: WebGLProgram;
+    uniforms: { name: string; location: WebGLUniformLocation | null; type: number }[];
+    projection: WebGLUniformLocation | null;
+    view: WebGLUniformLocation | null;
+    corner: number;
+    index: number;
+}
+
 interface GlResources {
     gl: WebGLRenderingContext;
     instancing: ANGLE_instanced_arrays;
     /** null: it does not compile here, not tried again. */
-    programs: Partial<Record<ProgramName, WebGLProgram | null>>;
+    programs: Partial<Record<ProgramName, LinkedProgram | null>>;
     corners: WebGLBuffer;
     indices: WebGLBuffer;
     indexCapacity: number;
@@ -146,10 +216,14 @@ export class PrecipitationLayer {
     private readonly object: PrecipitationExtern;
     private draws: Draw[] = [];
     private resources: GlResources | undefined;
-    /** The outdoor mask on the processor: texels of MASK_TEXEL map pixels over its area, red outdoors. */
+    /** The outdoor mask on the processor: one byte a texel over its area, 255 outdoors. */
     private mask: { area: WeatherView; width: number; height: number; texels: Uint8Array } | undefined;
-    private maskOf: OutdoorRects | null = null;
+    private maskOwners: readonly unknown[] | undefined;
     private maskVersion = 0;
+    private view: WeatherView | undefined;
+    private outdoors: OutdoorSource | undefined;
+    /** How far from where they are seen the drops of this drawing may land (perspective), map pixels. */
+    private reach = 0;
     private clouds: CloudLevels | undefined;
     private cloudsOf: ArrayLike<number> | undefined;
     private cloudsVersion = 0;
@@ -164,6 +238,8 @@ export class PrecipitationLayer {
         scene: Phaser.Scene,
         private readonly renderer: Phaser.Renderer.WebGL.WebGLRenderer,
         depth: number,
+        /** The largest side of the outdoor mask, texels. */
+        private readonly largestMask: number,
     ) {
         this.object = new PrecipitationExtern(scene, (context, matrix) => this.render(context, matrix));
         this.object.setDepth(depth).setVisible(false);
@@ -181,16 +257,20 @@ export class PrecipitationLayer {
         const gl = renderer.gl;
         if (!gl.getExtension("ANGLE_instanced_arrays")) return undefined;
         if (Number(gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS)) < 2) return undefined;
-        return new PrecipitationLayer(scene, renderer, depth);
+        const largest = Math.min(MASK_MOST_TEXELS, Number(gl.getParameter(gl.MAX_TEXTURE_SIZE)) || 0);
+        return new PrecipitationLayer(scene, renderer, depth, largest);
     }
 
     /**
-     * Starts a drawing of the weather: what falls is added after it (rain...), and shown by end(). `outdoors` and
-     * `clouds` are read again only when they change (the weather keeps the same list and levels while they do not).
+     * Starts a drawing of the weather over the view: what falls is added after it (rain...), and shown by end().
+     * `outdoors` and `clouds` are read again only when they change (the weather keeps the same levels while they do
+     * not).
      */
-    public begin(view: WeatherView, outdoors: OutdoorRects, clouds: CloudLevels | undefined): void {
+    public begin(view: WeatherView, outdoors: OutdoorSource | undefined, clouds: CloudLevels | undefined): void {
         this.draws = [];
-        this.updateMask(view, outdoors);
+        this.view = view;
+        this.outdoors = outdoors;
+        this.reach = 0;
         this.updateClouds(clouds);
     }
 
@@ -269,6 +349,8 @@ export class PrecipitationLayer {
         const { starts, count } = instanceStarts(planes, 3);
         if (count === 0) return;
         const { camera, air, view } = options;
+        const slowest = Math.min(...planes.map((plane) => options.speeds[plane.kind])) * 0.9;
+        this.reachFor(air.wind, TOP_SHARE * camera.height, slowest);
         this.draws.push({
             program: "rainPerspective",
             count,
@@ -373,6 +455,8 @@ export class PrecipitationLayer {
         const { starts, count } = instanceStarts(planes, 3);
         if (count === 0) return;
         const { camera, air, view } = options;
+        const slowest = Math.min(...planes.map((plane) => FLAKE_KINDS[plane.kind].fallSpeed)) * PX_PER_METRE * 0.85;
+        this.reachFor(air.velocity, TOP_SHARE * camera.height, slowest);
         this.draws.push({
             program: "snowPerspective",
             count,
@@ -410,6 +494,8 @@ export class PrecipitationLayer {
 
     /** Shows what was added since begin(); nothing to draw hides the layer (no cost at all). */
     public end(): void {
+        const view = this.view;
+        if (view && this.draws.length > 0) this.updateMask(view, this.outdoors, this.reach);
         this.object.setVisible(this.draws.length > 0);
     }
 
@@ -435,7 +521,7 @@ export class PrecipitationLayer {
         this.resources = undefined;
         if (!resources || resources.gl.isContextLost()) return;
         const { gl } = resources;
-        for (const program of Object.values(resources.programs)) if (program) gl.deleteProgram(program);
+        for (const linked of Object.values(resources.programs)) if (linked) gl.deleteProgram(linked.program);
         gl.deleteBuffer(resources.corners);
         gl.deleteBuffer(resources.indices);
         gl.deleteTexture(resources.mask);
@@ -452,43 +538,51 @@ export class PrecipitationLayer {
         };
     }
 
-    private updateMask(view: WeatherView, outdoors: OutdoorRects): void {
-        const current = this.mask;
-        const inside =
-            current !== undefined &&
-            view.x >= current.area.x &&
-            view.y >= current.area.y &&
-            view.x + view.width <= current.area.x + current.area.width &&
-            view.y + view.height <= current.area.y + current.area.height;
-        if (this.maskOf === outdoors && (outdoors === undefined || inside)) return;
-        this.maskOf = outdoors;
-        this.maskVersion++;
+    /** The farthest a drop falling from `top` at `slowest` (map px a second) or faster lands in this wind. */
+    private reachFor(wind: RainWind, top: number, slowest: number): void {
+        const reach = slowest > 0 ? (Math.hypot(wind.x, wind.y) * top) / slowest : MOST_REACH;
+        this.reach = Math.max(this.reach, Math.min(MOST_REACH, Number.isFinite(reach) ? reach : MOST_REACH));
+    }
+
+    /**
+     * The outdoor mask over the view and where its drops land, MASK_MARGIN around: read again when its owners change
+     * or the view leaves it (outdoorTexels). Beyond it the shaders count everything as outdoors.
+     */
+    private updateMask(view: WeatherView, outdoors: OutdoorSource | undefined, reach: number): void {
         if (!outdoors) {
+            if (this.mask) this.maskVersion++;
             this.mask = undefined;
+            this.maskOwners = undefined;
             return;
         }
-        const x = Math.floor((view.x - MASK_MARGIN) / MASK_MARGIN) * MASK_MARGIN;
-        const y = Math.floor((view.y - MASK_MARGIN) / MASK_MARGIN) * MASK_MARGIN;
-        const columns = Math.ceil((view.x + view.width + MASK_MARGIN - x) / MASK_TEXEL);
-        const rows = Math.ceil((view.y + view.height + MASK_MARGIN - y) / MASK_TEXEL);
-        const width = Math.ceil(columns / MASK_STEP) * MASK_STEP;
-        const height = Math.ceil(rows / MASK_STEP) * MASK_STEP;
-        // Kept while it is as large: a zoom does not make a new one at every step.
-        const texels =
-            current && current.width === width && current.height === height
-                ? current.texels.fill(0)
-                : new Uint8Array(width * height * 4);
-        for (const rect of outdoors) {
-            // The rectangles are on whole cells of the map (8 px or more): a texel is outdoors when its centre is.
-            const left = Math.max(0, Math.round((rect.x - x) / MASK_TEXEL));
-            const right = Math.min(width, Math.round((rect.x + rect.width - x) / MASK_TEXEL));
-            const top = Math.max(0, Math.round((rect.y - y) / MASK_TEXEL));
-            const bottom = Math.min(height, Math.round((rect.y + rect.height - y) / MASK_TEXEL));
-            for (let row = top; row < bottom; row++) {
-                for (let column = left; column < right; column++) texels[(row * width + column) * 4] = 255;
-            }
-        }
-        this.mask = { area: { x, y, width: width * MASK_TEXEL, height: height * MASK_TEXEL }, width, height, texels };
+        const current = this.mask;
+        const needed = MASK_MARGIN / 2 + reach;
+        const inside =
+            current !== undefined &&
+            view.x - needed >= current.area.x &&
+            view.y - needed >= current.area.y &&
+            view.x + view.width + needed <= current.area.x + current.area.width &&
+            view.y + view.height + needed <= current.area.y + current.area.height;
+        const owners = this.maskOwners;
+        const same =
+            owners !== undefined &&
+            owners.length === outdoors.owners.length &&
+            owners.every((owner, index) => owner === outdoors.owners[index]);
+        if (inside && same) return;
+        // A quarter of the reach more: a scroll in a strong wind does not read the outdoors again every few steps.
+        const margin = MASK_MARGIN + reach * 1.25;
+        const x = Math.floor((view.x - margin) / MASK_MARGIN) * MASK_MARGIN;
+        const y = Math.floor((view.y - margin) / MASK_MARGIN) * MASK_MARGIN;
+        const width = Math.ceil((view.x + view.width + margin) / MASK_MARGIN) * MASK_MARGIN - x;
+        const height = Math.ceil((view.y + view.height + margin) / MASK_MARGIN) * MASK_MARGIN - y;
+        // Coarser texels where a large area would need a texture larger than the graphics card takes.
+        let texel = MASK_TEXEL;
+        while (Math.max(width, height) / texel > this.largestMask) texel *= 2;
+        const area = { x, y, width, height };
+        const mask = outdoorTexels(area, outdoors.rectsIn(area), texel);
+        this.mask = { area: { x, y, width: mask.width * texel, height: mask.height * texel }, ...mask };
+        this.maskOwners = [...outdoors.owners];
+        this.maskVersion++;
     }
 
     private updateClouds(clouds: CloudLevels | undefined): void {
@@ -502,9 +596,9 @@ export class PrecipitationLayer {
         const texels =
             current && current.width === width && current.height === height
                 ? current.texels
-                : new Uint8Array(width * height * 4);
+                : new Uint8Array(width * height);
         for (let index = 0; index < width * height; index++) {
-            texels[index * 4] = Math.max(0, Math.min(255, Math.round(clouds.levels[index] ?? 0)));
+            texels[index] = Math.max(0, Math.min(255, Math.round(clouds.levels[index] ?? 0)));
         }
         this.cloudTexels = { width, height, texels };
     }
@@ -542,15 +636,14 @@ export class PrecipitationLayer {
         gl.activeTexture(gl.TEXTURE2);
         gl.bindTexture(gl.TEXTURE_2D, resources.shapes);
         for (const draw of this.draws) {
-            const program = this.program(resources, draw.program);
-            if (!program) continue;
+            const linked = this.program(resources, draw.program);
+            if (!linked) continue;
             this.ensureIndices(resources, draw.count);
-            gl.useProgram(program);
-            setUniforms(gl, program, { ...shared, ...draw.uniforms });
-            gl.uniformMatrix4fv(gl.getUniformLocation(program, "uProjection"), false, projection);
-            gl.uniformMatrix3fv(gl.getUniformLocation(program, "uView"), false, view);
-            const corner = gl.getAttribLocation(program, "inVertex");
-            const index = gl.getAttribLocation(program, "inIndex");
+            gl.useProgram(linked.program);
+            setUniforms(gl, linked, { ...shared, ...draw.uniforms });
+            gl.uniformMatrix4fv(linked.projection, false, projection);
+            gl.uniformMatrix3fv(linked.view, false, view);
+            const { corner, index } = linked;
             gl.bindBuffer(gl.ARRAY_BUFFER, resources.corners);
             gl.enableVertexAttribArray(corner);
             gl.vertexAttribPointer(corner, 1, gl.FLOAT, false, 0, 0);
@@ -624,16 +717,16 @@ export class PrecipitationLayer {
         const mask = this.mask;
         if (resources.maskVersion !== this.maskVersion) {
             resources.maskVersion = this.maskVersion;
-            if (mask) upload(gl, resources.mask, mask.width, mask.height, mask.texels);
+            if (mask) upload(gl, resources.mask, mask.width, mask.height, mask.texels, true);
         }
         const clouds = this.cloudTexels;
         if (resources.cloudsVersion !== this.cloudsVersion) {
             resources.cloudsVersion = this.cloudsVersion;
-            if (clouds) upload(gl, resources.clouds, clouds.width, clouds.height, clouds.texels);
+            if (clouds) upload(gl, resources.clouds, clouds.width, clouds.height, clouds.texels, true);
         }
     }
 
-    private program(resources: GlResources, name: ProgramName): WebGLProgram | undefined {
+    private program(resources: GlResources, name: ProgramName): LinkedProgram | undefined {
         const kept = resources.programs[name];
         if (kept !== undefined) return kept ?? undefined;
         // A lost context compiles nothing: tried again once it is back (onRestore).
@@ -650,8 +743,8 @@ export class PrecipitationLayer {
         }
         gl.attachShader(program, vertex);
         gl.attachShader(program, fragment);
-        // The index of the instance on the first attribute: some drivers want an array always bound to it.
-        gl.bindAttribLocation(program, 0, "inIndex");
+        // The corner of the quad on the first attribute: some drivers want an array, read for each vertex, there.
+        gl.bindAttribLocation(program, 0, "inVertex");
         gl.linkProgram(program);
         gl.deleteShader(vertex);
         gl.deleteShader(fragment);
@@ -666,8 +759,27 @@ export class PrecipitationLayer {
             this.broken = true;
             return undefined;
         }
-        resources.programs[name] = program;
-        return program;
+        const uniforms: LinkedProgram["uniforms"] = [];
+        const count = Number(gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS));
+        for (let index = 0; index < count; index++) {
+            const info = gl.getActiveUniform(program, index);
+            if (!info) continue;
+            uniforms.push({
+                name: info.name.replace(/\[0\]$/, ""),
+                location: gl.getUniformLocation(program, info.name),
+                type: info.type,
+            });
+        }
+        const linked: LinkedProgram = {
+            program,
+            uniforms,
+            projection: gl.getUniformLocation(program, "uProjection"),
+            view: gl.getUniformLocation(program, "uView"),
+            corner: gl.getAttribLocation(program, "inVertex"),
+            index: gl.getAttribLocation(program, "inIndex"),
+        };
+        resources.programs[name] = linked;
+        return linked;
     }
 }
 
@@ -705,11 +817,24 @@ function flakeAtlas(): Uint8Array {
     return texels;
 }
 
-function upload(gl: WebGLRenderingContext, texture: WebGLTexture, width: number, height: number, texels: Uint8Array) {
+/** Sends texels to a texture: four bytes each, or one (`luminance`: the outdoor mask, the levels of the clouds). */
+function upload(
+    gl: WebGLRenderingContext,
+    texture: WebGLTexture,
+    width: number,
+    height: number,
+    texels: Uint8Array,
+    luminance = false,
+): void {
+    const format = luminance ? gl.LUMINANCE : gl.RGBA;
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, texels);
+    // Rows of one byte a texel are not aligned on four: read as they are, then the alignment Phaser does not track
+    // put back.
+    if (luminance) gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, format, width, height, 0, format, gl.UNSIGNED_BYTE, texels);
+    if (luminance) gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
 }
 
 function compile(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | undefined {
@@ -726,16 +851,12 @@ function compile(gl: WebGLRenderingContext, type: number, source: string): WebGL
 }
 
 /** Sets the uniforms of a program by name: a number, or the values of a vector or an array (its type says which). */
-function setUniforms(gl: WebGLRenderingContext, program: WebGLProgram, uniforms: Uniforms): void {
-    const count = Number(gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS));
-    for (let index = 0; index < count; index++) {
-        const info = gl.getActiveUniform(program, index);
-        if (!info) continue;
-        const value = uniforms[info.name.replace(/\[0\]$/, "")];
+function setUniforms(gl: WebGLRenderingContext, linked: LinkedProgram, uniforms: Uniforms): void {
+    for (const { name, location, type } of linked.uniforms) {
+        const value = uniforms[name];
         if (value === undefined) continue;
-        const location = gl.getUniformLocation(program, info.name);
         const values = Float32Array.from(typeof value === "number" ? [value] : value);
-        switch (info.type) {
+        switch (type) {
             case gl.SAMPLER_2D:
             case gl.INT:
                 gl.uniform1i(location, values[0]);
