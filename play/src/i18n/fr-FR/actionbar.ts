@@ -536,6 +536,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         tsunamiHelp:
             "La mer arrive par le bord est de la carte : elle y monte d'un coup à la hauteur choisie (le mascaret d'un tsunami qui a déferlé avant la côte), puis redescend pendant la durée choisie. L'eau de la carte fait le reste, à l'échelle réelle : le front d'inondation, la vague dans les lacs, les remontées sur les pentes, puis le reflux vers la mer. Il remplit les creux de la carte, qui restent pleins. Tout joueur peut l'arrêter.",
         tsunamiGoing: "Tsunami de {metres} m : {phase}, la mer à {level} m à la côte, encore {left}",
+        tsunamiCelerity: "célérité limitée par le serveur : {percent} % de la réelle",
         tsunamiPhase: {
             front: "le mascaret arrive",
             ebb: "la mer redescend",

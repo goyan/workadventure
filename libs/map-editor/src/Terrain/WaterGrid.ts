@@ -623,6 +623,12 @@ export class WaterGrid implements WaterView {
     /** The sea at the east edge (setSea), and the ceiling of the water it raised, which comes down after it. */
     private sea: { levelPx: number; topPx: number } | undefined;
     private seaTop = 0;
+    /**
+     * The moves the water with inertia made at its last step, and the share of the real speed of its fastest waves
+     * they bore (1: all of it): fewer moves than the depth asks for bear the waves of `pulled` pixels of water only.
+     */
+    private lastMoves = 0;
+    private lastCelerity = 1;
     private next: Float32Array;
     /**
      * The balls standing in the water (setBalls), and what they changed. A ball is a solid: where it touches the
@@ -903,6 +909,27 @@ export class WaterGrid implements WaterView {
     }
 
     /** Whether the sea stands at the east edge (setSea). */
+    /** The moves the water with inertia made at its last step: 0 when it made none. */
+    public movesMade(): number {
+        return this.lastMoves;
+    }
+
+    /**
+     * The share of the real speed of its fastest waves (those of its deepest water) the last step of the water with
+     * inertia bore: under 1 when it made fewer moves than that depth asks for (`pulled`), as on a server that eased.
+     */
+    public celerityShare(): number {
+        return this.lastCelerity;
+    }
+
+    /**
+     * The highest the water may stand over the level it spills at, as the last step of the water with inertia had it
+     * (pixels): the usual ceiling, or the higher one of the sea of a tsunami while the water it brought stands over it.
+     */
+    public ceilingPx(): number {
+        return Math.max(this.highest, MAX_WATER_MAX_SURFACE, this.seaTop);
+    }
+
     public hasSea(): boolean {
         return this.sea !== undefined;
     }
@@ -2109,6 +2136,8 @@ export class WaterGrid implements WaterView {
         for (let index = 0; index < size; index++) if (this.depth[index] > deepest) deepest = this.depth[index];
         // The water the sea will lay on the coast counts: its bore needs the moves its depth asks for.
         if (sea) deepest = Math.max(deepest, this.seaDepth(sea.levelPx));
+        this.lastMoves = 0;
+        this.lastCelerity = 1;
         if (deepest <= DRY_PX) return false;
         const moves = Math.min(
             most,
@@ -2135,6 +2164,8 @@ export class WaterGrid implements WaterView {
         const pull = dt * GRAVITY;
         // The deepest water whose waves these moves bear: deeper, the slope pulls as on that depth.
         const pulled = (WAVE_CELLS_PER_MOVE / dt) ** 2 / GRAVITY;
+        this.lastMoves = moves;
+        this.lastCelerity = deepest > pulled ? Math.sqrt(pulled / deepest) : 1;
         // What a cell at the edge of the grid loses by each of its open sides, as when the water creeps.
         const edgeShare = FLOW_SHARE / moves;
         // The highest the water may stand: a wave is not cut at the level the map sets for its floods.

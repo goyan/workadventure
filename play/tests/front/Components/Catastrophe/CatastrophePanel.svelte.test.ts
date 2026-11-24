@@ -83,6 +83,8 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 tsunamiHelp: label("The sea comes in by the east edge of the map"),
                 tsunamiGoing: ({ metres, phase, level, left }: Record<string, string | number>) =>
                     `${metres} m tsunami: ${phase}, the sea at ${level} m at the coast, ${left} left`,
+                tsunamiCelerity: ({ percent }: { percent: number }) =>
+                    `speed limited by the server: ${percent} % of the real one`,
                 tsunamiPhase: {
                     front: label("the bore comes in"),
                     ebb: label("the sea goes down"),
@@ -131,6 +133,19 @@ import {
     disarmCatastrophe,
 } from "../../../../src/front/Stores/CatastropheStore";
 import { mapEditorModeStore } from "../../../../src/front/Stores/MapEditorStore";
+import { terrainWaterStatsStore } from "../../../../src/front/Stores/TerrainEditorStore";
+
+const STATS = {
+    rain: 0,
+    sources: 0,
+    sinks: 0,
+    evaporation: 0,
+    absorption: 0,
+    lost: 0,
+    stock: 0,
+    wetArea: 0,
+    rainRate: 0,
+};
 
 let target: HTMLElement;
 let component: ReturnType<typeof mount> | undefined;
@@ -418,6 +433,14 @@ describe("CatastrophePanel", () => {
             "8 m tsunami: the sea goes down, the sea at 3.8 m at the coast, 2 min 20 s left",
         );
         expect(target.querySelector('[data-testid="catastrophe-tsunami-start"]')).toBeNull();
+        // At full speed nothing more; when the server bears less of it, the panel says so.
+        expect(target.querySelector('[data-testid="catastrophe-tsunami-celerity"]')).toBeNull();
+        terrainWaterStatsStore.set({ ...STATS, seaCelerity: 0.42 });
+        flushSync();
+        expect(target.querySelector('[data-testid="catastrophe-tsunami-celerity"]')?.textContent).toContain(
+            "speed limited by the server: 42 % of the real one",
+        );
+        terrainWaterStatsStore.set(undefined);
         target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-tsunami-stop"]')?.click();
         expect(stopTsunami).toHaveBeenCalledTimes(1);
         tsunamiShownStore.set(undefined);

@@ -46,6 +46,11 @@ export const TSUNAMI_FRONT_SECONDS = 10;
  * tsunami left on the land runs back to it there (the backwash), instead of creeping off the edge of the map.
  */
 export const TSUNAMI_BACKWASH_MS = 60_000;
+/**
+ * Under this share of the real speed of its waves (the server affording fewer moves a step than the depth of its bore
+ * asks for), the panel says that the server limits the tsunami.
+ */
+export const TSUNAMI_FULL_CELERITY = 0.95;
 /** The room is told the tsunami once a second while it goes on, as it is told a hurricane. */
 export const TSUNAMI_TELL_MS = 1000;
 /**

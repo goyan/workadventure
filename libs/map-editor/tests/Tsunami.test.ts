@@ -4,6 +4,7 @@ import {
     TSUNAMI_DEFAULT_METRES,
     TSUNAMI_DEFAULT_MINUTES,
     TSUNAMI_FRONT_SECONDS,
+    TSUNAMI_FULL_CELERITY,
     TSUNAMI_MAX_METRES,
     TSUNAMI_MAX_MINUTES,
     TSUNAMI_MIN_METRES,
@@ -20,7 +21,11 @@ import { heightOfMetres } from "../src/Terrain/Scale";
 import { cellKey, withHeights } from "../src/Terrain/TerrainGrid";
 import { CELL_METRES, WaterGrid } from "../src/Terrain/WaterGrid";
 import type { WaterStepInput } from "../src/Terrain/WaterGrid";
-import { MAX_WATER_MAX_SURFACE } from "../src/types";
+import { DEFAULT_WATER_SETTINGS, MAX_WATER_MAX_SURFACE } from "../src/types";
+import type { WAMFileFormat } from "../src/types";
+import { threadWaterLoads } from "../src/Terrain/WaterLoad";
+import { WATER_STEP_MS } from "../src/Terrain/WaterInputs";
+import { WaterSimulation } from "../src/Terrain/WaterSimulation";
 
 const G = 9.81;
 
@@ -290,5 +295,131 @@ describe("a tsunami over a dry coastal plain", () => {
         // Against the west wall the water stands higher than the sea, over the usual ceiling of 8.8 m.
         expect(highest).toBeGreaterThan(MAX_WATER_MAX_SURFACE);
         expect(lost).toBeLessThan(1);
+    });
+});
+
+describe("the ceiling of the water under a tsunami", () => {
+    it("comes back to the usual one with the water, and leaves nothing over it", () => {
+        // A plain walled at 66 m from the coast: an 8 m bore piles up against the wall, over the usual 8.8 m.
+        const { grid } = channel(120, () => 0);
+        const tsunami: Tsunami = { id: 1, startedAt: 0, metres: 8, durationMs: 60_000 };
+        const input = stepOf(8);
+        let highest = 0;
+        let raised = false;
+        let back: number | undefined;
+        for (let step = 1; step <= 3000; step++) {
+            grid.setSea(tsunamiSea(tsunami, step * 100));
+            grid.step(input);
+            let over = 0;
+            for (let column = 0; column < 120; column++) over = Math.max(over, grid.depthAt(column, 2));
+            highest = Math.max(highest, over);
+            if (grid.ceilingPx() > MAX_WATER_MAX_SURFACE) raised = true;
+            if (raised && back === undefined && grid.ceilingPx() === MAX_WATER_MAX_SURFACE) back = step;
+            // Once back, no water stands over the usual ceiling.
+            if (back !== undefined) expect(over).toBeLessThanOrEqual(MAX_WATER_MAX_SURFACE);
+        }
+        expect(highest).toBeGreaterThan(MAX_WATER_MAX_SURFACE);
+        expect(raised).toBe(true);
+        expect(back).toBeDefined();
+    });
+});
+
+describe("the moves a tsunami asks for, within what the thread lets the water take", () => {
+    /** A lake of 4.4 m dug in a plain, at the pace of reality, its map asking for two moves a step. */
+    function room(costPerMoveMs: number) {
+        const heights = new Map<string, number>();
+        for (let y = 5; y < 35; y++) for (let x = 10; x < 70; x++) heights.set(cellKey(x, y), -128);
+        const wam: WAMFileFormat = {
+            version: "2.1.0",
+            mapUrl: "map.tmj",
+            areas: [],
+            entityCollections: [],
+            entities: {},
+            settings: {
+                water: {
+                    ...DEFAULT_WATER_SETTINGS,
+                    inertia: true,
+                    precision: 2,
+                    updates: 1,
+                    evaporation: 0,
+                    absorption: 0,
+                },
+            },
+            terrain: withHeights(undefined, heights),
+        };
+        threadWaterLoads.clear();
+        let now = 1_000_000;
+        let time = 0;
+        let calls = 0;
+        const stepsMs: number[] = [];
+        const celerities: number[] = [];
+        const held: { water?: WaterSimulation } = {};
+        // A step costs 2 ms, and `costPerMoveMs` for each move it made (the clock is read at its start and its end).
+        const clock = (): number => {
+            calls++;
+            if (calls % 2 === 0) {
+                const ms = 2 + costPerMoveMs * (held.water?.getGrid()?.movesMade() ?? 0);
+                stepsMs.push(ms);
+                time += ms;
+            }
+            return time;
+        };
+        const water = new WaterSimulation(
+            {
+                getWam: () => wam,
+                sendSubMessageToRoom: (message) => {
+                    if (message.message?.$case !== "terrainWaterMessage") return;
+                    const celerity = message.message.terrainWaterMessage.stats?.seaCelerity;
+                    if (celerity !== undefined) celerities.push(celerity);
+                },
+            },
+            { slotsFor: () => undefined },
+            (bytes) => bytes,
+            () => now,
+            () => ({ width: 80, height: 40 }),
+            clock,
+            WATER_STEP_MS,
+        );
+        held.water = water;
+        const simulation = water;
+        simulation.mapChanged();
+        simulation.pause();
+        const grid = simulation.getGrid();
+        if (!grid) throw new Error("no grid");
+        const full = new Uint8Array(grid.writeDepths().length);
+        for (let y = 5; y < 35; y++) for (let x = 10; x < 70; x++) full[(y * 80 + x) * 2 + 1] = 4; // 128 px
+        grid.readDepths(full);
+        const tsunami: Tsunami = { id: 1, startedAt: now + 5000, metres: 4, durationMs: 60_000 };
+        simulation.seaUnder(() => tsunami);
+        const moves: number[] = [];
+        const live = (steps: number): void => {
+            for (let step = 0; step < steps; step++) {
+                simulation.step();
+                moves.push(grid.movesMade());
+                now += WATER_STEP_MS;
+            }
+        };
+        return { live, moves, stepsMs, celerities };
+    }
+
+    it("asks for the moves the depth of the bore asks for, one more a second, when the thread affords them", () => {
+        const { live, moves, celerities } = room(1);
+        live(50);
+        expect(Math.max(...moves.slice(0, 50))).toBeLessThanOrEqual(2);
+        live(200);
+        // 4 m over 4.4 m of lake: the waves of 8.4 m ask for five moves a step; they come one a second.
+        expect(Math.max(...moves.slice(50, 60))).toBeLessThanOrEqual(3);
+        expect(Math.max(...moves.slice(150))).toBeGreaterThanOrEqual(5);
+        expect(celerities[celerities.length - 1]).toBe(1);
+    });
+
+    it("never takes more of the thread than it lets the water take before it eases, and says the speed it gives up", () => {
+        // 12 ms a move: the thread of the rooms (half of 100 ms) affords three.
+        const { live, moves, stepsMs, celerities } = room(12);
+        live(400);
+        expect(Math.max(...moves)).toBeLessThanOrEqual(3);
+        expect(Math.max(...stepsMs)).toBeLessThanOrEqual(50);
+        expect(celerities.length).toBeGreaterThan(0);
+        expect(Math.min(...celerities)).toBeLessThan(TSUNAMI_FULL_CELERITY);
     });
 });

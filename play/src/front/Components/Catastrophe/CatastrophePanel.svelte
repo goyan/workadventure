@@ -25,6 +25,7 @@
         tsunamiLastsMs,
         tsunamiPhase,
         tsunamiRiseAt,
+        TSUNAMI_FULL_CELERITY,
     } from "@workadventure/map-editor";
     import { onDestroy, untrack } from "svelte";
     import { LL, locale } from "../../../i18n/i18n-svelte";
@@ -52,6 +53,7 @@
         tsunamiMinutesStore,
         tsunamiShownStore,
     } from "../../Stores/CatastropheStore";
+    import { terrainWaterStatsStore } from "../../Stores/TerrainEditorStore";
     import { compassPointOf } from "../../Phaser/Game/Weather/WindDirection";
     import PixelIcon from "../ActionsMenu/PixelIcon.svelte";
     import ChipPopover from "../ClockLine/ChipPopover.svelte";
@@ -106,6 +108,16 @@
             disarmCatastrophe();
         }
     }
+
+    /**
+     * How much of the real speed of the waves of the tsunami the server bears, in %, when it bears less (it affords
+     * fewer moves a step than the depth of the bore asks for): the panel says so. Undefined at full speed.
+     */
+    const tsunamiCelerity = $derived.by((): number | undefined => {
+        const share = $terrainWaterStatsStore?.seaCelerity;
+        if (tsunamiGoing === undefined || share === undefined || share >= TSUNAMI_FULL_CELERITY) return undefined;
+        return Math.round(share * 100);
+    });
 
     /** What the panel says of the tsunami coming in, as the server last told it (once a second). */
     const tsunamiGoing = $derived.by((): string | undefined => {
@@ -715,6 +727,11 @@
                         <!-- A tsunami comes in: where it is, how high the sea stands at the coast, how to stop it. -->
                         <span class="flex basis-full items-center gap-2">
                             <span class="tabular-nums" data-testid="catastrophe-tsunami-going">{tsunamiGoing}</span>
+                            {#if tsunamiCelerity !== undefined}
+                                <span class="tabular-nums text-amber-300" data-testid="catastrophe-tsunami-celerity">
+                                    {$LL.actionbar.catastrophe.tsunamiCelerity({ percent: tsunamiCelerity })}
+                                </span>
+                            {/if}
                             <button
                                 type="button"
                                 class="rounded-full bg-white/10 px-2 py-1 hover:bg-white/20"

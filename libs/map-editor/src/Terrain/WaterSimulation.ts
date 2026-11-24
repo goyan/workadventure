@@ -103,6 +103,15 @@ const UNTOLD_EIGHTHS = 2;
  */
 const FLOOR_BLOCK_CELLS = 8;
 const FLOOR_UNTOLD_EIGHTHS = 8;
+/**
+ * While a tsunami comes in, the moves it asks for take no more than this share of what the thread lets the waters
+ * take before they ease (WaterLoad), and one more is asked every this many steps at most: the cost of a move is a
+ * mean, and the flood makes it grow.
+ */
+const SEA_LOAD_MARGIN = 0.85;
+const SEA_STEPS_PER_MORE = 10;
+/** How fast the mean cost of a move follows the steps (a share a step: about ten steps). */
+const MOVE_COST_SHARE = 0.1;
 /** While the wave of an impact runs, the room is told five times a second: a wave seen once a second would jump. */
 const WAVE_STEPS_PER_MESSAGE = 2;
 /** After an impact on a water with inertia, the room is told that often for this long (half a minute). */
@@ -198,6 +207,11 @@ export class WaterSimulation {
     private hurricane: () => Hurricane | undefined = () => undefined;
     /** The tsunami coming in from the sea by the east edge of the map (none on a ground of one's own). */
     private tsunami: () => Tsunami | undefined = () => undefined;
+    /** The moves a step asks for while it comes in (seaMoves), 0 without it, and the step it last asked for more. */
+    private seaAsked = 0;
+    private seaRaisedAt = 0;
+    /** What a move of the water costs, all of its step counted with it (ms), as a mean. */
+    private msPerMove = 0;
     /** What the room was last told, to send only what changed since. */
     private sentBytes: Uint8Array | undefined;
     private sentRates = false;
@@ -397,6 +411,38 @@ export class WaterSimulation {
         this.hurricane = hurricane;
     }
 
+    /**
+     * The moves a step asks for while the sea of a tsunami stands at the coast: its bore runs at the square root of g
+     * times its depth only with as many moves as that depth asks for (WaterGrid.flowWithInertia), up to the most a
+     * map may ask. It asks for no more than what a move costs lets the thread take before the water eases (what the
+     * thread lets the waters take, less what the others take, with a margin), and one more a second at most: never
+     * under what the map asks. The load stays the master (WaterLoad): what it eased, it keeps eased.
+     */
+    private seaMoves(mapAsked: number): number {
+        const most = WATER_PACE_BOUNDS.precision[1];
+        const allowed = (2 * this.load.quietMs() - this.load.othersMs()) * SEA_LOAD_MARGIN;
+        const affordable = this.msPerMove > 0 ? Math.floor(allowed / this.msPerMove) : mapAsked;
+        const target = Math.max(mapAsked, Math.min(most, affordable));
+        if (this.seaAsked < mapAsked) {
+            this.seaAsked = mapAsked;
+            this.seaRaisedAt = this.steps;
+        }
+        if (target < this.seaAsked) this.seaAsked = target;
+        else if (target > this.seaAsked && this.steps - this.seaRaisedAt >= SEA_STEPS_PER_MORE) {
+            this.seaAsked++;
+            this.seaRaisedAt = this.steps;
+        }
+        return this.seaAsked;
+    }
+
+    /**
+     * The share of the real speed of the waves of the sea of a tsunami the water bears now (WaterGrid.celerityShare):
+     * under 1 while the moves the server affords are fewer than the depth of its bore asks for. 1 without a tsunami.
+     */
+    public seaCelerity(): number {
+        return this.seaAsked > 0 && this.grid ? this.grid.celerityShare() : 1;
+    }
+
     /** The catastrophes of the room say which tsunami comes in: the sea it holds at the east edge of the map. */
     public seaUnder(tsunami: () => Tsunami | undefined): void {
         this.tsunami = tsunami;
@@ -423,11 +469,9 @@ export class WaterSimulation {
         // goes on; fewer while the steps take too long, as for any water (WaterLoad).
         const sea = tsunamiSea(this.tsunami(), this.now());
         grid.setSea(sea);
-        const asked = inertia
-            ? sea
-                ? WATER_PACE_BOUNDS.precision[1]
-                : (settings?.water?.precision ?? DEFAULT_WATER_PACE.precision)
-            : 1;
+        const mapAsked = inertia ? (settings?.water?.precision ?? DEFAULT_WATER_PACE.precision) : 1;
+        const asked = inertia && sea ? this.seaMoves(mapAsked) : mapAsked;
+        if (!sea) this.seaAsked = 0;
         // A map that says nothing of its water has the water of reality, with inertia.
         const water = inertia
             ? { ...(settings?.water ?? DEFAULT_WATER_SETTINGS), precision: times > 1 ? 1 : this.load.precision(asked) }
@@ -469,6 +513,7 @@ export class WaterSimulation {
         const pressure = hurricanePressure(this.hurricane(), this.now());
         grid.setPressure(pressure);
         const pressing = pressure !== undefined || sea !== undefined;
+        let movesMade = 0;
         if (this.moving || pouring || pressing) {
             const input = stepInputOf(stepWater, this.rainRate, this.objects, WATER_STEP_MS / 1000);
             // The water with inertia runs as it really does at each step of its time: no move more towards the sinks,
@@ -476,6 +521,7 @@ export class WaterSimulation {
             if (input.inertia) input.flowSteps = 1;
             for (let lived = 0; lived < times; lived++) {
                 const tally = grid.step(input);
+                movesMade += grid.movesMade();
                 this.untold = true;
                 this.moving = tally.moved;
                 if (tally.moved) this.version++;
@@ -501,6 +547,8 @@ export class WaterSimulation {
         }
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
         const elapsed = this.clock() - started;
+        // What a move of this water costs, all of the step counted with it: what a tsunami reads to ask for more.
+        if (movesMade > 0) this.msPerMove += (elapsed / movesMade - this.msPerMove) * MOVE_COST_SHARE;
         // The fineness goes by the cost of a step of its time; the pace by the cost of the real step.
         // Beside other waters on its thread, the whole real step counts: they see what this one really takes, and it
         // lives faster than reality only in what they leave under the share where they would ease. Alone (a room
@@ -996,6 +1044,7 @@ export class WaterSimulation {
                         wetArea: grid.wetCells() * CELL_AREA_M2,
                         rainRate: this.rainRate,
                         ...this.eased(water),
+                        ...(this.seaAsked > 0 ? { seaCelerity: this.seaCelerity() } : {}),
                         ...((this.askedTimes() ?? waterTimesOf(water)) > 1 ? { reachedSpeed: this.lived.flow } : {}),
                     },
                 },

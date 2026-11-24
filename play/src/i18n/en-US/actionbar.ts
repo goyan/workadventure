@@ -531,6 +531,7 @@ const actionbar = {
         tsunamiHelp:
             "The sea comes in by the east edge of the map: it jumps there to the height chosen (the bore of a tsunami that broke before the coast), then goes back down over the time chosen. The water of the map does the rest, at the scale of reality: the flood front, the wave across the lakes, the run-up on the slopes, then the backwash to the sea. It fills the hollows of the map, which stay full. Any player can stop it.",
         tsunamiGoing: "{metres} m tsunami: {phase}, the sea at {level} m at the coast, {left} left",
+        tsunamiCelerity: "speed limited by the server: {percent} % of the real one",
         tsunamiPhase: {
             front: "the bore comes in",
             ebb: "the sea goes down",
