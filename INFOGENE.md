@@ -4159,9 +4159,9 @@ de 0 à 100 %, avec sauvegarde personnelle. Les appels et les Jams conservent le
 « Outils → Cycle jour/nuit » ouvre directement le choix personnel serveur / ordinateur / désactivé.
 Cette première version couvre toute la carte, sans accumulation de neige ni distinction entre intérieur et extérieur.
 
-**Pluie et neige vues de dessus, en perspective** (expérimentation, 2026-11-23, `Weather/PerspectiveFall.ts`). Réglage
+**Pluie et neige vues de dessus, en perspective** (2026-11-23, `Weather/PerspectiveFall.ts`). Réglage
 personnel « Pluie et neige vues de dessus, en perspective », dans les réglages de la pluie, mémorisé par le navigateur,
-**éteint par défaut** : rien ne change pour qui ne l'allume pas. Allumé, la pluie et la neige sont vues d'une caméra
+**allumé par défaut** depuis le 2026-11-24 (choix de l’utilisateur) ; qui l’a déjà éteint le garde éteint. Allumé, la pluie et la neige sont vues d'une caméra
 au-dessus du milieu de l'écran, à la hauteur d'un champ de 60° sur la largeur de la vue (≈ 33 m au zoom habituel ; elle
 monte quand on dézoome). Une goutte à la hauteur z est dessinée à c + (p − c)·H/(H − z) : grosse et rapide près de la
 caméra, elle rétrécit en tombant, glisse vers le milieu de l'écran (le nadir, où les verticales se rejoignent) et
