@@ -115,6 +115,33 @@ export function landFriction(speed: number, z0: number): number {
     return frictionShare(speed, z0) / frictionShare(speed, seaRoughness(speed));
 }
 
+/**
+ * The shape of the force of the low of Holland at a distance s from its eye (in radii of its strongest winds),
+ * s^(−B−1) exp(−s^(−B)): the force is Δp B / (ρ R) times it. Tabulated once (B is a constant), every 1/512 of a radius
+ * up to HOLLAND_SHAPE_RADII, linear between (within 2·10⁻⁵ of its peak, measured: see the tests): the air reads it at each cell
+ * and each step, where a power and an exponential cost two thirds of the step. Exact past the table.
+ */
+const HOLLAND_SHAPE_PER_RADIUS = 512;
+const HOLLAND_SHAPE_RADII = 16;
+const HOLLAND_SHAPE = (() => {
+    const table = new Float64Array(HOLLAND_SHAPE_RADII * HOLLAND_SHAPE_PER_RADIUS + 2);
+    for (let at = 1; at < table.length; at++) table[at] = hollandShapeExact(at / HOLLAND_SHAPE_PER_RADIUS);
+    return table;
+})();
+
+function hollandShapeExact(s: number): number {
+    const power = Math.pow(s, -HURRICANE_HOLLAND_B);
+    return (power / s) * Math.exp(-power);
+}
+
+/** The shape of the force of the low at `s` radii of its strongest winds from its eye (HOLLAND_SHAPE). */
+export function hollandShape(s: number): number {
+    if (!(s < HOLLAND_SHAPE_RADII)) return hollandShapeExact(s);
+    const x = Math.max(0, s) * HOLLAND_SHAPE_PER_RADIUS;
+    const low = Math.floor(x);
+    return HOLLAND_SHAPE[low] + (HOLLAND_SHAPE[low + 1] - HOLLAND_SHAPE[low]) * (x - low);
+}
+
 /** The winds (m/s) at which landFriction is tabulated: one per m/s, up to this. */
 const FRICTION_TABLE_MS = 120;
 
@@ -317,8 +344,8 @@ export class AirSimulation {
             storm && forcing.hurricane
                 ? (hurricanePressureDrop(forcing.hurricane.category) * Math.max(0, storm.share)) / AIR_DENSITY
                 : 0;
-        const b = HURRICANE_HOLLAND_B;
-        const rb = Math.pow(HURRICANE_RMAX_M, b);
+        // The force of the low at r: Δp B / (ρ R) × hollandShape(r / R), grown with the storm (its share).
+        const force = (dropOverRho * HURRICANE_HOLLAND_B * share) / HURRICANE_RMAX_M;
         const cell = AIR_CELL_M;
         const cos = Math.cos(f * dt);
         const sin = Math.sin(f * dt);
@@ -347,8 +374,7 @@ export class AirSimulation {
                     const de = (x - storm.eyeX) / PX_PER_METRE;
                     const dn = -(y - storm.eyeY) / PX_PER_METRE;
                     const r = Math.max(0.5, Math.hypot(de, dn));
-                    const rmb = rb * Math.pow(r, -b);
-                    const g = dropOverRho * b * (rmb / r) * Math.exp(-rmb) * share;
+                    const g = force * hollandShape(r / HURRICANE_RMAX_M);
                     pe -= (g * de) / r;
                     pn -= (g * dn) / r;
                     const half = (r * Math.abs(f)) / 2;

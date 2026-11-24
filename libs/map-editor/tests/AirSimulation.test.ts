@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HURRICANE_RMAX_M, hurricaneHere, hurricaneMaxWind } from "../src/Catastrophe/Hurricane";
+import { HURRICANE_HOLLAND_B, HURRICANE_RMAX_M, hurricaneHere, hurricaneMaxWind } from "../src/Catastrophe/Hurricane";
 import type { Hurricane } from "../src/Catastrophe/Hurricane";
 import {
     AIR_CORIOLIS,
@@ -8,6 +8,7 @@ import {
     AIR_STEP_S,
     AIR_SURFACE_RATIO,
     AirSimulation,
+    hollandShape,
     landFriction,
     seaDrag,
 } from "../src/Weather/AirSimulation";
@@ -182,6 +183,19 @@ describe("the air of a map under a hurricane (AirSimulation)", () => {
         const forest = moving(AIR_ROUGHNESS_M.forest);
         expect(forest.east).toBeGreaterThan(forest.west);
     }, 60_000);
+});
+
+describe("the force of the low of Holland, tabulated (hollandShape)", () => {
+    it("is that of Holland within 2·10⁻⁵ of its peak (1.4·10⁻⁵ measured), near the eye and far from it", () => {
+        const exact = (s: number): number =>
+            Math.pow(s, -HURRICANE_HOLLAND_B - 1) * Math.exp(-Math.pow(s, -HURRICANE_HOLLAND_B));
+        let peak = 0;
+        for (let s = 0.01; s < 30; s += 0.001) peak = Math.max(peak, exact(s));
+        let most = 0;
+        for (let s = 0.0005; s < 30; s += 0.000731) most = Math.max(most, Math.abs(hollandShape(s) - exact(s)));
+        expect(most / peak).toBeLessThan(2e-5);
+        expect(hollandShape(0)).toBe(0);
+    });
 });
 
 describe("the air of a map without a hurricane", () => {

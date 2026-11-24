@@ -1,4 +1,4 @@
-import { hurricaneAirMessageOf } from "@workadventure/map-editor";
+import { hurricaneAirMessageOf, hurricaneAirWindAt } from "@workadventure/map-editor";
 import type { HurricaneAirMessage } from "@workadventure/messages";
 import { describe, expect, it } from "vitest";
 import {
@@ -79,6 +79,42 @@ describe("the wind of the air of a hurricane as a browser is told it (HurricaneA
         // The same picture while no other field is told.
         expect(air.seaAir(5)?.pixels).toBe(sea.pixels);
         expect(air.seaAir(6)).toBeUndefined();
+    });
+
+    it("reads a wind that changes from point to point as the message says it, between the two fields", () => {
+        const { air, clock } = field();
+        // A wind that turns and grows across the map, different in each field.
+        const before = hurricaneAirMessageOf(
+            { surfaceWindAt: (x, y) => ({ east: 30 * Math.sin(x / 150), north: 20 * Math.cos(y / 90) }) },
+            SIZE,
+            5,
+            0,
+            0,
+        );
+        const after = hurricaneAirMessageOf(
+            { surfaceWindAt: (x, y) => ({ east: -25 * Math.cos(y / 70), north: 35 * Math.sin((x + y) / 200) }) },
+            SIZE,
+            5,
+            1,
+            0,
+        );
+        air.receive(before);
+        clock.now += HURRICANE_AIR_MESSAGE_MS;
+        air.receive(after);
+        clock.now += 0.3 * HURRICANE_AIR_MESSAGE_MS;
+        for (const [x, y] of [
+            [0, 0],
+            [37, 411],
+            [500, 255],
+            [1023, 511],
+            [2000, -40],
+        ]) {
+            const a = hurricaneAirWindAt(before, x, y);
+            const b = hurricaneAirWindAt(after, x, y);
+            const read = air.windAt(5, x, y);
+            expect(read?.east, `${x},${y}`).toBeCloseTo(a.east + (b.east - a.east) * 0.3, 9);
+            expect(read?.north, `${x},${y}`).toBeCloseTo(a.north + (b.north - a.north) * 0.3, 9);
+        }
     });
 
     it("says a wind as the weather does: km/h, and where it comes from", () => {

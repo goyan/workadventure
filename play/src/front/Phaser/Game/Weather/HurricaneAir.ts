@@ -1,4 +1,3 @@
-import { hurricaneAirWindAt } from "@workadventure/map-editor";
 import type { HurricaneAirMessage } from "@workadventure/messages";
 import type { SeaAir } from "../Terrain/WindSeaShader";
 
@@ -10,14 +9,29 @@ export const HURRICANE_AIR_MESSAGE_MS = 500;
  */
 export const HURRICANE_AIR_STALE_MS = 3000;
 
+/** A field told, with its bytes read as signed once (a view is not made again at each reading of the wind). */
+interface ToldField {
+    message: HurricaneAirMessage;
+    east: Int8Array;
+    north: Int8Array;
+}
+
+function toldField(message: HurricaneAirMessage): ToldField {
+    return {
+        message,
+        east: new Int8Array(message.east.buffer, message.east.byteOffset, message.east.byteLength),
+        north: new Int8Array(message.north.buffer, message.north.byteOffset, message.north.byteLength),
+    };
+}
+
 /**
  * The wind of the air of the hurricane crossing the map, as the server tells it (HurricaneAirMessage): the last two
  * fields told, the wind going from the one before to the last over the time between two (so that it does not jump
  * twice a second). Only for the hurricane it was told for; nothing once it is stale.
  */
 export class HurricaneAirField {
-    private previous: HurricaneAirMessage | undefined;
-    private current: HurricaneAirMessage | undefined;
+    private previous: ToldField | undefined;
+    private current: ToldField | undefined;
     /** When the last field came (ms of `clock`). */
     private receivedAt = 0;
     /** Changes with each field told: what draws from it knows when to draw again. */
@@ -29,8 +43,8 @@ export class HurricaneAirField {
 
     public receive(message: HurricaneAirMessage): void {
         // A field of another hurricane is not mixed with this one.
-        this.previous = this.current?.hurricaneId === message.hurricaneId ? this.current : undefined;
-        this.current = message;
+        this.previous = this.current?.message.hurricaneId === message.hurricaneId ? this.current : undefined;
+        this.current = toldField(message);
         this.receivedAt = this.clock();
         this.version++;
     }
@@ -48,11 +62,18 @@ export class HurricaneAirField {
     public fields(
         hurricaneId: number | undefined,
     ): { previous: HurricaneAirMessage; current: HurricaneAirMessage; share: number } | undefined {
+        const told = this.toldFields(hurricaneId);
+        return told && { previous: told.previous.message, current: told.current.message, share: told.share };
+    }
+
+    private toldFields(
+        hurricaneId: number | undefined,
+    ): { previous: ToldField; current: ToldField; share: number } | undefined {
         const current = this.current;
-        if (!current || hurricaneId === undefined || current.hurricaneId !== hurricaneId) return undefined;
+        if (!current || hurricaneId === undefined || current.message.hurricaneId !== hurricaneId) return undefined;
         const since = this.clock() - this.receivedAt;
         if (!(since < HURRICANE_AIR_STALE_MS)) return undefined;
-        const previous = this.previous && sameGrid(this.previous, current) ? this.previous : current;
+        const previous = this.previous && sameGrid(this.previous.message, current.message) ? this.previous : current;
         return { previous, current, share: Math.min(1, Math.max(0, since / HURRICANE_AIR_MESSAGE_MS)) };
     }
 
@@ -94,13 +115,37 @@ export class HurricaneAirField {
 
     /** The wind at 10 m at a map point (m/s, east and north) under the hurricane `hurricaneId`; undefined: not known. */
     public windAt(hurricaneId: number | undefined, x: number, y: number): { east: number; north: number } | undefined {
-        const fields = this.fields(hurricaneId);
+        const fields = this.toldFields(hurricaneId);
         if (!fields) return undefined;
-        const before = hurricaneAirWindAt(fields.previous, x, y);
-        const after = hurricaneAirWindAt(fields.current, x, y);
+        const { previous, current, share } = fields;
+        // Bilinear between the points of the grid (hurricaneAirWindAt), the two fields on the same grid: the weights
+        // reckoned once for both. Read by every tree and every debris at each frame: nothing made but the answer.
+        const { columns, rows, cellPx } = current.message;
+        const gx = Math.max(0, Math.min(columns - 1, x / cellPx));
+        const gy = Math.max(0, Math.min(rows - 1, y / cellPx));
+        const x0 = Math.min(columns - 2, Math.floor(gx));
+        const y0 = Math.min(rows - 2, Math.floor(gy));
+        const fx = gx - x0;
+        const fy = gy - y0;
+        const a = y0 * columns + x0;
+        const b = a + columns;
+        const w00 = (1 - fx) * (1 - fy);
+        const w10 = fx * (1 - fy);
+        const w01 = (1 - fx) * fy;
+        const w11 = fx * fy;
+        const beforeStep = previous.message.step;
+        const afterStep = current.message.step;
+        const pe = previous.east;
+        const pn = previous.north;
+        const ce = current.east;
+        const cn = current.north;
+        const beforeEast = (pe[a] * w00 + pe[a + 1] * w10 + pe[b] * w01 + pe[b + 1] * w11) * beforeStep;
+        const beforeNorth = (pn[a] * w00 + pn[a + 1] * w10 + pn[b] * w01 + pn[b + 1] * w11) * beforeStep;
+        const afterEast = (ce[a] * w00 + ce[a + 1] * w10 + ce[b] * w01 + ce[b + 1] * w11) * afterStep;
+        const afterNorth = (cn[a] * w00 + cn[a + 1] * w10 + cn[b] * w01 + cn[b + 1] * w11) * afterStep;
         return {
-            east: before.east + (after.east - before.east) * fields.share,
-            north: before.north + (after.north - before.north) * fields.share,
+            east: beforeEast + (afterEast - beforeEast) * share,
+            north: beforeNorth + (afterNorth - beforeNorth) * share,
         };
     }
 }
