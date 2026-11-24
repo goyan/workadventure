@@ -296,7 +296,7 @@ describe("manual camera pan", () => {
         expect(camera.midPoint.x).toBe(1600);
     });
 
-    it("scrolls the map editor's view with the move keys, then recentres on the avatar when it closes", () => {
+    it("scrolls the map editor's view with the move keys, then keeps it there, detached, when it closes", () => {
         const { camera, manager, player, advanceTween } = setup(2, true);
         mapEditorModeStore.set(true);
         const right = {
@@ -310,8 +310,75 @@ describe("manual camera pan", () => {
         mapEditorModeStore.set(false);
         advanceTween(1);
         camera.preRender();
-        expect(camera.midPoint.x).toBe(player.x);
+        expect(camera.midPoint.x).toBeCloseTo(player.x + 30);
         expect(camera.midPoint.y).toBe(player.y);
+        expect(get(cameraDetachedStore)).toBe(true);
+    });
+
+    describe("closing the map editor", () => {
+        it("keeps following the avatar when the view is still on it", () => {
+            const { camera, player, advanceTween } = setup(1, true);
+            mapEditorModeStore.set(true);
+            mapEditorModeStore.set(false);
+            advanceTween(1);
+            player.x += 40;
+            camera.preRender();
+            expect(camera.midPoint.x).toBe(player.x);
+            expect(get(cameraDetachedStore)).toBe(false);
+        });
+
+        it("brings a view left past the map edge back inside the map, not onto the avatar", () => {
+            const { camera, manager, player } = setup(1, true);
+            mapEditorModeStore.set(true);
+            manager.scrollCamera(-3000, -2500);
+            camera.preRender();
+            expect(camera.worldView.x).toBeLessThan(0);
+            mapEditorModeStore.set(false);
+            camera.preRender();
+            expect(camera.worldView.x).toBeGreaterThanOrEqual(0);
+            expect(camera.worldView.y).toBeGreaterThanOrEqual(0);
+            expect(camera.midPoint.x).toBeLessThan(player.x);
+            expect(get(cameraDetachedStore)).toBe(true);
+        });
+
+        it("brings the zoom back to the game's minimum, around the view and not the avatar", () => {
+            const { camera, manager, player, advanceTween } = setup(0.28, true);
+            mapEditorModeStore.set(true);
+            manager.scrollCamera(500, 0);
+            camera.preRender();
+            const centre = camera.midPoint.x;
+            mapEditorModeStore.set(false);
+            advanceTween(1);
+            camera.preRender();
+            expect(camera.zoom).toBeCloseTo(manager.resistanceEndZoomLevel);
+            expect(camera.midPoint.x).toBeCloseTo(centre);
+            expect(camera.midPoint.x).not.toBeCloseTo(player.x);
+        });
+
+        it("goes back to the avatar when it moves, or on the recenter button, as after a drag", () => {
+            const { camera, manager, player, advanceTween } = setup(1, true);
+            mapEditorModeStore.set(true);
+            manager.scrollCamera(500, 0);
+            mapEditorModeStore.set(false);
+            expect(get(cameraDetachedStore)).toBe(true);
+            manager.resumePlayerFollow();
+            advanceTween(1);
+            camera.preRender();
+            expect(camera.midPoint.x).toBe(player.x);
+            expect(get(cameraDetachedStore)).toBe(false);
+        });
+
+        it("goes back on a focus zone rather than staying detached", () => {
+            const { camera, manager, limits, advanceTween } = setup(1, true);
+            mapEditorModeStore.set(true);
+            manager.scrollCamera(500, 0);
+            limits.focusTarget = { x: 600, y: 500 };
+            mapEditorModeStore.set(false);
+            advanceTween(1);
+            camera.preRender();
+            expect({ x: camera.midPoint.x, y: camera.midPoint.y }).toEqual({ x: 600, y: 500 });
+            expect(get(cameraDetachedStore)).toBe(false);
+        });
     });
 
     it("opens the map editor on the avatar, even when a small map held the game view elsewhere", () => {
@@ -328,19 +395,16 @@ describe("manual camera pan", () => {
         expect(camera.midPoint.y).toBe(100);
     });
 
-    it("ends on the avatar when the editor reopens while the view glides back to it", () => {
-        const { camera, manager, player, advanceTween } = setup(1, true);
+    it("keeps the detached view when the editor reopens right after closing", () => {
+        const { camera, manager, player } = setup(1, true);
         mapEditorModeStore.set(true);
         manager.scrollCamera(500, 0);
         camera.preRender();
         expect(camera.midPoint.x).toBe(player.x + 500);
         mapEditorModeStore.set(false);
-        advanceTween(0.5);
-        camera.preRender();
-        expect(camera.midPoint.x).toBeGreaterThan(player.x);
         mapEditorModeStore.set(true);
         camera.preRender();
-        expect(camera.midPoint.x).toBe(player.x);
+        expect(camera.midPoint.x).toBe(player.x + 500);
         expect(camera.midPoint.y).toBe(player.y);
     });
 

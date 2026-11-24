@@ -439,14 +439,36 @@ export class CameraManager extends EventEmitter {
         this.camera.setFollowOffset(offset.x, offset.y);
     }
 
+    /**
+     * Closing the editor keeps the view where it was, detached from the avatar as after a drag (the bounds of the game
+     * were just restored: a view past the map edges was brought back inside by the clamping). A view already on the
+     * avatar keeps following it, and a focus zone keeps its usual priority.
+     */
     private leaveMapEditor(): void {
-        // Zoomed out past the resistance level (to see the whole map, say): go back to the zoom from before.
-        const targetZoom =
+        // Zoomed out past the resistance level (to see the whole map, say): the game allows no further than that.
+        const zoomOutFactor =
             this.waScaleManager.zoomModifier < this.resistanceEndZoomLevel
-                ? Math.max(this.zoomBeforeMapEditor ?? 0, this.resistanceEndZoomLevel)
+                ? this.resistanceEndZoomLevel / this.waScaleManager.zoomModifier
                 : undefined;
-        this.startFollowPlayer(this.scene.CurrentPlayer, 1000);
-        if (targetZoom) this.zoomByFactor(targetZoom / this.waScaleManager.zoomModifier, 1000);
+
+        const focus = this.waScaleManager.getFocusTarget();
+        if (focus) {
+            this.animateToFocus({ x: focus.x, y: focus.y }, 1000);
+        } else {
+            // Apply the restored bounds before reading where the view is.
+            this.camera.preRender();
+            const player = this.scene.CurrentPlayer;
+            const { followOffset } = this.camera;
+            const onAvatar =
+                Math.abs(this.camera.midPoint.x + followOffset.x - player.x) < 1 &&
+                Math.abs(this.camera.midPoint.y + followOffset.y - (player.visualY ?? player.y)) < 1;
+            if (onAvatar) {
+                this.startFollowPlayer(player, 0);
+            } else {
+                this.startManualPan();
+            }
+        }
+        if (zoomOutFactor) this.zoomByFactor(zoomOutFactor, 1000);
     }
 
     public startFollowPlayer(player: Player | RemotePlayer, duration = 0): void {
