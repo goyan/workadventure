@@ -253,6 +253,7 @@ export class SocketManager {
             iceShacks: room.getIceShacks(),
             meadow: room.getMeadow(),
             treeFire: room.getTreeFire(),
+            hurricaneAir: room.getHurricaneAir(),
             fireConditions: room.getFireConditions(),
         };
 

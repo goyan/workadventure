@@ -40,13 +40,16 @@ export function withHurricane(
     date: Date | undefined,
     x = hurricane?.anchorX ?? 0,
     y = hurricane?.anchorY ?? 0,
+    /** The wind at 10 m of its air at that point, where the server simulates it: in place of that of its formula. */
+    air?: { windSpeed: number; windFrom: number },
 ): MapSnowSettings | undefined {
     if (!hurricane || !date) return settings;
     const now = hurricaneHere(hurricane, date.getTime(), x, y);
     if (!now || now.share <= 0) return settings;
     const share = now.share;
     const base = { windSpeed: settings?.windSpeed ?? 10, windFrom: settings?.windFrom ?? 315 };
-    const wind = blendedWind(base, now, share);
+    // The air of the server carries the wind of the room and the storm as grown: taken as it is.
+    const wind = air ?? blendedWind(base, now, share);
     const rainRate = mapRainRate(settings) + (now.rainRate - mapRainRate(settings)) * share;
     // The weather of the map until the storm has taken over half of it, then that of the storm.
     if (share < 0.5) return { ...settings, windFrom: wind.windFrom, windSpeed: wind.windSpeed };

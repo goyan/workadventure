@@ -361,6 +361,13 @@ uniform vec4 uSeaGroup;
 uniform vec4 uHurEye;
 uniform vec4 uHurWind;
 uniform vec4 uHurMix;
+// The wind of the air of the hurricane as the server simulates it (HurricaneAir.ts), while it is told: whether it is
+// (1) or not (0), how far from the field told before to the last (0 to 1), the m/s of a unit of its bytes, the cell
+// of its grid (map px); the columns and the rows of its grid. Its picture: the field before on the left, the last on
+// the right, a point of the grid a texel (towards the east in red, the north in green, 128 for none), read smooth.
+uniform vec4 uHurAir;
+uniform vec2 uHurAirSize;
+uniform sampler2D uHurAirTex;
 // Each wave: cycles a map pixel (x, y), its phase now (cycles, in [0, 1)), its frequency (Hz).
 ${range(SEA_COMPONENTS)
     .map((at) => `uniform vec4 uSeaA${at};`)
@@ -413,26 +420,42 @@ float seaFlowNoise(float acrossPx, float alongPx, vec2 offset) {
     return mix(a, b, gFlowMix);
 }
 
-// The wind at a map point: that of the sea (uSeaDir, uSea.x) without a hurricane; under one, its wind there, mixed
-// with that of the map at the ends of its passage, the waves as high as the square of its speed over the wind they
-// are drawn for (none in the eye). The twin of hurricaneHere.
+// The wind of the air of the server at a map point (m/s, east and south), between the field told before and the last.
+vec2 seaAirAt(vec2 world) {
+    vec2 g = clamp(world / uHurAir.w, vec2(0.0), uHurAirSize - 1.0) + 0.5;
+    float v = 1.0 - g.y / uHurAirSize.y;
+    vec2 before = texture2D(uHurAirTex, vec2(g.x / (2.0 * uHurAirSize.x), v)).rg;
+    vec2 after = texture2D(uHurAirTex, vec2((g.x + uHurAirSize.x) / (2.0 * uHurAirSize.x), v)).rg;
+    vec2 eastNorth = (mix(before, after, uHurAir.y) * 255.0 - 128.0) * uHurAir.z;
+    return vec2(eastNorth.x, -eastNorth.y);
+}
+
+// The wind at a map point: that of the sea (uSeaDir, uSea.x) without a hurricane; under one, that of its air where
+// the server simulates it, else its own wind there (the twin of hurricaneHere) mixed with that of the map at the ends
+// of its passage; the waves as high as the square of its speed over the wind they are drawn for (none in the eye).
 void seaWindHere(vec2 world) {
     gSeaWind = vec3(uSeaDir.xy, uSea.x);
     gSeaScale = 1.0;
     if (uHurEye.w == 0.0) return;
     vec2 d = world - uHurEye.xy;
     float r = length(d);
-    float share = 0.0;
-    vec2 outward = vec2(0.0);
-    if (r > 0.001) {
-        float x = pow(uHurEye.z / r, uHurWind.y);
-        share = sqrt(x * exp(1.0 - x));
-        outward = d / r;
+    vec2 wind;
+    if (uHurAir.x > 0.5) {
+        // The air of the server carries the wind of the map and the storm as grown.
+        wind = seaAirAt(world);
+    } else {
+        float share = 0.0;
+        vec2 outward = vec2(0.0);
+        if (r > 0.001) {
+            float x = pow(uHurEye.z / r, uHurWind.y);
+            share = sqrt(x * exp(1.0 - x));
+            outward = d / r;
+        }
+        // Round the eye (east, south), turned in towards it, and the motion of the storm where its wind blows.
+        vec2 around = vec2(outward.y, -outward.x) * uHurEye.w;
+        vec2 storm = uHurWind.x * share * (uHurMix.y * around - uHurMix.z * outward) + uHurWind.zw * share;
+        wind = mix(uSeaDir.xy * uSea.x, storm, uHurMix.x);
     }
-    // Round the eye (east, south), turned in towards it, and the motion of the storm where its wind blows.
-    vec2 around = vec2(outward.y, -outward.x) * uHurEye.w;
-    vec2 storm = uHurWind.x * share * (uHurMix.y * around - uHurMix.z * outward) + uHurWind.zw * share;
-    vec2 wind = mix(uSeaDir.xy * uSea.x, storm, uHurMix.x);
     float speed = length(wind);
     gSeaWind = vec3(speed > 0.0001 ? wind / speed : uSeaDir.xy, speed);
     float ratio = speed / max(uHurMix.w, 0.1);
@@ -725,6 +748,24 @@ export interface SeaHurricane {
     motionSouth: number;
     share: number;
     inflow: number;
+    /** The wind of its air where the server simulates it (in place of that of its formula); absent otherwise. */
+    air?: SeaAir;
+}
+
+/**
+ * The wind of the air of a hurricane as the sea reads it (uHurAirTex): the points of its grid, `cellPx` apart from the
+ * top left corner of the map, the field told before on the left half of `pixels`, the last on the right (RGBA, east
+ * in red and north in green, 128 for none, `step` m/s a unit); how far from the one to the other now (0 to 1).
+ * `version` changes with the pixels.
+ */
+export interface SeaAir {
+    version: number;
+    columns: number;
+    rows: number;
+    cellPx: number;
+    step: number;
+    share: number;
+    pixels: Uint8ClampedArray<ArrayBuffer>;
 }
 
 /** The uniforms of the hurricane over the wind sea: none (its eye "turning" 0) without one. */
@@ -735,12 +776,17 @@ function hurricaneUniforms(sea: SeaDrawing | undefined): [string, number[]][] {
             ["uHurEye", [0, 0, 1, 0]],
             ["uHurWind", [0, 1, 0, 0]],
             ["uHurMix", [0, 1, 0, 1]],
+            ["uHurAir", [0, 0, 1, 1]],
+            ["uHurAirSize", [2, 2]],
         ];
     }
+    const air = storm.air;
     return [
         ["uHurEye", [storm.eyeX, storm.eyeY, storm.rmaxPx, storm.spin]],
         ["uHurWind", [storm.maxMs, storm.hollandB, storm.motionEast, storm.motionSouth]],
         ["uHurMix", [storm.share, Math.cos(storm.inflow), Math.sin(storm.inflow), sea.windMs]],
+        ["uHurAir", air ? [1, air.share, air.step, air.cellPx] : [0, 0, 1, 1]],
+        ["uHurAirSize", air ? [air.columns, air.rows] : [2, 2]],
     ];
 }
 

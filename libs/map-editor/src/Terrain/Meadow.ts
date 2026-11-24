@@ -188,6 +188,11 @@ export interface MeadowStepInput {
     /** Where the wind comes from (degrees, 0 north, 90 east) and its speed (km/h): it pushes the fire. */
     windFrom?: number;
     windSpeed?: number;
+    /**
+     * The wind at a point of the map (pixels), where it differs from place to place (the air of a hurricane): it then
+     * pushes each fire in place of windFrom and windSpeed. Absent: the one wind of the room everywhere.
+     */
+    windAt?: (x: number, y: number) => { speed: number; from: number } | undefined;
     /** The luck of the fire, from 0 to 1 at each draw: whether it spreads, whether one starts. Math.random when absent. */
     random?: () => number;
     /**
@@ -1106,6 +1111,12 @@ export class Meadow {
         for (const index of spreading) {
             const tileX = index % width;
             const tileY = (index - tileX) / width;
+            // The wind where this fire burns, where it differs from place to place.
+            const local = input.windAt?.((tileX + 0.5) * TILE_PX, (tileY + 0.5) * TILE_PX);
+            const localFrom = local ? (local.from * Math.PI) / 180 : from;
+            const pushX = local ? -Math.sin(localFrom) : windX;
+            const pushY = local ? Math.cos(localFrom) : windY;
+            const pushSpeed = local ? Math.max(0, local.speed) : speed;
             for (let dy = -1; dy <= 1; dy++) {
                 for (let dx = -1; dx <= 1; dx++) {
                     if (dx === 0 && dy === 0) continue;
@@ -1115,10 +1126,10 @@ export class Meadow {
                     const other = y * width + x;
                     if (!this.burns(other)) continue;
                     const corner = dx !== 0 && dy !== 0;
-                    const along = (dx * windX + dy * windY) / (corner ? Math.SQRT2 : 1);
+                    const along = (dx * pushX + dy * pushY) / (corner ? Math.SQRT2 : 1);
                     // The wind holds the flanks and the back of a fire as much as it drives its head: a fire in
                     // the wind is long and narrow (four times as long as wide at 30 km/h, seven at 50).
-                    const wind = fireWindPush(along, speed);
+                    const wind = fireWindPush(along, pushSpeed);
                     const chance =
                         FIRE_SPREAD_CHANCE *
                         pace *
@@ -1129,10 +1140,10 @@ export class Meadow {
                 }
             }
             // Embers: as far downwind as the head of the fire runs at a step, a little less likely the further.
-            const reach = Math.min(HEAD_MAX_TILES, Math.round(speed * HEAD_TILES_PER_KMH));
+            const reach = Math.min(HEAD_MAX_TILES, Math.round(pushSpeed * HEAD_TILES_PER_KMH));
             for (let leap = 2; leap <= reach; leap++) {
-                const x = tileX + Math.round(windX * leap);
-                const y = tileY + Math.round(windY * leap);
+                const x = tileX + Math.round(pushX * leap);
+                const y = tileY + Math.round(pushY * leap);
                 if (x < 0 || y < 0 || x >= width || y >= height) break;
                 const other = y * width + x;
                 if (!this.burns(other)) continue;
