@@ -111,6 +111,69 @@ describe("the ground of a room behind its door (RoomGround)", () => {
         expect(Math.abs(west - southEast)).toBeGreaterThan(10);
     }, 60_000);
 
+    it("lays down the trees of a forest by the wind of the standard exposure, not by the calmer top of its canopy", async () => {
+        // Four oaks more next to the one of the south-east corner, their feet in the tiles 22 and 23: five trees in the
+        // cell of the air of 4 x 4 tiles there (tiles 20 to 23), a forest, and the air past the edge of the map takes
+        // the surface of its edge: from 704 px on, nothing but forest around the feet.
+        const wam = groundWam();
+        for (const [at, [x, y]] of [
+            [680, 648],
+            [712, 648],
+            [680, 680],
+            [712, 680],
+        ].entries()) {
+            wam.entities[`oak-stand-${at}`] = {
+                x,
+                y,
+                prefabRef: { collectionName: "Nature", id: "Nature:tree-oak:Down" },
+            };
+        }
+        const hand = world(wam);
+        const reference = await byHand(hand.inputs);
+        const feet = [
+            [712, 712],
+            [744, 712],
+            [712, 744],
+            [744, 744],
+        ];
+        // The gusts at the top of the canopy and in the standard exposure, at the feet of the stand, after each step.
+        const canopy: { gust: number; share: number }[] = [];
+        const standard: { from: number; gust: number }[][] = feet.map(() => []);
+        reference.water.stepAlong(() => {
+            feet.forEach(([x, y], at) => {
+                const top = reference.air.windAt(x, y);
+                const open = reference.air.standardWindAt(x, y);
+                if (!top || !open) return;
+                canopy.push({
+                    gust: Math.hypot(top.east, top.north) * 3.6 * HURRICANE_GUST_FACTOR,
+                    share: Math.hypot(top.east, top.north) / Math.max(1e-9, Math.hypot(open.east, open.north)),
+                });
+                const from = ((((Math.atan2(open.east, open.north) * 180) / Math.PI + 180) % 360) + 360) % 360;
+                standard[at].push({ from, gust: Math.hypot(open.east, open.north) * 3.6 * HURRICANE_GUST_FACTOR });
+            });
+        });
+        await live(reference, hand.state);
+        reference.stop();
+        const trees = reference.treeSnapshot()?.trees ?? [];
+        // The top of the canopy blows at a third of the standard exposure there (surfaceRatio of a forest over that of
+        // open land, 0.27 for 0.84 of the sea's), rarely as hard as what lays a tree down (EF: 130 km/h of gusts at
+        // 10 m in open terrain); the standard exposure does, and each tree lies the way it blew there.
+        expect(canopy.length).toBeGreaterThan(0);
+        for (const told of canopy) {
+            expect(told.share).toBeGreaterThan(0.2);
+            expect(told.share).toBeLessThan(0.4);
+        }
+        for (let at = 0; at < 4; at++) {
+            const tree = trees.find((told) => told.id === `oak-stand-${at}`);
+            expect(tree, `oak-stand-${at}`).toMatchObject({ fire: 0, damage: 16 });
+            const fallen = (tree?.fallen ?? 0) - 1;
+            expect(
+                standard[at].some((wind) => Math.round(wind.from) % 360 === fallen && wind.gust >= TREE_FALL_GUST_KMH),
+                `oak-stand-${at} fallen from ${fallen}`,
+            ).toBe(true);
+        }
+    }, 60_000);
+
     it("rains on the water at the real rate of a hurricane, and not at all in its eye", async () => {
         /** The rain the water of the room last said it reads (mm an hour of its own time), and how fast it lives. */
         const rainUnder = async (

@@ -6226,6 +6226,11 @@ mailles marge comprise sur la carte d'Antoine).
   avec des obstacles hauts de h ≈ 10 z0 et un déplacement d ≈ 2/3 h (Garratt 1992, Raupach 1994, à vérifier). Une
   forêt de z0 = 1 m mesure 10 m : son « 10 m » est le sommet de sa canopée. Mesuré en catégorie 4 : 195 km/h sur mer,
   165 sur sol ouvert (−15 %, comme à un atterrissage), 46 au sommet d'une forêt ; en catégorie 5 : 235, 198, 54.
+- Qui lit quel vent : les lecteurs de surface (débris, arbres qui ploient, mer, feux, panneau Météo) prennent le vent
+  à 10 m de leur surface, celui du sommet de la canopée en forêt. Les **arbres couchés** prennent le vent d'exposition
+  standard (`standardWindAt` : 10 m sur sol ouvert sous la même couche), celui des stations (OMM) et de l'échelle EF
+  sur laquelle est défini leur seuil de 130 km/h de rafales, arbre en peuplement compris. Piste hors lot : un seuil
+  propre aux arbres en peuplement, lu au sommet de la canopée (vitesses critiques de ForestGALES).
 - Les défauts de la forêt (mur contracté à 0,55 Rmax, œil mobile rempli, asymétrie inversée) venaient de
   l'épaisseur unique de la couche : corrigés le 2026-11-24 (PR #554). Rayon du maximum 0,85 Rmax en forêt (0,90
   sur mer), œil calme, côté fort à droite dans le nord ; entrée 20,0° sur mer, 22,0° sur sol ouvert, 25,8° en forêt.

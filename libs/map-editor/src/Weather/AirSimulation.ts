@@ -233,6 +233,13 @@ export class AirSimulation {
     private readonly friction: Float32Array[] = [];
     /** For each roughness of land, its surfaceRatio at each m/s of wind up to FRICTION_TABLE_MS. */
     private readonly surfaceShares: Float32Array[] = [];
+    /** The surfaceRatio of open land (AIR_ROUGHNESS_M.land) at each m/s: that of the standard exposure. */
+    private readonly openShares = (() => {
+        const shares = new Float32Array(FRICTION_TABLE_MS + 1);
+        for (let speed = 0; speed <= FRICTION_TABLE_MS; speed++)
+            shares[speed] = surfaceRatio(speed, AIR_ROUGHNESS_M.land);
+        return shares;
+    })();
     private readonly layerM: number;
     private readonly exchange: boolean;
 
@@ -319,6 +326,40 @@ export class AirSimulation {
             const e = this.east[cell];
             const n = this.north[cell];
             const share = weight * this.surfaceShareAt(cell, Math.hypot(e, n));
+            east += e * share;
+            north += n * share;
+        };
+        add(at, (1 - fx) * (1 - fy));
+        add(at + 1, fx * (1 - fy));
+        add(below, (1 - fx) * fy);
+        add(below + 1, fx * fy);
+        return { east, north };
+    }
+
+    /**
+     * The wind at 10 m in the standard exposure at a map point (pixels), east and north, m/s: that of open land
+     * (AIR_ROUGHNESS_M.land) under the layer of each cell around, whatever its own surface, bilinear between the cells.
+     * The wind of a weather station (the WMO exposure: 10 m over open land) and the one the Enhanced Fujita scale reads
+     * its damage on (3 s gusts at 10 m in open terrain, a tree standing in a forest included): what lays trees down
+     * against TREE_FALL_GUST_KMH. Over a forest the layer is the forest's, slowed by it; only the height read differs.
+     * Not taken (out of this work): a threshold of its own for a tree in a stand, read at the top of its canopy, as the
+     * critical wind speeds of ForestGALES (Gardiner et al. 2000, 2008) are; it would need sourcing species by species.
+     */
+    public standardWindAt(x: number, y: number): { east: number; north: number } {
+        const gx = Math.min(this.columns - 1.000001, Math.max(0, (x - this.originX) / AIR_CELL_PX));
+        const gy = Math.min(this.rows - 1.000001, Math.max(0, (y - this.originY) / AIR_CELL_PX));
+        const x0 = Math.floor(gx);
+        const y0 = Math.floor(gy);
+        const at = y0 * this.columns + x0;
+        const below = at + this.columns;
+        const fx = gx - x0;
+        const fy = gy - y0;
+        let east = 0;
+        let north = 0;
+        const add = (cell: number, weight: number): void => {
+            const e = this.east[cell];
+            const n = this.north[cell];
+            const share = weight * tableAt(this.openShares, Math.hypot(e, n));
             east += e * share;
             north += n * share;
         };

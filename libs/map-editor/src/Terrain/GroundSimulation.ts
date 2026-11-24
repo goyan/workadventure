@@ -112,8 +112,12 @@ export class GroundSimulation<
             this.air = air;
             // One step of the air with each step of the water: the same steps with and without a thread of its own.
             water.stepAlong(() => air.step());
-            // Its wind lays the trees down and pushes the fires, each where it is.
-            meadow.airUnder((x, y) => air.windAt(x, y));
+            // Its wind pushes the fires, each where it is, at 10 m over its surface; that of the standard exposure
+            // lays the trees down.
+            meadow.airUnder(
+                (x, y) => air.windAt(x, y),
+                (x, y) => air.standardWindAt(x, y),
+            );
         }
         const catchUp = setup.catchUp;
         if (catchUp) {

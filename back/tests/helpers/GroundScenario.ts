@@ -263,7 +263,10 @@ export async function byHand(
             ),
     });
     water.stepAlong(() => air.step());
-    meadow.airUnder((x, y) => air.windAt(x, y));
+    meadow.airUnder(
+        (x, y) => air.windAt(x, y),
+        (x, y) => air.standardWindAt(x, y),
+    );
     // The snow and the ice go as fast as what comes in to the water, as GroundSimulation wires them.
     meadow.timesWith(() => water.livedTimes().inflow);
     meadow.snowUnder(() => {

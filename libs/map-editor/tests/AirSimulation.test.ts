@@ -17,6 +17,7 @@ import {
     hollandShape,
     landFriction,
     seaDrag,
+    surfaceRatio,
 } from "../src/Weather/AirSimulation";
 
 /** The map of Antoine: 240 x 160 tiles of 32 px; map pixels in a metre. */
@@ -150,6 +151,26 @@ describe("the air of a map under a hurricane (AirSimulation)", () => {
         expect(land).toBeLessThan(sea * 0.9);
         expect(land).toBeGreaterThan(sea * 0.75);
         expect(forest).toBeLessThan(land * 0.5);
+    }, 60_000);
+
+    it("tells the wind of the standard exposure, open land under the same layer, over any surface", () => {
+        const forest = spun(standing(4), AIR_ROUGHNESS_M.forest, 60);
+        const land = spun(standing(4), AIR_ROUGHNESS_M.land, 60);
+        for (const [x, y] of [
+            [3840 + 1000, 2560],
+            [3840, 2560 - 1500],
+            [3840 - 2500, 2560 + 300],
+        ]) {
+            // Over open land: its own wind at 10 m.
+            expect(land.standardWindAt(x, y).east).toBeCloseTo(land.surfaceWindAt(x, y).east, 6);
+            // Over a forest: the layer of the forest read at 10 m over open land, three times the top of its canopy.
+            const layer = forest.windAt(x, y);
+            const speed = Math.hypot(layer.east, layer.north);
+            const open = forest.standardWindAt(x, y);
+            expect(Math.hypot(open.east, open.north) / speed).toBeCloseTo(surfaceRatio(speed, AIR_ROUGHNESS_M.land), 2);
+            const top = forest.surfaceWindAt(x, y);
+            expect(Math.hypot(top.east, top.north) / Math.hypot(open.east, open.north)).toBeLessThan(0.4);
+        }
     }, 60_000);
 
     it("turns anticlockwise in the north, clockwise in the south", () => {

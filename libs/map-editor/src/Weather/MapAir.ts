@@ -175,6 +175,14 @@ export class MapAir {
         return this.air?.surfaceWindAt(x, y);
     }
 
+    /**
+     * The wind at 10 m in the standard exposure (open land under the same layer: AirSimulation.standardWindAt) at a
+     * point of the map (m/s), while the air lives; undefined otherwise. What lays the trees down.
+     */
+    public standardWindAt(x: number, y: number): { east: number; north: number } | undefined {
+        return this.air?.standardWindAt(x, y);
+    }
+
     private live(hurricane: Hurricane): void {
         const now = this.setup.now();
         const roomWind = this.setup.roomWind();
