@@ -880,22 +880,24 @@ void main() {
         // a wave can be (WATER_STEEPEST_SLOPE) is water falling down a step, not a face of water: left as it was. A
         // level water is left exactly as it was.
         vec2 surfaceSlope = waterSlopeAt(world);
-        float aslant = deep * (1.0 - smoothstep(${glsl(WATER_STEEPEST_SLOPE)}, ${glsl(1.25 * WATER_STEEPEST_SLOPE)},
-            length(surfaceSlope)));
-        water *= mix(1.0, waterFacing(surfaceSlope), aslant);
+        float face = 1.0 - smoothstep(${glsl(WATER_STEEPEST_SLOPE)}, ${glsl(1.25 * WATER_STEEPEST_SLOPE)},
+            length(surfaceSlope));
+        float facing = waterFacing(surfaceSlope);
+        water *= mix(1.0, facing, deep * face);
         vec2 seaRipple = vec2(0.0);
         float seaWhite = 0.0;
+        float spray = 0.0;
 #ifdef WIND_SEA
         if (uSea.z > 0.5 && open > 0.5) {
             seaWindHere(world);
             gSeaDepthPx = depthPx;
             seaAmplitudes(pack(${FETCH_PACK}.0, world).r * ${FETCH_GLSL_METRES}, depthPx * ${glsl(MAP_PX_METRES)});
             seaWhite = seaFoam(world);
-            // In a hurricane the spray hides the waves: less light and shade, less of what the water reflects.
-            float spray = seaSpray(world);
+            // In a hurricane the spray hides the waves: less light and shade, less of what the water reflects. Its
+            // haze is laid over the foam too, further down.
+            spray = seaSpray(world);
             if (spray > 0.0) {
                 water *= 1.0 + ${glsl(SEA_SHADE)} * (1.0 - spray) * seaLight(gSeaLight);
-                water = mix(water, vec3(0.86, 0.89, 0.91), spray);
                 seaRipple = gSeaLight * ${glsl(SEA_RIPPLE_PX)} * (1.0 - spray);
             } else {
                 water *= 1.0 + ${glsl(SEA_SHADE)} * seaLight(gSeaLight);
@@ -941,8 +943,16 @@ void main() {
         // The foam of the crests of the wind sea that break, and the foam they left (WindSeaShader.ts).
         foam = max(foam, seaWhite * 0.95);
 
-        water = mix(water, FOAM, foam);
+        // The foam lies on the surface and scatters the light it gets about evenly every way: a diffuse white, some
+        // 55 % fresh and dense (Whitlock et al. 1982, Geophys. Res. Lett. 9:719), 22 % on the mean of whitecaps,
+        // taken as a Lambertian reflector (Koepke 1984, Appl. Opt. 23:1816). A face of foam aslant is lit by the
+        // cosine of the light on it as the water is (waterFacing), all of it, not only a share as the water (the
+        // ground is not seen through it). Being white, it shows the slope the more: the dome of a hurricane reads on
+        // its white sea. Never over white.
+        water = mix(water, min(FOAM * mix(1.0, facing, face), vec3(1.0)), foam);
         alpha = max(alpha, foam * 0.9);
+        // The spray of a hurricane is in the air, over the water and its foam: a haze, not lit by their slope.
+        water = mix(water, vec3(0.86, 0.89, 0.91), spray);
 
         float waterAlpha = alpha * cover;
         outColor = vec4(water * waterAlpha, waterAlpha) + outColor * (1.0 - waterAlpha);
