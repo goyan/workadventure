@@ -47,6 +47,7 @@ import type {
     AquaticLifeMessage,
     CatastropheKind,
     HurricaneTrackMessage,
+    TsunamiMessage,
     FishingMessage,
     IceShackAction,
     IceShacksMessage,
@@ -383,6 +384,7 @@ export class GameRoom implements BrothersFinder {
             balls: () => groundParts.catastrophes?.balls() ?? [],
             colds: () => groundParts.catastrophes?.colds() ?? [],
             hurricane: () => groundParts.catastrophes?.hurricane(),
+            tsunami: () => groundParts.catastrophes?.tsunami(),
             // The antelopes of the life of the land graze the meadow.
             grazers: () => groundParts.aquaticLife?.grazers() ?? [],
             // In the cold of the room the rain of the map falls as snow; the weather is not known until it is read.
@@ -1388,8 +1390,20 @@ export class GameRoom implements BrothersFinder {
         release = false,
         temperature?: number,
         hurricane?: HurricaneTrackMessage,
+        tsunami?: TsunamiMessage,
     ): void {
-        this.catastrophes?.request(user.id, kind, x, y, radiusTiles, wholeMap, release, temperature, hurricane);
+        this.catastrophes?.request(
+            user.id,
+            kind,
+            x,
+            y,
+            radiusTiles,
+            wholeMap,
+            release,
+            temperature,
+            hurricane,
+            tsunami,
+        );
     }
 
     /** A player casts their fishing line at a point of the map. */

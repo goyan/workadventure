@@ -7,6 +7,7 @@ import type {
     FireThresholds,
     Hurricane,
     LifeFire,
+    Tsunami,
     PrecipitationAir,
     WaterView,
 } from "@workadventure/map-editor";
@@ -35,6 +36,8 @@ export interface RoomGroundInputs {
     colds?(): readonly ColdMass[];
     /** The hurricane crossing the map: its wind, its air and its rain take the place of those of the room. */
     hurricane?(): Hurricane | undefined;
+    /** The tsunami coming in by the east edge of the map: the sea it holds at the coast. */
+    tsunami?(): Tsunami | undefined;
     /** Where the animals that graze are (map pixels). */
     grazers(): readonly { x: number; y: number }[];
     /** The air the precipitation of the room falls through; undefined while it is not known. */

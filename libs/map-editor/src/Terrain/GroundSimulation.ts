@@ -3,6 +3,7 @@ import type { ColdMass } from "../Catastrophe/Cold";
 import type { Downpour } from "../Catastrophe/Downpour";
 import type { Drain } from "../Catastrophe/Drain";
 import type { Hurricane } from "../Catastrophe/Hurricane";
+import type { Tsunami } from "../Catastrophe/Tsunami";
 import type { PrecipitationAir } from "../Weather/Precipitation";
 import type { MapPlace, RealWeatherSlot } from "../Weather/RealWeather";
 import type { MeadowSimulation, MeadowWater, ReplayedWeather } from "./MeadowSimulation";
@@ -30,6 +31,8 @@ export interface GroundSetup<W extends WaterSimulation, M extends MeadowSimulati
         colds?(): readonly ColdMass[];
         /** The hurricane crossing the map: its rain takes the place of that of the map, on the water and the meadow. */
         hurricane?(): Hurricane | undefined;
+        /** The tsunami coming in by the east edge of the map: the sea it holds there, on the water. */
+        tsunami?(): Tsunami | undefined;
     };
     /**
      * How a ground left alone lives the time it missed (MeadowSimulation.catchUpWith): the water then lives it along
@@ -73,6 +76,7 @@ export class GroundSimulation<
         meadow.snowUnder(() => setup.snow());
         meadow.pourWith(water.pour.bind(water));
         if (catastrophes?.colds) meadow.coldUnder(catastrophes.colds.bind(catastrophes));
+        if (catastrophes?.tsunami) water.seaUnder(catastrophes.tsunami.bind(catastrophes));
         if (catastrophes?.hurricane) {
             const hurricane = catastrophes.hurricane.bind(catastrophes);
             water.skyUnder(hurricane);

@@ -9,6 +9,7 @@ import type {
     MapPlace,
     PrecipitationAir,
     RealWeatherSlot,
+    Tsunami,
     WAMFileFormat,
     WaterGridBounds,
     WaterSnapshotBuffers,
@@ -30,6 +31,8 @@ export interface GroundRoomState {
     colds?: readonly ColdMass[];
     /** The hurricane crossing the map; absent while there is none. Its weather is computed from it at each step. */
     hurricane?: Hurricane;
+    /** The tsunami coming in; absent while there is none. The sea it holds is computed from it at each step. */
+    tsunami?: Tsunami;
     grazers: readonly { x: number; y: number }[];
     air: PrecipitationAir | undefined;
     fire: FireConditions;

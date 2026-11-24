@@ -26,10 +26,14 @@ import {
     meteorShape,
     METEORS_PER_ROOM,
     TILE_PX,
+    TSUNAMI_TELL_MS,
+    tsunamiLastsMs,
+    tsunamiMetres,
+    tsunamiMinutes,
 } from "@workadventure/map-editor";
-import type { Ball, ColdMass, Downpour, Drain, Hurricane } from "@workadventure/map-editor";
+import type { Ball, ColdMass, Downpour, Drain, Hurricane, Tsunami } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
-import type { HurricaneTrackMessage } from "@workadventure/messages";
+import type { HurricaneTrackMessage, TsunamiMessage } from "@workadventure/messages";
 import type { GameRoom } from "./GameRoom";
 
 /** The ice broken around a player who goes through it, in tiles: the hole they fall into. */
@@ -104,6 +108,9 @@ export class CatastropheManager {
     private stormTimer: ReturnType<typeof setInterval> | undefined;
     /** Whether the map lies in the southern hemisphere (its hurricanes turn clockwise): given by the room. */
     private southern: () => boolean = () => false;
+    /** The tsunami coming in from the sea, one a room, and what tells the room about it once a second. */
+    private wave: Tsunami | undefined;
+    private waveTimer: ReturnType<typeof setInterval> | undefined;
     /** How many times faster the hurricane goes (the speed of the map, hurricaneTimesOf): given by the room. */
     private hurricaneTimes: () => number = () => 1;
 
@@ -612,6 +619,85 @@ export class CatastropheManager {
         if (left <= 0) this.endHurricane();
     }
 
+    /**
+     * A player sends a tsunami to the coast of the map (its east edge), as high and for as long as they chose (kept
+     * within what a tsunami may be): its front reaches the coast now. The room is told at once, then once a second
+     * while it goes on, its backwash included, and once more when it ends; the water of the room reads the sea it
+     * holds at the coast (tsunami). One a room: false while one goes on, or once the room stopped.
+     */
+    public startTsunami(asked: TsunamiMessage): boolean {
+        if (this.stopped || this.tsunami()) return false;
+        if (!this.mapSize()) return false;
+        this.wave = {
+            id: this.nextId++,
+            startedAt: this.now(),
+            metres: tsunamiMetres(asked.metres),
+            durationMs: tsunamiMinutes(asked.minutes) * 60_000,
+        };
+        this.tellTsunami();
+        if (!this.waveTimer) {
+            this.waveTimer = setInterval(() => {
+                try {
+                    this.tellTsunami();
+                } catch (error) {
+                    console.error("The tsunami of the room could not be told", error);
+                }
+            }, TSUNAMI_TELL_MS);
+            // A tsunami must never keep the process alive.
+            this.waveTimer.unref?.();
+        }
+        return true;
+    }
+
+    /** A player stops the tsunami of the room: the sea is gone from the coast at once, and the room is told. */
+    public stopTsunami(): boolean {
+        const wave = this.tsunami();
+        if (!wave || this.stopped) return false;
+        this.tellTsunami(wave, 0);
+        this.endTsunami();
+        return true;
+    }
+
+    /** The tsunami coming in now, its backwash included; undefined once it ended. */
+    public tsunami(): Tsunami | undefined {
+        const wave = this.wave;
+        if (wave && this.now() >= wave.startedAt + tsunamiLastsMs(wave)) return undefined;
+        return wave;
+    }
+
+    private endTsunami(): void {
+        this.wave = undefined;
+        if (this.waveTimer) clearInterval(this.waveTimer);
+        this.waveTimer = undefined;
+    }
+
+    /** Tells the room the tsunami, and how long it still lasts: 0 once it ended, and then it is forgotten. */
+    private tellTsunami(wave = this.wave, lastsMs?: number): void {
+        if (!wave) return this.endTsunami();
+        const left = lastsMs ?? Math.max(0, wave.startedAt + tsunamiLastsMs(wave) - this.now());
+        this.room.sendSubMessageToRoom({
+            message: {
+                $case: "catastropheMessage",
+                catastropheMessage: {
+                    id: wave.id,
+                    kind: CatastropheKind.CATASTROPHE_TSUNAMI,
+                    x: 0,
+                    y: 0,
+                    impactInMs: left,
+                    radiusTiles: 0,
+                    wholeMap: true,
+                    tsunami: {
+                        metres: wave.metres,
+                        minutes: Math.round(wave.durationMs / 60_000),
+                        startedAt: wave.startedAt,
+                        durationMs: wave.durationMs,
+                    },
+                },
+            },
+        });
+        if (left <= 0) this.endTsunami();
+    }
+
     /** What a player asks for: the downpour, the drain or the ball that follows them, or a catastrophe thrown once. */
     public request(
         userId: number,
@@ -623,11 +709,13 @@ export class CatastropheManager {
         release = false,
         temperature?: number,
         hurricane?: HurricaneTrackMessage,
+        tsunami?: TsunamiMessage,
     ): boolean {
-        // A ball is let go, a cold snap and a hurricane are stopped: the others end by themselves.
+        // A ball is let go, a cold snap, a hurricane and a tsunami are stopped: the others end by themselves.
         if (release) {
             if (kind === CatastropheKind.CATASTROPHE_COLD) return this.calm();
             if (kind === CatastropheKind.CATASTROPHE_HURRICANE) return this.stopHurricane();
+            if (kind === CatastropheKind.CATASTROPHE_TSUNAMI) return this.stopTsunami();
             return kind === CatastropheKind.CATASTROPHE_BALL && this.release(userId);
         }
         if (kind === CatastropheKind.CATASTROPHE_DOWNPOUR) return this.rain(userId, x, y, radiusTiles, wholeMap);
@@ -638,6 +726,7 @@ export class CatastropheManager {
         if (kind === CatastropheKind.CATASTROPHE_COLD) return this.cold(userId, x, y, radiusTiles, temperature);
         if (kind === CatastropheKind.CATASTROPHE_HURRICANE)
             return hurricane ? this.startHurricane(hurricane, x, y) : false;
+        if (kind === CatastropheKind.CATASTROPHE_TSUNAMI) return tsunami ? this.startTsunami(tsunami) : false;
         return this.launch(kind, x, y, radiusTiles);
     }
 
@@ -695,5 +784,6 @@ export class CatastropheManager {
         this.chilling.clear();
         this.holding.clear();
         this.endHurricane();
+        this.endTsunami();
     }
 }

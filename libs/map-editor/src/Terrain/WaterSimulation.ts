@@ -5,6 +5,7 @@ import {
     DEFAULT_WATER_SETTINGS,
     TERRAIN_CELL,
     TILE_PX,
+    WATER_PACE_BOUNDS,
     waterHasInertia,
     WeatherType,
 } from "../types";
@@ -23,6 +24,8 @@ import type { PrecipitationAir } from "../Weather/Precipitation";
 import { rainRateAt } from "../Weather/RainRate";
 import { hurricanePressure, skyRainUnder } from "../Catastrophe/Hurricane";
 import type { Hurricane } from "../Catastrophe/Hurricane";
+import { tsunamiSea } from "../Catastrophe/Tsunami";
+import type { Tsunami } from "../Catastrophe/Tsunami";
 import type { MapPlace, RealWeatherSlot } from "../Weather/RealWeather";
 import { waterPassRunner } from "./WaterBands";
 import { BallLevels } from "./BallLevels";
@@ -193,6 +196,8 @@ export class WaterSimulation {
     private air: () => PrecipitationAir | undefined = () => undefined;
     /** The hurricane crossing the map, whose rain takes the place of that of the map (none on a ground of one's own). */
     private hurricane: () => Hurricane | undefined = () => undefined;
+    /** The tsunami coming in from the sea by the east edge of the map (none on a ground of one's own). */
+    private tsunami: () => Tsunami | undefined = () => undefined;
     /** What the room was last told, to send only what changed since. */
     private sentBytes: Uint8Array | undefined;
     private sentRates = false;
@@ -392,6 +397,11 @@ export class WaterSimulation {
         this.hurricane = hurricane;
     }
 
+    /** The catastrophes of the room say which tsunami comes in: the sea it holds at the east edge of the map. */
+    public seaUnder(tsunami: () => Tsunami | undefined): void {
+        this.tsunami = tsunami;
+    }
+
     /** One step of the water (ten a second), and once a second the room is told. */
     public step(): void {
         const grid = this.grid;
@@ -408,7 +418,16 @@ export class WaterSimulation {
         // The fineness and the tellings the map asks for are ceilings: less while the steps take too long; the
         // least while the water goes faster than reality (its steps are many).
         const inertia = waterHasInertia(settings?.water);
-        const asked = inertia ? (settings?.water?.precision ?? DEFAULT_WATER_PACE.precision) : 1;
+        // The sea of a tsunami at the east edge: its bore runs at the square root of g times its depth only with
+        // as many moves a step as that depth asks for (WaterGrid.flowWithInertia), the most a map may ask while it
+        // goes on; fewer while the steps take too long, as for any water (WaterLoad).
+        const sea = tsunamiSea(this.tsunami(), this.now());
+        grid.setSea(sea);
+        const asked = inertia
+            ? sea
+                ? WATER_PACE_BOUNDS.precision[1]
+                : (settings?.water?.precision ?? DEFAULT_WATER_PACE.precision)
+            : 1;
         // A map that says nothing of its water has the water of reality, with inertia.
         const water = inertia
             ? { ...(settings?.water ?? DEFAULT_WATER_SETTINGS), precision: times > 1 ? 1 : this.load.precision(asked) }
@@ -439,14 +458,20 @@ export class WaterSimulation {
         const raining = this.pourDownpours(grid);
         this.pumpPools(grid, WATER_STEP_MS / 1000);
         const draining = this.takeDrains(grid);
-        const waving = this.waves.length > 0 || raining || draining || displacing || this.steps < this.stirredUntilStep;
+        const waving =
+            this.waves.length > 0 ||
+            raining ||
+            draining ||
+            displacing ||
+            sea !== undefined ||
+            this.steps < this.stirredUntilStep;
         if (this.waves.length > 0) this.advanceWaves(grid);
         const pouring = this.rainRate > 0 || this.objects.some((object) => object.litresPerMinute > 0);
         // Under the low of a hurricane the water stands higher, and follows it as it goes (the inverted barometer):
         // the grid is kept moving while it crosses the map.
         const pressure = hurricanePressure(this.hurricane(), this.now());
         grid.setPressure(pressure);
-        const pressing = pressure !== undefined;
+        const pressing = pressure !== undefined || sea !== undefined;
         if (this.moving || pouring || pressing) {
             const input = stepInputOf(stepWater, this.rainRate, this.objects, WATER_STEP_MS / 1000);
             // The water with inertia runs as it really does at each step of its time: no move more towards the sinks,
