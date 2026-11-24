@@ -135,12 +135,18 @@ export class HurricaneView {
 
     /**
      * At each image: where the eye is at `serverDate` and how far the spiral has turned since the storm began (still
-     * in reduced motion), over the view of the camera. `sunElevation` darkens it at night.
+     * in reduced motion), over the view of the camera. `sunElevation` darkens it at night. Not `shown` (Basique), it
+     * is not drawn: the hurricane still blows.
      */
-    public update(serverDate: Date | undefined, sunElevation: number | undefined, reducedMotion: boolean): void {
+    public update(
+        serverDate: Date | undefined,
+        sunElevation: number | undefined,
+        reducedMotion: boolean,
+        shown: boolean,
+    ): void {
         const hurricane = this.hurricane;
         const storm = serverDate ? hurricaneAt(hurricane, serverDate.getTime()) : undefined;
-        if (!hurricane || !storm || storm.share <= 0) {
+        if (!shown || !hurricane || !storm || storm.share <= 0) {
             if (this.shader.visible) this.shader.setVisible(false);
             return;
         }

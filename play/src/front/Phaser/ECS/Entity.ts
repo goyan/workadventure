@@ -22,6 +22,7 @@ import { FLOOR_LEVEL_DEPTH, floorDepth, floorPieceDepth } from "../Game/MapEdito
 import type { ActionsMenuAction } from "../../Stores/ActionsMenuStore";
 import { actionsMenuStore } from "../../Stores/ActionsMenuStore";
 import { mapEditorModeStore } from "../../Stores/MapEditorStore";
+import { isBasicActive } from "../../Stores/BasicModeStore";
 import { createColorStore } from "../../Stores/OutlineColorStore";
 import { getImageCoWebsiteTitle, ImageCoWebsite, isImageCoWebsiteUrl } from "../../WebRtc/CoWebsite/ImageCoWebsite";
 import { SimpleCoWebsite } from "../../WebRtc/CoWebsite/SimpleCoWebsite";
@@ -211,9 +212,10 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         const unsnowed =
             seasonalPath && this.scene.textures.exists(seasonalPath) ? seasonalPath : this.prefab.imagePath;
         // A tree the wind laid down: it lies uprooted on the ground (drawn by FallenTreeView: nothing stands at its
-        // place meanwhile), then grows back from its foot. Not while the map is edited either.
+        // place meanwhile), then grows back from its foot. Not while the map is edited either, nor in Basique: the tree
+        // stands there as the map has it.
         const fallen =
-            isSwayingTree(this.prefab.id) && !get(mapEditorModeStore)
+            isSwayingTree(this.prefab.id) && !get(mapEditorModeStore) && !isBasicActive()
                 ? scene.getTreeFire?.().fallenOf(this.entityId)
                 : undefined;
         const fallenTexture = fallen

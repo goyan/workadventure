@@ -7,6 +7,7 @@
     import { altitudeLabel, metresLabel, SOIL_NAME_CH } from "../../Phaser/Game/Floors/AvatarAltitude";
     import { SOIL_TINTS } from "../../Phaser/Game/Terrain/TerrainShading";
     import { pointerFloodRiseStore } from "../../Stores/CatastropheStore";
+    import { basicActiveStore } from "../../Stores/BasicModeStore";
     import { floorLevelViewedStore, levelChangePulses } from "../../Stores/FloorLevelsStore";
     import { IconCheck, IconChevronDown, IconDroplet, IconSnowflake } from "@wa-icons";
 
@@ -48,8 +49,9 @@
               ? `< ${metresLabel(0.1, $locale, false)}`
               : metresLabel(pointer.depth, $locale, false),
     );
-    // How much higher the water is here than before the hurricane (negative: lower), when one is followed.
-    let floodRise = $derived($pointerFloodRiseStore);
+    // How much higher the water is here than before the hurricane (negative: lower), when one is followed; not in
+    // Basique, which shows no catastrophe.
+    let floodRise = $derived($basicActiveStore ? undefined : $pointerFloodRiseStore);
     let waterName = $derived(
         pointer?.ice
             ? $LL.mapEditor.mapLayer.floorLevel.pointerIce()

@@ -12,6 +12,7 @@ import {
 } from "@workadventure/map-editor";
 import type { Hurricane, HurricaneHere, WaterBall } from "@workadventure/map-editor";
 import { derived, get, writable } from "svelte/store";
+import { basicActiveStore } from "./BasicModeStore";
 
 /** "meteor" is the comet, which brings water; "fireball" is the burning meteor, which sets its crater on fire. */
 export type CatastropheChoice = "meteor" | "fireball" | "downpour" | "fire" | "drain" | "ball" | "cold";
@@ -92,11 +93,12 @@ export const forgetChoiceSubscriptions = [
 
 /**
  * The catastrophe the next click on the map throws: the chosen one while the panel is shown. In the map editor too:
- * the editor puts its tool aside while one is armed (see MapEditorModeManager).
+ * the editor puts its tool aside while one is armed (see MapEditorModeManager). Never in Basique: the panel is hidden
+ * there, a click on the map must not throw what it no longer shows.
  */
 export const armedCatastropheStore = derived(
-    [chosenCatastropheStore, catastrophePanelStore],
-    ([$chosen, $panelShown]) => ($panelShown ? $chosen : undefined),
+    [chosenCatastropheStore, catastrophePanelStore, basicActiveStore],
+    ([$chosen, $panelShown, $basic]) => ($panelShown && !$basic ? $chosen : undefined),
 );
 
 /** Arms the catastrophe, or disarms it when it is already the armed one. */
