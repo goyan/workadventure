@@ -58,6 +58,8 @@ import {
     rainVeilAlpha,
 } from "./Rain";
 import type { RainLocal, RainWind } from "./Rain";
+import { boostedAlpha, boostedSize, densityPlan } from "./ParticleDensity";
+import type { DensityPlan } from "./ParticleDensity";
 import { mapGroundWetness, PUDDLE_ROW, puddleRows, puddlesIn } from "./Puddles";
 import {
     cloudAlpha,
@@ -566,7 +568,8 @@ export class WeatherManager {
             if (snow < 1) this.drawRain(epoch, view, rain * (1 - snow), wind, isOutdoor, underClouds);
             const fall: SnowFall = {
                 // The snow of the winter theme under a dry sky falls as it says, whatever the rate of the map.
-                level: Math.min(1, (flakes ?? snowLevel(settings?.rainRate, snow, storm)) * this.rainSettings.amount),
+                // How hard it snows, as the air says: the personal amount adds flakes (drawSnow), not intensity.
+                level: Math.min(1, flakes ?? snowLevel(settings?.rainRate, snow, storm)),
                 mix: flakeMix(this.options.precipitationAir?.()),
             };
             if (fall.level > 0) {
@@ -965,9 +968,11 @@ export class WeatherManager {
         isOutdoor: ((x: number, y: number) => boolean) | undefined,
         local: RainLocal | undefined,
     ): void {
-        const amount = intensity * this.rainSettings.amount;
+        // The personal amount adds drops to the rain as it is (the same sizes, the same wind), it does not make it
+        // heavier: the intensity stays what the air says.
+        const density = densityPlan(this.rainSettings.amount);
         if (this.perspective) {
-            this.drawRainInPerspective(epoch, view, amount, wind, isOutdoor, local);
+            this.drawRainInPerspective(epoch, view, intensity, wind, isOutdoor, local, density);
             this.drawSplashes(epoch, view, 1, intensity, isOutdoor, local);
             return;
         }
@@ -980,7 +985,7 @@ export class WeatherManager {
                 : { x: view.x * fine, y: view.y * fine, width: view.width * fine, height: view.height * fine };
         const localFine: RainLocal | undefined = local && fine !== 1 ? (x, y) => local(x / fine, y / fine) : local;
         // A drop shows where its whole streak is outdoors (head, middle and tail): no trail over the edge of a roof.
-        const drops = rainDrops(epoch, finer, amount, wind, localFine)
+        const drops = rainDrops(epoch, finer, intensity, wind, localFine, density.copies)
             .map((drop) =>
                 fine === 1 ? drop : { ...drop, x: drop.x / fine, y: drop.y / fine, length: drop.length / fine },
             )
@@ -1000,7 +1005,11 @@ export class WeatherManager {
                 [0.5, 1],
             ] as const) {
                 // The near drops are thicker: they read as closer.
-                this.graphics.lineStyle((layer === 2 ? 1.5 : 1) / fine, RAIN_COLOR, plane[0].alpha * fade);
+                this.graphics.lineStyle(
+                    ((layer === 2 ? 1.5 : 1) * boostedSize(density.boost)) / fine,
+                    RAIN_COLOR,
+                    boostedAlpha(plane[0].alpha * fade, density.boost),
+                );
                 this.graphics.beginPath();
                 for (const drop of plane) {
                     const height = drop.length * share;
@@ -1079,16 +1088,26 @@ export class WeatherManager {
                 : { x: view.x * fine, y: view.y * fine, width: view.width * fine, height: view.height * fine };
         const localFine: RainLocal | undefined = local && fine !== 1 ? (x, y) => local(x / fine, y / fine) : local;
         const tones = snowTones(night);
+        // The personal amount adds flakes to the snow as it is, it does not make it heavier (see drawRain).
+        const density = densityPlan(this.rainSettings.amount);
         if (this.perspective) {
-            this.drawSnowInPerspective(epoch, view, fall, air, tones, isOutdoor, local);
+            this.drawSnowInPerspective(epoch, view, fall, air, tones, isOutdoor, local, density);
             return;
         }
-        const pixel = 1 / fine;
-        for (const flake of snowflakes(epoch, finer, fall, air, localFine, this.reducedMotion)) {
+        const pixel = boostedSize(density.boost) / fine;
+        for (const flake of snowflakes(epoch, finer, fall, air, localFine, this.reducedMotion, density.copies)) {
             const x = flake.x / fine;
             const y = flake.y / fine;
             if (isOutdoor && !isOutdoor(x, y)) continue;
-            drawFlake(this.graphics, x, y, flake.size, flake.alpha * tones.alpha, tones, pixel);
+            drawFlake(
+                this.graphics,
+                x,
+                y,
+                flake.size,
+                boostedAlpha(flake.alpha * tones.alpha, density.boost),
+                tones,
+                pixel,
+            );
         }
     }
 
@@ -1100,15 +1119,16 @@ export class WeatherManager {
     private drawRainInPerspective(
         epoch: number,
         view: WeatherView,
-        amount: number,
+        intensity: number,
         wind: RainWind,
         isOutdoor: ((x: number, y: number) => boolean) | undefined,
         local: RainLocal | undefined,
+        density: DensityPlan,
     ): void {
         const camera = perspectiveCamera(this.screenView());
         const still = this.reducedMotion;
         const air = { shift: still ? { x: 0, y: 0 } : this.rainDrift.at(epoch, wind), wind };
-        const drops = perspectiveDrops(still ? 0 : epoch, view, camera, amount, air, local).filter(
+        const drops = perspectiveDrops(still ? 0 : epoch, view, camera, intensity, air, local, density.copies).filter(
             (drop) => !isOutdoor || isOutdoor(drop.landX, drop.landY),
         );
         // Screen pixels a map pixel: the widths are set on the screen.
@@ -1119,8 +1139,8 @@ export class WeatherManager {
             const width = Math.min(PERSPECTIVE_DROP_WIDEST, PERSPECTIVE_DROP_WIDTHS[drop.size] * drop.scale);
             // Near the camera a drop is out of focus: fainter as it grows.
             const alpha = PERSPECTIVE_DROP_ALPHAS[drop.size] * Math.min(1, Math.sqrt(2.5 / drop.scale));
-            const roundedWidth = Math.max(1, Math.round(width * 2) / 2);
-            const roundedAlpha = Math.round(alpha * 10) / 10;
+            const roundedWidth = Math.max(1, Math.round(width * boostedSize(density.boost) * 2) / 2);
+            const roundedAlpha = Math.round(boostedAlpha(alpha, density.boost) * 10) / 10;
             const key = `${roundedWidth}|${roundedAlpha}`;
             const group = groups.get(key) ?? { width: roundedWidth, alpha: roundedAlpha, drops: [] };
             group.drops.push(drop);
@@ -1155,16 +1175,29 @@ export class WeatherManager {
         tones: { light: number; shade: number; alpha: number },
         isOutdoor: ((x: number, y: number) => boolean) | undefined,
         local: RainLocal | undefined,
+        density: DensityPlan,
     ): void {
         const camera = perspectiveCamera(this.screenView());
         // The pixel of a flake on the ground, as the flat snow draws it (finer seen from very close).
-        const pixel = 1 / rainFineness(this.screenScale());
-        for (const flake of perspectiveFlakes(epoch, view, camera, fall, air, local, this.reducedMotion)) {
+        const pixel = boostedSize(density.boost) / rainFineness(this.screenScale());
+        for (const flake of perspectiveFlakes(
+            epoch,
+            view,
+            camera,
+            fall,
+            air,
+            local,
+            this.reducedMotion,
+            density.copies,
+        )) {
             if (isOutdoor && !isOutdoor(flake.landX, flake.landY)) continue;
             const kind = FLAKE_KINDS[flake.kind];
             // The shape of the flake as on the ground, its pixels as many times bigger as the flake is near.
             const grown = Math.min(PERSPECTIVE_FLAKE_BIGGEST, flake.scale);
-            const alpha = flake.alpha * tones.alpha * Math.min(1, Math.sqrt(3 / flake.scale));
+            const alpha = boostedAlpha(
+                flake.alpha * tones.alpha * Math.min(1, Math.sqrt(3 / flake.scale)),
+                density.boost,
+            );
             drawFlake(this.graphics, flake.x, flake.y, kind.sizes[0], alpha, tones, pixel * grown);
         }
     }

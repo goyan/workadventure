@@ -1,4 +1,5 @@
 import { hash01 } from "../Autumn/LeafPalette";
+import { COPY_SALT } from "./ParticleDensity";
 import { RAIN_FALL_SPEEDS, rainCell, rainDropsExpected, rainRateOfLevel } from "./Rain";
 import type { RainLocal, RainWind } from "./Rain";
 import { FLAKE_KINDS, flakeCapacity, flakeFadeIn, FLAKES_PER_CAPACITY, PX_PER_METRE } from "./Snowfall";
@@ -102,7 +103,8 @@ const DROP_SPLITS = [8, 2, 1];
  * the screen as the drops of the flat rain at the same intensity (rainDropsExpected), shared between the sizes by
  * Marshall and Palmer. Each falls at its terminal velocity from TOP_SHARE of the height of the camera, carried by the
  * air (`shift`: how far the air has gone since the start of the clock, `wind`: its speed now, map px a second). The
- * same for everyone at the same server time.
+ * same for everyone at the same server time. `copies` (the personal density, see densityPlan): that many drops in
+ * each cell instead of one, the first being the drop of the usual rain.
  */
 export function perspectiveDrops(
     epoch: number,
@@ -111,6 +113,7 @@ export function perspectiveDrops(
     intensity: number,
     air: { shift: RainWind; wind: RainWind },
     local?: RainLocal,
+    copies = 1,
 ): PerspectiveDrop[] {
     const drops: PerspectiveDrop[] = [];
     if (!(intensity > 0)) return drops;
@@ -127,49 +130,52 @@ export function perspectiveDrops(
         // The cells move with the air: the drops of the cells over the view are those seen.
         const left = view.x - air.shift.x;
         const upper = view.y - air.shift.y;
-        for (let row = Math.floor(upper / cell); row <= Math.floor((upper + view.height) / cell); row++) {
-            const hashRow = wrap(row);
-            for (let column = Math.floor(left / cell); column <= Math.floor((left + view.width) / cell); column++) {
-                const hashColumn = wrap(column);
-                const pick = hash01(hashColumn, hashRow, 301 + size);
-                if (pick >= shown * (local ? 1.5 : 1)) continue;
-                // Each drop a little faster or slower than its size: no curtain falling as one.
-                const speed = fallPx * (0.9 + 0.2 * hash01(hashColumn, hashRow, 311 + size));
-                const falls = hash01(hashColumn, hashRow, 321 + size) + (time * speed) / top;
-                const cycle = Math.floor(falls) % CYCLES;
-                const z = top * (1 - (falls - Math.floor(falls)));
-                const x = (column + hash01(hashColumn + cycle, hashRow, 331 + size)) * cell + air.shift.x;
-                const y = (row + hash01(hashColumn, hashRow + cycle, 341 + size)) * cell + air.shift.y;
-                // Where it lands: the air carries it on until then.
-                const landX = x + (air.wind.x * z) / speed;
-                const landY = y + (air.wind.y * z) / speed;
-                if (local && pick >= shown * local(landX, landY)) continue;
-                const head = project(camera, x, y, z);
-                if (
-                    head.x < view.x ||
-                    head.x > view.x + view.width ||
-                    head.y < view.y ||
-                    head.y > view.y + view.height
-                ) {
-                    continue;
+        for (let copy = 0; copy < copies; copy++) {
+            const salt = copy * COPY_SALT;
+            for (let row = Math.floor(upper / cell); row <= Math.floor((upper + view.height) / cell); row++) {
+                const hashRow = wrap(row);
+                for (let column = Math.floor(left / cell); column <= Math.floor((left + view.width) / cell); column++) {
+                    const hashColumn = wrap(column);
+                    const pick = hash01(hashColumn, hashRow, 301 + size + salt);
+                    if (pick >= shown * (local ? 1.5 : 1)) continue;
+                    // Each drop a little faster or slower than its size: no curtain falling as one.
+                    const speed = fallPx * (0.9 + 0.2 * hash01(hashColumn, hashRow, 311 + size + salt));
+                    const falls = hash01(hashColumn, hashRow, 321 + size + salt) + (time * speed) / top;
+                    const cycle = Math.floor(falls) % CYCLES;
+                    const z = top * (1 - (falls - Math.floor(falls)));
+                    const x = (column + hash01(hashColumn + cycle, hashRow, 331 + size + salt)) * cell + air.shift.x;
+                    const y = (row + hash01(hashColumn, hashRow + cycle, 341 + size + salt)) * cell + air.shift.y;
+                    // Where it lands: the air carries it on until then.
+                    const landX = x + (air.wind.x * z) / speed;
+                    const landY = y + (air.wind.y * z) / speed;
+                    if (local && pick >= shown * local(landX, landY)) continue;
+                    const head = project(camera, x, y, z);
+                    if (
+                        head.x < view.x ||
+                        head.x > view.x + view.width ||
+                        head.y < view.y ||
+                        head.y > view.y + view.height
+                    ) {
+                        continue;
+                    }
+                    // Its streak: where it was EXPOSURE_S before, higher and upwind.
+                    const tail = project(
+                        camera,
+                        x - air.wind.x * EXPOSURE_S,
+                        y - air.wind.y * EXPOSURE_S,
+                        Math.min(camera.height * 0.99, z + speed * EXPOSURE_S),
+                    );
+                    drops.push({
+                        tailX: tail.x,
+                        tailY: tail.y,
+                        headX: head.x,
+                        headY: head.y,
+                        scale: head.scale,
+                        landX,
+                        landY,
+                        size,
+                    });
                 }
-                // Its streak: where it was EXPOSURE_S before, higher and upwind.
-                const tail = project(
-                    camera,
-                    x - air.wind.x * EXPOSURE_S,
-                    y - air.wind.y * EXPOSURE_S,
-                    Math.min(camera.height * 0.99, z + speed * EXPOSURE_S),
-                );
-                drops.push({
-                    tailX: tail.x,
-                    tailY: tail.y,
-                    headX: head.x,
-                    headY: head.y,
-                    scale: head.scale,
-                    landX,
-                    landY,
-                    size,
-                });
             }
         }
     });
@@ -197,6 +203,7 @@ const SWIRL_SPAN_S = 2.5;
  * The flakes of a snow over the view, seen from the camera: of the kinds the air makes (fall.mix), as many on the
  * screen as the flat snow shows at the same level (FLAKES_PER_CAPACITY), falling at their terminal velocity (about
  * 1 m/s: some 25 s from the top) carried by the air (`air`, as perspectiveDrops), each swirling round as it falls.
+ * `copies` (the personal density, see densityPlan): that many flakes in each cell instead of one.
  */
 export function perspectiveFlakes(
     epoch: number,
@@ -206,6 +213,7 @@ export function perspectiveFlakes(
     air: { shift: RainWind; velocity: RainWind },
     local?: RainLocal,
     still = false,
+    copies = 1,
 ): PerspectiveFlake[] {
     const flakes: PerspectiveFlake[] = [];
     if (!(fall.level > 0)) return flakes;
@@ -222,47 +230,51 @@ export function perspectiveFlakes(
         const fallPx = kind.fallSpeed * PX_PER_METRE;
         const left = view.x - air.shift.x;
         const upper = view.y - air.shift.y;
-        for (let row = Math.floor(upper / cell); row <= Math.floor((upper + view.height) / cell); row++) {
-            const hashRow = wrap(row);
-            for (let column = Math.floor(left / cell); column <= Math.floor((left + view.width) / cell); column++) {
-                const hashColumn = wrap(column);
-                const pick = hash01(hashColumn, hashRow, 401 + kindIndex);
-                if (pick >= shown * (local ? 1.5 : 1)) continue;
-                const own = hash01(hashColumn, hashRow, 411 + kindIndex);
-                const speed = fallPx * (0.85 + 0.3 * own);
-                const fallS = top / speed;
-                const falls = ((own * 37.3) % 1) + time / fallS;
-                const cycle = Math.floor(falls) % CYCLES;
-                const age = (falls - Math.floor(falls)) * fallS;
-                const z = top - speed * age;
-                // The swirl: round and round, as wide as the flake flutters, its own pace and way round.
-                const turnS = SWIRL_MIN_S + SWIRL_SPAN_S * ((own * 13.7) % 1);
-                const way = (own * 5.3) % 1 < 0.5 ? 1 : -1;
-                const angle = 2 * Math.PI * (way * (age / turnS) + ((own * 71.9) % 1));
-                const radius = 2 * kind.flutterPx;
-                const x = (column + hash01(hashColumn + cycle, hashRow, 421 + kindIndex)) * cell + air.shift.x;
-                const y = (row + hash01(hashColumn, hashRow + cycle, 431 + kindIndex)) * cell + air.shift.y;
-                const landX = x + (air.velocity.x * z) / speed;
-                const landY = y + (air.velocity.y * z) / speed;
-                if (local && pick >= shown * local(landX, landY)) continue;
-                const seen = project(camera, x + radius * Math.cos(angle), y + radius * Math.sin(angle), z);
-                if (
-                    seen.x < view.x ||
-                    seen.x > view.x + view.width ||
-                    seen.y < view.y ||
-                    seen.y > view.y + view.height
-                ) {
-                    continue;
+        for (let copy = 0; copy < copies; copy++) {
+            const salt = copy * COPY_SALT;
+            for (let row = Math.floor(upper / cell); row <= Math.floor((upper + view.height) / cell); row++) {
+                const hashRow = wrap(row);
+                for (let column = Math.floor(left / cell); column <= Math.floor((left + view.width) / cell); column++) {
+                    const hashColumn = wrap(column);
+                    const pick = hash01(hashColumn, hashRow, 401 + kindIndex + salt);
+                    if (pick >= shown * (local ? 1.5 : 1)) continue;
+                    const own = hash01(hashColumn, hashRow, 411 + kindIndex + salt);
+                    const speed = fallPx * (0.85 + 0.3 * own);
+                    const fallS = top / speed;
+                    const falls = ((own * 37.3) % 1) + time / fallS;
+                    const cycle = Math.floor(falls) % CYCLES;
+                    const age = (falls - Math.floor(falls)) * fallS;
+                    const z = top - speed * age;
+                    // The swirl: round and round, as wide as the flake flutters, its own pace and way round.
+                    const turnS = SWIRL_MIN_S + SWIRL_SPAN_S * ((own * 13.7) % 1);
+                    const way = (own * 5.3) % 1 < 0.5 ? 1 : -1;
+                    const angle = 2 * Math.PI * (way * (age / turnS) + ((own * 71.9) % 1));
+                    const radius = 2 * kind.flutterPx;
+                    const x =
+                        (column + hash01(hashColumn + cycle, hashRow, 421 + kindIndex + salt)) * cell + air.shift.x;
+                    const y = (row + hash01(hashColumn, hashRow + cycle, 431 + kindIndex + salt)) * cell + air.shift.y;
+                    const landX = x + (air.velocity.x * z) / speed;
+                    const landY = y + (air.velocity.y * z) / speed;
+                    if (local && pick >= shown * local(landX, landY)) continue;
+                    const seen = project(camera, x + radius * Math.cos(angle), y + radius * Math.sin(angle), z);
+                    if (
+                        seen.x < view.x ||
+                        seen.x > view.x + view.width ||
+                        seen.y < view.y ||
+                        seen.y > view.y + view.height
+                    ) {
+                        continue;
+                    }
+                    flakes.push({
+                        x: seen.x,
+                        y: seen.y,
+                        scale: seen.scale,
+                        landX,
+                        landY,
+                        kind: kindIndex,
+                        alpha: still ? 1 : flakeFadeIn(age),
+                    });
                 }
-                flakes.push({
-                    x: seen.x,
-                    y: seen.y,
-                    scale: seen.scale,
-                    landX,
-                    landY,
-                    kind: kindIndex,
-                    alpha: still ? 1 : flakeFadeIn(age),
-                });
             }
         }
     });

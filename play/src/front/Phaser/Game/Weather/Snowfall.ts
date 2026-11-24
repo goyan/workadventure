@@ -1,6 +1,7 @@
 import { wetBulbTemperature } from "@workadventure/map-editor";
 import type { PrecipitationAir } from "@workadventure/map-editor";
 import { hash01 } from "../Autumn/LeafPalette";
+import { COPY_SALT } from "./ParticleDensity";
 import type { WeatherView } from "./WeatherFrame";
 
 /**
@@ -228,7 +229,8 @@ const wrap = (value: number): number => ((value % HASH_WRAP) + HASH_WRAP) % HASH
  * wind. Each cell lets one flake fall at a time, for 9 to 15 s, which then lies on the ground a moment where it landed;
  * the next one appears elsewhere in the cell. The rate and the mix only say which cells show a flake, always the same
  * first. `local` (1 the same) makes the snow thicker under a cloud, read where the flake appeared. `still` (reduced
- * motion): the flakes stand still.
+ * motion): the flakes stand still. `copies` (the personal density, see densityPlan): that many cells of flakes over each
+ * other, each drawn apart from the others, the first being the snow as it was.
  */
 export function snowflakes(
     epoch: number,
@@ -237,6 +239,7 @@ export function snowflakes(
     air: SnowAir,
     local?: (x: number, y: number) => number,
     still = false,
+    copies = 1,
 ): Snowflake[] {
     const flakes: Snowflake[] = [];
     if (!(fall.level > 0)) return flakes;
@@ -246,74 +249,76 @@ export function snowflakes(
         if (!(share > 0)) return;
         const fallPx = kind.fallSpeed * PX_PER_METRE;
         SNOW_PLANES.forEach((plane, planeIndex) => {
-            const salt = kindIndex * 10 + planeIndex;
-            const most = flakeCapacity(kind) * FLAKES_PER_CAPACITY * plane.share;
-            const cell = snowCell(view, most);
-            // The cells are smaller than a flake each at the heaviest fall: only that share of them ever shows one.
-            const amount = (share * cell * cell * most) / Math.max(1, view.width * view.height);
-            // The cells of this plane moved with the air and by the fall of its flakes since the start of the clock.
-            const shiftX = plane.parallax * air.shift.x;
-            const shiftY = plane.parallax * (air.shift.y + fallPx * time);
-            const speedX = still ? 0 : plane.parallax * air.velocity.x;
-            const speedY = still ? 0 : plane.parallax * (air.velocity.y + fallPx);
-            // A lying flake stays where it landed while its cell goes on: read the cells it may have come from.
-            const margin = kind.flutterPx + 2;
-            const left = Math.min(view.x, view.x + speedX * LIE_S) - margin - shiftX;
-            const right = Math.max(view.x + view.width, view.x + view.width + speedX * LIE_S) + margin - shiftX;
-            const top = Math.min(view.y, view.y + speedY * LIE_S) - margin - shiftY;
-            const bottom = Math.max(view.y + view.height, view.y + view.height + speedY * LIE_S) + margin - shiftY;
-            const size = kind.sizes[planeIndex];
-            for (let row = Math.floor(top / cell); row <= Math.floor(bottom / cell); row++) {
-                const hashRow = wrap(row);
-                for (let column = Math.floor(left / cell); column <= Math.floor(right / cell); column++) {
-                    const hashColumn = wrap(column);
-                    const pick = hash01(hashColumn, hashRow, 101 + salt);
-                    // Never shown, even under the thickest cloud (rainUnderCloud: at most 1.4).
-                    if (pick >= amount * (local ? 1.5 : 1)) continue;
-                    // One hash for the length of its falls, the moment they start and how it sways.
-                    const own = hash01(hashColumn, hashRow, 131 + salt);
-                    const falls = FALL_MIN_S + FALL_SPAN_S * own;
-                    const period = falls + LIE_S;
-                    const clock = time + ((own * 61.7) % 1) * period;
-                    const turn = Math.floor(clock / period);
-                    const age = clock - turn * period;
-                    const cycle = ((turn % CYCLES) + CYCLES) % CYCLES;
-                    const lying = age >= falls;
-                    // Where the parcel of air it fell from is now, and where it lands (or landed): the air goes on
-                    // carrying the parcel at its speed, the flake falls through it, then lies where it landed.
-                    const anchorX = (column + hash01(hashColumn + cycle, hashRow, 191 + salt)) * cell + shiftX;
-                    const anchorY = (row + hash01(hashColumn, hashRow + cycle, 211 + salt)) * cell + shiftY;
-                    const { x, y } = fallingFlake({
-                        landX: anchorX + speedX * (falls - age),
-                        landY: anchorY + speedY * (falls - age),
-                        descentX: speedX * falls,
-                        descentY: speedY * falls,
-                        fall: age / falls,
-                        swayPx: kind.flutterPx,
-                        sways: (0.35 + 0.4 * ((own * 23.3) % 1)) * falls,
-                        phase: (own * 7.9) % 1,
-                    });
-                    if (x < view.x || x > view.x + view.width || y < view.y || y > view.y + view.height) continue;
-                    if (local) {
-                        // Where it appeared: a flake shows or not for its whole fall.
-                        const here = local(anchorX - speedX * age, anchorY - speedY * age);
-                        if (pick >= amount * here) continue;
+            for (let copy = 0; copy < copies; copy++) {
+                const salt = kindIndex * 10 + planeIndex + copy * COPY_SALT;
+                const most = flakeCapacity(kind) * FLAKES_PER_CAPACITY * plane.share;
+                const cell = snowCell(view, most);
+                // The cells are smaller than a flake each at the heaviest fall: only that share of them ever shows one.
+                const amount = (share * cell * cell * most) / Math.max(1, view.width * view.height);
+                // The cells of this plane moved with the air and by the fall of its flakes since the start of the clock.
+                const shiftX = plane.parallax * air.shift.x;
+                const shiftY = plane.parallax * (air.shift.y + fallPx * time);
+                const speedX = still ? 0 : plane.parallax * air.velocity.x;
+                const speedY = still ? 0 : plane.parallax * (air.velocity.y + fallPx);
+                // A lying flake stays where it landed while its cell goes on: read the cells it may have come from.
+                const margin = kind.flutterPx + 2;
+                const left = Math.min(view.x, view.x + speedX * LIE_S) - margin - shiftX;
+                const right = Math.max(view.x + view.width, view.x + view.width + speedX * LIE_S) + margin - shiftX;
+                const top = Math.min(view.y, view.y + speedY * LIE_S) - margin - shiftY;
+                const bottom = Math.max(view.y + view.height, view.y + view.height + speedY * LIE_S) + margin - shiftY;
+                const size = kind.sizes[planeIndex];
+                for (let row = Math.floor(top / cell); row <= Math.floor(bottom / cell); row++) {
+                    const hashRow = wrap(row);
+                    for (let column = Math.floor(left / cell); column <= Math.floor(right / cell); column++) {
+                        const hashColumn = wrap(column);
+                        const pick = hash01(hashColumn, hashRow, 101 + salt);
+                        // Never shown, even under the thickest cloud (rainUnderCloud: at most 1.4).
+                        if (pick >= amount * (local ? 1.5 : 1)) continue;
+                        // One hash for the length of its falls, the moment they start and how it sways.
+                        const own = hash01(hashColumn, hashRow, 131 + salt);
+                        const falls = FALL_MIN_S + FALL_SPAN_S * own;
+                        const period = falls + LIE_S;
+                        const clock = time + ((own * 61.7) % 1) * period;
+                        const turn = Math.floor(clock / period);
+                        const age = clock - turn * period;
+                        const cycle = ((turn % CYCLES) + CYCLES) % CYCLES;
+                        const lying = age >= falls;
+                        // Where the parcel of air it fell from is now, and where it lands (or landed): the air goes on
+                        // carrying the parcel at its speed, the flake falls through it, then lies where it landed.
+                        const anchorX = (column + hash01(hashColumn + cycle, hashRow, 191 + salt)) * cell + shiftX;
+                        const anchorY = (row + hash01(hashColumn, hashRow + cycle, 211 + salt)) * cell + shiftY;
+                        const { x, y } = fallingFlake({
+                            landX: anchorX + speedX * (falls - age),
+                            landY: anchorY + speedY * (falls - age),
+                            descentX: speedX * falls,
+                            descentY: speedY * falls,
+                            fall: age / falls,
+                            swayPx: kind.flutterPx,
+                            sways: (0.35 + 0.4 * ((own * 23.3) % 1)) * falls,
+                            phase: (own * 7.9) % 1,
+                        });
+                        if (x < view.x || x > view.x + view.width || y < view.y || y > view.y + view.height) continue;
+                        if (local) {
+                            // Where it appeared: a flake shows or not for its whole fall.
+                            const here = local(anchorX - speedX * age, anchorY - speedY * age);
+                            if (pick >= amount * here) continue;
+                        }
+                        const fadeIn = still ? 1 : flakeFadeIn(age);
+                        const fadeOut = lying ? 1 - (age - falls) / LIE_S : 1;
+                        flakes.push({
+                            x,
+                            y,
+                            size,
+                            alpha: plane.alpha * fadeIn * fadeOut,
+                            kind: kindIndex,
+                            plane: planeIndex,
+                            column,
+                            row,
+                            cycle,
+                            age,
+                            lying,
+                        });
                     }
-                    const fadeIn = still ? 1 : flakeFadeIn(age);
-                    const fadeOut = lying ? 1 - (age - falls) / LIE_S : 1;
-                    flakes.push({
-                        x,
-                        y,
-                        size,
-                        alpha: plane.alpha * fadeIn * fadeOut,
-                        kind: kindIndex,
-                        plane: planeIndex,
-                        column,
-                        row,
-                        cycle,
-                        age,
-                        lying,
-                    });
                 }
             }
         });

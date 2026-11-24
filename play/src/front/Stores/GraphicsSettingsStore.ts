@@ -75,7 +75,7 @@ export function graphicsProfile(quality: GraphicsPreset): GraphicsProfile {
         rainbows: !low,
         waterReflections: !low,
         animations: !low,
-        rain: ultra ? [2, 2, 2, 2, 1] : high ? [1, 1, 1, 1, 0.8] : low ? [0.25, 0, 0, 0, 0] : [0.5, 0.5, 0.25, 0, 0.5],
+        rain: ultra ? [2, 2, 2, 2, 1] : high ? [1, 1, 1, 1, 0.8] : low ? [1, 0, 0, 0, 0] : [1, 0.5, 0.25, 0, 0.5],
         lights: {
             sunShown: !low,
             moonShown: !low,

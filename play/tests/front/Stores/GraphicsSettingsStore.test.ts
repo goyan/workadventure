@@ -21,6 +21,8 @@ import { decodeLightSettings } from "../../../src/front/Stores/LightSettingsCode
 import {
     cloudsShownStore,
     weatherEffectsEnabledStore,
+    rainAmountOfStep,
+    rainAmountStep,
     rainAmountStore,
     rainLeanStore,
     rainSplashesStore,
@@ -123,6 +125,18 @@ describe("graphics presets", () => {
             lightBounceOn: true,
             lightSecondBounceOn: false,
         });
+    });
+
+    it("sets the amount of rain and snow to a step of its slider in every quality, ×1 at low quality", () => {
+        for (const quality of GRAPHICS_PRESETS) {
+            const amount = graphicsProfile(quality).rain[0];
+            expect(amount, quality).toBeGreaterThanOrEqual(1);
+            expect(rainAmountOfStep(rainAmountStep(amount)), quality).toBe(amount);
+        }
+        expect(graphicsProfile(GraphicsQuality.Low).rain[0]).toBe(1);
+        applyGraphicsQuality(GraphicsQuality.Ultra);
+        expect(get(rainAmountStore)).toBe(graphicsProfile(GraphicsQuality.Ultra).rain[0]);
+        expect(get(graphicsQualityStore)).toBe(GraphicsQuality.Ultra);
     });
 
     it("turns the smoothed pixels, the gliding clouds, the rainbows and the reflections off at low quality only", () => {
