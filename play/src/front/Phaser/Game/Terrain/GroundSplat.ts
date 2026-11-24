@@ -677,6 +677,8 @@ float waterFacing(vec2 slope) {
 }
 
 const vec3 FOAM = vec3(0.93, 0.97, 1.0);
+// The haze of the spray a hurricane tears off the sea (seaSpray).
+const vec3 SPRAY = vec3(0.86, 0.89, 0.91);
 
 // Whether the pool goes on d map pixels around a point, in eight directions: false near its rim (its coping).
 float poolAround(vec2 world, float d) {
@@ -898,6 +900,7 @@ void main() {
             spray = seaSpray(world);
             if (spray > 0.0) {
                 water *= 1.0 + ${glsl(SEA_SHADE)} * (1.0 - spray) * seaLight(gSeaLight);
+                water = mix(water, SPRAY, spray);
                 seaRipple = gSeaLight * ${glsl(SEA_RIPPLE_PX)} * (1.0 - spray);
             } else {
                 water *= 1.0 + ${glsl(SEA_SHADE)} * seaLight(gSeaLight);
@@ -949,10 +952,14 @@ void main() {
         // cosine of the light on it as the water is (waterFacing), all of it, not only a share as the water (the
         // ground is not seen through it). Being white, it shows the slope the more: the dome of a hurricane reads on
         // its white sea. Never over white.
-        water = mix(water, min(FOAM * mix(1.0, facing, face), vec3(1.0)), foam);
+        // A slope under half a step of its pack is level water: its foam is the white itself.
+        vec3 foamColor = FOAM;
+        if (length(surfaceSlope) >= ${glsl(0.5 / SLOPE_UNITS)}) foamColor = min(FOAM * mix(1.0, facing, face), 1.0);
+        water = mix(water, foamColor, foam);
         alpha = max(alpha, foam * 0.9);
-        // The spray of a hurricane is in the air, over the water and its foam: a haze, not lit by their slope.
-        water = mix(water, vec3(0.86, 0.89, 0.91), spray);
+        // The spray of a hurricane is in the air, over the water and its foam: a haze, not lit by their slope. It
+        // was laid over the water above; the foam laid since covered its share of it: laid back over that share.
+        if (spray > 0.0) water += spray * foam * (SPRAY - foamColor);
 
         float waterAlpha = alpha * cover;
         outColor = vec4(water * waterAlpha, waterAlpha) + outColor * (1.0 - waterAlpha);
