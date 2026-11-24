@@ -59,6 +59,8 @@ export * from "./Catastrophe/Hurricane";
 export * from "./Catastrophe/Tsunami";
 export * from "./Weather/AirSimulation";
 export * from "./Weather/MapAir";
+export * from "./Catastrophe/ZombieHorde";
+export * from "./Catastrophe/ZombieCrowd";
 export * from "./Life/WaterBodies";
 export * from "./Life/LandPlaces";
 export * from "./Terrain/LandTrees";

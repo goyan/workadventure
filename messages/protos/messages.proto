@@ -902,6 +902,10 @@ enum CatastropheKind {
   // height they chose (its bore, then its fall), and the water of the map carries it inland. The server tells the
   // room what it is once a second; the water itself comes as always. One a room; anyone stops it.
   CATASTROPHE_TSUNAMI = 9;
+  // A horde of zombies crosses the map the way a player chose, in the time they chose: it tramples the grass and
+  // pulls the trees down where it walks, and walks through the avatars. The server tells the room what it is once a
+  // second (never where a zombie is): every browser steps the same crowd from it. One a room; anyone stops it.
+  CATASTROPHE_ZOMBIES = 10;
 }
 
 // A tsunami, as a player asks for it (the server keeps each value within bounds) and as the server tells it.
@@ -914,6 +918,31 @@ message TsunamiMessage {
   // stays high (ms); its backwash follows.
   double startedAt = 3;
   double durationMs = 4;
+}
+
+// A horde of zombies, as a player asks for it (the server keeps each value within bounds) and as the server tells it.
+message ZombieHordeMessage {
+  // How many zombies, how long the horde takes to cross the map (minutes), where it goes (degrees, 0 north, 90 east).
+  int32 count = 1;
+  int32 minutes = 2;
+  double heading = 3;
+  // Told by the server only: the luck of its crowd, when it began (ms, the time of the server), how long it lasts
+  // (ms), the way it goes in map pixels (east, south: a unit vector, computed by the server alone), the middle of its
+  // front (map pixels), and the size of the map in cells of the relief (16 px).
+  uint32 seed = 4;
+  double startedAt = 5;
+  double durationMs = 6;
+  double dirX = 7;
+  double dirY = 8;
+  double anchorX = 9;
+  double anchorY = 10;
+  int32 widthCells = 11;
+  int32 heightCells = 12;
+  // Told by the server only: the water of each cell when the horde began, run-length coded in base64
+  // (ZombieHorde.encodeZombieTerrain), told at once and every few seconds (empty otherwise), and a number that tells
+  // it apart from another.
+  string terrain = 13;
+  uint32 terrainHash = 14;
 }
 
 // How a hurricane crosses the map, as a player asks for it (the server keeps each value within bounds) and as the
@@ -1015,6 +1044,8 @@ message LaunchCatastropheMessage {
   optional HurricaneTrackMessage hurricane = 8;
   // A tsunami: how high and for how long. `release` stops it.
   optional TsunamiMessage tsunami = 9;
+  // A horde of zombies: how many, for how long, which way. `release` stops it.
+  optional ZombieHordeMessage zombies = 10;
 }
 
 // Server to room: a catastrophe is on its way.
@@ -1045,6 +1076,9 @@ message CatastropheMessage {
   // A tsunami: what it is, told once a second while it goes on; `impactInMs` is how long it still lasts, its
   // backwash included, 0 when it was stopped or ended.
   optional TsunamiMessage tsunami = 15;
+  // A horde of zombies: what it is, told once a second while it goes on; `impactInMs` is how long it still lasts, 0
+  // when it was stopped or ended.
+  optional ZombieHordeMessage zombies = 16;
 }
 
 // A player casts their fishing line: where the float lands, in map pixels. The server decides whether it does
