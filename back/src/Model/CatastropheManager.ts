@@ -578,7 +578,9 @@ export class CatastropheManager {
     /** Tells the room the hurricane, and how long it still lasts: 0 once it ended, and then it is forgotten. */
     private tellHurricane(storm = this.storm, lastsMs?: number): void {
         if (!storm) return this.endHurricane();
-        const left = lastsMs ?? Math.max(0, storm.startedAt + storm.durationMs - this.now());
+        // A hurricane sped up starts at a fraction of a millisecond: the message carries whole milliseconds (int32),
+        // a fraction there fails its encoding and cuts the room from its players.
+        const left = Math.round(lastsMs ?? Math.max(0, storm.startedAt + storm.durationMs - this.now()));
         this.room.sendSubMessageToRoom({
             message: {
                 $case: "catastropheMessage",

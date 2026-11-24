@@ -810,4 +810,34 @@ describe("CatastropheManager, a hurricane sped up by the speed of the map", () =
         expect((101_000 - (told?.startedAt ?? NaN)) / 60_000).toBeCloseTo(101_000 / 300_000, 2);
         expect(sent[sent.length - 1].impactInMs).toBeCloseTo(60_000 * (1 - 101_000 / 300_000), -2);
     });
+
+    it("tells a sped-up hurricane in whole milliseconds, which its message can carry", () => {
+        const { manager, sent } = harness();
+        let times = 1;
+        manager.hurricaneTimesWith(() => times);
+        const asked = {
+            category: 4,
+            minutes: 5,
+            heading: 0,
+            southern: false,
+            startedAt: 0,
+            fromX: 0,
+            fromY: 0,
+            toX: 0,
+            toY: 0,
+            anchorX: 0,
+            anchorY: 0,
+            durationMs: 0,
+            times: 0,
+            waterEffect: 0,
+        };
+        manager.request(1, CatastropheKind.CATASTROPHE_HURRICANE, -1, -1, 0, true, false, undefined, asked);
+        vi.advanceTimersByTime(100_000);
+        // Three times faster a third of the way: its start falls on a fraction of a millisecond.
+        times = 3;
+        vi.advanceTimersByTime(HURRICANE_TELL_MS);
+        const told = sent[sent.length - 1];
+        expect(Number.isInteger(told.hurricane?.startedAt)).toBe(false);
+        expect(Number.isInteger(told.impactInMs)).toBe(true);
+    });
 });
