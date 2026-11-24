@@ -332,6 +332,32 @@ describe("a crowd of zombies", () => {
         expect(gone / crowd.count).toBeGreaterThan(0.9);
     });
 
+    it("senses an avatar anywhere on the map, some 200 m away, and runs to it", () => {
+        // A map 400 cells long (some 220 m), the avatar at its far end: far beyond what a voice carries.
+        const width = 400;
+        const height = 80;
+        const far = tileAt(390 * TERRAIN_CELL, 40 * TERRAIN_CELL, width);
+        const told = horde(
+            {
+                count: 200,
+                // Long enough for the way across not to press yet.
+                durationMs: 6 * 60_000,
+                avatars: encodeZombieLog([{ applyStep: 0, changes: [{ slot: 0, tile: far }] }]),
+            },
+            undefined,
+            width,
+            height,
+        );
+        const crowd = new ZombieCrowd(told);
+        for (let step = 0; step < 100; step++) crowd.step();
+        let running = 0;
+        for (let zombie = 0; zombie < crowd.count; zombie++) {
+            if (crowd.state[zombie] === ZOMBIE_WALKING && crowd.target[zombie] === 0) running++;
+        }
+        expect(crowd.walking).toBeGreaterThan(5);
+        expect(running).toBe(crowd.walking);
+    });
+
     it("goes into a closed room by its door to the avatar inside, comes within 5 tiles, comes out and crosses", () => {
         const width = 120;
         const height = 80;
