@@ -33,6 +33,14 @@ function told(impactInMs: number, withTerrain: boolean, startedAt = START): Cata
             heightCells: 30,
             terrain: withTerrain ? TERRAIN : "",
             terrainHash: zombieTerrainHash(TERRAIN),
+            collisions: "",
+            collisionsWidth: 0,
+            collisionsHeight: 0,
+            anchorStep: 0,
+            anchorAt: startedAt,
+            msPerStep: 100,
+            avatars: "",
+            safeStep: (180_000 - impactInMs) / 100 + 25,
         },
     };
 }
@@ -42,7 +50,7 @@ afterEach(() => {
 });
 
 describe("ZombieReceiver", () => {
-    it("waits for the water of the horde, then tells the same horde once", () => {
+    it("waits for the ground of the horde, then tells it at each message, its log complete further", () => {
         const heard: (ZombieHorde | undefined)[] = [];
         const receiver = new ZombieReceiver((horde) => heard.push(horde));
         // Joined between two tellings of its water: nothing yet.
@@ -62,10 +70,11 @@ describe("ZombieReceiver", () => {
             heightCells: 30,
             terrain: TERRAIN,
         });
-        // Told again without its water: the same horde, nothing new.
+        // Told again without its ground: the same horde, its log complete a second further.
         receiver.report(told(168_000, false));
-        expect(heard).toHaveLength(1);
-        expect(receiver.current()).toBe(heard[0]);
+        expect(heard).toHaveLength(2);
+        expect(heard[1]).toMatchObject({ id: 9, terrain: TERRAIN, safeStep: 145 });
+        expect(receiver.current()).toBe(heard[1]);
         receiver.destroy();
     });
 
@@ -92,7 +101,7 @@ describe("LocalCatastropheRelay, a horde of zombies", () => {
         const [state] = relay.due(1010);
         expect(state).toMatchObject({ kind: "catastrophes", zombies: { id: 9, seed: 1234, terrain: TERRAIN } });
         relay.receive(told(98_000, false), 2000);
-        expect(relay.due(2010)).toEqual([]);
+        expect(relay.due(2010)).toEqual([expect.objectContaining({ kind: "catastrophes" })]);
         relay.receive(told(0, false), 3000);
         const [stopped] = relay.due(3010);
         expect(stopped).toMatchObject({ kind: "catastrophes" });

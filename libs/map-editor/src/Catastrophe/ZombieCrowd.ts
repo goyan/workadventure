@@ -1,45 +1,60 @@
 import { TERRAIN_CELL, TILE_PX } from "../types";
-import { cellOf } from "../Terrain/TerrainGrid";
-import type { WaterWallSides } from "../Terrain/WaterGrid";
-import { decodeZombieTerrain, ZOMBIE_DEEP, ZOMBIE_PX_PER_METRE, ZOMBIE_WATER_PACE } from "./ZombieHorde";
-import type { ZombieHorde } from "./ZombieHorde";
+import {
+    decodeZombieLog,
+    decodeZombieTerrain,
+    ZOMBIE_EAST,
+    ZOMBIE_PX_PER_METRE,
+    ZOMBIE_SOLID,
+    ZOMBIE_SOUTH,
+    ZOMBIE_STEP_MS,
+    ZOMBIE_WATER,
+    zombieLastStep,
+    zombieStepAt,
+} from "./ZombieHorde";
+import type { ZombieHorde, ZombieLogEntry } from "./ZombieHorde";
 
 /**
  * The crowd of a horde of zombies, stepped the same everywhere: on the thread of the ground of the server (which
- * reads where it tramples) and in every browser (which draws it). Its state depends on the horde, the walls of the map
- * and the number of the step only, never on the time a step is taken at: a browser that steps image by image and a
- * ground that steps ten at a time every two seconds reach the same zombies at the same step. For that, the step uses
- * nothing but + - * /, Math.sqrt, Math.floor, Math.min, Math.max and Math.abs (exact in every engine), an integer luck
- * (mulberry32) and typed arrays filled in the same order: no sine, no exponential, no Math.hypot, no sort.
+ * reads where it tramples) and in every browser (which draws it). Its state depends on the horde (its ground frozen
+ * by the server, the log of the avatars) and on the number of the step only, never on the time a step is taken at.
+ * For that, the step uses nothing but + - * /, Math.sqrt, Math.floor, Math.min, Math.max and Math.abs (exact in every
+ * engine), an integer luck (mulberry32) and typed arrays filled in the same order: no sine, no exponential, no
+ * Math.hypot, no sort. It never steps past the last step the log of the avatars is complete to (`safeStep`): a lost
+ * message stalls it, never sends it another way.
  *
  * The model, a crowd that emerges from rules each zombie follows, not a drawing moved along a track:
- * - Where to go: a potential over the cells of the map, the time to walk out by the far side, computed once by the
- *   fast marching method (Sethian 1996, PNAS 93) over the walls (doors closed) and the water (slower the deeper:
- *   ZOMBIE_WATER_PACE). Its exits lie along a line beyond the map, square to the heading: on open ground it sends
- *   every zombie straight on, the way of the horde; around a building or a lake, by the shortest way round (the
- *   "floor field" of crowd models, Kirchner and Schadschneider 2002, Physica A 312). Each zombie walks down its slope.
- * - How fast: its own pace (the horde paces itself on the duration asked), slowed in water and by the crowd around it
- *   by the fundamental diagram of Weidmann (1993, Schriftenreihe IVT 90): v = v0 (1 - exp(-1.913 (1/rho - 1/5.4))),
- *   rho the density within a metre ahead of it (the half disc it walks into: a zombie at the mouth of a jam, with room
- *   ahead, walks on). Where the horde squeezes through a gap it packs, slows and queues.
- * - Who is around: the social force of Helbing and Molnar (1995, Physical Review E 51): each zombie relaxes to the
- *   velocity it wants in 0.5 s and is pushed away by those near it, more by those ahead than behind (anisotropy,
- *   Johansson, Helbing and Shukla 2007, Advances in Complex Systems 10). Its exponential is replaced by a polynomial
- *   of the same reach, exact everywhere. A little alignment with the neighbours keeps it moving as one (Reynolds 1987,
- *   SIGGRAPH, "Flocks, herds and schools").
+ * - Where to go: out by the far side, down a potential over the cells of the map (the time to run out), computed once
+ *   by the fast marching method (Sethian 1996, PNAS 93). Its exits lie along a line beyond the map, square to the
+ *   heading: on open ground it sends every zombie straight on; around a building, a lake or a river, by the shortest
+ *   way round, over the bridges, through the doors (the "floor field" of crowd models, Kirchner and Schadschneider
+ *   2002, Physica A 312). Water, walls and the collisions of the map are never entered.
+ * - Or towards an avatar it hears: within ZOMBIE_HEARING_M, through the walls (a voice of 60 dB at 1 m, falling by
+ *   6 dB a doubling of distance, spherical spreading, is under the 25 dB of a quiet countryside beyond some 60 to 80 m:
+ *   ISO 9613-1 and -2 [order of magnitude]). It runs to it by the way the plan of the map allows (a distance field from
+ *   the avatar, through the doors), until it is within ZOMBIE_SATISFIED_TILES tiles of it; then it is done with that
+ *   avatar for a while (ZOMBIE_FORGET_STEPS), and goes on its way. One that gets no nearer for a while (a jam at a
+ *   door) gives up on it too. When its time runs short, the way out wins over any avatar.
+ * - How fast: it runs, at its own pace (3 to 5 m/s: endurance running of humans, 2.3 to 6.5 m/s, Bramble and
+ *   Lieberman 2004, Nature 432), held back by the crowd ahead of it by the fundamental diagram of Weidmann (1993,
+ *   Schriftenreihe IVT 90): v = v0 (1 - exp(-1.913 (1/rho - 1/5.4))), rho the density within a metre ahead of it.
+ *   Where it squeezes through a door or onto a bridge it packs, pushes and queues.
+ * - Who is around: the social force of Helbing and Molnar (1995, Physical Review E 51) and its body forces at speed
+ *   (Helbing, Farkas and Vicsek 2000, Nature 407): each zombie relaxes to the velocity it wants in 0.5 s, so that it
+ *   turns wide at a run, and is pushed away by those near it (and by the avatars, which stand in its way), more by
+ *   those ahead than behind (anisotropy, Johansson, Helbing and Shukla 2007). Its exponential is replaced by a
+ *   polynomial of the same reach, exact everywhere. A little alignment keeps it running with the others (Reynolds
+ *   1987, SIGGRAPH).
  * - Bodies do not overlap: their contacts are undone once a step, pair by pair in a fixed order (position-based
- *   dynamics, as in Weiss, Litteneker, Jiang and Terzopoulos 2017, "Position-Based Real-Time Simulation of Large
- *   Crowds"); a wall is never crossed.
- * - Each sways a little from its way (a slow random walk of its own): it shambles.
+ *   dynamics, Weiss et al. 2017); a wall is never crossed.
  */
 
-/** A step of the crowd: ten a second. */
-export const ZOMBIE_STEP_MS = 100;
+/** A step of the crowd at the speed of reality: ten a second (a sped up horde takes its steps faster). */
 const DT = ZOMBIE_STEP_MS / 1000;
 
 const PX = ZOMBIE_PX_PER_METRE;
-/** The radius of a body (Helbing, Farkas and Vicsek 2000 take 0.25 to 0.35 m). */
+/** The radius of a body (Helbing, Farkas and Vicsek 2000 take 0.25 to 0.35 m), and that of an avatar. */
 export const ZOMBIE_RADIUS_PX = 0.25 * PX;
+const AVATAR_RADIUS_PX = 0.3 * PX;
 /** Beyond touching, a zombie feels another this far (m), the most when touching, nothing at the end. */
 const SOCIAL_RANGE_PX = 0.5 * PX;
 /** How hard the others push a zombie away when they touch it, m/s². */
@@ -50,7 +65,7 @@ const ANISOTROPY = 0.3;
 const RELAX_SECONDS = 0.5;
 /** How fast it matches the velocity of its neighbours, a share a second. */
 const ALIGNMENT = 0.3;
-/** The crowd around a zombie is counted within this radius (1 m: a disc of pi m²). */
+/** The crowd ahead of a zombie is counted within this radius (1 m). */
 const DENSITY_RADIUS_PX = 1 * PX;
 /**
  * The share of its pace a zombie keeps with `n` others within a metre: Weidmann (1993) at rho = (n + 1) / pi,
@@ -62,43 +77,65 @@ const WEIDMANN: readonly number[] = [
 ];
 /** Contacts are undone this much at a step (1 is entirely). */
 const CONTACT_STIFFNESS = 0.8;
-/** A zombie never moves more than this in a step: it cannot jump over a cell (and its walls). */
-const MOST_A_STEP_PX = TERRAIN_CELL * 0.9;
+/** A zombie never moves more than this in a step: under a cell, it cannot jump over one (and its walls). */
+const MOST_A_STEP_PX = TERRAIN_CELL - 0.5;
 
-/** The horde comes in as a column this dense, this many times wider than deep. */
+/** Its pace: a run, from this to this (m/s), each zombie its own. */
+const SLOWEST_RUN_PX = 3 * PX;
+const FASTEST_RUN_PX = 5 * PX;
+/** It comes in as a column this dense, this many times wider than deep. */
 const MARCH_DENSITY = 1.6;
 const FRONT_ASPECT = 3;
 const LEAST_FRONT_PX = 12 * PX;
-/** It never takes more than this share of its duration to come in. */
-const MOST_EMIT_SHARE = 0.5;
-/**
- * Its pace: its column (the crossing and its own depth) walked in its duration, this much faster for the detours and
- * the jams.
- */
-const PACE_SLACK = 1.7;
-/** A pace between a shamble and a run, m/s. */
-const LEAST_PACE_PX = 0.3 * PX;
-const MOST_PACE_PX = 3 * PX;
-/** Each zombie walks this share faster or slower than the horde. */
-const PACE_SPREAD = 0.12;
+/** It comes in over this share of its duration: a horde that keeps coming, wave after wave. */
+const EMIT_SHARE = 0.4;
 /** How far its sway turns it from its way (a share of its way), and how fast that sway wanders. */
-const SWAY = 0.35;
-const SWAY_WANDER = 0.08;
-/**
- * The horde keeps together: a zombie with few others around it (fewer than KEEP_ALONE in the tiles around it) more
- * than half its column ahead of its middle (along the potential) slows, down to this share of its pace, waiting for
- * the others; one as far behind hurries, up to this share. A choice at the scale of the horde, as the members of a
- * group walk slower to stay together (Moussaid et al. 2010, PLoS ONE 5, "The walking behaviour of pedestrian social
- * groups"): without it the free zombies at its head walk off from its packed body. Those that come out of a gap in a
- * stream are not alone: they walk on.
- */
-const KEEP_ALONE = 3;
-const KEEP_SLOWEST = 0.75;
-const KEEP_FASTEST = 1.25;
-const LEAST_KEEP_PX = 10 * PX;
+const SWAY = 0.25;
+const SWAY_WANDER = 0.06;
 /** A tile has room for one more coming in under this many zombies. */
 const ROOM_A_TILE = 3;
 const ENTRY_TRIES = 4;
+
+/** How far a zombie hears an avatar, through walls (m). */
+export const ZOMBIE_HEARING_M = 70;
+const HEARING_PX = ZOMBIE_HEARING_M * PX;
+/** Within this many tiles of an avatar, a zombie is done with it. */
+export const ZOMBIE_SATISFIED_TILES = 5;
+const SATISFIED_PX = ZOMBIE_SATISFIED_TILES * TILE_PX;
+/** A zombie done with an avatar does not run after it again for this many steps (60 s of the horde). */
+export const ZOMBIE_FORGET_STEPS = 600;
+/** One that got no nearer an avatar for this many steps (8 s) gives up on it. */
+const GIVE_UP_STEPS = 50;
+/** Getting nearer is getting this much nearer (2 cells, in the units of the fields). */
+const NEARER = 20;
+/**
+ * Within this many tiles of its avatar, in a press (this many others in the metre ahead, counted twice), a zombie is
+ * done with it: it is in the crowd round it, it will get no nearer.
+ */
+const PRESS_TILES = 12;
+const PRESS_NEAR = 6;
+/** Each zombie looks again for an avatar to run to every this many steps, in turn. */
+const RETARGET_STEPS = 10;
+/** The way out wins once the time to run out, this much longer, is more than the time left. */
+const URGENCY_MARGIN = 1.6;
+/**
+ * The whole horde runs out once the time left is under the time its furthest zombie needs to run out, this much
+ * longer and a few seconds more: no avatar holds it past that (a jam at a door would hold it otherwise).
+ */
+const RUSH_MARGIN = 2;
+/**
+ * A zombie runs to an avatar that fewer than this many others run to already: those round it make a press, the
+ * others hear it is taken and go on (a choice: without it the whole horde would pack into the room of one avatar,
+ * and never get out by its door in time).
+ */
+const MOST_ON_ONE = 40;
+const RUSH_SECONDS = 10;
+/** The avatars a horde follows, at most (the first seen). */
+export const ZOMBIE_MOST_AVATARS = 32;
+/** The fields of the avatars made again at one step, at most: one that moved waits its turn. */
+const FIELDS_A_STEP = 2;
+/** The distance fields count 10 a cell across, 14 a cell on the diagonal; this is "out of reach". */
+const FAR = 0xffff;
 
 /** What a zombie is doing. */
 export const ZOMBIE_WAITING = 0;
@@ -116,12 +153,12 @@ function mulberry32(seed: number): () => number {
     };
 }
 
-/** The crowd of a horde, from the horde and the walls of the map (landWallsOf: the doors closed). */
+/** The crowd of a horde. */
 export class ZombieCrowd {
     public readonly count: number;
     public readonly width: number;
     public readonly height: number;
-    /** The water of each cell, as the horde read it when it began. */
+    /** The ground of each cell, as the server froze it (ZOMBIE_WATER, ZOMBIE_EAST, ZOMBIE_SOUTH, ZOMBIE_SOLID). */
     public readonly terrain: Uint8Array;
     /** Where each zombie is (map pixels), where it was a step before, its velocity (px/s) and what it is doing. */
     public readonly x: Float64Array;
@@ -131,51 +168,70 @@ export class ZombieCrowd {
     public readonly vx: Float64Array;
     public readonly vy: Float64Array;
     public readonly state: Uint8Array;
-    /** The steps taken: the crowd is the horde at `startedAt + steps * ZOMBIE_STEP_MS`. */
+    /** The avatar each zombie runs to (its slot), -1 when it runs out. */
+    public readonly target: Int8Array;
+    /** The steps taken: the crowd is the horde at its step `steps`. */
     public steps = 0;
     /** At this step the horde is over: whoever is still on the map is gone. */
     public readonly lastStep: number;
     /** How many walk now. */
     public walking = 0;
+    /** The time to run out from each cell (fast marching, in cells), Infinity where none runs out. */
+    public readonly potential: Float64Array;
+    /** The tile each avatar stands on (its slot), -1 where none. */
+    public readonly avatarTile = new Int32Array(ZOMBIE_MOST_AVATARS).fill(-1);
 
     private readonly widthPx: number;
     private readonly heightPx: number;
-    /** 1: the east side of a cell is closed; 2: its south side. */
-    private readonly closed: Uint8Array;
-    /** The time to walk out from each cell (fast marching), and the way down it. Infinity where none walks out. */
-    public readonly potential: Float64Array;
+    private readonly tilesWide: number;
+    private readonly tilesHigh: number;
     private readonly wayX: Float32Array;
     private readonly wayY: Float32Array;
-    /** The cells of the edges a zombie walks out by: 1. */
     private readonly exits: Uint8Array;
-    /** The cells the horde comes in by, in the order of the edge. */
     private readonly entries: Int32Array;
     private readonly pace: Float64Array;
     private readonly sway: Float64Array;
     private readonly nextVx: Float64Array;
     private readonly nextVy: Float64Array;
-    /** At which step each zombie comes in, and the next to come. */
     private readonly emitSteps: number;
     private nextIn = 0;
     private readonly random: () => number;
-    /** The zombies by tile of the map (32 px), filled at each step: the first of each tile, then the list. */
-    private readonly tilesWide: number;
-    private readonly tilesHigh: number;
     private readonly tileStart: Int32Array;
     private readonly tileList: Int32Array;
     private readonly tileOf: Int32Array;
-    /** How many zombies went over each tile (in tiles walked) since it was last taken (takeTrample). */
     private readonly trampled: Float32Array;
     private trampledAny = false;
-    /** Half the depth of its column (cells of potential), and the potential of its middle at this step. */
-    private readonly keepCells: number;
-    private middle = 0;
+    /** Running out, whatever it hears: its time runs short. */
+    private readonly leaving: Uint8Array;
+    /** How many others were in the metre ahead of each zombie at the last step (counted twice). */
+    private readonly press: Uint8Array;
+    /** The whole horde runs out. */
+    private rushing = false;
+    private readonly onOne = new Int32Array(ZOMBIE_MOST_AVATARS);
+    /** Until which step each zombie is done with each avatar (zombie * ZOMBIE_MOST_AVATARS + slot). */
+    private readonly doneUntil: Int32Array;
+    /** How near it got to its avatar (its distance field), and at which step it last got nearer. */
+    private readonly nearest: Int32Array;
+    private readonly nearestAt: Int32Array;
+    /** The distance field of each avatar (10 a cell), made when it moved to another tile. */
+    private readonly fields: (Uint16Array | undefined)[] = new Array<Uint16Array | undefined>(ZOMBIE_MOST_AVATARS);
+    private readonly fieldTile = new Int32Array(ZOMBIE_MOST_AVATARS).fill(-1);
+    /** The log of the avatars, the next entry to apply, and the last step it is complete to. */
+    private log: ZombieLogEntry[] = [];
+    private logAt = 0;
+    private safeStep: number;
+    /** The queue of the field search, kept. */
+    private queue = new Int32Array(0);
+    private atX = 0;
+    private atY = 0;
+    /** The lowest potential of the exits: what is left to run out from a cell is its potential over this. */
+    private exitLevel = Number.POSITIVE_INFINITY;
 
-    constructor(
-        public readonly horde: ZombieHorde,
-        walls: WaterWallSides | undefined,
-        terrain?: Uint8Array,
-    ) {
+    /** The horde, its clock as last told (setClock). */
+    public readonly horde: ZombieHorde;
+
+    constructor(horde: ZombieHorde, terrain?: Uint8Array) {
+        this.horde = { ...horde };
         const width = Math.max(1, Math.floor(horde.widthCells));
         const height = Math.max(1, Math.floor(horde.heightCells));
         this.width = width;
@@ -194,72 +250,67 @@ export class ZombieCrowd {
         this.nextVx = new Float64Array(count);
         this.nextVy = new Float64Array(count);
         this.state = new Uint8Array(count);
+        this.target = new Int8Array(count).fill(-1);
         this.pace = new Float64Array(count);
         this.sway = new Float64Array(count);
+        this.leaving = new Uint8Array(count);
+        this.press = new Uint8Array(count);
+        this.doneUntil = new Int32Array(count * ZOMBIE_MOST_AVATARS);
+        this.nearest = new Int32Array(count).fill(FAR);
+        this.nearestAt = new Int32Array(count);
         this.tileOf = new Int32Array(count);
         this.tileList = new Int32Array(count);
         this.tilesWide = Math.ceil(this.widthPx / TILE_PX);
         this.tilesHigh = Math.ceil(this.heightPx / TILE_PX);
         this.tileStart = new Int32Array(this.tilesWide * this.tilesHigh + 1);
         this.trampled = new Float32Array(this.tilesWide * this.tilesHigh);
-        this.lastStep = Math.ceil(horde.durationMs / ZOMBIE_STEP_MS);
+        this.lastStep = zombieLastStep(horde);
         this.random = mulberry32(horde.seed);
-
-        this.closed = new Uint8Array(width * height);
-        for (const [sides, bit] of [
-            [walls?.east, 1],
-            [walls?.south, 2],
-        ] as const) {
-            for (const key of sides ?? []) {
-                const { x, y } = cellOf(key);
-                if (x >= 0 && y >= 0 && x < width && y < height) this.closed[y * width + x] |= bit;
-            }
-        }
         this.exits = new Uint8Array(width * height);
         this.potential = new Float64Array(width * height);
         this.wayX = new Float32Array(width * height);
         this.wayY = new Float32Array(width * height);
         this.march();
-        // Its front, as wide as its numbers make it, as wide as the edge it comes in by at most; its depth, so that
-        // it comes in as dense as it marches.
         const frontPx = Math.max(LEAST_FRONT_PX, Math.sqrt((count * FRONT_ASPECT) / MARCH_DENSITY) * PX);
         this.entries = this.entryCells(frontPx);
-        const frontMetres = Math.min(frontPx, Math.max(1, this.entries.length) * TERRAIN_CELL) / PX;
-        const depthPx = (count / (frontMetres * MARCH_DENSITY)) * PX;
-        // The pace of the horde: its column through the middle of the map, in its duration.
-        const seconds = horde.durationMs / 1000;
-        const pace = Math.min(
-            MOST_PACE_PX,
-            Math.max(
-                LEAST_PACE_PX,
-                seconds > 0 ? ((this.crossingPx() + depthPx) / seconds) * PACE_SLACK : LEAST_PACE_PX,
-            ),
-        );
-        this.keepCells = Math.max(LEAST_KEEP_PX, depthPx / 2) / TERRAIN_CELL;
-        // It comes in at that pace, its depth after its head.
-        this.emitSteps = Math.max(
-            1,
-            Math.min(Math.floor(this.lastStep * MOST_EMIT_SHARE), Math.ceil(depthPx / pace / (ZOMBIE_STEP_MS / 1000))),
-        );
+        this.emitSteps = Math.max(1, Math.floor(this.lastStep * EMIT_SHARE));
         for (let zombie = 0; zombie < count; zombie++) {
-            this.pace[zombie] = pace * (1 - PACE_SPREAD + 2 * PACE_SPREAD * this.random());
+            this.pace[zombie] = SLOWEST_RUN_PX + (FASTEST_RUN_PX - SLOWEST_RUN_PX) * this.random();
             this.sway[zombie] = (this.random() * 2 - 1) * SWAY;
         }
+        this.safeStep = -1;
+        this.setLog(horde.avatars, horde.safeStep);
     }
 
-    /** The pace of the horde on dry land, m/s, as its zombies walk it on average. */
+    /**
+     * The log of the avatars as the server tells it now: the same entries again and those that came since, and the
+     * last step it is complete to. A log that disagrees with what was applied already is not taken.
+     */
+    public setLog(text: string, safeStep: number): void {
+        const entries = decodeZombieLog(text);
+        for (let at = 0; at < this.logAt; at++) {
+            if (at >= entries.length || entries[at].applyStep !== this.log[at].applyStep) return;
+        }
+        this.log = entries;
+        if (Number.isFinite(safeStep) && safeStep > this.safeStep) this.safeStep = safeStep;
+    }
+
+    /**
+     * The clock of the horde as the server tells it now (sped up or slowed down by the speed of the map): the steps
+     * stay the same, only the time they fall at changes.
+     */
+    public setClock(clock: Pick<ZombieHorde, "anchorStep" | "anchorAt" | "msPerStep">): void {
+        if (!(clock.msPerStep > 0)) return;
+        this.horde.anchorStep = clock.anchorStep;
+        this.horde.anchorAt = clock.anchorAt;
+        this.horde.msPerStep = clock.msPerStep;
+    }
+
+    /** The pace of the horde, m/s, as its zombies run it on average. */
     public paceMetres(): number {
         let sum = 0;
         for (let zombie = 0; zombie < this.count; zombie++) sum += this.pace[zombie];
         return this.count > 0 ? sum / this.count / PX : 0;
-    }
-
-    /** The water of the cell at a point (map pixels): ZOMBIE_DRY outside the map. */
-    public waterAt(x: number, y: number): number {
-        const cellX = Math.floor(x / TERRAIN_CELL);
-        const cellY = Math.floor(y / TERRAIN_CELL);
-        if (cellX < 0 || cellY < 0 || cellX >= this.width || cellY >= this.height) return 0;
-        return this.terrain[cellY * this.width + cellX];
     }
 
     /** Whether the horde is over at this step: nobody walks any more, nobody will come. */
@@ -268,36 +319,36 @@ export class ZombieCrowd {
     }
 
     /**
-     * Steps the crowd to the time `epoch` (ms, the time of the server): up to the step that holds it, `most` steps at
-     * most (a browser spreads a long catch-up over its images). True once it is there.
+     * Steps the crowd to the time `epoch` (ms, the time of the server), `most` steps at most, and never past the last
+     * step the log of the avatars is complete to. True once it is there.
      */
     public advanceTo(epoch: number, most = Number.POSITIVE_INFINITY): boolean {
         const target = this.stepFor(epoch);
         let taken = 0;
-        while (this.steps < target && taken < most) {
+        while (this.steps < target && taken < most && this.steps <= this.safeStep) {
             this.step();
             taken++;
         }
         return this.steps >= target;
     }
 
+    /** Whether the crowd waits for the log of the avatars (it would step further otherwise). */
+    public stalled(epoch: number): boolean {
+        return this.steps < this.stepFor(epoch) && this.steps > this.safeStep;
+    }
+
     /** The step whose state holds the time `epoch`: the one at or just after it. */
     public stepFor(epoch: number): number {
         if (!Number.isFinite(epoch)) return this.steps;
-        const since = (epoch - this.horde.startedAt) / ZOMBIE_STEP_MS;
-        return Math.min(this.lastStep, Math.max(0, Math.floor(since) + 1));
+        return Math.min(this.lastStep, Math.max(0, Math.floor(zombieStepAt(this.horde, epoch)) + 1));
     }
 
     /** How far the time `epoch` is between the last step and the one before (0 to 1), to draw between them. */
     public between(epoch: number): number {
-        const since = (epoch - this.horde.startedAt) / ZOMBIE_STEP_MS - (this.steps - 1);
-        return Math.min(1, Math.max(0, since));
+        return Math.min(1, Math.max(0, zombieStepAt(this.horde, epoch) - (this.steps - 1)));
     }
 
-    /**
-     * The tiles the horde went over since this was last asked, each with how many zombies crossed it (tiles walked
-     * there), and none left. Nothing when it went nowhere.
-     */
+    /** The tiles the horde went over since this was last asked, each with how many zombies crossed it. */
     public takeTrample(): { tileX: number; tileY: number; passes: number }[] {
         if (!this.trampledAny) return [];
         const taken: { tileX: number; tileY: number; passes: number }[] = [];
@@ -311,7 +362,6 @@ export class ZombieCrowd {
         return taken;
     }
 
-    /** The tiles of the map across (32 px), as takeTrample numbers them. */
     public get tilesAcross(): number {
         return this.tilesWide;
     }
@@ -319,7 +369,7 @@ export class ZombieCrowd {
     /** A number for the whole state (positions, velocities, what each does, the step): two equal crowds, one number. */
     public checksum(): number {
         let hash = 0x811c9dc5;
-        const mix = (array: Float64Array | Uint8Array): void => {
+        const mix = (array: Float64Array | Uint8Array | Int8Array): void => {
             const bytes = new Uint8Array(array.buffer, array.byteOffset, array.byteLength);
             for (let at = 0; at < bytes.length; at++) hash = Math.imul(hash ^ bytes[at], 0x01000193) >>> 0;
         };
@@ -328,17 +378,19 @@ export class ZombieCrowd {
         mix(this.vx);
         mix(this.vy);
         mix(this.state);
+        mix(this.target);
         hash = Math.imul(hash ^ this.steps, 0x01000193) >>> 0;
         return hash >>> 0;
     }
 
-    /** One step of the crowd: ZOMBIE_STEP_MS later. */
+    /** One step of the crowd. Its caller makes sure the log is complete to it (advanceTo). */
     public step(): void {
         if (this.steps >= this.lastStep) return;
+        this.applyLog();
+        this.makeFields();
         this.steps++;
         const { count, state } = this;
         if (this.steps >= this.lastStep) {
-            // The horde is over: whoever is still on the map is gone.
             for (let zombie = 0; zombie < count; zombie++) {
                 this.lastX[zombie] = this.x[zombie];
                 this.lastY[zombie] = this.y[zombie];
@@ -349,10 +401,120 @@ export class ZombieCrowd {
             return;
         }
         this.fillTiles();
-        this.findMiddle();
         this.comeIn();
+        this.choose();
         this.steer();
         this.move();
+    }
+
+    /** The entries of the log whose step came: the avatars move, leave, come. */
+    private applyLog(): void {
+        while (this.logAt < this.log.length && this.log[this.logAt].applyStep <= this.steps) {
+            for (const { slot, tile } of this.log[this.logAt].changes) {
+                if (slot < 0 || slot >= ZOMBIE_MOST_AVATARS) continue;
+                this.avatarTile[slot] = tile >= 0 && tile < this.tilesWide * this.tilesHigh ? tile : -1;
+            }
+            this.logAt++;
+        }
+    }
+
+    /** The distance fields of the avatars that moved to another tile, FIELDS_A_STEP at most, in the order of slots. */
+    private makeFields(): void {
+        let made = 0;
+        for (let slot = 0; slot < ZOMBIE_MOST_AVATARS && made < FIELDS_A_STEP; slot++) {
+            const tile = this.avatarTile[slot];
+            if (tile === this.fieldTile[slot]) continue;
+            this.fieldTile[slot] = tile;
+            if (tile < 0) {
+                this.fields[slot] = undefined;
+                continue;
+            }
+            this.fields[slot] = this.distanceFrom(tile);
+            made++;
+        }
+    }
+
+    /**
+     * The distance from the tile of an avatar to each cell (10 a cell across, 14 on a diagonal), by the open sides of
+     * the cells, round the water and the collisions, through the doors; FAR beyond the hearing and the detours.
+     */
+    private distanceFrom(tile: number): Uint16Array {
+        const { width, height } = this;
+        const size = width * height;
+        const field = new Uint16Array(size).fill(FAR);
+        const cellsATile = TILE_PX / TERRAIN_CELL;
+        const tileX = tile % this.tilesWide;
+        const tileY = (tile - tileX) / this.tilesWide;
+        // A bucket queue on the distances: they grow by 10 or 14.
+        const limit = Math.min(FAR - 1, Math.floor(((HEARING_PX * 1.5) / TERRAIN_CELL) * 10));
+        const buckets: number[][] = [];
+        const push = (cell: number, distance: number): void => {
+            if (distance >= field[cell] || distance > limit) return;
+            field[cell] = distance;
+            (buckets[distance] ??= []).push(cell);
+        };
+        for (let dy = 0; dy < cellsATile; dy++) {
+            for (let dx = 0; dx < cellsATile; dx++) {
+                const cellX = tileX * cellsATile + dx;
+                const cellY = tileY * cellsATile + dy;
+                if (cellX < width && cellY < height && !this.blockedCell(cellY * width + cellX)) {
+                    push(cellY * width + cellX, 0);
+                }
+            }
+        }
+        for (let distance = 0; distance < buckets.length; distance++) {
+            const bucket = buckets[distance];
+            if (!bucket) continue;
+            for (let at = 0; at < bucket.length; at++) {
+                const cell = bucket[at];
+                if (field[cell] !== distance) continue;
+                const cellX = cell % width;
+                const cellY = (cell - cellX) / width;
+                const east = cellX < width - 1 && this.canGo(cell, 1, 0);
+                const west = cellX > 0 && this.canGo(cell, -1, 0);
+                const south = cellY < height - 1 && this.canGo(cell, 0, 1);
+                const north = cellY > 0 && this.canGo(cell, 0, -1);
+                if (east) push(cell + 1, distance + 10);
+                if (west) push(cell - 1, distance + 10);
+                if (south) push(cell + width, distance + 10);
+                if (north) push(cell - width, distance + 10);
+                // A diagonal only where both sides around the corner are open: no cutting through a wall's end.
+                if (east && south && this.canGo(cell + 1, 0, 1) && this.canGo(cell + width, 1, 0))
+                    push(cell + width + 1, distance + 14);
+                if (west && south && this.canGo(cell - 1, 0, 1) && this.canGo(cell + width, -1, 0))
+                    push(cell + width - 1, distance + 14);
+                if (east && north && this.canGo(cell + 1, 0, -1) && this.canGo(cell - width, 1, 0))
+                    push(cell - width + 1, distance + 14);
+                if (west && north && this.canGo(cell - 1, 0, -1) && this.canGo(cell - width, -1, 0))
+                    push(cell - width - 1, distance + 14);
+            }
+            buckets[distance] = [];
+        }
+        return field;
+    }
+
+    private blockedCell(cell: number): boolean {
+        return (this.terrain[cell] & (ZOMBIE_WATER | ZOMBIE_SOLID)) !== 0;
+    }
+
+    /** Whether one goes from a cell to its neighbour (dx, dy, one of them 0): no wall between, not into the blocked. */
+    private canGo(cell: number, dx: number, dy: number): boolean {
+        const { terrain, width } = this;
+        let next: number;
+        if (dx === 1) {
+            if (terrain[cell] & ZOMBIE_EAST) return false;
+            next = cell + 1;
+        } else if (dx === -1) {
+            next = cell - 1;
+            if (terrain[next] & ZOMBIE_EAST) return false;
+        } else if (dy === 1) {
+            if (terrain[cell] & ZOMBIE_SOUTH) return false;
+            next = cell + width;
+        } else {
+            next = cell - width;
+            if (terrain[next] & ZOMBIE_SOUTH) return false;
+        }
+        return !this.blockedCell(next);
     }
 
     /** The zombies walking now, by tile: counting first, then each in its place, in the order of their numbers. */
@@ -371,8 +533,6 @@ export class ZombieCrowd {
             tileStart[tile + 1]++;
         }
         for (let tile = 0; tile < tilesWide * tilesHigh; tile++) tileStart[tile + 1] += tileStart[tile];
-        // tileStart[tile] is now where the tile begins in tileList; it is moved along as the tile is filled, then put
-        // back by one tile.
         for (let zombie = 0; zombie < count; zombie++) {
             const tile = tileOf[zombie];
             if (tile < 0) continue;
@@ -382,42 +542,11 @@ export class ZombieCrowd {
         tileStart[0] = 0;
     }
 
-    /** The potential of the middle of the horde: the mean of those walking, where they walk out from. */
-    private findMiddle(): void {
-        let sum = 0;
-        let counted = 0;
-        for (let zombie = 0; zombie < this.count; zombie++) {
-            if (this.state[zombie] !== ZOMBIE_WALKING) continue;
-            const here = this.potential[this.cellAt(this.x[zombie], this.y[zombie])];
-            if (here === Number.POSITIVE_INFINITY) continue;
-            sum += here;
-            counted++;
-        }
-        this.middle = counted > 0 ? sum / counted : 0;
-    }
-
-    private cellAt(px: number, py: number): number {
-        const cellX = Math.min(this.width - 1, Math.max(0, Math.floor(px / TERRAIN_CELL)));
-        const cellY = Math.min(this.height - 1, Math.max(0, Math.floor(py / TERRAIN_CELL)));
-        return cellY * this.width + cellX;
-    }
-
-    /** How a zombie paces itself to keep with the horde: slower ahead of its body, faster behind it. */
-    private keepShare(px: number, py: number, alone: boolean): number {
-        const here = this.potential[this.cellAt(px, py)];
-        if (here === Number.POSITIVE_INFINITY) return 1;
-        const ahead = (this.middle - here) / this.keepCells;
-        if (ahead > 1 && alone) return Math.max(KEEP_SLOWEST, 1 - (1 - KEEP_SLOWEST) * (ahead - 1));
-        if (ahead < -1) return Math.min(KEEP_FASTEST, 1 + (KEEP_FASTEST - 1) * (-ahead - 1));
-        return 1;
-    }
-
-    /** How many zombies were in a tile at the start of the step. */
     private crowdOfTile(tile: number): number {
         return this.tileStart[tile + 1] - this.tileStart[tile];
     }
 
-    /** The zombies whose time came walk in at the edge, where there is room: the others wait behind, in order. */
+    /** The zombies whose time came run in at the edge, where there is room: the others wait behind, in order. */
     private comeIn(): void {
         const { entries, count } = this;
         if (entries.length === 0) {
@@ -452,12 +581,110 @@ export class ZombieCrowd {
         }
     }
 
-    /** The way wayAt found last. */
-    private atX = 0;
-    private atY = 0;
+    private cellAt(px: number, py: number): number {
+        const cellX = Math.min(this.width - 1, Math.max(0, Math.floor(px / TERRAIN_CELL)));
+        const cellY = Math.min(this.height - 1, Math.max(0, Math.floor(py / TERRAIN_CELL)));
+        return cellY * this.width + cellX;
+    }
 
-    /** The way down the potential at a point (atX, atY), between the four cells around it; the heading where there is none. */
-    private wayAt(px: number, py: number): void {
+    /**
+     * Each zombie, in its turn (every RETARGET_STEPS steps), chooses where it runs: to the nearest avatar it hears and
+     * is not done with, by the way the map allows, or out. Every step it checks whether it reached its avatar (then
+     * it is done with it), gave up on it, or must run out now.
+     */
+    private choose(): void {
+        const { count, state, x, y, target, steps } = this;
+        const remainingSeconds = (this.lastStep - steps) * DT;
+        if (!this.rushing) {
+            // The time the furthest zombie needs to run out.
+            let furthest = 0;
+            for (let zombie = 0; zombie < count; zombie++) {
+                if (state[zombie] !== ZOMBIE_WALKING) continue;
+                const out = this.potential[this.cellAt(x[zombie], y[zombie])] - this.exitLevel;
+                if (out !== Number.POSITIVE_INFINITY) {
+                    furthest = Math.max(furthest, (out * TERRAIN_CELL) / this.pace[zombie]);
+                }
+            }
+            // Those still to come in have the whole crossing to run.
+            if (this.nextIn < count) furthest = Math.max(furthest, this.widthPx / SLOWEST_RUN_PX);
+            if (furthest * RUSH_MARGIN + RUSH_SECONDS >= remainingSeconds) this.rushing = true;
+        }
+        // How many run to each avatar, from the step before: counted as the choices change.
+        const onOne = this.onOne;
+        onOne.fill(0);
+        for (let zombie = 0; zombie < count; zombie++) if (target[zombie] >= 0) onOne[target[zombie]]++;
+        for (let zombie = 0; zombie < count; zombie++) {
+            if (state[zombie] !== ZOMBIE_WALKING) continue;
+            const cell = this.cellAt(x[zombie], y[zombie]);
+            if (this.rushing && !this.leaving[zombie]) {
+                this.leaving[zombie] = 1;
+                target[zombie] = -1;
+            }
+            if (!this.leaving[zombie]) {
+                const out = this.potential[cell] - this.exitLevel;
+                const secondsOut = (out * TERRAIN_CELL) / this.pace[zombie];
+                if (out !== Number.POSITIVE_INFINITY && secondsOut * URGENCY_MARGIN + 2 >= remainingSeconds) {
+                    this.leaving[zombie] = 1;
+                    target[zombie] = -1;
+                }
+            }
+            const slot = target[zombie];
+            if (slot >= 0) {
+                const tile = this.avatarTile[slot];
+                const field = this.fields[slot];
+                if (tile < 0 || !field) {
+                    target[zombie] = -1;
+                } else {
+                    const ax = ((tile % this.tilesWide) + 0.5) * TILE_PX;
+                    const ay = (Math.floor(tile / this.tilesWide) + 0.5) * TILE_PX;
+                    const dx = ax - x[zombie];
+                    const dy = ay - y[zombie];
+                    const distance = field[cell];
+                    if (distance + NEARER <= this.nearest[zombie]) {
+                        this.nearest[zombie] = distance;
+                        this.nearestAt[zombie] = steps;
+                    }
+                    const d2 = dx * dx + dy * dy;
+                    // Reached (within 5 tiles), in the press round it, or no nearer for a while: done with it.
+                    if (
+                        d2 < SATISFIED_PX * SATISFIED_PX ||
+                        (d2 < PRESS_TILES * PRESS_TILES * TILE_PX * TILE_PX && this.press[zombie] >= PRESS_NEAR) ||
+                        steps - this.nearestAt[zombie] > GIVE_UP_STEPS
+                    ) {
+                        this.doneUntil[zombie * ZOMBIE_MOST_AVATARS + slot] = steps + ZOMBIE_FORGET_STEPS;
+                        target[zombie] = -1;
+                    }
+                }
+            }
+            if (this.leaving[zombie] || (zombie + steps) % RETARGET_STEPS !== 0) continue;
+            // The nearest avatar it hears, by the way it would run.
+            let best = -1;
+            let bestDistance = FAR;
+            for (let other = 0; other < ZOMBIE_MOST_AVATARS; other++) {
+                const tile = this.avatarTile[other];
+                const field = this.fields[other];
+                if (tile < 0 || !field || this.doneUntil[zombie * ZOMBIE_MOST_AVATARS + other] > steps) continue;
+                if (other !== target[zombie] && onOne[other] >= MOST_ON_ONE) continue;
+                const ax = ((tile % this.tilesWide) + 0.5) * TILE_PX - x[zombie];
+                const ay = (Math.floor(tile / this.tilesWide) + 0.5) * TILE_PX - y[zombie];
+                if (ax * ax + ay * ay > HEARING_PX * HEARING_PX) continue;
+                if (field[cell] < bestDistance) {
+                    bestDistance = field[cell];
+                    best = other;
+                }
+            }
+            if (best !== target[zombie]) {
+                if (target[zombie] >= 0) onOne[target[zombie]]--;
+                if (best >= 0) onOne[best]++;
+                target[zombie] = best;
+                this.nearest[zombie] = FAR;
+                this.nearestAt[zombie] = steps;
+            }
+        }
+    }
+
+    /** The way down the potential at a point (atX, atY), between the four cells around it; the heading where none. */
+    private wayOut(px: number, py: number): void {
         const { width, height, wayX, wayY } = this;
         const u = px / TERRAIN_CELL - 0.5;
         const v = py / TERRAIN_CELL - 0.5;
@@ -485,6 +712,30 @@ export class ZombieCrowd {
         }
     }
 
+    /** The way to an avatar from a point (atX, atY): towards the lowest of the eight cells around, by the open sides. */
+    private wayTo(field: Uint16Array, px: number, py: number): boolean {
+        const { width, height } = this;
+        const cell = this.cellAt(px, py);
+        const cellX = cell % width;
+        const cellY = (cell - cellX) / width;
+        const here = field[cell];
+        if (here === FAR) return false;
+        let gx = 0;
+        let gy = 0;
+        // The slope across the open sides (upwind: towards the lower side on each axis).
+        const east = cellX < width - 1 && this.canGo(cell, 1, 0) ? field[cell + 1] : here;
+        const west = cellX > 0 && this.canGo(cell, -1, 0) ? field[cell - 1] : here;
+        const south = cellY < height - 1 && this.canGo(cell, 0, 1) ? field[cell + width] : here;
+        const north = cellY > 0 && this.canGo(cell, 0, -1) ? field[cell - width] : here;
+        gx = Math.min(0, east - here) - Math.min(0, west - here);
+        gy = Math.min(0, south - here) - Math.min(0, north - here);
+        const length = Math.sqrt(gx * gx + gy * gy);
+        if (length < 1e-9) return false;
+        this.atX = -gx / length;
+        this.atY = -gy / length;
+        return true;
+    }
+
     /** The velocity each zombie wants and gets from those around it (from the velocities of the step before). */
     private steer(): void {
         const { count, state, x, y, vx, vy, nextVx, nextVy, tileStart, tileList, tilesWide, tilesHigh } = this;
@@ -495,7 +746,9 @@ export class ZombieCrowd {
             if (state[zombie] !== ZOMBIE_WALKING) continue;
             const zx = x[zombie];
             const zy = y[zombie];
-            this.wayAt(zx, zy);
+            const slot = this.target[zombie];
+            const field = slot >= 0 ? this.fields[slot] : undefined;
+            if (!field || !this.wayTo(field, zx, zy)) this.wayOut(zx, zy);
             // It sways from its way, a slow wander of its own: its way turned by a share of its square.
             let sway = this.sway[zombie] + (this.random() * 2 - 1) * SWAY_WANDER;
             sway = Math.min(SWAY, Math.max(-SWAY, sway));
@@ -514,6 +767,21 @@ export class ZombieCrowd {
             let alongX = 0;
             let alongY = 0;
             let along = 0;
+            const feel = (dx: number, dy: number, touch: number, ofOther: number): void => {
+                const d2 = dx * dx + dy * dy;
+                if (d2 >= (touch + SOCIAL_RANGE_PX) * (touch + SOCIAL_RANGE_PX) || d2 < 1e-9) return;
+                const d = Math.sqrt(d2);
+                const nx = dx / d;
+                const ny = dy / d;
+                // Those in the half disc ahead of it, counted twice: the density of the disc it runs into.
+                if (d2 < density2 && wayX * nx + wayY * ny > 0) near += 2;
+                const gap = d - touch;
+                const share = gap <= 0 ? 1 : 1 - gap / SOCIAL_RANGE_PX;
+                const facing = ANISOTROPY + (1 - ANISOTROPY) * 0.5 * (1 + wayX * nx + wayY * ny);
+                const push = share * share * facing * ofOther;
+                pushX -= push * nx;
+                pushY -= push * ny;
+            };
             for (let row = Math.max(0, tileY - 1); row <= Math.min(tilesHigh - 1, tileY + 1); row++) {
                 for (let column = Math.max(0, tileX - 1); column <= Math.min(tilesWide - 1, tileX + 1); column++) {
                     const tile = row * tilesWide + column;
@@ -522,31 +790,24 @@ export class ZombieCrowd {
                         if (other === zombie) continue;
                         const dx = x[other] - zx;
                         const dy = y[other] - zy;
-                        const d2 = dx * dx + dy * dy;
-                        if (d2 >= reach2 || d2 < 1e-9) continue;
-                        const d = Math.sqrt(d2);
-                        const nx = dx / d;
-                        const ny = dy / d;
-                        // Those in the half disc ahead of it, counted twice: the density of the disc it walks into.
-                        if (d2 < density2 && wayX * nx + wayY * ny > 0) near += 2;
-                        const gap = d - 2 * ZOMBIE_RADIUS_PX;
-                        const share = gap <= 0 ? 1 : 1 - gap / SOCIAL_RANGE_PX;
-                        // More from those it walks into than from those behind it.
-                        const facing = ANISOTROPY + (1 - ANISOTROPY) * 0.5 * (1 + wayX * nx + wayY * ny);
-                        const push = share * share * facing;
-                        pushX -= push * nx;
-                        pushY -= push * ny;
+                        if (dx * dx + dy * dy >= reach2) continue;
+                        feel(dx, dy, 2 * ZOMBIE_RADIUS_PX, 1);
                         alongX += vx[other];
                         alongY += vy[other];
                         along++;
                     }
                 }
             }
-            // The water and the crowd ahead each hold it back; the stronger of the two does.
-            const wanted =
-                this.pace[zombie] *
-                this.keepShare(zx, zy, along < KEEP_ALONE) *
-                Math.min(ZOMBIE_WATER_PACE[this.terrainAt(zx, zy)], WEIDMANN[Math.min(WEIDMANN.length - 1, near)]);
+            // The avatars stand in its way: it goes round them, and pushes against them in a press.
+            for (let other = 0; other < ZOMBIE_MOST_AVATARS; other++) {
+                const tile = this.avatarTile[other];
+                if (tile < 0) continue;
+                const ax = ((tile % tilesWide) + 0.5) * TILE_PX - zx;
+                const ay = (Math.floor(tile / tilesWide) + 0.5) * TILE_PX - zy;
+                if (ax * ax + ay * ay < reach2 * 4) feel(ax, ay, ZOMBIE_RADIUS_PX + AVATAR_RADIUS_PX, 2);
+            }
+            this.press[zombie] = Math.min(255, near);
+            const wanted = this.pace[zombie] * WEIDMANN[Math.min(WEIDMANN.length - 1, near)];
             let ax = (wanted * wayX - vx[zombie]) / RELAX_SECONDS + SOCIAL_ACCEL * pushX;
             let ay = (wanted * wayY - vy[zombie]) / RELAX_SECONDS + SOCIAL_ACCEL * pushY;
             if (along > 0) {
@@ -555,8 +816,7 @@ export class ZombieCrowd {
             }
             let nvx = vx[zombie] + ax * DT;
             let nvy = vy[zombie] + ay * DT;
-            // Never faster than a little over its own pace.
-            const most = this.pace[zombie] * KEEP_FASTEST;
+            const most = this.pace[zombie] * 1.15;
             const speed2 = nvx * nvx + nvy * nvy;
             if (speed2 > most * most) {
                 const scale = most / Math.sqrt(speed2);
@@ -568,13 +828,7 @@ export class ZombieCrowd {
         }
     }
 
-    private terrainAt(px: number, py: number): number {
-        const cellX = Math.min(this.width - 1, Math.max(0, Math.floor(px / TERRAIN_CELL)));
-        const cellY = Math.min(this.height - 1, Math.max(0, Math.floor(py / TERRAIN_CELL)));
-        return this.terrain[cellY * this.width + cellX];
-    }
-
-    /** Each zombie moves, the contacts are undone, the walls hold, and those who walked out by the far side are gone. */
+    /** Each zombie moves, the contacts are undone, the walls hold, and those who ran out by the far side are gone. */
     private move(): void {
         const { count, state, x, y, lastX, lastY, vx, vy, nextVx, nextVy, tileStart, tileList, tilesWide, tilesHigh } =
             this;
@@ -582,7 +836,6 @@ export class ZombieCrowd {
             if (state[zombie] !== ZOMBIE_WALKING) continue;
             lastX[zombie] = x[zombie];
             lastY[zombie] = y[zombie];
-            // Those just come in keep the velocity they came with (they were not steered).
             if (this.tileOf[zombie] >= 0) {
                 vx[zombie] = nextVx[zombie];
                 vy[zombie] = nextVy[zombie];
@@ -590,7 +843,6 @@ export class ZombieCrowd {
             x[zombie] += vx[zombie] * DT;
             y[zombie] += vy[zombie] * DT;
         }
-        // The contacts, pair by pair, in the order of the numbers.
         const touch = 2 * ZOMBIE_RADIUS_PX;
         const touch2 = touch * touch;
         for (let zombie = 0; zombie < count; zombie++) {
@@ -612,7 +864,6 @@ export class ZombieCrowd {
                         let ny: number;
                         let d: number;
                         if (d2 < 1e-9) {
-                            // On top of each other: apart along the numbers, the same everywhere.
                             nx = 1;
                             ny = 0;
                             d = 0;
@@ -630,7 +881,6 @@ export class ZombieCrowd {
                 }
             }
         }
-        // Then each against the walls and the edges, and what it trampled.
         for (let zombie = 0; zombie < count; zombie++) {
             if (state[zombie] !== ZOMBIE_WALKING) continue;
             const fromX = lastX[zombie];
@@ -639,7 +889,6 @@ export class ZombieCrowd {
             let toY = fromY + Math.min(MOST_A_STEP_PX, Math.max(-MOST_A_STEP_PX, y[zombie] - fromY));
             const cellX = Math.floor(fromX / TERRAIN_CELL);
             const cellY = Math.floor(fromY / TERRAIN_CELL);
-            // Across first, then down: a wall stops the part of the move that crosses it.
             const nextX = Math.floor(toX / TERRAIN_CELL);
             if (nextX !== cellX) {
                 if (nextX < 0 || nextX >= this.width) {
@@ -648,7 +897,7 @@ export class ZombieCrowd {
                         continue;
                     }
                     toX = Math.min(this.widthPx - 0.5, Math.max(0.5, toX));
-                } else if (this.closedBetween(cellX, cellY, nextX, cellY)) toX = fromX;
+                } else if (!this.canGo(cellY * this.width + cellX, nextX - cellX, 0)) toX = fromX;
             }
             const columnNow = Math.floor(toX / TERRAIN_CELL);
             const nextY = Math.floor(toY / TERRAIN_CELL);
@@ -659,7 +908,7 @@ export class ZombieCrowd {
                         continue;
                     }
                     toY = Math.min(this.heightPx - 0.5, Math.max(0.5, toY));
-                } else if (this.closedBetween(columnNow, cellY, columnNow, nextY)) toY = fromY;
+                } else if (!this.canGo(cellY * this.width + columnNow, 0, nextY - cellY)) toY = fromY;
             }
             x[zombie] = toX;
             y[zombie] = toY;
@@ -679,60 +928,26 @@ export class ZombieCrowd {
 
     private leave(zombie: number): void {
         this.state[zombie] = ZOMBIE_GONE;
+        this.target[zombie] = -1;
         this.walking--;
     }
 
-    /** Whether going (dx, dy) out of the map goes the way of the horde (by an edge it walks out by). */
     private outwards(dx: number, dy: number): boolean {
         return dx * this.horde.dirX + dy * this.horde.dirY > 0.05;
     }
 
-    /** Whether a wall closes the side between two cells next to each other. */
-    private closedBetween(fromX: number, fromY: number, toX: number, toY: number): boolean {
-        const { closed, width } = this;
-        if (toX === fromX + 1 && toY === fromY) return (closed[fromY * width + fromX] & 1) !== 0;
-        if (toX === fromX - 1 && toY === fromY) return (closed[fromY * width + toX] & 1) !== 0;
-        if (toY === fromY + 1 && toX === fromX) return (closed[fromY * width + fromX] & 2) !== 0;
-        if (toY === fromY - 1 && toX === fromX) return (closed[toY * width + fromX] & 2) !== 0;
-        return true;
-    }
-
-    /** How far the map is crossed along the heading through the middle of the horde, pixels. */
-    private crossingPx(): number {
-        const { dirX, dirY } = this.horde;
-        const inside =
-            this.horde.anchorX >= 0 &&
-            this.horde.anchorY >= 0 &&
-            this.horde.anchorX <= this.widthPx &&
-            this.horde.anchorY <= this.heightPx;
-        const ax = inside ? this.horde.anchorX : this.widthPx / 2;
-        const ay = inside ? this.horde.anchorY : this.heightPx / 2;
-        const reach = (sign: number): number => {
-            let best = Number.POSITIVE_INFINITY;
-            const ex = sign * dirX;
-            const ey = sign * dirY;
-            if (ex > 1e-9) best = Math.min(best, (this.widthPx - ax) / ex);
-            if (ex < -1e-9) best = Math.min(best, -ax / ex);
-            if (ey > 1e-9) best = Math.min(best, (this.heightPx - ay) / ey);
-            if (ey < -1e-9) best = Math.min(best, -ay / ey);
-            return Number.isFinite(best) ? best : 0;
-        };
-        return reach(1) + reach(-1);
-    }
-
     /**
-     * The potential: the time (in cells walked on dry land) to walk out by the far side from each cell, by fast
-     * marching. Its exits are the cells of the edges the heading goes out by, each worth its distance to a line
-     * square to the heading: on open ground the potential is that distance, its slope the heading.
+     * The potential: the time (in cells run) to run out by the far side from each cell, by fast marching through the
+     * open sides of the cells that are neither water nor collision. Its exits are the cells of the edges the heading
+     * goes out by, each worth its distance to a line square to the heading.
      */
     private march(): void {
-        const { width, height, closed, potential, exits, terrain } = this;
+        const { width, height, potential, exits } = this;
         const { dirX, dirY } = this.horde;
         const size = width * height;
         potential.fill(Number.POSITIVE_INFINITY);
         const done = new Uint8Array(size);
-        // A binary heap of cells by potential.
-        const heap = new Int32Array(size * 4 + 4);
+        const heap = new Int32Array(size + 4);
         const where = new Int32Array(size).fill(-1);
         let heapSize = 0;
         const less = (a: number, b: number): boolean =>
@@ -785,7 +1000,6 @@ export class ZombieCrowd {
             }
             return top;
         };
-        // The exits.
         const exitBy = (cellX: number, cellY: number): boolean =>
             (cellX === 0 && -dirX > 0.05) ||
             (cellX === width - 1 && dirX > 0.05) ||
@@ -794,33 +1008,30 @@ export class ZombieCrowd {
         for (let cellY = 0; cellY < height; cellY++) {
             for (let cellX = 0; cellX < width; cellX++) {
                 if (cellX !== 0 && cellY !== 0 && cellX !== width - 1 && cellY !== height - 1) continue;
-                if (!exitBy(cellX, cellY)) continue;
                 const cell = cellY * width + cellX;
+                if (!exitBy(cellX, cellY) || this.blockedCell(cell)) continue;
                 exits[cell] = 1;
-                // Its distance to a line beyond the map, square to the heading, through no water: a cell of water
-                // at the edge is slower to walk out of.
-                const along = (cellX + 0.5) * dirX + (cellY + 0.5) * dirY;
-                push(cell, -along + 1 / ZOMBIE_WATER_PACE[terrain[cell]]);
+                const value = -((cellX + 0.5) * dirX + (cellY + 0.5) * dirY) + 1;
+                this.exitLevel = Math.min(this.exitLevel, value);
+                push(cell, value);
             }
         }
-        // The time at a cell from its neighbours already known, through the sides that are open.
         const solve = (cell: number): number => {
             const cellX = cell % width;
             const cellY = (cell - cellX) / width;
             let a = Number.POSITIVE_INFINITY;
             let b = Number.POSITIVE_INFINITY;
-            if (cellX > 0 && done[cell - 1] && (closed[cell - 1] & 1) === 0) a = potential[cell - 1];
-            if (cellX < width - 1 && done[cell + 1] && (closed[cell] & 1) === 0) a = Math.min(a, potential[cell + 1]);
-            if (cellY > 0 && done[cell - width] && (closed[cell - width] & 2) === 0) b = potential[cell - width];
-            if (cellY < height - 1 && done[cell + width] && (closed[cell] & 2) === 0)
+            if (cellX > 0 && done[cell - 1] && this.canGo(cell, -1, 0)) a = potential[cell - 1];
+            if (cellX < width - 1 && done[cell + 1] && this.canGo(cell, 1, 0)) a = Math.min(a, potential[cell + 1]);
+            if (cellY > 0 && done[cell - width] && this.canGo(cell, 0, -1)) b = potential[cell - width];
+            if (cellY < height - 1 && done[cell + width] && this.canGo(cell, 0, 1))
                 b = Math.min(b, potential[cell + width]);
-            const h = 1 / ZOMBIE_WATER_PACE[terrain[cell]];
             if (a === Number.POSITIVE_INFINITY && b === Number.POSITIVE_INFINITY) return a;
-            if (a === Number.POSITIVE_INFINITY) return b + h;
-            if (b === Number.POSITIVE_INFINITY) return a + h;
+            if (a === Number.POSITIVE_INFINITY) return b + 1;
+            if (b === Number.POSITIVE_INFINITY) return a + 1;
             const gap = a - b;
-            if (gap >= h || gap <= -h) return Math.min(a, b) + h;
-            return (a + b + Math.sqrt(2 * h * h - gap * gap)) / 2;
+            if (gap >= 1 || gap <= -1) return Math.min(a, b) + 1;
+            return (a + b + Math.sqrt(2 - gap * gap)) / 2;
         };
         while (heapSize > 0) {
             const cell = pop();
@@ -828,14 +1039,14 @@ export class ZombieCrowd {
             done[cell] = 1;
             const cellX = cell % width;
             const cellY = (cell - cellX) / width;
-            if (cellX > 0 && !done[cell - 1] && (closed[cell - 1] & 1) === 0) push(cell - 1, solve(cell - 1));
-            if (cellX < width - 1 && !done[cell + 1] && (closed[cell] & 1) === 0) push(cell + 1, solve(cell + 1));
-            if (cellY > 0 && !done[cell - width] && (closed[cell - width] & 2) === 0)
-                push(cell - width, solve(cell - width));
-            if (cellY < height - 1 && !done[cell + width] && (closed[cell] & 2) === 0)
-                push(cell + width, solve(cell + width));
+            // Spread to the neighbours one can come from (the move is the same either way: walls and blocked cells).
+            const open = (other: number, dx: number, dy: number): boolean =>
+                !done[other] && !this.blockedCell(other) && this.canGo(other, dx, dy);
+            if (cellX > 0 && open(cell - 1, 1, 0)) push(cell - 1, solve(cell - 1));
+            if (cellX < width - 1 && open(cell + 1, -1, 0)) push(cell + 1, solve(cell + 1));
+            if (cellY > 0 && open(cell - width, 0, 1)) push(cell - width, solve(cell - width));
+            if (cellY < height - 1 && open(cell + width, 0, -1)) push(cell + width, solve(cell + width));
         }
-        // The way down the potential at each cell: its slope across the open sides, towards the lower.
         for (let cellY = 0; cellY < height; cellY++) {
             for (let cellX = 0; cellX < width; cellX++) {
                 const cell = cellY * width + cellX;
@@ -843,16 +1054,14 @@ export class ZombieCrowd {
                 if (here === Number.POSITIVE_INFINITY) continue;
                 const side = (other: number, open: boolean): number =>
                     open && potential[other] !== Number.POSITIVE_INFINITY ? potential[other] : here;
-                const west = cellX > 0 ? side(cell - 1, (closed[cell - 1] & 1) === 0) : here;
-                const east = cellX < width - 1 ? side(cell + 1, (closed[cell] & 1) === 0) : here;
-                const north = cellY > 0 ? side(cell - width, (closed[cell - width] & 2) === 0) : here;
-                const south = cellY < height - 1 ? side(cell + width, (closed[cell] & 2) === 0) : here;
-                // Upwind: towards the lower side on each axis.
+                const west = cellX > 0 ? side(cell - 1, this.canGo(cell, -1, 0)) : here;
+                const east = cellX < width - 1 ? side(cell + 1, this.canGo(cell, 1, 0)) : here;
+                const north = cellY > 0 ? side(cell - width, this.canGo(cell, 0, -1)) : here;
+                const south = cellY < height - 1 ? side(cell + width, this.canGo(cell, 0, 1)) : here;
                 const gx = Math.min(0, east - here) - Math.min(0, west - here);
                 const gy = Math.min(0, south - here) - Math.min(0, north - here);
                 const length = Math.sqrt(gx * gx + gy * gy);
                 if (exits[cell]) {
-                    // At the edge it walks out by, straight on, out.
                     this.wayX[cell] = dirX;
                     this.wayY[cell] = dirY;
                 } else if (length > 1e-9) {
@@ -863,7 +1072,7 @@ export class ZombieCrowd {
         }
     }
 
-    /** The cells the horde comes in by: on the edges it comes from, across its front, where it can walk out. */
+    /** The cells the horde comes in by: on the edges it comes from, across its front, where it can run out from. */
     private entryCells(frontPx: number): Int32Array {
         const { width, height, potential } = this;
         const { dirX, dirY } = this.horde;
@@ -881,21 +1090,21 @@ export class ZombieCrowd {
             (cellY === height - 1 && -dirY > 0.05);
         const edge: number[] = [];
         const front: number[] = [];
+        const anyEdge: number[] = [];
         for (let cellY = 0; cellY < height; cellY++) {
             for (let cellX = 0; cellX < width; cellX++) {
                 if (cellX !== 0 && cellY !== 0 && cellX !== width - 1 && cellY !== height - 1) continue;
                 const cell = cellY * width + cellX;
-                if (!entryBy(cellX, cellY) || potential[cell] === Number.POSITIVE_INFINITY) continue;
+                if (potential[cell] === Number.POSITIVE_INFINITY || this.blockedCell(cell)) continue;
+                anyEdge.push(cell);
+                if (!entryBy(cellX, cellY)) continue;
                 edge.push(cell);
-                // Across the front: how far from the middle of the horde, square to its way.
                 const across = ((cellX + 0.5) * TERRAIN_CELL - ax) * -dirY + ((cellY + 0.5) * TERRAIN_CELL - ay) * dirX;
                 if (Math.abs(across) <= frontPx / 2) front.push(cell);
             }
         }
-        // Out of the water where it can: a horde whose front lies on a sea at the edge comes in by its shores, not
-        // from under the water; through the water only where the whole edge is deep.
-        const shallow = (cells: number[]): number[] => cells.filter((cell) => this.terrain[cell] < ZOMBIE_DEEP);
-        for (const cells of [shallow(front), front, shallow(edge), edge]) {
+        // Out of the water and the walls, across its front where it can; anywhere on its edge, or on any edge, else.
+        for (const cells of [front, edge, anyEdge]) {
             if (cells.length > 0) return Int32Array.from(cells);
         }
         return new Int32Array(0);

@@ -38,7 +38,8 @@ import {
     heightAt,
     HURRICANE_GUST_FACTOR,
     hurricaneHere,
-    landWallsOf,
+    doorLeavesOf,
+    zombieCollisionsOf,
     type LifeFire,
     lifeFireOf,
     listeningZoneJamKey,
@@ -3919,6 +3920,17 @@ export class GameScene extends DirtyScene {
     }
 
     /**
+     * The collisions of the map as this browser walks its avatar by, a byte a tile, the doors open: what the player
+     * who sends a horde of zombies sends with it, so that it goes round the furniture and the walls of the map too.
+     */
+    public zombieCollisions(): { collisions: string; collisionsWidth: number; collisionsHeight: number } {
+        return zombieCollisionsOf(
+            this.gameMapFrontWrapper.getCollisionGrid({ emitMapChangedEvent: false }),
+            doorLeavesOf(this.getGameMap().getWamFile()?.getWam()),
+        );
+    }
+
+    /**
      * At each image, the horde of zombies of the room: stepped to the time of the server and drawn, and told to the
      * panel once a second. Nothing while there is none.
      */
@@ -5458,11 +5470,7 @@ export class GameScene extends DirtyScene {
         // The horde of zombies of the room: its crowd stepped here as on the server, from what it tells.
         this.zombieReceiver?.destroy();
         this.zombieView?.destroy();
-        const zombieView = new ZombieView(
-            this,
-            () => landWallsOf(this.getGameMap().getWamFile()?.getWam()),
-            (x, y) => this.groundDropAt(x, y),
-        );
+        const zombieView = new ZombieView(this, (x, y) => this.groundDropAt(x, y));
         this.zombieView = zombieView;
         const zombieReceiver = new ZombieReceiver((horde) => {
             zombieView.setHorde(horde, this.time.now);

@@ -237,14 +237,20 @@ describe("MeadowManager and the trees", () => {
     it("lays down the trees a horde of zombies walks over, away from it, and keeps them down while it goes on", () => {
         let now = Date.UTC(2026, 6, 14, 10);
         const { manager, steps } = createHarness({ clock: () => now, growMinutes: 1 });
-        // Eastwards across the map of 80 x 80 cells, 600 zombies on a front as wide as the map, in two minutes.
+        // Eastwards across the map of 80 x 80 cells, 600 zombies on a front as wide as the map, coming in for two minutes
+        // (the first 40 % of five).
         let horde: ZombieHorde | undefined = {
             id: 7,
             seed: 99,
             count: 600,
-            durationMs: 120_000,
+            durationMs: 300_000,
             heading: 90,
             startedAt: now,
+            anchorStep: 0,
+            anchorAt: now,
+            msPerStep: 100,
+            avatars: "",
+            safeStep: 1_000_000,
             ...zombieDirection(90),
             anchorX: 40 * TERRAIN_CELL,
             anchorY: 40 * TERRAIN_CELL,

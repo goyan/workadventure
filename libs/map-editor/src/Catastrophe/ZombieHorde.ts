@@ -1,14 +1,18 @@
 import { TERRAIN_CELL, TILE_PX } from "../types";
 import { TILE_AREA_M2 } from "../Terrain/Scale";
+import { cellOf } from "../Terrain/TerrainGrid";
+import type { WaterWallSides } from "../Terrain/WaterGrid";
 
 /**
- * A horde of zombies crosses the map the way a player chose: it comes in by the edge it comes from, a broad column a
- * few tens of metres wide, walks across as a crowd (ZombieCrowd), and goes out by the other side. Where it walks it
- * tramples the grass and pulls the trees down; the avatars are not touched, it walks through them.
+ * A horde of zombies crosses the map the way a player chose: it comes in by the edge it comes from, runs across as a
+ * crowd (ZombieCrowd), drawn to the avatars it hears on its way, and goes out by the other side. It keeps out of the
+ * water, crosses it by the bridges, goes into the buildings by their doors. Where it runs it tramples the grass and
+ * pulls the trees down.
  *
- * What the room is told is a few figures (the seed, the way it goes, when it began, how many they are, how long it
- * lasts) and, once, the water the server saw on the map when it began (zombieTerrainOf): every browser and the thread
- * of the ground step the same crowd from them, the same zombies at the same step. No position is ever sent.
+ * What the room is told is a few figures (the seed, the way it goes, its clock, how many they are, how long it lasts),
+ * the ground the server froze when it began (zombieTerrainOf: its water, its walls, the collisions of the map) and the
+ * log of where the avatars were, step by step (encodeZombieLog): every browser and the thread of the ground step the
+ * same crowd from them, the same zombies at the same step. No position of a zombie is ever sent.
  */
 
 /** Map pixels in a metre: a tile is about 1.1 m wide (Terrain/Scale). */
@@ -18,39 +22,32 @@ export const ZOMBIE_PX_PER_METRE = TILE_PX / Math.sqrt(TILE_AREA_M2);
 export const ZOMBIE_MIN_COUNT = 100;
 export const ZOMBIE_MAX_COUNT = 4000;
 export const ZOMBIE_DEFAULT_COUNT = 2000;
-/** How long the horde takes to cross the map, minutes: its head comes in, its tail goes out. */
+/** How long the horde has to cross the map, minutes: its last zombies are out by then. */
 export const ZOMBIE_MIN_MINUTES = 1;
 export const ZOMBIE_MAX_MINUTES = 15;
 export const ZOMBIE_DEFAULT_MINUTES = 6;
 /** Where the horde goes, degrees (0 north, 90 east): westwards. */
 export const ZOMBIE_DEFAULT_HEADING = 270;
 
+/** A step of the crowd at the speed of reality: ten a second. */
+export const ZOMBIE_STEP_MS = 100;
 /** The horde of a room is told this often, so that a player who joins sees it soon. */
 export const ZOMBIE_TELL_MS = 1000;
-/** The water the server saw is told with the horde this often (and at once): a player who joins waits that long. */
+/** The ground the server froze is told with the horde this often (and at once): a player who joins waits that long. */
 export const ZOMBIE_TERRAIN_TELL_MS = 5000;
-
 /**
- * The water on a cell, as the horde reads it once when it begins (depths in pixels of altitude, a tile of altitude as
- * high as a tile is wide, 1.1 m):
- * - dry, under a film of 2 px (7 cm);
- * - shallow, to 16 px (55 cm, the knee to the thigh);
- * - deep, to 40 px (1.4 m, the waist to the chest);
- * - over the head beyond: the zombies walk on the bottom, as zombies do.
+ * Where the avatars are is applied this long (ms of reality) after the server read it: every browser has had it by
+ * then, and steps the crowd with it at the same step as the server.
  */
-export const ZOMBIE_DRY = 0;
-export const ZOMBIE_SHALLOW = 1;
-export const ZOMBIE_DEEP = 2;
-export const ZOMBIE_UNDER = 3;
-export const ZOMBIE_SHALLOW_PX = 2;
-export const ZOMBIE_DEEP_PX = 16;
-export const ZOMBIE_UNDER_PX = 40;
+export const ZOMBIE_INPUT_DELAY_MS = 2500;
 
-/**
- * How fast a zombie walks in each of those waters, as a share of its pace on dry land: a choice, the pace falling
- * with the depth, to a crawl on the bottom.
- */
-export const ZOMBIE_WATER_PACE: readonly number[] = [1, 0.6, 0.3, 0.15];
+/** A cell of the ground of a horde: water it keeps out of, its east side closed, its south side closed, a collision. */
+export const ZOMBIE_WATER = 1;
+export const ZOMBIE_EAST = 2;
+export const ZOMBIE_SOUTH = 4;
+export const ZOMBIE_SOLID = 8;
+/** The water a zombie keeps out of: from a film of 2 px of altitude (7 cm). */
+export const ZOMBIE_WATER_PX = 2;
 
 /** A horde as a player asks for it, kept within what a horde may be. */
 export interface ZombieHordeAsk {
@@ -61,15 +58,18 @@ export interface ZombieHordeAsk {
 }
 
 /**
- * A horde crossing a map, as the server keeps it and tells it: since `startedAt` (ms, the time of the server), from
- * the edge it comes from, the way (dirX, dirY) goes (map pixels: east, south; a unit vector the server computes once,
- * so that nobody computes it again with a sine of their own), its middle over (anchorX, anchorY).
+ * A horde crossing a map, as the server keeps it and tells it. It began at `startedAt` (ms, the time of the server);
+ * its clock is its step `anchorStep` at the time `anchorAt`, a step every `msPerStep` (100 at the speed of reality,
+ * less when the map is sped up). Its way, in map pixels (east, south), is a unit vector the server computes once.
  */
 export interface ZombieHorde extends ZombieHordeAsk {
     id: number;
     /** The luck of the crowd: where each zombie comes in, its pace, its sway. */
     seed: number;
     startedAt: number;
+    anchorStep: number;
+    anchorAt: number;
+    msPerStep: number;
     dirX: number;
     dirY: number;
     anchorX: number;
@@ -77,8 +77,11 @@ export interface ZombieHorde extends ZombieHordeAsk {
     /** The size of the map in cells of the relief (16 px), as the server read it. */
     widthCells: number;
     heightCells: number;
-    /** The water of each cell when the horde began (zombieTerrainOf), run-length coded (encodeZombieTerrain). */
+    /** The ground of each cell when the horde began (zombieTerrainOf), run-length coded (encodeZombieTerrain). */
     terrain: string;
+    /** Where the avatars were, step by step (encodeZombieLog), and the last step that log is complete to. */
+    avatars: string;
+    safeStep: number;
 }
 
 export function zombieCount(count: number | undefined): number {
@@ -115,35 +118,73 @@ export function zombieDirection(heading: number): { dirX: number; dirY: number }
     return { dirX: clean(dirX), dirY: clean(dirY) };
 }
 
-/** Whether the horde ended at `epoch` (ms, the time of the server), or has not begun. */
+/** The step at which a horde ends: its duration, in steps of reality, whatever the speed of the map. */
+export function zombieLastStep(horde: Pick<ZombieHorde, "durationMs">): number {
+    return Math.ceil(horde.durationMs / ZOMBIE_STEP_MS);
+}
+
+/** The step of the horde at `epoch` (ms, the time of the server): fractional, negative before it began. */
+export function zombieStepAt(horde: Pick<ZombieHorde, "anchorStep" | "anchorAt" | "msPerStep">, epoch: number): number {
+    return horde.anchorStep + (epoch - horde.anchorAt) / horde.msPerStep;
+}
+
+/** Whether the horde goes on at `epoch` (ms, the time of the server): begun, and not at its last step. */
 export function zombieHordeGoing(horde: ZombieHorde | undefined, epoch: number): boolean {
-    if (!horde || !Number.isFinite(epoch)) return false;
-    const since = epoch - horde.startedAt;
-    return since >= 0 && since < horde.durationMs;
+    if (!horde || !Number.isFinite(epoch) || epoch < horde.startedAt) return false;
+    return zombieStepAt(horde, epoch) < zombieLastStep(horde);
+}
+
+/** How long the horde still lasts at `epoch`, whole ms (a field of whole numbers carries it). */
+export function zombieMsLeft(horde: ZombieHorde, epoch: number): number {
+    return Math.max(0, Math.round((zombieLastStep(horde) - zombieStepAt(horde, epoch)) * horde.msPerStep));
 }
 
 /**
- * The water of each cell of a map `width` x `height` cells, as the horde reads it (ZOMBIE_DRY to ZOMBIE_UNDER), from
- * the depth of the water on it in pixels; `dry` says a cell is walked on dry whatever is under it (the deck of a
- * bridge).
+ * The horde at `times` the speed of reality from `now`: a step every 100 / times ms, its clock anchored where it is,
+ * so that it goes on from the same step without a jump. The same horde when nothing changes.
+ */
+export function zombieSpedUp(horde: ZombieHorde, times: number, now: number): ZombieHorde {
+    const wanted = Number.isFinite(times) && times > 0 ? times : 1;
+    const msPerStep = ZOMBIE_STEP_MS / wanted;
+    if (Math.abs(msPerStep - horde.msPerStep) < 1e-9) return horde;
+    const at = Math.round(now);
+    return { ...horde, anchorStep: zombieStepAt(horde, at), anchorAt: at, msPerStep };
+}
+
+/**
+ * The ground of each cell of a map `width` x `height` cells, as the horde reads it: ZOMBIE_WATER where the water is
+ * 2 px deep at least (not on the deck of a bridge, `dry`), ZOMBIE_EAST and ZOMBIE_SOUTH where a wall closes its side
+ * (the walls of the map, doors open: waterWallsOf), ZOMBIE_SOLID in a tile (32 px) the collisions of the map close
+ * (`solid`, as the browser of the player who sent the horde reads them).
  */
 export function zombieTerrainOf(
     width: number,
     height: number,
     depthAt: (cellX: number, cellY: number) => number,
     dry: (cellX: number, cellY: number) => boolean = () => false,
+    walls?: WaterWallSides,
+    solid: (tileX: number, tileY: number) => boolean = () => false,
 ): Uint8Array {
-    const classes = new Uint8Array(Math.max(0, width * height));
+    const cells = new Uint8Array(Math.max(0, width * height));
+    const cellsATile = TILE_PX / TERRAIN_CELL;
     for (let cellY = 0; cellY < height; cellY++) {
         for (let cellX = 0; cellX < width; cellX++) {
-            if (dry(cellX, cellY)) continue;
-            const depth = depthAt(cellX, cellY);
-            if (!(depth >= ZOMBIE_SHALLOW_PX)) continue;
-            classes[cellY * width + cellX] =
-                depth >= ZOMBIE_UNDER_PX ? ZOMBIE_UNDER : depth >= ZOMBIE_DEEP_PX ? ZOMBIE_DEEP : ZOMBIE_SHALLOW;
+            let bits = 0;
+            if (!dry(cellX, cellY) && depthAt(cellX, cellY) >= ZOMBIE_WATER_PX) bits |= ZOMBIE_WATER;
+            if (solid(Math.floor(cellX / cellsATile), Math.floor(cellY / cellsATile))) bits |= ZOMBIE_SOLID;
+            cells[cellY * width + cellX] = bits;
         }
     }
-    return classes;
+    for (const [sides, bit] of [
+        [walls?.east, ZOMBIE_EAST],
+        [walls?.south, ZOMBIE_SOUTH],
+    ] as const) {
+        for (const key of sides ?? []) {
+            const { x, y } = cellOf(key);
+            if (x >= 0 && y >= 0 && x < width && y < height) cells[y * width + x] |= bit;
+        }
+    }
+    return cells;
 }
 
 const BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -169,7 +210,7 @@ function bytesOfBase64(text: string): number[] {
         if (char === "=") break;
         const value = BASE64.indexOf(char);
         if (value < 0) continue;
-        bits = (bits << 6) | value;
+        bits = ((bits << 6) | value) & 0xffff;
         kept += 6;
         if (kept >= 8) {
             kept -= 8;
@@ -179,53 +220,61 @@ function bytesOfBase64(text: string): number[] {
     return bytes;
 }
 
+function pushVarint(bytes: number[], value: number): void {
+    let left = Math.max(0, Math.floor(value));
+    while (left >= 128) {
+        bytes.push((left & 127) | 128);
+        left = Math.floor(left / 128);
+    }
+    bytes.push(left);
+}
+
+function readVarint(bytes: readonly number[], at: { read: number }): number {
+    let value = 0;
+    let scale = 1;
+    while (at.read < bytes.length) {
+        const byte = bytes[at.read++];
+        value += (byte & 127) * scale;
+        if (byte < 128) break;
+        scale *= 128;
+    }
+    return value;
+}
+
 /**
- * The water of the cells of a horde, as it is told: runs of the same water, row after row, each a byte of its water
- * and the length of the run in a variable number of bytes (7 bits each), in base64. A map without water is a few bytes.
+ * The ground of the cells of a horde (or any bytes), as it is told: runs of the same byte, row after row, each the
+ * byte and the length of the run in a variable number of bytes (7 bits each), in base64. An empty map is a few bytes.
  */
-export function encodeZombieTerrain(classes: Uint8Array): string {
+export function encodeZombieTerrain(cells: Uint8Array): string {
     const bytes: number[] = [];
     let at = 0;
-    while (at < classes.length) {
-        const value = classes[at];
+    while (at < cells.length) {
+        const value = cells[at];
         let run = 1;
-        while (at + run < classes.length && classes[at + run] === value) run++;
+        while (at + run < cells.length && cells[at + run] === value) run++;
         bytes.push(value);
-        let left = run;
-        while (left >= 128) {
-            bytes.push((left & 127) | 128);
-            left = Math.floor(left / 128);
-        }
-        bytes.push(left);
+        pushVarint(bytes, run);
         at += run;
     }
     return base64Of(bytes);
 }
 
-/** The water of `size` cells from what encodeZombieTerrain told: dry where it says nothing, or anything wrong. */
+/** The `size` bytes encodeZombieTerrain told: 0 where it says nothing. */
 export function decodeZombieTerrain(text: string, size: number): Uint8Array {
-    const classes = new Uint8Array(Math.max(0, size));
+    const cells = new Uint8Array(Math.max(0, size));
     const bytes = bytesOfBase64(text);
-    let at = 0;
-    let read = 0;
-    while (read < bytes.length && at < classes.length) {
-        const value = Math.min(ZOMBIE_UNDER, bytes[read++]);
-        let run = 0;
-        let scale = 1;
-        while (read < bytes.length) {
-            const byte = bytes[read++];
-            run += (byte & 127) * scale;
-            if (byte < 128) break;
-            scale *= 128;
-        }
-        const end = Math.min(classes.length, at + run);
-        if (value !== ZOMBIE_DRY) classes.fill(value, at, end);
-        at = end;
+    const at = { read: 0 };
+    let filled = 0;
+    while (at.read < bytes.length && filled < cells.length) {
+        const value = bytes[at.read++];
+        const end = Math.min(cells.length, filled + readVarint(bytes, at));
+        if (value !== 0) cells.fill(value, filled, end);
+        filled = end;
     }
-    return classes;
+    return cells;
 }
 
-/** A short number that tells two terrains apart (FNV-1a over the text): a horde told again keeps its crowd. */
+/** A short number that tells two texts apart (FNV-1a): a horde told again keeps its crowd. */
 export function zombieTerrainHash(text: string): number {
     let hash = 0x811c9dc5;
     for (let at = 0; at < text.length; at++) {
@@ -235,5 +284,85 @@ export function zombieTerrainHash(text: string): number {
     return hash >>> 0;
 }
 
+/**
+ * What changed of the avatars at a step of the horde: each avatar (by its slot, numbered in the order the server first
+ * saw them) now on that tile, or gone (-1).
+ */
+export interface ZombieLogEntry {
+    applyStep: number;
+    changes: { slot: number; tile: number }[];
+}
+
+/** The log of the avatars, as it is told: for each entry its step (from the one before), then its changes. */
+export function encodeZombieLog(entries: readonly ZombieLogEntry[]): string {
+    const bytes: number[] = [];
+    let step = 0;
+    for (const entry of entries) {
+        pushVarint(bytes, entry.applyStep - step);
+        step = entry.applyStep;
+        pushVarint(bytes, entry.changes.length);
+        for (const change of entry.changes) {
+            pushVarint(bytes, change.slot);
+            pushVarint(bytes, change.tile + 1);
+        }
+    }
+    return base64Of(bytes);
+}
+
+export function decodeZombieLog(text: string): ZombieLogEntry[] {
+    const bytes = bytesOfBase64(text);
+    const at = { read: 0 };
+    const entries: ZombieLogEntry[] = [];
+    let step = 0;
+    while (at.read < bytes.length) {
+        step += readVarint(bytes, at);
+        const count = readVarint(bytes, at);
+        const changes: { slot: number; tile: number }[] = [];
+        for (let change = 0; change < count && at.read < bytes.length; change++) {
+            const slot = readVarint(bytes, at);
+            changes.push({ slot, tile: readVarint(bytes, at) - 1 });
+        }
+        entries.push({ applyStep: step, changes });
+    }
+    return entries;
+}
+
 /** The cells of the relief in a tile. */
 export const ZOMBIE_CELLS_A_TILE = TILE_PX / TERRAIN_CELL;
+
+/**
+ * The collisions of a map as a horde reads them, from the grid the browser walks its avatar by (`grid[tileY][tileX]`,
+ * 1 where one does not walk): a byte a tile, run-length coded (encodeZombieTerrain), what the player who sends a
+ * horde sends with it. The tiles of the doors stay open (`doors`: their leaves, the sides of cells they close): a
+ * horde goes in by them, as the avatars do.
+ */
+export function zombieCollisionsOf(
+    grid: readonly (readonly number[])[],
+    doors: readonly { east: readonly string[]; south: readonly string[] }[] = [],
+): { collisions: string; collisionsWidth: number; collisionsHeight: number } {
+    const height = grid.length;
+    const width = height > 0 ? grid[0].length : 0;
+    const tiles = new Uint8Array(width * height);
+    for (let tileY = 0; tileY < height; tileY++) {
+        const row = grid[tileY];
+        for (let tileX = 0; tileX < width; tileX++) if (row[tileX] === 1) tiles[tileY * width + tileX] = 1;
+    }
+    const open = (cellX: number, cellY: number): void => {
+        const tileX = Math.floor(cellX / ZOMBIE_CELLS_A_TILE);
+        const tileY = Math.floor(cellY / ZOMBIE_CELLS_A_TILE);
+        if (tileX >= 0 && tileY >= 0 && tileX < width && tileY < height) tiles[tileY * width + tileX] = 0;
+    };
+    for (const door of doors) {
+        for (const key of door.east) {
+            const { x, y } = cellOf(key);
+            open(x, y);
+            open(x + 1, y);
+        }
+        for (const key of door.south) {
+            const { x, y } = cellOf(key);
+            open(x, y);
+            open(x, y + 1);
+        }
+    }
+    return { collisions: encodeZombieTerrain(tiles), collisionsWidth: width, collisionsHeight: height };
+}

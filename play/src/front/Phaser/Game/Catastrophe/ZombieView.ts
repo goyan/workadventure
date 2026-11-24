@@ -1,6 +1,6 @@
 import * as Phaser from "phaser";
 import { ZOMBIE_WALKING, ZombieCrowd } from "@workadventure/map-editor";
-import type { WaterWallSides, ZombieHorde } from "@workadventure/map-editor";
+import type { ZombieHorde } from "@workadventure/map-editor";
 import {
     ZOMBIE_DEAD,
     ZOMBIE_IDLE,
@@ -78,8 +78,6 @@ export class ZombieView {
 
     constructor(
         private readonly scene: Phaser.Scene & { markDirty(): void },
-        /** The walls of the map with their doors closed (landWallsOf), as the server reads them. */
-        private readonly walls: () => WaterWallSides | undefined,
         /** How much lower a point of the ground is drawn (the relief in 3/4); none when absent. */
         private readonly groundDropAt: (x: number, y: number) => number = () => 0,
         /** Where each sheet is fetched from: the resources of the game by default. */
@@ -90,6 +88,9 @@ export class ZombieView {
     public setHorde(horde: ZombieHorde | undefined, now: number): void {
         const crowd = this.crowd;
         if (horde && crowd && crowd.horde.id === horde.id && crowd.horde.startedAt === horde.startedAt) {
+            // The same horde told again: where the avatars stood since, its clock (the speed of the map).
+            crowd.setLog(horde.avatars, horde.safeStep);
+            crowd.setClock(horde);
             // Told again after a silence that let it fall to dust: it walks on, the same crowd.
             if (this.dust && !crowd.over()) this.dust = undefined;
             return;
@@ -99,7 +100,7 @@ export class ZombieView {
             return;
         }
         this.makeTexture();
-        const made = new ZombieCrowd(horde, this.walls());
+        const made = new ZombieCrowd(horde);
         this.crowd = made;
         this.dust = undefined;
         this.facing = new Uint8Array(made.count);

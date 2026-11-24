@@ -902,9 +902,10 @@ enum CatastropheKind {
   // height they chose (its bore, then its fall), and the water of the map carries it inland. The server tells the
   // room what it is once a second; the water itself comes as always. One a room; anyone stops it.
   CATASTROPHE_TSUNAMI = 9;
-  // A horde of zombies crosses the map the way a player chose, in the time they chose: it tramples the grass and
-  // pulls the trees down where it walks, and walks through the avatars. The server tells the room what it is once a
-  // second (never where a zombie is): every browser steps the same crowd from it. One a room; anyone stops it.
+  // A horde of zombies runs across the map the way a player chose, in the time they chose: it keeps out of the water,
+  // goes into the buildings by their doors, is drawn to the avatars it hears, tramples the grass and pulls the trees
+  // down. The server tells the room what it is once a second, with where the avatars stand (never where a zombie is):
+  // every browser steps the same crowd from it. One a room; anyone stops it.
   CATASTROPHE_ZOMBIES = 10;
 }
 
@@ -943,6 +944,21 @@ message ZombieHordeMessage {
   // it apart from another.
   string terrain = 13;
   uint32 terrainHash = 14;
+  // Sent by the player who launches it: the collisions of the map as their browser reads them, a byte a tile (0 open),
+  // run-length coded as `terrain`, and the size of that grid in tiles. The server checks it fits the map, freezes it
+  // into `terrain` (with the water and the walls of the map, doors open), and tells it no more.
+  string collisions = 15;
+  int32 collisionsWidth = 16;
+  int32 collisionsHeight = 17;
+  // Told by the server only: the clock of the horde, its step `anchorStep` at the time `anchorAt` (ms, the time of
+  // the server), a step every `msPerStep` ms (100 at the speed of reality, less when the map is sped up).
+  double anchorStep = 18;
+  double anchorAt = 19;
+  double msPerStep = 20;
+  // Told by the server only: where the avatars stood, as the steps of the horde apply it (ZombieHorde.encodeZombieLog),
+  // the whole log at each message, and the last step that log is complete to: no browser steps the horde past it.
+  string avatars = 21;
+  double safeStep = 22;
 }
 
 // How a hurricane crosses the map, as a player asks for it (the server keeps each value within bounds) and as the

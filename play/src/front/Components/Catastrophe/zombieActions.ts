@@ -7,11 +7,12 @@ import { zombieCountStore, zombieHeadingStore, zombieMinutesStore } from "../../
  * room. It refuses while one already goes on.
  */
 export function startZombies(): void {
-    gameManager.getCurrentGameScene().connection?.emitLaunchZombies({
+    const scene = gameManager.getCurrentGameScene();
+    scene.connection?.emitLaunchZombies({
         count: get(zombieCountStore),
         minutes: get(zombieMinutesStore),
         heading: get(zombieHeadingStore),
-        // The server decides the rest.
+        // The server decides the rest, but for the collisions of the map.
         seed: 0,
         startedAt: 0,
         durationMs: 0,
@@ -23,6 +24,13 @@ export function startZombies(): void {
         heightCells: 0,
         terrain: "",
         terrainHash: 0,
+        // The collisions of the map as this browser walks its avatar by: the server freezes them for the horde.
+        ...scene.zombieCollisions(),
+        anchorStep: 0,
+        anchorAt: 0,
+        msPerStep: 0,
+        avatars: "",
+        safeStep: 0,
     });
 }
 

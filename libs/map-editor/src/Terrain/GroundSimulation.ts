@@ -126,7 +126,11 @@ export class GroundSimulation<
                 (x, y) => air.standardWindAt(x, y),
             );
         }
-        if (catastrophes?.zombies) meadow.zombiesUnder(catastrophes.zombies.bind(catastrophes));
+        if (catastrophes?.zombies) {
+            meadow.zombiesUnder(catastrophes.zombies.bind(catastrophes));
+            // The crowd of a horde steps with the water, a step at a time: its cost spread, not in bursts.
+            water.stepAlong(() => meadow.stepZombies());
+        }
         const catchUp = setup.catchUp;
         if (catchUp) {
             meadow.liveAlong(water.liveAgain.bind(water));

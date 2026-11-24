@@ -21,6 +21,7 @@ import {
     TERRAIN_CELL,
     bridgeTilesOf,
     dryOnBridges,
+    waterWallsOf,
     zombieTerrainOf,
 } from "@workadventure/map-editor";
 import * as Sentry from "@sentry/node";
@@ -421,6 +422,9 @@ export class GameRoom implements BrothersFinder {
         catastrophes.hurricaneTimesWith(gameRoom.hurricaneTimes.bind(gameRoom));
         // A horde of zombies goes round the water of the ground as it is when it begins.
         catastrophes.zombieTerrainWith(gameRoom.zombieTerrain.bind(gameRoom));
+        // It runs to the avatars, and goes as fast as the map, as the hurricane does.
+        catastrophes.zombieAvatarsWith(gameRoom.zombieAvatars.bind(gameRoom));
+        catastrophes.zombieTimesWith(gameRoom.hurricaneTimes.bind(gameRoom));
         gameRoom.catastrophes = catastrophes;
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => catastrophes.stop());
@@ -1427,21 +1431,34 @@ export class GameRoom implements BrothersFinder {
     }
 
     /**
-     * The water of each cell of the map as a horde of zombies reads it when it begins: the water of the ground (dry
-     * on the decks of the bridges), none on a map without water. Undefined until the size of the map is read.
+     * The ground of each cell of the map as a horde of zombies reads it when it begins: the water of the ground (dry on
+     * the decks of the bridges), the walls of the map with their doors open, and the collisions of the map as the
+     * player who sent the horde reads them (`solid`, a tile each). Undefined until the size of the map is read.
      */
-    public zombieTerrain(): { widthCells: number; heightCells: number; classes: Uint8Array } | undefined {
+    public zombieTerrain(
+        solid: (tileX: number, tileY: number) => boolean,
+    ): { widthCells: number; heightCells: number; cells: Uint8Array } | undefined {
         const cells = this.mapCells;
         if (!cells) return undefined;
+        const wam = this.getWam();
         const grid = this.ground?.getGrid();
-        const depthAt = grid
-            ? dryOnBridges((cellX, cellY) => grid.depthAt(cellX, cellY), bridgeTilesOf(this.getWam()))
-            : () => 0;
+        const depthAt = grid ? dryOnBridges((cellX, cellY) => grid.depthAt(cellX, cellY), bridgeTilesOf(wam)) : () => 0;
         return {
             widthCells: cells.width,
             heightCells: cells.height,
-            classes: zombieTerrainOf(cells.width, cells.height, depthAt),
+            cells: zombieTerrainOf(cells.width, cells.height, depthAt, undefined, waterWallsOf(wam), solid),
         };
+    }
+
+    /** Where the avatars of the room stand, each by the id of its user: what a horde of zombies runs to. */
+    public zombieAvatars(): { key: number; x: number; y: number }[] {
+        const avatars: { key: number; x: number; y: number }[] = [];
+        for (const user of this.users.values()) {
+            if (user.disconnected === true) continue;
+            const { x, y } = user.getPosition();
+            avatars.push({ key: user.id, x, y });
+        }
+        return avatars;
     }
 
     /** A player casts their fishing line at a point of the map. */

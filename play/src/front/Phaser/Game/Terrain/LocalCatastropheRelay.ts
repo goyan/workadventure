@@ -1,8 +1,9 @@
 import { ballRadiusPx, coldCelsius, coldTiles } from "@workadventure/map-editor";
-import { hurricaneTrack, tsunamiLastsMs, tsunamiMetres, zombieAsk } from "@workadventure/map-editor";
+import { hurricaneTrack, tsunamiLastsMs, tsunamiMetres, zombieLastStep } from "@workadventure/map-editor";
 import type { Ball, ColdMass, Downpour, Drain, Hurricane, Tsunami, ZombieHorde } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
 import type { CatastropheMessage } from "@workadventure/messages";
+import { zombieHordeOf } from "../Catastrophe/ZombieReceiver";
 import type { LocalTerrainCommand } from "./LocalTerrainSimulation";
 
 /** What the relay tells the local ground of the catastrophes of the room. */
@@ -157,29 +158,17 @@ export class LocalCatastropheRelay {
                 if (told.terrain) this.zombieTerrain = { hash: told.terrainHash, text: told.terrain };
                 // Its water is told every few seconds: the local ground waits for it.
                 if (!this.zombieTerrain || this.zombieTerrain.hash !== told.terrainHash) return [];
-                const known = this.zombies;
-                // Told again each second: the local ground is told only when it is another one.
-                if (!known || known.horde.id !== id || known.toldStart !== told.startedAt) {
-                    this.changed = true;
-                    const ask = zombieAsk(told);
-                    const horde: ZombieHorde = {
-                        id,
-                        seed: told.seed,
-                        count: ask.count,
-                        heading: ask.heading,
-                        durationMs: told.durationMs,
-                        // When it began on the clock of the local ground: what is left of it, as the server says.
-                        startedAt: this.epoch() + message.impactInMs - told.durationMs,
-                        dirX: told.dirX,
-                        dirY: told.dirY,
-                        anchorX: told.anchorX,
-                        anchorY: told.anchorY,
-                        widthCells: told.widthCells,
-                        heightCells: told.heightCells,
-                        terrain: this.zombieTerrain.text,
-                    };
-                    this.zombies = { horde, until, toldStart: told.startedAt };
-                } else known.until = until;
+                // Its clock on the clock of the local ground: its end where the server says it is from now. Told again
+                // each second with where the avatars stood since: the local ground has it each time.
+                const horde = zombieHordeOf(id, told, this.zombieTerrain.text);
+                const serverEnd = horde.anchorAt + (zombieLastStep(horde) - horde.anchorStep) * horde.msPerStep;
+                const shift = this.epoch() + message.impactInMs - serverEnd;
+                this.zombies = {
+                    horde: { ...horde, startedAt: horde.startedAt + shift, anchorAt: horde.anchorAt + shift },
+                    until,
+                    toldStart: told.startedAt,
+                };
+                this.changed = true;
                 return [];
             }
             default:

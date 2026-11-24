@@ -1,6 +1,31 @@
 import { zombieAsk } from "@workadventure/map-editor";
 import type { ZombieHorde } from "@workadventure/map-editor";
-import type { CatastropheMessage } from "@workadventure/messages";
+import type { CatastropheMessage, ZombieHordeMessage } from "@workadventure/messages";
+
+/** The horde a message of the server tells, over the ground it told before (`terrain`). */
+export function zombieHordeOf(id: number, told: ZombieHordeMessage, terrain: string): ZombieHorde {
+    const ask = zombieAsk(told);
+    return {
+        id,
+        seed: told.seed,
+        count: ask.count,
+        heading: ask.heading,
+        durationMs: told.durationMs,
+        startedAt: told.startedAt,
+        anchorStep: told.anchorStep,
+        anchorAt: told.anchorAt,
+        msPerStep: told.msPerStep > 0 ? told.msPerStep : 100,
+        dirX: told.dirX,
+        dirY: told.dirY,
+        anchorX: told.anchorX,
+        anchorY: told.anchorY,
+        widthCells: told.widthCells,
+        heightCells: told.heightCells,
+        terrain,
+        avatars: told.avatars,
+        safeStep: told.safeStep,
+    };
+}
 
 /**
  * The server tells its horde once a second: past this without a word (a lost connection), it is forgotten, so that
@@ -32,28 +57,12 @@ export class ZombieReceiver {
         if (this.silence) clearTimeout(this.silence);
         this.silence = setTimeout(() => this.forget(), SILENCE_MS);
         if (!this.terrain || this.terrain.hash !== told.terrainHash) return;
-        const known = this.horde;
-        if (known && known.id === message.id && known.startedAt === told.startedAt && known.seed === told.seed) return;
-        const ask = zombieAsk(told);
-        this.horde = {
-            id: message.id,
-            seed: told.seed,
-            count: ask.count,
-            heading: ask.heading,
-            durationMs: told.durationMs,
-            startedAt: told.startedAt,
-            dirX: told.dirX,
-            dirY: told.dirY,
-            anchorX: told.anchorX,
-            anchorY: told.anchorY,
-            widthCells: told.widthCells,
-            heightCells: told.heightCells,
-            terrain: this.terrain.text,
-        };
+        this.horde = zombieHordeOf(message.id, told, this.terrain.text);
+        // Told each second: where the avatars stood since, the clock of the horde; the view keeps its crowd.
         this.tell(this.horde);
     }
 
-    /** The horde as last told, once its water is known. */
+    /** The horde as last told, once its ground is known. */
     public current(): ZombieHorde | undefined {
         return this.horde;
     }

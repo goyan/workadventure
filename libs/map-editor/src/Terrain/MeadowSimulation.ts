@@ -32,6 +32,9 @@ import type { WaterGrid } from "./WaterGrid";
 import { freezeThawSpeedOf, PX_PER_MM, waterTimesOf } from "./WaterInputs";
 import type { RainSlots, SimulationRoom } from "./WaterSimulation";
 
+/** The crowd of a horde takes this many steps at most a call: a ground that missed time catches up over its steps. */
+const ZOMBIE_STEPS_A_CALL = 40;
+
 /** A whole state of the meadow to start from, as a room tells it (its bytes unzipped). */
 export interface SeededMeadow {
     width: number;
@@ -435,26 +438,17 @@ export class MeadowSimulation {
      * over: nothing is kept of it, nothing is computed without it.
      */
     private tread(meadow: Meadow): { passes: Map<number, number>; across: number; from: number } | undefined {
-        const at = this.clock();
         const horde = this.zombies();
-        if (!horde || !zombieHordeGoing(horde, at)) {
-            this.crowd = undefined;
+        this.stepZombies();
+        const crowd = this.crowd;
+        // All of it ran out before its end: nothing more is trampled nor held, what it laid down lies as the map says.
+        if (!horde || !crowd || crowd.over()) {
             this.trodden.clear();
             return undefined;
         }
-        if (!this.crowd || this.crowd.horde.id !== horde.id || this.crowd.horde.startedAt !== horde.startedAt) {
-            this.crowd = new ZombieCrowd(horde, landWallsOf(this.room.getWam()));
-            this.trodden.clear();
-        }
-        this.crowd.advanceTo(at);
-        // All of it walked out before its end: nothing more is trampled nor held, what it laid down lies as the map says.
-        if (this.crowd.over()) {
-            this.trodden.clear();
-            return undefined;
-        }
-        const across = this.crowd.tilesAcross;
+        const across = crowd.tilesAcross;
         const passes = new Map<number, number>();
-        for (const tile of this.crowd.takeTrample()) {
+        for (const tile of crowd.takeTrample()) {
             const index = tile.tileY * across + tile.tileX;
             passes.set(index, tile.passes);
             const left = meadow.trample(tile.tileX, tile.tileY, tile.passes);
@@ -462,6 +456,29 @@ export class MeadowSimulation {
         }
         for (const [index, grass] of this.trodden) meadow.holdGrass(index % across, Math.floor(index / across), grass);
         return { passes, across, from: (horde.heading + 180) % 360 };
+    }
+
+    /**
+     * The crowd of the horde stepped to the time of the room, ZOMBIE_STEPS_A_CALL steps at most: with each step of
+     * the water (GroundSimulation), so that its cost is spread, and at each step of the meadow, which reads where it
+     * trampled. Its log and its clock as the room tells them now. Its crowd is forgotten once the horde is over.
+     */
+    public stepZombies(): void {
+        if (this.replay !== undefined) return;
+        const at = this.clock();
+        const horde = this.zombies();
+        if (!horde || !zombieHordeGoing(horde, at)) {
+            this.crowd = undefined;
+            this.trodden.clear();
+            return;
+        }
+        if (!this.crowd || this.crowd.horde.id !== horde.id || this.crowd.horde.startedAt !== horde.startedAt) {
+            this.crowd = new ZombieCrowd(horde);
+            this.trodden.clear();
+        }
+        this.crowd.setLog(horde.avatars, horde.safeStep);
+        this.crowd.setClock(horde);
+        this.crowd.advanceTo(at, ZOMBIE_STEPS_A_CALL);
     }
 
     /** The catastrophes of the room say which masses of cold air its players hold. */
